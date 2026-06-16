@@ -1,11 +1,11 @@
 {
   "version": 2,
-  "buildCommand": "echo 'Static deployment'",
-  "outputDirectory": "dist",
-  "installCommand": "echo 'Static deployment - no install needed'",
+  "buildCommand": "cd app && npm run build",
+  "outputDirectory": "app/dist",
+  "installCommand": "cd app && npm install",
   "framework": null,
   "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
+    { "source": "/api/(.*)", "destination": "/api/dist/boot.mjs" }
   ],
   "headers": [
     {
