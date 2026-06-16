@@ -10,8 +10,9 @@ import { PlatformDataProvider } from "@/react-app/context/PlatformDataContext";
 import HomePage from "@/react-app/pages/Home";
 import AuthLogin from "@/react-app/components/AuthLogin";
 import PasswordReset from "@/react-app/pages/PasswordReset";
-import { lazy, Suspense, useMemo } from "react";
+import { Suspense, useMemo } from "react";
 import InviteAccept from "@/react-app/pages/InviteAccept";
+import FounderAccess from "@/react-app/pages/FounderAccess";
 
 // Simple fallback for lazy-loaded routes
 function RouteFallback() {
@@ -25,9 +26,6 @@ function RouteFallback() {
     </div>
   );
 }
-
-// Lazy-load heavy components to reduce initial bundle
-const FounderAccessV2 = lazy(() => import("@/react-app/pages/FounderSimple"));
 
 /** Detect country from localStorage or timezone */
 function useDetectedCountry(): string {
@@ -106,7 +104,7 @@ export default function App() {
                     path="/founder"
                     element={
                       <Suspense fallback={<RouteFallback />}>
-                        <FounderAccessV2 />
+                        <FounderAccess />
                       </Suspense>
                     }
                   />

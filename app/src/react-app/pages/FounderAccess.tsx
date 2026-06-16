@@ -53,6 +53,7 @@ import {
   CreditCard,
 } from "lucide-react";
 import { validateFounderAuth } from "@/react-app/lib/founder-auth";
+import { trpc } from "@/providers/trpc";
 import {
   SecuritySection,
   BackupSection,
@@ -546,7 +547,15 @@ export default function FounderAccess() {
 
   const completeLogin = () => {
     setIsAuthenticated(true);
-    localStorage.setItem(FOUNDER_SESSION_KEY, "active");
+    // Store session with timestamp for 8-hour expiry
+    localStorage.setItem(
+      FOUNDER_SESSION_KEY,
+      JSON.stringify({
+        active: true,
+        loginTime: Date.now(),
+        username: loginUsername.trim(),
+      })
+    );
     setLoginError("");
     setLoginAttempts(0);
     setNeeds2FA(false);
@@ -588,12 +597,17 @@ export default function FounderAccess() {
 
   /* ─── Logout ─── */
   const handleLogout = () => {
+    // Clear session data
     localStorage.removeItem(FOUNDER_SESSION_KEY);
+    localStorage.removeItem("fuelpro_founder_2fa");
     setIsAuthenticated(false);
     setLoginUsername("");
     setLoginPassword("");
     setNeeds2FA(false);
     setLogin2FACode("");
+    // Redirect to home
+    window.location.hash = "/";
+    window.location.reload();
   };
 
   // logAudit now comes from useFounderBackend (syncs to MySQL + localStorage)

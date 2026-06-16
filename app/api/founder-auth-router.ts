@@ -13,7 +13,8 @@ import { nanoid } from "nanoid";
 
 // ─── Credential Store ───
 // Default credentials (configurable via localStorage on frontend)
-const DEFAULT_CREDS = { username: "FOUNDER", password: "publican1D#20" };
+// NOTE: Must match the default in app/src/react-app/lib/founder-auth.ts
+const DEFAULT_CREDS = { username: "FOUNDER", password: "fuelpro2026" };
 
 function getStoredCreds(): { username: string; password: string } {
   // In production, this could read from environment variables or encrypted store
