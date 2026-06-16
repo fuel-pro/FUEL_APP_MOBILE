@@ -6,7 +6,7 @@ import {
   featureFlags, pricingPlans, subscriptions, coupons,
   systemConfig, apiKeys, webhooks, emailTemplates, backups,
   users, stations, sales, auditLogs, founderSessions,
-  userActivityLog, siteConfigs, configVersions,
+  userActivityLog,
 } from "@db/schema";
 
 // ═══════════════════════════ FEATURE FLAGS ═══════════════════════════
