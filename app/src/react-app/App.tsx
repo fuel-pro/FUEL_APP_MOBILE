@@ -135,11 +135,7 @@ export default function App() {
                   {/* Founder Access - public, no auth required, rendered BEFORE auth check */}
                   <Route
                     path="/founder"
-                    element={
-                      <ErrorBoundary fallback={<div className="min-h-screen bg-slate-900 flex items-center justify-center text-white">Error loading Founder Access</div>}>
-                        <FounderAccess />
-                      </ErrorBoundary>
-                    }
+                    element={<div className="min-h-screen bg-red-900 flex items-center justify-center text-white text-2xl">Founder Route Works!</div>}
                   />
                   <Route
                     path="/founder-v1"
