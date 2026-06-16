@@ -8,6 +8,16 @@ import type { ReactNode } from "react";
 export const trpc = createTRPCReact<AppRouter>();
 
 const queryClient = new QueryClient();
+
+// Check if we're in a static deployment (no API server)
+const isStaticDeployment = () => {
+  if (typeof window === "undefined") return false;
+  const host = window.location.hostname;
+  return host.includes("vercel.app") || host.includes("netlify.app") || host.includes("github.io");
+};
+
+const staticMode = isStaticDeployment();
+
 const trpcClient = trpc.createClient({
   links: [
     httpBatchLink({
@@ -37,7 +47,26 @@ const trpcClient = trpc.createClient({
         }
         return headers;
       },
-      fetch(input, init) {
+      async fetch(input, init) {
+        // In static deployment, fail fast with a network error
+        if (staticMode) {
+          const controller = new AbortController();
+          // Abort immediately to fail fast
+          setTimeout(() => controller.abort(), 100);
+          try {
+            return await globalThis.fetch(input, {
+              ...(init ?? {}),
+              credentials: "include",
+              signal: controller.signal,
+            });
+          } catch (e) {
+            // Return a mock 404 response to fail gracefully
+            return new Response(JSON.stringify({ error: { message: "Static deployment - API unavailable" } }), {
+              status: 404,
+              headers: { "Content-Type": "application/json" },
+            });
+          }
+        }
         return globalThis.fetch(input, {
           ...(init ?? {}),
           credentials: "include",
