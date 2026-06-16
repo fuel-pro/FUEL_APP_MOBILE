@@ -25,13 +25,18 @@ export interface FounderSessionData {
  * In static mode, tRPC queries will fail, so we skip them
  */
 function isStaticDeployment(): boolean {
-  // On Vercel static deployment, /api/trpc doesn't exist
-  // We detect this by checking if we're on a known static host
   if (typeof window === "undefined") return false;
   const host = window.location.hostname;
-  // Vercel static deployments don't have serverless functions
-  // Check if this is a static deployment by attempting a quick HEAD request
-  return host.includes("vercel.app") || host.includes("netlify.app");
+  return host.includes("vercel.app") || host.includes("netlify.app") || host.includes("github.io");
+}
+
+// Use a ref to avoid re-computing on each render
+let staticModeCache: boolean | null = null;
+function getStaticMode(): boolean {
+  if (staticModeCache === null) {
+    staticModeCache = isStaticDeployment();
+  }
+  return staticModeCache;
 }
 
 /**
@@ -49,19 +54,18 @@ export function useFounderBackend() {
   const utils = trpc.useUtils();
   
   // Detect static deployment and skip backend queries
-  const isStatic = useMemo(() => isStaticDeployment(), []);
+  const isStatic = useMemo(() => getStaticMode(), []);
 
   /* ─── Audit Logging ─── */
   // Skip mutation in static mode - only log to localStorage
-  const logMutation = isStatic 
-    ? { mutate: () => {}, mutateAsync: () => Promise.resolve(), reset: () => {} }
-    : trpc.audit.log.useMutation({
-        onSuccess: () => {
-          // Invalidate cached lists after a new log entry
-          utils.audit.listAll.invalidate();
-          utils.audit.summary.invalidate();
-        },
-      });
+  const logMutation = trpc.audit.log.useMutation({
+    enabled: !isStatic,
+    retry: 1,
+    onSuccess: () => {
+      utils.audit.listAll.invalidate();
+      utils.audit.summary.invalidate();
+    },
+  });
 
   const logAudit = useCallback(
     (event: string, detail: string, severity: AuditSeverity = "info") => {
@@ -87,20 +91,24 @@ export function useFounderBackend() {
         /* ignore */
       }
 
-      // Also persist to backend (non-blocking)
-      logMutation.mutate({ event, detail, severity });
+      // Also persist to backend (non-blocking) - only if not static mode
+      if (!isStatic) {
+        logMutation.mutate({ event, detail, severity });
+      }
     },
-    [logMutation]
+    [logMutation, isStatic]
   );
 
   /* ─── Audit Log List ─── */
-  // Skip query in static mode - use localStorage directly
-  const { data: dbAuditLogs, isLoading: auditLoading } = isStatic
-    ? { data: undefined, isLoading: false }
-    : trpc.audit.listAll.useQuery(undefined, {
-        staleTime: 1000 * 60 * 2, // 2 min cache
-        retry: 1,
-      });
+  // Use enabled: false in static mode to skip the query
+  const { data: dbAuditLogs, isLoading: auditLoading } = trpc.audit.listAll.useQuery(
+    undefined,
+    {
+      enabled: !isStatic,
+      staleTime: 1000 * 60 * 2,
+      retry: 1,
+    }
+  );
 
   // Merge DB logs with localStorage fallback
   const auditLog: AuditEntry[] = useMemo(() => {
@@ -136,31 +144,28 @@ export function useFounderBackend() {
   }, [dbAuditLogs]);
 
   /* ─── Audit Summary (analytics) ─── */
-  // Skip query in static mode
-  const { data: auditSummary } = isStatic
-    ? { data: undefined }
-    : trpc.audit.summary.useQuery(undefined, {
-        staleTime: 1000 * 60 * 5,
-        retry: 1,
-      });
+  const { data: auditSummary } = trpc.audit.summary.useQuery(undefined, {
+    enabled: !isStatic,
+    staleTime: 1000 * 60 * 5,
+    retry: 1,
+  });
 
   /* ─── Founder Session (2FA / Password / Contact) ─── */
-  // Skip query in static mode
-  const { data: dbFounderSession } = isStatic
-    ? { data: undefined }
-    : trpc.audit.getFounderSession.useQuery(undefined, {
-        staleTime: 1000 * 60 * 5,
-        retry: 1,
-      });
+  const { data: dbFounderSession } = trpc.audit.getFounderSession.useQuery(
+    undefined,
+    {
+      enabled: !isStatic,
+      staleTime: 1000 * 60 * 5,
+      retry: 1,
+    }
+  );
 
-  // Skip mutation in static mode
-  const upsertSessionMutation = isStatic
-    ? { mutate: () => {}, mutateAsync: () => Promise.resolve(), reset: () => {} }
-    : trpc.audit.upsertFounderSession.useMutation({
-        onSuccess: () => {
-          utils.audit.getFounderSession.invalidate();
-        },
-      });
+  const upsertSessionMutation = trpc.audit.upsertFounderSession.useMutation({
+    enabled: !isStatic,
+    onSuccess: () => {
+      utils.audit.getFounderSession.invalidate();
+    },
+  });
 
   const founderSession: FounderSessionData = useMemo(() => {
     if (dbFounderSession) {
@@ -199,16 +204,18 @@ export function useFounderBackend() {
 
   const saveFounderSession = useCallback(
     (data: Partial<FounderSessionData>) => {
-      // Persist to backend
-      upsertSessionMutation.mutate({
-        twoFactorEnabled: data.twoFactorEnabled,
-        twoFactorSecret: data.twoFactorSecret,
-        contactEmail: data.contactEmail,
-        contactPhone: data.contactPhone,
-        passwordHash: data.passwordHash,
-      });
+      // Persist to backend only in non-static mode
+      if (!isStatic) {
+        upsertSessionMutation.mutate({
+          twoFactorEnabled: data.twoFactorEnabled,
+          twoFactorSecret: data.twoFactorSecret,
+          contactEmail: data.contactEmail,
+          contactPhone: data.contactPhone,
+          passwordHash: data.passwordHash,
+        });
+      }
 
-      // Also persist to localStorage for offline fallback
+      // Always persist to localStorage for offline fallback
       if (data.twoFactorEnabled !== undefined) {
         try {
           const existing = JSON.parse(
@@ -251,46 +258,47 @@ export function useFounderBackend() {
         }
       }
     },
-    [upsertSessionMutation]
+    [upsertSessionMutation, isStatic]
   );
 
   /* ─── Stations (from backend) ─── */
-  // Skip query in static mode
-  const { data: stationsData, isLoading: stationsLoading } = isStatic
-    ? { data: undefined, isLoading: false }
-    : trpc.station.list.useQuery(undefined, {
-        staleTime: 1000 * 60 * 2,
-        retry: 1,
-      });
+  const { data: stationsData, isLoading: stationsLoading } = trpc.station.list.useQuery(
+    undefined,
+    {
+      enabled: !isStatic,
+      staleTime: 1000 * 60 * 2,
+      retry: 1,
+    }
+  );
 
   const stationCount = stationsData?.length || 0;
 
   /* ─── Sales Analytics (from backend) ─── */
-  // Skip query in static mode
-  const { data: salesAnalytics } = isStatic
-    ? { data: undefined }
-    : trpc.sale.analytics.useQuery(undefined, {
-        staleTime: 1000 * 60 * 2,
-        retry: 1,
-      });
+  const { data: salesAnalytics } = trpc.sale.analytics.useQuery(undefined, {
+    enabled: !isStatic,
+    staleTime: 1000 * 60 * 2,
+    retry: 1,
+  });
 
   /* ─── All Users (from backend founder auth) ─── */
-  // Skip query in static mode
-  const { data: allBackendUsers, isLoading: usersLoading } = isStatic
-    ? { data: undefined, isLoading: false }
-    : trpc.founderAuth.getAllUsers.useQuery(undefined, {
-        staleTime: 1000 * 60 * 2,
-        retry: 1,
-      });
+  const { data: allBackendUsers, isLoading: usersLoading } = trpc.founderAuth.getAllUsers.useQuery(
+    undefined,
+    {
+      enabled: !isStatic,
+      staleTime: 1000 * 60 * 2,
+      retry: 1,
+    }
+  );
 
   /* ─── All Stations (from backend founder auth) ─── */
-  // Skip query in static mode
-  const { data: allBackendStations, isLoading: allStationsLoading } = isStatic
-    ? { data: undefined, isLoading: false }
-    : trpc.founderAuth.getAllStations.useQuery(undefined, {
-        staleTime: 1000 * 60 * 2,
-        retry: 1,
-      });
+  const { data: allBackendStations, isLoading: allStationsLoading } = trpc.founderAuth.getAllStations.useQuery(
+    undefined,
+    {
+      enabled: !isStatic,
+      staleTime: 1000 * 60 * 2,
+      retry: 1,
+    }
+  );
 
   return {
     // Audit
@@ -320,15 +328,17 @@ export function useFounderBackend() {
     // Sales Analytics
     salesAnalytics,
 
-    // Refresh helpers
+    // Refresh helpers - only works in non-static mode
     refresh: useCallback(() => {
-      utils.audit.listAll.invalidate();
-      utils.audit.summary.invalidate();
-      utils.audit.getFounderSession.invalidate();
-      utils.station.list.invalidate();
-      utils.sale.analytics.invalidate();
-      utils.founderAuth.getAllUsers.invalidate();
-      utils.founderAuth.getAllStations.invalidate();
-    }, [utils]),
+      if (!isStatic) {
+        utils.audit.listAll.invalidate();
+        utils.audit.summary.invalidate();
+        utils.audit.getFounderSession.invalidate();
+        utils.station.list.invalidate();
+        utils.sale.analytics.invalidate();
+        utils.founderAuth.getAllUsers.invalidate();
+        utils.founderAuth.getAllStations.invalidate();
+      }
+    }, [utils, isStatic]),
   };
 }
