@@ -239,6 +239,20 @@ export function useFounderBackend() {
     retry: 1,
   });
 
+  /* ─── All Users (from backend founder auth) ─── */
+  const { data: allBackendUsers, isLoading: usersLoading } =
+    trpc.founderAuth.getAllUsers.useQuery(undefined, {
+      staleTime: 1000 * 60 * 2,
+      retry: 1,
+    });
+
+  /* ─── All Stations (from backend founder auth) ─── */
+  const { data: allBackendStations, isLoading: allStationsLoading } =
+    trpc.founderAuth.getAllStations.useQuery(undefined, {
+      staleTime: 1000 * 60 * 2,
+      retry: 1,
+    });
+
   return {
     // Audit
     logAudit,
@@ -256,6 +270,14 @@ export function useFounderBackend() {
     stationsLoading,
     stationCount,
 
+    // All Users (for founder dashboard)
+    allBackendUsers,
+    usersLoading,
+
+    // All Stations (for founder dashboard)
+    allBackendStations,
+    allStationsLoading,
+
     // Sales Analytics
     salesAnalytics,
 
@@ -266,6 +288,8 @@ export function useFounderBackend() {
       utils.audit.getFounderSession.invalidate();
       utils.station.list.invalidate();
       utils.sale.analytics.invalidate();
+      utils.founderAuth.getAllUsers.invalidate();
+      utils.founderAuth.getAllStations.invalidate();
     }, [utils]),
   };
 }

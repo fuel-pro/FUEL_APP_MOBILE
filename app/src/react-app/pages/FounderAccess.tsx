@@ -302,6 +302,10 @@ export default function FounderAccess() {
     auditLoading: auditBackendLoading,
     stationCount: backendStationCount,
     salesAnalytics,
+    allBackendUsers,
+    usersLoading,
+    allBackendStations,
+    allStationsLoading,
   } = useFounderBackend();
 
   /* ─── Auth State ─── */
@@ -357,6 +361,113 @@ export default function FounderAccess() {
       logAudit("Session Resumed", "Founder session restored", "info");
     }
   }, []);
+
+  /* ─── Load real users and stations from backend when authenticated ─── */
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    
+    // If we have backend data, use it
+    if (allBackendUsers && allBackendUsers.length > 0) {
+      const backendUsersMapped: AppUser[] = allBackendUsers.map((u: any) => ({
+        authId: String(u.id),
+        authMethod: u.email?.includes('@') ? 'email' : 'unknown',
+        name: u.name || 'Unknown',
+        email: u.email || '',
+        role: u.role || 'user',
+        lastActive: u.lastSignInAt ? new Date(u.lastSignInAt).toLocaleString() : 'Never',
+        stations: 0,
+        createdAt: u.createdAt ? new Date(u.createdAt).toLocaleString() : 'Unknown',
+      }));
+      setUsers(backendUsersMapped);
+    }
+    
+    if (allBackendStations && allBackendStations.length > 0) {
+      const backendStationsMapped: StationRecord[] = allBackendStations.map((s: any) => ({
+        id: String(s.id),
+        name: s.name || 'Unnamed Station',
+        location: s.location || 'Unknown',
+        ownerId: String(s.ownerId || 0),
+        ownerName: 'Owner',
+        members: s.members || 0,
+        createdAt: s.createdAt ? new Date(s.createdAt).toLocaleString() : 'Unknown',
+        lastActive: s.updatedAt ? new Date(s.updatedAt).toLocaleString() : 'Unknown',
+        revenue: 0,
+      }));
+      setStations(backendStationsMapped);
+    }
+    
+    // If no backend data, fall back to localStorage scan
+    if ((!allBackendUsers || allBackendUsers.length === 0) && !usersLoading) {
+      const discoveredUsers: AppUser[] = [];
+      const discoveredStations: StationRecord[] = [];
+      const seenIds = new Set<string>();
+
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (!key) continue;
+
+        if (
+          key === "fuelpro_auth_identity" ||
+          key.startsWith("fuelpro_auth_identity")
+        ) {
+          try {
+            const val = JSON.parse(localStorage.getItem(key) || "{}");
+            if (val.authId && !seenIds.has(val.authId)) {
+              seenIds.add(val.authId);
+              discoveredUsers.push({
+                authId: val.authId,
+                authMethod: val.authMethod || "unknown",
+                name: val.name || "Unknown",
+                email: val.email || "",
+                role: val.role || "owner",
+                lastActive: "Now",
+                stations: 0,
+                createdAt: "Unknown",
+              });
+            }
+          } catch {
+            /* ignore */
+          }
+        }
+
+        if (key.includes("station") && key.startsWith("fuelpro")) {
+          try {
+            const val = JSON.parse(localStorage.getItem(key) || "{}");
+            const stationsList =
+              val.stations || (Array.isArray(val) ? val : val.id ? [val] : []);
+            stationsList.forEach((s: StationData) => {
+              if (s && s.id && !discoveredStations.some(ds => ds.id === s.id)) {
+                discoveredStations.push({
+                  id: s.id,
+                  name: s.name || "Unnamed Station",
+                  location: s.location || "Unknown",
+                  ownerId: s.createdBy || "unknown",
+                  ownerName: s.ownerName || "Unknown Owner",
+                  members: (s.sharedUsers || []).length + 1,
+                  createdAt: s.createdAt || "Unknown",
+                  lastActive: s.updatedAt || s.createdAt || "Unknown",
+                  revenue: Math.floor(Math.random() * 500000 + 50000),
+                });
+              }
+            });
+          } catch {
+            /* ignore */
+          }
+        }
+      }
+
+      discoveredUsers.forEach(u => {
+        u.stations = discoveredStations.filter(
+          s => s.ownerId === u.authId
+        ).length;
+      });
+      
+      if (users.length === 0) setUsers(discoveredUsers);
+      if (stations.length === 0) setStations(discoveredStations);
+    }
+    
+    setLoading(false);
+  }, [isAuthenticated, allBackendUsers, allBackendStations, usersLoading, allStationsLoading]);
 
   /* ─── Save secrets & flags ─── */
   useEffect(() => {
@@ -564,77 +675,6 @@ export default function FounderAccess() {
       })
     );
   };
-
-  /* ─── Scan localStorage for users & stations ─── */
-  useEffect(() => {
-    if (!isAuthenticated) return;
-    const discoveredUsers: AppUser[] = [];
-    const discoveredStations: StationRecord[] = [];
-    const seenIds = new Set<string>();
-
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (!key) continue;
-
-      if (
-        key === "fuelpro_auth_identity" ||
-        key.startsWith("fuelpro_auth_identity")
-      ) {
-        try {
-          const val = JSON.parse(localStorage.getItem(key) || "{}");
-          if (val.authId && !seenIds.has(val.authId)) {
-            seenIds.add(val.authId);
-            discoveredUsers.push({
-              authId: val.authId,
-              authMethod: val.authMethod || "unknown",
-              name: val.name || "Unknown",
-              email: val.email || "",
-              role: val.role || "owner",
-              lastActive: "Now",
-              stations: 0,
-              createdAt: "Unknown",
-            });
-          }
-        } catch {
-          /* ignore */
-        }
-      }
-
-      if (key.includes("station") && key.startsWith("fuelpro")) {
-        try {
-          const val = JSON.parse(localStorage.getItem(key) || "{}");
-          const stationsList =
-            val.stations || (Array.isArray(val) ? val : val.id ? [val] : []);
-          stationsList.forEach((s: StationData) => {
-            if (s && s.id && !discoveredStations.some(ds => ds.id === s.id)) {
-              discoveredStations.push({
-                id: s.id,
-                name: s.name || "Unnamed Station",
-                location: s.location || "Unknown",
-                ownerId: s.createdBy || "unknown",
-                ownerName: s.ownerName || "Unknown Owner",
-                members: (s.sharedUsers || []).length + 1,
-                createdAt: s.createdAt || "Unknown",
-                lastActive: s.updatedAt || s.createdAt || "Unknown",
-                revenue: Math.floor(Math.random() * 500000 + 50000),
-              });
-            }
-          });
-        } catch {
-          /* ignore */
-        }
-      }
-    }
-
-    discoveredUsers.forEach(u => {
-      u.stations = discoveredStations.filter(
-        s => s.ownerId === u.authId
-      ).length;
-    });
-    setUsers(discoveredUsers);
-    setStations(discoveredStations);
-    setLoading(false);
-  }, [isAuthenticated]);
 
   const filteredUsers = users.filter(
     u =>

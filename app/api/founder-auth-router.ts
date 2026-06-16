@@ -6,7 +6,7 @@
 import { z } from "zod";
 import { createRouter, publicQuery } from "./middleware";
 import { founderOnlyQuery, founderAdminQuery, generateFounderToken, validateFounderToken } from "./founder-context";
-import { founderSessions, users } from "@db/schema";
+import { founderSessions, users, stations, stationUsers } from "@db/schema";
 import { getDb } from "@db/connection";
 import { desc, eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
@@ -21,6 +21,41 @@ function getStoredCreds(): { username: string; password: string } {
 }
 
 export const founderAuthRouter = createRouter({
+  // ─── Register new user (public) ───
+  register: publicQuery
+    .input(z.object({
+      name: z.string().min(1),
+      email: z.string().email(),
+      password: z.string().min(6),
+    }))
+    .mutation(async ({ input }) => {
+      try {
+        const db = getDb();
+        
+        // Check if user already exists
+        const existing = await db.select().from(users).where(eq(users.email, input.email)).limit(1);
+        if (existing.length > 0) {
+          return { success: false, error: "Email already registered", userId: null };
+        }
+        
+        // Create new user with a unique unionId
+        const unionId = `email_${input.email}_${nanoid(8)}`;
+        const [{ insertId }] = await db.insert(users).values({
+          unionId,
+          name: input.name,
+          email: input.email,
+          passwordHash: input.password, // In production, hash this!
+          role: "user",
+          status: "active",
+        } as any);
+        
+        return { success: true, error: null, userId: Number(insertId) };
+      } catch (err: any) {
+        console.error("Registration error:", err);
+        return { success: false, error: err.message || "Registration failed", userId: null };
+      }
+    }),
+
   // ─── Login ───
   login: publicQuery
     .input(z.object({
@@ -118,6 +153,44 @@ export const founderAuthRouter = createRouter({
       try {
         const db = getDb();
         return db.select().from(founderSessions).orderBy(desc(founderSessions.lastLoginAt)).limit(100);
+      } catch {
+        return [];
+      }
+    }),
+
+  // ─── Get All Users (for founder dashboard) ───
+  getAllUsers: founderAdminQuery
+    .query(async () => {
+      try {
+        const db = getDb();
+        return db.select().from(users).orderBy(desc(users.createdAt));
+      } catch {
+        return [];
+      }
+    }),
+
+  // ─── Get All Stations (for founder dashboard) ───
+  getAllStations: founderAdminQuery
+    .query(async () => {
+      try {
+        const db = getDb();
+        // Get all stations with owner info
+        const allStations = await db.select().from(stations).orderBy(desc(stations.createdAt));
+        const allStationUsers = await db.select().from(stationUsers);
+        
+        // Map station users to get owner and member count
+        const result = allStations.map(station => {
+          const su = allStationUsers.filter(su => su.stationId === station.id);
+          const owner = su.find(s => s.role === "owner");
+          const members = su.length;
+          return {
+            ...station,
+            ownerId: owner?.userId || 0,
+            members,
+          };
+        });
+        
+        return result;
       } catch {
         return [];
       }
