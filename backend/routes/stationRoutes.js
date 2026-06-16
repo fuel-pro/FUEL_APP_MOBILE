@@ -7,7 +7,7 @@ const { protect, authorize, optionalAuth } = require('../middleware/auth');
 // 1. GET All Stations (with filters)
 router.get('/', optionalAuth, async (req, res) => {
   try {
-    const { status, ownerId, page = 1, limit = 20, sortBy = 'createdAt', order = 'desc' } = req.query;
+    const { status, ownerId, page = 1, limit = 20 } = req.query;
     
     const query = {};
     if (status) query.status = status;
@@ -18,15 +18,13 @@ router.get('/', optionalAuth, async (req, res) => {
       query.status = 'active';
     }
 
-    const sortObj = { [sortBy]: order === 'desc' ? -1 : 1 };
+    const allStations = Station.findAll(query);
+    const total = allStations.length;
 
-    const stations = await Station.find(query)
-      .populate('ownerId', 'name email')
-      .sort(sortObj)
-      .skip((page - 1) * limit)
-      .limit(parseInt(limit));
-
-    const total = await Station.countDocuments(query);
+    // Manual pagination
+    const startIndex = (parseInt(page) - 1) * parseInt(limit);
+    const endIndex = startIndex + parseInt(limit);
+    const stations = allStations.slice(startIndex, endIndex);
 
     res.json({
       stations,
@@ -34,7 +32,7 @@ router.get('/', optionalAuth, async (req, res) => {
         page: parseInt(page),
         limit: parseInt(limit),
         total,
-        pages: Math.ceil(total / limit)
+        pages: Math.ceil(total / parseInt(limit))
       }
     });
   } catch (error) {
@@ -45,9 +43,7 @@ router.get('/', optionalAuth, async (req, res) => {
 // 2. GET Single Station
 router.get('/:id', async (req, res) => {
   try {
-    const station = await Station.findById(req.params.id)
-      .populate('ownerId', 'name email')
-      .populate('members', 'name email role');
+    const station = Station.findById(req.params.id);
     
     if (!station) {
       return res.status(404).json({ error: 'Station not found' });
@@ -68,9 +64,9 @@ router.post('/', protect, authorize('founder', 'admin'), async (req, res) => {
       return res.status(400).json({ error: 'Name and location are required' });
     }
 
-    const owner = ownerId || req.user._id;
+    const owner = ownerId || req.user.id;
 
-    const station = await Station.create({
+    const station = Station.create({
       name,
       location,
       ownerId: owner,
@@ -79,12 +75,11 @@ router.post('/', protect, authorize('founder', 'admin'), async (req, res) => {
     });
 
     await AuditLog.create({
-      event: 'STATION_CREATED',
+      action: 'STATION_CREATED',
       detail: `Station "${name}" created`,
       user: req.user.email,
-      userId: req.user._id,
-      severity: 'success',
-      metadata: { stationId: station._id }
+      userId: req.user.id,
+      metadata: { stationId: station.id }
     });
 
     res.status(201).json({ message: 'Station created', station });
@@ -98,25 +93,26 @@ router.put('/:id', protect, authorize('founder', 'admin'), async (req, res) => {
   try {
     const { name, location, status, settings, stats } = req.body;
     
-    const station = await Station.findById(req.params.id);
+    const station = Station.findById(req.params.id);
     
     if (!station) {
       return res.status(404).json({ error: 'Station not found' });
     }
 
-    if (name) station.name = name;
-    if (location) station.location = location;
-    if (status) station.status = status;
-    if (settings) station.settings = { ...station.settings, ...settings };
-    if (stats) station.stats = { ...station.stats, ...stats };
-    
-    await station.save();
+    const updateData = {};
+    if (name) updateData.name = name;
+    if (location) updateData.location = location;
+    if (status) updateData.status = status;
+    if (settings) updateData.settings = { ...station.settings, ...settings };
+    if (stats) updateData.stats = { ...station.stats, ...stats };
+
+    const updatedStation = Station.update(req.params.id, updateData);
 
     // Emit real-time update
     const io = req.app.get('io');
-    io.emit('station_updated', { stationId: station._id });
+    io.emit('station_updated', { stationId: updatedStation.id });
 
-    res.json({ message: 'Station updated', station });
+    res.json({ message: 'Station updated', station: updatedStation });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -125,19 +121,20 @@ router.put('/:id', protect, authorize('founder', 'admin'), async (req, res) => {
 // 5. DELETE Station (founder only)
 router.delete('/:id', protect, authorize('founder'), async (req, res) => {
   try {
-    const station = await Station.findByIdAndDelete(req.params.id);
+    const station = Station.findById(req.params.id);
     
     if (!station) {
       return res.status(404).json({ error: 'Station not found' });
     }
 
+    Station.delete(req.params.id);
+
     await AuditLog.create({
-      event: 'STATION_DELETED',
+      action: 'STATION_DELETED',
       detail: `Station "${station.name}" deleted`,
       user: req.user.email,
-      userId: req.user._id,
-      severity: 'danger',
-      metadata: { stationId: station._id }
+      userId: req.user.id,
+      metadata: { stationId: station.id }
     });
 
     res.json({ message: 'Station deleted' });
@@ -150,21 +147,14 @@ router.delete('/:id', protect, authorize('founder'), async (req, res) => {
 router.get('/:id/analytics', async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
-    const station = await Station.findById(req.params.id);
+    const station = Station.findById(req.params.id);
     
     if (!station) {
       return res.status(404).json({ error: 'Station not found' });
     }
 
-    // Build date filter
-    const dateFilter = {};
-    if (startDate) dateFilter.$gte = new Date(startDate);
-    if (endDate) dateFilter.$lte = new Date(endDate);
-
-    // For now, return the station stats
-    // In production, you'd aggregate transaction data
     const analytics = {
-      stationId: station._id,
+      stationId: station.id,
       stationName: station.name,
       stats: station.stats,
       dateRange: { startDate, endDate },

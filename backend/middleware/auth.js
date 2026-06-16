@@ -18,8 +18,8 @@ const protect = async (req, res, next) => {
     // Verify token
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fuelpro-secret-key');
     
-    // Get user from token
-    const user = await User.findById(decoded.id);
+    // Get user from token (synchronous for SQLite)
+    const user = User.findById(decoded.id);
     
     if (!user) {
       return res.status(401).json({ error: 'User not found' });
@@ -89,7 +89,7 @@ const optionalAuth = async (req, res, next) => {
   if (token) {
     try {
       const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fuelpro-secret-key');
-      const user = await User.findById(decoded.id);
+      const user = User.findById(decoded.id);
       if (user && user.isActive) {
         req.user = user;
       }

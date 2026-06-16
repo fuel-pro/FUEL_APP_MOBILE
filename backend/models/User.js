@@ -1,74 +1,148 @@
-const mongoose = require('mongoose');
+const { db } = require('../database/sqlite');
+const { v4: uuidv4 } = require('uuid');
 const bcrypt = require('bcryptjs');
 
-const UserSchema = new mongoose.Schema({
-  email: { 
-    type: String, 
-    required: true, 
-    unique: true,
-    lowercase: true,
-    trim: true
-  },
-  password: { 
-    type: String, 
-    required: true,
-    select: false
-  },
-  name: { 
-    type: String, 
-    required: true,
-    trim: true
-  },
-  role: { 
-    type: String, 
-    enum: ['founder', 'admin', 'developer', 'user', 'guest'],
-    default: 'user'
-  },
-  permissions: [{
-    type: String,
-    enum: ['read', 'write', 'delete', 'rollback', 'manage_users', 'manage_content', 'view_audit']
-  }],
-  isActive: { type: Boolean, default: true },
-  lastLoginAt: { type: Date },
-  lastLoginIp: { type: String },
-  loginHistory: [{
-    timestamp: { type: Date, default: Date.now },
-    ip: String,
-    userAgent: String,
-    success: Boolean
-  }],
-  twoFactorEnabled: { type: Boolean, default: false },
-  twoFactorSecret: { type: String },
-  createdAt: { type: Date, default: Date.now },
-  updatedAt: { type: Date, default: Date.now }
-}, {
-  timestamps: true
-});
+class User {
+  static table = 'users';
 
-// Hash password before saving
-UserSchema.pre('save', async function(next) {
-  if (!this.isModified('password')) return next();
-  
-  try {
+  static async create(data) {
+    const id = uuidv4();
+    const now = new Date().toISOString();
+    
+    // Hash password
     const salt = await bcrypt.genSalt(12);
-    this.password = await bcrypt.hash(this.password, salt);
-    next();
-  } catch (error) {
-    next(error);
+    const hashedPassword = await bcrypt.hash(data.password, salt);
+    
+    const stmt = db.prepare(`
+      INSERT INTO users (id, email, password, name, role, permissions, isActive, createdAt, updatedAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    
+    stmt.run(
+      id,
+      data.email,
+      hashedPassword,
+      data.name,
+      data.role || 'user',
+      JSON.stringify(data.permissions || []),
+      data.isActive !== false ? 1 : 0,
+      now,
+      now
+    );
+    
+    return this.findById(id);
   }
-});
 
-// Compare password method
-UserSchema.methods.comparePassword = async function(candidatePassword) {
-  return bcrypt.compare(candidatePassword, this.password);
-};
+  static findById(id) {
+    const stmt = db.prepare(`SELECT * FROM users WHERE id = ?`);
+    const row = stmt.get(id);
+    return row ? this._parseRow(row) : null;
+  }
 
-// Remove sensitive fields when converting to JSON
-UserSchema.methods.toJSON = function() {
-  const user = this.toObject();
-  delete user.password;
-  delete user.twoFactorSecret;
-  return user;
-};
+  static findByEmail(email) {
+    const stmt = db.prepare(`SELECT * FROM users WHERE email = ?`);
+    const row = stmt.get(email.toLowerCase());
+    return row ? this._parseRow(row) : null;
+  }
 
-module.exports = mongoose.model('User', UserSchema);
+  static findAll(query = {}) {
+    let sql = `SELECT * FROM users WHERE 1=1`;
+    const params = [];
+    
+    if (query.role) {
+      sql += ` AND role = ?`;
+      params.push(query.role);
+    }
+    
+    if (query.isActive !== undefined) {
+      sql += ` AND isActive = ?`;
+      params.push(query.isActive ? 1 : 0);
+    }
+    
+    sql += ` ORDER BY createdAt DESC`;
+    
+    const stmt = db.prepare(sql);
+    const rows = stmt.all(...params);
+    return rows.map(row => this._parseRow(row));
+  }
+
+  static async update(id, data) {
+    const now = new Date().toISOString();
+    const updates = [];
+    const params = [];
+    
+    if (data.email) {
+      updates.push(`email = ?`);
+      params.push(data.email.toLowerCase());
+    }
+    if (data.name) {
+      updates.push(`name = ?`);
+      params.push(data.name);
+    }
+    if (data.password) {
+      const salt = await bcrypt.genSalt(12);
+      const hashedPassword = await bcrypt.hash(data.password, salt);
+      updates.push(`password = ?`);
+      params.push(hashedPassword);
+    }
+    if (data.role) {
+      updates.push(`role = ?`);
+      params.push(data.role);
+    }
+    if (data.permissions) {
+      updates.push(`permissions = ?`);
+      params.push(JSON.stringify(data.permissions));
+    }
+    if (data.isActive !== undefined) {
+      updates.push(`isActive = ?`);
+      params.push(data.isActive ? 1 : 0);
+    }
+    if (data.lastLoginAt) {
+      updates.push(`lastLoginAt = ?`);
+      params.push(data.lastLoginAt);
+    }
+    if (data.lastLoginIp) {
+      updates.push(`lastLoginIp = ?`);
+      params.push(data.lastLoginIp);
+    }
+    
+    updates.push(`updatedAt = ?`);
+    params.push(now);
+    params.push(id);
+    
+    const sql = `UPDATE users SET ${updates.join(', ')} WHERE id = ?`;
+    const stmt = db.prepare(sql);
+    stmt.run(...params);
+    
+    return this.findById(id);
+  }
+
+  static delete(id) {
+    const stmt = db.prepare(`DELETE FROM users WHERE id = ?`);
+    const result = stmt.run(id);
+    return result.changes > 0;
+  }
+
+  static async comparePassword(user, candidatePassword) {
+    return bcrypt.compare(candidatePassword, user.password);
+  }
+
+  static _parseRow(row) {
+    if (!row) return null;
+    return {
+      ...row,
+      permissions: JSON.parse(row.permissions || '[]'),
+      loginHistory: JSON.parse(row.loginHistory || '[]'),
+      isActive: row.isActive === 1,
+      twoFactorEnabled: row.twoFactorEnabled === 1,
+      toJSON: function() {
+        const obj = { ...this };
+        delete obj.password;
+        delete obj.twoFactorSecret;
+        return obj;
+      }
+    };
+  }
+}
+
+module.exports = User;

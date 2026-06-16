@@ -1,12 +1,15 @@
 require('dotenv').config();
 const express = require('express');
-const mongoose = require('mongoose');
 const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
+const { initializeDatabase } = require('./database/sqlite');
 
 const app = express();
 const server = http.createServer(app);
+
+// Initialize SQLite database
+initializeDatabase();
 
 // Initialize Socket.io with CORS for Vercel frontend
 const io = new Server(server, {
@@ -36,22 +39,14 @@ app.use(express.urlencoded({ extended: true }));
 // Make 'io' instance available to routes
 app.set('io', io);
 
-// Database Connection
-const MONGO_URI = process.env.MONGO_URI;
-console.log('🔧 MONGO_URI loaded:', MONGO_URI ? 'YES (length: ' + MONGO_URI.length + ')' : 'NO');
-mongoose.connect(MONGO_URI)
-  .then(() => console.log('✅ MongoDB Connected'))
-  .catch(err => console.error('❌ MongoDB Error:', err));
-
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.json({ 
     status: 'ok', 
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
-    mongodb: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+    database: 'sqlite',
     env: {
-      hasMongoUri: !!process.env.MONGO_URI,
       nodeEnv: process.env.NODE_ENV,
       port: process.env.PORT
     }
@@ -62,14 +57,13 @@ app.get('/health', (req, res) => {
 app.get('/debug', (req, res) => {
   res.json({
     env: {
-      MONGO_URI: process.env.MONGO_URI ? '***' : 'NOT SET',
       NODE_ENV: process.env.NODE_ENV,
       PORT: process.env.PORT,
       JWT_SECRET: process.env.JWT_SECRET ? '***' : 'NOT SET'
     },
-    mongoose: {
-      readyState: mongoose.connection.readyState,
-      states: ['disconnected', 'connected', 'connecting', 'disconnecting']
+    database: {
+      type: 'sqlite',
+      status: 'connected'
     }
   });
 });

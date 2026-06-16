@@ -1,12 +1,15 @@
 # FuelPro Backend API Dockerfile
-# Production-ready Node.js backend with Express and MongoDB
+# Production-ready Node.js backend with Express and SQLite
 
 FROM node:20-alpine AS production
 
 # Labels
 LABEL maintainer="FuelPro <support@fuelpro.app>"
-LABEL description="FuelPro Backend API - Express.js with MongoDB"
+LABEL description="FuelPro Backend API - Express.js with SQLite"
 LABEL version="1.0.0"
+
+# Install SQLite for native module
+RUN apk add --no-cache python3 make g++
 
 # Create non-root user for security
 RUN addgroup -g 1001 -S nodejs && \
@@ -25,6 +28,10 @@ COPY server.js ./
 COPY routes/ ./routes/
 COPY models/ ./models/
 COPY middleware/ ./middleware/
+COPY database/ ./database/
+
+# Create data directory for SQLite
+RUN mkdir -p /app/data && chown -R nodeuser:nodejs /app
 
 # Set environment variables
 ENV NODE_ENV=production

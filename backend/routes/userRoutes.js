@@ -13,21 +13,21 @@ router.get('/', protect, authorize('founder', 'admin'), async (req, res) => {
     if (role) query.role = role;
     if (isActive !== undefined) query.isActive = isActive === 'true';
 
-    const users = await User.find(query)
-      .select('-password -twoFactorSecret')
-      .sort({ createdAt: -1 })
-      .skip((page - 1) * limit)
-      .limit(parseInt(limit));
-
-    const total = await User.countDocuments(query);
+    const allUsers = User.findAll(query);
+    const total = allUsers.length;
+    
+    // Manual pagination
+    const startIndex = (parseInt(page) - 1) * parseInt(limit);
+    const endIndex = startIndex + parseInt(limit);
+    const users = allUsers.slice(startIndex, endIndex);
 
     res.json({
-      users,
+      users: users.map(u => u.toJSON()),
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),
         total,
-        pages: Math.ceil(total / limit)
+        pages: Math.ceil(total / parseInt(limit))
       }
     });
   } catch (error) {
@@ -38,14 +38,13 @@ router.get('/', protect, authorize('founder', 'admin'), async (req, res) => {
 // 2. GET Single User
 router.get('/:id', protect, authorize('founder', 'admin'), async (req, res) => {
   try {
-    const user = await User.findById(req.params.id)
-      .select('-password -twoFactorSecret');
+    const user = User.findById(req.params.id);
     
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    res.json({ user });
+    res.json({ user: user.toJSON() });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -56,7 +55,7 @@ router.put('/:id', protect, authorize('founder', 'admin'), async (req, res) => {
   try {
     const { name, role, permissions, isActive } = req.body;
     
-    const user = await User.findById(req.params.id);
+    const user = User.findById(req.params.id);
     
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
@@ -69,27 +68,28 @@ router.put('/:id', protect, authorize('founder', 'admin'), async (req, res) => {
 
     const oldRole = user.role;
     
-    if (name) user.name = name;
-    if (role) user.role = role;
-    if (permissions) user.permissions = permissions;
-    if (isActive !== undefined) user.isActive = isActive;
+    // Update user
+    const updateData = {};
+    if (name) updateData.name = name;
+    if (role) updateData.role = role;
+    if (permissions) updateData.permissions = permissions;
+    if (isActive !== undefined) updateData.isActive = isActive;
     
-    await user.save();
+    const updatedUser = await User.update(req.params.id, updateData);
 
     // Log change
     await AuditLog.create({
-      event: 'USER_UPDATED',
+      action: 'USER_UPDATED',
       detail: `User ${user.email} updated by ${req.user.email}`,
       user: req.user.email,
-      userId: req.user._id,
-      severity: 'info',
+      userId: req.user.id,
       metadata: {
-        targetUserId: user._id,
+        targetUserId: user.id,
         changes: { oldRole, newRole: role }
       }
     });
 
-    res.json({ message: 'User updated', user: user.toJSON() });
+    res.json({ message: 'User updated', user: updatedUser.toJSON() });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -98,7 +98,7 @@ router.put('/:id', protect, authorize('founder', 'admin'), async (req, res) => {
 // 4. DELETE User (soft delete)
 router.delete('/:id', protect, authorize('founder'), async (req, res) => {
   try {
-    const user = await User.findById(req.params.id);
+    const user = User.findById(req.params.id);
     
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
@@ -108,16 +108,14 @@ router.delete('/:id', protect, authorize('founder'), async (req, res) => {
       return res.status(403).json({ error: 'Cannot delete founder account' });
     }
 
-    user.isActive = false;
-    await user.save();
+    await User.update(req.params.id, { isActive: false });
 
     await AuditLog.create({
-      event: 'USER_DELETED',
+      action: 'USER_DELETED',
       detail: `User ${user.email} deactivated by ${req.user.email}`,
       user: req.user.email,
-      userId: req.user._id,
-      severity: 'warning',
-      metadata: { targetUserId: user._id }
+      userId: req.user.id,
+      metadata: { targetUserId: user.id }
     });
 
     res.json({ message: 'User deactivated successfully' });
@@ -129,13 +127,13 @@ router.delete('/:id', protect, authorize('founder'), async (req, res) => {
 // 5. GET User Login History
 router.get('/:id/login-history', protect, authorize('founder', 'admin'), async (req, res) => {
   try {
-    const user = await User.findById(req.params.id);
+    const user = User.findById(req.params.id);
     
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    res.json({ loginHistory: user.loginHistory });
+    res.json({ loginHistory: user.loginHistory || [] });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

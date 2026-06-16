@@ -29,7 +29,7 @@ router.post('/register', async (req, res) => {
     }
 
     // Check if user exists
-    const existingUser = await User.findOne({ email: email.toLowerCase() });
+    const existingUser = User.findByEmail(email);
     if (existingUser) {
       return res.status(400).json({ error: 'User already exists with this email' });
     }
@@ -44,7 +44,7 @@ router.post('/register', async (req, res) => {
     });
 
     // Generate token
-    const token = generateToken(user._id);
+    const token = generateToken(user.id);
 
     res.status(201).json({
       message: 'User registered successfully',
@@ -69,16 +69,15 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ error: 'Email and password are required' });
     }
 
-    // Find user with password field
-    const user = await User.findOne({ email: email.toLowerCase() }).select('+password');
+    // Find user
+    const user = User.findByEmail(email);
     
     if (!user) {
       // Log failed attempt
       await AuditLog.create({
-        event: 'LOGIN_FAILED',
+        action: 'LOGIN_FAILED',
         detail: `Failed login attempt for non-existent user: ${email}`,
         user: email,
-        severity: 'warning',
         metadata: { ip, userAgent }
       });
       return res.status(401).json({ error: 'Invalid credentials' });
@@ -87,61 +86,65 @@ router.post('/login', async (req, res) => {
     // Check if account is active
     if (!user.isActive) {
       await AuditLog.create({
-        event: 'LOGIN_BLOCKED',
+        action: 'LOGIN_BLOCKED',
         detail: `Login blocked for deactivated account: ${email}`,
         user: email,
-        severity: 'danger',
         metadata: { ip, userAgent }
       });
       return res.status(401).json({ error: 'Account is deactivated' });
     }
 
     // Compare password
-    const isMatch = await user.comparePassword(password);
+    const isMatch = await User.comparePassword(user, password);
     
     if (!isMatch) {
       // Log failed attempt
       await AuditLog.create({
-        event: 'LOGIN_FAILED',
+        action: 'LOGIN_FAILED',
         detail: `Failed login attempt for user: ${email}`,
         user: email,
-        severity: 'warning',
         metadata: { ip, userAgent }
       });
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
     // Update last login
-    user.lastLoginAt = new Date();
-    user.lastLoginIp = ip;
-    user.loginHistory.unshift({
-      timestamp: new Date(),
+    const loginHistory = [...(user.loginHistory || [])];
+    loginHistory.unshift({
+      timestamp: new Date().toISOString(),
       ip,
       userAgent,
       success: true
     });
     // Keep only last 10 login records
-    user.loginHistory = user.loginHistory.slice(0, 10);
-    await user.save();
+    const trimmedHistory = loginHistory.slice(0, 10);
+    
+    await User.update(user.id, {
+      lastLoginAt: new Date().toISOString(),
+      lastLoginIp: ip,
+      loginHistory: trimmedHistory
+    });
 
     // Log successful login
     await AuditLog.create({
-      event: 'LOGIN_SUCCESS',
+      action: 'LOGIN_SUCCESS',
       detail: `User logged in: ${email}`,
       user: email,
-      userId: user._id,
-      severity: 'success',
+      userId: user.id,
       metadata: { ip, userAgent }
     });
 
     // Generate token
-    const token = generateToken(user._id);
+    const token = generateToken(user.id);
+
+    // Fetch updated user
+    const updatedUser = User.findById(user.id);
 
     res.json({
       message: 'Login successful',
-      user: user.toJSON(),
+      user: updatedUser.toJSON(),
       token,
-      role: user.role
+      role: updatedUser.role
     });
   } catch (error) {
     console.error('Login error:', error);
@@ -152,7 +155,7 @@ router.post('/login', async (req, res) => {
 // 3. GET CURRENT USER
 router.get('/me', protect, async (req, res) => {
   try {
-    const user = await User.findById(req.user._id);
+    const user = User.findById(req.user.id);
     res.json({ user });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -173,22 +176,20 @@ router.put('/password', protect, async (req, res) => {
       return res.status(400).json({ error: 'New password must be at least 8 characters' });
     }
 
-    const user = await User.findById(req.user._id).select('+password');
+    const user = User.findById(req.user.id);
     
-    const isMatch = await user.comparePassword(currentPassword);
+    const isMatch = await User.comparePassword(user, currentPassword);
     if (!isMatch) {
       return res.status(401).json({ error: 'Current password is incorrect' });
     }
 
-    user.password = newPassword;
-    await user.save();
+    await User.update(user.id, { password: newPassword });
 
     await AuditLog.create({
-      event: 'PASSWORD_CHANGED',
+      action: 'PASSWORD_CHANGED',
       detail: `Password changed for user: ${user.email}`,
       user: user.email,
-      userId: user._id,
-      severity: 'warning',
+      userId: user.id,
       metadata: { ip }
     });
 
@@ -202,11 +203,10 @@ router.put('/password', protect, async (req, res) => {
 router.post('/logout', protect, async (req, res) => {
   try {
     await AuditLog.create({
-      event: 'LOGOUT',
+      action: 'LOGOUT',
       detail: `User logged out: ${req.user.email}`,
       user: req.user.email,
-      userId: req.user._id,
-      severity: 'info'
+      userId: req.user.id
     });
 
     res.json({ message: 'Logged out successfully' });

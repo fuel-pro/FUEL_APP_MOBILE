@@ -6,13 +6,12 @@ const AuditLog = require('../models/AuditLog');
 const { protect, authorize } = require('../middleware/auth');
 
 // Helper function to log audit
-const logAudit = async (io, event, detail, severity = 'info', user = null, metadata = {}) => {
+const logAudit = async (io, action, detail, severity = 'info', user = null, metadata = {}) => {
   const entry = {
-    event,
+    action,
     detail,
     user: user?.name || user?.email || 'System',
-    userId: user?._id,
-    severity,
+    userId: user?.id,
     metadata
   };
   
@@ -27,10 +26,7 @@ const logAudit = async (io, event, detail, severity = 'info', user = null, metad
 // 1. GET All Content Keys (for admin panel listing)
 router.get('/', protect, authorize('founder', 'admin', 'developer'), async (req, res) => {
   try {
-    const contents = await Content.find()
-      .select('key versionNumber metadata updatedAt updatedBy')
-      .sort({ updatedAt: -1 });
-    
+    const contents = Content.findAll();
     res.json({ contents });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -40,7 +36,7 @@ router.get('/', protect, authorize('founder', 'admin', 'developer'), async (req,
 // 2. GET Active Content by Key
 router.get('/:key', async (req, res) => {
   try {
-    const content = await Content.findOne({ key: req.params.key });
+    const content = Content.findByKey(req.params.key);
     
     if (!content) {
       return res.status(404).json({ message: 'Content not found' });
@@ -55,10 +51,7 @@ router.get('/:key', async (req, res) => {
 // 3. GET Version History for a Content Key
 router.get('/:key/versions', protect, authorize('founder', 'admin', 'developer'), async (req, res) => {
   try {
-    const versions = await ContentVersion.find({ contentKey: req.params.key })
-      .sort({ versionNumber: -1 })
-      .populate('createdBy', 'name email role');
-    
+    const versions = ContentVersion.findByContentId(req.params.key);
     res.json({ versions });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -68,8 +61,7 @@ router.get('/:key/versions', protect, authorize('founder', 'admin', 'developer')
 // 4. GET Specific Version by ID
 router.get('/:key/versions/:versionId', protect, authorize('founder', 'admin'), async (req, res) => {
   try {
-    const version = await ContentVersion.findById(req.params.versionId)
-      .populate('createdBy', 'name email role');
+    const version = ContentVersion.findById(req.params.versionId);
     
     if (!version) {
       return res.status(404).json({ message: 'Version not found' });
@@ -89,20 +81,17 @@ router.put('/:key', protect, authorize('founder', 'admin', 'developer'), async (
     const { data, note, metadata } = req.body;
 
     // Step A: Find current content
-    let currentContent = await Content.findOne({ key });
+    let currentContent = Content.findByKey(key);
     const oldData = currentContent ? currentContent.data : null;
 
     // Step B: If exists, save OLD data to Version History before overwriting
     if (currentContent) {
       await ContentVersion.create({
-        contentKey: key,
+        contentId: key,
         data: oldData,
         versionNumber: currentContent.versionNumber,
-        createdBy: req.user._id,
-        createdByName: req.user.name,
-        note: note || 'Auto-saved before update',
-        action: 'update',
-        snapshot: false
+        changedBy: req.user.id,
+        changeDescription: note || 'Auto-saved before update'
       });
       
       await logAudit(
@@ -118,28 +107,31 @@ router.put('/:key', protect, authorize('founder', 'admin', 'developer'), async (
     // Step C: Update the active content with NEW data
     const newVersionNumber = currentContent ? currentContent.versionNumber + 1 : 1;
     
-    const updatedContent = await Content.findOneAndUpdate(
-      { key },
-      { 
-        data, 
-        versionNumber: newVersionNumber, 
-        updatedBy: req.user._id,
-        updatedAt: new Date(),
-        ...(metadata && { metadata })
-      },
-      { new: true, upsert: true }
-    );
+    let updatedContent;
+    if (currentContent) {
+      updatedContent = Content.update(currentContent.id, {
+        data,
+        versionNumber: newVersionNumber,
+        updatedBy: req.user.id,
+        metadata: metadata || currentContent.metadata
+      });
+    } else {
+      updatedContent = Content.create({
+        key,
+        data,
+        versionNumber: newVersionNumber,
+        updatedBy: req.user.id,
+        metadata: metadata || {}
+      });
+    }
 
     // Step D: Save the NEW state as current version
     await ContentVersion.create({
-      contentKey: key,
+      contentId: key,
       data: data,
       versionNumber: newVersionNumber,
-      createdBy: req.user._id,
-      createdByName: req.user.name,
-      note: note || 'Updated content',
-      action: 'update',
-      snapshot: true
+      changedBy: req.user.id,
+      changeDescription: note || 'Updated content'
     });
 
     // Step E: Emit Real-Time Event to Frontend
@@ -165,47 +157,45 @@ router.post('/:key/rollback/:versionId', protect, authorize('founder', 'admin'),
     const { key, versionId } = req.params;
 
     // Step A: Find the version we want to rollback to
-    const targetVersion = await ContentVersion.findById(versionId);
+    const targetVersion = ContentVersion.findById(versionId);
     if (!targetVersion) {
       return res.status(404).json({ message: 'Version not found' });
     }
 
     // Step B: Get current active content to save it as a new version (Prevents data loss)
-    const currentContent = await Content.findOne({ key });
+    const currentContent = Content.findByKey(key);
     if (currentContent) {
       await ContentVersion.create({
-        contentKey: key,
+        contentId: key,
         data: currentContent.data,
         versionNumber: currentContent.versionNumber,
-        createdBy: req.user._id,
-        createdByName: req.user.name,
-        note: 'Auto-saved before rollback',
-        action: 'rollback'
+        changedBy: req.user.id,
+        changeDescription: 'Auto-saved before rollback'
       });
     }
 
-    // Step C: Overwrite active content with the target version's data
+    // Step C: Update content with the target version's data
     const newVersionNumber = currentContent ? currentContent.versionNumber + 1 : 1;
-    const rolledBackContent = await Content.findOneAndUpdate(
-      { key },
-      { 
-        data: targetVersion.data, 
-        versionNumber: newVersionNumber, 
-        updatedBy: req.user._id,
-        updatedAt: new Date()
-      },
-      { new: true, upsert: true }
-    );
+    const rolledBackContent = currentContent 
+      ? Content.update(currentContent.id, {
+          data: targetVersion.data,
+          versionNumber: newVersionNumber,
+          updatedBy: req.user.id
+        })
+      : Content.create({
+          key,
+          data: targetVersion.data,
+          versionNumber: newVersionNumber,
+          updatedBy: req.user.id
+        });
 
     // Save rollback action as version
     await ContentVersion.create({
-      contentKey: key,
+      contentId: key,
       data: targetVersion.data,
       versionNumber: newVersionNumber,
-      createdBy: req.user._id,
-      createdByName: req.user.name,
-      note: `Rolled back to version ${targetVersion.versionNumber}`,
-      action: 'rollback'
+      changedBy: req.user.id,
+      changeDescription: `Rolled back to version ${targetVersion.versionNumber}`
     });
 
     // Step D: Log and Emit Real-Time Event
@@ -234,13 +224,13 @@ router.post('/:key/rollback/:versionId', protect, authorize('founder', 'admin'),
   }
 });
 
-// 7. DELETE Content (Soft delete - marks as deleted)
+// 7. DELETE Content
 router.delete('/:key', protect, authorize('founder'), async (req, res) => {
   try {
     const io = req.app.get('io');
     const { key } = req.params;
 
-    const content = await Content.findOneAndDelete({ key });
+    const content = Content.findByKey(key);
     
     if (!content) {
       return res.status(404).json({ message: 'Content not found' });
@@ -248,20 +238,20 @@ router.delete('/:key', protect, authorize('founder'), async (req, res) => {
 
     // Save deletion as version
     await ContentVersion.create({
-      contentKey: key,
+      contentId: key,
       data: content.data,
       versionNumber: content.versionNumber + 1,
-      createdBy: req.user._id,
-      createdByName: req.user.name,
-      note: 'Content deleted',
-      action: 'delete'
+      changedBy: req.user.id,
+      changeDescription: 'Content deleted'
     });
+
+    Content.delete(content.id);
 
     await logAudit(
       io,
       'CONTENT_DELETED',
       `Content "${key}" deleted by ${req.user.name}`,
-      'danger',
+      'info',
       req.user,
       { key }
     );
@@ -284,38 +274,44 @@ router.post('/bulk/update', protect, authorize('founder', 'admin'), async (req, 
     
     for (const update of updates) {
       const { key, data, note } = update;
-      let currentContent = await Content.findOne({ key });
+      let currentContent = Content.findByKey(key);
       
       // Save old state
       if (currentContent) {
         await ContentVersion.create({
-          contentKey: key,
+          contentId: key,
           data: currentContent.data,
           versionNumber: currentContent.versionNumber,
-          createdBy: req.user._id,
-          createdByName: req.user.name,
-          note: 'Auto-saved before bulk update',
-          action: 'update'
+          changedBy: req.user.id,
+          changeDescription: 'Auto-saved before bulk update'
         });
       }
 
       // Update content
       const newVersion = currentContent ? currentContent.versionNumber + 1 : 1;
-      const updated = await Content.findOneAndUpdate(
-        { key },
-        { data, versionNumber: newVersion, updatedBy: req.user._id, updatedAt: new Date() },
-        { new: true, upsert: true }
-      );
+      let updated;
+      if (currentContent) {
+        updated = Content.update(currentContent.id, {
+          data,
+          versionNumber: newVersion,
+          updatedBy: req.user.id
+        });
+      } else {
+        updated = Content.create({
+          key,
+          data,
+          versionNumber: newVersion,
+          updatedBy: req.user.id
+        });
+      }
 
       // Save new state
       await ContentVersion.create({
-        contentKey: key,
+        contentId: key,
         data: data,
         versionNumber: newVersion,
-        createdBy: req.user._id,
-        createdByName: req.user.name,
-        note: note || 'Bulk update',
-        action: 'update'
+        changedBy: req.user.id,
+        changeDescription: note || 'Bulk update'
       });
 
       results.push({ key, version: newVersion });
