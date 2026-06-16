@@ -1,7 +1,6 @@
 export { default as SecuritySection } from "./SecuritySection";
 export { default as BackupSection } from "./BackupSection";
 export { default as ConfigSection } from "./ConfigSection";
-export { default as SiteConfigSection } from "./SiteConfigSection";
 export { default as NotificationsSection } from "./NotificationsSection";
 export { default as BrandingSection } from "./BrandingSection";
 export { default as ApiSection } from "./ApiSection";

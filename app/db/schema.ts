@@ -731,39 +731,3 @@ export const dataAccessPolicies = mysqlTable("data_access_policies", {
 });
 
 export type DataAccessPolicy = typeof dataAccessPolicies.$inferSelect;
-
-// ═══════════════════════════════════════════════════════════════════════════
-// SITE CONFIGURATION (Dynamic Settings)
-// ═══════════════════════════════════════════════════════════════════════════
-
-export const siteConfigs = mysqlTable("site_configs", {
-  id: serial("id").primaryKey(),
-  key: varchar("configKey", { length: 255 }).notNull().unique(),
-  value: text("configValue").notNull(),
-  type: mysqlEnum("configType", ["string", "number", "boolean", "json"]).default("string").notNull(),
-  category: varchar("configCategory", { length: 100 }).default("general").notNull(),
-  description: text("description"),
-  isPublic: boolean("isPublic").default(false).notNull(),
-  isEncrypted: boolean("isEncrypted").default(false).notNull(),
-  createdBy: bigint("createdBy", { mode: "number", unsigned: true }),
-  updatedBy: bigint("updatedBy", { mode: "number", unsigned: true }),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
-});
-
-export type SiteConfig = typeof siteConfigs.$inferSelect;
-
-export const configVersions = mysqlTable("config_versions", {
-  id: serial("id").primaryKey(),
-  version: varchar("version", { length: 50 }).notNull().unique(),
-  name: varchar("name", { length: 255 }).notNull(),
-  description: text("description"),
-  snapshot: text("snapshot").notNull(), // JSON snapshot of all configs
-  status: mysqlEnum("versionStatus", ["draft", "published", "archived"]).default("draft").notNull(),
-  createdBy: bigint("createdBy", { mode: "number", unsigned: true }),
-  publishedAt: timestamp("publishedAt"),
-  archivedAt: timestamp("archivedAt"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-});
-
-export type ConfigVersion = typeof configVersions.$inferSelect;

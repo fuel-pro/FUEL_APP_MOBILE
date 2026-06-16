@@ -53,6 +53,7 @@ import {
   CreditCard,
 } from "lucide-react";
 import { validateFounderAuth } from "@/react-app/lib/founder-auth";
+import { trpc } from "@/providers/trpc";
 import {
   SecuritySection,
   BackupSection,
@@ -73,9 +74,9 @@ import {
   PerformanceSection,
   PaywallControlSection,
   PaymentMethodsSection,
-  SiteConfigSection,
 } from "./founder-sections";
 import { useFounderBackend } from "@/react-app/hooks/useFounderBackend";
+import { trpc } from "@/providers/trpc";
 
 /* ─── Types ─── */
 interface AppUser {
@@ -277,7 +278,6 @@ type SectionId =
   | "security"
   | "backup"
   | "config"
-  | "siteconfig"
   | "notifications"
   | "branding"
   | "api"
@@ -948,7 +948,6 @@ export default function FounderAccess() {
       label: "Configuration",
       items: [
         { id: "config" as SectionId, label: "Site Config", icon: Settings },
-        { id: "siteconfig" as SectionId, label: "Dynamic Config", icon: Database },
         {
           id: "notifications" as SectionId,
           label: "Notifications",
@@ -2033,7 +2032,6 @@ export default function FounderAccess() {
           )}
           {activeSection === "backup" && <BackupSection logAudit={logAudit} />}
           {activeSection === "config" && <ConfigSection logAudit={logAudit} />}
-          {activeSection === "siteconfig" && <SiteConfigSection />}
           {activeSection === "notifications" && (
             <NotificationsSection logAudit={logAudit} />
           )}

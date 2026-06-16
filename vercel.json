@@ -1,1 +1,1 @@
-{"version":2,"buildCommand":"cd app && npm run build","outputDirectory":"app/dist","installCommand":"cd app && npm install","framework":null,"rewrites":[{"source":"/api/(.*)","destination":"/api/dist/boot.mjs"}],"headers":[{"source":"/(.*)","headers":[{"key":"X-Content-Type-Options","value":"nosniff"},{"key":"X-Frame-Options","value":"DENY"},{"key":"X-XSS-Protection","value":"1; mode=block"}]}]}
+{"version":2,"buildCommand":"cd app && npm run build:static","outputDirectory":"app/dist","installCommand":"cd app && npm install","framework":null}
