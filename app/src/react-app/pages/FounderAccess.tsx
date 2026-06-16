@@ -1,20 +1,13 @@
 import React, { useState, useEffect } from "react";
 import { Crown } from "lucide-react";
-import { useFounderBackend } from "@/react-app/hooks/useFounderBackend";
 
 export default function FounderAccess() {
-  const {
-    logAudit,
-    auditLog,
-  } = useFounderBackend();
-  
   const [showContent, setShowContent] = useState(false);
   
   useEffect(() => {
     console.log("FounderAccess mounted");
-    console.log("auditLog:", auditLog);
     setShowContent(true);
-  }, [auditLog]);
+  }, []);
 
   if (!showContent) {
     return (
@@ -36,14 +29,6 @@ export default function FounderAccess() {
         <div className="bg-white/10 rounded-xl p-6">
           <h2 className="text-lg font-semibold mb-2">Welcome to Founder Dashboard</h2>
           <p className="text-gray-300">This is a simplified version of the founder dashboard.</p>
-          <div className="mt-4">
-            <button 
-              onClick={() => logAudit("Test Event", "Test log entry", "info")}
-              className="px-4 py-2 bg-amber-500 text-white rounded-lg"
-            >
-              Test Log Audit
-            </button>
-          </div>
         </div>
       </main>
     </div>
