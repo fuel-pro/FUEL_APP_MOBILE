@@ -37,7 +37,7 @@ app.use(express.urlencoded({ extended: true }));
 app.set('io', io);
 
 // Database Connection
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/fuelapp';
+const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://leonibuyanawose_db_user:kRiuvbTANIc1rNnH@cluster0.yhxowyd.mongodb.net';
 mongoose.connect(MONGO_URI)
   .then(() => console.log('✅ MongoDB Connected'))
   .catch(err => console.error('❌ MongoDB Error:', err));
