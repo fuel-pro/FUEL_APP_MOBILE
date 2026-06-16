@@ -21,25 +21,47 @@ export interface FounderSessionData {
 }
 
 /**
+ * Check if we're in a static deployment (no API server)
+ * In static mode, tRPC queries will fail, so we skip them
+ */
+function isStaticDeployment(): boolean {
+  // On Vercel static deployment, /api/trpc doesn't exist
+  // We detect this by checking if we're on a known static host
+  if (typeof window === "undefined") return false;
+  const host = window.location.hostname;
+  // Vercel static deployments don't have serverless functions
+  // Check if this is a static deployment by attempting a quick HEAD request
+  return host.includes("vercel.app") || host.includes("netlify.app");
+}
+
+/**
  * useFounderBackend — Integrates Founder Access with the tRPC backend.
  *
  * Provides:
- *   - Audit logging (persisted to MySQL via audit.log)
+ *   - Audit logging (persisted to MySQL via audit.log, or localStorage in static mode)
  *   - Audit log retrieval (from DB, falls back to localStorage)
  *   - Founder session management (2FA, password, contact via founder_sessions table)
  *   - Station & sales analytics (from DB)
+ * 
+ * In static deployment mode, skips backend queries and uses localStorage only.
  */
 export function useFounderBackend() {
   const utils = trpc.useUtils();
+  
+  // Detect static deployment and skip backend queries
+  const isStatic = useMemo(() => isStaticDeployment(), []);
 
   /* ─── Audit Logging ─── */
-  const logMutation = trpc.audit.log.useMutation({
-    onSuccess: () => {
-      // Invalidate cached lists after a new log entry
-      utils.audit.listAll.invalidate();
-      utils.audit.summary.invalidate();
-    },
-  });
+  // Skip mutation in static mode - only log to localStorage
+  const logMutation = isStatic 
+    ? { mutate: () => {}, mutateAsync: () => Promise.resolve(), reset: () => {} }
+    : trpc.audit.log.useMutation({
+        onSuccess: () => {
+          // Invalidate cached lists after a new log entry
+          utils.audit.listAll.invalidate();
+          utils.audit.summary.invalidate();
+        },
+      });
 
   const logAudit = useCallback(
     (event: string, detail: string, severity: AuditSeverity = "info") => {
@@ -72,11 +94,13 @@ export function useFounderBackend() {
   );
 
   /* ─── Audit Log List ─── */
-  const { data: dbAuditLogs, isLoading: auditLoading } =
-    trpc.audit.listAll.useQuery(undefined, {
-      staleTime: 1000 * 60 * 2, // 2 min cache
-      retry: 1,
-    });
+  // Skip query in static mode - use localStorage directly
+  const { data: dbAuditLogs, isLoading: auditLoading } = isStatic
+    ? { data: undefined, isLoading: false }
+    : trpc.audit.listAll.useQuery(undefined, {
+        staleTime: 1000 * 60 * 2, // 2 min cache
+        retry: 1,
+      });
 
   // Merge DB logs with localStorage fallback
   const auditLog: AuditEntry[] = useMemo(() => {
@@ -112,25 +136,31 @@ export function useFounderBackend() {
   }, [dbAuditLogs]);
 
   /* ─── Audit Summary (analytics) ─── */
-  const { data: auditSummary } = trpc.audit.summary.useQuery(undefined, {
-    staleTime: 1000 * 60 * 5,
-    retry: 1,
-  });
+  // Skip query in static mode
+  const { data: auditSummary } = isStatic
+    ? { data: undefined }
+    : trpc.audit.summary.useQuery(undefined, {
+        staleTime: 1000 * 60 * 5,
+        retry: 1,
+      });
 
   /* ─── Founder Session (2FA / Password / Contact) ─── */
-  const { data: dbFounderSession } = trpc.audit.getFounderSession.useQuery(
-    undefined,
-    {
-      staleTime: 1000 * 60 * 5,
-      retry: 1,
-    }
-  );
+  // Skip query in static mode
+  const { data: dbFounderSession } = isStatic
+    ? { data: undefined }
+    : trpc.audit.getFounderSession.useQuery(undefined, {
+        staleTime: 1000 * 60 * 5,
+        retry: 1,
+      });
 
-  const upsertSessionMutation = trpc.audit.upsertFounderSession.useMutation({
-    onSuccess: () => {
-      utils.audit.getFounderSession.invalidate();
-    },
-  });
+  // Skip mutation in static mode
+  const upsertSessionMutation = isStatic
+    ? { mutate: () => {}, mutateAsync: () => Promise.resolve(), reset: () => {} }
+    : trpc.audit.upsertFounderSession.useMutation({
+        onSuccess: () => {
+          utils.audit.getFounderSession.invalidate();
+        },
+      });
 
   const founderSession: FounderSessionData = useMemo(() => {
     if (dbFounderSession) {
@@ -225,33 +255,42 @@ export function useFounderBackend() {
   );
 
   /* ─── Stations (from backend) ─── */
-  const { data: stationsData, isLoading: stationsLoading } =
-    trpc.station.list.useQuery(undefined, {
-      staleTime: 1000 * 60 * 2,
-      retry: 1,
-    });
+  // Skip query in static mode
+  const { data: stationsData, isLoading: stationsLoading } = isStatic
+    ? { data: undefined, isLoading: false }
+    : trpc.station.list.useQuery(undefined, {
+        staleTime: 1000 * 60 * 2,
+        retry: 1,
+      });
 
   const stationCount = stationsData?.length || 0;
 
   /* ─── Sales Analytics (from backend) ─── */
-  const { data: salesAnalytics } = trpc.sale.analytics.useQuery(undefined, {
-    staleTime: 1000 * 60 * 2,
-    retry: 1,
-  });
+  // Skip query in static mode
+  const { data: salesAnalytics } = isStatic
+    ? { data: undefined }
+    : trpc.sale.analytics.useQuery(undefined, {
+        staleTime: 1000 * 60 * 2,
+        retry: 1,
+      });
 
   /* ─── All Users (from backend founder auth) ─── */
-  const { data: allBackendUsers, isLoading: usersLoading } =
-    trpc.founderAuth.getAllUsers.useQuery(undefined, {
-      staleTime: 1000 * 60 * 2,
-      retry: 1,
-    });
+  // Skip query in static mode
+  const { data: allBackendUsers, isLoading: usersLoading } = isStatic
+    ? { data: undefined, isLoading: false }
+    : trpc.founderAuth.getAllUsers.useQuery(undefined, {
+        staleTime: 1000 * 60 * 2,
+        retry: 1,
+      });
 
   /* ─── All Stations (from backend founder auth) ─── */
-  const { data: allBackendStations, isLoading: allStationsLoading } =
-    trpc.founderAuth.getAllStations.useQuery(undefined, {
-      staleTime: 1000 * 60 * 2,
-      retry: 1,
-    });
+  // Skip query in static mode
+  const { data: allBackendStations, isLoading: allStationsLoading } = isStatic
+    ? { data: undefined, isLoading: false }
+    : trpc.founderAuth.getAllStations.useQuery(undefined, {
+        staleTime: 1000 * 60 * 2,
+        retry: 1,
+      });
 
   return {
     // Audit
