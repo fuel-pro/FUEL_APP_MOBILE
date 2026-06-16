@@ -10,42 +10,9 @@ import { PlatformDataProvider } from "@/react-app/context/PlatformDataContext";
 import HomePage from "@/react-app/pages/Home";
 import AuthLogin from "@/react-app/components/AuthLogin";
 import PasswordReset from "@/react-app/pages/PasswordReset";
-import { Suspense, useMemo, Component, ReactNode } from "react";
+import { Suspense, useMemo } from "react";
 import InviteAccept from "@/react-app/pages/InviteAccept";
 import FounderAccess from "@/react-app/pages/FounderAccess";
-
-// Error boundary to catch render errors
-class ErrorBoundary extends Component<{ children: ReactNode; fallback?: ReactNode }, { hasError: boolean; error?: Error }> {
-  constructor(props: any) {
-    super(props);
-    this.state = { hasError: false };
-  }
-  static getDerivedStateFromError(error: Error) {
-    return { hasError: true, error };
-  }
-  componentDidCatch(error: Error, info: any) {
-    console.error("FounderAccess Error:", error, info);
-  }
-  render() {
-    if (this.state.hasError) {
-      return this.props.fallback || (
-        <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 flex items-center justify-center p-8">
-          <div className="bg-white/10 backdrop-blur-xl rounded-2xl p-8 shadow-2xl border border-white/20 text-center max-w-lg">
-            <h2 className="text-xl font-semibold text-white mb-4">Something went wrong</h2>
-            <p className="text-gray-300 text-sm mb-4">{this.state.error?.message}</p>
-            <button 
-              onClick={() => window.location.reload()}
-              className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-sm"
-            >
-              Reload Page
-            </button>
-          </div>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
 
 // Simple fallback for lazy-loaded routes
 function RouteFallback() {
@@ -135,7 +102,7 @@ export default function App() {
                   {/* Founder Access - public, no auth required, rendered BEFORE auth check */}
                   <Route
                     path="/founder"
-                    element={<div className="min-h-screen bg-red-900 flex items-center justify-center text-white text-2xl">Founder Route Works!</div>}
+                    element={<div className="min-h-screen bg-green-900 flex items-center justify-center text-white text-2xl">Founder Route Works!</div>}
                   />
                   <Route
                     path="/founder-v1"
