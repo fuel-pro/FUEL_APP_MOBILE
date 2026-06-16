@@ -37,7 +37,11 @@ app.use(express.urlencoded({ extended: true }));
 app.set('io', io);
 
 // Database Connection
-const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://leonibuyanawose_db_user:kRiuvbTANIc1rNnH@cluster0.yhxowyd.mongodb.net';
+const MONGO_URI = process.env.MONGO_URI;
+if (!MONGO_URI) {
+  console.error('❌ MONGO_URI environment variable is not set');
+  process.exit(1);
+}
 mongoose.connect(MONGO_URI)
   .then(() => console.log('✅ MongoDB Connected'))
   .catch(err => console.error('❌ MongoDB Error:', err));
@@ -48,7 +52,28 @@ app.get('/health', (req, res) => {
     status: 'ok', 
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
-    mongodb: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected'
+    mongodb: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+    env: {
+      hasMongoUri: !!process.env.MONGO_URI,
+      nodeEnv: process.env.NODE_ENV,
+      port: process.env.PORT
+    }
+  });
+});
+
+// Debug endpoint
+app.get('/debug', (req, res) => {
+  res.json({
+    env: {
+      MONGO_URI: process.env.MONGO_URI ? '***' : 'NOT SET',
+      NODE_ENV: process.env.NODE_ENV,
+      PORT: process.env.PORT,
+      JWT_SECRET: process.env.JWT_SECRET ? '***' : 'NOT SET'
+    },
+    mongoose: {
+      readyState: mongoose.connection.readyState,
+      states: ['disconnected', 'connected', 'connecting', 'disconnecting']
+    }
   });
 });
 
