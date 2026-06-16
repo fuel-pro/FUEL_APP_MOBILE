@@ -102,11 +102,7 @@ export default function App() {
                   {/* Founder Access - public, no auth required, rendered BEFORE auth check */}
                   <Route
                     path="/founder"
-                    element={
-                      <Suspense fallback={<RouteFallback />}>
-                        <FounderAccess />
-                      </Suspense>
-                    }
+                    element={<FounderAccess />}
                   />
                   <Route
                     path="/founder-v1"
