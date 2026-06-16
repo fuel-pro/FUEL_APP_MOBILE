@@ -57,7 +57,6 @@ import {
   SecuritySection,
   BackupSection,
   ConfigSection,
-  SiteConfigSection,
   NotificationsSection,
   BrandingSection,
   ApiSection,
@@ -74,6 +73,7 @@ import {
   PerformanceSection,
   PaywallControlSection,
   PaymentMethodsSection,
+  SiteConfigSection,
 } from "./founder-sections";
 import { useFounderBackend } from "@/react-app/hooks/useFounderBackend";
 

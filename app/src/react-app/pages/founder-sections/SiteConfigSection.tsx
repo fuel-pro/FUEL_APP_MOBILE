@@ -38,7 +38,7 @@ const CATEGORIES = [
   { id: "security", label: "Security", icon: Lock },
 ];
 
-export function SiteConfigSection({ onToast }: SiteConfigSectionProps) {
+export default function SiteConfigSection({ onToast }: SiteConfigSectionProps) {
   const {
     configs,
     versions,
