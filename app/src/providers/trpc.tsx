@@ -9,6 +9,13 @@ export const trpc = createTRPCReact<AppRouter>();
 
 const queryClient = new QueryClient();
 
+// Check if we're in a static deployment
+function isStaticDeployment(): boolean {
+  if (typeof window === "undefined") return false;
+  const host = window.location.hostname;
+  return host.includes("vercel.app") || host.includes("netlify.app") || host.includes("github.io");
+}
+
 const trpcClient = trpc.createClient({
   links: [
     httpBatchLink({
@@ -39,6 +46,10 @@ const trpcClient = trpc.createClient({
         return headers;
       },
       fetch(input, init) {
+        // In static deployment, fail fast to avoid blocking
+        if (isStaticDeployment()) {
+          return Promise.resolve(new Response(JSON.stringify({}), { status: 404 }));
+        }
         return globalThis.fetch(input, {
           ...(init ?? {}),
           credentials: "include",
