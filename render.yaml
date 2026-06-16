@@ -9,11 +9,16 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+        sync: true
       - key: PORT
         value: 5000
+        sync: true
       - key: MONGO_URI
         value: mongodb+srv://leonibuyanawose_db_user:kRiuvbTANIc1rNnH@cluster0.yhxowyd.mongodb.net
+        sync: true
       - key: JWT_SECRET
         value: fuelpro_super_secret_jwt_key_2024_production
+        sync: true
       - key: JWT_EXPIRES_IN
         value: 7d
+        sync: true
