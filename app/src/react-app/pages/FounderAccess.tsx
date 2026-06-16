@@ -53,7 +53,6 @@ import {
   CreditCard,
 } from "lucide-react";
 import { validateFounderAuth } from "@/react-app/lib/founder-auth";
-import { trpc } from "@/providers/trpc";
 import {
   SecuritySection,
   BackupSection,
@@ -76,7 +75,6 @@ import {
   PaymentMethodsSection,
 } from "./founder-sections";
 import { useFounderBackend } from "@/react-app/hooks/useFounderBackend";
-import { trpc } from "@/providers/trpc";
 
 /* ─── Types ─── */
 interface AppUser {
@@ -278,6 +276,7 @@ type SectionId =
   | "security"
   | "backup"
   | "config"
+  
   | "notifications"
   | "branding"
   | "api"
