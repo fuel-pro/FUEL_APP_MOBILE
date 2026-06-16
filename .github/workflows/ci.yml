@@ -74,6 +74,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: app/package-lock.json
       - uses: actions/download-artifact@v4
         with:
           name: dist
@@ -81,7 +83,10 @@ jobs:
       - name: Deploy to Vercel
         run: |
           if [ -n "${{ secrets.VERCEL_TOKEN }}" ]; then
-            cd app && npx vercel@latest deploy --token=${{ secrets.VERCEL_TOKEN }} --prod --yes || echo "Vercel deploy skipped or failed"
+            # Copy dist to public for vercel.json outputDirectory setting
+            mkdir -p app/public && cp -r app/dist/* app/public/
+            cd app && npx vercel@latest deploy --token=${{ secrets.VERCEL_TOKEN }} --prod --yes
           else
-            echo "VERCEL_TOKEN not set - skipping deploy"
+            echo "VERCEL_TOKEN not set - skipping Vercel deploy"
+            echo "Please add VERCEL_TOKEN secret to GitHub repository"
           fi
