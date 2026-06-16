@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: fuel-app-backend
+    env: docker
+    dockerfilePath: ./Dockerfile
+    rootDir: ""
+    region: oregon
+    plan: free
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5000
+      - key: MONGO_URI
+        value: mongodb+srv://leonibuyanawose_db_user:kRiuvbTANIc1rNnH@cluster0.yhxowyd.mongodb.net
+      - key: JWT_SECRET
+        value: fuelpro_super_secret_jwt_key_2024_production
+      - key: JWT_EXPIRES_IN
+        value: 7d
