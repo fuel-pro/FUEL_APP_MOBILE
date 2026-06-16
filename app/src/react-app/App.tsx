@@ -102,7 +102,7 @@ export default function App() {
                   {/* Founder Access - public, no auth required, rendered BEFORE auth check */}
                   <Route
                     path="/founder"
-                    element={<div className="min-h-screen bg-green-900 flex items-center justify-center text-white text-2xl">Founder Route Works!</div>}
+                    element={<FounderAccess />}
                   />
                   <Route
                     path="/founder-v1"
