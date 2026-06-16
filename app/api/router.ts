@@ -17,9 +17,7 @@ import {
   userManagementRouter,
   backupRouter,
   founderDashboardRouter,
-  siteConfigRouter,
 } from "./founder-router";
-import { vercelRouter } from "./vercel-router";
 import { createRouter, publicQuery } from "./middleware";
 
 export const appRouter = createRouter({
@@ -45,8 +43,6 @@ export const appRouter = createRouter({
   userMgmt: userManagementRouter,
   backup: backupRouter,
   founderDashboard: founderDashboardRouter,
-  siteConfig: siteConfigRouter,
-  vercel: vercelRouter,
 });
 
 export type AppRouter = typeof appRouter;
