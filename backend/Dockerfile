@@ -8,8 +8,14 @@ LABEL maintainer="FuelPro <support@fuelpro.app>"
 LABEL description="FuelPro Backend API - Express.js with SQLite"
 LABEL version="1.0.0"
 
-# Install SQLite for native module
-RUN apk add --no-cache python3 make g++
+# Install build tools and Python for native modules (better-sqlite3)
+RUN apk add --no-cache \
+    python3 \
+    make \
+    g++ \
+    sqlite \
+    sqlite-dev \
+    node-gyp
 
 # Create non-root user for security
 RUN addgroup -g 1001 -S nodejs && \
@@ -20,15 +26,17 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install production dependencies only
-RUN npm ci --only=production && npm cache clean --force
+# Install ALL dependencies (including devDependencies for native module compilation)
+RUN npm ci
 
 # Copy source code
-COPY server.js ./
-COPY routes/ ./routes/
-COPY models/ ./models/
-COPY middleware/ ./middleware/
-COPY database/ ./database/
+COPY --chown=nodeuser:nodejs server.js ./
+COPY --chown=nodeuser:nodejs routes/ ./routes/
+COPY --chown=nodeuser:nodejs models/ ./models/
+COPY --chown=nodeuser:nodejs middleware/ ./middleware/
+COPY --chown=nodeuser:nodejs database/ ./database/
+COPY --chown=nodeuser:nodejs services/ ./services/
+COPY --chown=nodeuser:nodejs utils/ ./utils/
 
 # Create data directory for SQLite
 RUN mkdir -p /app/data && chown -R nodeuser:nodejs /app
@@ -49,17 +57,3 @@ USER nodeuser
 
 # Start server
 CMD ["sh", "-c", "node server.js"]
-
-# ─── Development Stage ───
-FROM node:20-alpine AS development
-
-WORKDIR /app
-
-COPY package*.json ./
-RUN npm install
-
-COPY . .
-
-EXPOSE 5000
-
-CMD ["npm", "run", "dev"]
