@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 env:
-  IMAGE_NAME: ghcr.io/${{ github.repository }}/fuel-backend
+  IMAGE_NAME: ghcr.io/fuel-pro/fuel_app_mobile/fuel-backend
 
 jobs:
   build-and-deploy:
@@ -34,12 +34,14 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Make image public
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           # Make the package public so Render can pull it
           gh api \
             --method PATCH \
             -H "Accept: application/vnd.github+json" \
-            /user/packages/container/ghcr.io/${{ github.repository }}/fuel-backend \
+            /user/packages/container/ghcr.io/fuel-pro/fuel_app_mobile/fuel-backend \
             -f visibility=public
 
       - name: Extract metadata for Docker
