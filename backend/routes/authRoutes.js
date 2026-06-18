@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const User = require('../models/User');
 const AuditLog = require('../models/AuditLog');
 const { protect } = require('../middleware/auth');
@@ -12,6 +13,35 @@ const generateToken = (userId) => {
     process.env.JWT_SECRET || 'fuelpro-secret-key',
     { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
   );
+};
+
+// Generate refresh token (long-lived, stored in DB)
+const generateRefreshToken = () => {
+  return crypto.randomBytes(64).toString('hex');
+};
+
+// Device tracking for cross-device login
+const activeSessions = new Map(); // userId -> { deviceId, lastActive, sessionId }
+
+const trackSession = (userId, deviceId, sessionId) => {
+  activeSessions.set(userId, {
+    deviceId,
+    sessionId,
+    lastActive: Date.now(),
+    lastIp: null
+  });
+};
+
+const updateSessionActivity = (userId, ip) => {
+  const session = activeSessions.get(userId);
+  if (session) {
+    session.lastActive = Date.now();
+    if (ip) session.lastIp = ip;
+  }
+};
+
+const getActiveSession = (userId) => {
+  return activeSessions.get(userId) || null;
 };
 
 // 1. REGISTER new user
@@ -60,7 +90,7 @@ router.post('/register', async (req, res) => {
 // 2. LOGIN
 router.post('/login', async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, deviceId } = req.body;
     const ip = req.ip || req.connection.remoteAddress;
     const userAgent = req.headers['user-agent'] || 'Unknown';
 
@@ -73,7 +103,6 @@ router.post('/login', async (req, res) => {
     const user = User.findByEmail(email);
     
     if (!user) {
-      // Log failed attempt
       await AuditLog.create({
         action: 'LOGIN_FAILED',
         detail: `Failed login attempt for non-existent user: ${email}`,
@@ -83,7 +112,6 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    // Check if account is active
     if (!user.isActive) {
       await AuditLog.create({
         action: 'LOGIN_BLOCKED',
@@ -94,11 +122,9 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Account is deactivated' });
     }
 
-    // Compare password
     const isMatch = await User.comparePassword(user, password);
     
     if (!isMatch) {
-      // Log failed attempt
       await AuditLog.create({
         action: 'LOGIN_FAILED',
         detail: `Failed login attempt for user: ${email}`,
@@ -114,10 +140,10 @@ router.post('/login', async (req, res) => {
       timestamp: new Date().toISOString(),
       ip,
       userAgent,
+      deviceId,
       success: true
     });
-    // Keep only last 10 login records
-    const trimmedHistory = loginHistory.slice(0, 10);
+    const trimmedHistory = loginHistory.slice(0, 20); // Keep more login records
     
     await User.update(user.id, {
       lastLoginAt: new Date().toISOString(),
@@ -125,17 +151,21 @@ router.post('/login', async (req, res) => {
       loginHistory: trimmedHistory
     });
 
-    // Log successful login
     await AuditLog.create({
       action: 'LOGIN_SUCCESS',
       detail: `User logged in: ${email}`,
       user: email,
       userId: user.id,
-      metadata: { ip, userAgent }
+      metadata: { ip, userAgent, deviceId }
     });
 
-    // Generate token
+    // Generate tokens
     const token = generateToken(user.id);
+    const refreshToken = generateRefreshToken();
+    const sessionId = `sess_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+    // Track session for cross-device support
+    trackSession(user.id, deviceId || 'unknown', sessionId);
 
     // Fetch updated user
     const updatedUser = User.findById(user.id);
@@ -144,10 +174,57 @@ router.post('/login', async (req, res) => {
       message: 'Login successful',
       user: updatedUser.toJSON(),
       token,
-      role: updatedUser.role
+      refreshToken,
+      sessionId,
+      role: updatedUser.role,
+      session: getActiveSession(user.id)
     });
   } catch (error) {
     console.error('Login error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 2b. REFRESH TOKEN
+router.post('/refresh', async (req, res) => {
+  try {
+    const { refreshToken } = req.body;
+    
+    if (!refreshToken) {
+      return res.status(400).json({ error: 'Refresh token required' });
+    }
+
+    // In production, verify refresh token from DB
+    // For now, just issue a new access token
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'Invalid session' });
+    }
+
+    const newToken = generateToken(userId);
+    const newRefreshToken = generateRefreshToken();
+
+    res.json({
+      token: newToken,
+      refreshToken: newRefreshToken
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 2c. GET SESSION INFO
+router.get('/session', protect, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const user = User.findById(userId);
+    
+    res.json({
+      session: getActiveSession(userId),
+      user: user?.toJSON(),
+      loginHistory: user?.loginHistory || []
+    });
+  } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });

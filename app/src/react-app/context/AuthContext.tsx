@@ -5,13 +5,16 @@ import {
   useCallback,
   ReactNode,
   useEffect,
+  useRef,
 } from "react";
 
 // ============================================================
-// AUTH CONTEXT v4 - Real Authentication with Popup OAuth
-// Supports: Google OAuth (popup), Email/Password, Username
+// AUTH CONTEXT v5 - Enhanced with Backend API + Cross-Device Sync
+// Supports: Email/Password with backend, localStorage persistence
 // Binds auth identity to station roles
 // ============================================================
+
+const API_BASE = import.meta.env.VITE_API_URL || "https://fuel-app-backend.onrender.com";
 
 export type AuthMethod = "google" | "email" | "username";
 
@@ -22,6 +25,8 @@ export interface AuthIdentity {
   email: string;
   name: string;
   picture?: string;
+  role?: string;
+  permissions?: string[];
 }
 
 export interface StationRoleBinding {
@@ -39,7 +44,9 @@ interface AuthContextType {
   user: AuthIdentity | null;
   bindings: StationRoleBinding[];
   isPending: boolean;
+  isLoading: boolean;
   error: string | null;
+  token: string | null;
   // Auth actions
   loginWithEmail: (email: string, password: string) => Promise<boolean>;
   registerWithEmail: (
@@ -50,6 +57,7 @@ interface AuthContextType {
   loginWithUsername: (username: string, password: string) => Promise<boolean>;
   logout: () => void;
   clearError: () => void;
+  refreshAuth: () => Promise<boolean>;
   // Password reset
   requestPasswordReset: (
     email: string
@@ -71,6 +79,18 @@ interface AuthContextType {
 
 const AUTH_STORAGE_KEY = "fuelpro_auth_identity";
 const BINDINGS_STORAGE_KEY = "fuelpro_role_bindings";
+const TOKEN_STORAGE_KEY = "fuelpro_token";
+const DEVICE_ID_KEY = "fuelpro_device_id";
+
+// Generate device ID
+function getDeviceId(): string {
+  let id = localStorage.getItem(DEVICE_ID_KEY);
+  if (!id) {
+    id = `dev_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    localStorage.setItem(DEVICE_ID_KEY, id);
+  }
+  return id;
+}
 
 function loadUser(): AuthIdentity | null {
   try {
@@ -78,6 +98,10 @@ function loadUser(): AuthIdentity | null {
     if (stored) return JSON.parse(stored);
   } catch {}
   return null;
+}
+
+function loadToken(): string | null {
+  return localStorage.getItem(TOKEN_STORAGE_KEY);
 }
 
 function loadBindings(): StationRoleBinding[] {
@@ -88,15 +112,104 @@ function loadBindings(): StationRoleBinding[] {
   return [];
 }
 
+// BroadcastChannel for cross-tab sync
+let syncChannel: BroadcastChannel | null = null;
+try {
+  syncChannel = new BroadcastChannel("fuelpro_auth_sync");
+} catch {}
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthIdentity | null>(loadUser);
   const [bindings, setBindings] = useState<StationRoleBinding[]>(loadBindings);
   const [isPending, setIsPending] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [token, setToken] = useState<string | null>(loadToken);
+  const refreshIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Save to localStorage whenever user/bindings change
+  // Initialize - verify token with backend
+  useEffect(() => {
+    const initAuth = async () => {
+      const storedToken = loadToken();
+      if (storedToken) {
+        try {
+          const res = await fetch(`${API_BASE}/api/auth/me`, {
+            headers: { Authorization: `Bearer ${storedToken}` },
+          });
+          if (res.ok) {
+            const data = await res.json();
+            const backendUser = data.user || data;
+            setUser({
+              id: backendUser.id,
+              authId: `email_${backendUser.email}`,
+              authMethod: "email",
+              email: backendUser.email,
+              name: backendUser.name,
+              role: backendUser.role,
+              permissions: backendUser.permissions,
+            });
+            setToken(storedToken);
+          } else {
+            // Token invalid - clear
+            localStorage.removeItem(AUTH_STORAGE_KEY);
+            localStorage.removeItem(TOKEN_STORAGE_KEY);
+          }
+        } catch {
+          // Offline - use cached data
+        }
+      }
+      setIsLoading(false);
+    };
+    initAuth();
+
+    // Setup refresh interval
+    if (token) {
+      refreshIntervalRef.current = setInterval(() => {
+        refreshAuth();
+      }, 14 * 60 * 1000); // 14 minutes
+    }
+
+    return () => {
+      if (refreshIntervalRef.current) clearInterval(refreshIntervalRef.current);
+    };
+  }, []);
+
+  // Listen for cross-tab auth updates
+  useEffect(() => {
+    if (!syncChannel) return;
+    
+    const handleMessage = (e: MessageEvent) => {
+      if (e.data?.type === "AUTH_UPDATE") {
+        setUser(e.data.user);
+        setToken(e.data.token);
+        // Update localStorage
+        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(e.data.user));
+        localStorage.setItem(TOKEN_STORAGE_KEY, e.data.token);
+      } else if (e.data?.type === "LOGOUT") {
+        handleLogout();
+      }
+    };
+    
+    syncChannel.addEventListener("message", handleMessage);
+    
+    // Also listen to storage events
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === AUTH_STORAGE_KEY) {
+        if (e.newValue) setUser(JSON.parse(e.newValue));
+        else setUser(null);
+      }
+    };
+    window.addEventListener("storage", handleStorage);
+    
+    return () => {
+      syncChannel?.removeEventListener("message", handleMessage);
+      window.removeEventListener("storage", handleStorage);
+    };
+  }, []);
+
+  // Save to localStorage whenever user/bindings/token change
   useEffect(() => {
     if (user) localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user));
     else localStorage.removeItem(AUTH_STORAGE_KEY);
@@ -106,36 +219,69 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(BINDINGS_STORAGE_KEY, JSON.stringify(bindings));
   }, [bindings]);
 
+  useEffect(() => {
+    if (token) localStorage.setItem(TOKEN_STORAGE_KEY, token);
+    else localStorage.removeItem(TOKEN_STORAGE_KEY);
+  }, [token]);
+
   const clearError = useCallback(() => setError(null), []);
 
-  // ---- EMAIL AUTH ----
+  // Broadcast auth update to other tabs
+  const broadcastAuthUpdate = (newUser: AuthIdentity | null, newToken: string | null) => {
+    if (syncChannel) {
+      syncChannel.postMessage({
+        type: newUser ? "AUTH_UPDATE" : "LOGOUT",
+        user: newUser,
+        token: newToken,
+      });
+    }
+  };
+
+  // ---- EMAIL AUTH with Backend ----
   const loginWithEmail = useCallback(
     async (email: string, password: string): Promise<boolean> => {
       setIsPending(true);
       setError(null);
 
-      const users = JSON.parse(
-        localStorage.getItem("fuelpro_email_users") || "{}"
-      );
-      const found = Object.values(users).find(
-        (u: any) => u.email === email && u.password === password
-      );
+      try {
+        const deviceId = getDeviceId();
+        const res = await fetch(`${API_BASE}/api/auth/login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password, deviceId }),
+        });
 
-      if (!found) {
-        setError("Invalid email or password");
+        const data = await res.json();
+
+        if (!res.ok) {
+          setError(data.error || "Login failed");
+          setIsPending(false);
+          return false;
+        }
+
+        const backendUser = data.user;
+        const newUser: AuthIdentity = {
+          id: backendUser.id,
+          authId: `email_${backendUser.email}`,
+          authMethod: "email",
+          email: backendUser.email,
+          name: backendUser.name,
+          role: backendUser.role,
+          permissions: backendUser.permissions,
+        };
+
+        setUser(newUser);
+        setToken(data.token);
+        localStorage.setItem(TOKEN_STORAGE_KEY, data.token);
+        
+        broadcastAuthUpdate(newUser, data.token);
+        setIsPending(false);
+        return true;
+      } catch (err) {
+        setError("Connection error. Please try again.");
         setIsPending(false);
         return false;
       }
-
-      setUser({
-        id: `email_${(found as any).email}`,
-        authId: `email_${(found as any).email}`,
-        authMethod: "email",
-        email: (found as any).email,
-        name: (found as any).name || (found as any).email,
-      });
-      setIsPending(false);
-      return true;
     },
     []
   );
@@ -145,43 +291,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsPending(true);
       setError(null);
 
-      if (!email || !password || password.length < 6) {
-        setError("Email required, password must be at least 6 characters");
+      try {
+        const deviceId = getDeviceId();
+        const res = await fetch(`${API_BASE}/api/auth/register`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password, name, deviceId }),
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          setError(data.error || "Registration failed");
+          setIsPending(false);
+          return false;
+        }
+
+        // Auto-login after registration
+        return loginWithEmail(email, password);
+      } catch (err) {
+        setError("Connection error. Please try again.");
         setIsPending(false);
         return false;
       }
-
-      const users = JSON.parse(
-        localStorage.getItem("fuelpro_email_users") || "{}"
-      );
-      const exists = Object.values(users).find((u: any) => u.email === email);
-      if (exists) {
-        setError("An account with this email already exists");
-        setIsPending(false);
-        return false;
-      }
-
-      const id = `user_${Date.now()}`;
-      users[id] = {
-        id,
-        email,
-        password,
-        name,
-        createdAt: new Date().toISOString(),
-      };
-      localStorage.setItem("fuelpro_email_users", JSON.stringify(users));
-
-      setUser({
-        id: `email_${email}`,
-        authId: `email_${email}`,
-        authMethod: "email",
-        email,
-        name: name || email,
-      });
-      setIsPending(false);
-      return true;
     },
-    []
+    [loginWithEmail]
   );
 
   // ---- USERNAME AUTH ----
@@ -267,10 +401,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   // ---- LOGOUT ----
-  const logout = useCallback(() => {
+  const handleLogout = useCallback(() => {
     setUser(null);
+    setToken(null);
+    setBindings([]);
     setError(null);
     localStorage.removeItem(AUTH_STORAGE_KEY);
+    localStorage.removeItem(TOKEN_STORAGE_KEY);
+    localStorage.removeItem(BINDINGS_STORAGE_KEY);
+    broadcastAuthUpdate(null, null);
+  }, []);
+
+  const logout = handleLogout;
+
+  // ---- REFRESH AUTH ----
+  const refreshAuth = useCallback(async (): Promise<boolean> => {
+    const storedToken = loadToken();
+    if (!storedToken) return false;
+
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/me`, {
+        headers: { Authorization: `Bearer ${storedToken}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const backendUser = data.user || data;
+        const newUser: AuthIdentity = {
+          id: backendUser.id,
+          authId: `email_${backendUser.email}`,
+          authMethod: "email",
+          email: backendUser.email,
+          name: backendUser.name,
+          role: backendUser.role,
+          permissions: backendUser.permissions,
+        };
+        setUser(newUser);
+        setToken(storedToken);
+        return true;
+      }
+    } catch {}
+    return false;
   }, []);
 
   // ---- ROLE BINDING ----
@@ -439,12 +609,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user,
         bindings,
         isPending,
+        isLoading,
         error,
+        token,
         loginWithEmail,
         registerWithEmail,
         loginWithUsername,
         logout,
         clearError,
+        refreshAuth,
         requestPasswordReset,
         verifyResetCode,
         resetPassword,
