@@ -56,12 +56,20 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # Make the package public so Render can pull it
+          # Get the package ID first, then make it public
+          PACKAGE_ID=$(gh api -H "Accept: application/vnd.github+json" \
+            "/user/packages/container/fuel-backend/versions" 2>/dev/null | jq -r '.[0].id' || echo "")
+          if [ -n "$PACKAGE_ID" ]; then
+            gh api --method PATCH \
+              -H "Accept: application/vnd.github+json" \
+              "/user/packages/container/fuel-backend/versions/$PACKAGE_ID" \
+              -f visibility=public || echo "Visibility update skipped"
+          fi
+          # Also try the org-level package API
           gh api \
-            --method PATCH \
+            --method PUT \
             -H "Accept: application/vnd.github+json" \
-            /user/packages/container/ghcr.io/fuel-pro/fuel_app_mobile/fuel-backend \
-            -f visibility=public || echo "Package visibility update skipped (may already be public or not exist yet)"
+            "orgs/fuel-pro/packages/container/fuel-backend/versions" || echo "Org-level update skipped"
 
       - name: Show deployment info
         run: |
