@@ -8,6 +8,9 @@ on:
       - 'render.yaml'
   workflow_dispatch:
 
+env:
+  IMAGE_NAME: ghcr.io/${{ github.repository }}/fuel-backend
+
 jobs:
   build-and-deploy:
     name: Build Docker Image & Deploy to Render
@@ -30,6 +33,15 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Make image public
+        run: |
+          # Make the package public so Render can pull it
+          gh api \
+            --method PATCH \
+            -H "Accept: application/vnd.github+json" \
+            /user/packages/container/ghcr.io/${{ github.repository }}/fuel-backend \
+            -f visibility=public
+
       - name: Extract metadata for Docker
         id: meta
         uses: docker/metadata-action@v5
@@ -48,27 +60,27 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          no-cache: false
 
-      - name: Get latest image digest
-        id: digest
+      - name: Trigger Render Deploy via Deploy Hook
+        if: secrets.RENDER_DEPLOY_HOOK != ''
         run: |
-          DIGEST=$(docker inspect ghcr.io/${{ github.repository }}/fuel-backend:latest --format='{{index .RepoDigests 0}}' | cut -d'@' -f2)
-          echo "digest=$DIGEST" >> $GITHUB_OUTPUT
-          echo "Full image: ghcr.io/${{ github.repository }}/fuel-backend:latest@$DIGEST"
+          echo "Triggering Render deployment..."
+          curl -s -X POST "${{ secrets.RENDER_DEPLOY_HOOK }}"
+          echo "Render deployment triggered!"
 
-      - name: Trigger Render Deploy
+      - name: Show deployment info
         run: |
-          echo "Waiting for image to be available..."
-          sleep 10
-          
-          echo "Image built: ghcr.io/${{ github.repository }}/fuel-backend:latest"
-          echo "Digest: ${{ steps.digest.outputs.digest }}"
+          echo "✅ Docker image built successfully!"
+          echo "   Image: ${{ env.IMAGE_NAME }}:latest"
+          echo "   SHA: ${{ github.sha }}"
           echo ""
-          echo "=== NEXT STEPS ==="
-          echo "To deploy manually:"
-          echo "1. Go to https://dashboard.render.com/blueprints/exs-d8pv4t3sq97s738hdte0"
-          echo "2. Click 'Manual Deploy' → 'Deploy latest commit'"
-          echo ""
-          echo "Or share the image with Render:"
-          echo "ghcr.io/${{ github.repository }}/fuel-backend:latest"
+          if [ -z "${{ secrets.RENDER_DEPLOY_HOOK }}" ]; then
+            echo "⚠️ RENDER_DEPLOY_HOOK not set. To enable automatic deployment:"
+            echo "   1. Go to Render dashboard → your backend service"
+            echo "   2. Go to Settings → Deploy Hooks"
+            echo "   3. Copy the Deploy Hook URL"
+            echo "   4. Add it as a secret in GitHub: Settings → Secrets → Actions"
+            echo "   5. Name the secret RENDER_DEPLOY_HOOK"
+          else
+            echo "✅ Auto-deploy triggered via Render Deploy Hook!"
+          fi

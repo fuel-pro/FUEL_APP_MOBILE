@@ -7,7 +7,9 @@ services:
     name: fuel-pro-backend
     env: docker
     region: oregon
-    dockerfilePath: ./backend/Dockerfile
+    image:
+      # Use pre-built image from GitHub Container Registry
+      url: ghcr.io/fuel-pro/fuel_app_mobile/fuel-backend:latest
     healthCheckPath: /
     envVars:
       - key: NODE_ENV
