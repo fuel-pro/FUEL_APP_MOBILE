@@ -39,13 +39,15 @@ app.use(express.urlencoded({ extended: true }));
 // Make 'io' instance available to routes
 app.set('io', io);
 
-// Health check endpoint
+// Health check endpoint - SQLite version 3.0
 app.get('/health', (req, res) => {
   res.json({ 
     status: 'ok', 
+    version: '3.0-SQLITE-MIGRATION-COMPLETE',
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
     database: 'sqlite',
+    migration: 'MongoDB-to-SQLite-2024-06-18',
     env: {
       nodeEnv: process.env.NODE_ENV,
       port: process.env.PORT
