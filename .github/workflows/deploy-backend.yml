@@ -12,6 +12,8 @@ jobs:
   deploy-fly:
     name: Deploy to Fly.io
     runs-on: ubuntu-latest
+    # Only run if FLY_API_TOKEN is set
+    if: ${{ secrets.FLY_API_TOKEN != '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -20,7 +22,6 @@ jobs:
         uses: superfly/flyctl-actions/setup-flyctl@master
 
       - name: Deploy to Fly
-        if: secrets.FLY_API_TOKEN != ''
         run: |
           cd backend
           flyctl deploy --remote-only
@@ -30,9 +31,10 @@ jobs:
   deploy-render:
     name: Trigger Render Deploy
     runs-on: ubuntu-latest
+    # Only run if RENDER_DEPLOY_HOOK is set
+    if: ${{ secrets.RENDER_DEPLOY_HOOK != '' }}
     steps:
       - name: Trigger Render
-        if: secrets.RENDER_DEPLOY_HOOK != ''
         run: |
           curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK }}"
         env:

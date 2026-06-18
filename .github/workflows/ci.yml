@@ -81,12 +81,8 @@ jobs:
           name: dist
           path: app/dist
       - name: Deploy to Vercel
+        if: ${{ secrets.VERCEL_TOKEN != '' }}
         run: |
-          if [ -n "${{ secrets.VERCEL_TOKEN }}" ]; then
-            # Copy dist to public for vercel.json outputDirectory setting
-            mkdir -p app/public && cp -r app/dist/* app/public/
-            cd app && npx vercel@latest deploy --token=${{ secrets.VERCEL_TOKEN }} --prod --yes
-          else
-            echo "VERCEL_TOKEN not set - skipping Vercel deploy"
-            echo "Please add VERCEL_TOKEN secret to GitHub repository"
-          fi
+          # Copy dist to public for vercel.json outputDirectory setting
+          mkdir -p app/public && cp -r app/dist/* app/public/
+          cd app && npx vercel@latest deploy --token=${{ secrets.VERCEL_TOKEN }} --prod --yes
