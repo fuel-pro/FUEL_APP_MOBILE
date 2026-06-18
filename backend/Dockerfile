@@ -8,14 +8,13 @@ LABEL maintainer="FuelPro <support@fuelpro.app>"
 LABEL description="FuelPro Backend API - Express.js with SQLite"
 LABEL version="2.0.0"
 
-# Install build tools and Python for native modules (better-sqlite3)
+# Install build tools for native modules
 RUN apk add --no-cache \
     python3 \
     make \
     g++ \
     sqlite \
     sqlite-dev \
-    node-gyp \
     && rm -rf /var/cache/apk/*
 
 WORKDIR /app
