@@ -35,8 +35,6 @@ COPY --chown=nodeuser:nodejs routes/ ./routes/
 COPY --chown=nodeuser:nodejs models/ ./models/
 COPY --chown=nodeuser:nodejs middleware/ ./middleware/
 COPY --chown=nodeuser:nodejs database/ ./database/
-COPY --chown=nodeuser:nodejs services/ ./services/
-COPY --chown=nodeuser:nodejs utils/ ./utils/
 
 # Create data directory for SQLite
 RUN mkdir -p /app/data && chown -R nodeuser:nodejs /app
