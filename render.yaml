@@ -1,0 +1,20 @@
+# FuelPro Backend Render Blueprint
+# This file auto-deploys the backend service
+
+services:
+  - type: web
+    name: fuel-app-mobile
+    env: docker
+    dockerfilePath: ./backend/Dockerfile
+    region: oregon
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: JWT_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        value: /data/fuel-app.db
