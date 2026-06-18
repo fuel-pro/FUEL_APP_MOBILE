@@ -12,8 +12,6 @@ jobs:
   deploy-fly:
     name: Deploy to Fly.io
     runs-on: ubuntu-latest
-    # Only run if FLY_API_TOKEN is set
-    if: ${{ secrets.FLY_API_TOKEN != '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -23,19 +21,25 @@ jobs:
 
       - name: Deploy to Fly
         run: |
-          cd backend
-          flyctl deploy --remote-only
+          if [ -n "$FLY_API_TOKEN" ]; then
+            cd backend
+            flyctl deploy --remote-only
+          else
+            echo "FLY_API_TOKEN not configured - skipping Fly.io deployment"
+          fi
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
   deploy-render:
     name: Trigger Render Deploy
     runs-on: ubuntu-latest
-    # Only run if RENDER_DEPLOY_HOOK is set
-    if: ${{ secrets.RENDER_DEPLOY_HOOK != '' }}
     steps:
       - name: Trigger Render
         run: |
-          curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK }}"
+          if [ -n "$RENDER_DEPLOY_HOOK" ]; then
+            curl -X POST "$RENDER_DEPLOY_HOOK"
+          else
+            echo "RENDER_DEPLOY_HOOK not configured - skipping Render deployment"
+          fi
         env:
           RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
