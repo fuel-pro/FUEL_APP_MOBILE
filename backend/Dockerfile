@@ -6,7 +6,7 @@ FROM node:20-alpine AS production
 # Labels
 LABEL maintainer="FuelPro <support@fuelpro.app>"
 LABEL description="FuelPro Backend API - Express.js with SQLite"
-LABEL version="1.0.0"
+LABEL version="2.0.0"
 
 # Install build tools and Python for native modules (better-sqlite3)
 RUN apk add --no-cache \
@@ -15,29 +15,28 @@ RUN apk add --no-cache \
     g++ \
     sqlite \
     sqlite-dev \
-    node-gyp
-
-# Create non-root user for security
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nodeuser -u 1001 -G nodejs
+    node-gyp \
+    && rm -rf /var/cache/apk/*
 
 WORKDIR /app
 
-# Copy package files
+# Copy package files first for better layer caching
 COPY package*.json ./
 
-# Install ALL dependencies (including devDependencies for native module compilation)
-RUN npm ci
+# Install dependencies
+RUN npm ci --only=production && \
+    npm cache clean --force
 
 # Copy source code
-COPY --chown=nodeuser:nodejs server.js ./
-COPY --chown=nodeuser:nodejs routes/ ./routes/
-COPY --chown=nodeuser:nodejs models/ ./models/
-COPY --chown=nodeuser:nodejs middleware/ ./middleware/
-COPY --chown=nodeuser:nodejs database/ ./database/
+COPY server.js ./
+COPY routes/ ./routes/
+COPY models/ ./models/
+COPY middleware/ ./middleware/
+COPY database/ ./database/
 
-# Create data directory for SQLite
-RUN mkdir -p /app/data && chown -R nodeuser:nodejs /app
+# Create data directory for SQLite and set permissions
+RUN mkdir -p /app/data && \
+    chown -R node:node /app
 
 # Set environment variables
 ENV NODE_ENV=production
@@ -46,12 +45,12 @@ ENV PORT=8080
 # Expose port
 EXPOSE 8080
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
+# Health check using wget (available in alpine)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:8080/ || exit 1
 
-# Switch to non-root user
-USER nodeuser
+# Run as node user
+USER node
 
 # Start server
-CMD ["sh", "-c", "node server.js"]
+CMD ["node", "server.js"]
