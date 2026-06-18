@@ -5,7 +5,7 @@ services:
   - type: web
     name: fuel-app-mobile
     env: docker
-    dockerfilePath: ./backend/Dockerfile
+    dockerfilePath: ./Dockerfile
     region: oregon
     plan: free
     healthCheckPath: /health
@@ -16,5 +16,3 @@ services:
         value: 10000
       - key: JWT_SECRET
         generateValue: true
-      - key: DATABASE_URL
-        value: /data/fuel-app.db
