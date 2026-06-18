@@ -33,22 +33,11 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Make image public
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          # Make the package public so Render can pull it
-          gh api \
-            --method PATCH \
-            -H "Accept: application/vnd.github+json" \
-            /user/packages/container/ghcr.io/fuel-pro/fuel_app_mobile/fuel-backend \
-            -f visibility=public
-
       - name: Extract metadata for Docker
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ github.repository }}/fuel-backend
+          images: ghcr.io/fuel-pro/fuel_app_mobile/fuel-backend
           tags: |
             type=sha,prefix=,suffix=,format=short
             type=raw,value=latest
@@ -62,6 +51,17 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Make image public
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Make the package public so Render can pull it
+          gh api \
+            --method PATCH \
+            -H "Accept: application/vnd.github+json" \
+            /user/packages/container/ghcr.io/fuel-pro/fuel_app_mobile/fuel-backend \
+            -f visibility=public || echo "Package visibility update skipped (may already be public or not exist yet)"
 
       - name: Show deployment info
         run: |
