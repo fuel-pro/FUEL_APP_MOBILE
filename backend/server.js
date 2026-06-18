@@ -39,6 +39,16 @@ app.use(express.urlencoded({ extended: true }));
 // Make 'io' instance available to routes
 app.set('io', io);
 
+// Root endpoint - Render needs this for health check
+app.get('/', (req, res) => {
+  res.json({
+    status: 'ok',
+    message: 'FuelPro Backend API',
+    version: '3.0-SQLITE-MIGRATION-COMPLETE',
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Health check endpoint - SQLite version 3.0
 app.get('/health', (req, res) => {
   res.json({ 
