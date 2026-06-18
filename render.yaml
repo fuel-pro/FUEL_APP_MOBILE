@@ -4,7 +4,7 @@
 
 services:
   - type: web
-    name: fuel-pro-backend
+    name: fuel-pro-backend-v2
     env: docker
     region: oregon
     image:
