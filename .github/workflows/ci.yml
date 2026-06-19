@@ -82,7 +82,6 @@ jobs:
           name: dist
           path: app/dist
       - name: Deploy to Vercel
-        if: ${{ secrets.VERCEL_TOKEN != '' }}
         run: |
           # Copy dist to public for vercel.json outputDirectory setting
           mkdir -p app/public && cp -r app/dist/* app/public/
