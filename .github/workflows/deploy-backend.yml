@@ -11,7 +11,7 @@ on:
 
 jobs:
   deploy-fly:
-    name: Deploy to Fly.io (Primary)
+    name: Deploy to Fly.io
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -20,11 +20,9 @@ jobs:
       - name: Setup Flyctl
         uses: superfly/flyctl-actions/setup-flyctl@master
 
-      - name: Launch Fly App (first time)
+      - name: Deploy to Fly
         run: |
           if [ -n "$FLY_API_TOKEN" ]; then
-            flyctl apps create fuel-pro-backend --json || true
-            flyctl volumes create fuel_app_data --region ord --size 1 || true
             flyctl deploy --remote-only --no-cache
           else
             echo "FLY_API_TOKEN not configured - skipping Fly.io deployment"
@@ -33,7 +31,7 @@ jobs:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
   deploy-render:
-    name: Deploy to Render (Backup)
+    name: Deploy to Render
     runs-on: ubuntu-latest
     steps:
       - name: Trigger Render

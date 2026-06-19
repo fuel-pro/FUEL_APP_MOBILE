@@ -1,7 +1,6 @@
 # FuelPro Backend - Fly.io Configuration
-# Free forever with $5/month credits
 
-app = "fuel-pro-backend"
+app = "fuelpro"
 primary_region = "ord"
 
 [build]
@@ -9,6 +8,7 @@ primary_region = "ord"
 
 [env]
   PORT = "8080"
+  NODE_ENV = "production"
 
 [http_service]
   internal_port = 8080
@@ -16,22 +16,8 @@ primary_region = "ord"
   auto_stop_machines = false
   auto_start_machines = true
   min_machines_running = 1
-  processes = ["app"]
 
-# Health check
 [health_check]
   interval = 30
   timeout = 10
   restart_threshold = 3
-
-# Persistent volume for SQLite database
-[[mounts]]
-  source = "fuel_app_data"
-  destination = "/app/data"
-
-# Environment variables
-[env]
-  NODE_ENV = "production"
-
-# Secrets (set via flyctl secrets set)
-# FLY_API_TOKEN - for CI/CD deployments
