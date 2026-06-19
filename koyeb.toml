@@ -1,0 +1,28 @@
+# FuelPro Backend - Koyeb Deployment
+# Free forever with persistent storage
+
+name = "fuel-pro-backend"
+runtimes = ["docker"]
+region = "fra"
+
+[build]
+  dockerfile = "backend/Dockerfile"
+
+[ports]
+  port = 8080
+  protocol = "http"
+
+[health_checks]
+  path = "/"
+
+[scale]
+  min_instances = 1
+  max_instances = 1
+
+[resources]
+  memory = "256Mi"
+  cpu = "0.25"
+
+[env]
+  NODE_ENV = "production"
+  PORT = "8080"

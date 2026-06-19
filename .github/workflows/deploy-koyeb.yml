@@ -1,0 +1,32 @@
+name: Deploy to Koyeb
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - 'koyeb.toml'
+  workflow_dispatch:
+
+jobs:
+  deploy-koyeb:
+    name: Deploy to Koyeb
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy to Koyeb
+        run: |
+          if [ -n "$KOYEB_TOKEN" ]; then
+            curl -sL https://github.com/koyeb/cli/releases/download/v2.2.2/koyeb-cli-linux_amd64.tar.gz | tar xz
+            ./koyeb login -t "$KOYEB_TOKEN"
+            
+            # Create app or update existing
+            ./koyeb app create fuel-pro-backend -f koyeb.toml || \
+            ./koyeb app update fuel-pro-backend -f koyeb.toml
+          else
+            echo "KOYEB_TOKEN not configured - skipping Koyeb deployment"
+          fi
+        env:
+          KOYEB_TOKEN: ${{ secrets.KOYEB_TOKEN }}

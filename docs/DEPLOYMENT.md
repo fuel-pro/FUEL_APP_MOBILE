@@ -1,136 +1,172 @@
-# Deployment Guide - Fly.io (Recommended)
+# Deployment Guide
 
-## Overview
-This guide deploys the FuelPro Backend to **Fly.io** which provides **$5/month free credits forever** (not a trial) with persistent storage.
+This document covers all deployment options for the FuelPro Backend.
 
-## Why Fly.io?
-- ✅ $5/month free credits forever (not trial)
-- ✅ Persistent volumes for SQLite
-- ✅ No cold starts (keeps 1 machine running)
-- ✅ Docker native
-- ✅ Edge locations globally
+---
 
-## Prerequisites
-- Fly.io account: https://fly.io
-- GitHub account with access to `fuel-pro/FUEL_APP_MOBILE`
+## Option 1: Koyeb (Recommended Alternative)
 
-## Quick Deploy (Manual)
+**Koyeb** is a great Fly.io alternative with **free tier that never expires** and persistent storage.
 
-### Step 1: Install Flyctl
+### Features:
+- ✅ 2 services free forever
+- ✅ 1GB disk per service
+- ✅ Persistent storage
+- ✅ Docker support
+- ✅ GitHub integration
+- ✅ No credit card required
+
+### Quick Deploy:
+
+**Step 1:** Create account at https://app.koyeb.com
+
+**Step 2:** Add GitHub Secret:
+- Go to: https://github.com/fuel-pro/FUEL_APP_MOBILE/settings/secrets/actions
+- Add: **KOYEB_TOKEN**
+- Get from: https://app.koyeb.com/auth_tokens
+
+**Step 3:** Connect GitHub:
+1. Go to https://app.koyeb.com
+2. Click **"Create App"**
+3. Select **"Deploy from GitHub"**
+4. Connect: `fuel-pro/FUEL_APP_MOBILE`
+5. Use `backend/Dockerfile`
+6. Set PORT to `8080`
+
+**Step 4:** Add persistent disk:
+1. In Koyeb app settings → **Disks**
+2. Create 1GB volume mounted at `/app/data`
+
+Your app will be at: `https://fuel-pro-backend-$username.koyeb.app`
+
+### Manual CLI Deploy:
 ```bash
-curl -L https://fly.io/install.sh | sh
-export FLYCTL_INSTALL="$HOME/.fly"
-export PATH="$FLYCTL_INSTALL/bin:$PATH"
-```
-
-### Step 2: Login to Fly.io
-```bash
-flyctl auth login
-```
-
-### Step 3: Create App & Volume
-```bash
-cd fuel-pro/FUEL_APP_MOBILE
-flyctl apps create fuel-pro-backend
-flyctl volumes create fuel_app_data --region ord --size 1
-```
-
-### Step 4: Deploy
-```bash
-flyctl deploy --remote-only
-```
-
-## Automated Deploy (GitHub Actions)
-
-The repository has automated deployment via `.github/workflows/deploy-backend.yml`.
-
-### Required Secrets:
-1. Go to: https://github.com/fuel-pro/FUEL_APP_MOBILE/settings/secrets/actions
-2. Add: **FLY_API_TOKEN**
-   - Get from: https://fly.io/dashboard/personal-tokens
-   - Create new token with "Create" scope
-
-### Auto-Deploy Triggers:
-- Push to `main` branch with changes to `backend/**`, `fly.toml`, or `render.yaml`
-- Manual trigger via GitHub Actions
-
-## After Deployment
-
-Get your app's URL:
-```bash
-flyctl apps list
-flyctl info fuel-pro-backend
-```
-
-Your backend will be available at:
-```
-https://fuel-pro-backend.fly.dev
-```
-
-Update your mobile app's API endpoint to this URL.
-
-## Health Check
-
-The backend provides a health check at `/` which returns:
-```json
-{"status":"ok","timestamp":"..."}
-```
-
-## Troubleshooting
-
-### Volume Not Mounted
-```bash
-flyctl volumes list
-flyctl ssh console -a fuel-pro-backend
-ls /app/data/
-```
-
-### Rebuild from Scratch
-```bash
-flyctl deploy --remote-only --no-cache
-```
-
-### View Logs
-```bash
-flyctl logs fuel-pro-backend
+curl -sL https://github.com/koyeb/cli/releases/download/v2.2.2/koyeb-cli-linux_amd64.tar.gz | tar xz
+./koyeb login -t $KOYEB_TOKEN
+./koyeb app create fuel-pro-backend -f koyeb.toml
 ```
 
 ---
 
-# Alternative: Render Deployment
+## Option 2: Fly.io
 
-Render provides a free tier but with limitations.
+**Fly.io** provides **$5/month free credits forever** (not trial) with persistent volumes.
 
-## Deploy to Render
+### Features:
+- ✅ $5/mo free credits (stays active forever)
+- ✅ Persistent volumes
+- ✅ No cold starts
+- ✅ Docker native
+- ⚠️ Requires credit card for verification (but credits are truly free)
 
-### Option A: Connect via Render Blueprint
+### Quick Deploy:
 
-1. Go to https://dashboard.render.com/blueprints
-2. Click **"New Blueprint Instance"**
-3. Connect GitHub: `fuel-pro/FUEL_APP_MOBILE`
-4. Render detects `render.yaml` automatically
-5. Click **"Apply"**
+**Step 1:** Create account at https://fly.io
 
-### Option B: Manual Deployment
+**Step 2:** Install CLI:
+```bash
+curl -L https://fly.io/install.sh | sh
+flyctl auth login
+```
 
-1. Create **Web Service** on Render
-2. Select **Docker**
-3. Enter: `ghcr.io/fuel-pro/fuel_app_mobile/fuel-backend:latest`
-4. Configure:
-   - Region: Oregon
-   - Instance: Free
-   - Port: `10000`
-   - Health Check: `/`
+**Step 3:** Deploy:
+```bash
+cd fuel-pro/FUEL_APP_MOBILE
+flyctl apps create fuel-pro-backend
+flyctl volumes create fuel_app_data --region ord --size 1
+flyctl deploy --remote-only
+```
 
-### Make Image Public First
+**Step 4:** Add GitHub Secret:
+- Add: **FLY_API_TOKEN** (from https://fly.io/dashboard/personal-tokens)
+- Auto-deploy triggers on push to main
 
-1. Go to: https://github.com/orgs/fuel-pro/packages/container/fuel-backend
-2. Package Settings → Danger Zone → Change to public
+Your app will be at: `https://fuel-pro-backend.fly.dev`
 
-## Render Limitations
+---
 
+## Option 3: Northflank
+
+**Northflank** offers **3 services free forever** with persistent storage.
+
+### Features:
+- ✅ 3 services free
+- ✅ 1GB storage per service
+- ✅ Persistent volumes
+- ✅ Docker support
+- ✅ GitHub integration
+
+### Quick Deploy:
+
+**Step 1:** Create account at https://northflank.com
+
+**Step 2:** Create service:
+1. New Service → From Docker image
+2. Use: `ghcr.io/fuel-pro/fuel_app_mobile/fuel-backend:latest`
+3. Set port: `8080`
+4. Add volume: `/app/data` (persistent)
+
+**Step 3:** Add GitHub Secret:
+- Add: **NORTHFLANK_TOKEN** (from https://app.northflank.com/settings/tokens)
+
+---
+
+## Option 4: Render (Limited)
+
+Render has a free tier but with significant limitations.
+
+### Limitations:
 - ⚠️ Sleeps after 15 min inactivity
-- ⚠️ No persistent storage (data lost on sleep)
+- ⚠️ No persistent storage
 - ⚠️ Not truly "free forever"
+- ⚠️ Data lost on sleep
 
-**Recommendation:** Use Fly.io for production.
+### Deploy:
+1. Go to https://dashboard.render.com/blueprints
+2. Connect: `fuel-pro/FUEL_APP_MOBILE`
+3. Render detects `render.yaml`
+
+**Not recommended for production.**
+
+---
+
+## Comparison
+
+| Feature | Koyeb | Fly.io | Northflank | Render |
+|---------|-------|--------|------------|--------|
+| Free tier | 2 services | $5/mo credits | 3 services | 1 service |
+| Persistence | ✅ 1GB | ✅ 1GB+ | ✅ 1GB | ❌ None |
+| Cold starts | ✅ None | ✅ None | ✅ None | ⚠️ 15 min |
+| Docker | ✅ | ✅ | ✅ | ✅ |
+| GitHub CI/CD | ✅ | ✅ | ✅ | ✅ |
+| Credit card | ❌ No | ⚠️ Yes | ⚠️ Yes | ❌ No |
+| Best for | Small apps | Production | Multi-service | Testing |
+
+---
+
+## GitHub Actions Setup
+
+### Required Secrets:
+
+| Platform | Secret Name | Where to get |
+|----------|-------------|--------------|
+| Koyeb | `KOYEB_TOKEN` | https://app.koyeb.com/auth_tokens |
+| Fly.io | `FLY_API_TOKEN` | https://fly.io/dashboard/personal-tokens |
+| Northflank | `NORTHFLANK_TOKEN` | https://app.northflank.com/settings/tokens |
+
+### Workflows:
+- `.github/workflows/deploy-koyeb.yml` - Koyeb deployment
+- `.github/workflows/deploy-backend.yml` - Fly.io deployment
+- `.github/workflows/deploy-container.yml` - Render deployment (backup)
+
+---
+
+## After Deployment
+
+Update your mobile app's API endpoint to point to your deployed backend:
+
+```
+https://fuel-pro-backend.[koyeb|fly|northflank].app
+```
+
+Health check endpoint: `/` returns `{"status":"ok"}`
