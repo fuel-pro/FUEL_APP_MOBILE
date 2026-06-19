@@ -1,0 +1,23 @@
+# Zeabur deployment configuration for FuelPro Backend
+
+[project]
+name = "fuel-pro-backend"
+
+[services.backend]
+path = "./backend"
+dockerfile = "./backend/Dockerfile"
+healthcheck = "/"
+port = 8080
+
+[[services.backend.env]]
+key = "NODE_ENV"
+value = "production"
+
+[[services.backend.env]]
+key = "PORT"
+value = "8080"
+
+[[services.backend.disks]]
+name = "fuel-data"
+mount = "/app/data"
+size = 1024  # MB

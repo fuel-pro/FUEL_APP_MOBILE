@@ -6,6 +6,7 @@ on:
     paths:
       - 'backend/**'
       - 'zeabur.json'
+      - 'zeabur.toml'
   workflow_dispatch:
 
 jobs:
@@ -16,14 +17,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Download Zeabur CLI
+        run: |
+          curl -sL https://github.com/zeabur/zeabur/releases/latest/download/zeabur-linux-amd64 -o zb
+          chmod +x zb
+          sudo mv zb /usr/local/bin/zb
+
       - name: Deploy to Zeabur
         run: |
           if [ -n "$ZEABUR_TOKEN" ]; then
-            npm install -g @zeabur/cli
             zb login --token "$ZEABUR_TOKEN"
-            zb deploy --template zeabur.json --project fuel-pro-backend
+            zb project deploy fuel-pro-backend --wait
           else
             echo "ZEABUR_TOKEN not configured - skipping Zeabur deployment"
+            echo "To deploy manually: https://zeabur.com/dashboard"
           fi
         env:
           ZEABUR_TOKEN: ${{ secrets.ZEABUR_TOKEN }}
