@@ -313,3 +313,4 @@ Proprietary - All rights reserved
 
 **The Publican Energy**  
 Lodwar, Turkana County, Kenya
+
