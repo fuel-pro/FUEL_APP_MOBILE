@@ -1,0 +1,29 @@
+name: Deploy to Zeabur
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - 'zeabur.json'
+  workflow_dispatch:
+
+jobs:
+  deploy-zeabur:
+    name: Deploy to Zeabur
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy to Zeabur
+        run: |
+          if [ -n "$ZEABUR_TOKEN" ]; then
+            npm install -g @zeabur/cli
+            zb login --token "$ZEABUR_TOKEN"
+            zb deploy --template zeabur.json --project fuel-pro-backend
+          else
+            echo "ZEABUR_TOKEN not configured - skipping Zeabur deployment"
+          fi
+        env:
+          ZEABUR_TOKEN: ${{ secrets.ZEABUR_TOKEN }}
