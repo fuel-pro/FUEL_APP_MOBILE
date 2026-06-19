@@ -42,7 +42,7 @@ ENV NODE_ENV=production
 ENV PORT=10000
 
 # Expose port
-EXPOSE 8080
+EXPOSE 10000
 
 # Health check using wget (available in alpine)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
