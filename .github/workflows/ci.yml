@@ -22,9 +22,7 @@ jobs:
           cache-dependency-path: app/package-lock.json
       - run: npm ci
         working-directory: ./app
-      - run: npm run lint || true
-        working-directory: ./app
-      - run: npx tsc --noEmit --skipLibCheck 2>/dev/null || echo "TypeScript check completed"
+      - run: npm run check || true
         working-directory: ./app
 
   build:
@@ -61,7 +59,7 @@ jobs:
           cache-dependency-path: app/package-lock.json
       - run: npm ci
         working-directory: ./app
-      - run: npm audit --audit-level=high || npm audit || true
+      - run: npm audit --audit-level=high || echo "Security vulnerabilities found (non-blocking)"
         working-directory: ./app
 
   deploy-vercel:
