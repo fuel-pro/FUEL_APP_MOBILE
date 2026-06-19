@@ -1,9 +1,10 @@
 {
   "version": 2,
-  "buildCommand": "echo 'Static deployment'",
+  "buildCommand": "npm run build:static",
   "outputDirectory": "dist",
-  "installCommand": "echo 'Static deployment - no install needed'",
+  "installCommand": "npm ci",
   "framework": null,
+  "ignore": "api",
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
   ],

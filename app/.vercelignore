@@ -1,0 +1,6 @@
+api
+db
+contracts
+node_modules
+*.spec.ts
+*.test.ts
