@@ -22,9 +22,16 @@ jobs:
         run: |
           set -euo pipefail
           
-          KOYEB_VERSION=$(curl -sL "https://api.github.com/repos/koyeb/cli/releases/latest" | jq -r '.tag_name' | sed 's/v//')
+          # Get latest Koyeb CLI version
+          KOYEB_VERSION=$(curl -sL "https://api.github.com/repos/koyeb/koyeb-cli/releases/latest" | jq -r '.tag_name' | sed 's/v//')
           echo "Downloading Koyeb CLI v${KOYEB_VERSION}..."
-          curl -sL "https://github.com/koyeb/cli/releases/download/v${KOYEB_VERSION}/koyeb-cli-linux_amd64.tar.gz" | tar xz
+          
+          # Download and extract Koyeb CLI (new naming convention)
+          curl -sL "https://github.com/koyeb/koyeb-cli/releases/download/v${KOYEB_VERSION}/koyeb-cli_${KOYEB_VERSION}_linux_amd64.tar.gz" -o koyeb.tar.gz
+          tar xzf koyeb.tar.gz
+          rm koyeb.tar.gz
+          
+          # Verify CLI is working
           ./koyeb version
         shell: bash
 
