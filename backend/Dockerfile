@@ -20,18 +20,18 @@ RUN apk add --no-cache \
 WORKDIR /app
 
 # Copy package files first for better layer caching
-COPY package*.json ./
+COPY backend/package*.json ./
 
 # Install ALL dependencies (including dev for jose native deps)
 RUN npm ci && \
     npm cache clean --force
 
-# Copy source code
-COPY server.js ./
-COPY routes/ ./routes/
-COPY models/ ./models/
-COPY middleware/ ./middleware/
-COPY database/ ./database/
+# Copy source code (prefix with backend/ so Docker builds with repo root as context)
+COPY backend/server.js ./
+COPY backend/routes/ ./routes/
+COPY backend/models/ ./models/
+COPY backend/middleware/ ./middleware/
+COPY backend/database/ ./database/
 
 # Create data directory for SQLite (persistent volume on Koyeb/Fly.io)
 RUN mkdir -p /app/data && \
