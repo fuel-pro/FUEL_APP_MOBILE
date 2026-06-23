@@ -1,7 +1,7 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
-// Protect route - verify JWT token
+// Protect route - verify JWT token OR Clerk JWT token
 const protect = async (req, res, next) => {
   let token;
 
@@ -15,7 +15,16 @@ const protect = async (req, res, next) => {
   }
 
   try {
-    // Verify token
+    // Check if it's a Clerk JWT token (starts with 'eyJ' - JWT format)
+    const isClerkToken = token.startsWith('eyJ') && token.split('.').length === 3;
+    
+    if (isClerkToken) {
+      // Clerk token - use Clerk auth middleware
+      const clerkAuth = require('./clerkAuth');
+      return clerkAuth.protect(req, res, next);
+    }
+    
+    // Legacy JWT verification
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fuelpro-secret-key');
     
     // Get user from token (synchronous for SQLite)
@@ -88,6 +97,12 @@ const optionalAuth = async (req, res, next) => {
 
   if (token) {
     try {
+      // Check if Clerk token
+      if (token.startsWith('eyJ') && token.split('.').length === 3) {
+        const clerkAuth = require('./clerkAuth');
+        return clerkAuth.optionalAuth(req, res, next);
+      }
+      
       const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fuelpro-secret-key');
       const user = User.findById(decoded.id);
       if (user && user.isActive) {

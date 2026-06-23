@@ -5,6 +5,7 @@ const crypto = require('crypto');
 const User = require('../models/User');
 const AuditLog = require('../models/AuditLog');
 const { protect } = require('../middleware/auth');
+const clerkAuth = require('../middleware/clerkAuth');
 
 // Generate JWT Token
 const generateToken = (userId) => {
@@ -214,7 +215,7 @@ router.post('/refresh', async (req, res) => {
 });
 
 // 2c. GET SESSION INFO
-router.get('/session', protect, async (req, res) => {
+router.get('/session', clerkAuth.protect, async (req, res) => {
   try {
     const userId = req.user.id;
     const user = User.findById(userId);
@@ -230,7 +231,7 @@ router.get('/session', protect, async (req, res) => {
 });
 
 // 3. GET CURRENT USER
-router.get('/me', protect, async (req, res) => {
+router.get('/me', clerkAuth.protect, async (req, res) => {
   try {
     const user = User.findById(req.user.id);
     res.json({ user });
@@ -240,7 +241,7 @@ router.get('/me', protect, async (req, res) => {
 });
 
 // 4. UPDATE PASSWORD
-router.put('/password', protect, async (req, res) => {
+router.put('/password', clerkAuth.protect, async (req, res) => {
   try {
     const { currentPassword, newPassword } = req.body;
     const ip = req.ip || req.connection.remoteAddress;
@@ -277,7 +278,7 @@ router.put('/password', protect, async (req, res) => {
 });
 
 // 5. LOGOUT (client-side token removal, but we can log it)
-router.post('/logout', protect, async (req, res) => {
+router.post('/logout', clerkAuth.protect, async (req, res) => {
   try {
     await AuditLog.create({
       action: 'LOGOUT',

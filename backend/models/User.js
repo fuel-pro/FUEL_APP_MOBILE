@@ -45,6 +45,13 @@ class User {
     return row ? this._parseRow(row) : null;
   }
 
+  static findByClerkUserId(clerkUserId) {
+    if (!clerkUserId) return null;
+    const stmt = db.prepare(`SELECT * FROM users WHERE clerkUserId = ?`);
+    const row = stmt.get(clerkUserId);
+    return row ? this._parseRow(row) : null;
+  }
+
   static findAll(query = {}) {
     let sql = `SELECT * FROM users WHERE 1=1`;
     const params = [];

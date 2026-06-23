@@ -37,10 +37,18 @@ function initializeDatabase() {
       loginHistory TEXT DEFAULT '[]',
       twoFactorEnabled INTEGER DEFAULT 0,
       twoFactorSecret TEXT,
+      clerkUserId TEXT,
       createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
       updatedAt TEXT DEFAULT CURRENT_TIMESTAMP
     )
   `);
+
+  // Add clerkUserId column if it doesn't exist (for existing databases)
+  try {
+    db.exec(`ALTER TABLE users ADD COLUMN clerkUserId TEXT`);
+  } catch (e) {
+    // Column already exists, ignore
+  }
 
   // Stations table
   db.exec(`
@@ -122,6 +130,7 @@ function initializeDatabase() {
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
     CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
+    CREATE INDEX IF NOT EXISTS idx_users_clerkUserId ON users(clerkUserId);
     CREATE INDEX IF NOT EXISTS idx_stations_ownerId ON stations(ownerId);
     CREATE INDEX IF NOT EXISTS idx_stations_status ON stations(status);
     CREATE INDEX IF NOT EXISTS idx_content_key ON content(key);

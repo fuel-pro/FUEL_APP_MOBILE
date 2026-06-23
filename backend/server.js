@@ -87,6 +87,12 @@ app.use('/api/users', require('./routes/userRoutes'));
 app.use('/api/stations', require('./routes/stationRoutes'));
 app.use('/api/audit', require('./routes/auditRoutes'));
 
+// Clerk Backend Integration Routes
+app.use('/api/clerk', require('./routes/clerkRoutes'));
+
+// Clerk Backend Integration Status
+console.log(`🔐 Clerk Backend Integration: ${process.env.CLERK_SECRET_KEY ? 'Enabled' : 'Disabled'}`);
+
 // Socket.io Connection Handler
 io.on('connection', (socket) => {
   console.log(`🔌 Client connected: ${socket.id}`);
