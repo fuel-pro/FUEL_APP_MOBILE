@@ -20,29 +20,24 @@ jobs:
         run: |
           set -euo pipefail
           
-          if [ -z "$NORTHFLANK_CLIENT_ID" ] || [ -z "$NORTHFLANK_CLIENT_SECRET" ]; then
-            echo "Northflank credentials not configured - skipping deployment"
-            echo ""
-            echo "To enable Northflank deployment (free, no credit card):"
-            echo "1. Sign up at https://northflank.com (free tier available)"
-            echo "2. Go to Settings > Client credentials"
-            echo "3. Create new credentials"
-            echo "4. Add NORTHFLANK_CLIENT_ID and NORTHFLANK_CLIENT_SECRET to GitHub secrets"
+          if [ -z "$NORTHFLANK_TOKEN" ]; then
+            echo "Northflank token not configured - skipping deployment"
             exit 0
           fi
           
           echo "Installing Northflank CLI..."
-          npm install -g @northflank/node-sdk
+          npm install -g @northflank/northflank-cli
           
-          echo "Deploying to Northflank..."
-          # Build and push Docker image
-          IMAGE_TAG="registry.northflank.com/$NORTHFLANK_CLIENT_ID/fuel-pro-backend:latest"
+          echo "Logging in to Northflank..."
+          northflank login --token "$NORTHFLANK_TOKEN"
           
-          docker login registry.northflank.com -u "$NORTHFLANK_CLIENT_ID" -p "$NORTHFLANK_CLIENT_SECRET"
-          docker build -t "$IMAGE_TAG" -f backend/Dockerfile backend/
-          docker push "$IMAGE_TAG"
+          echo "Deploying fuel-pro-backend..."
+          # Create project if not exists, then deploy
+          northflank project create fuel-pro --org fuel-pro || true
+          northflank service create fuel-pro-backend --project fuel-pro --port 8080 --min-replicas 1 || true
+          northflank service deploy fuel-pro-backend --project fuel-pro --wait
           
           echo "Deployed to Northflank successfully!"
+          echo "Your app should be available at: https://fuel-pro-backend.northflank.app"
         env:
-          NORTHFLANK_CLIENT_ID: ${{ secrets.NORTHFLANK_CLIENT_ID }}
-          NORTHFLANK_CLIENT_SECRET: ${{ secrets.NORTHFLANK_CLIENT_SECRET }}
+          NORTHFLANK_TOKEN: ${{ secrets.NORTHFLANK_TOKEN }}
