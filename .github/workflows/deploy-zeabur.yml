@@ -20,9 +20,41 @@ jobs:
 
       - name: Download Zeabur CLI
         run: |
-          curl -sL https://github.com/zeabur/zeabur/releases/latest/download/zeabur-linux-amd64 -o zb
+          set -euo pipefail
+
+          # Resolve the correct download URL from the GitHub Releases API
+          download_url=$(curl -s "https://api.github.com/repos/zeabur/zeabur/releases/latest" \
+            | grep "browser_download_url" \
+            | grep "linux" \
+            | grep -E "amd64|x86_64" \
+            | head -n1 \
+            | cut -d '"' -f4)
+
+          if [ -z "$download_url" ]; then
+            echo "ERROR: Could not find a linux-amd64 zb asset in the latest release."
+            echo "API output:"
+            curl -s "https://api.github.com/repos/zeabur/zeabur/releases/latest" || true
+            exit 1
+          fi
+
+          echo "Downloading zb from: $download_url"
+          curl -fL "$download_url" -o zb
+
+          # Quick sanity checks: make sure it's a binary (ELF) before installing
+          if ! command -v file >/dev/null 2>&1; then
+            sudo apt-get update && sudo apt-get install -y file
+          fi
+
+          if ! file zb | grep -qE 'ELF|executable'; then
+            echo "ERROR: downloaded zb is not an ELF binary. Showing first 100 lines of the file:"
+            head -n 100 zb || true
+            rm -f zb
+            exit 1
+          fi
+
           chmod +x zb
           sudo mv zb /usr/local/bin/zb
+        shell: bash
 
       - name: Deploy to Zeabur
         run: |
