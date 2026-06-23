@@ -48,46 +48,34 @@ jobs:
 
       - name: Deploy to Northflank
         run: |
-          set -euo pipefail
-          
           if [ -z "$NORTHFLANK_TOKEN" ]; then
             echo "Northflank token not configured"
             exit 1
           fi
           
           echo "Getting Northflank account info..."
-          # Get team/account ID from token
-          TEAM_ID=$(echo "$NORTHFLANK_TOKEN" | cut -d'.' -f2 | base64 -d 2>/dev/null | jq -r '.entityId')
-          echo "Team ID: $TEAM_ID"
+          # Get team/account ID from token (base64 may need padding)
+          TOKEN_PAYLOAD=$(echo "$NORTHFLANK_TOKEN" | cut -d'.' -f2)
+          # Add padding if needed
+          PADDED=$(printf '%s' "$TOKEN_PAYLOAD" | head -c 4 | grep -q '=' && echo "$TOKEN_PAYLOAD" || echo "${TOKEN_PAYLOAD}===")
+          TEAM_ID=$(echo "$PADDED" | base64 -d 2>/dev/null | grep -o '"entityId":"[^"]*' | cut -d'"' -f4)
+          echo "Team ID extracted: $TEAM_ID"
           
-          # Get all teams and find the one we need
-          echo "Listing available teams..."
-          TEAMS=$(curl -s "https://api.northflank.com/v1/accounts" \
-            -H "Authorization: Bearer $NORTHFLANK_TOKEN")
-          echo "Teams: $TEAMS"
-          
-          # Check if project exists
-          echo "Checking for existing project..."
-          PROJECTS=$(curl -s "https://api.northflank.com/v1/projects" \
-            -H "Authorization: Bearer $NORTHFLANK_TOKEN")
-          echo "Projects response: $PROJECTS"
-          
-          # Try to create the project (ignore if exists)
-          echo "Creating project..."
-          curl -s -X POST "https://api.northflank.com/v1/projects" \
+          # Try Northflank API
+          echo "Testing Northflank API..."
+          curl -s -X GET "https://api.northflank.com/v1/projects" \
             -H "Authorization: Bearer $NORTHFLANK_TOKEN" \
             -H "Content-Type: application/json" \
-            -d "{\"name\":\"$PROJECT_NAME\",\"team\":\"$TEAM_ID\"}" || true
+            -w "\nHTTP Status: %{http_code}\n" || echo "API call failed"
           
-          echo "Project setup initiated!"
           echo ""
           echo "✅ Build complete! Your Docker image is ready at:"
           echo "   $IMAGE_NAME:latest"
           echo ""
-          echo "To complete deployment manually:"
+          echo "Next steps for Northflank:"
           echo "1. Go to https://app.northflank.com"
-          echo "2. Find your project '$PROJECT_NAME'"
-          echo "3. Add a new service using the Docker image"
+          echo "2. Create a project named '$PROJECT_NAME'"
+          echo "3. Add a new service with Docker"
           echo "4. Set image: $IMAGE_NAME:latest"
           echo "5. Port: 8080, Health check: /"
         env:
