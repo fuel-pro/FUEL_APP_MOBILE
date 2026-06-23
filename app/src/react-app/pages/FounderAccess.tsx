@@ -355,12 +355,25 @@ export default function FounderAccess() {
 
   /* ─── Password check on mount ─── */
   useEffect(() => {
-    const session = localStorage.getItem(FOUNDER_SESSION_KEY);
-    if (session === "active") {
-      setIsAuthenticated(true);
-      logAudit("Session Resumed", "Founder session restored", "info");
+    try {
+      const sessionStr = localStorage.getItem(FOUNDER_SESSION_KEY);
+      if (sessionStr) {
+        const session = JSON.parse(sessionStr);
+        // Check the JSON object structure and enforce an 8-hour expiry
+        if (session?.active && session.loginTime) {
+          if (Date.now() - session.loginTime < 8 * 60 * 60 * 1000) {
+            setIsAuthenticated(true);
+            logAudit("Session Resumed", "Founder session restored", "info");
+          } else {
+            localStorage.removeItem(FOUNDER_SESSION_KEY);
+          }
+        }
+      }
+    } catch (error) {
+      // Handle corrupted localStorage data gracefully
+      localStorage.removeItem(FOUNDER_SESSION_KEY);
     }
-  }, []);
+  }, [logAudit]);
 
   /* ─── Load real users and stations from backend when authenticated ─── */
   useEffect(() => {
@@ -883,7 +896,7 @@ export default function FounderAccess() {
     {
       label: "Main",
       items: [
-        { id: "overview" as SectionId, label: "Overview", icon: 3 },
+        { id: "overview" as SectionId, label: "Overview", icon: Activity },
         {
           id: "users" as SectionId,
           label: "All Users",
@@ -896,7 +909,7 @@ export default function FounderAccess() {
           icon: Building2,
           count: effectiveStationCount,
         },
-        { id: "analytics" as SectionId, label: "Analytics", icon: 3 },
+        { id: "analytics" as SectionId, label: "Analytics", icon: Activity },
       ],
     },
     {
@@ -970,7 +983,7 @@ export default function FounderAccess() {
           label: "Pricing Manager",
           icon: DollarSign,
         },
-        { id: "subdash" as SectionId, label: "Sub. Dashboard", icon: 3 },
+        { id: "subdash" as SectionId, label: "Sub. Dashboard", icon: Layers },
         { id: "coupons" as SectionId, label: "Coupons", icon: Tag },
         { id: "payouts" as SectionId, label: "Payments", icon: CreditCard },
         {
