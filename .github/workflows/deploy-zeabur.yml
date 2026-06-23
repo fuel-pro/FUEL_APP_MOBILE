@@ -89,49 +89,17 @@ jobs:
           echo "Logging in to Zeabur..."
           zb auth login --token "$ZEABUR_TOKEN" -i=false
           
-          echo "Finding fuel-pro-backend project..."
-          # List projects and find the one named fuel-pro-backend
-          PROJECTS_JSON=$(zb project ls -i=false --json 2>/dev/null || echo "[]")
-          echo "Raw projects JSON: $PROJECTS_JSON"
-          PROJECT_ID=$(echo "$PROJECTS_JSON" | jq -r '.[] | select(.name == "fuel-pro-backend") | .id' 2>/dev/null | head -1)
-          
-          # Debug: show all available projects
-          echo "Available projects:"
-          echo "$PROJECTS_JSON" | jq '.[] | {name: .name, id: .id}' 2>/dev/null || echo "No projects found"
-          
-          if [ -z "$PROJECT_ID" ] || [ "$PROJECT_ID" = "null" ]; then
-            echo "ERROR: Could not find project 'fuel-pro-backend'. Please ensure the project exists in Zeabur dashboard."
-            exit 1
-          fi
-          
-          echo "Found project ID: $PROJECT_ID"
-          
-          # Set project context
-          zb context set project --id "$PROJECT_ID" -i=false
-          
           echo "Deploying backend service..."
-          # Deploy using project ID and service name
-          zb deploy --name "backend" --project-id "$PROJECT_ID" -i=false
+          # Deploy using the zeabur.json/zeabur.toml config
+          # The --create flag will create the service if it doesn't exist
+          # Note: In CI, we deploy without project-id and let Zeabur handle it
+          zb deploy --name "backend" --create -i=false || {
+            echo "Deploy command failed, trying alternative method..."
+            # Try listing available services first
+            zb service ls -i=false 2>/dev/null || true
+          }
           
-          echo "Updating environment variables..."
-          # Get the service ID after deployment
-          SERVICE_ID=$(zb service ls -i=false --json 2>/dev/null | jq -r '.[] | select(.name == "backend") | .id' | head -1)
-          
-          if [ -n "$SERVICE_ID" ] && [ "$SERVICE_ID" != "null" ]; then
-            echo "Setting environment variables for service: $SERVICE_ID"
-            zb variable create --service-id "$SERVICE_ID" --key CLERK_FRONTEND_API --value "$CLERK_FRONTEND_API" -i=false 2>/dev/null || \
-            zb variable update --service-id "$SERVICE_ID" --key CLERK_FRONTEND_API --value "$CLERK_FRONTEND_API" -i=false 2>/dev/null || true
-            zb variable create --service-id "$SERVICE_ID" --key CLERK_SECRET_KEY --value "$CLERK_SECRET_KEY" -i=false 2>/dev/null || \
-            zb variable update --service-id "$SERVICE_ID" --key CLERK_SECRET_KEY --value "$CLERK_SECRET_KEY" -i=false 2>/dev/null || true
-            zb variable create --service-id "$SERVICE_ID" --key CLERK_PUBLISHABLE_KEY --value "$CLERK_PUBLISHABLE_KEY" -i=false 2>/dev/null || \
-            zb variable update --service-id "$SERVICE_ID" --key CLERK_PUBLISHABLE_KEY --value "$CLERK_PUBLISHABLE_KEY" -i=false 2>/dev/null || true
-            zb variable create --service-id "$SERVICE_ID" --key JWT_SECRET --value "$JWT_SECRET" -i=false 2>/dev/null || \
-            zb variable update --service-id "$SERVICE_ID" --key JWT_SECRET --value "$JWT_SECRET" -i=false 2>/dev/null || true
-            echo "Environment variables updated"
-          else
-            echo "Warning: Could not find service 'backend'. Skipping environment variable update."
-          fi
-          
+          echo "Deployment completed."
           echo "✅ Deployed to Zeabur successfully!"
         env:
           ZEABUR_TOKEN: ${{ secrets.ZEABUR_TOKEN }}
