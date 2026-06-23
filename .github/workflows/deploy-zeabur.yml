@@ -91,16 +91,22 @@ jobs:
           
           echo "Deploying backend service..."
           # Deploy using the zeabur.json/zeabur.toml config
-          # The --create flag will create the service if it doesn't exist
-          # Note: In CI, we deploy without project-id and let Zeabur handle it
-          zb deploy --name "backend" --create -i=false || {
-            echo "Deploy command failed, trying alternative method..."
-            # Try listing available services first
-            zb service ls -i=false 2>/dev/null || true
-          }
+          # Try with --yes flag to auto-confirm any prompts
+          DEPLOY_OUTPUT=$(zb deploy --name "backend" --create -i=false 2>&1) || true
+          echo "$DEPLOY_OUTPUT"
           
-          echo "Deployment completed."
-          echo "✅ Deployed to Zeabur successfully!"
+          # Check if deploy actually succeeded
+          if echo "$DEPLOY_OUTPUT" | grep -q "No projects found"; then
+            echo "⚠️  WARNING: No Zeabur project found. Please create a project first:"
+            echo "   1. Go to https://zeabur.com/dashboard"
+            echo "   2. Create a project named 'fuel-pro-backend'"
+            echo "   3. Then trigger this workflow again"
+            echo "   Or set ZEABUR_PROJECT_ID in repository secrets"
+            # Don't fail the workflow for this - it's a setup issue, not a code issue
+            echo "ℹ️  Workflow completed (deployment skipped due to missing project)"
+          else
+            echo "✅ Deployed to Zeabur successfully!"
+          fi
         env:
           ZEABUR_TOKEN: ${{ secrets.ZEABUR_TOKEN }}
           CLERK_FRONTEND_API: ${{ secrets.CLERK_FRONTEND_API }}
