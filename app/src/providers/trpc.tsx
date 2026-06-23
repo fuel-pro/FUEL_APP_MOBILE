@@ -16,14 +16,41 @@ function isStaticDeployment(): boolean {
   return host.includes("vercel.app") || host.includes("netlify.app") || host.includes("github.io");
 }
 
+// Check if Clerk is configured
+const isClerkConfigured = () => !!import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
+
+// Get Clerk session token (async)
+async function getClerkToken(): Promise<string | null> {
+  if (!isClerkConfigured()) return null;
+  
+  try {
+    // @ts-ignore - Clerk exposes this in the browser
+    const clerk = window.Clerk;
+    if (clerk?.session) {
+      return await clerk.session.getToken();
+    }
+  } catch {
+    /* Clerk not available */
+  }
+  return null;
+}
+
 const trpcClient = trpc.createClient({
   links: [
     httpBatchLink({
       url: "/api/trpc",
       transformer: superjson as never,
-      headers() {
-        // Include founder session token if available (for Founder Access)
+      async headers() {
         const headers: Record<string, string> = {};
+        
+        // Include Clerk auth token if configured
+        const clerkToken = await getClerkToken();
+        if (clerkToken) {
+          headers["Authorization"] = `Bearer ${clerkToken}`;
+          headers["X-Clerk-Auth"] = "true";
+        }
+        
+        // Include founder session token if available (for Founder Access)
         try {
           const sessionJson = localStorage.getItem("fuelpro_founder_session");
           if (sessionJson) {
@@ -34,7 +61,6 @@ const trpcClient = trpc.createClient({
               session.loginTime &&
               Date.now() - session.loginTime < 8 * 60 * 60 * 1000
             ) {
-              // Try to get the token from session, or generate from stored data
               if (session.token) {
                 headers["x-founder-token"] = session.token;
               }
@@ -43,6 +69,7 @@ const trpcClient = trpc.createClient({
         } catch {
           /* no founder session */
         }
+        
         return headers;
       },
       fetch(input, init) {
