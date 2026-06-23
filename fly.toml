@@ -1,7 +1,7 @@
 # FuelPro Backend - Fly.io Configuration
 # Free tier: 3 shared VMs, 160GB bandwidth/month
 
-app = "fuel-pro-backend"
+app = "fuelpro-backend-v2"
 primary_region = "iad"
 
 [build]
