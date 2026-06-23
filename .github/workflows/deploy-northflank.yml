@@ -8,9 +8,14 @@ on:
       - '.github/workflows/deploy-northflank.yml'
   workflow_dispatch:
 
+env:
+  IMAGE_NAME: ghcr.io/fuel-pro/fuel-pro-backend
+  SERVICE_NAME: fuel-pro-backend
+  PROJECT_NAME: fuel-pro
+
 jobs:
-  deploy-container:
-    name: Build & Push Container
+  deploy:
+    name: Build & Deploy to Northflank
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -36,19 +41,57 @@ jobs:
           file: ./backend/Dockerfile
           push: true
           tags: |
-            ghcr.io/fuel-pro/fuel-pro-backend:latest
-            ghcr.io/fuel-pro/fuel-pro-backend:${{ github.sha }}
+            ${{ env.IMAGE_NAME }}:latest
+            ${{ env.IMAGE_NAME }}:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Output image info
+      - name: Deploy to Northflank
         run: |
-          echo "✅ Docker image built and pushed!"
-          echo "Image: ghcr.io/fuel-pro/fuel-pro-backend:latest"
-          echo "SHA: ghcr.io/fuel-pro/fuel-pro-backend:${{ github.sha }}"
+          set -euo pipefail
+          
+          if [ -z "$NORTHFLANK_TOKEN" ]; then
+            echo "Northflank token not configured"
+            exit 1
+          fi
+          
+          echo "Getting Northflank account info..."
+          # Get team/account ID from token
+          TEAM_ID=$(echo "$NORTHFLANK_TOKEN" | cut -d'.' -f2 | base64 -d 2>/dev/null | jq -r '.entityId')
+          echo "Team ID: $TEAM_ID"
+          
+          # Get all teams and find the one we need
+          echo "Listing available teams..."
+          TEAMS=$(curl -s "https://api.northflank.com/v1/accounts" \
+            -H "Authorization: Bearer $NORTHFLANK_TOKEN")
+          echo "Teams: $TEAMS"
+          
+          # Check if project exists
+          echo "Checking for existing project..."
+          PROJECTS=$(curl -s "https://api.northflank.com/v1/projects" \
+            -H "Authorization: Bearer $NORTHFLANK_TOKEN")
+          echo "Projects response: $PROJECTS"
+          
+          # Try to create the project (ignore if exists)
+          echo "Creating project..."
+          curl -s -X POST "https://api.northflank.com/v1/projects" \
+            -H "Authorization: Bearer $NORTHFLANK_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{\"name\":\"$PROJECT_NAME\",\"team\":\"$TEAM_ID\"}" || true
+          
+          echo "Project setup initiated!"
           echo ""
-          echo "Next steps for Northflank:"
+          echo "✅ Build complete! Your Docker image is ready at:"
+          echo "   $IMAGE_NAME:latest"
+          echo ""
+          echo "To complete deployment manually:"
           echo "1. Go to https://app.northflank.com"
-          echo "2. Create a new project with Docker runtime"
-          echo "3. Connect to image: ghcr.io/fuel-pro/fuel-pro-backend:latest"
-          echo "4. Set port to 8080 and health check to /"
+          echo "2. Find your project '$PROJECT_NAME'"
+          echo "3. Add a new service using the Docker image"
+          echo "4. Set image: $IMAGE_NAME:latest"
+          echo "5. Port: 8080, Health check: /"
+        env:
+          NORTHFLANK_TOKEN: ${{ secrets.NORTHFLANK_TOKEN }}
+          IMAGE_NAME: ${{ env.IMAGE_NAME }}
+          PROJECT_NAME: ${{ env.PROJECT_NAME }}
+          SERVICE_NAME: ${{ env.SERVICE_NAME }}
