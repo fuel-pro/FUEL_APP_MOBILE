@@ -9,9 +9,12 @@ on:
   workflow_dispatch:
 
 jobs:
-  deploy-northflank:
-    name: Deploy to Northflank (Free)
+  deploy-container:
+    name: Build & Push Container
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -19,31 +22,33 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Login to Northflank Registry
+      - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
-          registry: registry.northflank.com
-          username: ${{ secrets.NORTHFLANK_USERNAME }}
-          password: ${{ secrets.NORTHFLANK_TOKEN }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and Push to Northflank
+      - name: Build and Push to GHCR
         uses: docker/build-push-action@v5
         with:
           context: ./backend
           file: ./backend/Dockerfile
           push: true
           tags: |
-            registry.northflank.com/fuel-pro/fuel-pro-backend:latest
+            ghcr.io/fuel-pro/fuel-pro-backend:latest
+            ghcr.io/fuel-pro/fuel-pro-backend:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Verify deployment
+      - name: Output image info
         run: |
-          echo "Docker image pushed to Northflank registry!"
-          echo "Image: registry.northflank.com/fuel-pro/fuel-pro-backend:latest"
+          echo "✅ Docker image built and pushed!"
+          echo "Image: ghcr.io/fuel-pro/fuel-pro-backend:latest"
+          echo "SHA: ghcr.io/fuel-pro/fuel-pro-backend:${{ github.sha }}"
           echo ""
-          echo "Next steps:"
+          echo "Next steps for Northflank:"
           echo "1. Go to https://app.northflank.com"
           echo "2. Create a new project with Docker runtime"
-          echo "3. Connect to image: registry.northflank.com/fuel-pro/fuel-pro-backend:latest"
+          echo "3. Connect to image: ghcr.io/fuel-pro/fuel-pro-backend:latest"
           echo "4. Set port to 8080 and health check to /"
