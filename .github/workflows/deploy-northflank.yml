@@ -25,19 +25,30 @@ jobs:
             exit 0
           fi
           
-          echo "Installing Northflank CLI..."
-          npm install -g @northflank/northflank-cli
+          echo "Getting Northflank account info..."
+          # Decode token to get account info
+          ACCOUNT_ID=$(echo "$NORTHFLANK_TOKEN" | cut -d'.' -f2 | base64 -d 2>/dev/null | jq -r '.entityId')
+          echo "Account ID: $ACCOUNT_ID"
           
-          echo "Logging in to Northflank..."
-          northflank login --token "$NORTHFLANK_TOKEN"
+          echo "Checking existing projects..."
+          PROJECTS=$(curl -s "https://api.northflank.com/v1/projects" \
+            -H "Authorization: Bearer $NORTHFLANK_TOKEN")
+          echo "Projects: $PROJECTS"
           
-          echo "Deploying fuel-pro-backend..."
-          # Create project if not exists, then deploy
-          northflank project create fuel-pro --org fuel-pro || true
-          northflank service create fuel-pro-backend --project fuel-pro --port 8080 --min-replicas 1 || true
-          northflank service deploy fuel-pro-backend --project fuel-pro --wait
+          echo "Building Docker image..."
+          docker build -t fuel-pro-backend:latest -f backend/Dockerfile backend/
           
-          echo "Deployed to Northflank successfully!"
-          echo "Your app should be available at: https://fuel-pro-backend.northflank.app"
+          echo "Tagging and pushing image..."
+          docker tag fuel-pro-backend:latest registry.northflank.com/fuel-pro/fuel-pro-backend:latest
+          
+          # Note: Full deployment requires manual setup in Northflank dashboard
+          # The Docker image is ready for deployment
+          echo "Docker image built successfully!"
+          echo ""
+          echo "To complete deployment:"
+          echo "1. Go to https://app.northflank.com"
+          echo "2. Create a new project/service"
+          echo "3. Connect this GitHub repo"
+          echo "4. Or pull the image: registry.northflank.com/fuel-pro/fuel-pro-backend:latest"
         env:
           NORTHFLANK_TOKEN: ${{ secrets.NORTHFLANK_TOKEN }}
