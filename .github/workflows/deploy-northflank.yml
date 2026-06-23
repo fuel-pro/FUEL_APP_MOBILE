@@ -19,6 +19,13 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Login to Northflank Registry
+        uses: docker/login-action@v3
+        with:
+          registry: registry.northflank.com
+          username: ${{ secrets.NORTHFLANK_USERNAME }}
+          password: ${{ secrets.NORTHFLANK_TOKEN }}
+
       - name: Build and Push to Northflank
         uses: docker/build-push-action@v5
         with:
@@ -29,8 +36,6 @@ jobs:
             registry.northflank.com/fuel-pro/fuel-pro-backend:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
-        env:
-          NORTHFLANK_TOKEN: ${{ secrets.NORTHFLANK_TOKEN }}
 
       - name: Verify deployment
         run: |
