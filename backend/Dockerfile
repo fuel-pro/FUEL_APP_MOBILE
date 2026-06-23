@@ -5,8 +5,8 @@ FROM node:20-alpine AS production
 
 # Labels
 LABEL maintainer="FuelPro <support@fuelpro.app>"
-LABEL description="FuelPro Backend API - Express.js with SQLite"
-LABEL version="2.0.0"
+LABEL description="FuelPro Backend API - Express.js with SQLite with Clerk Auth"
+LABEL version="3.0.0"
 
 # Install build tools and Python for native modules
 RUN apk add --no-cache \
@@ -22,8 +22,8 @@ WORKDIR /app
 # Copy package files first for better layer caching
 COPY package*.json ./
 
-# Install dependencies
-RUN npm ci --only=production && \
+# Install ALL dependencies (including dev for jose native deps)
+RUN npm ci && \
     npm cache clean --force
 
 # Copy source code
@@ -33,7 +33,7 @@ COPY models/ ./models/
 COPY middleware/ ./middleware/
 COPY database/ ./database/
 
-# Create data directory for SQLite (mounted volume on Fly.io)
+# Create data directory for SQLite (persistent volume on Koyeb/Fly.io)
 RUN mkdir -p /app/data && \
     chown -R node:node /app
 
@@ -41,7 +41,7 @@ RUN mkdir -p /app/data && \
 ENV NODE_ENV=production
 ENV PORT=8080
 
-# Expose port (Fly.io uses 8080)
+# Expose port
 EXPOSE 8080
 
 # Health check using wget (available in alpine)
