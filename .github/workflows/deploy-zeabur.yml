@@ -92,12 +92,15 @@ jobs:
           echo "Finding fuel-pro-backend project..."
           # List projects and find the one named fuel-pro-backend
           PROJECTS_JSON=$(zb project ls -i=false --json 2>/dev/null || echo "[]")
+          echo "Raw projects JSON: $PROJECTS_JSON"
           PROJECT_ID=$(echo "$PROJECTS_JSON" | jq -r '.[] | select(.name == "fuel-pro-backend") | .id' 2>/dev/null | head -1)
           
+          # Debug: show all available projects
+          echo "Available projects:"
+          echo "$PROJECTS_JSON" | jq '.[] | {name: .name, id: .id}' 2>/dev/null || echo "No projects found"
+          
           if [ -z "$PROJECT_ID" ] || [ "$PROJECT_ID" = "null" ]; then
-            echo "ERROR: Could not find project 'fuel-pro-backend'. Available projects:"
-            echo "$PROJECTS_JSON" | jq '.[] | .name' 2>/dev/null || echo "No projects found"
-            echo "Please ensure the project exists in Zeabur dashboard."
+            echo "ERROR: Could not find project 'fuel-pro-backend'. Please ensure the project exists in Zeabur dashboard."
             exit 1
           fi
           
