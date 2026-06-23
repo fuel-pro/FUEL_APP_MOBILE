@@ -89,27 +89,44 @@ jobs:
           echo "Logging in to Zeabur..."
           zb auth login --token "$ZEABUR_TOKEN" -i=false
           
-          echo "Deploying fuel-pro-backend service..."
-          # Use the deploy command which reads zeabur.json/zeabur.toml from current directory
-          zb deploy --name "backend" -i=false
+          echo "Finding fuel-pro-backend project..."
+          # List projects and find the one named fuel-pro-backend
+          PROJECTS_JSON=$(zb project ls -i=false --json 2>/dev/null || echo "[]")
+          PROJECT_ID=$(echo "$PROJECTS_JSON" | jq -r '.[] | select(.name == "fuel-pro-backend") | .id' 2>/dev/null | head -1)
+          
+          if [ -z "$PROJECT_ID" ] || [ "$PROJECT_ID" = "null" ]; then
+            echo "ERROR: Could not find project 'fuel-pro-backend'. Available projects:"
+            echo "$PROJECTS_JSON" | jq '.[] | .name' 2>/dev/null || echo "No projects found"
+            echo "Please ensure the project exists in Zeabur dashboard."
+            exit 1
+          fi
+          
+          echo "Found project ID: $PROJECT_ID"
+          
+          # Set project context
+          zb context set project --id "$PROJECT_ID" -i=false
+          
+          echo "Deploying backend service..."
+          # Deploy using project ID and service name
+          zb deploy --name "backend" --project-id "$PROJECT_ID" -i=false
           
           echo "Updating environment variables..."
-          # Update environment variables for the deployed service
-          # First, get the project and service info
-          PROJECT_ID=$(zb project ls -i=false --json 2>/dev/null | jq -r '.[] | select(.name == "fuel-pro-backend") | .id' | head -1)
-          if [ -n "$PROJECT_ID" ] && [ "$PROJECT_ID" != "null" ]; then
-            SERVICE_ID=$(zb service ls -i=false --json 2>/dev/null | jq -r '.[] | select(.name == "backend") | .id' | head -1)
-            if [ -n "$SERVICE_ID" ] && [ "$SERVICE_ID" != "null" ]; then
-              zb variable create --service-id "$SERVICE_ID" --key CLERK_FRONTEND_API --value "$CLERK_FRONTEND_API" -i=false 2>/dev/null || \
-              zb variable update --service-id "$SERVICE_ID" --key CLERK_FRONTEND_API --value "$CLERK_FRONTEND_API" -i=false 2>/dev/null || true
-              zb variable create --service-id "$SERVICE_ID" --key CLERK_SECRET_KEY --value "$CLERK_SECRET_KEY" -i=false 2>/dev/null || \
-              zb variable update --service-id "$SERVICE_ID" --key CLERK_SECRET_KEY --value "$CLERK_SECRET_KEY" -i=false 2>/dev/null || true
-              zb variable create --service-id "$SERVICE_ID" --key CLERK_PUBLISHABLE_KEY --value "$CLERK_PUBLISHABLE_KEY" -i=false 2>/dev/null || \
-              zb variable update --service-id "$SERVICE_ID" --key CLERK_PUBLISHABLE_KEY --value "$CLERK_PUBLISHABLE_KEY" -i=false 2>/dev/null || true
-              zb variable create --service-id "$SERVICE_ID" --key JWT_SECRET --value "$JWT_SECRET" -i=false 2>/dev/null || \
-              zb variable update --service-id "$SERVICE_ID" --key JWT_SECRET --value "$JWT_SECRET" -i=false 2>/dev/null || true
-              echo "Environment variables updated"
-            fi
+          # Get the service ID after deployment
+          SERVICE_ID=$(zb service ls -i=false --json 2>/dev/null | jq -r '.[] | select(.name == "backend") | .id' | head -1)
+          
+          if [ -n "$SERVICE_ID" ] && [ "$SERVICE_ID" != "null" ]; then
+            echo "Setting environment variables for service: $SERVICE_ID"
+            zb variable create --service-id "$SERVICE_ID" --key CLERK_FRONTEND_API --value "$CLERK_FRONTEND_API" -i=false 2>/dev/null || \
+            zb variable update --service-id "$SERVICE_ID" --key CLERK_FRONTEND_API --value "$CLERK_FRONTEND_API" -i=false 2>/dev/null || true
+            zb variable create --service-id "$SERVICE_ID" --key CLERK_SECRET_KEY --value "$CLERK_SECRET_KEY" -i=false 2>/dev/null || \
+            zb variable update --service-id "$SERVICE_ID" --key CLERK_SECRET_KEY --value "$CLERK_SECRET_KEY" -i=false 2>/dev/null || true
+            zb variable create --service-id "$SERVICE_ID" --key CLERK_PUBLISHABLE_KEY --value "$CLERK_PUBLISHABLE_KEY" -i=false 2>/dev/null || \
+            zb variable update --service-id "$SERVICE_ID" --key CLERK_PUBLISHABLE_KEY --value "$CLERK_PUBLISHABLE_KEY" -i=false 2>/dev/null || true
+            zb variable create --service-id "$SERVICE_ID" --key JWT_SECRET --value "$JWT_SECRET" -i=false 2>/dev/null || \
+            zb variable update --service-id "$SERVICE_ID" --key JWT_SECRET --value "$JWT_SECRET" -i=false 2>/dev/null || true
+            echo "Environment variables updated"
+          else
+            echo "Warning: Could not find service 'backend'. Skipping environment variable update."
           fi
           
           echo "✅ Deployed to Zeabur successfully!"
