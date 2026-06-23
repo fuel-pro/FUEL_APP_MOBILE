@@ -78,23 +78,41 @@ jobs:
 
       - name: Deploy to Zeabur
         run: |
-          if [ -n "$ZEABUR_TOKEN" ]; then
-            echo "Logging in to Zeabur..."
-            zb login --token "$ZEABUR_TOKEN"
-            
-            echo "Deploying fuel-pro-backend service..."
-            # Deploy the service
-            zb project deploy fuel-pro-backend --wait \
-              --env CLERK_FRONTEND_API="$CLERK_FRONTEND_API" \
-              --env CLERK_SECRET_KEY="$CLERK_SECRET_KEY" \
-              --env CLERK_PUBLISHABLE_KEY="$CLERK_PUBLISHABLE_KEY"
-            
-            echo "✅ Deployed to Zeabur successfully!"
-          else
-            echo "⚠️  ZEABUR_TOKEN not configured - skipping Zeabur deployment"
+          set -euo pipefail
+          
+          if [ -z "$ZEABUR_TOKEN" ]; then
+            echo "ERROR: ZEABUR_TOKEN not configured. Please add it to your repository secrets."
             echo "To deploy manually: https://zeabur.com/dashboard"
             exit 1
           fi
+          
+          echo "Logging in to Zeabur..."
+          zb auth login --token "$ZEABUR_TOKEN" -i=false
+          
+          echo "Deploying fuel-pro-backend service..."
+          # Use the deploy command which reads zeabur.json/zeabur.toml from current directory
+          zb deploy --name "backend" -i=false
+          
+          echo "Updating environment variables..."
+          # Update environment variables for the deployed service
+          # First, get the project and service info
+          PROJECT_ID=$(zb project ls -i=false --json 2>/dev/null | jq -r '.[] | select(.name == "fuel-pro-backend") | .id' | head -1)
+          if [ -n "$PROJECT_ID" ] && [ "$PROJECT_ID" != "null" ]; then
+            SERVICE_ID=$(zb service ls -i=false --json 2>/dev/null | jq -r '.[] | select(.name == "backend") | .id' | head -1)
+            if [ -n "$SERVICE_ID" ] && [ "$SERVICE_ID" != "null" ]; then
+              zb variable create --service-id "$SERVICE_ID" --key CLERK_FRONTEND_API --value "$CLERK_FRONTEND_API" -i=false 2>/dev/null || \
+              zb variable update --service-id "$SERVICE_ID" --key CLERK_FRONTEND_API --value "$CLERK_FRONTEND_API" -i=false 2>/dev/null || true
+              zb variable create --service-id "$SERVICE_ID" --key CLERK_SECRET_KEY --value "$CLERK_SECRET_KEY" -i=false 2>/dev/null || \
+              zb variable update --service-id "$SERVICE_ID" --key CLERK_SECRET_KEY --value "$CLERK_SECRET_KEY" -i=false 2>/dev/null || true
+              zb variable create --service-id "$SERVICE_ID" --key CLERK_PUBLISHABLE_KEY --value "$CLERK_PUBLISHABLE_KEY" -i=false 2>/dev/null || \
+              zb variable update --service-id "$SERVICE_ID" --key CLERK_PUBLISHABLE_KEY --value "$CLERK_PUBLISHABLE_KEY" -i=false 2>/dev/null || true
+              zb variable create --service-id "$SERVICE_ID" --key JWT_SECRET --value "$JWT_SECRET" -i=false 2>/dev/null || \
+              zb variable update --service-id "$SERVICE_ID" --key JWT_SECRET --value "$JWT_SECRET" -i=false 2>/dev/null || true
+              echo "Environment variables updated"
+            fi
+          fi
+          
+          echo "✅ Deployed to Zeabur successfully!"
         env:
           ZEABUR_TOKEN: ${{ secrets.ZEABUR_TOKEN }}
           CLERK_FRONTEND_API: ${{ secrets.CLERK_FRONTEND_API }}
