@@ -15,12 +15,22 @@ import { useAuth } from "@/react-app/context/AuthContext";
 export function useClerkAuth() {
   const { user, isSignedIn, isLoaded } = useUser();
   const { user: appUser, token: appToken, logout: appLogout } = useAuth();
+  
+  // Check if Clerk is configured
+  const isClerkConfigured = !!import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 
   return {
+    // Clerk configuration status
+    isClerkConfigured,
+    
     // Clerk-specific
     clerkUser: user,
     isClerkSignedIn: isSignedIn,
     isClerkLoaded: isLoaded,
+    clerkUserId: user?.id,
+    clerkEmail: user?.primaryEmailAddress?.emailAddress,
+    clerkName: user?.fullName || user?.firstName,
+    clerkImageUrl: user?.imageUrl,
     
     // App-specific
     appUser,
@@ -30,24 +40,47 @@ export function useClerkAuth() {
     // User is considered authenticated if either Clerk or app auth is active
     isAuthenticated: isSignedIn || !!appUser,
     
+    // Display name (prefers Clerk, falls back to app user)
+    displayName: user?.fullName || user?.firstName || appUser?.name || "User",
+    
+    // Email (prefers Clerk, falls back to app user)
+    email: user?.primaryEmailAddress?.emailAddress || appUser?.email || "",
+    
+    // Profile image
+    imageUrl: user?.imageUrl || appUser?.picture || "",
+    
     // Helper to get Clerk session token for API calls
     getClerkToken: async () => {
       if (!isSignedIn) return null;
-      // Clerk SDK handles token refresh automatically
-      // The user() hook returns the session token via useUser
       return user?.getSessionToken();
+    },
+    
+    // Helper to get auth token (Clerk token when signed in, otherwise app token)
+    getAuthToken: async () => {
+      if (isSignedIn) {
+        return user?.getSessionToken();
+      }
+      return appToken;
     },
     
     // Sign out from Clerk
     clerkSignOut: async () => {
       if (isSignedIn) {
-        // Import clerk/clerk-react dynamically to avoid circular deps
         const { signOut } = await import("@clerk/clerk-react");
         await signOut();
       }
     },
     
-    // App logout (clears local auth)
+    // Sign out from app (legacy)
     appSignOut: appLogout,
+    
+    // Combined sign out (clears both Clerk and app auth)
+    signOut: async () => {
+      if (isSignedIn) {
+        const { signOut } = await import("@clerk/clerk-react");
+        await signOut();
+      }
+      appLogout();
+    },
   };
 }

@@ -2,14 +2,10 @@ import { ClerkProvider } from "@clerk/clerk-react";
 import { ReactNode } from "react";
 
 // Get the publishable key from environment variables
-// For Clerk, this is typically VITE_CLERK_PUBLISHABLE_KEY
 const publishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 
-if (!publishableKey) {
-  console.warn(
-    "Missing VITE_CLERK_PUBLISHABLE_KEY. Clerk authentication will not work."
-  );
-}
+// Router type: hash for React Router v7 (HashRouter), path for browser router
+const routerType = "hash";
 
 interface ClerkWrapperProps {
   children: ReactNode;
@@ -19,7 +15,12 @@ export default function ClerkWrapper({ children }: ClerkWrapperProps) {
   return (
     <ClerkProvider 
       publishableKey={publishableKey || ""}
-      afterSignOutUrl="/"
+      routerType={routerType}
+      afterSignInUrl="/#/dashboard"
+      afterSignUpUrl="/#/welcome"
+      afterSignOutUrl="/#/sign-in"
+      signInFallbackRedirectUrl="/#/dashboard"
+      signUpFallbackRedirectUrl="/#/welcome"
     >
       {children}
     </ClerkProvider>

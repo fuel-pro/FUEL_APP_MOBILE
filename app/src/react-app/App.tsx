@@ -16,6 +16,9 @@ import FounderAccess from "@/react-app/pages/FounderAccess";
 import ClerkWrapper from "@/react-app/components/ClerkWrapper";
 import ClerkSignIn from "@/react-app/components/ClerkSignIn";
 import ClerkSignUp from "@/react-app/components/ClerkSignUp";
+import ClerkBridge from "@/react-app/components/ClerkBridge";
+import ClerkShow from "@/react-app/components/ClerkShow";
+import ClerkUserButton from "@/react-app/components/ClerkUserButton";
 
 // Simple fallback for lazy-loaded routes
 function RouteFallback() {
@@ -57,8 +60,11 @@ function useDetectedCountry(): string {
 function MainAppLoader() {
   const { user, isPending: isLoading } = useAuth();
   const detectedCountry = useDetectedCountry();
+  const publishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
+  const isClerkConfigured = !!publishableKey;
 
-  if (isLoading) {
+  // Loading state
+  if (isLoading && !isClerkConfigured) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 flex items-center justify-center">
         <div className="bg-white/10 backdrop-blur-xl rounded-2xl p-8 shadow-2xl border border-white/20 text-center">
@@ -80,6 +86,23 @@ function MainAppLoader() {
     );
   }
 
+  // Clerk is configured - show Clerk auth or dashboard
+  if (isClerkConfigured) {
+    return (
+      <ClerkShow when="signed-in" fallback={<ClerkSignIn />}>
+        <ClerkBridge />
+        <TenantProvider detectedCountry={detectedCountry}>
+          <StationProvider>
+            <FuelProvider>
+              <HomePage />
+            </FuelProvider>
+          </StationProvider>
+        </TenantProvider>
+      </ClerkShow>
+    );
+  }
+
+  // Legacy auth (no Clerk configured)
   return user ? (
     <TenantProvider detectedCountry={detectedCountry}>
       <StationProvider>
@@ -106,6 +129,7 @@ export default function App() {
                     {/* Clerk Authentication Routes */}
                     <Route path="/sign-in" element={<ClerkSignIn />} />
                     <Route path="/sign-up" element={<ClerkSignUp />} />
+                    <Route path="/dashboard" element={<MainAppLoader />} />
 
                     {/* Founder Access - public, no auth required, rendered BEFORE auth check */}
                     <Route

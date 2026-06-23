@@ -1,29 +1,21 @@
 import { SignIn } from "@clerk/clerk-react";
 
-interface ClerkSignInProps {
-  onSuccess?: () => void;
-  onSignUpClick?: () => void;
-}
-
-export default function ClerkSignIn({ onSuccess, onSignUpClick }: ClerkSignInProps) {
+/**
+ * ClerkSignIn - Full Clerk-powered sign-in component
+ * 
+ * Uses Clerk's prebuilt SignIn component with hash routing
+ * for React Router v7 HashRouter compatibility.
+ */
+export default function ClerkSignIn() {
   return (
-    <div className="w-full max-w-md mx-auto">
-      <SignIn 
-        routing="hash"
-        afterSignInUrl={onSuccess ? window.location.href : undefined}
-        signUpUrl={onSignUpClick ? "#/sign-up" : undefined}
-      />
-      {onSignUpClick && (
-        <p className="text-center mt-4 text-sm text-gray-400">
-          Don't have an account?{" "}
-          <button
-            onClick={onSignUpClick}
-            className="text-blue-400 hover:text-blue-300 font-medium"
-          >
-            Sign up
-          </button>
-        </p>
-      )}
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-indigo-900 to-slate-900 flex items-center justify-center p-4">
+      <div className="w-full max-w-md">
+        <SignIn 
+          routing="hash"
+          fallbackRedirectUrl="/#/dashboard"
+          signUpUrl="/#/sign-up"
+        />
+      </div>
     </div>
   );
 }

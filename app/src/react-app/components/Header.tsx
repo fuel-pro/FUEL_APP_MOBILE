@@ -31,6 +31,7 @@ import {
   LayoutDashboard,
   Crown,
 } from "lucide-react";
+import ClerkUserButton from "@/react-app/components/ClerkUserButton";
 
 interface HeaderProps {
   onShowStations?: () => void;
@@ -441,14 +442,20 @@ export default function Header({
 
             {/* User & Logout */}
             <div className="flex items-center justify-between pt-3 border-t border-white/10">
-              {user && (
+              {/* Clerk UserButton when configured */}
+              {import.meta.env.VITE_CLERK_PUBLISHABLE_KEY ? (
+                <div className="flex items-center gap-2">
+                  <ClerkUserButton />
+                  <span className="text-sm text-gray-300">Account</span>
+                </div>
+              ) : user ? (
                 <div className="flex items-center gap-2">
                   <div className="w-8 h-8 bg-gradient-to-br from-amber-400 to-amber-600 rounded-full flex items-center justify-center text-xs font-bold">
                     {user.name?.charAt(0).toUpperCase()}
                   </div>
                   <span className="text-sm text-gray-300">{user.name}</span>
                 </div>
-              )}
+              ) : null}
               <button
                 onClick={() => {
                   logout();
