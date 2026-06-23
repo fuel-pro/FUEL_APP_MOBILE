@@ -1,0 +1,48 @@
+name: Deploy to Northflank (Free)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/deploy-northflank.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy-northflank:
+    name: Deploy to Northflank (Free)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy to Northflank
+        run: |
+          set -euo pipefail
+          
+          if [ -z "$NORTHFLANK_CLIENT_ID" ] || [ -z "$NORTHFLANK_CLIENT_SECRET" ]; then
+            echo "Northflank credentials not configured - skipping deployment"
+            echo ""
+            echo "To enable Northflank deployment (free, no credit card):"
+            echo "1. Sign up at https://northflank.com (free tier available)"
+            echo "2. Go to Settings > Client credentials"
+            echo "3. Create new credentials"
+            echo "4. Add NORTHFLANK_CLIENT_ID and NORTHFLANK_CLIENT_SECRET to GitHub secrets"
+            exit 0
+          fi
+          
+          echo "Installing Northflank CLI..."
+          npm install -g @northflank/node-sdk
+          
+          echo "Deploying to Northflank..."
+          # Build and push Docker image
+          IMAGE_TAG="registry.northflank.com/$NORTHFLANK_CLIENT_ID/fuel-pro-backend:latest"
+          
+          docker login registry.northflank.com -u "$NORTHFLANK_CLIENT_ID" -p "$NORTHFLANK_CLIENT_SECRET"
+          docker build -t "$IMAGE_TAG" -f backend/Dockerfile backend/
+          docker push "$IMAGE_TAG"
+          
+          echo "Deployed to Northflank successfully!"
+        env:
+          NORTHFLANK_CLIENT_ID: ${{ secrets.NORTHFLANK_CLIENT_ID }}
+          NORTHFLANK_CLIENT_SECRET: ${{ secrets.NORTHFLANK_CLIENT_SECRET }}
