@@ -57,12 +57,12 @@ jobs:
           
           echo "Creating project on Northflank..."
           
-          # Create project with region
+          # Create project without region (use default)
           echo "Creating project: $PROJECT_NAME"
           CREATE_RESULT=$(curl -s -X POST "https://api.northflank.com/v1/projects" \
             -H "Authorization: Bearer $NORTHFLANK_TOKEN" \
             -H "Content-Type: application/json" \
-            -d '{"name":"'"$PROJECT_NAME"'","region":"eu-west"}')
+            -d '{"name":"'"$PROJECT_NAME"'"}')
           echo "Create result: $CREATE_RESULT"
           
           sleep 5
