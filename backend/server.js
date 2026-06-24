@@ -86,6 +86,7 @@ app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/users', require('./routes/userRoutes'));
 app.use('/api/stations', require('./routes/stationRoutes'));
 app.use('/api/audit', require('./routes/auditRoutes'));
+app.use('/api/sync', require('./routes/syncRoutes'));
 
 // Clerk Backend Integration Routes
 app.use('/api/clerk', require('./routes/clerkRoutes'));

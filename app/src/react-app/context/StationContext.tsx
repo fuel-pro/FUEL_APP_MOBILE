@@ -6,6 +6,7 @@ import React, {
   useEffect,
 } from "react";
 import { getCountryByCode } from "@/react-app/lib/world-country-utils";
+import { cloudSyncService } from "../services/CloudSyncService";
 
 // Encryption helper for sensitive data
 const encrypt = (text: string, key: string): string => {
@@ -353,16 +354,38 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
     setIsStationLoading(false);
   }, []);
 
-  // Persist to storage
+  // Persist to storage AND sync to cloud
   const persist = useCallback(
-    (newStations?: Station[], newAdmin?: AdminSettings) => {
+    async (newStations?: Station[], newAdmin?: AdminSettings) => {
       const s = newStations || stations;
       const a = newAdmin || adminSettings;
+      
+      // Save to local storage
       localStorage.setItem(
         STORAGE_KEY,
         JSON.stringify({ stations: s, version: "3.0" })
       );
       localStorage.setItem(ADMIN_KEY, JSON.stringify(a));
+      
+      // Sync to cloud (fire and forget - don't block UI)
+      try {
+        // Sync each station's data
+        for (const station of s) {
+          const stationKey = `fuelpro_station_${station.id}`;
+          await cloudSyncService.save(stationKey, station);
+        }
+        
+        // Sync admin settings (without sensitive data)
+        const safeAdminSettings = {
+          ...a,
+          adminPasswordHash: undefined, // Don't sync sensitive data
+        };
+        await cloudSyncService.save('fuelpro_admin_settings', safeAdminSettings);
+        
+        console.log('[StationContext] Data synced to cloud');
+      } catch (error) {
+        console.warn('[StationContext] Cloud sync failed:', error);
+      }
     },
     [stations, adminSettings]
   );
@@ -370,6 +393,22 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     persist();
   }, [stations, adminSettings, persist]);
+
+  // Initialize cloud sync on mount
+  useEffect(() => {
+    const initCloudSync = async () => {
+      try {
+        await cloudSyncService.init();
+        console.log('[StationContext] Cloud sync initialized');
+      } catch (error) {
+        console.warn('[StationContext] Failed to init cloud sync:', error);
+      }
+    };
+    
+    if (!isStationLoading) {
+      initCloudSync();
+    }
+  }, [isStationLoading]);
 
   // Station CRUD
   const createStation = useCallback(

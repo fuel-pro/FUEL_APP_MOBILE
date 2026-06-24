@@ -126,6 +126,55 @@ function initializeDatabase() {
     )
   `);
 
+  // User storage preferences (for controlling local vs cloud storage)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS user_storage_preferences (
+      id TEXT PRIMARY KEY,
+      userId TEXT NOT NULL UNIQUE,
+      storeLocally INTEGER DEFAULT 0,
+      syncEnabled INTEGER DEFAULT 1,
+      autoSyncInterval INTEGER DEFAULT 30000,
+      syncOnWifiOnly INTEGER DEFAULT 0,
+      lastSyncAt TEXT,
+      createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+      updatedAt TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (userId) REFERENCES users(id)
+    )
+  `);
+
+  // Cloud sync metadata for tracking data changes
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS cloud_sync_meta (
+      id TEXT PRIMARY KEY,
+      userId TEXT NOT NULL,
+      dataKey TEXT NOT NULL,
+      dataType TEXT NOT NULL,
+      version INTEGER DEFAULT 1,
+      checksum TEXT,
+      lastModified TEXT DEFAULT CURRENT_TIMESTAMP,
+      syncedAt TEXT,
+      deviceId TEXT,
+      FOREIGN KEY (userId) REFERENCES users(id),
+      UNIQUE(userId, dataKey)
+    )
+  `);
+
+  // Device registrations for multi-device sync
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS user_devices (
+      id TEXT PRIMARY KEY,
+      userId TEXT NOT NULL,
+      deviceId TEXT NOT NULL,
+      deviceName TEXT,
+      deviceType TEXT,
+      lastSeenAt TEXT DEFAULT CURRENT_TIMESTAMP,
+      isActive INTEGER DEFAULT 1,
+      createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (userId) REFERENCES users(id),
+      UNIQUE(userId, deviceId)
+    )
+  `);
+
   // Create indexes
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
@@ -136,6 +185,9 @@ function initializeDatabase() {
     CREATE INDEX IF NOT EXISTS idx_content_key ON content(key);
     CREATE INDEX IF NOT EXISTS idx_audit_logs_userId ON audit_logs(userId);
     CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON audit_logs(timestamp);
+    CREATE INDEX IF NOT EXISTS idx_cloud_sync_meta_userId ON cloud_sync_meta(userId);
+    CREATE INDEX IF NOT EXISTS idx_cloud_sync_meta_dataKey ON cloud_sync_meta(dataKey);
+    CREATE INDEX IF NOT EXISTS idx_user_devices_userId ON user_devices(userId);
   `);
 
   console.log('✅ SQLite database initialized');
