@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useCallback } from "react";
 import { useState, useEffect } from "react";
 import {
   Crown,
@@ -9,6 +9,7 @@ import {
   Server,
   HardDrive,
   Wifi,
+  WifiOff,
   Clock,
   Search,
   Eye,
@@ -51,6 +52,8 @@ import {
   DollarSign,
   Tag,
   CreditCard,
+  Cloud,
+  CloudOff,
 } from "lucide-react";
 import { validateFounderAuth } from "@/react-app/lib/founder-auth";
 import {
@@ -75,6 +78,8 @@ import {
   PaymentMethodsSection,
 } from "./founder-sections";
 import { useFounderBackend } from "@/react-app/hooks/useFounderBackend";
+import { useCloudSync, useCloudUsers, useCloudStations, useCloudAuditLog, useCloudSecrets, useCloudFeatureFlags } from "@/react-app/hooks/useCloudSync";
+import { checkApiStatus } from "@/react-app/lib/restApiSync";
 
 /* ─── Types ─── */
 interface AppUser {
@@ -295,6 +300,14 @@ type SectionId =
   | "paymentmethods";
 
 export default function FounderAccess() {
+  /* ─── Cloud Sync State ─── */
+  const [cloudStatus, setCloudStatus] = useState<{
+    isOnline: boolean;
+    isSyncing: boolean;
+    lastSync: number;
+    pendingChanges: number;
+  }>({ isOnline: false, isSyncing: false, lastSync: 0, pendingChanges: 0 });
+
   /* ─── Backend Integration ─── */
   const {
     logAudit,
@@ -352,6 +365,23 @@ export default function FounderAccess() {
   );
   const [copiedSecret, setCopiedSecret] = useState("");
   const [loading, setLoading] = useState(true);
+
+  /* ─── Cloud Status Check ─── */
+  const checkCloudStatus = useCallback(async () => {
+    const status = await checkApiStatus();
+    setCloudStatus((prev) => ({
+      ...prev,
+      isOnline: status.connected,
+    }));
+    return status.connected;
+  }, []);
+
+  // Check cloud status periodically
+  useEffect(() => {
+    checkCloudStatus();
+    const interval = setInterval(checkCloudStatus, 30000);
+    return () => clearInterval(interval);
+  }, [checkCloudStatus]);
 
   /* ─── Password check on mount ─── */
   useEffect(() => {
@@ -1148,9 +1178,19 @@ export default function FounderAccess() {
                 className="pl-8 pr-3 py-1.5 bg-white/[0.03] border border-white/[0.08] rounded-lg text-xs text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/30 w-48"
               />
             </div>
-            <div className="flex items-center gap-2 px-2.5 py-1.5 bg-amber-500/10 border border-amber-500/20 rounded-lg">
-              <Radio size={10} className="text-amber-400" />
-              <span className="text-[10px] text-amber-300">Live</span>
+            {/* Cloud Sync Status */}
+            <div className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg ${cloudStatus.isOnline ? 'bg-emerald-500/10 border border-emerald-500/20' : 'bg-red-500/10 border border-red-500/20'}`}>
+              {cloudStatus.isOnline ? (
+                <>
+                  <Cloud size={10} className="text-emerald-400" />
+                  <span className="text-[10px] text-emerald-300">Cloud Sync</span>
+                </>
+              ) : (
+                <>
+                  <CloudOff size={10} className="text-red-400" />
+                  <span className="text-[10px] text-red-300">Local Only</span>
+                </>
+              )}
             </div>
           </div>
         </header>

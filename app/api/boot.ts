@@ -11,8 +11,28 @@ import { Paths } from "@contracts/constants";
 const app = new Hono<{ Bindings: HttpBindings }>();
 
 app.use(bodyLimit({ maxSize: 50 * 1024 * 1024 }));
+
+// Health check endpoint
+app.get("/", (c) => c.json({ 
+  status: "ok", 
+  message: "FuelPro Backend API", 
+  version: "3.0-CLOUD-SYNC",
+  timestamp: new Date().toISOString()
+}));
+
 app.get(Paths.oauthCallback, createOAuthCallbackHandler());
+
+// tRPC endpoint with explicit CORS
 app.use("/api/trpc/*", async (c) => {
+  // Add CORS headers
+  c.res.headers.set("Access-Control-Allow-Origin", "*");
+  c.res.headers.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  c.res.headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization, x-founder-token");
+  
+  if (c.req.method === "OPTIONS") {
+    return c.json({ ok: true });
+  }
+  
   return fetchRequestHandler({
     endpoint: "/api/trpc",
     req: c.req.raw,
@@ -20,7 +40,9 @@ app.use("/api/trpc/*", async (c) => {
     createContext,
   });
 });
-app.all("/api/*", (c) => c.json({ error: "Not Found" }, 404));
+
+// REST API fallback endpoints for direct access
+app.notFound((c) => c.json({ error: "Not Found", path: c.req.path }, 404));
 
 export default app;
 
