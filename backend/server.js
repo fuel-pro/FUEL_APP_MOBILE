@@ -44,7 +44,7 @@ app.get('/', (req, res) => {
   res.json({
     status: 'ok',
     message: 'FuelPro Backend API',
-    version: '3.0-SQLITE-MIGRATION-COMPLETE',
+    version: '3.1-CLOUD-SYNC-REST',
     timestamp: new Date().toISOString()
   });
 });
@@ -86,6 +86,9 @@ app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/users', require('./routes/userRoutes'));
 app.use('/api/stations', require('./routes/stationRoutes'));
 app.use('/api/audit', require('./routes/auditRoutes'));
+
+// Cloud Sync REST API
+app.use('/api', require('./routes/cloudSyncRoutes'));
 
 // Clerk Backend Integration Routes
 app.use('/api/clerk', require('./routes/clerkRoutes'));
