@@ -14,7 +14,7 @@ import {
 // Binds auth identity to station roles
 // ============================================================
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://fuel-app-backend.onrender.com";
+const API_BASE = import.meta.env.VITE_API_URL || "https://fuel-pro-backend-v2-production-7c2b.up.railway.app";
 
 export type AuthMethod = "google" | "email" | "username";
 
