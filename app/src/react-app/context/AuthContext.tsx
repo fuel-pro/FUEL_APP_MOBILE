@@ -14,6 +14,15 @@ import {
 // Binds auth identity to station roles
 // ============================================================
 
+// Demo mode - use local storage for authentication when backend is unavailable
+const DEMO_MODE = true;
+const DEMO_USERS = [
+  { email: "admin@fuelpro.demo", password: "admin123", name: "Admin User", role: "admin" },
+  { email: "manager@fuelpro.demo", password: "manager123", name: "Manager User", role: "manager" },
+  { email: "staff@fuelpro.demo", password: "staff123", name: "Staff User", role: "staff" },
+  { email: "demo@fuelpro.demo", password: "demo", name: "Demo User", role: "owner" },
+];
+
 const API_BASE = import.meta.env.VITE_API_URL || "https://fuel-pro-backend-v2-production-7c2b.up.railway.app";
 
 export type AuthMethod = "google" | "email" | "username";
@@ -243,6 +252,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsPending(true);
       setError(null);
 
+      // Demo mode - authenticate locally
+      if (DEMO_MODE) {
+        const demoUser = DEMO_USERS.find(u => u.email === email && u.password === password);
+        if (demoUser) {
+          const newUser: AuthIdentity = {
+            id: `demo_${Date.now()}`,
+            authId: `demo_${email}`,
+            authMethod: "email",
+            email: demoUser.email,
+            name: demoUser.name,
+            role: demoUser.role,
+            permissions: ["read", "write", "admin"],
+          };
+          setUser(newUser);
+          const demoToken = `demo_token_${Date.now()}`;
+          setToken(demoToken);
+          localStorage.setItem(TOKEN_STORAGE_KEY, demoToken);
+          localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(newUser));
+          broadcastAuthUpdate(newUser, demoToken);
+          setIsPending(false);
+          return true;
+        } else {
+          setError("Invalid demo credentials. Try: demo@fuelpro.demo / demo");
+          setIsPending(false);
+          return false;
+        }
+      }
+
       try {
         const deviceId = getDeviceId();
         const res = await fetch(`${API_BASE}/api/auth/login`, {
@@ -290,6 +327,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (email: string, password: string, name: string): Promise<boolean> => {
       setIsPending(true);
       setError(null);
+
+      // Demo mode - create local user
+      if (DEMO_MODE) {
+        const newUser: AuthIdentity = {
+          id: `demo_${Date.now()}`,
+          authId: `demo_${email}`,
+          authMethod: "email",
+          email,
+          name,
+          role: "staff",
+          permissions: ["read", "write"],
+        };
+        setUser(newUser);
+        const demoToken = `demo_token_${Date.now()}`;
+        setToken(demoToken);
+        localStorage.setItem(TOKEN_STORAGE_KEY, demoToken);
+        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(newUser));
+        setIsPending(false);
+        return true;
+      }
 
       try {
         const deviceId = getDeviceId();

@@ -38,3 +38,5 @@ npm-debug.log*
 .cache/
 .turbo/
 backend/render.yaml
+.vercel
+.env*

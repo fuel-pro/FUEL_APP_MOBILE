@@ -83,7 +83,7 @@
     "vitest": "^4.0.16"
   },
   "scripts": {
-    "build": "vite build && esbuild api/boot.ts --platform=node --bundle --format=esm --outdir=dist --banner:js=\"import { createRequire } from 'module';const require = createRequire(import.meta.url);\"",
+    "build": "vite build && esbuild api/boot.ts --platform=node --bundle --format=esm --outfile=dist/api/handler.mjs --tsconfig=tsconfig.server.json",
     "build:vercel": "vite build && esbuild api/boot.ts --platform=node --bundle --format=esm --outfile=../api/handler.mjs --tsconfig=tsconfig.server.json",
     "build:static": "vite build",
     "dev": "vite",
