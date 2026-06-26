@@ -557,8 +557,30 @@ export default function FounderAccess() {
     }
   };
 
-  const completeLogin = () => {
+  const completeLogin = async () => {
     setIsAuthenticated(true);
+    
+    // Get founder token from backend
+    let token = null;
+    try {
+      const res = await fetch(
+        `${import.meta.env.VITE_API_URL || "https://fuel-pro-backend-v2-production-7c2b.up.railway.app"}/api/trpc/founderAuth.login`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            json: { username: loginUsername.trim(), password: loginPassword },
+          }),
+        }
+      );
+      const data = await res.json();
+      if (data?.result?.data?.json?.token) {
+        token = data.result.data.json.token;
+      }
+    } catch (e) {
+      // Backend might be unavailable - continue with local auth
+    }
+    
     // Store session with timestamp for 8-hour expiry
     localStorage.setItem(
       FOUNDER_SESSION_KEY,
@@ -566,6 +588,7 @@ export default function FounderAccess() {
         active: true,
         loginTime: Date.now(),
         username: loginUsername.trim(),
+        token: token, // Store backend token for API calls
       })
     );
     setLoginError("");
