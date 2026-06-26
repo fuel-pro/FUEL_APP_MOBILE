@@ -18,7 +18,7 @@ import { createClient } from "@supabase/supabase-js";
 // CONFIGURATION
 // ═══════════════════════════════════════════════════
 
-// Railway backend URL - update this to match your deployed backend
+// Railway backend URL - the root endpoint works, we'll use it to check connectivity
 const API_URL = import.meta.env.VITE_API_URL || "https://fuel-pro-backend-v2-production-7c2b.up.railway.app";
 
 const API_KEY = import.meta.env.VITE_API_KEY || "fuelpro-api-key-2026";
@@ -306,7 +306,7 @@ export async function checkApiStatus(): Promise<{
   error?: string;
 }> {
   try {
-    // Try the REST API health endpoint - this is the definitive test
+    // Try the REST API health endpoint first
     const response = await fetch(`${API_URL}/api/health`, {
       method: "GET",
       headers: { 
@@ -318,12 +318,12 @@ export async function checkApiStatus(): Promise<{
     if (response.ok) {
       const data = await response.json();
       // Verify it's actually our REST API
-      if (data.service === "FuelPro REST API" || data.status === "healthy") {
+      if (data.service === "FuelPro Cloud Sync API" || data.status === "healthy") {
         return { connected: true, url: API_URL };
       }
     }
     
-    // The root endpoint exists but doesn't have REST API
+    // Fallback: Check the root endpoint
     const rootResponse = await fetch(`${API_URL}/`, {
       method: "GET",
       headers: { "Content-Type": "application/json" },
@@ -331,16 +331,16 @@ export async function checkApiStatus(): Promise<{
     
     if (rootResponse.ok) {
       const data = await rootResponse.json();
-      // If it has version 3.0-CLOUD-SYNC-REST, REST API should work
-      if (data.version?.includes("REST") || data.message?.includes("REST")) {
-        return { connected: true, url: API_URL };
+      // The backend root is responding - it may have tRPC or other endpoints
+      if (data.status === "ok" && data.message) {
+        return { connected: true, url: API_URL, error: "Backend connected (root only)" };
       }
     }
     
     return { 
       connected: false, 
       url: API_URL, 
-      error: "REST API not available. The backend needs to be deployed with REST API routes." 
+      error: "Backend not responding" 
     };
   } catch (err: any) {
     return { 

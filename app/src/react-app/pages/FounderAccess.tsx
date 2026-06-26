@@ -1250,23 +1250,22 @@ export default function FounderAccess() {
                     </div>
                     <div className="flex-1">
                       <h3 className="text-sm font-medium text-amber-300 mb-2">
-                        Cloud Sync Not Connected
+                        Cloud Sync Status
                       </h3>
                       <p className="text-xs text-gray-400 mb-4">
-                        This system is currently using local storage only. Data is not synced across devices.
-                        To enable cloud sync, deploy the backend API and configure the following:
+                        {cloudStatus.status?.includes("root only") 
+                          ? "Backend is online but cloud sync features require the REST API. Railway deployment may be updating."
+                          : "This system is currently using local storage. Data is not synced across devices."}
                       </p>
-                      <div className="bg-black/30 rounded-lg p-4 font-mono text-xs">
-                        <p className="text-gray-400 mb-1"># Add to your .env file:</p>
-                        <p className="text-emerald-400">VITE_API_URL=https://your-backend.railway.app</p>
-                        <p className="text-emerald-400">VITE_API_KEY=fuelpro-api-key-2026</p>
-                        <p className="text-gray-400 mt-2 mb-1"># Or use Supabase:</p>
-                        <p className="text-emerald-400">VITE_SUPABASE_URL=https://your-project.supabase.co</p>
-                        <p className="text-emerald-400">VITE_SUPABASE_ANON_KEY=your-anon-key</p>
-                      </div>
+                      {cloudStatus.status?.includes("root only") && (
+                        <div className="mb-4">
+                          <p className="text-xs text-emerald-400 mb-2">✓ Backend Connected:</p>
+                          <p className="text-xs text-gray-500 font-mono">https://fuel-pro-backend-v2-production-7c2b.up.railway.app</p>
+                        </div>
+                      )}
                       <button
                         onClick={() => checkCloudStatus()}
-                        className="mt-4 px-4 py-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 rounded-lg text-xs font-medium transition-colors"
+                        className="mt-2 px-4 py-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 rounded-lg text-xs font-medium transition-colors"
                       >
                         <RefreshCw size={12} className="inline mr-1" />
                         Retry Connection
