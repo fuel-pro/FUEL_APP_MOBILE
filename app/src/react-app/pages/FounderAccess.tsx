@@ -514,7 +514,7 @@ export default function FounderAccess() {
       ? loginPassword === atob(stored.password)
       : loginPassword === stored.password;
     const isValid =
-      (loginUsername.trim() === stored.username && legacyPwMatch) ||
+      (loginUsername.trim().toLowerCase() === stored.username.toLowerCase() && legacyPwMatch) ||
       validateFounderAuth(loginUsername.trim(), loginPassword);
     if (isValid) {
       // Check if 2FA is enabled

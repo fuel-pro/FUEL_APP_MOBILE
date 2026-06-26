@@ -25,6 +25,7 @@ import ClerkSignUp from "@/react-app/components/ClerkSignUp";
 import ClerkBridge from "@/react-app/components/ClerkBridge";
 import ClerkShow from "@/react-app/components/ClerkShow";
 import ClerkUserButton from "@/react-app/components/ClerkUserButton";
+import { TRPCProvider } from "@/providers/trpc";
 
 // Simple fallback for lazy-loaded routes
 function RouteFallback() {
@@ -130,40 +131,42 @@ export default function App() {
         <LocalizationProvider>
           <PermissionProvider>
             <PlatformDataProvider>
-              <Router>
-                <Routes>
-                  {/* Clerk Authentication Routes */}
-                  <Route path="/sign-in" element={<ClerkSignIn />} />
-                  <Route path="/sign-up" element={<ClerkSignUp />} />
-                  <Route path="/dashboard" element={<MainAppLoader />} />
+              <TRPCProvider>
+                <Router>
+                  <Routes>
+                    {/* Clerk Authentication Routes */}
+                    <Route path="/sign-in" element={<ClerkSignIn />} />
+                    <Route path="/sign-up" element={<ClerkSignUp />} />
+                    <Route path="/dashboard" element={<MainAppLoader />} />
 
-                  {/* Founder Access - public, no auth required, rendered BEFORE auth check */}
-                  <Route
-                    path="/founder"
-                    element={<FounderAccess />}
-                  />
-                  <Route
-                    path="/founder-v1"
-                    element={<Navigate to="/founder" replace />}
-                  />
-                  <Route
-                    path="/admin"
-                    element={<Navigate to="/founder" replace />}
-                  />
+                    {/* Founder Access - public, no auth required, rendered BEFORE auth check */}
+                    <Route
+                      path="/founder"
+                      element={<FounderAccess />}
+                    />
+                    <Route
+                      path="/founder-v1"
+                      element={<Navigate to="/founder" replace />}
+                    />
+                    <Route
+                      path="/admin"
+                      element={<Navigate to="/founder" replace />}
+                    />
 
-                  {/* Password Reset - public */}
-                  <Route path="/reset-password" element={<PasswordReset />} />
+                    {/* Password Reset - public */}
+                    <Route path="/reset-password" element={<PasswordReset />} />
 
-                  {/* Invite acceptance - public */}
-                  <Route path="/join/:inviteId" element={<InviteAccept />} />
+                    {/* Invite acceptance - public */}
+                    <Route path="/join/:inviteId" element={<InviteAccept />} />
 
-                  {/* Main app - requires auth, shows loader while checking */}
-                  <Route path="/" element={<MainAppLoader />} />
+                    {/* Main app - requires auth, shows loader while checking */}
+                    <Route path="/" element={<MainAppLoader />} />
 
-                  {/* Catch all */}
-                  <Route path="*" element={<Navigate to="/" replace />} />
-                </Routes>
-              </Router>
+                    {/* Catch all */}
+                    <Route path="*" element={<Navigate to="/" replace />} />
+                  </Routes>
+                </Router>
+              </TRPCProvider>
             </PlatformDataProvider>
           </PermissionProvider>
         </LocalizationProvider>

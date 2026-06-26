@@ -40,7 +40,7 @@ export function validateFounderAuth(
   inputPw: string
 ): boolean {
   const creds = getFounderCredentials();
-  return inputUser === creds.username && inputPw === creds.password;
+  return inputUser.toLowerCase() === creds.username.toLowerCase() && inputPw === creds.password;
 }
 
 /** Check active founder session */
