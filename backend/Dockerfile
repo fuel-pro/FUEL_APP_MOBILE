@@ -32,6 +32,7 @@ COPY routes/ ./routes/
 COPY models/ ./models/
 COPY middleware/ ./middleware/
 COPY database/ ./database/
+COPY controllers/ ./controllers/
 
 # Create data directory for SQLite (persistent volume on Koyeb/Fly.io)
 RUN mkdir -p /app/data && \
