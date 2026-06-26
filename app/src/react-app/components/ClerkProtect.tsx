@@ -1,6 +1,9 @@
 import { ReactNode } from "react";
 import { useUser } from "@clerk/clerk-react";
+import { useAuth } from "@/react-app/context/AuthContext";
 import ClerkSignIn from "./ClerkSignIn";
+
+const publishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 
 interface ClerkProtectProps {
   children: ReactNode;
@@ -8,56 +11,18 @@ interface ClerkProtectProps {
   redirectUrl?: string;
 }
 
-/**
- * ClerkProtect - Protected route wrapper
- * 
- * Shows children only when user is signed in via Clerk.
- * Shows ClerkSignIn when not signed in.
- * Shows fallback or nothing while loading.
- * 
- * Usage:
- * ```tsx
- * <ClerkProtect fallback={<Loading />}>
- *   <Dashboard />
- * </ClerkProtect>
- * ```
- */
-export function ClerkProtect({ 
-  children, 
-  fallback = null,
-  redirectUrl = "/#/sign-in" 
-}: ClerkProtectProps) {
+export function ClerkProtect({ children, fallback = null }: ClerkProtectProps) {
+  if (!publishableKey) {
+    const { user } = useAuth();
+    if (!user) return <>{fallback || <ClerkSignIn />}</>;
+    return <>{children}</>;
+  }
   const { isSignedIn, isLoaded } = useUser();
-
-  // Still loading
-  if (!isLoaded) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 flex items-center justify-center">
-        <div className="bg-white/10 backdrop-blur-xl rounded-2xl p-8 shadow-2xl border border-white/20 text-center">
-          <div className="animate-spin rounded-full h-14 w-14 border-b-2 border-amber-400 mx-auto mb-4" />
-          <p className="text-gray-300 text-sm">Loading...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Not signed in - show sign in or fallback
-  if (!isSignedIn) {
-    return (
-      <>
-        {fallback}
-        <ClerkSignIn />
-      </>
-    );
-  }
-
-  // Signed in - show protected content
+  if (!isLoaded) return <div className="animate-spin">Loading...</div>;
+  if (!isSignedIn) return <>{fallback || <ClerkSignIn />}</>;
   return <>{children}</>;
 }
 
-/**
- * ClerkShow - Conditional rendering based on auth state
- */
 interface ClerkShowProps {
   when: "signed-in" | "signed-out";
   children: ReactNode;
@@ -65,33 +30,27 @@ interface ClerkShowProps {
 }
 
 export function ClerkShow({ when, children, fallback = null }: ClerkShowProps) {
+  if (!publishableKey) {
+    const { user } = useAuth();
+    const isSignedIn = !!user;
+    if (when === "signed-in") return isSignedIn ? <>{children}</> : <>{fallback}</>;
+    if (when === "signed-out") return !isSignedIn ? <>{children}</> : <>{fallback}</>;
+    return <>{fallback}</>;
+  }
   const { isSignedIn, isLoaded } = useUser();
-
-  // Still loading
-  if (!isLoaded) {
-    return null;
-  }
-
-  if (when === "signed-in") {
-    return isSignedIn ? <>{children}</> : <>{fallback}</>;
-  }
-
-  if (when === "signed-out") {
-    return !isSignedIn ? <>{children}</> : <>{fallback}</>;
-  }
-
+  if (!isLoaded) return null;
+  if (when === "signed-in") return isSignedIn ? <>{children}</> : <>{fallback}</>;
+  if (when === "signed-out") return !isSignedIn ? <>{children}</> : <>{fallback}</>;
   return <>{fallback}</>;
 }
 
-/**
- * ClerkLoading - Shows content while Clerk is loading
- */
 interface ClerkLoadingProps {
   children: ReactNode;
   fallback?: ReactNode;
 }
 
 export function ClerkLoading({ children, fallback = null }: ClerkLoadingProps) {
+  if (!publishableKey) return <>{children}</>;
   const { isLoaded } = useUser();
   return isLoaded ? <>{children}</> : <>{fallback}</>;
 }

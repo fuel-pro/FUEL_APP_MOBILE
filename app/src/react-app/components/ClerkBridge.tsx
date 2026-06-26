@@ -1,11 +1,18 @@
 import { useEffect } from "react";
 import { useUser } from "@clerk/clerk-react";
 
+const publishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
+
 /**
  * ClerkBridge synchronizes Clerk authentication state with localStorage.
- * This allows the app to read Clerk auth state from non-Clerk contexts.
+ * Only works when Clerk is configured.
  */
 export default function ClerkBridge() {
+  // Skip if Clerk not configured
+  if (!publishableKey) {
+    return null;
+  }
+  
   const { user, isSignedIn, isLoaded } = useUser();
 
   useEffect(() => {

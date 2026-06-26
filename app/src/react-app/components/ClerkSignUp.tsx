@@ -1,12 +1,16 @@
 import { SignUp } from "@clerk/clerk-react";
+import AuthLogin from "@/react-app/components/AuthLogin";
+
+const publishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 
 /**
  * ClerkSignUp - Full Clerk-powered sign-up component
- * 
- * Uses Clerk's prebuilt SignUp component with hash routing
- * for React Router v7 HashRouter compatibility.
+ * Falls back to local AuthLogin if Clerk is not configured (demo mode).
  */
 export default function ClerkSignUp() {
+  if (!publishableKey) {
+    return <AuthLogin />;
+  }
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-indigo-900 to-slate-900 flex items-center justify-center p-4">
       <div className="w-full max-w-md">

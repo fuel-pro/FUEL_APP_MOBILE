@@ -1,5 +1,8 @@
 import { ReactNode } from "react";
 import { useUser } from "@clerk/clerk-react";
+import { useAuth } from "@/react-app/context/AuthContext";
+
+const publishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 
 interface ClerkShowProps {
   when: "signed-in" | "signed-out";
@@ -7,35 +10,17 @@ interface ClerkShowProps {
   fallback?: ReactNode;
 }
 
-/**
- * ClerkShow - Conditional rendering based on Clerk authentication state
- * 
- * Usage:
- * ```tsx
- * <ClerkShow when="signed-in">
- *   <Dashboard />
- * </ClerkShow>
- * 
- * <ClerkShow when="signed-out" fallback={<Loading />}>
- *   <LoginForm />
- * </ClerkShow>
- * ```
- */
 export default function ClerkShow({ when, children, fallback = null }: ClerkShowProps) {
+  if (!publishableKey) {
+    const { user } = useAuth();
+    const isSignedIn = !!user;
+    if (when === "signed-in") return isSignedIn ? <>{children}</> : <>{fallback}</>;
+    if (when === "signed-out") return !isSignedIn ? <>{children}</> : <>{fallback}</>;
+    return <>{fallback}</>;
+  }
   const { isSignedIn, isLoaded } = useUser();
-
-  // Show nothing while loading
-  if (!isLoaded) {
-    return null;
-  }
-
-  if (when === "signed-in") {
-    return isSignedIn ? <>{children}</> : <>{fallback}</>;
-  }
-
-  if (when === "signed-out") {
-    return !isSignedIn ? <>{children}</> : <>{fallback}</>;
-  }
-
+  if (!isLoaded) return null;
+  if (when === "signed-in") return isSignedIn ? <>{children}</> : <>{fallback}</>;
+  if (when === "signed-out") return !isSignedIn ? <>{children}</> : <>{fallback}</>;
   return <>{fallback}</>;
 }

@@ -13,6 +13,12 @@ import PasswordReset from "@/react-app/pages/PasswordReset";
 import { Suspense, useMemo } from "react";
 import InviteAccept from "@/react-app/pages/InviteAccept";
 import FounderAccess from "@/react-app/pages/FounderAccess";
+
+// Demo mode - skip Clerk if not configured
+const publishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
+const isClerkConfigured = !!publishableKey;
+
+// Lazy load Clerk components only when needed
 import ClerkWrapper from "@/react-app/components/ClerkWrapper";
 import ClerkSignIn from "@/react-app/components/ClerkSignIn";
 import ClerkSignUp from "@/react-app/components/ClerkSignUp";
@@ -117,52 +123,57 @@ function MainAppLoader() {
 }
 
 export default function App() {
-  return (
-    <ClerkWrapper>
-      <AuthProvider>
-        <ThemeProvider>
-          <LocalizationProvider>
-            <PermissionProvider>
-              <PlatformDataProvider>
-                <Router>
-                  <Routes>
-                    {/* Clerk Authentication Routes */}
-                    <Route path="/sign-in" element={<ClerkSignIn />} />
-                    <Route path="/sign-up" element={<ClerkSignUp />} />
-                    <Route path="/dashboard" element={<MainAppLoader />} />
+  // Wrap with ClerkProvider only if configured
+  const appContent = (
+    <AuthProvider>
+      <ThemeProvider>
+        <LocalizationProvider>
+          <PermissionProvider>
+            <PlatformDataProvider>
+              <Router>
+                <Routes>
+                  {/* Clerk Authentication Routes */}
+                  <Route path="/sign-in" element={<ClerkSignIn />} />
+                  <Route path="/sign-up" element={<ClerkSignUp />} />
+                  <Route path="/dashboard" element={<MainAppLoader />} />
 
-                    {/* Founder Access - public, no auth required, rendered BEFORE auth check */}
-                    <Route
-                      path="/founder"
-                      element={<FounderAccess />}
-                    />
-                    <Route
-                      path="/founder-v1"
-                      element={<Navigate to="/founder" replace />}
-                    />
-                    <Route
-                      path="/admin"
-                      element={<Navigate to="/founder" replace />}
-                    />
+                  {/* Founder Access - public, no auth required, rendered BEFORE auth check */}
+                  <Route
+                    path="/founder"
+                    element={<FounderAccess />}
+                  />
+                  <Route
+                    path="/founder-v1"
+                    element={<Navigate to="/founder" replace />}
+                  />
+                  <Route
+                    path="/admin"
+                    element={<Navigate to="/founder" replace />}
+                  />
 
-                    {/* Password Reset - public */}
-                    <Route path="/reset-password" element={<PasswordReset />} />
+                  {/* Password Reset - public */}
+                  <Route path="/reset-password" element={<PasswordReset />} />
 
-                    {/* Invite acceptance - public */}
-                    <Route path="/join/:inviteId" element={<InviteAccept />} />
+                  {/* Invite acceptance - public */}
+                  <Route path="/join/:inviteId" element={<InviteAccept />} />
 
-                    {/* Main app - requires auth, shows loader while checking */}
-                    <Route path="/" element={<MainAppLoader />} />
+                  {/* Main app - requires auth, shows loader while checking */}
+                  <Route path="/" element={<MainAppLoader />} />
 
-                    {/* Catch all */}
-                    <Route path="*" element={<Navigate to="/" replace />} />
-                  </Routes>
-                </Router>
-              </PlatformDataProvider>
-            </PermissionProvider>
-          </LocalizationProvider>
-        </ThemeProvider>
-      </AuthProvider>
-    </ClerkWrapper>
+                  {/* Catch all */}
+                  <Route path="*" element={<Navigate to="/" replace />} />
+                </Routes>
+              </Router>
+            </PlatformDataProvider>
+          </PermissionProvider>
+        </LocalizationProvider>
+      </ThemeProvider>
+    </AuthProvider>
+  );
+
+  return isClerkConfigured ? (
+    <ClerkWrapper>{appContent}</ClerkWrapper>
+  ) : (
+    appContent
   );
 }
