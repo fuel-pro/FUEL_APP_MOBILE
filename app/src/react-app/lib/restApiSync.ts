@@ -18,12 +18,10 @@ import { createClient } from "@supabase/supabase-js";
 // CONFIGURATION
 // ═══════════════════════════════════════════════════
 
-const API_URL = import.meta.env.VITE_API_URL || 
-  (typeof window !== 'undefined' && window.location.hostname.includes('vercel') 
-    ? "https://fuel-pro-backend-v2-production.up.railway.app"
-    : "http://localhost:3001");
+// Railway backend URL - update this to match your deployed backend
+const API_URL = import.meta.env.VITE_API_URL || "https://fuel-pro-backend-v2-production-7c2b.up.railway.app";
 
-const API_KEY = import.meta.env.VITE_API_KEY || "";
+const API_KEY = import.meta.env.VITE_API_KEY || "fuelpro-api-key-2026";
 
 // ═══════════════════════════════════════════════════
 // REST API CLIENT
@@ -308,12 +306,26 @@ export async function checkApiStatus(): Promise<{
   error?: string;
 }> {
   try {
-    const response = await fetch(`${API_URL}/`, {
+    // Try the REST API health endpoint first
+    const response = await fetch(`${API_URL}/api/health`, {
+      method: "GET",
+      headers: { 
+        "Content-Type": "application/json",
+        "X-API-Key": API_KEY,
+      },
+    });
+    
+    if (response.ok) {
+      return { connected: true, url: API_URL };
+    }
+    
+    // Fallback to root endpoint
+    const rootResponse = await fetch(`${API_URL}/`, {
       method: "GET",
       headers: { "Content-Type": "application/json" },
     });
     
-    if (response.ok) {
+    if (rootResponse.ok) {
       return { connected: true, url: API_URL };
     }
     

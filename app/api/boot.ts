@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
+import { cors } from "hono/cors";
 import type { HttpBindings } from "@hono/node-server";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { appRouter } from "./router";
@@ -7,28 +8,34 @@ import { createContext } from "./context";
 import { env } from "./lib/env";
 import { createOAuthCallbackHandler } from "./kimi/auth";
 import { Paths } from "@contracts/constants";
+import restApi from "./routes/rest-api";
 
 const app = new Hono<{ Bindings: HttpBindings }>();
 
 app.use(bodyLimit({ maxSize: 50 * 1024 * 1024 }));
 
+// Global CORS
+app.use("*", cors({
+  origin: "*",
+  allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowHeaders: ["Content-Type", "Authorization", "X-API-Key", "x-founder-token"],
+}));
+
 // Health check endpoint
 app.get("/", (c) => c.json({ 
   status: "ok", 
   message: "FuelPro Backend API", 
-  version: "3.0-CLOUD-SYNC",
+  version: "3.0-CLOUD-SYNC-REST",
   timestamp: new Date().toISOString()
 }));
 
+// REST API routes (mounted before tRPC)
+app.route("/api", restApi);
+
 app.get(Paths.oauthCallback, createOAuthCallbackHandler());
 
-// tRPC endpoint with explicit CORS
+// tRPC endpoint
 app.use("/api/trpc/*", async (c) => {
-  // Add CORS headers
-  c.res.headers.set("Access-Control-Allow-Origin", "*");
-  c.res.headers.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  c.res.headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization, x-founder-token");
-  
   if (c.req.method === "OPTIONS") {
     return c.json({ ok: true });
   }
@@ -41,8 +48,13 @@ app.use("/api/trpc/*", async (c) => {
   });
 });
 
-// REST API fallback endpoints for direct access
-app.notFound((c) => c.json({ error: "Not Found", path: c.req.path }, 404));
+// Fallback for unmatched routes
+app.notFound((c) => c.json({ 
+  error: "Not Found", 
+  path: c.req.path,
+  method: c.req.method,
+  hint: "Try /api/health or /api/data/:collection"
+}, 404));
 
 export default app;
 

@@ -1179,16 +1179,16 @@ export default function FounderAccess() {
               />
             </div>
             {/* Cloud Sync Status */}
-            <div className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg ${cloudStatus.isOnline ? 'bg-emerald-500/10 border border-emerald-500/20' : 'bg-red-500/10 border border-red-500/20'}`}>
+            <div className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg ${cloudStatus.isOnline ? 'bg-emerald-500/10 border border-emerald-500/20' : 'bg-amber-500/10 border border-amber-500/20'}`}>
               {cloudStatus.isOnline ? (
                 <>
                   <Cloud size={10} className="text-emerald-400" />
-                  <span className="text-[10px] text-emerald-300">Cloud Sync</span>
+                  <span className="text-[10px] text-emerald-300">Cloud Synced</span>
                 </>
               ) : (
                 <>
-                  <CloudOff size={10} className="text-red-400" />
-                  <span className="text-[10px] text-red-300">Local Only</span>
+                  <CloudOff size={10} className="text-amber-400" />
+                  <span className="text-[10px] text-amber-300">No Cloud</span>
                 </>
               )}
             </div>
@@ -1240,6 +1240,42 @@ export default function FounderAccess() {
                   </div>
                 ))}
               </div>
+              
+              {/* Cloud Sync Status */}
+              {!cloudStatus.isOnline && (
+                <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-6">
+                  <div className="flex items-start gap-4">
+                    <div className="p-3 bg-amber-500/20 rounded-lg">
+                      <CloudOff size={24} className="text-amber-400" />
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="text-sm font-medium text-amber-300 mb-2">
+                        Cloud Sync Not Connected
+                      </h3>
+                      <p className="text-xs text-gray-400 mb-4">
+                        This system is currently using local storage only. Data is not synced across devices.
+                        To enable cloud sync, deploy the backend API and configure the following:
+                      </p>
+                      <div className="bg-black/30 rounded-lg p-4 font-mono text-xs">
+                        <p className="text-gray-400 mb-1"># Add to your .env file:</p>
+                        <p className="text-emerald-400">VITE_API_URL=https://your-backend.railway.app</p>
+                        <p className="text-emerald-400">VITE_API_KEY=fuelpro-api-key-2026</p>
+                        <p className="text-gray-400 mt-2 mb-1"># Or use Supabase:</p>
+                        <p className="text-emerald-400">VITE_SUPABASE_URL=https://your-project.supabase.co</p>
+                        <p className="text-emerald-400">VITE_SUPABASE_ANON_KEY=your-anon-key</p>
+                      </div>
+                      <button
+                        onClick={() => checkCloudStatus()}
+                        className="mt-4 px-4 py-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 rounded-lg text-xs font-medium transition-colors"
+                      >
+                        <RefreshCw size={12} className="inline mr-1" />
+                        Retry Connection
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
               <div className="bg-[#161618] border border-white/[0.06] rounded-xl p-6">
                 <h3 className="text-sm font-medium text-gray-300 mb-4">
                   Global Revenue Overview
