@@ -90,8 +90,12 @@ app.use('/api/audit', require('./routes/auditRoutes'));
 // Clerk Backend Integration Routes
 app.use('/api/clerk', require('./routes/clerkRoutes'));
 
+// M-PESA Callback Routes (NEW!)
+app.use('/api/mpesa', require('./routes/mpesaCallback'));
+
 // Clerk Backend Integration Status
 console.log(`🔐 Clerk Backend Integration: ${process.env.CLERK_SECRET_KEY ? 'Enabled' : 'Disabled'}`);
+console.log(`📱 M-PESA Integration: ${process.env.MPESA_SHORTCODE ? 'Enabled' : 'Disabled'}`);
 
 // Socket.io Connection Handler
 io.on('connection', (socket) => {
