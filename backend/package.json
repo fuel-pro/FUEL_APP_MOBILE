@@ -8,7 +8,7 @@
     "dev": "nodemon server.js"
   },
   "dependencies": {
-    "@clerk/clerk-sdk-node": "^4.13.23",
+    "@clerk/clerk-sdk-node": "^5.1.6",
     "bcryptjs": "^2.4.3",
     "better-sqlite3": "^12.11.1",
     "cors": "^2.8.5",
@@ -17,7 +17,7 @@
     "jose": "^6.2.3",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.0.3",
-    "nodemailer": "^6.9.8",
+    "nodemailer": "^9.0.1",
     "socket.io": "^4.7.2",
     "uuid": "^14.0.0"
   },
