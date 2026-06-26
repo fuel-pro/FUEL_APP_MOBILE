@@ -306,7 +306,7 @@ export async function checkApiStatus(): Promise<{
   error?: string;
 }> {
   try {
-    // Try the REST API health endpoint first
+    // Try the REST API health endpoint - this is the definitive test
     const response = await fetch(`${API_URL}/api/health`, {
       method: "GET",
       headers: { 
@@ -316,23 +316,31 @@ export async function checkApiStatus(): Promise<{
     });
     
     if (response.ok) {
-      return { connected: true, url: API_URL };
+      const data = await response.json();
+      // Verify it's actually our REST API
+      if (data.service === "FuelPro REST API" || data.status === "healthy") {
+        return { connected: true, url: API_URL };
+      }
     }
     
-    // Fallback to root endpoint
+    // The root endpoint exists but doesn't have REST API
     const rootResponse = await fetch(`${API_URL}/`, {
       method: "GET",
       headers: { "Content-Type": "application/json" },
     });
     
     if (rootResponse.ok) {
-      return { connected: true, url: API_URL };
+      const data = await rootResponse.json();
+      // If it has version 3.0-CLOUD-SYNC-REST, REST API should work
+      if (data.version?.includes("REST") || data.message?.includes("REST")) {
+        return { connected: true, url: API_URL };
+      }
     }
     
     return { 
       connected: false, 
       url: API_URL, 
-      error: `HTTP ${response.status}` 
+      error: "REST API not available. The backend needs to be deployed with REST API routes." 
     };
   } catch (err: any) {
     return { 
