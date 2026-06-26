@@ -73,10 +73,7 @@ const trpcClient = trpc.createClient({
         return headers;
       },
       fetch(input, init) {
-        // In static deployment, fail fast to avoid blocking
-        if (isStaticDeployment()) {
-          return Promise.resolve(new Response(JSON.stringify({}), { status: 404 }));
-        }
+        // Always allow backend calls - no blocking
         return globalThis.fetch(input, {
           ...(init ?? {}),
           credentials: "include",

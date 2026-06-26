@@ -21,40 +21,21 @@ export interface FounderSessionData {
 }
 
 /**
- * Check if we're in a static deployment (no API server)
- * In static mode, tRPC queries will fail, so we skip them
- */
-function isStaticDeployment(): boolean {
-  if (typeof window === "undefined") return false;
-  const host = window.location.hostname;
-  return host.includes("vercel.app") || host.includes("netlify.app") || host.includes("github.io");
-}
-
-// Use a ref to avoid re-computing on each render
-let staticModeCache: boolean | null = null;
-function getStaticMode(): boolean {
-  if (staticModeCache === null) {
-    staticModeCache = isStaticDeployment();
-  }
-  return staticModeCache;
-}
-
-/**
  * useFounderBackend — Integrates Founder Access with the tRPC backend.
  *
  * Provides:
- *   - Audit logging (persisted to MySQL via audit.log, or localStorage in static mode)
+ *   - Audit logging (persisted to MySQL via audit.log, and localStorage for backup)
  *   - Audit log retrieval (from DB, falls back to localStorage)
  *   - Founder session management (2FA, password, contact via founder_sessions table)
  *   - Station & sales analytics (from DB)
  * 
- * In static deployment mode, skips backend queries and uses localStorage only.
+ * Always attempts backend connection - falls back to localStorage only if backend is unavailable.
  */
 export function useFounderBackend() {
   const utils = trpc.useUtils();
   
-  // Detect static deployment and skip backend queries
-  const isStatic = useMemo(() => getStaticMode(), []);
+  // Always try backend - no static mode blocking
+  const isStatic = false;
 
   /* ─── Audit Logging ─── */
   // Skip mutation in static mode - only log to localStorage
