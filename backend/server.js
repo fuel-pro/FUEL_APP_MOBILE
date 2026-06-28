@@ -3,10 +3,34 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
-const { initializeDatabase } = require('./database/sqlite');
+const rateLimit = require('express-rate-limit');
+
+// Use Turso adapter if TURSO credentials are provided, otherwise SQLite
+const dbModule = (process.env.TURSO_DATABASE_URL && process.env.TURSO_AUTH_TOKEN) 
+  ? require('./database/turso')
+  : require('./database/sqlite');
+
+const { initializeDatabase } = dbModule;
 
 const app = express();
 const server = http.createServer(app);
+
+// Rate limiting middleware
+const generalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // limit each IP to 100 requests per windowMs
+  message: { error: 'Too many requests, please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10, // limit each IP to 10 auth requests per windowMs
+  message: { error: 'Too many authentication attempts, please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 // Initialize SQLite database
 initializeDatabase();
@@ -35,6 +59,10 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
+
+// Apply rate limiting
+app.use(generalLimiter);
+app.use('/api/auth', authLimiter);
 
 // Make 'io' instance available to routes
 app.set('io', io);

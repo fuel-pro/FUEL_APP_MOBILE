@@ -15,7 +15,7 @@ import {
 // ============================================================
 
 // Demo mode - use local storage for authentication when backend is unavailable
-const DEMO_MODE = true;
+const DEMO_MODE = import.meta.env.VITE_DEMO_MODE === "true";
 const DEMO_USERS = [
   { email: "admin@fuelpro.demo", password: "admin123", name: "Admin User", role: "admin" },
   { email: "manager@fuelpro.demo", password: "manager123", name: "Manager User", role: "manager" },
