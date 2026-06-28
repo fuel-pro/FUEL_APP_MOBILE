@@ -7,6 +7,9 @@ on:
       - 'backend/**'
   workflow_dispatch:
 
+env:
+  RAILWAY_PROJECT_ID: 226c5567-8377-4520-8088-1e4c019b984a
+
 jobs:
   deploy:
     name: Deploy Backend
@@ -27,24 +30,21 @@ jobs:
           curl -fsSL https://railway.app/install.sh | sh
           echo "$HOME/.railway/bin" >> $GITHUB_PATH
 
-      - name: Deploy to Railway via API
+      - name: Link and Deploy to Railway
         run: |
           cd backend
           
           # Set Railway token
           export RAILWAY_TOKEN="${{ secrets.RAILWAY_TOKEN }}"
           
-          # Check Railway status
-          railway whoami || echo "Railway login check completed"
+          # Link to project using project ID
+          railway link --project ${{ env.RAILWAY_PROJECT_ID }}
           
-          # Try to link to existing project
-          railway link fuel-pro-backend-v2 2>/dev/null || echo "Project may already be linked"
+          # Add environment variables
+          railway variables set NODE_ENV=production
           
-          # Add environment variables if project is linked
-          railway variables set NODE_ENV=production 2>/dev/null || true
-          
-          # Trigger deployment
-          railway up --detach 2>/dev/null || echo "Using Railway Connect to deploy..."
+          # Deploy
+          railway up --detach
           
           echo "Railway deployment triggered"
 
@@ -57,8 +57,8 @@ jobs:
     steps:
       - name: Check API health
         run: |
-          echo "Waiting 45 seconds for deployment..."
-          sleep 45
+          echo "Waiting 60 seconds for deployment..."
+          sleep 60
           
           for i in {1..10}; do
             response=$(curl -s -o /dev/null -w "%{http_code}" "https://fuel-pro-backend-v2-production-7c2b.up.railway.app/" 2>/dev/null || echo "000")
