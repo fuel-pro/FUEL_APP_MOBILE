@@ -22,34 +22,25 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '24'
-          cache: 'npm'
-          cache-dependency-path: backend/package-lock.json
 
-      - name: Install Railway CLI
+      - name: Download Railway CLI
         run: |
           curl -fsSL https://railway.app/install.sh | sh
           echo "$HOME/.railway/bin" >> $GITHUB_PATH
 
-      - name: Link and Deploy to Railway
+      - name: Deploy to Railway
         run: |
-          cd backend
-          
-          # Set Railway token
           export RAILWAY_TOKEN="${{ secrets.RAILWAY_TOKEN }}"
+          cd backend
+          railway service source connect \
+            --repo fuel-pro/FUEL_APP_MOBILE \
+            --branch main \
+            --service backend \
+            --project ${{ env.RAILWAY_PROJECT_ID }} \
+            --environment production || true
           
-          # Link to project using project ID
-          railway link --project ${{ env.RAILWAY_PROJECT_ID }}
-          
-          # Add environment variables
-          railway variables set NODE_ENV=production
-          
-          # Deploy
-          railway up --detach
-          
-          echo "Railway deployment triggered"
-
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          # If connect fails, try direct upload
+          railway up --detach --project ${{ env.RAILWAY_PROJECT_ID }} --environment production --service backend
 
   health-check:
     name: Health Check
