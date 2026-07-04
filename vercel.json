@@ -20,7 +20,7 @@
       "headers": [
         {
           "key": "Access-Control-Allow-Origin",
-          "value": "*"
+          "value": "https://fuel-app-mobile.vercel.app"
         },
         {
           "key": "Access-Control-Allow-Methods",
@@ -29,6 +29,10 @@
         {
           "key": "Access-Control-Allow-Headers",
           "value": "Content-Type, Authorization, X-API-Key, x-founder-token, X-Requested-With"
+        },
+        {
+          "key": "Access-Control-Allow-Credentials",
+          "value": "true"
         },
         {
           "key": "Access-Control-Max-Age",
