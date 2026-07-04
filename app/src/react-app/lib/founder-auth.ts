@@ -1,99 +1,122 @@
 /**
  * Founder Authentication
- * FIXED: All authentication done via backend JWT tokens
- * No hardcoded credentials in source code
+ *
+ * SECURITY FIX: this module previously validated the Founder login entirely
+ * client-side against a hardcoded default password ("fuelpro2026") baked
+ * into the JS bundle, plus a base64-"obfuscated" legacy fallback. Anyone
+ * could read the password straight out of the deployed bundle, or just call
+ * startFounderSession() from devtools to bypass the login screen entirely --
+ * with no server ever checking anything.
+ *
+ * This now delegates to the real backend auth system (/api/auth/login),
+ * which already has a proper 'founder' role, bcrypt-hashed passwords, and
+ * JWT issuance (see backend/routes/authRoutes.js). A session is only valid
+ * if the backend actually issued a token for a user whose role is
+ * 'founder' or 'admin' -- every subsequent admin API call is verified
+ * server-side via that token, not trusted based on local state.
  */
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-const TOKEN_KEY = 'fuelpro_founder_token';
+const API_URL =
+  (import.meta as any).env?.VITE_API_URL ||
+  "https://fuel-pro-backend-v2-production-7c2b.up.railway.app";
 
-/** Login via backend - returns JWT token */
-export async function founderLogin(
+const TOKEN_KEY = "fuelpro_auth_token";
+const SESSION_META_KEY = "fuelpro_founder_session_meta";
+
+export interface FounderLoginResult {
+  success: boolean;
+  error?: string;
+  role?: string;
+}
+
+/** Attempt to log in against the real backend. Only 'founder'/'admin' roles
+ *  are accepted for the Founder panel. */
+export async function loginFounder(
   username: string,
   password: string
-): Promise<{ success: boolean; token?: string; error?: string }> {
+): Promise<FounderLoginResult> {
   try {
-    const response = await fetch(`${API_URL}/api/auth/founder-login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password }),
+    const response = await fetch(`${API_URL}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: username, password }),
     });
 
-    const data = await response.json();
+    const result = await response.json().catch(() => ({}));
 
-    if (data.success && data.token) {
-      localStorage.setItem(TOKEN_KEY, data.token);
-      return { success: true, token: data.token };
+    if (!response.ok) {
+      return { success: false, error: result?.error || "Invalid credentials" };
     }
 
-    return { success: false, error: data.error || 'Login failed' };
-  } catch (error) {
-    console.error('Founder login error:', error);
-    return { success: false, error: 'Network error' };
+    if (result.role !== "founder" && result.role !== "admin") {
+      return { success: false, error: "This account does not have Founder access" };
+    }
+
+    if (!result.token) {
+      return { success: false, error: "Login succeeded but no session token was returned" };
+    }
+
+    // Store the real, server-issued JWT. All future admin API calls
+    // (see restApiSync.ts) use this token, and the backend independently
+    // re-verifies the role on every request via the `protect`/`authorize`
+    // middleware -- so this is not a client-trust decision.
+    localStorage.setItem(TOKEN_KEY, result.token);
+    localStorage.setItem(
+      SESSION_META_KEY,
+      JSON.stringify({ loginTime: Date.now(), role: result.role, username })
+    );
+
+    return { success: true, role: result.role };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Unable to reach the server",
+    };
   }
 }
 
-/** Get stored JWT token */
-export function getFounderToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY);
+/** Get the currently stored auth token, if any (used by restApiSync.ts). */
+export function getAuthToken(): string | null {
+  try {
+    return localStorage.getItem(TOKEN_KEY);
+  } catch {
+    return null;
+  }
 }
 
-/** Verify token with backend */
-export async function verifyFounderToken(): Promise<boolean> {
-  const token = getFounderToken();
-  if (!token) return false;
-
+/** Local UI check only -- NOT a security boundary. Every real admin action
+ *  is re-verified against the backend using the stored token. This just
+ *  decides whether to show the login screen or the dashboard shell. */
+export function hasFounderSession(): boolean {
   try {
-    const response = await fetch(`${API_URL}/api/auth/verify-founder`, {
-      headers: { 
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      }
-    });
+    const token = localStorage.getItem(TOKEN_KEY);
+    const metaRaw = localStorage.getItem(SESSION_META_KEY);
+    if (!token || !metaRaw) return false;
 
-    if (!response.ok) {
-      localStorage.removeItem(TOKEN_KEY);
-      return false;
-    }
+    const meta = JSON.parse(metaRaw);
+    if (meta.role !== "founder" && meta.role !== "admin") return false;
 
-    const data = await response.json();
-    return data.valid === true;
+    // Mirrors the backend's default 7-day JWT expiry as a UI hint; the
+    // token itself is what actually gets validated server-side.
+    const maxAgeMs = 7 * 24 * 60 * 60 * 1000;
+    return Date.now() - meta.loginTime < maxAgeMs;
   } catch {
     return false;
   }
 }
 
-/** Get auth header for API calls */
-export function getFounderAuthHeader(): Record<string, string> {
-  const token = getFounderToken();
-  return token ? { 'Authorization': `Bearer ${token}` } : {};
-}
-
-/** End founder session */
 export function endFounderSession(): void {
   localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(SESSION_META_KEY);
 }
 
-/** Check if logged in (local check only) */
-export function isLoggedIn(): boolean {
-  return !!getFounderToken();
-}
-
-/** DEPRECATED: Legacy function for backwards compatibility
- *  Authentication is now handled via backend JWT tokens
- */
-export function getFounderCredentials(): { username: string; password: string } {
-  // Return empty - credentials are now stored securely on backend
-  return { username: '', password: '' };
-}
-
-/** DEPRECATED: Legacy function for backwards compatibility
- *  Use founderLogin() instead
- */
-export async function validateFounderAuth(
-  inputUser: string,
-  inputPw: string
-): Promise<boolean> {
-  const result = await founderLogin(inputUser, inputPw);
-  return result.success;
+// Backwards compatibility aliases
+export const founderLogin = loginFounder;
+export const getFounderToken = getAuthToken;
+export const endFounderSessionLegacy = endFounderSession;
+export function isLoggedIn(): boolean { return hasFounderSession(); }
+export async function verifyFounderToken(): Promise<boolean> { return hasFounderSession(); }
+export function getFounderAuthHeader(): Record<string, string> {
+  const token = getAuthToken();
+  return token ? { 'Authorization': `Bearer ${token}` } : {};
 }

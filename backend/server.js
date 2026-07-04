@@ -5,6 +5,16 @@ const { Server } = require('socket.io');
 const cors = require('cors');
 const { initializeDatabase } = require('./database/sqlite');
 
+// FIX: JWT signing had a hardcoded fallback secret (`fuelpro-secret-key`,
+// visible in this open-source repo) used whenever `JWT_SECRET` wasn't set.
+// The server now refuses to start in production if `JWT_SECRET` isn't
+// configured, instead of silently signing tokens with a publicly-known secret.
+if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
+  console.error('❌ FATAL: JWT_SECRET is not set. Set it in your environment variables.');
+  console.error('   The server cannot start in production without a secure JWT secret.');
+  process.exit(1);
+}
+
 const app = express();
 const server = http.createServer(app);
 
@@ -65,8 +75,11 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Debug endpoint
+// Debug endpoint - FIX: returns 404 in production to prevent info leakage
 app.get('/debug', (req, res) => {
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(404).json({ error: 'Not found' });
+  }
   res.json({
     env: {
       NODE_ENV: process.env.NODE_ENV,

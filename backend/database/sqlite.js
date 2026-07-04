@@ -68,6 +68,13 @@ function initializeDatabase() {
     )
   `);
 
+  // Add totalSales column to stations if it doesn't exist (FIX: creditStationSales needs this)
+  try {
+    db.exec(`ALTER TABLE stations ADD COLUMN totalSales REAL DEFAULT 0`);
+  } catch (e) {
+    // Column already exists, ignore
+  }
+
   // Content table
   db.exec(`
     CREATE TABLE IF NOT EXISTS content (
@@ -126,39 +133,47 @@ function initializeDatabase() {
     )
   `);
 
-  // M-Pesa transactions table (required for payment processing)
+  // Transactions table (M-PESA STK Push / B2C / manual payments).
+  // FIX: this table did not exist before, so every M-PESA callback query
+  // ("SELECT * FROM transactions ...") threw "no such table: transactions"
+  // and every real payment silently failed. Columns are snake_case to match
+  // the query helpers in routes/mpesaCallback.js (camelToSnake conversion).
   db.exec(`
-    CREATE TABLE IF NOT EXISTS mpesa_transactions (
+    CREATE TABLE IF NOT EXISTS transactions (
       id TEXT PRIMARY KEY,
-      userId TEXT NOT NULL,
-      stationId TEXT,
-      checkoutRequestId TEXT UNIQUE NOT NULL,
-      phoneNumber TEXT NOT NULL,
-      amount REAL NOT NULL,
+      checkout_request_id TEXT UNIQUE,
+      merchant_request_id TEXT,
+      station_id TEXT,
+      user_id TEXT,
+      phone_number TEXT,
+      amount REAL,
       status TEXT DEFAULT 'PENDING',
-      mpesaReceipt TEXT,
-      paymentPhone TEXT,
-      paymentDate TEXT,
-      failureReason TEXT,
-      paidAt TEXT,
-      failedAt TEXT,
-      createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
-      updatedAt TEXT DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (userId) REFERENCES users(id),
-      FOREIGN KEY (stationId) REFERENCES stations(id)
+      mpesa_receipt TEXT,
+      payment_phone TEXT,
+      payment_date TEXT,
+      failure_reason TEXT,
+      paid_at TEXT,
+      failed_at TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (station_id) REFERENCES stations(id),
+      FOREIGN KEY (user_id) REFERENCES users(id)
     )
   `);
 
-  // Cloud data table for synced settings (persisted across restarts)
+  // Generic persisted key/value store backing the Founder / cloud-sync admin
+  // API (routes/cloudSyncRoutes.js). FIX: this replaces an in-memory
+  // JS object that lost ALL data (including secrets, users, stations,
+  // feature flags) on every server restart or redeploy, and would not even
+  // be shared across concurrent serverless function instances.
   db.exec(`
-    CREATE TABLE IF NOT EXISTS cloud_data (
-      id TEXT PRIMARY KEY,
+    CREATE TABLE IF NOT EXISTS cloud_records (
       collection TEXT NOT NULL,
+      id TEXT NOT NULL,
       data TEXT NOT NULL,
       createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
       updatedAt TEXT DEFAULT CURRENT_TIMESTAMP,
-      updatedBy TEXT,
-      UNIQUE(collection, id)
+      PRIMARY KEY (collection, id)
     )
   `);
 
@@ -172,13 +187,20 @@ function initializeDatabase() {
     CREATE INDEX IF NOT EXISTS idx_content_key ON content(key);
     CREATE INDEX IF NOT EXISTS idx_audit_logs_userId ON audit_logs(userId);
     CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON audit_logs(timestamp);
-    CREATE INDEX IF NOT EXISTS idx_mpesa_checkoutRequestId ON mpesa_transactions(checkoutRequestId);
-    CREATE INDEX IF NOT EXISTS idx_mpesa_status ON mpesa_transactions(status);
-    CREATE INDEX IF NOT EXISTS idx_mpesa_userId ON mpesa_transactions(userId);
-    CREATE INDEX IF NOT EXISTS idx_cloud_data_collection ON cloud_data(collection);
+    CREATE INDEX IF NOT EXISTS idx_transactions_checkout ON transactions(checkout_request_id);
+    CREATE INDEX IF NOT EXISTS idx_transactions_status ON transactions(status);
+    CREATE INDEX IF NOT EXISTS idx_cloud_records_collection ON cloud_records(collection);
   `);
 
   console.log('✅ SQLite database initialized');
 }
 
-module.exports = { db, initializeDatabase };
+// FIX: this accessor was imported by routes/mpesaCallback.js
+// ("const { getDb } = require('../database/sqlite')") but was never
+// exported, so calling getDb() threw "getDb is not a function" — meaning
+// the M-PESA callback crashed before it even reached the missing-table bug.
+function getDb() {
+  return db;
+}
+
+module.exports = { db, getDb, initializeDatabase };

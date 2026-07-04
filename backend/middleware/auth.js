@@ -1,6 +1,15 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
+// FIX: Don't use fallback secret in production - require JWT_SECRET to be set
+function getJwtSecret() {
+  const secret = process.env.JWT_SECRET;
+  if (!secret && process.env.NODE_ENV === 'production') {
+    throw new Error('JWT_SECRET environment variable is required in production');
+  }
+  return secret || 'fuelpro-secret-key'; // Only used in development
+}
+
 // Protect route - verify JWT token OR Clerk JWT token
 const protect = async (req, res, next) => {
   let token;
@@ -25,7 +34,7 @@ const protect = async (req, res, next) => {
     }
     
     // Legacy JWT verification
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, getJwtSecret());
     
     // Get user from token (synchronous for SQLite)
     const user = User.findById(decoded.id);
@@ -103,7 +112,7 @@ const optionalAuth = async (req, res, next) => {
         return clerkAuth.optionalAuth(req, res, next);
       }
       
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      const decoded = jwt.verify(token, getJwtSecret());
       const user = User.findById(decoded.id);
       if (user && user.isActive) {
         req.user = user;

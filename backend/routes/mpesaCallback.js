@@ -1,6 +1,28 @@
 /**
  * M-PESA STK Push Callback Handler
  * Safaricom will POST to this endpoint when a payment is completed
+ *
+ * IMPORTANT -- ARCHITECTURAL GAP (not fixed in this pass, documented instead
+ * of patched blind): this file fixes the callback handler itself (missing
+ * `transactions` table, wrong column names, unsafe destructuring -- see
+ * comments below). But nothing in this backend ever creates the initial
+ * PENDING transaction row that this callback looks up, because STK push
+ * initiation currently happens entirely client-side, in
+ * app/src/react-app/utils/mpesaStk.ts, which calls Safaricom's Daraja API
+ * directly from the browser using a Consumer Key/Secret pulled from
+ * localStorage. That means:
+ *   1) Real M-PESA API credentials are exposed in the browser/localStorage
+ *      to anyone who opens devtools -- these must be server-side secrets.
+ *   2) No PENDING row is ever inserted here before Safaricom calls back, so
+ *      even with the fixes below, findPendingTransaction() will still
+ *      return "Transaction not found" for real payments until STK push
+ *      initiation is moved server-side (an endpoint here that: takes
+ *      phone/amount/station, calls Safaricom with server-held credentials,
+ *      inserts the PENDING row using the returned CheckoutRequestID, then
+ *      returns just the customer-facing status to the frontend).
+ * This is a genuine feature-level gap, not a quick patch, and needs its own
+ * implementation + testing against Safaricom's sandbox rather than being
+ * guessed at without the ability to run it end-to-end.
  */
 
 const express = require('express');
@@ -8,14 +30,37 @@ const router = express.Router();
 const AuditLog = require('../models/AuditLog');
 const User = require('../models/User');
 
+// Optional shared-secret check. Safaricom does not sign STK callbacks, so
+// there is no way to cryptographically verify the sender. If
+// MPESA_CALLBACK_SECRET is set, require it as a query param on the callback
+// URL registered with Safaricom (e.g. .../callback?key=...), which at least
+// stops randoms from POSTing fake payment confirmations to a guessed public
+// URL. Left optional so existing deployments don't break.
+function verifyCallbackSource(req) {
+  const expected = process.env.MPESA_CALLBACK_SECRET;
+  if (!expected) return true; // not configured -- skip (warning logged separately)
+  return req.query && req.query.key === expected;
+}
+
 // Safaricom M-PESA Callback URL
 router.post('/callback', async (req, res) => {
   try {
     console.log('📱 M-PESA Callback received:', JSON.stringify(req.body, null, 2));
 
-    // Safe destructuring with fallbacks
-    const Body = req.body?.Body;
-    const stkCallback = Body?.stkCallback;
+    if (!process.env.MPESA_CALLBACK_SECRET) {
+      console.warn('WARNING: MPESA_CALLBACK_SECRET is not set - this callback endpoint is unauthenticated.');
+    }
+    if (!verifyCallbackSource(req)) {
+      console.log('Rejected M-PESA callback - invalid or missing secret key');
+      return res.status(403).json({ ResultCode: 1, ResultDesc: 'Forbidden' });
+    }
+
+    // FIX: req.body.Body could be missing or malformed (e.g. a health-check
+    // ping, malformed request, or body-parser failing) -- destructuring
+    // straight off req.body.Body crashed with a TypeError before the
+    // payload was ever validated.
+    const Body = req.body && req.body.Body;
+    const stkCallback = Body && Body.stkCallback;
 
     if (!stkCallback) {
       console.log('❌ Invalid M-PESA callback - no stkCallback');
@@ -124,11 +169,17 @@ router.post('/balance/callback', async (req, res) => {
   try {
     console.log('📱 M-PESA Balance Query Callback:', JSON.stringify(req.body, null, 2));
 
-    const { Body } = req.body;
-    const { OriginatorConversationID, Conversation, Result } = Body;
+    const Body = req.body && req.body.Body;
+    const Result = Body && Body.Result;
+    const OriginatorConversationID = Result && Result.OriginatorConversationID;
+
+    if (!Result) {
+      console.log('Invalid balance callback - no Result object');
+      return res.json({ ResultCode: 1, ResultDesc: 'Invalid callback' });
+    }
 
     if (Result.ResultCode === 0) {
-      const callbackMetadata = Result.CallbackMetadata?.Item || [];
+      const callbackMetadata = (Result.CallbackMetadata && Result.CallbackMetadata.Item) || [];
       
       const balance = callbackMetadata.find(i => i.Name === 'WorkingAccountAvailableFunds')?.Value;
       const currency = callbackMetadata.find(i => i.Name === 'Currency')?.Value;
@@ -154,11 +205,16 @@ router.post('/b2c/callback', async (req, res) => {
   try {
     console.log('📱 M-PESA B2C Callback:', JSON.stringify(req.body, null, 2));
 
-    const { Body } = req.body;
-    const { Result } = Body;
+    const Body = req.body && req.body.Body;
+    const Result = Body && Body.Result;
+
+    if (!Result) {
+      console.log('Invalid B2C callback - no Result object');
+      return res.json({ ResultCode: 1, ResultDesc: 'Invalid callback' });
+    }
 
     if (Result.ResultCode === 0) {
-      const callbackMetadata = Result.CallbackMetadata?.Item || [];
+      const callbackMetadata = (Result.CallbackMetadata && Result.CallbackMetadata.Item) || [];
       
       const amount = callbackMetadata.find(i => i.Name === 'TransAmount')?.Value;
       const receipt = callbackMetadata.find(i => i.Name === 'MpesaReceiptNumber')?.Value;
@@ -195,15 +251,13 @@ router.get('/status', (req, res) => {
 
 // Helper functions
 async function findPendingTransaction(checkoutRequestID) {
-  // Query your database for pending transaction
-  // This depends on your database implementation
   const { getDb } = require('../database/sqlite');
   const db = getDb();
   
   try {
     const transaction = db.prepare(`
-      SELECT * FROM mpesa_transactions 
-      WHERE checkoutRequestId = ? AND status = 'PENDING'
+      SELECT * FROM transactions 
+      WHERE checkout_request_id = ? AND status = 'PENDING'
     `).get(checkoutRequestID);
     
     return transaction;
@@ -221,8 +275,8 @@ async function updateTransaction(id, updates) {
   const values = Object.values(updates);
   
   db.prepare(`
-    UPDATE mpesa_transactions 
-    SET ${fields}, updatedAt = ?
+    UPDATE transactions 
+    SET ${fields}, updated_at = ?
     WHERE id = ?
   `).run(...values, new Date().toISOString(), id);
 }
@@ -230,12 +284,17 @@ async function updateTransaction(id, updates) {
 async function creditStationSales(stationId, amount) {
   const { getDb } = require('../database/sqlite');
   const db = getDb();
-  
+
+  // FIX: the stations table (backend/database/sqlite.js) uses camelCase
+  // columns (`totalSales`, `updatedAt`), not `total_sales` / `updated_at`.
+  // The previous query referenced columns that don't exist and would throw
+  // "no such column: total_sales" on every successful payment.
+  const numericAmount = Number(amount) || 0;
   db.prepare(`
-    UPDATE stations 
-    SET total_sales = total_sales + ?, updatedAt = ?
+    UPDATE stations
+    SET totalSales = COALESCE(totalSales, 0) + ?, updatedAt = ?
     WHERE id = ?
-  `).run(amount, new Date().toISOString(), stationId);
+  `).run(numericAmount, new Date().toISOString(), stationId);
 }
 
 function camelToSnake(str) {
