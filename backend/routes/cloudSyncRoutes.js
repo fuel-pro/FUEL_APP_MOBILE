@@ -259,4 +259,43 @@ router.get('/user-data', protect, (req, res) => {
   res.json({ data: row ? JSON.parse(row.data) : null });
 });
 
+// Sales data sync endpoint - stores individual sales records
+router.post('/sales', protect, (req, res) => {
+  const userId = req.user.id;
+  const { salesId, data } = req.body;
+  
+  if (!salesId || !data) {
+    return res.status(400).json({ success: false, error: 'salesId and data are required' });
+  }
+  
+  const db = getDb();
+  const now = new Date().toISOString();
+  
+  db.prepare(`
+    INSERT OR REPLACE INTO cloud_records (collection, id, data, createdAt, updatedAt)
+    VALUES ('sales', ?, ?, ?, ?)
+  `).run(`${userId}_${salesId}`, JSON.stringify(data), now, now);
+  
+  res.json({ success: true });
+});
+
+router.get('/sales', protect, (req, res) => {
+  const userId = req.user.id;
+  const db = getDb();
+  
+  const rows = db.prepare(`
+    SELECT id, data, updatedAt FROM cloud_records 
+    WHERE collection = 'sales' AND id LIKE ?
+    ORDER BY updatedAt DESC
+  `).all(`${userId}_%`);
+  
+  const sales = rows.map(row => ({
+    salesId: row.id.replace(`${userId}_`, ''),
+    data: JSON.parse(row.data),
+    updatedAt: row.updatedAt
+  }));
+  
+  res.json({ success: true, data: sales });
+});
+
 module.exports = router;

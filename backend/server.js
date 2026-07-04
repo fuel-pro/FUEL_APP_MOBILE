@@ -100,6 +100,9 @@ app.use('/api/users', require('./routes/userRoutes'));
 app.use('/api/stations', require('./routes/stationRoutes'));
 app.use('/api/audit', require('./routes/auditRoutes'));
 
+// Dashboard Analytics Routes
+app.use('/api', require('./routes/dashboardRoutes'));
+
 // Cloud Sync REST API
 app.use('/api', require('./routes/cloudSyncRoutes'));
 
