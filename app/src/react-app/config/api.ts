@@ -3,23 +3,10 @@
  * Centralized API client for backend communication
  */
 
-// Backend API URL - configure via environment variable
-const getApiBaseUrl = (): string => {
-  // Check Vite environment variable first
-  if (import.meta.env.VITE_API_URL) {
-    return import.meta.env.VITE_API_URL;
-  }
-  
-  // Development fallback
-  if (import.meta.env.DEV) {
-    return 'http://localhost:8080';
-  }
-  
-  // Default production backend
-  return 'https://fuel-pro-backend-v2-production-7c2b.up.railway.app';
-};
+import { getBackendUrl } from "@/utils/apiConfig";
 
-export const API_BASE_URL = getApiBaseUrl();
+// Backend API URL - uses centralized config that handles Vercel proxy
+export const API_BASE_URL = getBackendUrl();
 
 // Get auth token from founder session
 export function getAuthToken(): string | null {

@@ -14,7 +14,9 @@
 // The backend fallback (for backwards compatibility) is kept for development
 // only when the backend is unavailable.
 
-const API_URL = import.meta.env.VITE_API_URL || "https://fuel-pro-backend-v2-production-7c2b.up.railway.app";
+import { getBackendUrl } from "@/utils/apiConfig";
+
+const API_URL = getBackendUrl();
 
 interface DarajaConfig {
   consumerKey: string;

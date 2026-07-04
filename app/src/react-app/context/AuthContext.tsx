@@ -7,6 +7,7 @@ import {
   useEffect,
   useRef,
 } from "react";
+import { getBackendUrl } from "@/utils/apiConfig";
 
 // ============================================================
 // AUTH CONTEXT v5 - Enhanced with Backend API + Cross-Device Sync
@@ -23,7 +24,7 @@ const DEMO_USERS = [
   { email: "demo@fuelpro.demo", password: "demo", name: "Demo User", role: "owner" },
 ];
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://fuel-pro-backend-v2-production-7c2b.up.railway.app";
+const API_BASE = getBackendUrl();
 
 export type AuthMethod = "google" | "email" | "username";
 

@@ -31,10 +31,11 @@ import {
   Info,
 } from "lucide-react";
 import { formatNumber } from "@/react-app/utils/formatUtils";
+import { getBackendUrl } from "@/utils/apiConfig";
 import { useState, useEffect, useMemo, useCallback } from "react";
 
 // Backend API configuration
-const API_BASE = import.meta.env.VITE_API_URL || "https://fuel-pro-backend-v2-production-7c2b.up.railway.app";
+const API_BASE = getBackendUrl();
 
 // Import chart.js components
 import {

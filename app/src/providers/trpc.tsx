@@ -16,6 +16,21 @@ function isStaticDeployment(): boolean {
   return host.includes("vercel.app") || host.includes("netlify.app") || host.includes("github.io");
 }
 
+// Determine the correct API URL - use relative path for Vercel deployments
+// to leverage the Vercel proxy which handles CORS headers
+function getApiUrl(): string {
+  // For Vercel/static deployments, use relative URL to go through proxy
+  if (typeof window !== "undefined") {
+    const host = window.location.hostname;
+    if (host.includes("vercel.app") || host.includes("netlify.app") || host.includes("github.io")) {
+      // Use relative path - Vercel will proxy to Railway backend
+      return "/api/trpc";
+    }
+  }
+  // For other environments, use the configured backend URL
+  return import.meta.env.VITE_API_URL || "https://fuel-pro-backend-v2-production-7c2b.up.railway.app/api/trpc";
+}
+
 // Check if Clerk is configured
 const isClerkConfigured = () => !!import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 
@@ -38,10 +53,10 @@ async function getClerkToken(): Promise<string | null> {
 const trpcClient = trpc.createClient({
   links: [
     httpBatchLink({
-      url: `${import.meta.env.VITE_API_URL || "https://fuel-pro-backend-v2-production-7c2b.up.railway.app"}/api/trpc`,
+      url: getApiUrl(),
       transformer: superjson as never,
       // Limit URL length to prevent 431 errors from oversized batch requests
-      // Standard limit is 8KB, we use 2KB to be safe across proxies
+      // Standard limit is 8KB, we use 2000 to be safe across proxies
       maxURLLength: 2000,
       async headers() {
         const headers: Record<string, string> = {};

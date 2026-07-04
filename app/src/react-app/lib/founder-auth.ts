@@ -16,9 +16,9 @@
  * server-side via that token, not trusted based on local state.
  */
 
-const API_URL =
-  (import.meta as any).env?.VITE_API_URL ||
-  "https://fuel-pro-backend-v2-production-7c2b.up.railway.app";
+import { getBackendUrl, getApiPath } from "@/utils/apiConfig";
+
+const API_URL = getBackendUrl();
 
 const TOKEN_KEY = "fuelpro_auth_token";
 const SESSION_META_KEY = "fuelpro_founder_session_meta";

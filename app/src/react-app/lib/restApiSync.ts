@@ -13,13 +13,14 @@
  */
 
 import { createClient } from "@supabase/supabase-js";
+import { getApiPath, getBackendUrl } from "@/utils/apiConfig";
 
 // ═══════════════════════════════════════════════════
 // CONFIGURATION
 // ═══════════════════════════════════════════════════
 
-// Railway backend URL - the root endpoint works, we'll use it to check connectivity
-const API_URL = import.meta.env.VITE_API_URL || "https://fuel-pro-backend-v2-production-7c2b.up.railway.app";
+// Railway backend URL - use proxy on Vercel deployments for CORS handling
+const API_URL = getBackendUrl();
 
 // Get auth token from founder session
 function getAuthToken(): string | null {
@@ -74,7 +75,9 @@ async function apiRequest<T>(
       headers["Authorization"] = `Bearer ${authToken}`;
     }
     
-    const response = await fetch(`${API_URL}${path}`, {
+    // Use proxy path on Vercel deployments for CORS handling
+    const url = getApiPath(path);
+    const response = await fetch(url, {
       method,
       headers,
       body: body ? JSON.stringify({ json: body }) : undefined,

@@ -80,6 +80,7 @@ import {
 import { useFounderBackend } from "@/react-app/hooks/useFounderBackend";
 import { useCloudSync, useCloudUsers, useCloudStations, useCloudAuditLog, useCloudSecrets, useCloudFeatureFlags } from "@/react-app/hooks/useCloudSync";
 import { checkApiStatus } from "@/react-app/lib/restApiSync";
+import { getBackendUrl } from "@/utils/apiConfig";
 
 /* ─── Types ─── */
 interface AppUser {
@@ -592,7 +593,7 @@ export default function FounderAccess() {
     
     // Get founder token from backend via REST API
     let token = null;
-    const API_URL = import.meta.env.VITE_API_URL || "https://fuel-pro-backend-v2-production-7c2b.up.railway.app";
+    const API_URL = getBackendUrl();
     
     try {
       // Try the founder-login REST endpoint first
