@@ -8,8 +8,13 @@
   ],
   "routes": [
     {
+      "src": "/api/(.*)",
+      "dest": "https://fuel-pro-backend-v2-production-7c2b.up.railway.app/api/$1"
+    },
+    {
       "src": "/(.*)",
-      "dest": "/app/dist/$1"
+      "dest": "/app/dist/index.html",
+      "status": 200
     }
   ]
 }
