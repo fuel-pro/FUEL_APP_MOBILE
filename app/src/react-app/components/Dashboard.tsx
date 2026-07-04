@@ -70,7 +70,7 @@ export default function Dashboard() {
   const { state } = useFuel();
   const location = useLocation();
   const { currentStation } = useStations();
-  const { fuelPrice, taxRates, exchangeRates, isSyncing, lastSync, syncNow, locationPrice, currentLocation, refreshLocation } =
+  const { fuelPrice, taxRates, exchangeRates, isSyncing, lastSync, syncNow, locationPrice, currentLocation, refreshLocation, refreshPrices } =
     useAutoSync(location.currentCountry.id);
   const [currentTime, setCurrentTime] = useState(new Date());
   

@@ -164,9 +164,12 @@ interface SyncRecord {
 
 const SYNC_STORAGE_KEY = "fuelpro_sync_records";
 const SYNC_INTERVAL_MS = 1000 * 60 * 60 * 6; // 6 hours default
-const FUEL_PRICE_SYNC_INTERVAL = 1000 * 60 * 60 * 12; // 12 hours for fuel
+const FUEL_PRICE_SYNC_INTERVAL = 1000 * 60 * 60 * 24; // 24 hours for fuel (prices change daily)
 const NEWS_SYNC_INTERVAL = 1000 * 60 * 30; // 30 minutes for news
 const TAX_SYNC_INTERVAL = 1000 * 60 * 60 * 24 * 7; // Weekly for tax
+
+// Maximum age for cached prices before forcing refresh (12 hours)
+const MAX_PRICE_CACHE_AGE = 1000 * 60 * 60 * 12;
 
 function loadSyncRecords(): Record<string, SyncRecord> {
   try {
@@ -228,6 +231,59 @@ function markError(key: string, source: string, error: string) {
     status: "error",
     error,
   });
+}
+
+// Check if prices are stale (older than MAX_PRICE_CACHE_AGE)
+export function arePricesStale(countryCode: string): boolean {
+  const records = loadSyncRecords();
+  const key = `fuel_price_${countryCode}`;
+  const record = records[key];
+  
+  if (!record) return true; // No record = stale
+  
+  const lastSync = new Date(record.lastSync).getTime();
+  const now = Date.now();
+  
+  // Check if last update was today - if not, prices are stale
+  const lastUpdateDate = new Date(lastSync).toDateString();
+  const today = new Date().toDateString();
+  if (lastUpdateDate !== today) return true;
+  
+  // Also check if cache is too old
+  return (now - lastSync) > MAX_PRICE_CACHE_AGE;
+}
+
+// Force refresh prices - ignores sync interval
+export async function forceRefreshPrices(countryCode: string): Promise<FuelPriceData | null> {
+  const key = `fuel_price_${countryCode}`;
+  
+  // Clear sync record to force fresh fetch
+  const records = loadSyncRecords();
+  delete records[key];
+  localStorage.setItem(SYNC_STORAGE_KEY, JSON.stringify(records));
+  
+  // Fetch fresh prices
+  try {
+    const specificFetchers: Record<string, () => Promise<FuelPriceData | null>> = {
+      KE: fetchKenyaFuelPrices,
+      UG: fetchUgandaFuelPrices,
+      TZ: fetchTanzaniaFuelPrices,
+      NG: fetchNigeriaFuelPrices,
+      ZA: fetchSouthAfricaFuelPrices,
+      ET: fetchEthiopiaFuelPrices,
+      RW: fetchRwandaFuelPrices,
+      GH: fetchGhanaFuelPrices,
+    };
+    
+    const fetcher = specificFetchers[countryCode];
+    if (fetcher) {
+      return await fetcher();
+    }
+  } catch (error) {
+    console.error("[DataSync] Force refresh failed:", error);
+  }
+  
+  return null;
 }
 
 // --- FUEL PRICE DATA ---

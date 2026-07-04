@@ -7,6 +7,8 @@ import {
   getSyncedExchangeRates,
   getRegulatoryUpdates,
   getPriceForLocation,
+  arePricesStale,
+  forceRefreshPrices,
   type SyncResult,
   type FuelPriceData,
   type TaxRateData,
@@ -40,8 +42,10 @@ interface UseAutoSyncReturn {
   dismissUpdate: (id: string) => void;
   markUpdateRead: (id: string) => void;
   refreshLocation: () => Promise<void>;
+  refreshPrices: () => Promise<void>; // Force refresh fuel prices
   unreadCount: number;
   highPriorityCount: number;
+  arePricesStale: boolean;
 }
 
 export function useAutoSync(
@@ -137,6 +141,23 @@ export function useAutoSync(
     }
   }, [countryCode, isSyncing]);
 
+  // Force refresh fuel prices (ignores cache age)
+  const refreshPrices = useCallback(async () => {
+    if (isSyncing) return;
+    setIsSyncing(true);
+    try {
+      const result = await forceRefreshPrices(countryCode);
+      if (result) {
+        setFuelPrice(result);
+        setLastSync(new Date().toISOString());
+      }
+    } catch (err) {
+      console.error("[useAutoSync] Price refresh failed:", err);
+    } finally {
+      setIsSyncing(false);
+    }
+  }, [countryCode, isSyncing]);
+
   useEffect(() => {
     const cachedFuel = getSyncedFuelPrice(countryCode);
     const cachedTax = getSyncedTaxRates(countryCode);
@@ -150,12 +171,26 @@ export function useAutoSync(
       const cachedPos = localStorage.getItem("fuelpro_last_geo_position");
       if (cachedPos) setCurrentLocation(JSON.parse(cachedPos));
     } catch {}
-    if (isSyncDue(countryCode)) doSync();
+    
+    // Check if prices are stale (from previous day) - if so, force refresh
+    if (arePricesStale(countryCode)) {
+      console.log("[useAutoSync] Prices are stale, forcing refresh...");
+      doSync();
+    } else if (isSyncDue(countryCode)) {
+      doSync();
+    }
+    
     refreshLocation();
     intervalRef.current = setInterval(() => {
-      if (isSyncDue(countryCode)) doSync();
+      // Always check if prices are stale on each interval
+      if (arePricesStale(countryCode)) {
+        console.log("[useAutoSync] Interval check: prices stale, refreshing...");
+        doSync();
+      } else if (isSyncDue(countryCode)) {
+        doSync();
+      }
       refreshLocation();
-    }, 1000 * 60 * 15);
+    }, 1000 * 60 * 15); // Check every 15 minutes
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
@@ -190,10 +225,11 @@ export function useAutoSync(
 
   const unreadCount = regulatoryUpdates.filter(u => !u.read).length;
   const highPriorityCount = regulatoryUpdates.filter(u => !u.read && u.priority === "high").length;
+  const pricesStale = arePricesStale(countryCode);
 
   return {
     isSyncing, lastSync, error, fuelPrice, taxRates, exchangeRates, regulatoryUpdates,
     locationPrice, currentLocation, syncNow: doSync, dismissUpdate, markUpdateRead,
-    refreshLocation, unreadCount, highPriorityCount,
+    refreshLocation, refreshPrices, unreadCount, highPriorityCount, arePricesStale: pricesStale,
   };
 }
