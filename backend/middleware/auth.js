@@ -1,15 +1,27 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
+/**
+ * Detect if a token is a Clerk token by checking the issuer claim
+ * This prevents false positives where any JWT is routed to Clerk
+ */
+function detectClerkToken(token) {
+  try {
+    const decoded = jwt.decode(token, { complete: true });
+    if (!decoded || !decoded.payload) return false;
+
+    const iss = decoded.payload.iss;
+    return iss && (iss.includes('clerk') || iss.includes('clerk.accounts.dev'));
+  } catch {
+    return false;
+  }
+}
+
 // FIX: Require JWT_SECRET in all environments to prevent accidental security holes
 function getJwtSecret() {
   const secret = process.env.JWT_SECRET;
   if (!secret) {
-    if (process.env.NODE_ENV === 'production') {
-      throw new Error('JWT_SECRET environment variable is required in production');
-    }
-    // In development, require .env file to be set
-    throw new Error('JWT_SECRET is not set. Create a .env file with JWT_SECRET=your-secret');
+    throw new Error('JWT_SECRET environment variable is required');
   }
   return secret;
 }
@@ -28,21 +40,21 @@ const protect = async (req, res, next) => {
   }
 
   try {
-    // Check if it's a Clerk JWT token (starts with 'eyJ' - JWT format)
-    const isClerkToken = token.startsWith('eyJ') && token.split('.').length === 3;
-    
+    // FIX: Use proper Clerk token detection instead of matching any JWT format
+    const isClerkToken = detectClerkToken(token);
+
     if (isClerkToken) {
       // Clerk token - use Clerk auth middleware
       const clerkAuth = require('./clerkAuth');
       return clerkAuth.protect(req, res, next);
     }
-    
+
     // Legacy JWT verification
     const decoded = jwt.verify(token, getJwtSecret());
-    
+
     // Get user from token (synchronous for SQLite)
     const user = User.findById(decoded.id);
-    
+
     if (!user) {
       return res.status(401).json({ error: 'User not found' });
     }
@@ -73,7 +85,6 @@ const authorize = (...roles) => {
         requiredRoles: roles
       });
     }
-
     next();
   };
 };
@@ -95,7 +106,6 @@ const hasPermission = (...permissions) => {
         current: userPermissions
       });
     }
-
     next();
   };
 };
@@ -111,11 +121,11 @@ const optionalAuth = async (req, res, next) => {
   if (token) {
     try {
       // Check if Clerk token
-      if (token.startsWith('eyJ') && token.split('.').length === 3) {
+      if (detectClerkToken(token)) {
         const clerkAuth = require('./clerkAuth');
         return clerkAuth.optionalAuth(req, res, next);
       }
-      
+
       const decoded = jwt.verify(token, getJwtSecret());
       const user = User.findById(decoded.id);
       if (user && user.isActive) {
