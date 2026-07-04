@@ -19,7 +19,7 @@ import { createClient } from "@supabase/supabase-js";
 // ═══════════════════════════════════════════════════
 
 // Railway backend URL - the root endpoint works, we'll use it to check connectivity
-const API_URL = import.meta.env.VITE_API_URL || "https://fuel-app-mobile.vercel.app";
+const API_URL = import.meta.env.VITE_API_URL || "https://fuel-pro-backend-v2-production-7c2b.up.railway.app";
 
 const API_KEY = import.meta.env.VITE_API_KEY || "fuelpro-api-key-2026";
 
