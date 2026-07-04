@@ -38,7 +38,7 @@ async function getClerkToken(): Promise<string | null> {
 const trpcClient = trpc.createClient({
   links: [
     httpBatchLink({
-      url: `${import.meta.env.VITE_API_URL || "https://fuel-pro-backend-v2-production-7c2b.up.railway.app"}/api/trpc`,
+      url: `${import.meta.env.VITE_API_URL || "https://fuel-app-mobile.vercel.app"}/api/trpc`,
       transformer: superjson as never,
       async headers() {
         const headers: Record<string, string> = {};

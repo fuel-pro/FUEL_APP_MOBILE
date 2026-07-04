@@ -40,7 +40,7 @@ interface RegisterData {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-const API_BASE = import.meta.env.VITE_API_URL || 'https://fuel-pro-backend-v2-production-7c2b.up.railway.app';
+const API_BASE = import.meta.env.VITE_API_URL || 'https://fuel-app-mobile.vercel.app';
 
 // Token refresh interval (in ms)
 const TOKEN_REFRESH_INTERVAL = 14 * 60 * 1000; // 14 minutes (JWT typically 15 min)
