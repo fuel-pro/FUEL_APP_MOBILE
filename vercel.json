@@ -12,6 +12,26 @@
       "dest": "https://fuel-pro-backend-v2-production-7c2b.up.railway.app/api/$1"
     },
     {
+      "src": "/assets/(.*)",
+      "dest": "/app/dist/assets/$1"
+    },
+    {
+      "src": "/sw.js",
+      "dest": "/app/dist/sw.js"
+    },
+    {
+      "src": "/manifest.json",
+      "dest": "/app/dist/manifest.json"
+    },
+    {
+      "src": "/robots.txt",
+      "dest": "/app/dist/robots.txt"
+    },
+    {
+      "src": "/sitemap.xml",
+      "dest": "/app/dist/sitemap.xml"
+    },
+    {
       "src": "/(.*)",
       "dest": "/app/dist/index.html",
       "status": 200
