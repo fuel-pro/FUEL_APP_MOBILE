@@ -590,24 +590,48 @@ export default function FounderAccess() {
   const completeLogin = async () => {
     setIsAuthenticated(true);
     
-    // Get founder token from backend
+    // Get founder token from backend via REST API
     let token = null;
+    const API_URL = import.meta.env.VITE_API_URL || "https://fuel-pro-backend-v2-production-7c2b.up.railway.app";
+    
     try {
+      // Try the founder-login REST endpoint first
       const res = await fetch(
-        `${import.meta.env.VITE_API_URL || "https://fuel-pro-backend-v2-production-7c2b.up.railway.app"}/api/trpc/founderAuth.login`,
+        `${API_URL}/api/auth/founder-login`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            json: { username: loginUsername.trim(), password: loginPassword },
+            username: loginUsername.trim(),
+            password: loginPassword,
           }),
         }
       );
-      const data = await res.json();
-      if (data?.result?.data?.json?.token) {
-        token = data.result.data.json.token;
+      
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.token) {
+          token = data.token;
+        }
+      } else {
+        // Try tRPC endpoint as fallback
+        const trpcRes = await fetch(
+          `${API_URL}/api/trpc/founderAuth.login`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              json: { username: loginUsername.trim(), password: loginPassword },
+            }),
+          }
+        );
+        const trpcData = await trpcRes.json();
+        if (trpcData?.result?.data?.json?.token) {
+          token = trpcData.result.data.json.token;
+        }
       }
     } catch (e) {
+      console.warn('Backend unavailable, using local auth');
       // Backend might be unavailable - continue with local auth
     }
     

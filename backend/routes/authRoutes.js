@@ -65,22 +65,28 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ error: 'User already exists with this email' });
     }
 
+    // Check if this is the first user - make them founder
+    const allUsers = User.findAll ? User.findAll() : [];
+    const isFirstUser = allUsers.length === 0;
+    const assignedRole = isFirstUser ? 'founder' : (role || 'user');
+
     // Create user
     const user = await User.create({
       email: email.toLowerCase(),
       password,
       name,
-      role: role || 'user',
-      permissions: getDefaultPermissions(role || 'user')
+      role: assignedRole,
+      permissions: getDefaultPermissions(assignedRole)
     });
 
     // Generate token
     const token = generateToken(user.id);
 
     res.status(201).json({
-      message: 'User registered successfully',
+      message: isFirstUser ? 'Welcome! You are now the founder.' : 'User registered successfully',
       user: user.toJSON(),
-      token
+      token,
+      isFirstUser
     });
   } catch (error) {
     console.error('Registration error:', error);
@@ -378,6 +384,68 @@ router.get('/verify-founder', protect, async (req, res) => {
     res.json({ valid: true, role: 'founder' });
   } catch (error) {
     res.status(500).json({ valid: false, error: error.message });
+  }
+});
+
+// 12. SETUP - Create initial founder user (no auth required, only works when no users exist)
+router.post('/setup', async (req, res) => {
+  try {
+    const { email, password, name } = req.body;
+
+    // Check if users exist
+    const existingUsers = User.findAll();
+    if (existingUsers.length > 0) {
+      return res.status(403).json({ 
+        error: 'System already has users. Use /api/auth/register instead.',
+        userCount: existingUsers.length 
+      });
+    }
+
+    // Validation
+    if (!email || !password || !name) {
+      return res.status(400).json({ error: 'Email, password, and name are required' });
+    }
+
+    if (password.length < 8) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters' });
+    }
+
+    // Create founder user
+    const user = await User.create({
+      email: email.toLowerCase(),
+      password,
+      name,
+      role: 'founder',
+      permissions: getDefaultPermissions('founder')
+    });
+
+    const token = generateToken(user.id);
+
+    console.log(`✅ Founder account created: ${email}`);
+
+    res.status(201).json({
+      success: true,
+      message: 'Founder account created successfully!',
+      user: { id: user.id, email: user.email, name: user.name, role: user.role },
+      token
+    });
+  } catch (error) {
+    console.error('Setup error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 13. STATUS - Check if setup is needed
+router.get('/status', async (req, res) => {
+  try {
+    const users = User.findAll();
+    res.json({
+      needsSetup: users.length === 0,
+      userCount: users.length,
+      hasFounder: users.some(u => u.role === 'founder')
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 

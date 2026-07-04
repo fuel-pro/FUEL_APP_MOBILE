@@ -29,7 +29,10 @@ import {
   FileText,
 } from "lucide-react";
 import { formatNumber } from "@/react-app/utils/formatUtils";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
+
+// Backend API configuration
+const API_BASE = import.meta.env.VITE_API_URL || "https://fuel-pro-backend-v2-production-7c2b.up.railway.app";
 
 // Import chart.js components
 import {
@@ -67,6 +70,16 @@ export default function Dashboard() {
   const { fuelPrice, taxRates, exchangeRates, isSyncing, lastSync, syncNow, locationPrice, currentLocation, refreshLocation } =
     useAutoSync(location.currentCountry.id);
   const [currentTime, setCurrentTime] = useState(new Date());
+  
+  // Backend data state
+  const [backendStats, setBackendStats] = useState<{
+    totalRevenue: number;
+    netProfit: number;
+    fuelSold: number;
+    balanceDue: number;
+  } | null>(null);
+  const [backendLoading, setBackendLoading] = useState(false);
+  const [hasBackendData, setHasBackendData] = useState(false);
 
   // Use precise location-based fuel prices (auto-synced with GPS)
   const stationCity = currentStation?.location || "Nairobi";
@@ -94,18 +107,61 @@ export default function Dashboard() {
     debt: 0,
   });
 
+  // Fetch dashboard stats from backend
+  const fetchBackendStats = useCallback(async () => {
+    // Get auth token
+    let token: string | null = null;
+    try {
+      const sessionJson = localStorage.getItem("fuelpro_founder_session");
+      if (sessionJson) {
+        const session = JSON.parse(sessionJson);
+        if (session.active && session.token) {
+          token = session.token;
+        }
+      }
+    } catch { /* no session */ }
+    
+    if (!token) return;
+    
+    setBackendLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/dashboard/stats`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.data) {
+          setBackendStats(data.data);
+          setHasBackendData(true);
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to fetch backend stats:', e);
+    } finally {
+      setBackendLoading(false);
+    }
+  }, []);
+
+  // Fetch on mount and periodically
+  useEffect(() => {
+    fetchBackendStats();
+    const interval = setInterval(fetchBackendStats, 60000); // Refresh every minute
+    return () => clearInterval(interval);
+  }, [fetchBackendStats]);
+
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
 
-  // Animate KPI values on mount
+  // Animate KPI values on mount - use backend data if available
   useEffect(() => {
+    // Prefer backend stats over local calculation
     const targets = {
-      revenue: totalRevenue,
-      profit: netProfit,
-      fuelSold: totalFuelSold,
-      debt: totalDebt,
+      revenue: hasBackendData && backendStats ? backendStats.totalRevenue : totalRevenue,
+      profit: hasBackendData && backendStats ? backendStats.netProfit : netProfit,
+      fuelSold: hasBackendData && backendStats ? backendStats.fuelSold : totalFuelSold,
+      debt: hasBackendData && backendStats ? backendStats.balanceDue : totalDebt,
     };
     const duration = 1000;
     const steps = 30;
@@ -126,7 +182,7 @@ export default function Dashboard() {
     }, interval);
 
     return () => clearInterval(animTimer);
-  }, []);
+  }, [hasBackendData, backendStats, totalRevenue, netProfit, totalFuelSold, totalDebt]);
 
   // Calculate totals from sales history
   const {
