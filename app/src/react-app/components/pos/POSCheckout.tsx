@@ -1,7 +1,10 @@
 // POS Checkout Component - Payment processing with hardware integration
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { printerService, type ReceiptData } from '@/react-app/lib/pos/printer-service';
 import { paymentService } from '@/react-app/lib/pos/payment-service';
+import { useAuth } from '@/react-app/context/AuthContext';
+import { useFuel } from '@/react-app/context/FuelContext';
+import { useLocation } from '@/react-app/context/LocationContext';
 import { 
   CreditCard, 
   Banknote, 
@@ -10,7 +13,9 @@ import {
   CheckCircle,
   XCircle,
   Loader2,
-  ArrowLeft
+  ArrowLeft,
+  User,
+  MapPin
 } from 'lucide-react';
 
 interface SaleItem {
@@ -33,9 +38,9 @@ interface Sale {
 interface POSCheckoutProps {
   sale: Sale;
   customerName?: string;
-  attendantName: string;
-  stationName: string;
-  stationLocation: string;
+  attendantName?: string;
+  stationName?: string;
+  stationLocation?: string;
   onComplete: () => void;
   onCancel: () => void;
 }
@@ -46,12 +51,22 @@ type PaymentStatus = 'idle' | 'processing' | 'success' | 'error';
 export default function POSCheckout({
   sale,
   customerName,
-  attendantName,
-  stationName,
-  stationLocation,
+  attendantName: attendantNameProp,
+  stationName: stationNameProp,
+  stationLocation: stationLocationProp,
   onComplete,
   onCancel,
 }: POSCheckoutProps) {
+  // Get context data for existing logged-in users
+  const { user } = useAuth();
+  const { state } = useFuel();
+  const location = useLocation();
+  
+  // Use prop values or fall back to context values
+  const attendantName = attendantNameProp || user?.name || user?.email || 'Cashier';
+  const stationName = stationNameProp || location.currentLocation?.name || state.companyData?.name || 'FuelPro Station';
+  const stationLocation = stationLocationProp || location.currentLocation?.location || state.companyData?.physicalAddress || 'Kenya';
+  
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
   const [amountPaid, setAmountPaid] = useState('');
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>('idle');

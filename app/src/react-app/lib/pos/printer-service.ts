@@ -2,8 +2,10 @@
 import { hardwareManager, type PrinterDevice } from './hardware-manager';
 
 export interface ReceiptData {
-  stationName: string;
-  stationLocation: string;
+  stationName?: string;
+  stationLocation?: string;
+  stationPhone?: string;
+  stationEmail?: string;
   receiptNumber: string;
   date: string;
   time: string;
@@ -16,9 +18,10 @@ export interface ReceiptData {
   amountPaid: number;
   change: number;
   customerName?: string;
-  attendantName: string;
+  attendantName?: string;
   transactionRef?: string;
   footerMessage?: string;
+  vatRegNo?: string;
 }
 
 export interface ReceiptItem {
@@ -138,19 +141,27 @@ class PrinterService {
     // Initialize
     commands.push(this.cmdInit());
     
-    // Header - Station Info
+    // Header - Station Info (with fallbacks)
     commands.push(this.cmdAlign('center'));
     commands.push(this.cmdBold(true));
     commands.push(this.cmdDoubleHeight(true));
-    commands.push(this.textToBytes(receipt.stationName));
+    commands.push(this.textToBytes(receipt.stationName || 'FuelPro Station'));
     commands.push(this.newline());
     
     commands.push(this.cmdDoubleHeight(false));
     commands.push(this.cmdBold(false));
-    commands.push(this.textToBytes(receipt.stationLocation));
+    commands.push(this.textToBytes(receipt.stationLocation || ''));
     commands.push(this.newline());
-    commands.push(this.textToBytes('Tel: +254-700-000-000'));
-    commands.push(this.newline());
+    
+    if (receipt.stationPhone) {
+      commands.push(this.textToBytes(`Tel: ${receipt.stationPhone}`));
+      commands.push(this.newline());
+    }
+    
+    if (receipt.vatRegNo) {
+      commands.push(this.textToBytes(`VAT TIN: ${receipt.vatRegNo}`));
+      commands.push(this.newline());
+    }
     
     // Divider
     commands.push(this.textToBytes('========================================'));
@@ -176,7 +187,9 @@ class PrinterService {
       commands.push(this.newline());
     }
     
-    commands.push(this.textToBytes(this.formatLine('Attendant:', receipt.attendantName)));
+    // Attendant (with fallback)
+    const attendant = receipt.attendantName || 'Cashier';
+    commands.push(this.textToBytes(this.formatLine('Attendant:', attendant)));
     commands.push(this.newline());
     
     // Divider
