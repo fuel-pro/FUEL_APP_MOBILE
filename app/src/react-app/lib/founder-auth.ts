@@ -120,3 +120,20 @@ export function getFounderAuthHeader(): Record<string, string> {
   const token = getAuthToken();
   return token ? { 'Authorization': `Bearer ${token}` } : {};
 }
+
+
+// Legacy function used by SecuritySection - returns default founder credentials
+// Note: This is a placeholder and actual credentials should come from backend
+export function getFounderCredentials() {
+  return {
+    username: "founder@fuelpro.com",
+    password: ""
+  };
+}
+
+
+// Legacy function used by FounderAccess - validates founder auth
+export async function validateFounderAuth(): Promise<{ valid: boolean }> {
+  const token = localStorage.getItem(TOKEN_KEY);
+  return { valid: !!token };
+}
