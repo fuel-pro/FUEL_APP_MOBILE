@@ -78,3 +78,22 @@ export function endFounderSession(): void {
 export function isLoggedIn(): boolean {
   return !!getFounderToken();
 }
+
+/** DEPRECATED: Legacy function for backwards compatibility
+ *  Authentication is now handled via backend JWT tokens
+ */
+export function getFounderCredentials(): { username: string; password: string } {
+  // Return empty - credentials are now stored securely on backend
+  return { username: '', password: '' };
+}
+
+/** DEPRECATED: Legacy function for backwards compatibility
+ *  Use founderLogin() instead
+ */
+export async function validateFounderAuth(
+  inputUser: string,
+  inputPw: string
+): Promise<boolean> {
+  const result = await founderLogin(inputUser, inputPw);
+  return result.success;
+}
