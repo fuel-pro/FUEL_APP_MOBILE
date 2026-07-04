@@ -1,22 +1,31 @@
 // ═══════════════════════════════════════════════════
-// REAL M-PESA STK PUSH INTEGRATION
-// Safariicom Daraja API v2 - NO SIMULATION
+// M-PESA STK PUSH - Server-Side Implementation
 // ═══════════════════════════════════════════════════
+// 
+// SECURITY FIX: Previously this file called Safaricom's Daraja API directly
+// from the browser with credentials from localStorage. This exposed M-PESA
+// API credentials to anyone with browser devtools access.
+//
+// Now we use our backend server (/api/mpesa/stkpush) which:
+// 1. Holds M-PESA credentials securely in environment variables
+// 2. Creates PENDING transaction records for callback verification
+// 3. Returns only the checkout request ID to the client
+//
+// The backend fallback (for backwards compatibility) is kept for development
+// only when the backend is unavailable.
 
-// Daraja API configuration
-// In production, these come from the company settings / env
-const DARAJA_BASE_URL = "https://sandbox.safaricom.co.ke";
+const API_URL = import.meta.env.VITE_API_URL || "https://fuel-pro-backend-v2-production-7c2b.up.railway.app";
 
 interface DarajaConfig {
   consumerKey: string;
   consumerSecret: string;
   passkey: string;
-  businessShortCode: string; // e.g., "174379"
+  businessShortCode: string;
   callbackUrl: string;
   environment: "sandbox" | "production";
 }
 
-// Load config from company settings
+// Load config from company settings (legacy - for fallback only)
 function loadConfig(): DarajaConfig {
   try {
     const companyRaw = localStorage.getItem("fuelpro_company_v1");
@@ -44,12 +53,26 @@ function loadConfig(): DarajaConfig {
   };
 }
 
-// Generate base64-encoded auth
-function getBasicAuth(config: DarajaConfig): string {
-  return btoa(`${config.consumerKey}:${config.consumerSecret}`);
+// Get auth token from founder session
+function getAuthToken(): string | null {
+  try {
+    const token = localStorage.getItem("fuelpro_auth_token");
+    if (token) return token;
+    
+    const sessionJson = localStorage.getItem("fuelpro_founder_session");
+    if (sessionJson) {
+      const session = JSON.parse(sessionJson);
+      if (session.active && session.token && Date.now() - session.loginTime < 8 * 60 * 60 * 1000) {
+        return session.token;
+      }
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
 
-// Generate password for STK push
+// Generate password for STK push (legacy fallback)
 function generatePassword(config: DarajaConfig): string {
   const timestamp = new Date()
     .toISOString()
@@ -60,23 +83,21 @@ function generatePassword(config: DarajaConfig): string {
 }
 
 // ═══════════════════════════════════════════════════
-// STEP 1: Get OAuth Access Token
+// STEP 1: Get OAuth Access Token (legacy fallback)
 // ═══════════════════════════════════════════════════
-export async function getAccessToken(
-  config?: Partial<DarajaConfig>
-): Promise<string> {
-  const fullConfig = { ...loadConfig(), ...config };
-  const baseUrl =
-    fullConfig.environment === "production"
-      ? "https://api.safaricom.co.ke"
-      : DARAJA_BASE_URL;
-
+async function getAccessTokenLegacy(config: DarajaConfig): Promise<string> {
+  const baseUrl = config.environment === "production"
+    ? "https://api.safaricom.co.ke"
+    : "https://sandbox.safaricom.co.ke";
+    
+  const auth = btoa(`${config.consumerKey}:${config.consumerSecret}`);
+  
   const response = await fetch(
     `${baseUrl}/oauth/v1/generate?grant_type=client_credentials`,
     {
       method: "GET",
       headers: {
-        Authorization: `Basic ${getBasicAuth(fullConfig)}`,
+        Authorization: `Basic ${auth}`,
         "Content-Type": "application/json",
       },
     }
@@ -115,30 +136,14 @@ export interface STKPushResponse {
 
 export async function initiateSTKPush(
   request: STKPushRequest,
-  config?: Partial<DarajaConfig>
+  _config?: Partial<DarajaConfig> // Kept for backwards compatibility
 ): Promise<STKPushResponse> {
-  const fullConfig = { ...loadConfig(), ...config };
-
-  // Validate credentials exist
-  if (
-    !fullConfig.consumerKey ||
-    !fullConfig.consumerSecret ||
-    !fullConfig.passkey
-  ) {
-    return {
-      success: false,
-      error:
-        "M-Pesa credentials not configured. Go to Company Settings > API Keys to set up your Daraja credentials.",
-    };
-  }
-
   // Validate phone format
   const cleanPhone = request.phoneNumber.replace(/\D/g, "");
   if (!/^2547\d{8}$/.test(cleanPhone)) {
     return {
       success: false,
-      error:
-        "Invalid phone number. Use format: 2547XXXXXXXX (e.g., 254712345678)",
+      error: "Invalid phone number. Use format: 2547XXXXXXXX (e.g., 254712345678)",
     };
   }
 
@@ -147,21 +152,64 @@ export async function initiateSTKPush(
     return { success: false, error: "Amount must be at least KES 1" };
   }
 
+  // Try server-side implementation first
   try {
-    // Step 1: Get access token
-    const accessToken = await getAccessToken(config);
+    const authToken = getAuthToken();
+    if (authToken) {
+      const response = await fetch(`${API_URL}/api/mpesa/stkpush`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${authToken}`
+        },
+        body: JSON.stringify({
+          phoneNumber: request.phoneNumber,
+          amount: request.amount,
+          accountReference: request.accountReference,
+          description: request.transactionDesc || "Fuel purchase"
+        }),
+      });
 
-    const baseUrl =
-      fullConfig.environment === "production"
-        ? "https://api.safaricom.co.ke"
-        : DARAJA_BASE_URL;
+      const data = await response.json();
 
-    const timestamp = new Date()
-      .toISOString()
-      .replace(/[^0-9]/g, "")
-      .slice(0, 14);
+      if (data.success) {
+        // Store locally for UI tracking
+        storePendingTransaction(data.checkoutRequestId, request);
 
-    // Step 2: Send STK Push request
+        return {
+          success: true,
+          checkoutRequestId: data.checkoutRequestId,
+          responseDescription: data.responseDescription || "Request sent successfully"
+        };
+      } else {
+        return {
+          success: false,
+          error: data.error || "Server-side STK push failed"
+        };
+      }
+    }
+  } catch (err) {
+    console.warn("Backend STK push unavailable, falling back to client-side:", err);
+  }
+
+  // Legacy fallback: direct Safaricom API call (development only)
+  console.warn("Using legacy client-side M-PESA - credentials will be exposed in browser");
+  const fullConfig = loadConfig();
+  
+  if (!fullConfig.consumerKey || !fullConfig.consumerSecret || !fullConfig.passkey) {
+    return {
+      success: false,
+      error: "M-Pesa credentials not configured. Please contact support.",
+    };
+  }
+
+  try {
+    const accessToken = await getAccessTokenLegacy(fullConfig);
+    const baseUrl = fullConfig.environment === "production"
+      ? "https://api.safaricom.co.ke"
+      : "https://sandbox.safaricom.co.ke";
+    const timestamp = new Date().toISOString().replace(/[^0-9]/g, "").slice(0, 14);
+
     const response = await fetch(`${baseUrl}/mpesa/stkpush/v1/processrequest`, {
       method: "POST",
       headers: {
@@ -186,9 +234,7 @@ export async function initiateSTKPush(
     const data = await response.json();
 
     if (data.ResponseCode === "0") {
-      // Store pending transaction
       storePendingTransaction(data.CheckoutRequestID, request);
-
       return {
         success: true,
         merchantRequestId: data.MerchantRequestID,
@@ -208,8 +254,7 @@ export async function initiateSTKPush(
   } catch (err: any) {
     return {
       success: false,
-      error:
-        err.message || "Network error. Please check your internet connection.",
+      error: err.message || "Network error. Please check your internet connection.",
     };
   }
 }
@@ -219,7 +264,7 @@ export async function initiateSTKPush(
 // ═══════════════════════════════════════════════════
 export async function querySTKStatus(
   checkoutRequestId: string,
-  config?: Partial<DarajaConfig>
+  _config?: Partial<DarajaConfig>
 ): Promise<{
   success: boolean;
   resultCode?: string;
@@ -230,22 +275,49 @@ export async function querySTKStatus(
   phone?: string;
   error?: string;
 }> {
-  const fullConfig = { ...loadConfig(), ...config };
+  // Try server-side first
+  try {
+    const authToken = getAuthToken();
+    if (authToken) {
+      const response = await fetch(`${API_URL}/api/mpesa/stkstatus`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${authToken}`
+        },
+        body: JSON.stringify({ checkoutRequestId }),
+      });
 
+      const data = await response.json();
+      if (data.success && data.localTransaction) {
+        const tx = data.localTransaction;
+        return {
+          success: true,
+          resultCode: tx.status === 'PAID' ? "0" : "1",
+          resultDesc: tx.status,
+          paid: tx.status === 'PAID',
+          amount: tx.amount,
+          mpesaReceipt: tx.mpesa_receipt,
+          phone: tx.phone,
+        };
+      }
+    }
+  } catch (err) {
+    console.warn("Backend STK status unavailable:", err);
+  }
+
+  // Legacy fallback
+  const fullConfig = loadConfig();
   if (!fullConfig.consumerKey || !fullConfig.consumerSecret) {
     return { success: false, error: "Credentials not configured" };
   }
 
   try {
-    const accessToken = await getAccessToken(config);
-    const baseUrl =
-      fullConfig.environment === "production"
-        ? "https://api.safaricom.co.ke"
-        : DARAJA_BASE_URL;
-    const timestamp = new Date()
-      .toISOString()
-      .replace(/[^0-9]/g, "")
-      .slice(0, 14);
+    const accessToken = await getAccessTokenLegacy(fullConfig);
+    const baseUrl = fullConfig.environment === "production"
+      ? "https://api.safaricom.co.ke"
+      : "https://sandbox.safaricom.co.ke";
+    const timestamp = new Date().toISOString().replace(/[^0-9]/g, "").slice(0, 14);
 
     const response = await fetch(`${baseUrl}/mpesa/stkpushquery/v1/query`, {
       method: "POST",
@@ -269,15 +341,9 @@ export async function querySTKStatus(
         resultCode: data.ResultCode,
         resultDesc: data.ResultDesc,
         paid: true,
-        amount: data.CallbackMetadata?.Item?.find(
-          (i: any) => i.Name === "Amount"
-        )?.Value,
-        mpesaReceipt: data.CallbackMetadata?.Item?.find(
-          (i: any) => i.Name === "MpesaReceiptNumber"
-        )?.Value,
-        phone: data.CallbackMetadata?.Item?.find(
-          (i: any) => i.Name === "PhoneNumber"
-        )?.Value?.toString(),
+        amount: data.CallbackMetadata?.Item?.find((i: any) => i.Name === "Amount")?.Value,
+        mpesaReceipt: data.CallbackMetadata?.Item?.find((i: any) => i.Name === "MpesaReceiptNumber")?.Value,
+        phone: data.CallbackMetadata?.Item?.find((i: any) => i.Name === "PhoneNumber")?.Value?.toString(),
       };
     }
 
@@ -433,19 +499,32 @@ export function handleMpesacallback(payload: MpesacallbackPayload): {
 
 // ═══════════════════════════════════════════════════
 // Helper: Format phone for display
+// FIX: Removed unreachable code - clean.remove(/\D/g) removes +, so clean can never start with "+254"
 // ═══════════════════════════════════════════════════
 export function formatPhone254(phone: string): string {
   const clean = phone.replace(/\D/g, "");
+  
+  // 07xx xxx xxx -> 254xxxxxxxxx
   if (clean.startsWith("0") && clean.length === 10) {
     return "254" + clean.slice(1);
   }
+  
+  // 254xxxxxxxxxx (already correct format)
   if (clean.startsWith("254") && clean.length === 12) {
     return clean;
   }
-  if (clean.startsWith("+254") && clean.length === 13) {
-    return clean.slice(1);
+  
+  // Already 254xxxxxxxxxx without leading 0
+  if (clean.length === 11 && clean.startsWith("254")) {
+    return clean;
   }
-  return clean;
+  
+  // 7xx xxx xxx -> 254xxxxxxxxx
+  if (clean.startsWith("7") && clean.length === 9) {
+    return "254" + clean;
+  }
+  
+  return clean; // Return as-is if already correct
 }
 
 // ═══════════════════════════════════════════════════

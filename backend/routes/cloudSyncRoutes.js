@@ -218,4 +218,45 @@ router.post('/seed', authorize('founder', 'admin'), (req, res) => {
   res.json({ success: true, message: 'Seed data ready', counts });
 });
 
+// User data storage - FIX for broken /api/user-data endpoint
+router.post('/user-data', protect, (req, res) => {
+  const userId = req.user.id;
+  const { data } = req.body;
+  
+  if (!data) {
+    return res.status(400).json({ success: false, error: 'Data is required' });
+  }
+  
+  const db = getDb();
+  
+  // Ensure table exists
+  db.exec(`CREATE TABLE IF NOT EXISTS user_data (
+    user_id TEXT PRIMARY KEY,
+    data TEXT,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+  )`);
+  
+  db.prepare(`
+    INSERT OR REPLACE INTO user_data (user_id, data, updated_at)
+    VALUES (?, ?, datetime('now'))
+  `).run(userId, JSON.stringify(data));
+  
+  res.json({ success: true });
+});
+
+router.get('/user-data', protect, (req, res) => {
+  const userId = req.user.id;
+  const db = getDb();
+  
+  // Ensure table exists
+  db.exec(`CREATE TABLE IF NOT EXISTS user_data (
+    user_id TEXT PRIMARY KEY,
+    data TEXT,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+  )`);
+  
+  const row = db.prepare(`SELECT data FROM user_data WHERE user_id = ?`).get(userId);
+  res.json({ data: row ? JSON.parse(row.data) : null });
+});
+
 module.exports = router;

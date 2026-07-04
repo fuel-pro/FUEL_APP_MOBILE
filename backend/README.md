@@ -9,12 +9,13 @@ Backend API for the FuelPro Founder/Admin Panel with versioning, real-time updat
 - **Role-Based Access**: JWT authentication with founder, admin, developer, and user roles
 - **Audit Logging**: Complete audit trail of all changes
 - **Station Management**: Manage fuel stations and track analytics
+- **M-PESA Integration**: Server-side STK Push for secure payment processing
 
 ## Tech Stack
 
 - **Runtime**: Node.js 18+
 - **Framework**: Express.js
-- **Database**: MongoDB with Mongoose
+- **Database**: SQLite with better-sqlite3 (persistent storage)
 - **Real-Time**: Socket.io
 - **Authentication**: JWT with bcrypt password hashing
 
@@ -23,7 +24,6 @@ Backend API for the FuelPro Founder/Admin Panel with versioning, real-time updat
 ### Prerequisites
 
 - Node.js 18+ installed
-- MongoDB instance (local or MongoDB Atlas)
 
 ### Installation
 
@@ -43,10 +43,17 @@ cp .env.example .env
 Edit `.env` with your settings:
 
 ```env
-MONGO_URI=mongodb://localhost:27017/fuelapp
-JWT_SECRET=your-super-secret-key
+JWT_SECRET=your-super-secret-key-minimum-32-chars
 PORT=5000
 NODE_ENV=development
+
+# M-PESA (optional)
+MPESA_CONSUMER_KEY=your-mpesa-consumer-key
+MPESA_CONSUMER_SECRET=your-mpesa-consumer-secret
+MPESA_PASSKEY=your-mpesa-passkey
+MPESA_SHORTCODE=your-shortcode
+MPESA_CALLBACK_URL=https://your-domain.com/api/mpesa/callback
+MPESA_ENV=sandbox
 ```
 
 ### Run Development Server
@@ -130,16 +137,9 @@ npm start
 ### Railway.app
 
 1. Create a new project
-2. Add a MongoDB database
+2. Add a persistent disk for SQLite database
 3. Deploy from GitHub
 4. Configure environment variables
-
-### MongoDB Atlas (Database)
-
-1. Create a free cluster at mongodb.com/atlas
-2. Create a database user
-3. Get the connection string
-4. Add to `MONGO_URI` environment variable
 
 ## WebSocket Events
 

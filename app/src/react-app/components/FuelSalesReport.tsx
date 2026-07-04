@@ -78,21 +78,21 @@ export default function FuelSalesReport() {
           ) {
             // Only process if we have actual sales data
             if (salesData && (salesData.pmsPumps || salesData.agoPumps)) {
-              // Calculate petrol sales from all PMS pumps
-              const petrolSales = (salesData.pmsPumps || []).reduce(
-                (sum: number, pump: any) => {
-                  return sum + (pump.salesKsh || 0);
-                },
-                0
-              );
+              // Calculate petrol sales from all PMS pumps (with rounding for safety)
+              const petrolSales = Math.round(
+                (salesData.pmsPumps || []).reduce(
+                  (sum: number, pump: any) => sum + (pump.salesKsh || 0),
+                  0
+                ) * 100
+              ) / 100;
 
-              // Calculate diesel sales from all AGO pumps
-              const dieselSales = (salesData.agoPumps || []).reduce(
-                (sum: number, pump: any) => {
-                  return sum + (pump.salesKsh || 0);
-                },
-                0
-              );
+              // Calculate diesel sales from all AGO pumps (with rounding for safety)
+              const dieselSales = Math.round(
+                (salesData.agoPumps || []).reduce(
+                  (sum: number, pump: any) => sum + (pump.salesKsh || 0),
+                  0
+                ) * 100
+              ) / 100;
 
               // Format date as DD/MM/YYYY(SHIFT)
               const day = salesDate.getDate().toString().padStart(2, "0");
@@ -109,9 +109,9 @@ export default function FuelSalesReport() {
                 entries.push({
                   date: formattedDate,
                   shift: shift as "DAY" | "NIGHT",
-                  petrolSales: petrolSales,
-                  dieselSales: dieselSales,
-                  totalSales: petrolSales + dieselSales,
+                  petrolSales,
+                  dieselSales,
+                  totalSales: Math.round((petrolSales + dieselSales) * 100) / 100,
                 });
               }
             }

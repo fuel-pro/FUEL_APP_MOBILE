@@ -109,6 +109,9 @@ app.use('/api/clerk', require('./routes/clerkRoutes'));
 // M-PESA Callback Routes (NEW!)
 app.use('/api/mpesa', require('./routes/mpesaCallback'));
 
+// M-PESA STK Push Server-Side Route (NEW!)
+app.use('/api/mpesa', require('./routes/mpesaStk'));
+
 // Clerk Backend Integration Status
 console.log(`🔐 Clerk Backend Integration: ${process.env.CLERK_SECRET_KEY ? 'Enabled' : 'Disabled'}`);
 console.log(`📱 M-PESA Integration: ${process.env.MPESA_SHORTCODE ? 'Enabled' : 'Disabled'}`);

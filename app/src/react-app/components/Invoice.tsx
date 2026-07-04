@@ -73,7 +73,8 @@ export default function Invoice() {
       (item as any)[field] = value;
     }
 
-    item.total = item.qty * item.price;
+    // FIX: Round to 2 decimal places to prevent floating point errors
+    item.total = Math.round((item.qty * item.price) * 100) / 100;
 
     dispatch({ type: "SET_INVOICE_ITEMS", payload: updatedItems });
   };
@@ -85,10 +86,10 @@ export default function Invoice() {
   };
 
   const calculateTotals = () => {
-    const totalDue = state.invoiceItems.reduce(
-      (sum, item) => sum + item.total,
-      0
-    );
+    // FIX: Round to 2 decimal places to prevent floating point errors
+    const totalDue = Math.round(
+      state.invoiceItems.reduce((sum, item) => sum + item.total, 0) * 100
+    ) / 100;
     return { totalDue };
   };
 

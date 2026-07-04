@@ -1,13 +1,17 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
-// FIX: Don't use fallback secret in production - require JWT_SECRET to be set
+// FIX: Require JWT_SECRET in all environments to prevent accidental security holes
 function getJwtSecret() {
   const secret = process.env.JWT_SECRET;
-  if (!secret && process.env.NODE_ENV === 'production') {
-    throw new Error('JWT_SECRET environment variable is required in production');
+  if (!secret) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('JWT_SECRET environment variable is required in production');
+    }
+    // In development, require .env file to be set
+    throw new Error('JWT_SECRET is not set. Create a .env file with JWT_SECRET=your-secret');
   }
-  return secret || 'fuelpro-secret-key'; // Only used in development
+  return secret;
 }
 
 // Protect route - verify JWT token OR Clerk JWT token
