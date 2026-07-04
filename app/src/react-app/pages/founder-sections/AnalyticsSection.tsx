@@ -13,6 +13,7 @@ import {
   Tablet,
   Building2,
   RefreshCw,
+  AlertCircle,
 } from "lucide-react";
 import { trpc } from "@/providers/trpc";
 
@@ -28,31 +29,51 @@ export default function AnalyticsSection({ logAudit }: Props) {
   const [fuelBreakdown, setFuelBreakdown] = useState<
     Record<string, { qty: number; amount: number }>
   >({});
+  const [backendError, setBackendError] = useState<string | null>(null);
+  const [dataSource, setDataSource] = useState<"backend" | "local" | "none">("none");
 
-  /* ─── Backend Queries ─── */
+  /* ─── Backend Queries with proper error handling ─── */
   const {
     data: salesAnalytics,
     isLoading: salesLoading,
     refetch: refetchSales,
+    isError: salesError,
   } = trpc.sale.analytics.useQuery(undefined, {
     staleTime: 1000 * 60 * 2,
     retry: 1,
+    enabled: false, // Don't auto-fetch - handle manually
   });
 
   const {
     data: stationsData,
     isLoading: stationsLoading,
     refetch: refetchStations,
+    isError: stationsError,
   } = trpc.station.list.useQuery(undefined, {
     staleTime: 1000 * 60 * 2,
     retry: 1,
+    enabled: false,
   });
 
   const { data: auditSummary, isLoading: auditLoading } =
     trpc.audit.summary.useQuery(undefined, {
       staleTime: 1000 * 60 * 5,
       retry: 1,
+      enabled: false,
     });
+
+  /* ─── Try to fetch backend data on mount ─── */
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        await refetchSales();
+        await refetchStations();
+      } catch (e) {
+        console.warn("Backend unavailable, using local data");
+      }
+    };
+    fetchData();
+  }, []);
 
   const handleRefresh = () => {
     refetchSales();
@@ -66,7 +87,7 @@ export default function AnalyticsSection({ logAudit }: Props) {
 
   /* ─── Process fuel breakdown from backend analytics ─── */
   useEffect(() => {
-    if (salesAnalytics?.byFuelType) {
+    if (salesAnalytics?.byFuelType && salesAnalytics.byFuelType.length > 0) {
       const fBreak: Record<string, { qty: number; amount: number }> = {};
       salesAnalytics.byFuelType.forEach((ft: any) => {
         const name = String(ft.fuelType || "Other");
@@ -76,6 +97,14 @@ export default function AnalyticsSection({ logAudit }: Props) {
         };
       });
       setFuelBreakdown(fBreak);
+      setDataSource("backend");
+      setBackendError(null);
+      return;
+    }
+    
+    // Check for errors
+    if (salesError || stationsError) {
+      setBackendError("Backend unavailable - showing local data");
     }
     logAudit(
       "Analytics Viewed",
@@ -179,7 +208,11 @@ export default function AnalyticsSection({ logAudit }: Props) {
           <p className="text-xs text-gray-500 mt-0.5">
             {isLoading
               ? "Loading from backend..."
-              : "Real-time usage analytics from database"}
+              : dataSource === "backend"
+                ? "Real-time usage analytics from database"
+                : dataSource === "local"
+                  ? "Showing local storage data"
+                  : "No data available"}
           </p>
         </div>
         <button
@@ -189,6 +222,14 @@ export default function AnalyticsSection({ logAudit }: Props) {
           <RefreshCw size={12} /> Refresh
         </button>
       </div>
+
+      {/* Data Source Status Banner */}
+      {backendError && (
+        <div className="flex items-center gap-2 px-4 py-2 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+          <AlertCircle size={14} className="text-amber-400" />
+          <span className="text-xs text-amber-300">{backendError}</span>
+        </div>
+      )}
 
       {/* KPI Cards */}
       <div className="grid grid-cols-4 gap-4">

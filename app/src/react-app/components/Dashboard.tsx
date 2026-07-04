@@ -3,6 +3,7 @@ import { useLocation } from "@/react-app/context/LocationContext";
 import { useStations } from "@/react-app/context/StationContext";
 import { useAutoSync } from "@/react-app/hooks/useAutoSync";
 import { getPriceForCity } from "@/react-app/services/DataSyncService";
+import { getDemoKPIs, getDemoChartData, hasRealData } from "@/react-app/lib/demoData";
 import RegulatoryAlerts from "@/react-app/components/RegulatoryAlerts";
 import SyncStatusIndicator from "@/react-app/components/SyncStatusIndicator";
 import WeatherWidget from "@/react-app/components/WeatherWidget";
@@ -27,6 +28,7 @@ import {
   Zap,
   TrendingUpIcon,
   FileText,
+  Info,
 } from "lucide-react";
 import { formatNumber } from "@/react-app/utils/formatUtils";
 import { useState, useEffect, useMemo, useCallback } from "react";
@@ -80,6 +82,7 @@ export default function Dashboard() {
   } | null>(null);
   const [backendLoading, setBackendLoading] = useState(false);
   const [hasBackendData, setHasBackendData] = useState(false);
+  const [usingDemoData, setUsingDemoData] = useState(false);
 
   // Use precise location-based fuel prices (auto-synced with GPS)
   const stationCity = currentStation?.location || "Nairobi";
@@ -154,15 +157,42 @@ export default function Dashboard() {
     return () => clearInterval(timer);
   }, []);
 
-  // Animate KPI values on mount - use backend data if available
+  // Animate KPI values on mount - use backend data if available, then local, then demo
   useEffect(() => {
-    // Prefer backend stats over local calculation
-    const targets = {
-      revenue: hasBackendData && backendStats ? backendStats.totalRevenue : totalRevenue,
-      profit: hasBackendData && backendStats ? backendStats.netProfit : netProfit,
-      fuelSold: hasBackendData && backendStats ? backendStats.fuelSold : totalFuelSold,
-      debt: hasBackendData && backendStats ? backendStats.balanceDue : totalDebt,
+    // Prefer backend stats over local calculation, then demo data
+    let targets = {
+      revenue: 0,
+      profit: 0,
+      fuelSold: 0,
+      debt: 0,
     };
+    
+    if (hasBackendData && backendStats) {
+      targets = {
+        revenue: backendStats.totalRevenue,
+        profit: backendStats.netProfit,
+        fuelSold: backendStats.fuelSold,
+        debt: backendStats.balanceDue,
+      };
+    } else if (totalRevenue > 0 || totalFuelSold > 0) {
+      targets = {
+        revenue: totalRevenue,
+        profit: netProfit,
+        fuelSold: totalFuelSold,
+        debt: totalDebt,
+      };
+    } else {
+      // Use demo data
+      const demoKPIs = getDemoKPIs();
+      targets = {
+        revenue: demoKPIs.totalRevenue,
+        profit: demoKPIs.netProfit,
+        fuelSold: demoKPIs.fuelSold,
+        debt: demoKPIs.balanceDue,
+      };
+      setUsingDemoData(true);
+    }
+    
     const duration = 1000;
     const steps = 30;
     const interval = duration / steps;
@@ -507,6 +537,30 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-3">
+      {/* Demo Data Banner */}
+      {usingDemoData && (
+        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 flex items-start gap-3">
+          <Info size={20} className="text-blue-500 flex-shrink-0 mt-0.5" />
+          <div>
+            <h3 className="text-sm font-semibold text-blue-700 dark:text-blue-300">
+              Welcome to FuelPro! 🎉
+            </h3>
+            <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+              You're seeing demo data to help you explore the app. Start adding stations and sales to see your real data here.
+            </p>
+            <button
+              onClick={() => {
+                setUsingDemoData(false);
+                window.dispatchEvent(new CustomEvent("changeTab", { detail: "pos" }));
+              }}
+              className="mt-2 text-xs px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors"
+            >
+              Start with Point of Sale →
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
