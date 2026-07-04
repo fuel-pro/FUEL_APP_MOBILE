@@ -6,10 +6,16 @@ const jwt = require('jsonwebtoken');
 const jose = require('jose');
 const User = require('../models/User');
 
-// Clerk configuration - use env vars or fallback to provided credentials
-const CLERK_FRONTEND_API = process.env.CLERK_FRONTEND_API || 'https://immense-mullet-70.clerk.accounts.dev';
+// Clerk configuration - MUST be set via environment variables
+const CLERK_FRONTEND_API = process.env.CLERK_FRONTEND_API;
 const CLERK_API_KEY = process.env.CLERK_SECRET_KEY;
-const CLERK_JWKS_URL = `${CLERK_FRONTEND_API}/.well-known/jwks.json`;
+
+// Validate Clerk configuration on load
+if (!CLERK_FRONTEND_API) {
+  console.warn('⚠️ CLERK_FRONTEND_API not set. Clerk authentication will be disabled.');
+}
+
+const CLERK_JWKS_URL = CLERK_FRONTEND_API ? `${CLERK_FRONTEND_API}/.well-known/jwks.json` : null;
 
 // Cache for JWKS
 let jwksCache = null;
@@ -20,6 +26,10 @@ const JWKS_CACHE_TTL = 3600000; // 1 hour
  * Fetch and cache JWKS from Clerk
  */
 async function getJWKS() {
+  if (!CLERK_JWKS_URL) {
+    throw new Error('Clerk is not configured');
+  }
+
   const now = Date.now();
   if (jwksCache && now < jwksCacheExpiry) {
     return jwksCache;
@@ -48,15 +58,13 @@ async function getJWKS() {
 async function verifyClerkToken(token) {
   try {
     const jwks = await getJWKS();
-    
-    // Use jose library for JWKS verification
     const JWKS = jose.createLocalJWKSet(jwks);
-    
+
     const { payload } = await jose.jwtVerify(token, JWKS, {
       issuer: CLERK_FRONTEND_API,
       audience: process.env.CLERK_PUBLISHABLE_KEY || 'any',
     });
-    
+
     return payload;
   } catch (error) {
     console.error('Clerk token verification failed:', error.message);
@@ -68,30 +76,23 @@ async function verifyClerkToken(token) {
  * Get or create app user from Clerk user
  */
 async function getOrCreateClerkUser(clerkUser) {
-  // Try to find by Clerk user ID first
   let user = User.findByEmail(clerkUser.email_addresses?.[0]?.email_address);
-  
+
   if (!user) {
-    // Create a new user linked to Clerk
     try {
+      const crypto = require('crypto');
       user = await User.create({
         email: clerkUser.email_addresses?.[0]?.email_address || `clerk_${clerkUser.id}@clerk.local`,
-        password: `clerk_${clerkUser.id}_placeholder`, // Random placeholder - user signs in via Clerk
+        password: `clerk_${clerkUser.id}_placeholder_${crypto.randomBytes(16).toString('hex')}`,
         name: clerkUser.first_name && clerkUser.last_name 
           ? `${clerkUser.first_name} ${clerkUser.last_name}`
           : clerkUser.first_name || clerkUser.username || 'Clerk User',
         role: 'user',
         permissions: ['read'],
-        clerkUserId: clerkUser.id, // Store Clerk user ID
+        clerkUserId: clerkUser.id,
         isActive: true,
       });
-      
-      // Update with Clerk metadata
-      await User.update(user.id, {
-        clerkUserId: clerkUser.id,
-        // Additional Clerk metadata can be stored
-      });
-      
+
       user = User.findById(user.id);
       console.log(`Created new Clerk user: ${user.email} (${user.id})`);
     } catch (error) {
@@ -99,19 +100,32 @@ async function getOrCreateClerkUser(clerkUser) {
       return null;
     }
   }
-  
+
   return user;
 }
 
 /**
+ * Detect if a token is a Clerk token by checking the issuer claim
+ */
+function detectClerkToken(token) {
+  try {
+    const decoded = jwt.decode(token, { complete: true });
+    if (!decoded || !decoded.payload) return false;
+
+    const iss = decoded.payload.iss;
+    return iss && (iss.includes('clerk') || iss.includes('clerk.accounts.dev'));
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Middleware: Protect route - verify Clerk JWT token
- * Supports both Clerk tokens and legacy JWT tokens for backward compatibility
  */
 const protect = async (req, res, next) => {
   let token;
   let authHeader = req.headers.authorization;
 
-  // Get token from Authorization header
   if (authHeader && authHeader.startsWith('Bearer ')) {
     token = authHeader.split(' ')[1];
   }
@@ -121,16 +135,13 @@ const protect = async (req, res, next) => {
   }
 
   try {
-    // Check if it's a Clerk token (starts with 'eyJ' - JWT format)
-    const isClerkToken = token.startsWith('eyJ') && token.split('.').length === 3;
-    
+    const isClerkToken = detectClerkToken(token);
+
     if (isClerkToken) {
-      // Try Clerk JWT verification
       console.log('Verifying Clerk JWT token...');
       const payload = await verifyClerkToken(token);
-      
+
       if (payload) {
-        // Get or create user from Clerk data
         const clerkUser = {
           id: payload.sub,
           email_addresses: [{ email_address: payload.email }],
@@ -139,34 +150,33 @@ const protect = async (req, res, next) => {
           username: payload.username,
           public_metadata: payload.public_metadata || {},
         };
-        
+
         const user = await getOrCreateClerkUser(clerkUser);
-        
+
         if (!user) {
           return res.status(401).json({ error: 'Failed to authenticate Clerk user' });
         }
-        
+
         if (!user.isActive) {
           return res.status(401).json({ error: 'Account is deactivated' });
         }
-        
-        // Attach user and mark as Clerk authenticated
+
         req.user = user;
         req.clerkAuth = true;
         req.clerkUserId = payload.sub;
         return next();
       }
     }
-    
+
     // Fallback: Try legacy JWT verification
-    const jwtSecret = process.env.JWT_SECRET || 
-      (process.env.NODE_ENV === 'production' ? null : 'fuelpro-secret-key');
+    const jwtSecret = process.env.JWT_SECRET;
     if (!jwtSecret) {
       return res.status(500).json({ error: 'Server misconfiguration: JWT_SECRET not set' });
     }
+
     const decoded = jwt.verify(token, jwtSecret);
     const user = User.findById(decoded.id);
-    
+
     if (!user) {
       return res.status(401).json({ error: 'User not found' });
     }
@@ -184,38 +194,28 @@ const protect = async (req, res, next) => {
   }
 };
 
-/**
- * Authorize specific roles
- */
 const authorize = (...roles) => {
   return (req, res, next) => {
     if (!req.user) {
       return res.status(401).json({ error: 'Not authenticated' });
     }
-
     if (!roles.includes(req.user.role)) {
       return res.status(403).json({ 
-        error: `Role '${req.user.role}' is not authorized to access this resource`,
+        error: `Role '${req.user.role}' is not authorized`,
         requiredRoles: roles
       });
     }
-
     next();
   };
 };
 
-/**
- * Check specific permission
- */
 const hasPermission = (...permissions) => {
   return (req, res, next) => {
     if (!req.user) {
       return res.status(401).json({ error: 'Not authenticated' });
     }
-
     const userPermissions = req.user.permissions || [];
     const hasAllPermissions = permissions.every(p => userPermissions.includes(p));
-
     if (!hasAllPermissions) {
       return res.status(403).json({ 
         error: 'Insufficient permissions',
@@ -223,14 +223,10 @@ const hasPermission = (...permissions) => {
         current: userPermissions
       });
     }
-
     next();
   };
 };
 
-/**
- * Optional auth - set user if token exists, but don't require it
- */
 const optionalAuth = async (req, res, next) => {
   let token;
   let authHeader = req.headers.authorization;
@@ -241,8 +237,7 @@ const optionalAuth = async (req, res, next) => {
 
   if (token) {
     try {
-      // Try Clerk token first
-      if (token.startsWith('eyJ') && token.split('.').length === 3) {
+      if (detectClerkToken(token)) {
         const payload = await verifyClerkToken(token);
         if (payload) {
           const clerkUser = {
@@ -259,10 +254,8 @@ const optionalAuth = async (req, res, next) => {
           return next();
         }
       }
-      
-      // Fallback to legacy JWT
-      const jwtSecret = process.env.JWT_SECRET || 
-        (process.env.NODE_ENV === 'production' ? null : 'fuelpro-secret-key');
+
+      const jwtSecret = process.env.JWT_SECRET;
       if (jwtSecret) {
         const decoded = jwt.verify(token, jwtSecret);
         const user = User.findById(decoded.id);
@@ -275,22 +268,20 @@ const optionalAuth = async (req, res, next) => {
       // Token invalid, continue without user
     }
   }
-
   next();
 };
 
 /**
- * Helper to generate a session token for Clerk users
- * (for hybrid mode where you want to issue your own JWT after Clerk auth)
+ * FAIL-SECURE: Throws if JWT_SECRET is not set - NEVER falls back to hardcoded secret
  */
 const generateAppToken = (userId) => {
   const jwtSecret = process.env.JWT_SECRET;
-  if (!jwtSecret && process.env.NODE_ENV === 'production') {
-    throw new Error('JWT_SECRET environment variable is required in production');
+  if (!jwtSecret) {
+    throw new Error('JWT_SECRET environment variable is required');
   }
   return jwt.sign(
     { id: userId },
-    jwtSecret || 'fuelpro-secret-key',
+    jwtSecret,
     { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
   );
 };
