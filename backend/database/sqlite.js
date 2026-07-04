@@ -18,10 +18,16 @@ const db = new Database(DB_PATH);
 // Enable WAL mode for better performance
 db.pragma('journal_mode = WAL');
 
+// FIX: Enable foreign key enforcement (was disabled by default)
+db.pragma('foreign_keys = ON');
+
+// FIX: Set automatic WAL checkpointing to prevent unbounded growth
+db.pragma('wal_autocheckpoint = 1000');
+
 // Initialize database schema
 function initializeDatabase() {
   console.log('📦 Initializing SQLite database...');
-  
+
   // Users table
   db.exec(`
     CREATE TABLE IF NOT EXISTS users (
@@ -43,7 +49,7 @@ function initializeDatabase() {
     )
   `);
 
-  // Add clerkUserId column if it doesn't exist (for existing databases)
+  // Add clerkUserId column if it doesn't exist
   try {
     db.exec(`ALTER TABLE users ADD COLUMN clerkUserId TEXT`);
   } catch (e) {
@@ -62,13 +68,14 @@ function initializeDatabase() {
       members TEXT DEFAULT '[]',
       settings TEXT DEFAULT '{}',
       stats TEXT DEFAULT '{}',
+      totalSales REAL DEFAULT 0,
       createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
       updatedAt TEXT DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (ownerId) REFERENCES users(id)
     )
   `);
 
-  // Add totalSales column to stations if it doesn't exist (FIX: creditStationSales needs this)
+  // Add totalSales column to stations if it doesn't exist
   try {
     db.exec(`ALTER TABLE stations ADD COLUMN totalSales REAL DEFAULT 0`);
   } catch (e) {
@@ -133,11 +140,7 @@ function initializeDatabase() {
     )
   `);
 
-  // Transactions table (M-PESA STK Push / B2C / manual payments).
-  // FIX: this table did not exist before, so every M-PESA callback query
-  // ("SELECT * FROM transactions ...") threw "no such table: transactions"
-  // and every real payment silently failed. Columns are snake_case to match
-  // the query helpers in routes/mpesaCallback.js (camelToSnake conversion).
+  // Transactions table (M-PESA STK Push / B2C / manual payments)
   db.exec(`
     CREATE TABLE IF NOT EXISTS transactions (
       id TEXT PRIMARY KEY,
@@ -161,11 +164,7 @@ function initializeDatabase() {
     )
   `);
 
-  // Generic persisted key/value store backing the Founder / cloud-sync admin
-  // API (routes/cloudSyncRoutes.js). FIX: this replaces an in-memory
-  // JS object that lost ALL data (including secrets, users, stations,
-  // feature flags) on every server restart or redeploy, and would not even
-  // be shared across concurrent serverless function instances.
+  // Generic persisted key/value store
   db.exec(`
     CREATE TABLE IF NOT EXISTS cloud_records (
       collection TEXT NOT NULL,
@@ -174,6 +173,15 @@ function initializeDatabase() {
       createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
       updatedAt TEXT DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY (collection, id)
+    )
+  `);
+
+  // FIX: Add user_data table (previously created dynamically in routes)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS user_data (
+      user_id TEXT PRIMARY KEY,
+      data TEXT,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
     )
   `);
 
@@ -190,15 +198,12 @@ function initializeDatabase() {
     CREATE INDEX IF NOT EXISTS idx_transactions_checkout ON transactions(checkout_request_id);
     CREATE INDEX IF NOT EXISTS idx_transactions_status ON transactions(status);
     CREATE INDEX IF NOT EXISTS idx_cloud_records_collection ON cloud_records(collection);
+    CREATE INDEX IF NOT EXISTS idx_sessions_refresh ON sessions(refreshToken);
   `);
 
   console.log('✅ SQLite database initialized');
 }
 
-// FIX: this accessor was imported by routes/mpesaCallback.js
-// ("const { getDb } = require('../database/sqlite')") but was never
-// exported, so calling getDb() threw "getDb is not a function" — meaning
-// the M-PESA callback crashed before it even reached the missing-table bug.
 function getDb() {
   return db;
 }
