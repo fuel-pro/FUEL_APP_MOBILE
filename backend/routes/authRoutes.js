@@ -309,4 +309,79 @@ function getDefaultPermissions(role) {
   }
 }
 
+// 6. FOUNDER LOGIN (FIXED: No hardcoded credentials - uses env vars)
+// Credentials stored in backend environment variables only
+router.post('/founder-login', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    const ip = req.ip || req.connection.remoteAddress;
+
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Username and password required' });
+    }
+
+    // FIXED: Use environment variables instead of hardcoded credentials
+    const FOUNDER_USER = process.env.FOUNDER_USER || process.env.FOUNDER_USERNAME;
+    const FOUNDER_PASS = process.env.FOUNDER_PASS || process.env.FOUNDER_PASSWORD;
+
+    if (!FOUNDER_USER || !FOUNDER_PASS) {
+      console.error('❌ FOUNDER_USER/FOUNDER_PASS not set in environment');
+      return res.status(500).json({ error: 'Founder login not configured' });
+    }
+
+    if (username !== FOUNDER_USER || password !== FOUNDER_PASS) {
+      await AuditLog.create({
+        action: 'FOUNDER_LOGIN_FAILED',
+        detail: `Failed founder login attempt for: ${username}`,
+        metadata: { ip }
+      });
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    // Generate JWT token for founder
+    const founderUser = User.findByEmail('founder@system.local') || 
+      await User.create({
+        email: 'founder@system.local',
+        password: crypto.randomBytes(32).toString('hex'),
+        name: 'Founder',
+        role: 'founder',
+        permissions: getDefaultPermissions('founder')
+      });
+
+    const token = jwt.sign(
+      { id: founderUser.id, role: 'founder' },
+      process.env.JWT_SECRET,
+      { expiresIn: '8h' } // 8 hour session
+    );
+
+    await AuditLog.create({
+      action: 'FOUNDER_LOGIN_SUCCESS',
+      detail: 'Founder logged in successfully',
+      userId: founderUser.id,
+      metadata: { ip }
+    });
+
+    res.json({
+      success: true,
+      token,
+      user: { id: founderUser.id, role: 'founder', email: founderUser.email }
+    });
+  } catch (error) {
+    console.error('Founder login error:', error);
+    res.status(500).json({ error: 'Login failed' });
+  }
+});
+
+// 7. VERIFY FOUNDER TOKEN (FIXED)
+router.get('/verify-founder', protect, async (req, res) => {
+  try {
+    if (req.user.role !== 'founder') {
+      return res.status(403).json({ valid: false, error: 'Not a founder' });
+    }
+    res.json({ valid: true, role: 'founder' });
+  } catch (error) {
+    res.status(500).json({ valid: false, error: error.message });
+  }
+});
+
 module.exports = router;
