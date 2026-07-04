@@ -159,7 +159,12 @@ const protect = async (req, res, next) => {
     }
     
     // Fallback: Try legacy JWT verification
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fuelpro-secret-key');
+    const jwtSecret = process.env.JWT_SECRET || 
+      (process.env.NODE_ENV === 'production' ? null : 'fuelpro-secret-key');
+    if (!jwtSecret) {
+      return res.status(500).json({ error: 'Server misconfiguration: JWT_SECRET not set' });
+    }
+    const decoded = jwt.verify(token, jwtSecret);
     const user = User.findById(decoded.id);
     
     if (!user) {
@@ -256,11 +261,15 @@ const optionalAuth = async (req, res, next) => {
       }
       
       // Fallback to legacy JWT
-      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fuelpro-secret-key');
-      const user = User.findById(decoded.id);
-      if (user && user.isActive) {
-        req.user = user;
-        req.clerkAuth = false;
+      const jwtSecret = process.env.JWT_SECRET || 
+        (process.env.NODE_ENV === 'production' ? null : 'fuelpro-secret-key');
+      if (jwtSecret) {
+        const decoded = jwt.verify(token, jwtSecret);
+        const user = User.findById(decoded.id);
+        if (user && user.isActive) {
+          req.user = user;
+          req.clerkAuth = false;
+        }
       }
     } catch (error) {
       // Token invalid, continue without user
@@ -275,9 +284,13 @@ const optionalAuth = async (req, res, next) => {
  * (for hybrid mode where you want to issue your own JWT after Clerk auth)
  */
 const generateAppToken = (userId) => {
+  const jwtSecret = process.env.JWT_SECRET;
+  if (!jwtSecret && process.env.NODE_ENV === 'production') {
+    throw new Error('JWT_SECRET environment variable is required in production');
+  }
   return jwt.sign(
     { id: userId },
-    process.env.JWT_SECRET || 'fuelpro-secret-key',
+    jwtSecret || 'fuelpro-secret-key',
     { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
   );
 };

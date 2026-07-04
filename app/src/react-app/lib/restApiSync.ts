@@ -21,7 +21,32 @@ import { createClient } from "@supabase/supabase-js";
 // Railway backend URL - the root endpoint works, we'll use it to check connectivity
 const API_URL = import.meta.env.VITE_API_URL || "https://fuel-pro-backend-v2-production-7c2b.up.railway.app";
 
-const API_KEY = import.meta.env.VITE_API_KEY || "fuelpro-api-key-2026";
+// Get auth token from founder session
+function getAuthToken(): string | null {
+  try {
+    // Try new token key from founder-auth.ts
+    const token = localStorage.getItem("fuelpro_auth_token");
+    if (token) return token;
+    
+    // Try founder session token (legacy format)
+    const sessionJson = localStorage.getItem("fuelpro_founder_session");
+    if (sessionJson) {
+      const session = JSON.parse(sessionJson);
+      if (session.active && session.token) {
+        // Check if session is still valid (8 hours)
+        if (session.loginTime && Date.now() - session.loginTime < 8 * 60 * 60 * 1000) {
+          return session.token;
+        }
+      }
+    }
+    
+    // Try legacy token
+    const legacyToken = localStorage.getItem("fuelpro_founder_token");
+    return legacyToken || null;
+  } catch {
+    return null;
+  }
+}
 
 // ═══════════════════════════════════════════════════
 // REST API CLIENT
@@ -43,8 +68,10 @@ async function apiRequest<T>(
       "Content-Type": "application/json",
     };
     
-    if (API_KEY) {
-      headers["Authorization"] = `Bearer ${API_KEY}`;
+    // Use real JWT auth token instead of static API key
+    const authToken = getAuthToken();
+    if (authToken) {
+      headers["Authorization"] = `Bearer ${authToken}`;
     }
     
     const response = await fetch(`${API_URL}${path}`, {
