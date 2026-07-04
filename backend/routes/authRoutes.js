@@ -4,27 +4,47 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const User = require('../models/User');
 const AuditLog = require('../models/AuditLog');
+const { getDb } = require('../database/sqlite');
 const { protect } = require('../middleware/auth');
 const clerkAuth = require('../middleware/clerkAuth');
 
 // Generate JWT Token
 const generateToken = (userId) => {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) throw new Error('JWT_SECRET is not set');
   return jwt.sign(
     { id: userId },
-    process.env.JWT_SECRET,
+    secret,
     { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
   );
 };
 
-// Generate refresh token (long-lived, stored in DB)
 const generateRefreshToken = () => {
   return crypto.randomBytes(64).toString('hex');
 };
 
-// Device tracking for cross-device login
-const activeSessions = new Map(); // userId -> { deviceId, lastActive, sessionId }
+// Session tracking with cleanup
+const activeSessions = new Map();
+const SESSION_TIMEOUT = 24 * 60 * 60 * 1000; // 24 hours
+const MAX_SESSIONS = 10000;
+
+function cleanupSessions() {
+  const now = Date.now();
+  for (const [userId, session] of activeSessions.entries()) {
+    if (now - session.lastActive > SESSION_TIMEOUT) {
+      activeSessions.delete(userId);
+    }
+  }
+}
+
+// Run cleanup every hour
+setInterval(cleanupSessions, 60 * 60 * 1000);
 
 const trackSession = (userId, deviceId, sessionId) => {
+  if (activeSessions.size >= MAX_SESSIONS) {
+    const oldestKey = activeSessions.keys().next().value;
+    activeSessions.delete(oldestKey);
+  }
   activeSessions.set(userId, {
     deviceId,
     sessionId,
@@ -45,32 +65,35 @@ const getActiveSession = (userId) => {
   return activeSessions.get(userId) || null;
 };
 
+// Email validation regex
+const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 // 1. REGISTER new user
 router.post('/register', async (req, res) => {
   try {
     const { email, password, name, role } = req.body;
 
-    // Validation
     if (!email || !password || !name) {
       return res.status(400).json({ error: 'Email, password, and name are required' });
+    }
+
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ error: 'Invalid email format' });
     }
 
     if (password.length < 8) {
       return res.status(400).json({ error: 'Password must be at least 8 characters' });
     }
 
-    // Check if user exists
     const existingUser = User.findByEmail(email);
     if (existingUser) {
       return res.status(400).json({ error: 'User already exists with this email' });
     }
 
-    // Check if this is the first user - make them founder
     const allUsers = User.findAll ? User.findAll() : [];
     const isFirstUser = allUsers.length === 0;
     const assignedRole = isFirstUser ? 'founder' : (role || 'user');
 
-    // Create user
     const user = await User.create({
       email: email.toLowerCase(),
       password,
@@ -79,7 +102,6 @@ router.post('/register', async (req, res) => {
       permissions: getDefaultPermissions(assignedRole)
     });
 
-    // Generate token
     const token = generateToken(user.id);
 
     res.status(201).json({
@@ -101,14 +123,12 @@ router.post('/login', async (req, res) => {
     const ip = req.ip || req.connection.remoteAddress;
     const userAgent = req.headers['user-agent'] || 'Unknown';
 
-    // Validation
     if (!email || !password) {
       return res.status(400).json({ error: 'Email and password are required' });
     }
 
-    // Find user
     const user = User.findByEmail(email);
-    
+
     if (!user) {
       await AuditLog.create({
         action: 'LOGIN_FAILED',
@@ -130,7 +150,7 @@ router.post('/login', async (req, res) => {
     }
 
     const isMatch = await User.comparePassword(user, password);
-    
+
     if (!isMatch) {
       await AuditLog.create({
         action: 'LOGIN_FAILED',
@@ -141,7 +161,6 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    // Update last login
     const loginHistory = [...(user.loginHistory || [])];
     loginHistory.unshift({
       timestamp: new Date().toISOString(),
@@ -150,8 +169,8 @@ router.post('/login', async (req, res) => {
       deviceId,
       success: true
     });
-    const trimmedHistory = loginHistory.slice(0, 20); // Keep more login records
-    
+    const trimmedHistory = loginHistory.slice(0, 20);
+
     await User.update(user.id, {
       lastLoginAt: new Date().toISOString(),
       lastLoginIp: ip,
@@ -166,15 +185,20 @@ router.post('/login', async (req, res) => {
       metadata: { ip, userAgent, deviceId }
     });
 
-    // Generate tokens
     const token = generateToken(user.id);
     const refreshToken = generateRefreshToken();
     const sessionId = `sess_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
-    // Track session for cross-device support
+    // Store refresh token in database
+    const db = getDb();
+    db.prepare(`
+      INSERT INTO sessions (id, userId, refreshToken, expiresAt)
+      VALUES (?, ?, ?, ?)
+    `).run(sessionId, user.id, refreshToken, expiresAt);
+
     trackSession(user.id, deviceId || 'unknown', sessionId);
 
-    // Fetch updated user
     const updatedUser = User.findById(user.id);
 
     res.json({
@@ -192,30 +216,48 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// 2b. REFRESH TOKEN
+// FIX: REFRESH TOKEN - Proper implementation with DB verification
 router.post('/refresh', async (req, res) => {
   try {
     const { refreshToken } = req.body;
-    
+
     if (!refreshToken) {
       return res.status(400).json({ error: 'Refresh token required' });
     }
 
-    // In production, verify refresh token from DB
-    // For now, just issue a new access token
-    const userId = req.user?.id;
-    if (!userId) {
-      return res.status(401).json({ error: 'Invalid session' });
+    // Verify refresh token from database
+    const db = getDb();
+    const session = db.prepare(`
+      SELECT * FROM sessions 
+      WHERE refreshToken = ? AND expiresAt > datetime('now')
+    `).get(refreshToken);
+
+    if (!session) {
+      return res.status(401).json({ error: 'Invalid or expired refresh token' });
     }
 
-    const newToken = generateToken(userId);
+    // Get user
+    const user = User.findById(session.userId);
+    if (!user || !user.isActive) {
+      return res.status(401).json({ error: 'User not found or deactivated' });
+    }
+
+    // Generate new tokens
+    const newToken = generateToken(user.id);
     const newRefreshToken = generateRefreshToken();
+    const newExpiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+
+    // Update session in database
+    db.prepare(`
+      UPDATE sessions SET refreshToken = ?, expiresAt = ? WHERE id = ?
+    `).run(newRefreshToken, newExpiry, session.id);
 
     res.json({
       token: newToken,
       refreshToken: newRefreshToken
     });
   } catch (error) {
+    console.error('Refresh token error:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -225,7 +267,7 @@ router.get('/session', clerkAuth.protect, async (req, res) => {
   try {
     const userId = req.user.id;
     const user = User.findById(userId);
-    
+
     res.json({
       session: getActiveSession(userId),
       user: user?.toJSON(),
@@ -261,7 +303,7 @@ router.put('/password', clerkAuth.protect, async (req, res) => {
     }
 
     const user = User.findById(req.user.id);
-    
+
     const isMatch = await User.comparePassword(user, currentPassword);
     if (!isMatch) {
       return res.status(401).json({ error: 'Current password is incorrect' });
@@ -283,7 +325,7 @@ router.put('/password', clerkAuth.protect, async (req, res) => {
   }
 });
 
-// 5. LOGOUT (client-side token removal, but we can log it)
+// 5. LOGOUT
 router.post('/logout', clerkAuth.protect, async (req, res) => {
   try {
     await AuditLog.create({
@@ -299,7 +341,6 @@ router.post('/logout', clerkAuth.protect, async (req, res) => {
   }
 });
 
-// Helper function to get default permissions based on role
 function getDefaultPermissions(role) {
   switch (role) {
     case 'founder':
@@ -315,7 +356,7 @@ function getDefaultPermissions(role) {
   }
 }
 
-// FOUNDER LOGIN (requires FOUNDER_USER and FOUNDER_PASS env vars)
+// FOUNDER LOGIN
 router.post('/founder-login', async (req, res) => {
   try {
     const { username, password } = req.body;
@@ -325,7 +366,6 @@ router.post('/founder-login', async (req, res) => {
       return res.status(400).json({ error: 'Username and password required' });
     }
 
-    // Get credentials from environment variables
     const FOUNDER_USER = process.env.FOUNDER_USER;
     const FOUNDER_PASS = process.env.FOUNDER_PASS;
 
@@ -343,7 +383,6 @@ router.post('/founder-login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    // Find or create founder user
     let founderUser = User.findByEmail('founder@system.local');
     if (!founderUser) {
       founderUser = await User.create({
@@ -387,12 +426,11 @@ router.get('/verify-founder', protect, async (req, res) => {
   }
 });
 
-// 12. SETUP - Create initial founder user (no auth required, only works when no users exist)
+// SETUP - Create initial founder user
 router.post('/setup', async (req, res) => {
   try {
     const { email, password, name } = req.body;
 
-    // Check if users exist
     const existingUsers = User.findAll();
     if (existingUsers.length > 0) {
       return res.status(403).json({ 
@@ -401,16 +439,18 @@ router.post('/setup', async (req, res) => {
       });
     }
 
-    // Validation
     if (!email || !password || !name) {
       return res.status(400).json({ error: 'Email, password, and name are required' });
+    }
+
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ error: 'Invalid email format' });
     }
 
     if (password.length < 8) {
       return res.status(400).json({ error: 'Password must be at least 8 characters' });
     }
 
-    // Create founder user
     const user = await User.create({
       email: email.toLowerCase(),
       password,
@@ -435,7 +475,7 @@ router.post('/setup', async (req, res) => {
   }
 });
 
-// 13. STATUS - Check if setup is needed
+// STATUS - Check if setup is needed
 router.get('/status', async (req, res) => {
   try {
     const users = User.findAll();
