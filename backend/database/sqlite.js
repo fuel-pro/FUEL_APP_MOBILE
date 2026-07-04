@@ -126,6 +126,42 @@ function initializeDatabase() {
     )
   `);
 
+  // M-Pesa transactions table (required for payment processing)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS mpesa_transactions (
+      id TEXT PRIMARY KEY,
+      userId TEXT NOT NULL,
+      stationId TEXT,
+      checkoutRequestId TEXT UNIQUE NOT NULL,
+      phoneNumber TEXT NOT NULL,
+      amount REAL NOT NULL,
+      status TEXT DEFAULT 'PENDING',
+      mpesaReceipt TEXT,
+      paymentPhone TEXT,
+      paymentDate TEXT,
+      failureReason TEXT,
+      paidAt TEXT,
+      failedAt TEXT,
+      createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+      updatedAt TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (userId) REFERENCES users(id),
+      FOREIGN KEY (stationId) REFERENCES stations(id)
+    )
+  `);
+
+  // Cloud data table for synced settings (persisted across restarts)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS cloud_data (
+      id TEXT PRIMARY KEY,
+      collection TEXT NOT NULL,
+      data TEXT NOT NULL,
+      createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+      updatedAt TEXT DEFAULT CURRENT_TIMESTAMP,
+      updatedBy TEXT,
+      UNIQUE(collection, id)
+    )
+  `);
+
   // Create indexes
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
@@ -136,6 +172,10 @@ function initializeDatabase() {
     CREATE INDEX IF NOT EXISTS idx_content_key ON content(key);
     CREATE INDEX IF NOT EXISTS idx_audit_logs_userId ON audit_logs(userId);
     CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON audit_logs(timestamp);
+    CREATE INDEX IF NOT EXISTS idx_mpesa_checkoutRequestId ON mpesa_transactions(checkoutRequestId);
+    CREATE INDEX IF NOT EXISTS idx_mpesa_status ON mpesa_transactions(status);
+    CREATE INDEX IF NOT EXISTS idx_mpesa_userId ON mpesa_transactions(userId);
+    CREATE INDEX IF NOT EXISTS idx_cloud_data_collection ON cloud_data(collection);
   `);
 
   console.log('✅ SQLite database initialized');

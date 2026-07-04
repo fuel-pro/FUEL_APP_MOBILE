@@ -11,7 +11,7 @@ const clerkAuth = require('../middleware/clerkAuth');
 const generateToken = (userId) => {
   return jwt.sign(
     { id: userId },
-    process.env.JWT_SECRET || 'fuelpro-secret-key',
+    process.env.JWT_SECRET,
     { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
   );
 };
@@ -308,5 +308,77 @@ function getDefaultPermissions(role) {
       return ['read'];
   }
 }
+
+// FOUNDER LOGIN (requires FOUNDER_USER and FOUNDER_PASS env vars)
+router.post('/founder-login', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    const ip = req.ip || req.connection.remoteAddress;
+
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Username and password required' });
+    }
+
+    // Get credentials from environment variables
+    const FOUNDER_USER = process.env.FOUNDER_USER;
+    const FOUNDER_PASS = process.env.FOUNDER_PASS;
+
+    if (!FOUNDER_USER || !FOUNDER_PASS) {
+      console.error('❌ FOUNDER_USER/FOUNDER_PASS not set');
+      return res.status(500).json({ error: 'Founder login not configured' });
+    }
+
+    if (username !== FOUNDER_USER || password !== FOUNDER_PASS) {
+      await AuditLog.create({
+        action: 'FOUNDER_LOGIN_FAILED',
+        detail: `Failed founder login for: ${username}`,
+        metadata: { ip }
+      });
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    // Find or create founder user
+    let founderUser = User.findByEmail('founder@system.local');
+    if (!founderUser) {
+      founderUser = await User.create({
+        email: 'founder@system.local',
+        password: crypto.randomBytes(32).toString('hex'),
+        name: 'Founder',
+        role: 'founder',
+        permissions: getDefaultPermissions('founder')
+      });
+    }
+
+    const token = generateToken(founderUser.id);
+
+    await AuditLog.create({
+      action: 'FOUNDER_LOGIN_SUCCESS',
+      detail: 'Founder logged in',
+      userId: founderUser.id,
+      metadata: { ip }
+    });
+
+    res.json({
+      success: true,
+      token,
+      user: { id: founderUser.id, role: 'founder', email: founderUser.email }
+    });
+  } catch (error) {
+    console.error('Founder login error:', error);
+    res.status(500).json({ error: 'Login failed' });
+  }
+});
+
+// VERIFY FOUNDER TOKEN
+router.get('/verify-founder', protect, async (req, res) => {
+  try {
+    if (req.user.role !== 'founder') {
+      return res.status(403).json({ valid: false, error: 'Not a founder' });
+    }
+    res.json({ valid: true, role: 'founder' });
+  } catch (error) {
+    res.status(500).json({ valid: false, error: error.message });
+  }
+});
 
 module.exports = router;

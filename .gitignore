@@ -40,3 +40,14 @@ npm-debug.log*
 backend/render.yaml
 .vercel
 .env*
+
+# Database files
+*.db
+*.db-wal
+*.db-shm
+
+# Build artifacts
+*.apk
+*.exe
+*.zip
+app/build-exe/

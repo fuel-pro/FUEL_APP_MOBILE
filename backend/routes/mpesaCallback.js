@@ -13,8 +13,9 @@ router.post('/callback', async (req, res) => {
   try {
     console.log('📱 M-PESA Callback received:', JSON.stringify(req.body, null, 2));
 
-    const { Body } = req.body;
-    const { stkCallback } = Body;
+    // Safe destructuring with fallbacks
+    const Body = req.body?.Body;
+    const stkCallback = Body?.stkCallback;
 
     if (!stkCallback) {
       console.log('❌ Invalid M-PESA callback - no stkCallback');
@@ -201,8 +202,8 @@ async function findPendingTransaction(checkoutRequestID) {
   
   try {
     const transaction = db.prepare(`
-      SELECT * FROM transactions 
-      WHERE checkout_request_id = ? AND status = 'PENDING'
+      SELECT * FROM mpesa_transactions 
+      WHERE checkoutRequestId = ? AND status = 'PENDING'
     `).get(checkoutRequestID);
     
     return transaction;
@@ -220,8 +221,8 @@ async function updateTransaction(id, updates) {
   const values = Object.values(updates);
   
   db.prepare(`
-    UPDATE transactions 
-    SET ${fields}, updated_at = ?
+    UPDATE mpesa_transactions 
+    SET ${fields}, updatedAt = ?
     WHERE id = ?
   `).run(...values, new Date().toISOString(), id);
 }
@@ -232,7 +233,7 @@ async function creditStationSales(stationId, amount) {
   
   db.prepare(`
     UPDATE stations 
-    SET total_sales = total_sales + ?, updated_at = ?
+    SET total_sales = total_sales + ?, updatedAt = ?
     WHERE id = ?
   `).run(amount, new Date().toISOString(), stationId);
 }

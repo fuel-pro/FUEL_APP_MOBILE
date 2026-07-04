@@ -1,75 +1,80 @@
 /**
- * Founder Authentication — secure credential management.
- * Credentials are configurable via environment/localStorage,
- * NOT hardcoded in source code.
+ * Founder Authentication
+ * FIXED: All authentication done via backend JWT tokens
+ * No hardcoded credentials in source code
  */
 
-const DEFAULT_CREDS = {
-  username: "FOUNDER",
-  password: "fuelpro2026",
-};
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+const TOKEN_KEY = 'fuelpro_founder_token';
 
-const STORAGE_KEY = "fuelpro_founder_creds";
-const SESSION_KEY = "fuelpro_founder_session";
-
-/** Get current credentials (configurable, not hardcoded) */
-export function getFounderCredentials(): {
-  username: string;
-  password: string;
-} {
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) return JSON.parse(saved);
-  } catch {
-    /* */
-  }
-  return DEFAULT_CREDS;
-}
-
-/** Update founder credentials */
-export function setFounderCredentials(
+/** Login via backend - returns JWT token */
+export async function founderLogin(
   username: string,
   password: string
-): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify({ username, password }));
-}
-
-/** Check if credentials match */
-export function validateFounderAuth(
-  inputUser: string,
-  inputPw: string
-): boolean {
-  const creds = getFounderCredentials();
-  return inputUser.toLowerCase() === creds.username.toLowerCase() && inputPw === creds.password;
-}
-
-/** Check active founder session */
-export function hasFounderSession(): boolean {
+): Promise<{ success: boolean; token?: string; error?: string }> {
   try {
-    const s = localStorage.getItem(SESSION_KEY);
-    if (!s) return false;
-    const { loginTime } = JSON.parse(s);
-    // Session valid for 8 hours
-    return Date.now() - loginTime < 8 * 60 * 60 * 1000;
+    const response = await fetch(`${API_URL}/api/auth/founder-login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
+
+    const data = await response.json();
+
+    if (data.success && data.token) {
+      localStorage.setItem(TOKEN_KEY, data.token);
+      return { success: true, token: data.token };
+    }
+
+    return { success: false, error: data.error || 'Login failed' };
+  } catch (error) {
+    console.error('Founder login error:', error);
+    return { success: false, error: 'Network error' };
+  }
+}
+
+/** Get stored JWT token */
+export function getFounderToken(): string | null {
+  return localStorage.getItem(TOKEN_KEY);
+}
+
+/** Verify token with backend */
+export async function verifyFounderToken(): Promise<boolean> {
+  const token = getFounderToken();
+  if (!token) return false;
+
+  try {
+    const response = await fetch(`${API_URL}/api/auth/verify-founder`, {
+      headers: { 
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      localStorage.removeItem(TOKEN_KEY);
+      return false;
+    }
+
+    const data = await response.json();
+    return data.valid === true;
   } catch {
     return false;
   }
 }
 
-/** Start founder session */
-export function startFounderSession(): void {
-  localStorage.setItem(
-    SESSION_KEY,
-    JSON.stringify({ loginTime: Date.now(), active: true })
-  );
+/** Get auth header for API calls */
+export function getFounderAuthHeader(): Record<string, string> {
+  const token = getFounderToken();
+  return token ? { 'Authorization': `Bearer ${token}` } : {};
 }
 
 /** End founder session */
 export function endFounderSession(): void {
-  localStorage.removeItem(SESSION_KEY);
+  localStorage.removeItem(TOKEN_KEY);
 }
 
-/** Reset credentials to default (emergency recovery) */
-export function resetFounderCredentials(): void {
-  localStorage.removeItem(STORAGE_KEY);
+/** Check if logged in (local check only) */
+export function isLoggedIn(): boolean {
+  return !!getFounderToken();
 }

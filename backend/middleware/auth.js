@@ -25,7 +25,7 @@ const protect = async (req, res, next) => {
     }
     
     // Legacy JWT verification
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fuelpro-secret-key');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
     
     // Get user from token (synchronous for SQLite)
     const user = User.findById(decoded.id);
@@ -103,7 +103,7 @@ const optionalAuth = async (req, res, next) => {
         return clerkAuth.optionalAuth(req, res, next);
       }
       
-      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fuelpro-secret-key');
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
       const user = User.findById(decoded.id);
       if (user && user.isActive) {
         req.user = user;
