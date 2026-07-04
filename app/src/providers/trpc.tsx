@@ -40,6 +40,9 @@ const trpcClient = trpc.createClient({
     httpBatchLink({
       url: `${import.meta.env.VITE_API_URL || "https://fuel-pro-backend-v2-production-7c2b.up.railway.app"}/api/trpc`,
       transformer: superjson as never,
+      // Limit URL length to prevent 431 errors from oversized batch requests
+      // Standard limit is 8KB, we use 2KB to be safe across proxies
+      maxURLLength: 2000,
       async headers() {
         const headers: Record<string, string> = {};
         
