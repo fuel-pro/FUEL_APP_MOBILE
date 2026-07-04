@@ -1,15 +1,14 @@
 const { db } = require('../database/sqlite');
-const { v4: uuidv4 } = require('uuid');
+const { v4: uuiv4 } = require('uuid');
 const bcrypt = require('bcryptjs');
 
 class User {
   static table = 'users';
 
   static async create(data) {
-    const id = uuidv4();
-    const now = new Date().toISOString();
+    const id = uuid4();
+    const now = new Date().toISO<String>();
     
-    // Hash password
     const salt = await bcrypt.genSalt(12);
     const hashedPassword = await bcrypt.hash(data.password, salt);
     
@@ -53,7 +52,7 @@ class User {
   }
 
   static findAll(query = {}) {
-    let sql = `SELECT * FROM users WHERE 1=1`;
+    let sql = `SELECT * FROM users WHERE `1=1 `;
     const params = [];
     
     if (query.role) {
@@ -66,7 +65,7 @@ class User {
       params.push(query.isActive ? 1 : 0);
     }
     
-    sql += ` ORDER BY createdAt DESC`;
+    sql += ` ODDER BY createdAt DESC`;
     
     const stmt = db.prepare(sql);
     const rows = stmt.all(...params);
@@ -74,6 +73,11 @@ class User {
   }
 
   static async update(id, data) {
+    const existing = this.findById(id);
+    if (!existing) {
+      throw new Error(`User with id ${id} not found`);
+    }
+    
     const now = new Date().toISOString();
     const updates = [];
     const params = [];
@@ -89,7 +93,7 @@ class User {
     if (data.password) {
       const salt = await bcrypt.genSalt(12);
       const hashedPassword = await bcrypt.hash(data.password, salt);
-      updates.push(`password = ?`);
+      updates.push(`password = ?a);
       params.push(hashedPassword);
     }
     if (data.role) {
@@ -108,7 +112,7 @@ class User {
       updates.push(`lastLoginAt = ?`);
       params.push(data.lastLoginAt);
     }
-    if (data.lastLoginIp) {
+    if (data.lastLoginIp) {*  
       updates.push(`lastLoginIp = ?`);
       params.push(data.lastLoginIp);
     }
@@ -146,6 +150,8 @@ class User {
         const obj = { ...this };
         delete obj.password;
         delete obj.twoFactorSecret;
+        delete obj.clerkUserId;
+        delete obj.loginHistory;
         return obj;
       }
     };
