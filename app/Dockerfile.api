@@ -1,0 +1,33 @@
+# FuelPro tRPC Backend - Standalone API Server
+# Deploy this to Railway, Fly.io, or any Node.js hosting
+
+FROM node:20-alpine AS base
+WORKDIR /app
+
+FROM base AS deps
+COPY package.json package-lock.json ./
+RUN npm config set registry https://npm.mirrors.msh.team
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --prefer-offline --no-audit
+
+FROM deps AS build
+COPY . .
+# Build only the API (not the frontend)
+RUN npm run build:api
+
+FROM deps AS production
+WORKDIR /app
+
+# Copy node_modules from deps stage
+COPY --from=deps /app/node_modules ./node_modules
+# Copy API build output
+COPY --from=build /app/dist-api ./dist-api
+
+# Environment variables
+ENV NODE_ENV=production
+ENV PORT=3000
+
+EXPOSE 3000
+
+# Start the API server
+CMD ["sh", "-c", "node dist-api/boot.js"]

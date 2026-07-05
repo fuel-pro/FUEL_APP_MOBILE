@@ -1,0 +1,37 @@
+# FuelPro tRPC Backend - Railway Deployment Configuration
+#
+# This deploys the Hono + tRPC backend from the app/api directory
+
+database = "postgresql"
+releaseBranch = "main"
+
+[deploy]
+region = "us-east-1"
+runtime = "nodejs20"
+healthcheckPath = "/"
+
+[build]
+command = "cd app && npm install && npm run build:api"
+builder = "nixpacks"
+
+[start]
+command = "cd app && npm run start:api"
+
+[environment]
+NODE_ENV = "production"
+PORT = "3000"
+
+# Required environment variables (set in Railway dashboard)
+# - DATABASE_URL: PostgreSQL connection string
+# - JWT_SECRET: Secret for JWT signing
+# - APP_ID: Application ID
+# - APP_SECRET: Application secret
+# - KIMI_AUTH_URL: Kimi auth endpoint
+# - KIMI_OPEN_URL: Kimi open endpoint
+# - CLERK_SECRET_KEY: Clerk backend secret (optional)
+# - CLERK_PUBLISHABLE_KEY: Clerk frontend key (optional)
+# - MPESA_CONSUMER_KEY: M-PESA Daraja API key (optional)
+# - MPESA_CONSUMER_SECRET: M-PESA Daraja API secret (optional)
+# - MPESA_SHORTCODE: M-PESA business shortcode (optional)
+# - MPESA_PASSKEY: M-PESA passkey (optional)
+# - MPESA_CALLBACK_URL: M-PESA callback URL (optional)

@@ -4,24 +4,37 @@
  * Provides centralized API URL management for different deployment environments.
  * In Vercel/static deployments, uses relative URLs to proxy through Vercel
  * which handles CORS headers. In other environments, uses direct backend URL.
+ * 
+ * Priority:
+ * 1. VITE_API_URL (environment variable)
+ * 2. Fallback to Railway backend URL
  */
 
+// tRPC API Server (new backend with MySQL)
+const TRPC_API_URL = import.meta.env.VITE_API_URL || "https://fuel-pro-tprc-api.up.railway.app";
+
+// Legacy REST API Server (old Express backend)
 const BACKEND_URL = "https://fuel-pro-backend-v2-production-7c2b.up.railway.app";
+
+// Detect if we're in a Vercel deployment
+function isVercelDeployment(): boolean {
+  if (typeof window === "undefined") return false;
+  const host = window.location.hostname;
+  return (
+    host.includes("vercel.app") ||
+    host.includes("netlify.app") ||
+    host.includes("github.io")
+  );
+}
 
 export function getApiUrl(): string {
   if (typeof window !== "undefined") {
-    const host = window.location.hostname;
     // For Vercel/static deployments, use relative path to proxy through Vercel
-    if (
-      host.includes("vercel.app") ||
-      host.includes("netlify.app") ||
-      host.includes("github.io") ||
-      host.includes("localhost")
-    ) {
+    if (isVercelDeployment()) {
       return "";
     }
   }
-  return BACKEND_URL;
+  return TRPC_API_URL;
 }
 
 export function getApiPath(path: string): string {
@@ -32,17 +45,28 @@ export function getApiPath(path: string): string {
   return path;
 }
 
+// Get tRPC API URL (for tRPC client)
+export function getTrpcUrl(): string {
+  if (typeof window !== "undefined" && isVercelDeployment()) {
+    return "/api/trpc";
+  }
+  return `${TRPC_API_URL}/api/trpc`;
+}
+
+// Get legacy REST API URL (for REST endpoints)
+export function getRestApiUrl(): string {
+  if (typeof window !== "undefined" && isVercelDeployment()) {
+    return "/api";
+  }
+  return `${BACKEND_URL}/api`;
+}
+
+// Get backend URL (legacy)
 export function getBackendUrl(): string {
   return BACKEND_URL;
 }
 
 // Check if running on Vercel (can proxy requests)
 export function isProxiedDeployment(): boolean {
-  if (typeof window === "undefined") return false;
-  const host = window.location.hostname;
-  return (
-    host.includes("vercel.app") ||
-    host.includes("netlify.app") ||
-    host.includes("github.io")
-  );
+  return isVercelDeployment();
 }

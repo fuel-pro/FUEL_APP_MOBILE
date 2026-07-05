@@ -85,10 +85,12 @@
   },
   "scripts": {
     "build": "vite build && esbuild api/boot.ts --platform=node --bundle --format=esm --outdir=dist --banner:js=\"import { createRequire } from 'module';const require = createRequire(import.meta.url);\"",
+    "build:api": "esbuild api/boot.ts --platform=node --bundle --format=esm --outdir=dist-api --banner:js=\"import { createRequire } from 'module';const require = createRequire(import.meta.url);\"",
     "build:vercel": "vite build && esbuild api/boot.ts --platform=node --bundle --format=esm --outfile=../api/handler.mjs --tsconfig=tsconfig.server.json",
     "build:static": "vite build",
     "dev": "vite",
     "start": "NODE_ENV=production node dist/boot.js",
+    "start:api": "NODE_ENV=production node dist-api/boot.js",
     "check": "tsc -b",
     "format": "prettier --write .",
     "test": "vitest run",
