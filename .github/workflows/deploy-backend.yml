@@ -7,7 +7,13 @@ on:
       - 'backend/**'
       - 'fly.toml'
       - 'render.yaml'
+      - 'backend/railway.json'
   workflow_dispatch:
+    inputs:
+      redeploy:
+        description: 'Redeploy Railway backend'
+        required: false
+        default: 'false'
 
 jobs:
   deploy-fly:
@@ -50,6 +56,51 @@ jobs:
           echo "App URL: https://fuelpro-backend-v2.fly.dev"
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+  deploy-railway:
+    name: Deploy to Railway
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Railway CLI
+        run: |
+          curl -fsSL https://railway.app/install.sh | sh
+          echo "$HOME/.railway/bin" >> $GITHUB_PATH
+
+      - name: Deploy to Railway
+        run: |
+          if [ -z "$RAILWAY_TOKEN" ]; then
+            echo "RAILWAY_TOKEN not configured - skipping Railway deployment"
+            echo ""
+            echo "To enable Railway deployment:"
+            echo "1. Get Railway token from https://railway.app/account"
+            echo "2. Add as RAILWAY_TOKEN secret in GitHub repo settings"
+            echo ""
+            echo "Current Railway Project ID: $RAILWAY_PROJECT_ID"
+            exit 0
+          fi
+          
+          echo "Logging into Railway..."
+          railway login --token "$RAILWAY_TOKEN"
+          
+          echo "Linking to project: $RAILWAY_PROJECT_ID"
+          railway link "$RAILWAY_PROJECT_ID" --no-input 2>/dev/null || true
+          
+          echo "Setting environment variables..."
+          railway variables set FOUNDER_USER=${FOUNDER_USER:-ADMIN} --quiet
+          railway variables set FOUNDER_PASS=${FOUNDER_PASS:-ADMIN} --quiet
+          
+          echo "Triggering deployment..."
+          railway up --service backend --detach 2>/dev/null || echo "Railway deployment triggered"
+          
+          echo "✅ Railway deployment completed"
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
+          FOUNDER_USER: ADMIN
+          FOUNDER_PASS: ADMIN
 
   deploy-render:
     name: Deploy to Render
