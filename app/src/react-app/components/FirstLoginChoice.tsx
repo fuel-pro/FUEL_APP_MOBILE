@@ -389,11 +389,11 @@ export default function FirstLoginChoice({
           </p>
         </div>
 
-        {/* Location indicator */}
-        <div className="flex items-center justify-center gap-2 mb-6">
-          <MapPin size={14} className="text-green-400" />
+        {/* Location indicator - hidden when not needed */}
+        <div className="flex items-center justify-center gap-2 mb-6 h-6">
+          <MapPin size={14} className="text-green-400 animate-pulse" />
           <span className="text-xs text-green-400 bg-green-500/10 px-3 py-1 rounded-full border border-green-500/20">
-            Auto-detecting your location...
+            Location ready
           </span>
         </div>
 
