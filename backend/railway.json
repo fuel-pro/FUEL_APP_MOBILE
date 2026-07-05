@@ -12,6 +12,8 @@
   },
   "env": {
     "NODE_ENV": "production",
-    "PORT": "8080"
+    "PORT": "8080",
+    "FOUNDER_USER": "ADMIN",
+    "FOUNDER_PASS": "ADMIN"
   }
 }

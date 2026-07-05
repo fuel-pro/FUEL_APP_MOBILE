@@ -14,7 +14,7 @@
     },
     {
       "src": "/api/health",
-      "dest": "/api/health"
+      "dest": "https://fuel-pro-backend-v2-production-7c2b.up.railway.app/api/health"
     },
     {
       "src": "/api/(.*)",
