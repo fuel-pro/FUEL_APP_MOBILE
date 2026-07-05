@@ -45,7 +45,6 @@
     }
   ],
   "env": {
-    "VITE_API_URL": "https://fuel-pro-tprc-api.up.railway.app",
-    "VITE_CLERK_PUBLISHABLE_KEY": "@clerk-publishable-key"
+    "VITE_API_URL": "https://fuel-pro-tprc-api.up.railway.app"
   }
 }
