@@ -4,54 +4,52 @@ This PR fixes TypeScript errors, deployment configuration, and founder authentic
 
 ### Changes
 
-#### 1. TypeScript Fixes
-- POS hardware modules (USB/Bluetooth types)
-- Import path corrections  
-- Schema property fixes
+#### 1. TypeScript Fixes ✅
+- All TypeScript errors resolved
+- `npm run check` passes
+- `npm run build` completes successfully
 
-#### 2. Deployment Infrastructure
+#### 2. Deployment Infrastructure ✅
 - `vercel.json` - Fixed routing with proper CORS headers
-- `.github/workflows/vercel-deploy.yml` - Updated Vercel deployment workflow
-- `app/railway.toml` - Railway deployment config for tRPC API
-- `backend/railway.json` - Railway deployment config for legacy backend
+- `backend/railway.json` - Added default founder credentials (ADMIN/ADMIN)
+- `.github/workflows/deploy-backend.yml` - Added Railway deployment job
 
-#### 3. Founder Authentication Fix
+#### 3. Founder Authentication Fix ✅
 - Backend: Uses default ADMIN/ADMIN credentials when env vars not set
 - Frontend: Fixed API routing to use Vercel proxy on deployment
+- `getBackendUrl()` now returns empty string on Vercel for proper proxying
 
-#### 4. Documentation
+#### 4. Documentation ✅
 - `AGENTS.md` - Agent knowledge base with deployment URLs
 - `DEPLOYMENT.md` - Full deployment guide
+- `backend/railway-update.sh` - Setup script
 
 ### Testing
 
-1. **TypeScript**: `npm run check` ✅ Passes
-2. **Build**: `npm run build` ✅ Passes  
-3. **Backend**: Health check ✅ Returns healthy
+| Test | Result |
+|------|--------|
+| TypeScript Check (`npm run check`) | ✅ Passes |
+| Frontend Build (`npm run build`) | ✅ Passes |
+| Backend Syntax | ✅ Passes |
+| Frontend Health | ✅ Returns 200 |
+| Backend Health | ✅ Returns healthy |
 
-### Manual Steps Required After Merge
+### Known Issues to Address
 
-To enable founder login on Railway, run:
+1. **Railway Backend Token**: The `RAILWAY_TOKEN` secret may need verification. After merge, verify the GitHub Actions workflow can access Railway.
 
-```bash
-# Install Railway CLI
-curl -fsSL https://railway.app/install.sh | sh
+2. **tRPC API Not Deployed**: The tRPC API (`fuel-pro-tprc-api`) returns 404. May need separate Railway deployment.
 
-# Login with token (use: d1a34559-6a70-4c38-8312-00d8f982f04c)
-railway login
+### After Merge Checklist
 
-# Link project
-railway link 226c5567-8377-4520-8088-1e4c019b984a
-
-# Set founder credentials
-railway variables set FOUNDER_USER=ADMIN
-railway variables set FOUNDER_PASS=ADMIN
-```
-
-Or run: `bash backend/railway-update.sh`
+1. Trigger GitHub Actions `Deploy Backend` workflow
+2. Verify Railway deployment sets FOUNDER_USER and FOUNDER_PASS
+3. Test founder login at https://fuel-app-mobile.vercel.app/#/founder
+4. Verify Vercel proxy routes work correctly
 
 ### URLs
 
 - **Frontend**: https://fuel-app-mobile.vercel.app
 - **Backend**: https://fuel-pro-backend-v2-production-7c2b.up.railway.app
 - **Founder Page**: https://fuel-app-mobile.vercel.app/#/founder
+- **Founder Credentials**: ADMIN / ADMIN
