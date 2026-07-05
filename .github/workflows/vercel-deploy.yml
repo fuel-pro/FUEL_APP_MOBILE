@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - fix/security-critical-patches-2026
+      - fix/typescript-errors
   workflow_dispatch:
 
 jobs:
