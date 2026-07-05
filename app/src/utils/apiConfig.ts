@@ -63,6 +63,9 @@ export function getRestApiUrl(): string {
 
 // Get backend URL (legacy)
 export function getBackendUrl(): string {
+  if (typeof window !== "undefined" && isVercelDeployment()) {
+    return ""; // Use relative path for Vercel proxy
+  }
   return BACKEND_URL;
 }
 
