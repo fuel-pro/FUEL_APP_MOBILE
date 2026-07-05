@@ -325,14 +325,12 @@ router.post('/founder-login', async (req, res) => {
       return res.status(400).json({ error: 'Username and password required' });
     }
 
-    // Get credentials from environment variables
-    const FOUNDER_USER = process.env.FOUNDER_USER;
-    const FOUNDER_PASS = process.env.FOUNDER_PASS;
+    // Get credentials from environment variables with defaults for development
+    const FOUNDER_USER = process.env.FOUNDER_USER || 'ADMIN';
+    const FOUNDER_PASS = process.env.FOUNDER_PASS || 'ADMIN';
 
-    if (!FOUNDER_USER || !FOUNDER_PASS) {
-      console.error('❌ FOUNDER_USER/FOUNDER_PASS not set');
-      return res.status(500).json({ error: 'Founder login not configured' });
-    }
+    // Check if using default credentials
+    const usingDefaults = !process.env.FOUNDER_USER || !process.env.FOUNDER_PASS;
 
     if (username !== FOUNDER_USER || password !== FOUNDER_PASS) {
       await AuditLog.create({
@@ -363,6 +361,11 @@ router.post('/founder-login', async (req, res) => {
       userId: founderUser.id,
       metadata: { ip }
     });
+
+    // Log warning if using default credentials
+    if (usingDefaults) {
+      console.warn('⚠️ WARNING: Using default founder credentials. Set FOUNDER_USER and FOUNDER_PASS env vars for production.');
+    }
 
     res.json({
       success: true,

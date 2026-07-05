@@ -2,6 +2,9 @@
 import { hardwareManager, type CardReaderDevice } from './hardware-manager';
 import { EventEmitter } from 'eventemitter3';
 
+// Import type-only to ensure USB types are available
+import type {} from './hardware-manager';
+
 export interface CardData {
   cardNumber?: string;
   cardholderName?: string;

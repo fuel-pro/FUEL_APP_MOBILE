@@ -1,0 +1,42 @@
+name: Update Railway Environment Variables
+
+on:
+  workflow_dispatch:
+    inputs:
+      founder_user:
+        description: 'Founder Username'
+        required: true
+        default: 'ADMIN'
+      founder_pass:
+        description: 'Founder Password'
+        required: true
+
+jobs:
+  update-railway:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Update Railway Environment
+        run: |
+          # Railway API expects a specific format
+          # Using Railway CLI for environment variable updates
+          
+          # Install Railway CLI
+          curl -fsSL https://railway.app/install.sh | sh
+          export PATH="$HOME/.railway/bin:$PATH"
+          
+          # Login with token
+          railway login --token ${{ secrets.RAILWAY_TOKEN }}
+          
+          # Link project
+          railway link ${{ secrets.RAILWAY_PROJECT_ID }}
+          
+          # Set environment variables
+          railway variables set FOUNDER_USER=${{ inputs.founder_user }}
+          railway variables set FOUNDER_PASS=${{ inputs.founder_pass }}
+          
+          echo "✅ Railway environment variables updated"
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}

@@ -42,7 +42,6 @@ export function useFounderBackend() {
   // Note: We intentionally do NOT invalidate queries on audit log mutation
   // to prevent potential cascade effects that could cause batch overflow
   const logMutation = trpc.audit.log.useMutation({
-    enabled: !isStatic,
     retry: 1,
     // Don't invalidate on success - audit log mutations should be fire-and-forget
     // This prevents potential cascade effects from invalidating multiple queries
@@ -142,7 +141,6 @@ export function useFounderBackend() {
   );
 
   const upsertSessionMutation = trpc.audit.upsertFounderSession.useMutation({
-    enabled: !isStatic,
     onSuccess: () => {
       utils.audit.getFounderSession.invalidate();
     },

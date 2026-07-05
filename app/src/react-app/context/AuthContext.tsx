@@ -15,8 +15,8 @@ import { getBackendUrl } from "@/utils/apiConfig";
 // Binds auth identity to station roles
 // ============================================================
 
-// Demo mode - use local storage for authentication when backend is unavailable
-const DEMO_MODE = true;
+// Demo mode - DISABLED for production. Always use real backend authentication.
+const DEMO_MODE = false;
 const DEMO_USERS = [
   { email: "admin@fuelpro.demo", password: "admin123", name: "Admin User", role: "admin" },
   { email: "manager@fuelpro.demo", password: "manager123", name: "Manager User", role: "manager" },
@@ -145,9 +145,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const storedToken = loadToken();
       if (storedToken) {
         try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout
           const res = await fetch(`${API_BASE}/api/auth/me`, {
             headers: { Authorization: `Bearer ${storedToken}` },
+            signal: controller.signal,
           });
+          clearTimeout(timeoutId);
           if (res.ok) {
             const data = await res.json();
             const backendUser = data.user || data;

@@ -307,6 +307,7 @@ export default function FounderAccess() {
     isSyncing: boolean;
     lastSync: number;
     pendingChanges: number;
+    status?: string;
   }>({ isOnline: false, isSyncing: false, lastSync: 0, pendingChanges: 0 });
 
   /* ─── Backend Integration ─── */
@@ -546,7 +547,7 @@ export default function FounderAccess() {
       : loginPassword === stored.password;
     const isValid =
       (loginUsername.trim().toLowerCase() === stored.username.toLowerCase() && legacyPwMatch) ||
-      validateFounderAuth(loginUsername.trim(), loginPassword);
+      (async () => validateFounderAuth().then(r => r.valid))();
     if (isValid) {
       // Check if 2FA is enabled
       let faConfig: FAConfig | null = null;

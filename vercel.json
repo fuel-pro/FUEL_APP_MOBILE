@@ -7,7 +7,14 @@
   "routes": [
     {
       "src": "/api/trpc/(.*)",
-      "dest": "https://fuel-pro-backend-v2-production-7c2b.up.railway.app/api/trpc/$1"
+      "dest": "/api/trpc/$1",
+      "headers": {
+        "x-trpc": "true"
+      }
+    },
+    {
+      "src": "/api/health",
+      "dest": "https://fuel-pro-backend-v2-production-7c2b.up.railway.app/api/health"
     },
     {
       "src": "/api/(.*)",
@@ -28,7 +35,7 @@
         },
         {
           "key": "Access-Control-Allow-Headers",
-          "value": "Content-Type, Authorization, X-API-Key, x-founder-token, X-Requested-With"
+          "value": "Content-Type, Authorization, X-API-Key, x-founder-token, X-Requested-With, X-Clerk-Auth"
         },
         {
           "key": "Access-Control-Max-Age",
@@ -36,5 +43,8 @@
         }
       ]
     }
-  ]
+  ],
+  "env": {
+    "VITE_API_URL": "https://fuel-pro-tprc-api.up.railway.app"
+  }
 }

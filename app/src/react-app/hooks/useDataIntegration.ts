@@ -34,9 +34,11 @@ export function useDataIntegration(stationId: string) {
   const recordSale = useCallback(
     (sale: SaleEvent) => {
       // 1. Update tank levels
-      const currentTanks = JSON.parse(
-        localStorage.getItem(`${STORAGE_PREFIX}_tanks`) || '{"pms":0,"ago":0}'
-      );
+      let currentTanks = { pms: 0, ago: 0 };
+      try {
+        const stored = localStorage.getItem(`${STORAGE_PREFIX}_tanks`);
+        if (stored) currentTanks = JSON.parse(stored);
+      } catch { /* Use defaults */ }
       if (sale.fuelType === "PMS")
         currentTanks.pms = Math.max(0, currentTanks.pms - sale.quantity);
       else currentTanks.ago = Math.max(0, currentTanks.ago - sale.quantity);
@@ -54,10 +56,11 @@ export function useDataIntegration(stationId: string) {
       // 3. Update daily sales summary
       const today = new Date().toISOString().split("T")[0];
       const dailyKey = `${STORAGE_PREFIX}_daily_${today}`;
-      const daily = JSON.parse(
-        localStorage.getItem(dailyKey) ||
-          '{"pmsQty":0,"agoQty":0,"pmsRevenue":0,"agoRevenue":0,"transactions":0}'
-      );
+      let daily = { pmsQty: 0, agoQty: 0, pmsRevenue: 0, agoRevenue: 0, transactions: 0 };
+      try {
+        const stored = localStorage.getItem(dailyKey);
+        if (stored) daily = JSON.parse(stored);
+      } catch { /* Use defaults */ }
       if (sale.fuelType === "PMS") {
         daily.pmsQty += sale.quantity;
         daily.pmsRevenue += sale.amount;
@@ -84,9 +87,11 @@ export function useDataIntegration(stationId: string) {
   // Record fuel delivery - updates tank levels
   const recordDelivery = useCallback(
     (delivery: DeliveryEvent) => {
-      const currentTanks = JSON.parse(
-        localStorage.getItem(`${STORAGE_PREFIX}_tanks`) || '{"pms":0,"ago":0}'
-      );
+      let currentTanks = { pms: 0, ago: 0 };
+      try {
+        const stored = localStorage.getItem(`${STORAGE_PREFIX}_tanks`);
+        if (stored) currentTanks = JSON.parse(stored);
+      } catch { /* Use defaults */ }
       if (delivery.fuelType === "PMS") currentTanks.pms += delivery.quantity;
       else currentTanks.ago += delivery.quantity;
       localStorage.setItem(
@@ -109,10 +114,10 @@ export function useDataIntegration(stationId: string) {
   // Award loyalty points
   const awardLoyaltyPoints = useCallback(
     (phone: string, points: number, amount: number) => {
+      let customers: any[] = [];
       try {
-        const customers = JSON.parse(
-          localStorage.getItem("fuelpro_customers") || "[]"
-        );
+        const stored = localStorage.getItem("fuelpro_customers");
+        if (stored) customers = JSON.parse(stored);
         const idx = customers.findIndex((c: any) => c.phone === phone);
         if (idx >= 0) {
           customers[idx].loyaltyPoints =
@@ -171,9 +176,11 @@ export function useDataIntegration(stationId: string) {
   const recordCreditSale = useCallback(
     (accountId: string, amount: number, description: string) => {
       try {
-        const accounts = JSON.parse(
-          localStorage.getItem("fuelpro_credit_accounts") || "[]"
-        );
+        let accounts: any[] = [];
+        try {
+          const stored = localStorage.getItem("fuelpro_credit_accounts");
+          if (stored) accounts = JSON.parse(stored);
+        } catch { /* Use empty array */ }
         const idx = accounts.findIndex((a: any) => a.id === accountId);
         if (idx >= 0) {
           accounts[idx].balanceUsed = (accounts[idx].balanceUsed || 0) + amount;
@@ -185,9 +192,11 @@ export function useDataIntegration(stationId: string) {
           );
 
           // Also record transaction
-          const txs = JSON.parse(
-            localStorage.getItem("fuelpro_credit_tx") || "[]"
-          );
+          let txs: any[] = [];
+          try {
+            const storedTx = localStorage.getItem("fuelpro_credit_tx");
+            if (storedTx) txs = JSON.parse(storedTx);
+          } catch { /* Use empty array */ }
           txs.unshift({
             id: `ctx_${Date.now()}`,
             accountId,
@@ -228,15 +237,19 @@ export function useDataIntegration(stationId: string) {
       pumpAssignment?: string
     ) => {
       try {
-        const shifts = JSON.parse(
-          localStorage.getItem("fuelpro_shifts") || "[]"
-        );
+        let shifts: any[] = [];
+        try {
+          const stored = localStorage.getItem("fuelpro_shifts");
+          if (stored) shifts = JSON.parse(stored);
+        } catch { /* Use empty array */ }
         const today = new Date().toISOString().split("T")[0];
 
         if (action === "checkin") {
-          const employees = JSON.parse(
-            localStorage.getItem("fuelpro_employees") || "[]"
-          );
+          let employees: any[] = [];
+          try {
+            const storedEmp = localStorage.getItem("fuelpro_employees");
+            if (storedEmp) employees = JSON.parse(storedEmp);
+          } catch { /* Use empty array */ }
           const emp = employees.find((e: any) => e.id === employeeId);
           shifts.unshift({
             id: `shift_${Date.now()}`,
@@ -278,9 +291,11 @@ export function useDataIntegration(stationId: string) {
   const recordInventoryAdjustment = useCallback(
     (itemId: string, quantity: number, type: "in" | "out", reason: string) => {
       try {
-        const items = JSON.parse(
-          localStorage.getItem("fuelpro_inventory") || "[]"
-        );
+        let items: any[] = [];
+        try {
+          const stored = localStorage.getItem("fuelpro_inventory");
+          if (stored) items = JSON.parse(stored);
+        } catch { /* Use empty array */ }
         const idx = items.findIndex((i: any) => i.id === itemId);
         if (idx >= 0) {
           if (type === "in") items[idx].quantity += quantity;
@@ -290,9 +305,11 @@ export function useDataIntegration(stationId: string) {
           localStorage.setItem("fuelpro_inventory", JSON.stringify(items));
 
           // Log movement
-          const movements = JSON.parse(
-            localStorage.getItem("fuelpro_inventory_movements") || "[]"
-          );
+          let movements: any[] = [];
+          try {
+            const storedMov = localStorage.getItem("fuelpro_inventory_movements");
+            if (storedMov) movements = JSON.parse(storedMov);
+          } catch { /* Use empty array */ }
           movements.unshift({
             id: `mov_${Date.now()}`,
             itemId,
@@ -329,9 +346,11 @@ export function useDataIntegration(stationId: string) {
   const getDailySummary = useCallback(
     (date?: string) => {
       const d = date || new Date().toISOString().split("T")[0];
-      const daily = JSON.parse(
-        localStorage.getItem(`${STORAGE_PREFIX}_daily_${d}`) || "null"
-      );
+      let daily = null;
+      try {
+        const stored = localStorage.getItem(`${STORAGE_PREFIX}_daily_${d}`);
+        if (stored) daily = JSON.parse(stored);
+      } catch { /* Return defaults */ }
       if (!daily)
         return {
           pmsQty: 0,
@@ -347,9 +366,11 @@ export function useDataIntegration(stationId: string) {
 
   // Get current tank levels
   const getTankLevels = useCallback(() => {
-    return JSON.parse(
-      localStorage.getItem(`${STORAGE_PREFIX}_tanks`) || '{"pms":0,"ago":0}'
-    );
+    try {
+      const stored = localStorage.getItem(`${STORAGE_PREFIX}_tanks`);
+      if (stored) return JSON.parse(stored);
+    } catch { /* Use defaults */ }
+    return { pms: 0, ago: 0 };
   }, [STORAGE_PREFIX]);
 
   return {

@@ -1,12 +1,12 @@
 import { z } from "zod";
 import { eq, and, desc, sql, isNull, or } from "drizzle-orm";
-import { createRouter, authedQuery, adminQuery } from "./middleware";
+import { createRouter, authedQuery, adminQuery, publicQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import {
   featureFlags, pricingPlans, subscriptions, coupons,
   systemConfig, apiKeys, webhooks, emailTemplates, backups,
   users, stations, sales, auditLogs, founderSessions,
-  userActivityLog,
+  userActivityLog, siteConfigs, configVersions,
 } from "@db/schema";
 
 // ═══════════════════════════ FEATURE FLAGS ═══════════════════════════
@@ -553,13 +553,13 @@ export const siteConfigRouter = createRouter({
     const configs = await db.select().from(siteConfigs);
     const result: Record<string, any> = {};
     for (const c of configs) {
-      let value: any = c.configValue;
-      if (c.type === "number") value = Number(value);
-      else if (c.type === "boolean") value = value === "true" || value === "1";
+      let val: any = c.value;
+      if (c.type === "number") val = Number(val);
+      else if (c.type === "boolean") val = val === "true" || val === "1";
       else if (c.type === "json") {
-        try { value = JSON.parse(value); } catch { /* keep as string */ }
+        try { val = JSON.parse(val); } catch { /* keep as string */ }
       }
-      result[c.configKey] = value;
+      result[c.key] = val;
     }
     return result;
   }),
@@ -582,9 +582,9 @@ export const siteConfigRouter = createRouter({
       if (existing.length > 0) {
         await db.update(siteConfigs)
           .set({ 
-            configValue: input.value,
-            configType: input.type,
-            configCategory: input.category,
+            value: input.value,
+            type: input.type,
+            category: input.category,
             description: input.description,
             isPublic: input.isPublic,
             isEncrypted: input.isEncrypted,
@@ -595,10 +595,10 @@ export const siteConfigRouter = createRouter({
         return { success: true, action: "updated", key: input.key };
       } else {
         const [result] = await db.insert(siteConfigs).values({
-          configKey: input.key,
-          configValue: input.value,
-          configType: input.type,
-          configCategory: input.category,
+          key: input.key,
+          value: input.value,
+          type: input.type,
+          category: input.category,
           description: input.description,
           isPublic: input.isPublic,
           isEncrypted: input.isEncrypted,
@@ -628,10 +628,10 @@ export const siteConfigRouter = createRouter({
       const db = getDb();
       const configs = await db.select().from(siteConfigs);
       const snapshot = JSON.stringify(configs.map(c => ({
-        key: c.configKey,
-        value: c.configValue,
-        type: c.configType,
-        category: c.configCategory,
+        key: c.key,
+        value: c.value,
+        type: c.type,
+        category: c.category,
       })));
       const version = `v${Date.now()}`;
       
@@ -691,18 +691,18 @@ export const siteConfigRouter = createRouter({
         if (existing.length > 0) {
           await db.update(siteConfigs)
             .set({ 
-              configValue: item.value,
-              configType: item.type,
+              value: item.value,
+              type: item.type,
               updatedBy: ctx.user?.id,
               updatedAt: new Date(),
             })
             .where(eq(siteConfigs.key, item.key));
         } else {
           await db.insert(siteConfigs).values({
-            configKey: item.key,
-            configValue: item.value,
-            configType: item.type,
-            configCategory: item.category || "general",
+            key: item.key,
+            value: item.value,
+            type: item.type,
+            category: item.category || "general",
             createdBy: ctx.user?.id,
             updatedBy: ctx.user?.id,
           });

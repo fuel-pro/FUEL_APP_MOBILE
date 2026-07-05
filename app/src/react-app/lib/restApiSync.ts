@@ -337,12 +337,16 @@ export async function checkApiStatus(): Promise<{
 }> {
   try {
     // Try the REST API health endpoint first
+    // Use JWT auth token if available
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    const authToken = getAuthToken();
+    if (authToken) {
+      headers["Authorization"] = `Bearer ${authToken}`;
+    }
+    
     const response = await fetch(`${API_URL}/api/health`, {
       method: "GET",
-      headers: { 
-        "Content-Type": "application/json",
-        "X-API-Key": API_KEY,
-      },
+      headers,
     });
     
     if (response.ok) {
