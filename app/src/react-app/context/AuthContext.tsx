@@ -15,8 +15,8 @@ import { getBackendUrl } from "@/utils/apiConfig";
 // Binds auth identity to station roles
 // ============================================================
 
-// Demo mode - use local storage for authentication when backend is unavailable
-const DEMO_MODE = true;
+// Demo mode - DISABLED for production. Always use real backend authentication.
+const DEMO_MODE = false;
 const DEMO_USERS = [
   { email: "admin@fuelpro.demo", password: "admin123", name: "Admin User", role: "admin" },
   { email: "manager@fuelpro.demo", password: "manager123", name: "Manager User", role: "manager" },

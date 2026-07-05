@@ -26656,7 +26656,7 @@ var t = initTRPC.context().create({
   transformer: dist_default
 });
 var createRouter = t.router;
-var publicQuery2 = t.procedure;
+var publicQuery = t.procedure;
 var requireAuth = t.middleware(async (opts) => {
   const { ctx, next } = opts;
   if (!ctx.user) {
@@ -47646,7 +47646,7 @@ __export(schema_exports, {
   authEvents: () => authEvents,
   backups: () => backups,
   bankAccounts: () => bankAccounts,
-  configVersions: () => configVersions2,
+  configVersions: () => configVersions,
   coupons: () => coupons,
   crossTenantLinks: () => crossTenantLinks,
   dataAccessLog: () => dataAccessLog,
@@ -47662,7 +47662,7 @@ __export(schema_exports, {
   pricingPlans: () => pricingPlans,
   roles: () => roles,
   sales: () => sales,
-  siteConfigs: () => siteConfigs2,
+  siteConfigs: () => siteConfigs,
   stationUsers: () => stationUsers,
   stations: () => stations,
   subscriptions: () => subscriptions,
@@ -48246,7 +48246,7 @@ var dataAccessPolicies = mysqlTable("data_access_policies", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => /* @__PURE__ */ new Date())
 });
-var siteConfigs2 = mysqlTable("site_configs", {
+var siteConfigs = mysqlTable("site_configs", {
   id: serial("id").primaryKey(),
   key: varchar("configKey", { length: 255 }).notNull().unique(),
   value: text("configValue").notNull(),
@@ -48260,7 +48260,7 @@ var siteConfigs2 = mysqlTable("site_configs", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => /* @__PURE__ */ new Date())
 });
-var configVersions2 = mysqlTable("config_versions", {
+var configVersions = mysqlTable("config_versions", {
   id: serial("id").primaryKey(),
   version: varchar("version", { length: 50 }).notNull().unique(),
   name: varchar("name", { length: 255 }).notNull(),
@@ -49658,7 +49658,7 @@ function getStoredCreds() {
 }
 var founderAuthRouter = createRouter({
   // ─── Register new user (public) ───
-  register: publicQuery2.input(external_exports.object({
+  register: publicQuery.input(external_exports.object({
     name: external_exports.string().min(1),
     email: external_exports.string().email(),
     password: external_exports.string().min(6)
@@ -49686,7 +49686,7 @@ var founderAuthRouter = createRouter({
     }
   }),
   // ─── Login ───
-  login: publicQuery2.input(external_exports.object({
+  login: publicQuery.input(external_exports.object({
     username: external_exports.string().min(1),
     password: external_exports.string().min(1)
   })).mutation(async ({ input }) => {
@@ -49728,7 +49728,7 @@ var founderAuthRouter = createRouter({
     };
   }),
   // ─── Validate Token ───
-  validate: publicQuery2.input(external_exports.object({ token: external_exports.string() }).optional()).query(async ({ input }) => {
+  validate: publicQuery.input(external_exports.object({ token: external_exports.string() }).optional()).query(async ({ input }) => {
     if (!input?.token) return { valid: false, username: null };
     const founder = validateFounderToken(input.token);
     return { valid: !!founder, username: founder?.username || null };
@@ -50944,16 +50944,16 @@ var siteConfigRouter = createRouter({
     const configs = await db4.select().from(siteConfigs);
     const result = {};
     for (const c of configs) {
-      let value = c.configValue;
-      if (c.type === "number") value = Number(value);
-      else if (c.type === "boolean") value = value === "true" || value === "1";
+      let val = c.value;
+      if (c.type === "number") val = Number(val);
+      else if (c.type === "boolean") val = val === "true" || val === "1";
       else if (c.type === "json") {
         try {
-          value = JSON.parse(value);
+          val = JSON.parse(val);
         } catch {
         }
       }
-      result[c.configKey] = value;
+      result[c.key] = val;
     }
     return result;
   }),
@@ -50971,9 +50971,9 @@ var siteConfigRouter = createRouter({
     const existing = await db4.select().from(siteConfigs).where(eq(siteConfigs.key, input.key)).limit(1);
     if (existing.length > 0) {
       await db4.update(siteConfigs).set({
-        configValue: input.value,
-        configType: input.type,
-        configCategory: input.category,
+        value: input.value,
+        type: input.type,
+        category: input.category,
         description: input.description,
         isPublic: input.isPublic,
         isEncrypted: input.isEncrypted,
@@ -50983,10 +50983,10 @@ var siteConfigRouter = createRouter({
       return { success: true, action: "updated", key: input.key };
     } else {
       const [result] = await db4.insert(siteConfigs).values({
-        configKey: input.key,
-        configValue: input.value,
-        configType: input.type,
-        configCategory: input.category,
+        key: input.key,
+        value: input.value,
+        type: input.type,
+        category: input.category,
         description: input.description,
         isPublic: input.isPublic,
         isEncrypted: input.isEncrypted,
@@ -51010,10 +51010,10 @@ var siteConfigRouter = createRouter({
     const db4 = getDb();
     const configs = await db4.select().from(siteConfigs);
     const snapshot = JSON.stringify(configs.map((c) => ({
-      key: c.configKey,
-      value: c.configValue,
-      type: c.configType,
-      category: c.configCategory
+      key: c.key,
+      value: c.value,
+      type: c.type,
+      category: c.category
     })));
     const version3 = `v${Date.now()}`;
     await db4.update(configVersions).set({ status: "archived", archivedAt: /* @__PURE__ */ new Date() }).where(eq(configVersions.status, "published"));
@@ -51055,17 +51055,17 @@ var siteConfigRouter = createRouter({
       const existing = await db4.select().from(siteConfigs).where(eq(siteConfigs.key, item.key)).limit(1);
       if (existing.length > 0) {
         await db4.update(siteConfigs).set({
-          configValue: item.value,
-          configType: item.type,
+          value: item.value,
+          type: item.type,
           updatedBy: ctx.user?.id,
           updatedAt: /* @__PURE__ */ new Date()
         }).where(eq(siteConfigs.key, item.key));
       } else {
         await db4.insert(siteConfigs).values({
-          configKey: item.key,
-          configValue: item.value,
-          configType: item.type,
-          configCategory: item.category || "general",
+          key: item.key,
+          value: item.value,
+          type: item.type,
+          category: item.category || "general",
           createdBy: ctx.user?.id,
           updatedBy: ctx.user?.id
         });
@@ -51077,7 +51077,7 @@ var siteConfigRouter = createRouter({
 
 // api/router.ts
 var appRouter = createRouter({
-  ping: publicQuery2.query(() => ({ ok: true, ts: Date.now() })),
+  ping: publicQuery.query(() => ({ ok: true, ts: Date.now() })),
   auth: authRouter,
   station: stationRouter,
   sale: saleRouter,
