@@ -97,7 +97,7 @@ npm run db:migrate     # Apply migrations
 ## 🌐 Deployment Architecture
 
 ### Frontend (Vercel)
-- URL: `https://fuel-pro.vercel.app`
+- URL: `https://fuel-app-mobile.vercel.app`
 - Build: `npm run build`
 - Output: `app/dist`
 
