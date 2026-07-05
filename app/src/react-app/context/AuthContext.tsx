@@ -145,9 +145,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const storedToken = loadToken();
       if (storedToken) {
         try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout
           const res = await fetch(`${API_BASE}/api/auth/me`, {
             headers: { Authorization: `Bearer ${storedToken}` },
+            signal: controller.signal,
           });
+          clearTimeout(timeoutId);
           if (res.ok) {
             const data = await res.json();
             const backendUser = data.user || data;

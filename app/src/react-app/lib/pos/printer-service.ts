@@ -1,6 +1,9 @@
 // ESC/POS Printer Service - Handles thermal printer communication
 import { hardwareManager, type PrinterDevice } from './hardware-manager';
 
+// Import type-only to ensure USB types are available
+import type {} from './hardware-manager';
+
 export interface ReceiptData {
   stationName: string;
   stationLocation: string;

@@ -99,7 +99,7 @@ export default function Dashboard() {
     ?? state.agoPrice;
   const displayKerosenePrice = locationPrice?.kerosenePrice 
     ?? fuelPrice?.kerosenePrice 
-    ?? state.kerosenePrice;
+    ?? 0; // Kerosene price not in base state
   // Show the detected city for location-based pricing
   const priceCityName = locationPrice?.cityName || regionalPrice.cityName || "Nairobi";
   const isLocationBased = !!locationPrice;
@@ -213,7 +213,7 @@ export default function Dashboard() {
     }, interval);
 
     return () => clearInterval(animTimer);
-  }, [hasBackendData, backendStats, totalRevenue, netProfit, totalFuelSold, totalDebt]);
+  }, [hasBackendData, backendStats]);
 
   // Calculate totals from sales history
   const {

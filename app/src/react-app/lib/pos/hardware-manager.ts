@@ -1,6 +1,71 @@
 // POS Hardware Manager - Handles USB/Bluetooth device detection and management
 import { EventEmitter } from 'eventemitter3';
 
+// Augment global types for USB Web API if not already defined
+declare global {
+  interface USBDevice {
+    vendorId: number;
+    productId: number;
+    productName: string;
+    manufacturerName?: string;
+    opened: boolean;
+    configuration?: USBConfiguration;
+    open(): Promise<void>;
+    close(): Promise<void>;
+    selectConfiguration(configurationValue: number): Promise<void>;
+    claimInterface(interfaceNumber: number): Promise<void>;
+    releaseInterface(interfaceNumber: number): Promise<void>;
+    transferIn(endpointNumber: number, length: number): Promise<USBInTransferResult>;
+    transferOut(endpointNumber: number, data: BufferSource): Promise<USBOutTransferResult>;
+  }
+
+  interface USBConfiguration {
+    configurationValue: number;
+    configurationName?: string;
+    interfaces: USBInterface[];
+  }
+
+  interface USBInterface {
+    interfaceNumber: number;
+    alternate: USBAlternateInterface;
+    alternates: USBAlternateInterface[];
+    claimed: boolean;
+  }
+
+  interface USBAlternateInterface {
+    alternateSetting: number;
+    interfaceClass: number;
+    interfaceSubclass: number;
+    interfaceProtocol: number;
+    interfaceName?: string;
+    endpoints: USBEndpoint[];
+  }
+
+  interface USBEndpoint {
+    endpointNumber: number;
+    direction: 'in' | 'out';
+    type: 'bulk' | 'interrupt' | 'isochronous';
+    packetSize: number;
+  }
+
+  interface USBInTransferResult {
+    data?: DataView;
+    status: USBTransferStatus;
+  }
+
+  interface USBOutTransferResult {
+    bytesWritten: number;
+    status: USBTransferStatus;
+  }
+
+  type USBTransferStatus = 'ok' | 'stall' | 'babble';
+
+  interface BluetoothDevice {
+    uuid: string;
+    name?: string;
+  }
+}
+
 export interface PrinterDevice {
   id: string;
   name: string;
@@ -306,10 +371,15 @@ class HardwareManager extends EventEmitter {
   }
 
   async disconnectDevice(id: string, type: string): Promise<void> {
+    // Helper to check if connection has USB-like methods
+    const isUSBConnection = (conn: USBDevice | BluetoothDevice | undefined): conn is USBDevice => {
+      return conn !== undefined && 'vendorId' in conn && 'transferIn' in conn;
+    };
+    
     switch (type) {
       case 'printer':
         const printer = this.printers.get(id);
-        if (printer?.connection instanceof USBDevice) {
+        if (isUSBConnection(printer?.connection)) {
           await printer.connection.close();
         }
         this.printers.delete(id);
@@ -318,7 +388,7 @@ class HardwareManager extends EventEmitter {
         
       case 'cardReader':
         const reader = this.cardReaders.get(id);
-        if (reader?.connection instanceof USBDevice) {
+        if (isUSBConnection(reader?.connection)) {
           await reader.connection.close();
         }
         this.cardReaders.delete(id);

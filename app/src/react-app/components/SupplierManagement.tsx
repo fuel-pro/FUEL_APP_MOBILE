@@ -443,7 +443,7 @@ export default function SupplierManagement() {
                       <div
                         className="h-full bg-amber-500 rounded-full"
                         style={{
-                          width: `${Math.min((supplier.currentBalance / supplier.creditLimit) * 100, 100)}%`,
+                          width: `${Math.min((supplier.currentBalance / Math.max(supplier.creditLimit, 1)) * 100, 100)}%`,
                         }}
                       />
                     </div>
