@@ -276,4 +276,185 @@ app.post("/api/seed", (c) => {
   });
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Dashboard Statistics Endpoint
+// ─────────────────────────────────────────────────────────────────────────────
+app.get("/api/dashboard/stats", requireAuth, (c) => {
+  // Calculate stats from data store
+  const sales = Object.values(dataStore.sales || {});
+  const stations = Object.values(dataStore.stations || {});
+  const users = Object.values(dataStore.users || {});
+  
+  const totalRevenue = sales.reduce((sum: number, sale: any) => sum + (sale.amount || 0), 0);
+  const todaySales = sales.filter((sale: any) => {
+    const saleDate = new Date(sale.createdAt || sale.timestamp);
+    const today = new Date();
+    return saleDate.toDateString() === today.toDateString();
+  }).length;
+  
+  return c.json({
+    success: true,
+    data: {
+      totalRevenue,
+      netProfit: totalRevenue * 0.15, // Estimated 15% margin
+      fuelSold: sales.reduce((sum: number, sale: any) => sum + (sale.quantity || 0), 0),
+      balanceDue: 0,
+      todaySales,
+      totalStations: stations.length,
+      totalUsers: users.length,
+      timestamp: new Date().toISOString(),
+    }
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Station Stats Endpoint
+// ─────────────────────────────────────────────────────────────────────────────
+app.get("/api/stations/:id/stats", requireAuth, (c) => {
+  const { id } = c.req.param();
+  const station = dataStore.stations[id];
+  
+  if (!station) {
+    return c.json({ error: "Station not found" }, 404);
+  }
+  
+  const stationSales = Object.values(dataStore.sales || {}).filter((sale: any) => sale.stationId === id);
+  const totalRevenue = stationSales.reduce((sum: number, sale: any) => sum + (sale.amount || 0), 0);
+  
+  return c.json({
+    success: true,
+    data: {
+      stationId: id,
+      totalSales: stationSales.length,
+      totalRevenue,
+      totalTransactions: stationSales.length,
+      todaySales: stationSales.filter((sale: any) => {
+        const saleDate = new Date(sale.createdAt || sale.timestamp);
+        const today = new Date();
+        return saleDate.toDateString() === today.toDateString();
+      }).length,
+    }
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Inventory Endpoints
+// ─────────────────────────────────────────────────────────────────────────────
+app.get("/api/inventory", requireAuth, (c) => {
+  const records = Object.entries(dataStore.inventory || {}).map(([id, record]) => ({
+    id,
+    ...(record as Record<string, unknown>),
+  }));
+  return c.json({ success: true, data: records });
+});
+
+app.get("/api/inventory/:id", requireAuth, (c) => {
+  const { id } = c.req.param();
+  if (!dataStore.inventory?.[id]) {
+    return c.json({ error: "Inventory item not found" }, 404);
+  }
+  return c.json({ success: true, data: { id, ...dataStore.inventory[id] } });
+});
+
+app.post("/api/inventory", requireAuth, async (c) => {
+  if (!dataStore.inventory) dataStore.inventory = {};
+  try {
+    const body = await c.req.json() as Record<string, unknown>;
+    const id = (body.id as string) || generateId("inventory");
+    dataStore.inventory[id] = {
+      ...body,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    return c.json({ success: true, id, data: { id, ...dataStore.inventory[id] } }, 201);
+  } catch {
+    return c.json({ success: false, error: "Invalid JSON body" }, 400);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Payments Endpoints
+// ─────────────────────────────────────────────────────────────────────────────
+app.get("/api/payments", requireAuth, (c) => {
+  const records = Object.entries(dataStore.payments || {}).map(([id, record]) => ({
+    id,
+    ...(record as Record<string, unknown>),
+  }));
+  return c.json({ success: true, data: records });
+});
+
+app.post("/api/payments", requireAuth, async (c) => {
+  if (!dataStore.payments) dataStore.payments = {};
+  try {
+    const body = await c.req.json() as Record<string, unknown>;
+    const id = (body.id as string) || generateId("payment");
+    dataStore.payments[id] = {
+      ...body,
+      status: "completed",
+      createdAt: new Date().toISOString(),
+    };
+    return c.json({ success: true, id, data: { id, ...dataStore.payments[id] } }, 201);
+  } catch {
+    return c.json({ success: false, error: "Invalid JSON body" }, 400);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Settings Endpoints
+// ─────────────────────────────────────────────────────────────────────────────
+app.get("/api/settings", requireAuth, (c) => {
+  return c.json({
+    success: true,
+    data: {
+      currency: "KES",
+      currencySymbol: "KSh",
+      timezone: "Africa/Nairobi",
+      dateFormat: "DD/MM/YYYY",
+      language: "en",
+      fuelTypes: ["PMS", "AGO", "Kerosene"],
+      defaultPrices: { PMS: 183.5, AGO: 168.3, Kerosene: 103.5 },
+      taxRate: 0.16,
+    }
+  });
+});
+
+app.put("/api/settings", requireAuth, async (c) => {
+  if (!dataStore.config) dataStore.config = {};
+  try {
+    const body = await c.req.json() as Record<string, unknown>;
+    dataStore.config.settings = { ...dataStore.config.settings, ...body, updatedAt: new Date().toISOString() };
+    return c.json({ success: true, data: dataStore.config.settings });
+  } catch {
+    return c.json({ success: false, error: "Invalid JSON body" }, 400);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Feature Flags Endpoint
+// ─────────────────────────────────────────────────────────────────────────────
+app.get("/api/feature-flags", (c) => {
+  const flags = Object.entries(dataStore.feature_flags || {}).map(([id, flag]) => ({
+    id,
+    ...(flag as Record<string, unknown>),
+  }));
+  return c.json({ success: true, data: flags });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// User Data Endpoint (for frontend state sync)
+// ─────────────────────────────────────────────────────────────────────────────
+app.get("/api/user-data", requireAuth, (c) => {
+  const authHeader = c.req.header("Authorization")?.replace("Bearer ", "");
+  const userId = authHeader; // In a real app, decode the JWT to get user ID
+  
+  const userData = {
+    stations: Object.values(dataStore.stations || {}),
+    sales: Object.values(dataStore.sales || {}),
+    inventory: Object.values(dataStore.inventory || {}),
+    config: dataStore.config,
+  };
+  
+  return c.json({ success: true, data: userData });
+});
+
 export default app;
