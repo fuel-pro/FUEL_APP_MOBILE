@@ -93,16 +93,19 @@ export function createOAuthCallbackHandler() {
     }
 
     try {
-      // Validate and decode state parameter safely
+      // Validate and decode state parameter safely with try-catch
       let redirectUri: string;
       try {
         redirectUri = atob(state);
+        // Validate that decoded value is a valid URL
         if (!redirectUri || !redirectUri.startsWith("http")) {
           throw new Error("Invalid redirect URI in state");
         }
-      } catch {
+      } catch (decodeError) {
+        console.error("[OAuth] State decode failed:", decodeError);
         return c.json({ error: "Invalid state parameter" }, 400);
       }
+      
       const tokenResp = await exchangeAuthCode(code, redirectUri);
       const { userId } = await verifyAccessToken(tokenResp.access_token);
       const userProfile = await kimiUsers.getProfile(tokenResp.access_token);

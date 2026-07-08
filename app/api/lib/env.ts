@@ -12,7 +12,7 @@ export const env = {
   appId: getEnv("APP_ID"),
   appSecret: getEnv("APP_SECRET"),
   isProduction: process.env.NODE_ENV === "production",
-  databaseUrl: getEnv("DATABASE_URL", true),
+  databaseUrl: getEnv("DATABASE_URL", true), // Only this is truly required
   kimiAuthUrl: getEnv("KIMI_AUTH_URL"),
   kimiOpenUrl: getEnv("KIMI_OPEN_URL"),
   ownerUnionId: process.env.OWNER_UNION_ID ?? "",

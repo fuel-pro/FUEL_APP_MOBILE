@@ -40,7 +40,7 @@ function getApiUrl(): string {
   if (typeof window !== "undefined") {
     const host = window.location.hostname;
     if (host.includes("vercel.app") || host.includes("netlify.app") || host.includes("github.io")) {
-      // Use relative path - Vercel will proxy to Railway backend
+      // Use relative path - Vercel will proxy to backend
       return "/api/trpc";
     }
   }

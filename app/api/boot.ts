@@ -17,7 +17,7 @@ app.use(bodyLimit({ maxSize: 50 * 1024 * 1024 }));
 // CORS configuration - restrict in production
 const allowedOrigins = process.env.CORS_ALLOWED_ORIGINS
   ? process.env.CORS_ALLOWED_ORIGINS.split(",")
- : env.isProduction
+  : env.isProduction
     ? []
     : ["*"];
 
