@@ -158,6 +158,17 @@ export function useAutoSync(
     }
   }, [countryCode, isSyncing]);
 
+  // Use refs to avoid stale closures in interval callbacks
+  const doSyncRef = useRef(doSync);
+  const refreshLocationRef = useRef(refreshLocation);
+  const countryCodeRef = useRef(countryCode);
+  
+  useEffect(() => {
+    doSyncRef.current = doSync;
+    refreshLocationRef.current = refreshLocation;
+    countryCodeRef.current = countryCode;
+  }, [doSync, refreshLocation, countryCode]);
+
   useEffect(() => {
     const cachedFuel = getSyncedFuelPrice(countryCode);
     const cachedTax = getSyncedTaxRates(countryCode);
@@ -173,28 +184,39 @@ export function useAutoSync(
     } catch {}
     
     // Check if prices are stale (from previous day) - if so, force refresh
-    if (arePricesStale(countryCode)) {
+    // Use refs to avoid stale closures and dependency issues
+    const cc = countryCode;
+    if (arePricesStale(cc)) {
       console.log("[useAutoSync] Prices are stale, forcing refresh...");
-      doSync();
-    } else if (isSyncDue(countryCode)) {
-      doSync();
+      doSyncRef.current();
+    } else if (isSyncDue(cc)) {
+      doSyncRef.current();
     }
     
-    refreshLocation();
+    refreshLocationRef.current();
+    
+    // Clear any existing interval before setting new one
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    
     intervalRef.current = setInterval(() => {
+      const currentCc = countryCodeRef.current;
       // Always check if prices are stale on each interval
-      if (arePricesStale(countryCode)) {
+      if (arePricesStale(currentCc)) {
         console.log("[useAutoSync] Interval check: prices stale, refreshing...");
-        doSync();
-      } else if (isSyncDue(countryCode)) {
-        doSync();
+        doSyncRef.current();
+      } else if (isSyncDue(currentCc)) {
+        doSyncRef.current();
       }
-      refreshLocation();
+      refreshLocationRef.current();
     }, 1000 * 60 * 15); // Check every 15 minutes
     return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
     };
-  }, [countryCode, doSync, refreshLocation]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [countryCode]); // Only re-run when countryCode changes
 
   useEffect(() => { updateLocationPrice(); }, [updateLocationPrice]);
 

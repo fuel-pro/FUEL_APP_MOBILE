@@ -14,11 +14,30 @@ const app = new Hono<{ Bindings: HttpBindings }>();
 
 app.use(bodyLimit({ maxSize: 50 * 1024 * 1024 }));
 
-// Global CORS
+// CORS configuration - restrict in production
+const allowedOrigins = process.env.CORS_ALLOWED_ORIGINS
+  ? process.env.CORS_ALLOWED_ORIGINS.split(",")
+ : env.isProduction
+    ? []
+    : ["*"];
+
 app.use("*", cors({
-  origin: "*",
+  origin: (origin) => {
+    // Allow requests with no origin (mobile apps, curl, etc.)
+    if (!origin) return origin || "";
+    // In development or if wildcard is allowed
+    if (allowedOrigins.includes("*")) return origin;
+    // Check against allowed origins
+    if (allowedOrigins.some((o: string) => origin === o || origin.endsWith(o.replace("*.", ".")))) {
+      return origin;
+    }
+    // In production, return empty string to deny (Hono handles this gracefully)
+    return env.isProduction ? "" : origin;
+  },
   allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowHeaders: ["Content-Type", "Authorization", "X-API-Key", "x-founder-token"],
+  credentials: true,
+  maxAge: 86400,
 }));
 
 // Health check endpoint
@@ -34,18 +53,27 @@ app.route("/api", restApi);
 
 app.get(Paths.oauthCallback, createOAuthCallbackHandler());
 
-// tRPC endpoint
+// tRPC endpoint with error handling
 app.use("/api/trpc/*", async (c) => {
   if (c.req.method === "OPTIONS") {
     return c.json({ ok: true });
   }
   
-  return fetchRequestHandler({
-    endpoint: "/api/trpc",
-    req: c.req.raw,
-    router: appRouter,
-    createContext,
-  });
+  try {
+    return await fetchRequestHandler({
+      endpoint: "/api/trpc",
+      req: c.req.raw,
+      router: appRouter,
+      createContext,
+    });
+  } catch (err) {
+    console.error("[tRPC] Unhandled error:", err);
+    return c.json({ 
+      error: "Internal server error", 
+      code: "INTERNAL_SERVER_ERROR",
+      path: c.req.path 
+    }, 500);
+  }
 });
 
 // Fallback for unmatched routes

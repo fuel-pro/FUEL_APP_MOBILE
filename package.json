@@ -1,14 +1,18 @@
 {
-  "name": "workspace",
+  "name": "fuelpro-workspace",
   "version": "1.0.0",
-  "main": "index.js",
+  "private": true,
+  "description": "FuelPro - Fuel Station Management System",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Tests run in app/ directory\" && exit 0",
+    "dev": "cd app && npm run dev",
+    "build": "cd app && npm run build",
+    "check": "cd app && npm run check",
+    "format": "cd app && npm run format"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": ["fuel", "station", "management", "pos"],
+  "author": "FuelPro",
   "license": "ISC",
-  "description": "",
   "devDependencies": {
     "vercel": "^54.17.3"
   }

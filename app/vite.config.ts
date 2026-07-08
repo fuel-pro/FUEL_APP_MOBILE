@@ -1,25 +1,26 @@
 import path from "path";
-const __dirname = import.meta.dirname;
+import { fileURLToPath } from "url";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+
+const __dirname = fileURLToPath(new URL(".", import.meta.url));
 
 // Only load dev server plugin when not in production build
 const plugins = [react()];
 
-try {
-  if (process.env.NODE_ENV !== "production") {
-    // Only load dev server plugin if available (not during Vercel build)
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const devServer = require("@hono/vite-dev-server");
+// Dynamic import for dev server (ESM-compatible)
+if (process.env.NODE_ENV !== "production") {
+  try {
+    const devServer = await import("@hono/vite-dev-server");
     if (devServer?.default) {
-      plugins.unshift(devServer.default({ 
-        entry: "api/boot.ts", 
-        exclude: [/^\/(?!api\/).*$/] 
+      plugins.unshift(devServer.default({
+        entry: "api/boot.ts",
+        exclude: [/^\/(?!api\/).*$/],
       }));
     }
+  } catch {
+    // @hono/vite-dev-server not available during production build
   }
-} catch {
-  // @hono/vite-dev-server not available during production build
 }
 
 export default defineConfig({

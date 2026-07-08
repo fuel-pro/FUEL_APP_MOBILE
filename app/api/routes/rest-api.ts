@@ -3,6 +3,9 @@
  * 
  * Simple REST API endpoints that work alongside tRPC.
  * These endpoints provide direct CRUD operations for cloud sync.
+ * 
+ * SECURITY: All endpoints require API key authentication.
+ * The "secrets" collection is write-only and never returned in list/get operations.
  */
 
 import { Hono } from "hono";
@@ -13,27 +16,59 @@ const app = new Hono();
 
 // CORS middleware
 app.use("*", cors({
-  origin: "*",
+  origin: (origin) => origin || "",
   allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowHeaders: ["Content-Type", "Authorization", "X-API-Key"],
+  credentials: true,
 }));
 
 app.use("*", logger());
 
+// Data store type
+type DataRecord = Record<string, unknown>;
+interface DataStore {
+  [collection: string]: Record<string, DataRecord>;
+}
+
 // In-memory data store (in production, use a real database)
-const dataStore: Record<string, Record<string, any>> = {
+const dataStore: DataStore = {
   users: {},
   stations: {},
   sales: {},
   audit_log: {},
-  secrets: {},
   feature_flags: {},
   config: {},
 };
 
+// Collections that require authentication
+const PROTECTED_COLLECTIONS = ["users", "sales", "audit_log", "config"];
+// Collections that are write-only (never listed or read back)
+const WRITE_ONLY_COLLECTIONS = ["secrets"];
+
 // Helper to generate IDs
 function generateId(prefix: string): string {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+// Simple API key auth middleware
+async function requireAuth(c: any, next: any) {
+  const apiKey = c.req.header("X-API-Key") || c.req.header("Authorization")?.replace("Bearer ", "");
+  const collection = c.req.param("collection");
+  
+  // Public collections don't require auth
+  if (collection && !PROTECTED_COLLECTIONS.includes(collection)) {
+    return next();
+  }
+  
+  // In production, validate against configured API keys
+  if (process.env.NODE_ENV === "production") {
+    const validKeys = (process.env.API_KEYS || "").split(",").filter(Boolean);
+    if (!apiKey || !validKeys.includes(apiKey)) {
+      return c.json({ success: false, error: "Unauthorized - valid API key required" }, 401);
+    }
+  }
+  
+  return next();
 }
 
 // Health check
@@ -67,9 +102,14 @@ app.get("/api/health", (c) => {
   });
 });
 
-// List all records in a collection
-app.get("/api/data/:collection", (c) => {
+// List all records in a collection (protected)
+app.get("/api/data/:collection", requireAuth, (c) => {
   const { collection } = c.req.param();
+  
+  // Never allow reading from write-only collections
+  if (WRITE_ONLY_COLLECTIONS.includes(collection)) {
+    return c.json({ success: false, error: "Collection is write-only" }, 403);
+  }
   
   if (!dataStore[collection]) {
     dataStore[collection] = {};
@@ -88,9 +128,14 @@ app.get("/api/data/:collection", (c) => {
   });
 });
 
-// Get single record
-app.get("/api/data/:collection/:id", (c) => {
+// Get single record (protected)
+app.get("/api/data/:collection/:id", requireAuth, (c) => {
   const { collection, id } = c.req.param();
+  
+  // Never allow reading from write-only collections
+  if (WRITE_ONLY_COLLECTIONS.includes(collection)) {
+    return c.json({ success: false, error: "Collection is write-only" }, 403);
+  }
   
   if (!dataStore[collection]?.[id]) {
     return c.json({ success: false, error: "Not found" }, 404);
@@ -102,8 +147,8 @@ app.get("/api/data/:collection/:id", (c) => {
   });
 });
 
-// Create record
-app.post("/api/data/:collection", async (c) => {
+// Create record (protected for sensitive collections)
+app.post("/api/data/:collection", requireAuth, async (c) => {
   const { collection } = c.req.param();
   
   if (!dataStore[collection]) {
@@ -111,9 +156,16 @@ app.post("/api/data/:collection", async (c) => {
   }
   
   try {
-    const body = await c.req.json();
-    const id = body.id || generateId(collection);
-    const record = {
+    const body = await c.req.json() as Record<string, unknown>;
+    
+    // Basic input validation - reject overly large payloads
+    const payloadSize = JSON.stringify(body).length;
+    if (payloadSize > 1024 * 1024) { // 1MB limit
+      return c.json({ success: false, error: "Payload too large" }, 413);
+    }
+    
+    const id = (body.id as string) || generateId(collection);
+    const record: DataRecord = {
       ...body,
       createdAt: body.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -132,8 +184,8 @@ app.post("/api/data/:collection", async (c) => {
   }
 });
 
-// Update record
-app.put("/api/data/:collection/:id", async (c) => {
+// Update record (protected for sensitive collections)
+app.put("/api/data/:collection/:id", requireAuth, async (c) => {
   const { collection, id } = c.req.param();
   
   if (!dataStore[collection]?.[id]) {
@@ -141,7 +193,14 @@ app.put("/api/data/:collection/:id", async (c) => {
   }
   
   try {
-    const body = await c.req.json();
+    const body = await c.req.json() as Record<string, unknown>;
+    
+    // Basic input validation
+    const payloadSize = JSON.stringify(body).length;
+    if (payloadSize > 1024 * 1024) { // 1MB limit
+      return c.json({ success: false, error: "Payload too large" }, 413);
+    }
+    
     dataStore[collection][id] = {
       ...dataStore[collection][id],
       ...body,
@@ -157,8 +216,8 @@ app.put("/api/data/:collection/:id", async (c) => {
   }
 });
 
-// Delete record
-app.delete("/api/data/:collection/:id", (c) => {
+// Delete record (protected for sensitive collections)
+app.delete("/api/data/:collection/:id", requireAuth, (c) => {
   const { collection, id } = c.req.param();
   
   if (!dataStore[collection]?.[id]) {

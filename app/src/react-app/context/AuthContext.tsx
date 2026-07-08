@@ -139,8 +139,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(loadToken);
   const refreshIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Initialize - verify token with backend
+  // Use refs to always have latest callbacks in event handlers without re-subscribing
+  const handleLogoutRef = useRef<(() => void) | null>(null);
+  const refreshAuthRef = useRef<(() => Promise<boolean>) | null>(null);
+
+  // Initialize - verify token with backend (runs once on mount)
   useEffect(() => {
+    let cancelled = false;
     const initAuth = async () => {
       const storedToken = loadToken();
       if (storedToken) {
@@ -152,43 +157,64 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             signal: controller.signal,
           });
           clearTimeout(timeoutId);
-          if (res.ok) {
-            const data = await res.json();
-            const backendUser = data.user || data;
-            setUser({
-              id: backendUser.id,
-              authId: `email_${backendUser.email}`,
-              authMethod: "email",
-              email: backendUser.email,
-              name: backendUser.name,
-              role: backendUser.role,
-              permissions: backendUser.permissions,
-            });
-            setToken(storedToken);
-          } else {
-            // Token invalid - clear
-            localStorage.removeItem(AUTH_STORAGE_KEY);
-            localStorage.removeItem(TOKEN_STORAGE_KEY);
+          if (!cancelled) {
+            if (res.ok) {
+              const data = await res.json();
+              const backendUser = data.user || data;
+              setUser({
+                id: backendUser.id,
+                authId: `email_${backendUser.email}`,
+                authMethod: "email",
+                email: backendUser.email,
+                name: backendUser.name,
+                role: backendUser.role,
+                permissions: backendUser.permissions,
+              });
+              setToken(storedToken);
+            } else {
+              // Token invalid - clear
+              localStorage.removeItem(AUTH_STORAGE_KEY);
+              localStorage.removeItem(TOKEN_STORAGE_KEY);
+            }
           }
         } catch {
           // Offline - use cached data
         }
       }
-      setIsLoading(false);
+      if (!cancelled) setIsLoading(false);
     };
     initAuth();
+    return () => { cancelled = true; };
+  }, []);
 
-    // Setup refresh interval
+  // Separate effect for token refresh interval - properly reacts to token changes
+  useEffect(() => {
+    // Clear any existing interval first
+    if (refreshIntervalRef.current) {
+      clearInterval(refreshIntervalRef.current);
+      refreshIntervalRef.current = null;
+    }
     if (token) {
       refreshIntervalRef.current = setInterval(() => {
-        refreshAuth();
+        refreshAuthRef.current?.();
       }, 14 * 60 * 1000); // 14 minutes
     }
-
     return () => {
-      if (refreshIntervalRef.current) clearInterval(refreshIntervalRef.current);
+      if (refreshIntervalRef.current) {
+        clearInterval(refreshIntervalRef.current);
+        refreshIntervalRef.current = null;
+      }
     };
-  }, []);
+  }, [token]);
+
+  // Keep refs in sync with latest callbacks to avoid stale closures
+  useEffect(() => {
+    handleLogoutRef.current = handleLogout;
+  }, [handleLogout]);
+
+  useEffect(() => {
+    refreshAuthRef.current = refreshAuth;
+  }, [refreshAuth]);
 
   // Listen for cross-tab auth updates
   useEffect(() => {
@@ -202,7 +228,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(e.data.user));
         localStorage.setItem(TOKEN_STORAGE_KEY, e.data.token);
       } else if (e.data?.type === "LOGOUT") {
-        handleLogout();
+        handleLogoutRef.current?.();
       }
     };
     
@@ -240,16 +266,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const clearError = useCallback(() => setError(null), []);
 
-  // Broadcast auth update to other tabs
-  const broadcastAuthUpdate = (newUser: AuthIdentity | null, newToken: string | null) => {
+  // Broadcast auth update to other tabs - stable callback using useCallback
+  const broadcastAuthUpdate = useCallback((newUser: AuthIdentity | null, newToken: string | null) => {
     if (syncChannel) {
-      syncChannel.postMessage({
-        type: newUser ? "AUTH_UPDATE" : "LOGOUT",
-        user: newUser,
-        token: newToken,
-      });
+      try {
+        syncChannel.postMessage({
+          type: newUser ? "AUTH_UPDATE" : "LOGOUT",
+          user: newUser,
+          token: newToken,
+        });
+      } catch {
+        // BroadcastChannel may be unavailable in some environments
+      }
     }
-  };
+  }, []);
 
   // ---- EMAIL AUTH with Backend ----
   const loginWithEmail = useCallback(
@@ -472,7 +502,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem(TOKEN_STORAGE_KEY);
     localStorage.removeItem(BINDINGS_STORAGE_KEY);
     broadcastAuthUpdate(null, null);
-  }, []);
+  }, [broadcastAuthUpdate]);
 
   const logout = handleLogout;
 

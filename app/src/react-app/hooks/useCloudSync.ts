@@ -7,7 +7,7 @@
  * 3. Queues changes for sync when connection is restored
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { checkApiStatus, listRecords, createRecord, updateRecord, deleteRecord, Collections, getPendingCount, queuePendingChange } from "@/react-app/lib/restApiSync";
 
 // Types
@@ -83,14 +83,21 @@ export function useCloudSync() {
     return status.connected;
   }, []);
 
+  // Use ref to avoid stale closures in interval
+  const checkConnectionRef = useRef(checkConnection);
+  useEffect(() => {
+    checkConnectionRef.current = checkConnection;
+  }, [checkConnection]);
+
   // Initial connection check
   useEffect(() => {
-    checkConnection();
+    checkConnectionRef.current();
     
-    // Recheck every 30 seconds
-    const interval = setInterval(checkConnection, 30000);
+    // Recheck every 30 seconds - use ref to avoid stale closure
+    const interval = setInterval(() => checkConnectionRef.current(), 30000);
     return () => clearInterval(interval);
-  }, [checkConnection]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Sync all data
   const syncAll = useCallback(async () => {
