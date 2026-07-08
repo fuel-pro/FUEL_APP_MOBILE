@@ -6,45 +6,31 @@
   "outputDirectory": "app/dist",
   "routes": [
     {
-      "src": "/api/trpc/(.*)",
-      "dest": "/api/trpc/$1",
-      "headers": {
-        "x-trpc": "true"
-      }
-    },
-    {
       "src": "/api/health",
       "dest": "https://fuel-pro-backend-v2-production-7c2b.up.railway.app/api/health"
     },
     {
       "src": "/api/(.*)",
-      "dest": "https://fuel-pro-backend-v2-production-7c2b.up.railway.app/api/$1"
+      "dest": "https://fuel-pro-backend-v2-production-7c2b.up.railway.app/api/$1",
+      "methods": ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"]
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
     }
   ],
   "headers": [
     {
       "source": "/api/(.*)",
       "headers": [
-        {
-          "key": "Access-Control-Allow-Origin",
-          "value": "*"
-        },
-        {
-          "key": "Access-Control-Allow-Methods",
-          "value": "GET, POST, PUT, DELETE, OPTIONS, PATCH"
-        },
-        {
-          "key": "Access-Control-Allow-Headers",
-          "value": "Content-Type, Authorization, X-API-Key, x-founder-token, X-Requested-With, X-Clerk-Auth"
-        },
-        {
-          "key": "Access-Control-Max-Age",
-          "value": "86400"
-        }
+        { "key": "Access-Control-Allow-Origin", "value": "*" },
+        { "key": "Access-Control-Allow-Methods", "value": "GET, POST, PUT, DELETE, OPTIONS, PATCH" },
+        { "key": "Access-Control-Allow-Headers", "value": "Content-Type, Authorization, X-API-Key, x-founder-token, X-Requested-With, X-Clerk-Auth" },
+        { "key": "Access-Control-Max-Age", "value": "86400" }
       ]
     }
   ],
   "env": {
-    "VITE_API_URL": "https://fuel-pro-tprc-api.up.railway.app"
+    "VITE_API_URL": "https://fuel-pro-backend-v2-production-7c2b.up.railway.app"
   }
 }
