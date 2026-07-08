@@ -156,7 +156,7 @@ FUEL_APP_MOBILE/
 ### Prerequisites
 - Node.js 18+
 - npm 9+
-- MySQL 8+ (for backend)
+- SQLite 3+ (for backend)
 
 ### Install Dependencies
 ```bash
@@ -223,7 +223,7 @@ VITE_APP_ID=your_app_id
 ```env
 APP_ID=your_app_id
 APP_SECRET=your_app_secret
-DATABASE_URL=mysql://user:pass@host:port/db
+DATABASE_URL=file:./dev.db
 KIMI_AUTH_URL=https://auth.kimi.com
 KIMI_OPEN_URL=https://open.kimi.com
 OWNER_UNION_ID=your_union_id
