@@ -1,325 +1,282 @@
 /**
- * M-PESA STK Push Server-Side Implementation
- * 
- * SECURITY FIX: This file addresses the critical vulnerability where M-PESA
- * API credentials (Consumer Key, Consumer Secret, Passkey) were stored in
- * localStorage and used client-side. This exposed financial API credentials
- * to anyone with browser devtools access.
- * 
- * Now STK Push is initiated server-side using environment variables:
- *   - MPESA_CONSUMER_KEY
- *   - MPESA_CONSUMER_SECRET
- *   - MPESA_PASSKEY
- *   - MPESA_SHORTCODE
- *   - MPESA_CALLBACK_URL (your callback URL registered with Safaricom)
- *   - MPESA_ENV (sandbox | live)
- * 
- * The server also creates a PENDING transaction row so when Safaricom
- * calls back, the transaction can be found and updated.
+ * M-PESA STK Push Server-Side Handler
+ * SECURITY: All credential handling done server-side
  */
 
 const express = require('express');
 const router = express.Router();
-const { getDb } = require('../database/sqlite');
-const { protect } = require('../middleware/auth');
-const AuditLog = require('../models/AuditLog');
+const crypto = require('crypto');
+const { protect, requireRole } = require('../middleware/auth');
 
-const MPESA_ENV = process.env.MPESA_ENV || 'sandbox';
-const BASE_URL = MPESA_ENV === 'live' 
-  ? 'https://api.safaricom.co.ke'
-  : 'https://sandbox.safaricom.co.ke';
+// M-PESA Configuration from Environment
+const MPESA_CONFIG = {
+  shortcode: process.env.MPESA_SHORTCODE,
+  passkey: process.env.MPESA_PASSKEY,
+  consumerKey: process.env.MPESA_CONSUMER_KEY,
+  consumerSecret: process.env.MPESA_CONSUMER_SECRET,
+  env: process.env.MPESA_ENV || 'sandbox',
+  callbackUrl: process.env.MPESA_CALLBACK_URL
+};
 
-/**
- * Get OAuth token from Safaricom
- */
-async function getMpesaToken() {
-  const consumerKey = process.env.MPESA_CONSUMER_KEY;
-  const consumerSecret = process.env.MPESA_CONSUMER_SECRET;
-  
-  if (!consumerKey || !consumerSecret) {
-    throw new Error('MPESA_CONSUMER_KEY and MPESA_CONSUMER_SECRET must be set');
-  }
-  
-  const auth = Buffer.from(`${consumerKey}:${consumerSecret}`).toString('base64');
-  
-  const response = await fetch(`${BASE_URL}/oauth/v1/generate?grant_type=client_credentials`, {
-    method: 'GET',
-    headers: {
-      'Authorization': `Basic ${auth}`,
-      'Content-Type': 'application/json'
-    }
-  });
-  
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Failed to get M-PESA token: ${error}`);
-  }
-  
-  const data = await response.json();
-  return data.access_token;
+// SECURITY: Verify configuration at startup
+if (MPESA_CONFIG.shortcode && !MPESA_CONFIG.passkey) {
+  console.warn('⚠️ WARNING: MPESA_SHORTCODE set but MPESA_PASSKEY missing');
 }
 
 /**
- * Format phone number to 254 format
+ * Validate and format Kenyan phone number to M-PESA format (254XXXXXXXXX)
+ * SECURITY: Strict validation to prevent invalid requests
  */
 function formatPhone254(phone) {
-  if (!phone) return null;
-  
-  // Remove all non-digits
-  const clean = phone.replace(/\D/g, '');
-  
-  // Handle various formats
-  if (clean.startsWith('254') && clean.length === 12) {
-    return clean;
-  }
-  if (clean.startsWith('0') && clean.length === 9) {
-    return '254' + clean.slice(1);
-  }
-  if (clean.startsWith('7') && clean.length === 9) {
-    return '254' + clean;
-  }
-  if (clean.startsWith('+254') && clean.length === 13) {
-    return clean.slice(1);
+  if (!phone || typeof phone !== 'string') {
+    return null;
   }
   
-  // Return as-is if already in correct format
-  if (clean.length === 12) return clean;
+  // Remove spaces, dashes, and leading +
+  let clean = phone.replace(/[\s+-]/g, '');
   
-  return null; // Invalid format
+  // Validate: only digits
+  if (!/^[0-9]+$/.test(clean)) {
+    return null;
+  }
+  
+  // Convert formats
+  if (clean.startsWith('254')) {
+    // Already in correct format, validate length
+    if (clean.length === 12) return clean;
+  } else if (clean.startsWith('07') || clean.startsWith('01')) {
+    // Convert 07xxxxxxxx or 01xxxxxxxx to 254XXXXXXXXX
+    if (clean.length === 10) {
+      return '254' + clean.substring(1);
+    }
+  }
+  
+  return null;
 }
 
 /**
+ * Validate M-PESA amount
+ * SECURITY: Prevent abuse with min/max limits
+ */
+function validateAmount(amount) {
+  const numericAmount = Number(amount);
+  
+  if (isNaN(numericAmount)) {
+    return { valid: false, error: 'Invalid amount format' };
+  }
+  
+  // M-PESA limits
+  const MIN_AMOUNT = 10; // KES 10 minimum
+  const MAX_AMOUNT = 150000; // KES 150,000 per transaction (M-PESA limit)
+  
+  if (numericAmount < MIN_AMOUNT) {
+    return { valid: false, error: `Minimum amount is KES ${MIN_AMOUNT}` };
+  }
+  
+  if (numericAmount > MAX_AMOUNT) {
+    return { valid: false, error: `Maximum amount is KES ${MAX_AMOUNT}` };
+  }
+  
+  // Check for too many decimal places (max 2)
+  if (!/^\d+(\.\d{1,2})?$/.test(amount.toString())) {
+    return { valid: false, error: 'Amount can have at most 2 decimal places' };
+  }
+  
+  return { valid: true, amount: numericAmount };
+}
+
+/**
+ * Generate M-PESA Access Token
+ */
+async function getMpesaAccessToken() {
+  const auth = Buffer.from(
+    `${MPESA_CONFIG.consumerKey}:${MPESA_CONFIG.consumerSecret}`
+  ).toString('base64');
+
+  const baseUrl = MPESA_CONFIG.env === 'production' 
+    ? 'https://api.safaricom.co.ke' 
+    : 'https://sandbox.safaricom.co.ke';
+
+  try {
+    const response = await fetch(`${baseUrl}/oauth/v1/generate?grant_type=client_credentials`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Basic ${auth}`
+      }
+    });
+
+    const data = await response.json();
+    
+    if (data.access_token) {
+      return { success: true, token: data.access_token };
+    }
+    
+    return { success: false, error: data.error_description || 'Failed to get token' };
+  } catch (error) {
+    console.error('M-PESA Token Error:', error.message);
+    return { success: false, error: 'Failed to connect to M-PESA' };
+  }
+}
+
+/**
+ * Initiate STK Push
  * POST /api/mpesa/stkpush
- * Initiate STK Push payment request
  */
 router.post('/stkpush', protect, async (req, res) => {
   try {
-    const { phoneNumber, amount, accountReference, description } = req.body;
-    
-    // Validate required fields
-    if (!phoneNumber || !amount || !accountReference) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'phoneNumber, amount, and accountReference are required' 
-      });
-    }
-    
-    // Validate amount
-    const numericAmount = Number(amount);
-    if (isNaN(numericAmount) || numericAmount < 1) {
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Amount must be a positive number' 
-      });
-    }
-    
-    // Format phone number
-    const formattedPhone = formatPhone254(phoneNumber);
+    const { phone, amount, accountReference, transactionDesc } = req.body;
+
+    // Validate phone number
+    const formattedPhone = formatPhone254(phone);
     if (!formattedPhone) {
       return res.status(400).json({ 
         success: false, 
-        error: 'Invalid phone number format. Use 07xx xxx xxx or +254xx xxx xxx' 
+        error: 'Invalid phone number format. Use 254XXXXXXXXX, 07XXXXXXXX, or 01XXXXXXXX' 
       });
     }
-    
-    // Get environment variables
-    const shortcode = process.env.MPESA_SHORTCODE;
-    const passkey = process.env.MPESA_PASSKEY;
-    const callbackUrl = process.env.MPESA_CALLBACK_URL;
-    
-    if (!shortcode || !passkey || !callbackUrl) {
-      console.error('M-PESA environment not fully configured');
+
+    // Validate amount
+    const amountValidation = validateAmount(amount);
+    if (!amountValidation.valid) {
+      return res.status(400).json({ 
+        success: false, 
+        error: amountValidation.error 
+      });
+    }
+
+    // Check M-PESA configuration
+    if (!MPESA_CONFIG.shortcode || !MPESA_CONFIG.passkey) {
+      console.error('M-PESA not configured');
       return res.status(500).json({ 
         success: false, 
-        error: 'M-PESA is not configured on this server' 
+        error: 'Payment service not configured' 
       });
     }
-    
-    // Get OAuth token
-    const token = await getMpesaToken();
-    
+
+    // Get access token
+    const tokenResult = await getMpesaAccessToken();
+    if (!tokenResult.success) {
+      return res.status(500).json({ 
+        success: false, 
+        error: 'Failed to authenticate with payment service' 
+      });
+    }
+
     // Generate timestamp and password
-    const timestamp = new Date().toISOString().replace(/[-:T]/g, '').split('.')[0];
-    const password = Buffer.from(`${shortcode}${passkey}${timestamp}`).toString('base64');
-    
-    // Prepare STK Push request
-    const stkRequest = {
-      BusinessShortCode: shortcode,
+    const timestamp = new Date().toISOString().replace(/[-:T]/g, '').substring(0, 14);
+    const password = Buffer.from(
+      `${MPESA_CONFIG.shortcode}${MPESA_CONFIG.passkey}${timestamp}`
+    ).toString('base64');
+
+    const baseUrl = MPESA_CONFIG.env === 'production' 
+      ? 'https://api.safaricom.co.ke' 
+      : 'https://sandbox.safaricom.co.ke';
+
+    const stkPushPayload = {
+      BusinessShortCode: MPESA_CONFIG.shortcode,
       Password: password,
       Timestamp: timestamp,
       TransactionType: 'CustomerPayBillOnline',
-      Amount: Math.round(numericAmount), // Safaricom requires integer
+      Amount: amountValidation.amount,
       PartyA: formattedPhone,
-      PartyB: shortcode,
+      PartyB: MPESA_CONFIG.shortcode,
       PhoneNumber: formattedPhone,
-      CallBackURL: callbackUrl,
-      AccountReference: String(accountReference).substring(0, 20), // Max 20 chars
-      TransactionDesc: String(description || 'Payment').substring(0, 100)
+      CallBackURL: MPESA_CONFIG.callbackUrl,
+      AccountReference: (accountReference || 'FuelPro').substring(0, 12), // Max 12 chars
+      TransactionDesc: (transactionDesc || 'Fuel Purchase').substring(0, 13) // Max 13 chars
     };
-    
-    // Send STK Push request
-    const response = await fetch(`${BASE_URL}/mpesa/stkpush/v1/processrequest`, {
+
+    const response = await fetch(`${baseUrl}/mpesa/stkpush/v1/processrequest`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${token}`,
+        'Authorization': `Bearer ${tokenResult.token}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify(stkRequest)
+      body: JSON.stringify(stkPushPayload)
     });
-    
+
     const data = await response.json();
-    
-    // Check for successful response
+
     if (data.ResponseCode === '0') {
-      // Create PENDING transaction record so callback can find it
-      const db = getDb();
-      const checkoutRequestId = data.CheckoutRequestID;
-      
-      db.prepare(`
-        INSERT INTO transactions (
-          checkout_request_id, phone, amount, account_ref, 
-          status, user_id, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, 'PENDING', ?, datetime('now'), datetime('now'))
-      `).run(
-        checkoutRequestId,
-        formattedPhone,
-        numericAmount,
-        accountReference,
-        req.user.id
-      );
-      
-      // Log the initiation
-      await AuditLog.create({
-        action: 'MPESA_STK_INITIATED',
-        detail: `STK Push initiated: KES ${numericAmount} to ${accountReference}`,
-        userId: req.user.id,
-        metadata: {
-          checkoutRequestId,
-          amount: numericAmount,
-          phone: formattedPhone,
-          accountReference
-        }
-      });
-      
-      console.log(`✅ STK Push initiated: ${checkoutRequestId}`);
-      
-      return res.json({
+      res.json({
         success: true,
-        checkoutRequestId: checkoutRequestId,
-        responseDescription: data.ResponseDescription
+        message: 'STK Push initiated. Check your phone.',
+        CheckoutRequestID: data.CheckoutRequestID,
+        MerchantRequestID: data.MerchantRequestID
       });
     } else {
-      // STK Push failed
-      console.error(`❌ STK Push failed: ${data.ResponseCode} - ${data.ResponseDescription}`);
-      
-      return res.json({
+      console.error('STK Push Failed:', data);
+      res.status(400).json({
         success: false,
-        error: data.ResponseDescription || 'STK Push request failed',
-        responseCode: data.ResponseCode
+        error: data.errorMessage || 'Failed to initiate payment',
+        errorCode: data.errorCode
       });
     }
-    
   } catch (error) {
-    console.error('❌ M-PESA STK Push Error:', error);
-    
-    return res.status(500).json({
-      success: false,
-      error: error.message || 'Failed to initiate payment'
+    console.error('STK Push Error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to process payment request' 
     });
   }
 });
 
 /**
- * POST /api/mpesa/stkstatus
- * Check STK Push transaction status
+ * Check STK Push Status
+ * POST /api/mpesa/stkpush/query
  */
-router.post('/stkstatus', protect, async (req, res) => {
+router.post('/stkpush/query', protect, async (req, res) => {
   try {
     const { checkoutRequestId } = req.body;
-    
+
     if (!checkoutRequestId) {
       return res.status(400).json({ 
         success: false, 
-        error: 'checkoutRequestId is required' 
+        error: 'CheckoutRequestID is required' 
       });
     }
-    
-    // Get environment variables
-    const shortcode = process.env.MPESA_SHORTCODE;
-    const passkey = process.env.MPESA_PASSKEY;
-    
-    if (!shortcode || !passkey) {
+
+    // Get access token
+    const tokenResult = await getMpesaAccessToken();
+    if (!tokenResult.success) {
       return res.status(500).json({ 
         success: false, 
-        error: 'M-PESA is not configured' 
+        error: 'Failed to authenticate with payment service' 
       });
     }
-    
-    // Get OAuth token
-    const token = await getMpesaToken();
-    
-    // Generate timestamp and password
-    const timestamp = new Date().toISOString().replace(/[-:T]/g, '').split('.')[0];
-    const password = Buffer.from(`${shortcode}${passkey}${timestamp}`).toString('base64');
-    
-    // Query transaction status
-    const response = await fetch(`${BASE_URL}/mpesa/stkpushquery/v1/query`, {
+
+    const timestamp = new Date().toISOString().replace(/[-:T]/g, '').substring(0, 14);
+    const password = Buffer.from(
+      `${MPESA_CONFIG.shortcode}${MPESA_CONFIG.passkey}${timestamp}`
+    ).toString('base64');
+
+    const baseUrl = MPESA_CONFIG.env === 'production' 
+      ? 'https://api.safaricom.co.ke' 
+      : 'https://sandbox.safaricom.co.ke';
+
+    const response = await fetch(`${baseUrl}/mpesa/stkpushquery/v1/query`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${token}`,
+        'Authorization': `Bearer ${tokenResult.token}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        BusinessShortCode: shortcode,
+        BusinessShortCode: MPESA_CONFIG.shortcode,
         Password: password,
         Timestamp: timestamp,
         CheckoutRequestID: checkoutRequestId
       })
     });
-    
+
     const data = await response.json();
-    
-    // Find local transaction record
-    const db = getDb();
-    const transaction = db.prepare(`
-      SELECT * FROM transactions WHERE checkout_request_id = ?
-    `).get(checkoutRequestId);
-    
-    return res.json({
-      success: true,
-      mpesaResponse: data,
-      localTransaction: transaction
-    });
-    
+    res.json(data);
   } catch (error) {
-    console.error('❌ M-PESA STK Status Error:', error);
-    return res.status(500).json({
-      success: false,
-      error: error.message || 'Failed to check transaction status'
+    console.error('STK Query Error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to check payment status' 
     });
   }
-});
-
-/**
- * GET /api/mpesa/config
- * Check M-PESA configuration status
- */
-router.get('/config', (req, res) => {
-  const hasEnvVars = !!(
-    process.env.MPESA_CONSUMER_KEY &&
-    process.env.MPESA_CONSUMER_SECRET &&
-    process.env.MPESA_PASSKEY &&
-    process.env.MPESA_SHORTCODE &&
-    process.env.MPESA_CALLBACK_URL
-  );
-  
-  res.json({
-    configured: hasEnvVars,
-    env: MPESA_ENV,
-    message: hasEnvVars 
-      ? 'M-PESA is properly configured' 
-      : 'M-PESA credentials are missing. Set MPESA_CONSUMER_KEY, MPESA_CONSUMER_SECRET, MPESA_PASSKEY, MPESA_SHORTCODE, and MPESA_CALLBACK_URL'
-  });
 });
 
 module.exports = router;

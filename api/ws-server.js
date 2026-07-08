@@ -1,213 +1,249 @@
 /**
- * FuelPro WebSocket Server
- * Real-time bidirectional communication for instant sync
+ * WebSocket Server for Real-time Features
+ * SECURITY: Added origin validation and rate limiting
  */
 
-import { WebSocketServer, WebSocket } from 'ws';
-import { createServer } from 'http';
+const { WebSocketServer } = require('ws');
 
-const PORT = process.env.WS_PORT || 3001;
-
-// Connected clients per station
 const stations = new Map();
-
-// Message types
-const MSG_TYPES = {
-  AUTH: 'auth',
-  SYNC: 'sync',
-  PUSH: 'push',
-  PULL: 'pull',
-  BROADCAST: 'broadcast',
-  PING: 'ping',
-  PONG: 'pong',
-  ERROR: 'error',
-  SUCCESS: 'success'
-};
-
-// Station rooms for broadcasting
 const rooms = new Map();
 
-function broadcast(stationId, message, excludeWs = null) {
-  const room = rooms.get(stationId);
-  if (!room) return;
-  
-  const payload = JSON.stringify(message);
-  room.forEach(ws => {
-    if (ws !== excludeWs && ws.readyState === WebSocket.OPEN) {
-      ws.send(payload);
+// Rate limiting
+const connectionRateLimit = new Map();
+const MAX_CONNECTIONS_PER_MINUTE = 5;
+const RATE_LIMIT_WINDOW = 60000;
+
+// Allowed origins for WebSocket connections
+const ALLOWED_ORIGINS = [
+  'https://fuel-app-mobile.vercel.app',
+  'http://localhost:3000',
+  'http://localhost:5173'
+];
+
+// Clean up rate limit entries periodically
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, data] of connectionRateLimit.entries()) {
+    if (now - data.windowStart > RATE_LIMIT_WINDOW) {
+      connectionRateLimit.delete(ip);
     }
+  }
+}, RATE_LIMIT_WINDOW);
+
+function createWebSocketServer(server) {
+  const wss = new WebSocketServer({ 
+    server,
+    path: '/ws',
+    clientTracking: true
   });
-}
 
-function handleMessage(ws, data) {
-  try {
-    const message = JSON.parse(data);
-    const { type, payload, id } = message;
+  // Validate origin on connection
+  wss.on('connection', (ws, req) => {
+    const clientIp = req.socket.remoteAddress;
+    const origin = req.headers.origin || req.headers.host;
+
+    console.log(`[WS] Connection attempt from ${clientIp} origin: ${origin}`);
+
+    // SECURITY: Rate limiting per IP
+    const rateData = connectionRateLimit.get(clientIp) || { count: 0, windowStart: Date.now() };
+    const now = Date.now();
     
-    switch (type) {
-      case MSG_TYPES.AUTH:
-        handleAuth(ws, payload);
-        send(ws, { type: MSG_TYPES.SUCCESS, id, payload: { authenticated: true } });
-        break;
-        
-      case MSG_TYPES.PING:
-        send(ws, { type: MSG_TYPES.PONG, id });
-        break;
-        
-      case MSG_TYPES.PUSH:
-        handlePush(ws, payload);
-        break;
-        
-      case MSG_TYPES.BROADCAST:
-        handleBroadcast(ws, payload);
-        break;
-        
-      case MSG_TYPES.SYNC:
-        handleSync(ws, payload);
-        break;
-        
-      default:
-        send(ws, { type: MSG_TYPES.ERROR, id, payload: { message: 'Unknown message type' } });
+    if (now - rateData.windowStart > RATE_LIMIT_WINDOW) {
+      rateData.count = 1;
+      rateData.windowStart = now;
+    } else {
+      rateData.count++;
     }
-  } catch (e) {
-    console.error('[WS] Parse error:', e.message);
-    send(ws, { type: MSG_TYPES.ERROR, payload: { message: 'Invalid JSON' } });
+    
+    connectionRateLimit.set(clientIp, rateData);
+    
+    if (rateData.count > MAX_CONNECTIONS_PER_MINUTE) {
+      console.warn(`[WS] Rate limited: ${clientIp}`);
+      ws.close(1008, 'Rate limit exceeded');
+      return;
+    }
+
+    // SECURITY: Validate origin (skip for localhost in development)
+    const isLocalhost = clientIp === '::1' || clientIp === '127.0.0.1' || clientIp.startsWith('::ffff:127.');
+    if (process.env.NODE_ENV === 'production' && !isLocalhost) {
+      if (!origin || !ALLOWED_ORIGINS.some(allowed => origin.startsWith(allowed))) {
+        console.warn(`[WS] Rejected connection from invalid origin: ${origin}`);
+        ws.close(1008, 'Invalid origin');
+        return;
+      }
+    }
+
+    ws.isAlive = true;
+    ws.clientIp = clientIp;
+
+    // Heartbeat to detect dead connections
+    ws.on('pong', () => {
+      ws.isAlive = true;
+    });
+
+    ws.on('message', (data) => {
+      try {
+        const message = JSON.parse(data.toString());
+        handleMessage(ws, message);
+      } catch (error) {
+        console.error('[WS] Message parse error:', error.message);
+        ws.send(JSON.stringify({ 
+          type: 'error', 
+          message: 'Invalid message format' 
+        }));
+      }
+    });
+
+    ws.on('close', (code, reason) => {
+      console.log(`[WS] Client disconnected: ${clientIp} code: ${code}`);
+      // Clean up rooms
+      cleanupDisconnectedClient(ws);
+    });
+
+    ws.on('error', (error) => {
+      console.error(`[WS] Error from ${clientIp}:`, error.message);
+    });
+
+    // Send welcome message
+    ws.send(JSON.stringify({
+      type: 'connected',
+      message: 'Connected to FuelPro',
+      timestamp: new Date().toISOString()
+    }));
+  });
+
+  // Heartbeat interval to detect dead connections
+  const heartbeatInterval = setInterval(() => {
+    wss.clients.forEach((ws) => {
+      if (!ws.isAlive) {
+        console.log(`[WS] Terminating dead connection: ${ws.clientIp}`);
+        return ws.terminate();
+      }
+      ws.isAlive = false;
+      ws.ping();
+    });
+  }, 30000);
+
+  wss.on('close', () => {
+    clearInterval(heartbeatInterval);
+  });
+
+  return wss;
+}
+
+function handleMessage(ws, message) {
+  const { type, payload } = message;
+
+  // Validate message type
+  if (!type || typeof type !== 'string') {
+    return ws.send(JSON.stringify({ 
+      type: 'error', 
+      message: 'Message type required' 
+    }));
+  }
+
+  switch (type) {
+    case 'join_room':
+      handleJoinRoom(ws, payload);
+      break;
+    case 'leave_room':
+      handleLeaveRoom(ws, payload);
+      break;
+    case 'broadcast':
+      handleBroadcast(ws, payload);
+      break;
+    case 'ping':
+      ws.send(JSON.stringify({ type: 'pong' }));
+      break;
+    default:
+      ws.send(JSON.stringify({ 
+        type: 'error', 
+        message: `Unknown message type: ${type}` 
+      }));
   }
 }
 
-function handleAuth(ws, payload) {
-  const { stationId, userId, token } = payload;
-  
-  if (!stationId) {
-    send(ws, { type: MSG_TYPES.ERROR, payload: { message: 'stationId required' } });
-    return;
+function handleJoinRoom(ws, payload) {
+  if (!payload || !payload.roomId) {
+    return ws.send(JSON.stringify({ 
+      type: 'error', 
+      message: 'roomId required' 
+    }));
   }
-  
-  ws.stationId = stationId;
-  ws.userId = userId;
-  
-  // Join station room
-  if (!rooms.has(stationId)) {
-    rooms.set(stationId, new Set());
+
+  const roomId = payload.roomId.toString().substring(0, 50); // Limit room ID length
+
+  if (!rooms.has(roomId)) {
+    rooms.set(roomId, new Set());
   }
-  rooms.get(stationId).add(ws);
-  
-  console.log(`[WS] Client joined station ${stationId} (${rooms.get(stationId).size} clients)`);
+
+  rooms.get(roomId).add(ws);
+  ws.currentRoom = roomId;
+
+  console.log(`[WS] Client joined room: ${roomId}`);
+
+  ws.send(JSON.stringify({
+    type: 'room_joined',
+    roomId,
+    clientCount: rooms.get(roomId).size
+  }));
 }
 
-function handlePush(ws, { collection, record, operation }) {
-  if (!ws.stationId) {
-    send(ws, { type: MSG_TYPES.ERROR, payload: { message: 'Not authenticated' } });
-    return;
-  }
-  
-  // Broadcast to other clients in the same station
-  broadcast(ws.stationId, {
-    type: MSG_TYPES.SYNC,
-    payload: {
-      collection,
-      operation,
-      record,
-      userId: ws.userId,
-      timestamp: Date.now()
+function handleLeaveRoom(ws, payload) {
+  if (!payload || !payload.roomId) return;
+
+  const roomId = payload.roomId;
+
+  if (rooms.has(roomId)) {
+    rooms.get(roomId).delete(ws);
+    if (rooms.get(roomId).size === 0) {
+      rooms.delete(roomId);
     }
-  }, ws);
+  }
+
+  ws.currentRoom = null;
+
+  ws.send(JSON.stringify({ 
+    type: 'room_left', 
+    roomId 
+  }));
 }
 
 function handleBroadcast(ws, payload) {
-  if (!ws.stationId) {
-    send(ws, { type: MSG_TYPES.ERROR, payload: { message: 'Not authenticated' } });
-    return;
+  if (!ws.currentRoom) {
+    return ws.send(JSON.stringify({ 
+      type: 'error', 
+      message: 'Not in a room' 
+    }));
   }
-  
-  broadcast(ws.stationId, {
-    type: MSG_TYPES.BROADCAST,
-    payload: {
-      ...payload,
-      userId: ws.userId,
-      timestamp: Date.now()
+
+  const room = rooms.get(ws.currentRoom);
+  if (!room) return;
+
+  const broadcastMessage = JSON.stringify({
+    type: 'broadcast',
+    payload: payload,
+    timestamp: new Date().toISOString(),
+    from: ws.clientIp
+  });
+
+  room.forEach((client) => {
+    if (client !== ws && client.readyState === 1) {
+      client.send(broadcastMessage);
     }
   });
 }
 
-function handleSync(ws, payload) {
-  if (!ws.stationId) {
-    send(ws, { type: MSG_TYPES.ERROR, payload: { message: 'Not authenticated' } });
-    return;
-  }
-  
-  // Request latest data from station
-  const room = rooms.get(ws.stationId);
-  if (room) {
-    // Notify other clients to send their pending changes
-    broadcast(ws.stationId, {
-      type: MSG_TYPES.PULL,
-      payload: {
-        requesterId: ws.userId,
-        collections: payload.collections
-      }
-    }, ws);
-  }
-}
-
-function send(ws, message) {
-  if (ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify(message));
-  }
-}
-
-function handleClose(ws) {
-  if (ws.stationId) {
-    const room = rooms.get(ws.stationId);
+function cleanupDisconnectedClient(ws) {
+  if (ws.currentRoom) {
+    const room = rooms.get(ws.currentRoom);
     if (room) {
       room.delete(ws);
       if (room.size === 0) {
-        rooms.delete(ws.stationId);
-      } else {
-        console.log(`[WS] Client left station ${ws.stationId} (${room.size} remaining)`);
+        rooms.delete(ws.currentRoom);
       }
     }
   }
 }
 
-// Create HTTP server
-const server = createServer();
-
-// Create WebSocket server
-const wss = new WebSocketServer({ server, path: '/ws' });
-
-wss.on('connection', (ws, req) => {
-  console.log(`[WS] New connection from ${req.socket.remoteAddress}`);
-  
-  // Set up heartbeat
-  ws.isAlive = true;
-  ws.on('pong', () => { ws.isAlive = true; });
-  
-  ws.on('message', (data) => handleMessage(ws, data.toString()));
-  ws.on('close', () => handleClose(ws));
-  ws.on('error', (err) => console.error('[WS] Error:', err.message));
-  
-  // Send welcome
-  send(ws, { type: MSG_TYPES.SUCCESS, payload: { message: 'Connected to FuelPro WS' } });
-});
-
-// Heartbeat interval
-const heartbeat = setInterval(() => {
-  wss.clients.forEach(ws => {
-    if (!ws.isAlive) {
-      handleClose(ws);
-      return ws.terminate();
-    }
-    ws.isAlive = false;
-    ws.ping();
-  });
-}, 30000);
-
-wss.on('close', () => clearInterval(heartbeat));
-
-// Start server
-server.listen(PORT, () => {
-  console.log(`[WS] FuelPro WebSocket server running on port ${PORT}`);
-});
-
-export default server;
+module.exports = { createWebSocketServer };
