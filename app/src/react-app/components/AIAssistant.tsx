@@ -13,6 +13,7 @@ import {
   BarChart3,
   Lightbulb,
 } from "lucide-react";
+import { getGeminiUrl } from "@/utils/apiConfig";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -78,29 +79,40 @@ export default function AIAssistant() {
     setIsLoading(true);
     const systemPrompt = `You are FuelPro AI, a specialized assistant for fuel station management in Africa. You help with sales analysis, fuel pricing, inventory management, tax compliance (KRA/URA/TRA), and operational efficiency. Be concise, practical, and data-driven. Use local currency (Ksh) where relevant.`;
 
-    try {
-      const response = await fetch(
-        "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=AIzaSyDc5Lx_Hr7JOIXG-GFjWEt63sW_2EqrZt4",
+    const geminiUrl = getGeminiUrl();
+    if (!geminiUrl) {
+      setMessages(prev => [
+        ...prev,
         {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [
-              { role: "user", parts: [{ text: systemPrompt }] },
-              {
-                role: "model",
-                parts: [
-                  {
-                    text: "I understand. I am FuelPro AI, ready to help with fuel station management.",
-                  },
-                ],
-              },
-              { role: "user", parts: [{ text: userMessage }] },
-            ],
-            generationConfig: { temperature: 0.7, maxOutputTokens: 800 },
-          }),
-        }
-      );
+          role: "assistant",
+          content: "AI Assistant is not configured. Please set the VITE_GEMINI_API_KEY environment variable to enable AI features.",
+          timestamp: new Date().toISOString(),
+        },
+      ]);
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      const response = await fetch(geminiUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [
+            { role: "user", parts: [{ text: systemPrompt }] },
+            {
+              role: "model",
+              parts: [
+                {
+                  text: "I understand. I am FuelPro AI, ready to help with fuel station management.",
+                },
+              ],
+            },
+            { role: "user", parts: [{ text: userMessage }] },
+          ],
+          generationConfig: { temperature: 0.7, maxOutputTokens: 800 },
+        }),
+      });
 
       if (!response.ok) throw new Error("AI request failed");
       const data = await response.json();

@@ -16,6 +16,9 @@ const TRPC_API_URL = import.meta.env.VITE_API_URL || "https://fuel-pro-tprc-api.
 // Legacy REST API Server (old Express backend)
 const BACKEND_URL = "https://fuel-pro-backend-v2-production-7c2b.up.railway.app";
 
+// Google Gemini API Key (for AI features)
+const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || "";
+
 // Detect if we're in a Vercel deployment
 function isVercelDeployment(): boolean {
   if (typeof window === "undefined") return false;
@@ -67,6 +70,14 @@ export function getBackendUrl(): string {
     return ""; // Use relative path for Vercel proxy
   }
   return BACKEND_URL;
+}
+
+// Get Gemini API URL with key
+export function getGeminiUrl(): string {
+  if (GEMINI_API_KEY) {
+    return `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
+  }
+  return "";
 }
 
 // Check if running on Vercel (can proxy requests)

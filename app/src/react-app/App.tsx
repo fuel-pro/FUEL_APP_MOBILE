@@ -10,7 +10,7 @@ import { PlatformDataProvider } from "@/react-app/context/PlatformDataContext";
 import HomePage from "@/react-app/pages/Home";
 import AuthLogin from "@/react-app/components/AuthLogin";
 import PasswordReset from "@/react-app/pages/PasswordReset";
-import { Suspense, useMemo } from "react";
+import { Suspense, useMemo, useState, useEffect, Component, ReactNode } from "react";
 import InviteAccept from "@/react-app/pages/InviteAccept";
 import FounderAccess from "@/react-app/pages/FounderAccess";
 
@@ -26,6 +26,7 @@ import ClerkBridge from "@/react-app/components/ClerkBridge";
 import ClerkShow from "@/react-app/components/ClerkShow";
 import ClerkUserButton from "@/react-app/components/ClerkUserButton";
 import { TRPCProvider } from "@/providers/trpc";
+import { AlertTriangle, RefreshCw } from "lucide-react";
 
 // Simple fallback for lazy-loaded routes
 function RouteFallback() {
@@ -38,6 +39,65 @@ function RouteFallback() {
       </div>
     </div>
   );
+}
+
+// Error Boundary - catches React errors and shows fallback UI
+interface ErrorBoundaryProps {
+  children: ReactNode;
+  fallback?: ReactNode;
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
+
+class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error("[ErrorBoundary] Caught error:", error, errorInfo);
+  }
+
+  handleReload = () => {
+    this.setState({ hasError: false, error: null });
+    window.location.reload();
+  };
+
+  render() {
+    if (this.state.hasError) {
+      if (this.props.fallback) return this.props.fallback;
+      
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900/20 to-slate-900 flex items-center justify-center p-4">
+          <div className="bg-white/10 backdrop-blur-xl rounded-2xl p-8 shadow-2xl border border-red-500/30 text-center max-w-md">
+            <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+              <AlertTriangle className="w-8 h-8 text-red-400" />
+            </div>
+            <h2 className="text-xl font-semibold text-white mb-2">Something went wrong</h2>
+            <p className="text-gray-400 text-sm mb-4">
+              {this.state.error?.message || "An unexpected error occurred"}
+            </p>
+            <button
+              onClick={this.handleReload}
+              className="inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white font-semibold py-2 px-4 rounded-xl transition-colors"
+            >
+              <RefreshCw className="w-4 h-4" /> Reload App
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
 }
 
 /** Detect country from localStorage or timezone */
@@ -69,6 +129,43 @@ function MainAppLoader() {
   const detectedCountry = useDetectedCountry();
   const publishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
   const isClerkConfigured = !!publishableKey;
+
+  // Add loading timeout - show error after 15 seconds
+  const [loadTimeout, setLoadTimeout] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (isLoading) {
+        setLoadTimeout(true);
+      }
+    }, 15000); // 15 second timeout
+    return () => clearTimeout(timer);
+  }, [isLoading]);
+
+  // Loading timeout exceeded
+  if (loadTimeout && isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900/20 to-slate-900 flex items-center justify-center p-4">
+        <div className="bg-white/10 backdrop-blur-xl rounded-2xl p-8 shadow-2xl border border-red-500/30 text-center max-w-md">
+          <div className="w-16 h-16 bg-amber-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+            <AlertTriangle className="w-8 h-8 text-amber-400" />
+          </div>
+          <h2 className="text-xl font-semibold text-white mb-2">Connection Timeout</h2>
+          <p className="text-gray-400 text-sm mb-4">
+            The server is taking too long to respond. Please check your connection and try again.
+          </p>
+          <button
+            onClick={() => {
+              setLoadTimeout(false);
+              window.location.reload();
+            }}
+            className="inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white font-semibold py-2 px-4 rounded-xl transition-colors"
+          >
+            <RefreshCw className="w-4 h-4" /> Try Again
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   // Loading state
   if (isLoading && !isClerkConfigured) {
@@ -126,52 +223,54 @@ function MainAppLoader() {
 export default function App() {
   // Wrap with ClerkProvider only if configured
   const appContent = (
-    <AuthProvider>
-      <ThemeProvider>
-        <LocalizationProvider>
-          <PermissionProvider>
-            <PlatformDataProvider>
-              <TRPCProvider>
-                <Router>
-                  <Routes>
-                    {/* Clerk Authentication Routes */}
-                    <Route path="/sign-in" element={<ClerkSignIn />} />
-                    <Route path="/sign-up" element={<ClerkSignUp />} />
-                    <Route path="/dashboard" element={<MainAppLoader />} />
+    <ErrorBoundary>
+      <AuthProvider>
+        <ThemeProvider>
+          <LocalizationProvider>
+            <PermissionProvider>
+              <PlatformDataProvider>
+                <TRPCProvider>
+                  <Router>
+                    <Routes>
+                      {/* Clerk Authentication Routes */}
+                      <Route path="/sign-in" element={<ClerkSignIn />} />
+                      <Route path="/sign-up" element={<ClerkSignUp />} />
+                      <Route path="/dashboard" element={<MainAppLoader />} />
 
-                    {/* Founder Access - public, no auth required, rendered BEFORE auth check */}
-                    <Route
-                      path="/founder"
-                      element={<FounderAccess />}
-                    />
-                    <Route
-                      path="/founder-v1"
-                      element={<Navigate to="/founder" replace />}
-                    />
-                    <Route
-                      path="/admin"
-                      element={<Navigate to="/founder" replace />}
-                    />
+                      {/* Founder Access - public, no auth required, rendered BEFORE auth check */}
+                      <Route
+                        path="/founder"
+                        element={<FounderAccess />}
+                      />
+                      <Route
+                        path="/founder-v1"
+                        element={<Navigate to="/founder" replace />}
+                      />
+                      <Route
+                        path="/admin"
+                        element={<Navigate to="/founder" replace />}
+                      />
 
-                    {/* Password Reset - public */}
-                    <Route path="/reset-password" element={<PasswordReset />} />
+                      {/* Password Reset - public */}
+                      <Route path="/reset-password" element={<PasswordReset />} />
 
-                    {/* Invite acceptance - public */}
-                    <Route path="/join/:inviteId" element={<InviteAccept />} />
+                      {/* Invite acceptance - public */}
+                      <Route path="/join/:inviteId" element={<InviteAccept />} />
 
-                    {/* Main app - requires auth, shows loader while checking */}
-                    <Route path="/" element={<MainAppLoader />} />
+                      {/* Main app - requires auth, shows loader while checking */}
+                      <Route path="/" element={<MainAppLoader />} />
 
-                    {/* Catch all */}
-                    <Route path="*" element={<Navigate to="/" replace />} />
-                  </Routes>
-                </Router>
-              </TRPCProvider>
-            </PlatformDataProvider>
-          </PermissionProvider>
-        </LocalizationProvider>
-      </ThemeProvider>
-    </AuthProvider>
+                      {/* Catch all */}
+                      <Route path="*" element={<Navigate to="/" replace />} />
+                    </Routes>
+                  </Router>
+                </TRPCProvider>
+              </PlatformDataProvider>
+            </PermissionProvider>
+          </LocalizationProvider>
+        </ThemeProvider>
+      </AuthProvider>
+    </ErrorBoundary>
   );
 
   return isClerkConfigured ? (

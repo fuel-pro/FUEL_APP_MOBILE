@@ -20,6 +20,7 @@ import {
   Bug,
 } from "lucide-react";
 import { formatNumber } from "@/react-app/utils/formatUtils";
+import { getGeminiUrl } from "@/utils/apiConfig";
 
 // ============================================================
 // M-PESA Inflow Analyzer v5 - RESTRUCTURED
@@ -353,6 +354,11 @@ export default function MPESAAnalyzer() {
 
   // ===== AI EXTRACTION =====
   const extractWithAI = async (text: string): Promise<InflowRecord[]> => {
+    const geminiUrl = getGeminiUrl();
+    if (!geminiUrl) {
+      throw new Error("Gemini API key not configured. Please set VITE_GEMINI_API_KEY environment variable.");
+    }
+    
     const allRecords: InflowRecord[] = [];
     const chunkSize = 20000;
 
@@ -361,20 +367,17 @@ export default function MPESAAnalyzer() {
       const prompt = `Extract ONLY "Merchant Payment from" inflow transactions from this M-PESA statement. For each, return: {"details":"Phone - Customer Name","paidIn":number,"balance":number,"receipt":"10-char code","date":"YYYY-MM-DD","time":"HH:MM:SS"}. Return JSON array only. Exclude loans, charges, transfers.\n\n${chunk}`;
 
       try {
-        const response = await fetch(
-          "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=AIzaSyDc5Lx_Hr7JOIXG-GFjWEt63sW_2EqrZt4",
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              contents: [{ role: "user", parts: [{ text: prompt }] }],
-              generationConfig: {
-                temperature: 0.05,
-                responseMimeType: "application/json",
-              },
-            }),
-          }
-        );
+        const response = await fetch(geminiUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ role: "user", parts: [{ text: prompt }] }],
+            generationConfig: {
+              temperature: 0.05,
+              responseMimeType: "application/json",
+            },
+          }),
+        });
         if (!response.ok) continue;
 
         const data = await response.json();

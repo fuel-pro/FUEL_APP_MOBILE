@@ -26,6 +26,9 @@ import {
 
 type LoginMode = "email" | "username" | "register";
 
+// Email validation regex
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export default function AuthLogin() {
   const navigate = useNavigate();
   const {
@@ -89,6 +92,10 @@ export default function AuthLogin() {
       setLocalError("Please enter your email");
       return;
     }
+    if (!EMAIL_REGEX.test(email.trim())) {
+      setLocalError("Please enter a valid email address");
+      return;
+    }
     if (!password) {
       setLocalError("Please enter your password");
       return;
@@ -129,6 +136,10 @@ export default function AuthLogin() {
       setLocalError("Please enter your email");
       return;
     }
+    if (!EMAIL_REGEX.test(regEmail.trim())) {
+      setLocalError("Please enter a valid email address");
+      return;
+    }
     if (!regPassword || regPassword.length < 6) {
       setLocalError("Password must be at least 6 characters");
       return;
@@ -160,6 +171,8 @@ export default function AuthLogin() {
         );
       }
       setSuccess("Account created successfully! Logging you in...");
+      // Clear success message after navigation
+      setTimeout(() => setSuccess(""), 3000);
     }
   };
 

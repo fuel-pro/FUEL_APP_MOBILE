@@ -112,19 +112,28 @@ function loadUser(): AuthIdentity | null {
   try {
     const stored = localStorage.getItem(AUTH_STORAGE_KEY);
     if (stored) return JSON.parse(stored);
-  } catch {}
+  } catch (err) {
+    console.warn("[AuthContext] Failed to load user from storage:", err);
+  }
   return null;
 }
 
 function loadToken(): string | null {
-  return localStorage.getItem(TOKEN_STORAGE_KEY);
+  try {
+    return localStorage.getItem(TOKEN_STORAGE_KEY);
+  } catch (err) {
+    console.warn("[AuthContext] Failed to load token from storage:", err);
+    return null;
+  }
 }
 
 function loadBindings(): StationRoleBinding[] {
   try {
     const stored = localStorage.getItem(BINDINGS_STORAGE_KEY);
     if (stored) return JSON.parse(stored);
-  } catch {}
+  } catch (err) {
+    console.warn("[AuthContext] Failed to load bindings from storage:", err);
+  }
   return [];
 }
 
@@ -132,7 +141,9 @@ function loadBindings(): StationRoleBinding[] {
 let syncChannel: BroadcastChannel | null = null;
 try {
   syncChannel = new BroadcastChannel("fuelpro_auth_sync");
-} catch {}
+} catch (err) {
+  console.warn("[AuthContext] BroadcastChannel not supported:", err);
+}
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -184,10 +195,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 localStorage.removeItem(TOKEN_STORAGE_KEY);
               }
             }
-          } catch {
+          } catch (err) {
             // Offline - use cached data
+            console.info("[AuthContext] Using cached auth data (offline or API unavailable)");
           }
         }
+      } catch (err) {
+        console.error("[AuthContext] Auth initialization error:", err);
       } finally {
         if (!cancelled) setIsLoading(false);
       }
@@ -554,7 +568,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setToken(storedToken);
         return true;
       }
-    } catch {}
+    } catch (err) {
+      console.warn("[AuthContext] Token refresh failed:", err);
+    }
     return false;
   }, []);
 

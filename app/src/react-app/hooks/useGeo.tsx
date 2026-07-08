@@ -261,7 +261,8 @@ export function GeoProvider({ children }: { children: React.ReactNode }) {
               lon: pos.coords.longitude,
             }));
           }
-        } catch {
+        } catch (err) {
+          console.warn("[useGeo] Failed to fetch location details:", err);
           setGeo(prev => ({
             ...prev,
             isLoading: false,
