@@ -44,7 +44,9 @@ function loadConfig(): DarajaConfig {
         environment: apiKeys.mpesaEnvironment || "sandbox",
       };
     }
-  } catch {}
+  } catch (err) {
+    console.warn("[MpesaStk] Failed to load M-Pesa config from storage:", err);
+  }
   return {
     consumerKey: "",
     consumerSecret: "",
@@ -397,7 +399,9 @@ function storePendingTransaction(
       "fuelpro_mpesa_pending",
       JSON.stringify(pending.slice(0, 100))
     );
-  } catch {}
+  } catch (err) {
+    console.warn("[MpesaStk] Failed to store pending transaction:", err);
+  }
 }
 
 export function getPendingTransactions(): PendingTransaction[] {
@@ -423,7 +427,9 @@ export function updateTransactionStatus(
         : tx
     );
     localStorage.setItem("fuelpro_mpesa_pending", JSON.stringify(updated));
-  } catch {}
+  } catch (err) {
+    console.warn("[MpesaStk] Failed to update transaction status:", err);
+  }
 }
 
 export function getTransactionHistory(): PendingTransaction[] {
@@ -442,7 +448,9 @@ export function addToHistory(tx: PendingTransaction) {
       "fuelpro_mpesa_history",
       JSON.stringify(history.slice(0, 500))
     );
-  } catch {}
+  } catch (err) {
+    console.warn("[MpesaStk] Failed to add transaction to history:", err);
+  }
 }
 
 // ═══════════════════════════════════════════════════

@@ -4,6 +4,7 @@
 
 import { z } from "zod";
 import { initTRPC, TRPCError } from "@trpc/server";
+import superjson from "superjson";
 import { accessControl, PERMISSIONS, DEFAULT_ROLES } from "./lib/access-control";
 import { auditService } from "./lib/audit-service";
 import { getDb } from "@db/connection";
@@ -21,7 +22,9 @@ import { eq, and, inArray } from "drizzle-orm";
 import { nanoid } from "nanoid";
 
 const db = getDb();
-const t = initTRPC.context<TrpcContext>().create();
+const t = initTRPC.context<TrpcContext>().create({
+  transformer: superjson,
+});
 
 // ─── Context Type ───
 interface TrpcContext {

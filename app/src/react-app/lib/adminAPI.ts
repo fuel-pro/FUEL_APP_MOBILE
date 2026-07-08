@@ -126,13 +126,17 @@ export interface APIResponse<T> {
 // ═══════════════════════════════════════════════════════════════════
 
 // ─── Auth API ───
+// NOTE: These functions previously called /api/admin/auth/* endpoints which don't exist.
+// Refactored to use the existing main auth system (/api/auth/*) with founder/admin role checks.
+// The separate admin auth system was never fully implemented on the backend.
 export const AdminAuthAPI = {
-  async login(email: string, password: string, mfaCode?: string) {
+  async login(email: string, password: string, _mfaCode?: string) {
     try {
-      const response = await fetch("/api/admin/auth/login", {
+      // Use the main auth API - founder accounts are identified by their role
+      const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, mfaCode }),
+        body: JSON.stringify({ email, password }),
         credentials: "include",
       });
 
@@ -141,7 +145,19 @@ export const AdminAuthAPI = {
         throw new Error(error.message || "Login failed");
       }
 
-      return await response.json();
+      const data = await response.json();
+      
+      // Check if user has admin/founder role
+      if (data.user?.role !== "founder" && data.user?.role !== "admin") {
+        throw new Error("Admin access required. This account does not have admin privileges.");
+      }
+
+      // Store admin token
+      if (data.token) {
+        localStorage.setItem("fuelpro_admin_token", data.token);
+      }
+
+      return data;
     } catch (e) {
       console.error("[AdminAPI] Login error:", e);
       throw e;
@@ -149,22 +165,49 @@ export const AdminAuthAPI = {
   },
 
   async logout() {
-    await fetch("/api/admin/auth/logout", {
-      method: "POST",
-      credentials: "include",
-    });
+    try {
+      // Clear admin token
+      localStorage.removeItem("fuelpro_admin_token");
+      
+      // Call main auth logout
+      await fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "include",
+      });
+    } catch (e) {
+      // Ignore logout errors - clear local state anyway
+      console.warn("[AdminAPI] Logout warning:", e);
+      localStorage.removeItem("fuelpro_admin_token");
+    }
   },
 
   async refreshToken(refreshToken: string) {
-    const response = await fetch("/api/admin/auth/refresh", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refreshToken }),
-      credentials: "include",
-    });
+    try {
+      const response = await fetch("/api/auth/refresh", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refreshToken }),
+        credentials: "include",
+      });
 
-    if (!response.ok) throw new Error("Token refresh failed");
-    return response.json();
+      if (!response.ok) {
+        localStorage.removeItem("fuelpro_admin_token");
+        throw new Error("Token refresh failed");
+      }
+
+      const data = await response.json();
+      
+      // Update admin token if present
+      if (data.token) {
+        localStorage.setItem("fuelpro_admin_token", data.token);
+      }
+
+      return data;
+    } catch (e) {
+      console.error("[AdminAPI] Token refresh error:", e);
+      localStorage.removeItem("fuelpro_admin_token");
+      throw e;
+    }
   },
 
   async getProfile() {
