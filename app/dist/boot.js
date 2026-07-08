@@ -47618,20 +47618,20 @@ function drizzle(...params) {
 })();
 
 // api/lib/env.ts
-function required2(name) {
+function getEnv(name, required2 = false) {
   const value = process.env[name];
-  if (!value && process.env.NODE_ENV === "production") {
+  if (!value && required2 && process.env.NODE_ENV === "production") {
     throw new Error(`Missing required environment variable: ${name}`);
   }
   return value ?? "";
 }
 var env = {
-  appId: required2("APP_ID"),
-  appSecret: required2("APP_SECRET"),
+  appId: getEnv("APP_ID"),
+  appSecret: getEnv("APP_SECRET"),
   isProduction: process.env.NODE_ENV === "production",
-  databaseUrl: required2("DATABASE_URL"),
-  kimiAuthUrl: required2("KIMI_AUTH_URL"),
-  kimiOpenUrl: required2("KIMI_OPEN_URL"),
+  databaseUrl: getEnv("DATABASE_URL", true),
+  kimiAuthUrl: getEnv("KIMI_AUTH_URL"),
+  kimiOpenUrl: getEnv("KIMI_OPEN_URL"),
   ownerUnionId: process.env.OWNER_UNION_ID ?? ""
 };
 
@@ -48349,12 +48349,30 @@ var dataPartitionsRelations = relations(dataPartitions, ({ one, many }) => ({
 // api/queries/connection.ts
 var fullSchema = { ...schema_exports, ...relations_exports };
 var instance;
+var connectionError = null;
+var lastConnectionAttempt = 0;
+var CONNECTION_COOLDOWN = 5e3;
 function getDb() {
   if (!instance) {
-    instance = drizzle(env.databaseUrl, {
-      mode: "planetscale",
-      schema: fullSchema
-    });
+    const now = Date.now();
+    if (connectionError && now - lastConnectionAttempt < CONNECTION_COOLDOWN) {
+      throw connectionError;
+    }
+    lastConnectionAttempt = now;
+    try {
+      if (!env.databaseUrl) {
+        throw new Error("DATABASE_URL is not configured");
+      }
+      instance = drizzle(env.databaseUrl, {
+        mode: "planetscale",
+        schema: fullSchema
+      });
+      connectionError = null;
+    } catch (err) {
+      connectionError = err instanceof Error ? err : new Error(String(err));
+      console.error("[DB] Failed to initialize database connection:", connectionError.message);
+      throw connectionError;
+    }
   }
   return instance;
 }
@@ -50172,7 +50190,9 @@ var accessControl = new AccessControlService();
 
 // api/access-control-router.ts
 var db3 = getDb();
-var t3 = initTRPC.context().create();
+var t3 = initTRPC.context().create({
+  transformer: dist_default
+});
 var requirePermission = (permission) => t3.middleware(async ({ ctx, next }) => {
   if (!ctx.user?.id) {
     throw new TRPCError({
@@ -53028,7 +53048,15 @@ function createOAuthCallbackHandler() {
       return c.json({ error: "code and state are required" }, 400);
     }
     try {
-      const redirectUri = atob(state);
+      let redirectUri;
+      try {
+        redirectUri = atob(state);
+        if (!redirectUri || !redirectUri.startsWith("http")) {
+          throw new Error("Invalid redirect URI in state");
+        }
+      } catch {
+        return c.json({ error: "Invalid state parameter" }, 400);
+      }
       const tokenResp = await exchangeAuthCode(code, redirectUri);
       const { userId } = await verifyAccessToken(tokenResp.access_token);
       const userProfile = await users2.getProfile(tokenResp.access_token);
@@ -53159,10 +53187,19 @@ var logger = (fn = console.log) => {
 
 // api/routes/rest-api.ts
 var app = new Hono2();
+var restApiAllowedOrigins = process.env.CORS_ALLOWED_ORIGINS ? process.env.CORS_ALLOWED_ORIGINS.split(",") : process.env.NODE_ENV === "production" ? [] : ["*"];
 app.use("*", cors({
-  origin: "*",
+  origin: (origin) => {
+    if (!origin) return origin || "";
+    if (restApiAllowedOrigins.includes("*")) return origin;
+    if (restApiAllowedOrigins.some((o) => origin === o || origin.endsWith(o.replace("*.", ".")))) {
+      return origin;
+    }
+    return process.env.NODE_ENV === "production" ? "" : origin;
+  },
   allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowHeaders: ["Content-Type", "Authorization", "X-API-Key"]
+  allowHeaders: ["Content-Type", "Authorization", "X-API-Key"],
+  credentials: true
 }));
 app.use("*", logger());
 var dataStore = {
@@ -53170,12 +53207,27 @@ var dataStore = {
   stations: {},
   sales: {},
   audit_log: {},
-  secrets: {},
   feature_flags: {},
   config: {}
 };
+var PROTECTED_COLLECTIONS = ["users", "sales", "audit_log", "config"];
+var WRITE_ONLY_COLLECTIONS = ["secrets"];
 function generateId(prefix) {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+async function requireAuth2(c, next) {
+  const apiKey = c.req.header("X-API-Key") || c.req.header("Authorization")?.replace("Bearer ", "");
+  const collection = c.req.param("collection");
+  if (collection && !PROTECTED_COLLECTIONS.includes(collection)) {
+    return next();
+  }
+  const validKeys = (process.env.API_KEYS || "").split(",").filter(Boolean);
+  if (validKeys.length > 0) {
+    if (!apiKey || !validKeys.includes(apiKey)) {
+      return c.json({ success: false, error: "Unauthorized - valid API key required" }, 401);
+    }
+  }
+  return next();
 }
 app.get("/", (c) => {
   return c.json({
@@ -53205,8 +53257,11 @@ app.get("/api/health", (c) => {
     }
   });
 });
-app.get("/api/data/:collection", (c) => {
+app.get("/api/data/:collection", requireAuth2, (c) => {
   const { collection } = c.req.param();
+  if (WRITE_ONLY_COLLECTIONS.includes(collection)) {
+    return c.json({ success: false, error: "Collection is write-only" }, 403);
+  }
   if (!dataStore[collection]) {
     dataStore[collection] = {};
   }
@@ -53221,8 +53276,11 @@ app.get("/api/data/:collection", (c) => {
     data: records
   });
 });
-app.get("/api/data/:collection/:id", (c) => {
+app.get("/api/data/:collection/:id", requireAuth2, (c) => {
   const { collection, id } = c.req.param();
+  if (WRITE_ONLY_COLLECTIONS.includes(collection)) {
+    return c.json({ success: false, error: "Collection is write-only" }, 403);
+  }
   if (!dataStore[collection]?.[id]) {
     return c.json({ success: false, error: "Not found" }, 404);
   }
@@ -53231,20 +53289,24 @@ app.get("/api/data/:collection/:id", (c) => {
     data: { id, ...dataStore[collection][id] }
   });
 });
-app.post("/api/data/:collection", async (c) => {
+app.post("/api/data/:collection", requireAuth2, async (c) => {
   const { collection } = c.req.param();
   if (!dataStore[collection]) {
     dataStore[collection] = {};
   }
   try {
     const body = await c.req.json();
+    const payloadSize = JSON.stringify(body).length;
+    if (payloadSize > 1024 * 1024) {
+      return c.json({ success: false, error: "Payload too large" }, 413);
+    }
     const id = body.id || generateId(collection);
+    const { id: _bodyId, ...bodyWithoutId } = body;
     const record2 = {
-      ...body,
+      ...bodyWithoutId,
       createdAt: body.createdAt || (/* @__PURE__ */ new Date()).toISOString(),
       updatedAt: (/* @__PURE__ */ new Date()).toISOString()
     };
-    delete record2.id;
     dataStore[collection][id] = record2;
     return c.json({
       success: true,
@@ -53255,13 +53317,17 @@ app.post("/api/data/:collection", async (c) => {
     return c.json({ success: false, error: "Invalid JSON body" }, 400);
   }
 });
-app.put("/api/data/:collection/:id", async (c) => {
+app.put("/api/data/:collection/:id", requireAuth2, async (c) => {
   const { collection, id } = c.req.param();
   if (!dataStore[collection]?.[id]) {
     return c.json({ success: false, error: "Not found" }, 404);
   }
   try {
     const body = await c.req.json();
+    const payloadSize = JSON.stringify(body).length;
+    if (payloadSize > 1024 * 1024) {
+      return c.json({ success: false, error: "Payload too large" }, 413);
+    }
     dataStore[collection][id] = {
       ...dataStore[collection][id],
       ...body,
@@ -53275,7 +53341,7 @@ app.put("/api/data/:collection/:id", async (c) => {
     return c.json({ success: false, error: "Invalid JSON body" }, 400);
   }
 });
-app.delete("/api/data/:collection/:id", (c) => {
+app.delete("/api/data/:collection/:id", requireAuth2, (c) => {
   const { collection, id } = c.req.param();
   if (!dataStore[collection]?.[id]) {
     return c.json({ success: false, error: "Not found" }, 404);
@@ -53311,15 +53377,167 @@ app.post("/api/seed", (c) => {
     )
   });
 });
+app.get("/api/dashboard/stats", requireAuth2, (c) => {
+  const sales2 = Object.values(dataStore.sales || {});
+  const stations2 = Object.values(dataStore.stations || {});
+  const users3 = Object.values(dataStore.users || {});
+  const totalRevenue = sales2.reduce((sum, sale) => sum + (sale.amount || 0), 0);
+  const todaySales = sales2.filter((sale) => {
+    const saleDate = new Date(sale.createdAt || sale.timestamp);
+    const today = /* @__PURE__ */ new Date();
+    return saleDate.toDateString() === today.toDateString();
+  }).length;
+  return c.json({
+    success: true,
+    data: {
+      totalRevenue,
+      netProfit: totalRevenue * 0.15,
+      // Estimated 15% margin
+      fuelSold: sales2.reduce((sum, sale) => sum + (sale.quantity || 0), 0),
+      balanceDue: 0,
+      todaySales,
+      totalStations: stations2.length,
+      totalUsers: users3.length,
+      timestamp: (/* @__PURE__ */ new Date()).toISOString()
+    }
+  });
+});
+app.get("/api/stations/:id/stats", requireAuth2, (c) => {
+  const { id } = c.req.param();
+  const station = dataStore.stations[id];
+  if (!station) {
+    return c.json({ error: "Station not found" }, 404);
+  }
+  const stationSales = Object.values(dataStore.sales || {}).filter((sale) => sale.stationId === id);
+  const totalRevenue = stationSales.reduce((sum, sale) => sum + (sale.amount || 0), 0);
+  return c.json({
+    success: true,
+    data: {
+      stationId: id,
+      totalSales: stationSales.length,
+      totalRevenue,
+      totalTransactions: stationSales.length,
+      todaySales: stationSales.filter((sale) => {
+        const saleDate = new Date(sale.createdAt || sale.timestamp);
+        const today = /* @__PURE__ */ new Date();
+        return saleDate.toDateString() === today.toDateString();
+      }).length
+    }
+  });
+});
+app.get("/api/inventory", requireAuth2, (c) => {
+  const records = Object.entries(dataStore.inventory || {}).map(([id, record2]) => ({
+    id,
+    ...record2
+  }));
+  return c.json({ success: true, data: records });
+});
+app.get("/api/inventory/:id", requireAuth2, (c) => {
+  const { id } = c.req.param();
+  if (!dataStore.inventory?.[id]) {
+    return c.json({ error: "Inventory item not found" }, 404);
+  }
+  return c.json({ success: true, data: { id, ...dataStore.inventory[id] } });
+});
+app.post("/api/inventory", requireAuth2, async (c) => {
+  if (!dataStore.inventory) dataStore.inventory = {};
+  try {
+    const body = await c.req.json();
+    const id = body.id || generateId("inventory");
+    dataStore.inventory[id] = {
+      ...body,
+      createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    return c.json({ success: true, id, data: { id, ...dataStore.inventory[id] } }, 201);
+  } catch {
+    return c.json({ success: false, error: "Invalid JSON body" }, 400);
+  }
+});
+app.get("/api/payments", requireAuth2, (c) => {
+  const records = Object.entries(dataStore.payments || {}).map(([id, record2]) => ({
+    id,
+    ...record2
+  }));
+  return c.json({ success: true, data: records });
+});
+app.post("/api/payments", requireAuth2, async (c) => {
+  if (!dataStore.payments) dataStore.payments = {};
+  try {
+    const body = await c.req.json();
+    const id = body.id || generateId("payment");
+    dataStore.payments[id] = {
+      ...body,
+      status: "completed",
+      createdAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    return c.json({ success: true, id, data: { id, ...dataStore.payments[id] } }, 201);
+  } catch {
+    return c.json({ success: false, error: "Invalid JSON body" }, 400);
+  }
+});
+app.get("/api/settings", requireAuth2, (c) => {
+  return c.json({
+    success: true,
+    data: {
+      currency: "KES",
+      currencySymbol: "KSh",
+      timezone: "Africa/Nairobi",
+      dateFormat: "DD/MM/YYYY",
+      language: "en",
+      fuelTypes: ["PMS", "AGO", "Kerosene"],
+      defaultPrices: { PMS: 183.5, AGO: 168.3, Kerosene: 103.5 },
+      taxRate: 0.16
+    }
+  });
+});
+app.put("/api/settings", requireAuth2, async (c) => {
+  if (!dataStore.config) dataStore.config = {};
+  try {
+    const body = await c.req.json();
+    dataStore.config.settings = { ...dataStore.config.settings, ...body, updatedAt: (/* @__PURE__ */ new Date()).toISOString() };
+    return c.json({ success: true, data: dataStore.config.settings });
+  } catch {
+    return c.json({ success: false, error: "Invalid JSON body" }, 400);
+  }
+});
+app.get("/api/feature-flags", (c) => {
+  const flags = Object.entries(dataStore.feature_flags || {}).map(([id, flag]) => ({
+    id,
+    ...flag
+  }));
+  return c.json({ success: true, data: flags });
+});
+app.get("/api/user-data", requireAuth2, (c) => {
+  const authHeader = c.req.header("Authorization")?.replace("Bearer ", "");
+  const userId = authHeader;
+  const userData = {
+    stations: Object.values(dataStore.stations || {}),
+    sales: Object.values(dataStore.sales || {}),
+    inventory: Object.values(dataStore.inventory || {}),
+    config: dataStore.config
+  };
+  return c.json({ success: true, data: userData });
+});
 var rest_api_default = app;
 
 // api/boot.ts
 var app2 = new Hono2();
 app2.use(bodyLimit({ maxSize: 50 * 1024 * 1024 }));
+var allowedOrigins = process.env.CORS_ALLOWED_ORIGINS ? process.env.CORS_ALLOWED_ORIGINS.split(",") : env.isProduction ? [] : ["*"];
 app2.use("*", cors({
-  origin: "*",
+  origin: (origin) => {
+    if (!origin) return origin || "";
+    if (allowedOrigins.includes("*")) return origin;
+    if (allowedOrigins.some((o) => origin === o || origin.endsWith(o.replace("*.", ".")))) {
+      return origin;
+    }
+    return env.isProduction ? "" : origin;
+  },
   allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowHeaders: ["Content-Type", "Authorization", "X-API-Key", "x-founder-token"]
+  allowHeaders: ["Content-Type", "Authorization", "X-API-Key", "x-founder-token"],
+  credentials: true,
+  maxAge: 86400
 }));
 app2.get("/", (c) => c.json({
   status: "ok",
@@ -53333,12 +53551,21 @@ app2.use("/api/trpc/*", async (c) => {
   if (c.req.method === "OPTIONS") {
     return c.json({ ok: true });
   }
-  return fetchRequestHandler({
-    endpoint: "/api/trpc",
-    req: c.req.raw,
-    router: appRouter,
-    createContext
-  });
+  try {
+    return await fetchRequestHandler({
+      endpoint: "/api/trpc",
+      req: c.req.raw,
+      router: appRouter,
+      createContext
+    });
+  } catch (err) {
+    console.error("[tRPC] Unhandled error:", err);
+    return c.json({
+      error: "Internal server error",
+      code: "INTERNAL_SERVER_ERROR",
+      path: c.req.path
+    }, 500);
+  }
 });
 app2.notFound((c) => c.json({
   error: "Not Found",
@@ -53348,13 +53575,18 @@ app2.notFound((c) => c.json({
 }, 404));
 var boot_default = app2;
 if (env.isProduction && !process.env.VERCEL) {
-  const { serve: serve2 } = await Promise.resolve().then(() => (init_dist(), dist_exports));
-  const { serveStaticFiles: serveStaticFiles2 } = await Promise.resolve().then(() => (init_vite(), vite_exports));
-  serveStaticFiles2(app2);
-  const port = parseInt(process.env.PORT || "3000");
-  serve2({ fetch: app2.fetch, port }, () => {
-    console.log(`Server running on http://localhost:${port}/`);
-  });
+  try {
+    const { serve: serve2 } = await Promise.resolve().then(() => (init_dist(), dist_exports));
+    const { serveStaticFiles: serveStaticFiles2 } = await Promise.resolve().then(() => (init_vite(), vite_exports));
+    serveStaticFiles2(app2);
+    const port = parseInt(process.env.PORT || "3000");
+    serve2({ fetch: app2.fetch, port }, () => {
+      console.log(`Server running on http://localhost:${port}/`);
+    });
+  } catch (err) {
+    console.error("[Server] Failed to start production server:", err);
+    process.exit(1);
+  }
 }
 export {
   boot_default as default
