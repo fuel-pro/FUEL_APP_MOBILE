@@ -7,11 +7,11 @@
   "routes": [
     {
       "src": "/api/health",
-      "dest": "https://fuel-pro-backend-v2-production-7c2b.up.railway.app/api/health"
+      "dest": "${API_URL}/api/health"
     },
     {
       "src": "/api/(.*)",
-      "dest": "https://fuel-pro-backend-v2-production-7c2b.up.railway.app/api/$1",
+      "dest": "${API_URL}/api/$1",
       "methods": ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"]
     },
     {
@@ -23,14 +23,24 @@
     {
       "source": "/api/(.*)",
       "headers": [
-        { "key": "Access-Control-Allow-Origin", "value": "*" },
+        { "key": "Access-Control-Allow-Origin", "value": "https://fuel-app-mobile.vercel.app" },
         { "key": "Access-Control-Allow-Methods", "value": "GET, POST, PUT, DELETE, OPTIONS, PATCH" },
         { "key": "Access-Control-Allow-Headers", "value": "Content-Type, Authorization, X-API-Key, x-founder-token, X-Requested-With, X-Clerk-Auth" },
+        { "key": "Access-Control-Allow-Credentials", "value": "true" },
         { "key": "Access-Control-Max-Age", "value": "86400" }
+      ]
+    },
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "X-Frame-Options", "value": "SAMEORIGIN" },
+        { "key": "X-XSS-Protection", "value": "1; mode=block" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" }
       ]
     }
   ],
   "env": {
-    "VITE_API_URL": "https://fuel-pro-backend-v2-production-7c2b.up.railway.app"
+    "VITE_API_URL": "${API_URL}"
   }
 }

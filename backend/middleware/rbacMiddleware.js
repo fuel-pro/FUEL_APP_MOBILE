@@ -1,11 +1,20 @@
 /**
  * Role-Based Access Control (RBAC) Middleware
  * Protects routes by verifying user role on the backend
+ * 
+ * SECURITY: No hardcoded JWT secret fallback - server will reject tokens
+ * if JWT_SECRET is not properly configured
  */
 
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const AuditLog = require('../models/AuditLog');
+
+// SECURITY: Check JWT_SECRET at module load time
+if (!process.env.JWT_SECRET) {
+  console.error('❌ CRITICAL: JWT_SECRET environment variable is not set!');
+  console.error('   All JWT verification will fail. Set JWT_SECRET before starting the server.');
+}
 
 // 1. Verify JWT Token
 exports.verifyToken = (req, res, next) => {
@@ -17,8 +26,14 @@ exports.verifyToken = (req, res, next) => {
 
   const token = authHeader.split(' ')[1];
 
+  // SECURITY: No fallback secret - must use environment variable
+  if (!process.env.JWT_SECRET) {
+    console.error('❌ JWT_SECRET not configured - cannot verify token');
+    return res.status(500).json({ error: 'Server configuration error' });
+  }
+
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fuelpro-secret-key');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
     
     // Attach user info to request
     req.user = {
@@ -123,33 +138,49 @@ exports.optionalAuth = (req, res, next) => {
 
   const token = authHeader.split(' ')[1];
 
+  // SECURITY: No fallback - skip user attachment if no secret
+  if (!process.env.JWT_SECRET) {
+    return next();
+  }
+
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fuelpro-secret-key');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
     req.user = {
       id: decoded.id,
       role: decoded.role
     };
   } catch (error) {
     // Token invalid, but we don't block - just continue without user
+    // Log for debugging purposes
+    console.debug('Optional auth token invalid:', error.message);
   }
   
   next();
 };
 
-// 5. Rate Limiter for Auth Routes
+// 5. Rate Limiter for Auth Routes (with automatic cleanup)
 const rateLimitStore = new Map();
+
+// Clean up rate limit store every 5 minutes
+setInterval(() => {
+  const now = Date.now();
+  const maxAge = 30 * 60 * 1000; // 30 minutes
+  let cleaned = 0;
+  for (const [k, v] of rateLimitStore.entries()) {
+    if (now - v.windowStart > maxAge) {
+      rateLimitStore.delete(k);
+      cleaned++;
+    }
+  }
+  if (cleaned > 0) {
+    console.debug(`[RateLimit] Cleaned ${cleaned} stale entries`);
+  }
+}, 5 * 60 * 1000);
 
 exports.rateLimit = (maxAttempts = 5, windowMs = 15 * 60 * 1000) => {
   return (req, res, next) => {
     const key = req.ip || req.connection.remoteAddress;
     const now = Date.now();
-    
-    // Clean old entries
-    for (const [k, v] of rateLimitStore.entries()) {
-      if (now - v.windowStart > windowMs) {
-        rateLimitStore.delete(k);
-      }
-    }
 
     const record = rateLimitStore.get(key) || { count: 0, windowStart: now };
 
