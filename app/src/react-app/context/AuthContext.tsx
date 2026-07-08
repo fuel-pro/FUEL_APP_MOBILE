@@ -65,6 +65,12 @@ interface AuthContextType {
     name: string
   ) => Promise<boolean>;
   loginWithUsername: (username: string, password: string) => Promise<boolean>;
+  registerWithUsername: (
+    username: string,
+    password: string,
+    name: string,
+    email: string
+  ) => Promise<boolean>;
   logout: () => void;
   clearError: () => void;
   refreshAuth: () => Promise<boolean>;
@@ -147,45 +153,58 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false;
     const initAuth = async () => {
-      const storedToken = loadToken();
-      if (storedToken) {
-        try {
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout
-          const res = await fetch(`${API_BASE}/api/auth/me`, {
-            headers: { Authorization: `Bearer ${storedToken}` },
-            signal: controller.signal,
-          });
-          clearTimeout(timeoutId);
-          if (!cancelled) {
-            if (res.ok) {
-              const data = await res.json();
-              const backendUser = data.user || data;
-              setUser({
-                id: backendUser.id,
-                authId: `email_${backendUser.email}`,
-                authMethod: "email",
-                email: backendUser.email,
-                name: backendUser.name,
-                role: backendUser.role,
-                permissions: backendUser.permissions,
-              });
-              setToken(storedToken);
-            } else {
-              // Token invalid - clear
-              localStorage.removeItem(AUTH_STORAGE_KEY);
-              localStorage.removeItem(TOKEN_STORAGE_KEY);
+      try {
+        const storedToken = loadToken();
+        if (storedToken) {
+          try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout
+            const res = await fetch(`${API_BASE}/api/auth/me`, {
+              headers: { Authorization: `Bearer ${storedToken}` },
+              signal: controller.signal,
+            });
+            clearTimeout(timeoutId);
+            if (!cancelled) {
+              if (res.ok) {
+                const data = await res.json();
+                const backendUser = data.user || data;
+                setUser({
+                  id: backendUser.id,
+                  authId: `email_${backendUser.email}`,
+                  authMethod: "email",
+                  email: backendUser.email,
+                  name: backendUser.name,
+                  role: backendUser.role,
+                  permissions: backendUser.permissions,
+                });
+                setToken(storedToken);
+              } else {
+                // Token invalid - clear
+                localStorage.removeItem(AUTH_STORAGE_KEY);
+                localStorage.removeItem(TOKEN_STORAGE_KEY);
+              }
             }
+          } catch {
+            // Offline - use cached data
           }
-        } catch {
-          // Offline - use cached data
         }
+      } finally {
+        if (!cancelled) setIsLoading(false);
       }
-      if (!cancelled) setIsLoading(false);
     };
     initAuth();
     return () => { cancelled = true; };
   }, []);
+
+  // Keep refs in sync with latest callbacks BEFORE starting intervals
+  // This order ensures refs are always set before any interval fires
+  useEffect(() => {
+    handleLogoutRef.current = handleLogout;
+  }, [handleLogout]);
+
+  useEffect(() => {
+    refreshAuthRef.current = refreshAuth;
+  }, [refreshAuth]);
 
   // Separate effect for token refresh interval - properly reacts to token changes
   useEffect(() => {
@@ -206,15 +225,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     };
   }, [token]);
-
-  // Keep refs in sync with latest callbacks to avoid stale closures
-  useEffect(() => {
-    handleLogoutRef.current = handleLogout;
-  }, [handleLogout]);
-
-  useEffect(() => {
-    refreshAuthRef.current = refreshAuth;
-  }, [refreshAuth]);
 
   // Listen for cross-tab auth updates
   useEffect(() => {
@@ -422,28 +432,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return false;
       }
 
-      const users = JSON.parse(
-        localStorage.getItem("fuelpro_username_users") || "{}"
-      );
-      const found = users[username];
+      try {
+        const users = JSON.parse(
+          localStorage.getItem("fuelpro_username_users") || "{}"
+        );
+        const found = users[username];
 
-      if (!found || found.password !== password) {
-        setError("Invalid username or password");
+        if (!found || found.password !== password) {
+          setError("Invalid username or password");
+          setIsPending(false);
+          return false;
+        }
+
+        const usernameToken = `username_token_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        const newUser: AuthIdentity = {
+          id: `username_${username}`,
+          authId: `username_${username}`,
+          authMethod: "username",
+          email: found.email || "",
+          name: found.name || username,
+        };
+
+        setUser(newUser);
+        setToken(usernameToken);
+        localStorage.setItem(TOKEN_STORAGE_KEY, usernameToken);
+        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(newUser));
+        broadcastAuthUpdate(newUser, usernameToken);
+        setIsPending(false);
+        return true;
+      } catch {
+        setError("Login failed. Please try again.");
         setIsPending(false);
         return false;
       }
-
-      setUser({
-        id: `username_${username}`,
-        authId: `username_${username}`,
-        authMethod: "username",
-        email: found.email || "",
-        name: found.name || username,
-      });
-      setIsPending(false);
-      return true;
     },
-    []
+    [broadcastAuthUpdate]
   );
 
   const registerWithUsername = useCallback(
@@ -707,6 +730,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loginWithEmail,
         registerWithEmail,
         loginWithUsername,
+        registerWithUsername,
         logout,
         clearError,
         refreshAuth,

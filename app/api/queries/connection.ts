@@ -44,7 +44,7 @@ export async function checkDbHealth(): Promise<{ healthy: boolean; error?: strin
     return { healthy: true };
   } catch (err) {
     // Reset instance to force reconnection on next attempt
-    instance = undefined as any;
+    instance = null as unknown as ReturnType<typeof drizzle<typeof fullSchema>>;
     return {
       healthy: false,
       error: err instanceof Error ? err.message : String(err),

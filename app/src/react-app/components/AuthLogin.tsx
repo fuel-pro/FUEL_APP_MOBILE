@@ -65,9 +65,9 @@ export default function AuthLogin() {
   // Redirect if already logged in
   useEffect(() => {
     if (user) {
-      window.location.href = "/";
+      navigate("/", { replace: true });
     }
-  }, [user]);
+  }, [user, navigate]);
 
   // Clear errors when switching modes
   useEffect(() => {

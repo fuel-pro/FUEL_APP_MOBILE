@@ -87,12 +87,17 @@ app.notFound((c) => c.json({
 export default app;
 
 if (env.isProduction && !process.env.VERCEL) {
-  const { serve } = await import("@hono/node-server");
-  const { serveStaticFiles } = await import("./lib/vite");
-  serveStaticFiles(app);
+  try {
+    const { serve } = await import("@hono/node-server");
+    const { serveStaticFiles } = await import("./lib/vite");
+    serveStaticFiles(app);
 
-  const port = parseInt(process.env.PORT || "3000");
-  serve({ fetch: app.fetch, port }, () => {
-    console.log(`Server running on http://localhost:${port}/`);
-  });
+    const port = parseInt(process.env.PORT || "3000");
+    serve({ fetch: app.fetch, port }, () => {
+      console.log(`Server running on http://localhost:${port}/`);
+    });
+  } catch (err) {
+    console.error("[Server] Failed to start production server:", err);
+    process.exit(1);
+  }
 }

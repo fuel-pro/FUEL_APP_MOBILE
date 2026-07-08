@@ -14,9 +14,22 @@ import { logger } from "hono/logger";
 
 const app = new Hono();
 
-// CORS middleware
+// CORS middleware - use restrictive defaults, allow override via env
+const restApiAllowedOrigins = process.env.CORS_ALLOWED_ORIGINS
+  ? process.env.CORS_ALLOWED_ORIGINS.split(",")
+  : process.env.NODE_ENV === "production"
+    ? []
+    : ["*"];
+
 app.use("*", cors({
-  origin: (origin) => origin || "",
+  origin: (origin) => {
+    if (!origin) return origin || "";
+    if (restApiAllowedOrigins.includes("*")) return origin;
+    if (restApiAllowedOrigins.some((o: string) => origin === o || origin.endsWith(o.replace("*.", ".")))) {
+      return origin;
+    }
+    return process.env.NODE_ENV === "production" ? "" : origin;
+  },
   allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowHeaders: ["Content-Type", "Authorization", "X-API-Key"],
   credentials: true,
@@ -60,9 +73,9 @@ async function requireAuth(c: any, next: any) {
     return next();
   }
   
-  // In production, validate against configured API keys
-  if (process.env.NODE_ENV === "production") {
-    const validKeys = (process.env.API_KEYS || "").split(",").filter(Boolean);
+  // Always validate API key if configured, regardless of environment
+  const validKeys = (process.env.API_KEYS || "").split(",").filter(Boolean);
+  if (validKeys.length > 0) {
     if (!apiKey || !validKeys.includes(apiKey)) {
       return c.json({ success: false, error: "Unauthorized - valid API key required" }, 401);
     }
@@ -165,13 +178,14 @@ app.post("/api/data/:collection", requireAuth, async (c) => {
     }
     
     const id = (body.id as string) || generateId(collection);
+    // Create a copy to avoid mutating the input object
+    const { id: _bodyId, ...bodyWithoutId } = body;
+    void _bodyId; // explicitly ignore
     const record: DataRecord = {
-      ...body,
+      ...bodyWithoutId,
       createdAt: body.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
-    
-    delete record.id; // Remove id from record, it's the key
     dataStore[collection][id] = record;
     
     return c.json({

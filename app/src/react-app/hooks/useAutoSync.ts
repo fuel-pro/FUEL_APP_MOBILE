@@ -236,14 +236,20 @@ export function useAutoSync(
   }, [countryCode]);
 
   const dismissUpdate = useCallback((id: string) => {
-    setRegulatoryUpdates(prev => prev.filter(u => u.id !== id));
-    localStorage.setItem(`fuelpro_regulatory_${countryCode}`, JSON.stringify(regulatoryUpdates.filter(u => u.id !== id)));
-  }, [countryCode, regulatoryUpdates]);
+    setRegulatoryUpdates(prev => {
+      const updated = prev.filter(u => u.id !== id);
+      localStorage.setItem(`fuelpro_regulatory_${countryCode}`, JSON.stringify(updated));
+      return updated;
+    });
+  }, [countryCode]);
 
   const markUpdateRead = useCallback((id: string) => {
-    setRegulatoryUpdates(prev => prev.map(u => u.id === id ? { ...u, read: true } : u));
-    localStorage.setItem(`fuelpro_regulatory_${countryCode}`, JSON.stringify(regulatoryUpdates.map(u => u.id === id ? { ...u, read: true } : u)));
-  }, [countryCode, regulatoryUpdates]);
+    setRegulatoryUpdates(prev => {
+      const updated = prev.map(u => u.id === id ? { ...u, read: true } : u);
+      localStorage.setItem(`fuelpro_regulatory_${countryCode}`, JSON.stringify(updated));
+      return updated;
+    });
+  }, [countryCode]);
 
   const unreadCount = regulatoryUpdates.filter(u => !u.read).length;
   const highPriorityCount = regulatoryUpdates.filter(u => !u.read && u.priority === "high").length;
