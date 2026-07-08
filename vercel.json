@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "buildCommand": "cd app && npm run build",
+  "buildCommand": "cd app && npm run build:static",
   "installCommand": "cd app && npm install",
   "framework": null,
   "outputDirectory": "app/dist",
