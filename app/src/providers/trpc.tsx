@@ -72,7 +72,7 @@ function createTrpcClient() {
     links: [
       httpBatchLink({
         url: getApiUrl(),
-        transformer: superjson,
+        transformer: superjson as any,
         // Limit URL length to prevent 431 errors from oversized batch requests
         // Standard limit is 8KB, we use 2000 to be safe across proxies
         maxURLLength: 2000,

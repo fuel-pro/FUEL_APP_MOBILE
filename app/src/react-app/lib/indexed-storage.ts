@@ -120,25 +120,25 @@ class IndexedStorageService {
 
       // Try IndexedDB first
       try {
-        const entry = await CloudStorage.load(storageKey);
+        const entry = await CloudStorage.load<StorageEntry>(storageKey);
         if (entry) {
           // Check expiry
           if (entry.expiresAt && Date.now() > entry.expiresAt) {
             await this.delete(key);
             return null;
           }
-          return entry.value;
+          return entry.value as T;
         }
       } catch (e) {
         // Fallback to localStorage
         const stored = localStorage.getItem(storageKey);
         if (stored) {
-          const entry = JSON.parse(stored);
+          const entry: StorageEntry = JSON.parse(stored);
           if (entry.expiresAt && Date.now() > entry.expiresAt) {
             localStorage.removeItem(storageKey);
             return null;
           }
-          return entry.value;
+          return entry.value as T;
         }
       }
 
@@ -302,7 +302,7 @@ class IndexedStorageService {
           // Try to sync to cloud
           const { cloudSync } = await import('./cloudStorage');
           if (cloudSync.isEnabled()) {
-            await cloudSync.queueSync(item.key, item.value);
+            await cloudSync.pushToCloud({ [item.key]: item.value });
           }
 
           item.synced = true;
@@ -394,7 +394,7 @@ class IndexedStorageService {
    */
   private async updateStorageIndex(key: string): Promise<void> {
     try {
-      const index = await CloudStorage.load(STORAGE_INDEX_KEY) || {};
+      const index = await CloudStorage.load<Record<string, number>>(STORAGE_INDEX_KEY) || {};
       index[key] = Date.now();
       await CloudStorage.save(STORAGE_INDEX_KEY, index);
     } catch (e) {
@@ -407,7 +407,7 @@ class IndexedStorageService {
    */
   private async removeFromStorageIndex(key: string): Promise<void> {
     try {
-      const index = await CloudStorage.load(STORAGE_INDEX_KEY) || {};
+      const index = await CloudStorage.load<Record<string, number>>(STORAGE_INDEX_KEY) || {};
       delete index[key];
       await CloudStorage.save(STORAGE_INDEX_KEY, index);
     } catch (e) {

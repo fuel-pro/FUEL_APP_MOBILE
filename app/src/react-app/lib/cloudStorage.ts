@@ -1175,6 +1175,199 @@ const FIREBASE_CONFIG = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID || "",
 };
 
+// ═══════════════════════════════════════════════════════════════════
+// KEY-VALUE STORE (IndexedDB-backed, used by indexed-storage & silent-print)
+// ═══════════════════════════════════════════════════════════════════
+
+export interface StorageEntry {
+  key: string;
+  value: unknown;
+  timestamp: number;
+  expiresAt?: number;
+  synced?: boolean;
+  version?: number;
+  metadata?: Record<string, unknown>;
+}
+
+const KV_DB_NAME = "fuelpro-kv-store";
+const KV_STORE_NAME = "keyvalue";
+const KV_DB_VERSION = 1;
+
+async function openKVDB(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(KV_DB_NAME, KV_DB_VERSION);
+    req.onerror = () => reject(req.error);
+    req.onsuccess = () => resolve(req.result);
+    req.onupgradeneeded = (e) => {
+      const db = (e.target as IDBOpenDBRequest).result;
+      if (!db.objectStoreNames.contains(KV_STORE_NAME)) {
+        db.createObjectStore(KV_STORE_NAME, { keyPath: "key" });
+      }
+    };
+  });
+}
+
+function readFromLocalStorage(key: string): unknown | null {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeToLocalStorage(key: string, value: unknown): void {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    console.error("localStorage write failed for key:", key);
+  }
+}
+
+function deleteFromLocalStorage(key: string): void {
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    /* no-op */
+  }
+}
+
+export const CloudStorage = {
+  async save(key: string, value: unknown): Promise<void> {
+    try {
+      const db = await openKVDB();
+      const tx = db.transaction(KV_STORE_NAME, "readwrite");
+      tx.objectStore(KV_STORE_NAME).put({ key, value });
+      await new Promise<void>((resolve, reject) => {
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      });
+    } catch {
+      writeToLocalStorage(key, value);
+    }
+  },
+
+  async load<T = unknown>(key: string): Promise<T | null> {
+    try {
+      const db = await openKVDB();
+      const tx = db.transaction(KV_STORE_NAME, "readonly");
+      const req = tx.objectStore(KV_STORE_NAME).get(key);
+      return new Promise<T | null>((resolve, reject) => {
+        req.onsuccess = () => {
+          const result = req.result as { key: string; value: T } | undefined;
+          resolve(result?.value ?? null);
+        };
+        req.onerror = () => reject(req.error);
+      });
+    } catch {
+      return readFromLocalStorage(key) as T | null;
+    }
+  },
+
+  async loadAll(): Promise<Record<string, StorageEntry>> {
+    const result: Record<string, StorageEntry> = {};
+    try {
+      const db = await openKVDB();
+      const tx = db.transaction(KV_STORE_NAME, "readonly");
+      const store = tx.objectStore(KV_STORE_NAME);
+      const req = store.getAll();
+      return new Promise((resolve, reject) => {
+        req.onsuccess = () => {
+          const entries = req.result as Array<{ key: string; value: unknown }>;
+          for (const entry of entries) {
+            result[entry.key] = entry.value as StorageEntry;
+          }
+          resolve(result);
+        };
+        req.onerror = () => reject(req.error);
+      });
+    } catch {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key?.startsWith("fuelpro_")) {
+          const val = readFromLocalStorage(key);
+          if (val) result[key] = val as StorageEntry;
+        }
+      }
+      return result;
+    }
+  },
+
+  async remove(key: string): Promise<void> {
+    try {
+      const db = await openKVDB();
+      const tx = db.transaction(KV_STORE_NAME, "readwrite");
+      tx.objectStore(KV_STORE_NAME).delete(key);
+      await new Promise<void>((resolve, reject) => {
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      });
+    } catch {
+      deleteFromLocalStorage(key);
+    }
+  },
+
+  async getStorageStats(): Promise<{
+    indexedDB: number;
+    localStorage: number;
+  }> {
+    let indexedDBSize = 0;
+    let localStorageSize = 0;
+    try {
+      const all = await this.loadAll();
+      indexedDBSize = JSON.stringify(all).length;
+    } catch {
+      /* no-op */
+    }
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key) {
+          localStorageSize += (localStorage.getItem(key)?.length ?? 0) * 2;
+        }
+      }
+    } catch {
+      /* no-op */
+    }
+    return { indexedDB: indexedDBSize, localStorage: localStorageSize };
+  },
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// AUDIT LOGGING
+// ═══════════════════════════════════════════════════════════════════
+
+export interface AuditLogEntry {
+  stationId?: string;
+  action: string;
+  category: string;
+  details?: string;
+  timestamp?: number;
+}
+
+const AUDIT_LOG_KEY = "fuelpro_audit_log";
+const MAX_AUDIT_ENTRIES = 1000;
+
+export async function logAudit(entry: AuditLogEntry): Promise<void> {
+  try {
+    const raw = localStorage.getItem(AUDIT_LOG_KEY);
+    const logs: AuditLogEntry[] = raw ? JSON.parse(raw) : [];
+    logs.push({ ...entry, timestamp: Date.now() });
+    if (logs.length > MAX_AUDIT_ENTRIES) {
+      logs.splice(0, logs.length - MAX_AUDIT_ENTRIES);
+    }
+    localStorage.setItem(AUDIT_LOG_KEY, JSON.stringify(logs));
+  } catch {
+    console.debug("Audit log write failed");
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// CLOUD SYNC INSTANCE
+// ═══════════════════════════════════════════════════════════════════
+
+export const cloudSync = new FuelProCloudSync();
+
 // ─── Legacy compatibility exports ───
 export const cloudStorage = {
   R2: R2Storage,

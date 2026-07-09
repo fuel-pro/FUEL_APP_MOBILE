@@ -34,6 +34,7 @@ export interface PrintSettings {
   quality?: 'draft' | 'normal' | 'high';
   silent?: boolean;
   timeout?: number;
+  printerId?: string;
 }
 
 const DEFAULT_SETTINGS: PrintSettings = {
