@@ -13,6 +13,7 @@ import PasswordReset from "@/react-app/pages/PasswordReset";
 import { Suspense, useMemo, useState, useEffect, Component, ReactNode } from "react";
 import InviteAccept from "@/react-app/pages/InviteAccept";
 import FounderAccess from "@/react-app/pages/FounderAccess";
+import OfflineIndicator from "@/react-app/components/OfflineIndicator";
 
 // Demo mode - skip Clerk if not configured
 const publishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
@@ -263,6 +264,8 @@ export default function App() {
                       {/* Catch all */}
                       <Route path="*" element={<Navigate to="/" replace />} />
                     </Routes>
+                    {/* Offline indicator for sync status */}
+                    <OfflineIndicator />
                   </Router>
                 </TRPCProvider>
               </PlatformDataProvider>

@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { printerService, type ReceiptData } from '@/react-app/lib/pos/printer-service';
 import { paymentService } from '@/react-app/lib/pos/payment-service';
+import { silentPrintService } from '@/react-app/lib/silent-print-service';
 import { 
   CreditCard, 
   Banknote, 
@@ -109,9 +110,9 @@ export default function POSCheckout({
       // Generate a reference
       const ref = `CASH-${Date.now()}`;
       
-      // Print receipt
+      // Print receipt using silent print service (offline-capable)
       const receipt = buildReceiptData(ref);
-      await printerService.printReceipt(receipt);
+      await silentPrintService.queueReceipt(receipt);
       
       // Open cash drawer
       await printerService.openCashDrawer();
@@ -121,8 +122,19 @@ export default function POSCheckout({
       
       setTimeout(onComplete, 2000);
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Payment failed');
-      setPaymentStatus('error');
+      // Fallback to direct print if silent print fails
+      try {
+        const ref = `CASH-${Date.now()}`;
+        const receipt = buildReceiptData(ref);
+        await printerService.printReceipt(receipt);
+        await printerService.openCashDrawer();
+        setTransactionRef(ref);
+        setPaymentStatus('success');
+        setTimeout(onComplete, 2000);
+      } catch (fallbackError) {
+        setErrorMessage(fallbackError instanceof Error ? fallbackError.message : 'Payment failed');
+        setPaymentStatus('error');
+      }
     }
   };
 
@@ -142,9 +154,9 @@ export default function POSCheckout({
       if (result.success) {
         setTransactionRef(result.authorizationCode || result.transactionId || '');
         
-        // Print receipt
+        // Print receipt using silent print service (offline-capable)
         const receipt = buildReceiptData(result.authorizationCode || result.transactionId || '');
-        await printerService.printReceipt(receipt);
+        await silentPrintService.queueReceipt(receipt);
 
         setPaymentStatus('success');
         setTimeout(onComplete, 2000);
@@ -179,9 +191,9 @@ export default function POSCheckout({
       if (result.success) {
         setTransactionRef(result.transactionId || '');
         
-        // Print receipt
+        // Print receipt using silent print service (offline-capable)
         const receipt = buildReceiptData(result.transactionId || '');
-        await printerService.printReceipt(receipt);
+        await silentPrintService.queueReceipt(receipt);
 
         setPaymentStatus('success');
         setTimeout(onComplete, 2000);

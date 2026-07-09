@@ -7,6 +7,8 @@ import {
   Bot,
   Send,
   Building2,
+  Printer,
+  Loader2,
 } from "lucide-react";
 import { useFuel } from "@/react-app/context/FuelContext";
 import ExportDropdown from "@/react-app/components/ExportDropdown";
@@ -16,6 +18,7 @@ import {
   exportInvoiceTXT,
 } from "@/react-app/utils/exportUtils";
 import { formatNumber } from "@/react-app/utils/formatUtils";
+import { silentPrintService } from "@/react-app/lib/silent-print-service";
 
 export default function Invoice() {
   const { state, dispatch } = useFuel();
@@ -30,6 +33,8 @@ export default function Invoice() {
   const [quantityLabel, setQuantityLabel] = useState(
     state.invoiceSettings.quantityLabel
   );
+  const [isPrinting, setIsPrinting] = useState(false);
+  const [printError, setPrintError] = useState<string | null>(null);
 
   useEffect(() => {
     // Auto-fill today's date
@@ -126,6 +131,54 @@ export default function Invoice() {
     });
 
     alert(`Invoice ${invNum} saved successfully!`);
+  };
+
+  // Silent print invoice using print service
+  const handleSilentPrint = async () => {
+    if (!customerName || state.invoiceItems.length === 0) {
+      setPrintError("Please add customer details and invoice items before printing.");
+      return;
+    }
+
+    setIsPrinting(true);
+    setPrintError(null);
+
+    try {
+      const invoiceData = {
+        invoiceNumber: getInvoiceNumber(),
+        stationName: state.companyData.name || 'FuelPro Station',
+        stationLocation: state.companyData.poBox || state.companyData.address || '',
+        date: invoiceDate,
+        time: new Date().toLocaleTimeString(),
+        customerName,
+        customerAddress,
+        customerPhone,
+        items: state.invoiceItems.map(item => ({
+          desc: item.desc || item.name || '',
+          qty: item.qty || 1,
+          price: item.price || 0,
+          total: item.total || (item.qty * item.price),
+        })),
+        subtotal: totalDue,
+        tax: 0,
+        discount: 0,
+        totalDue: totalDue,
+        currency: state.companyData.currency || 'Ksh',
+        attendantName: 'System',
+        footerMessage: 'Thank you for your business',
+      };
+
+      await silentPrintService.queueInvoice(invoiceData);
+      
+      // Show brief success indicator
+      setTimeout(() => {
+        setIsPrinting(false);
+      }, 1500);
+    } catch (error) {
+      console.error("Print error:", error);
+      setPrintError(error instanceof Error ? error.message : "Print failed");
+      setIsPrinting(false);
+    }
   };
 
   const loadInvoice = (num: string) => {
@@ -589,7 +642,7 @@ export default function Invoice() {
       </div>
 
       {/* Actions */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
         {/* Save Invoice */}
         <div className="card">
           <div className="flex justify-between items-center mb-4">
@@ -602,6 +655,39 @@ export default function Invoice() {
           <div className="text-sm text-gray-600">
             Save this invoice to your records and generate the invoice number.
           </div>
+        </div>
+
+        {/* Silent Print */}
+        <div className="card">
+          <div className="mb-4">
+            <h3 className="text-xl font-bold mb-2 flex items-center gap-2">
+              <Printer size={20} className="text-blue-600" />
+              Silent Print
+            </h3>
+            <div className="text-sm text-gray-600 mb-4">
+              Print directly to connected printer (works offline)
+            </div>
+          </div>
+          <button
+            onClick={handleSilentPrint}
+            disabled={isPrinting || !customerName || state.invoiceItems.length === 0}
+            className="btn btn-primary w-full flex items-center justify-center gap-2"
+          >
+            {isPrinting ? (
+              <>
+                <Loader2 size={16} className="animate-spin" />
+                Printing...
+              </>
+            ) : (
+              <>
+                <Printer size={16} />
+                Print Invoice
+              </>
+            )}
+          </button>
+          {printError && (
+            <div className="mt-2 text-sm text-red-600">{printError}</div>
+          )}
         </div>
 
         {/* Export Options */}

@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
-import { FileText, Printer, TrendingUp, Download } from "lucide-react";
+import { FileText, Printer, TrendingUp, Download, Loader2 } from "lucide-react";
 import { useFuel } from "@/react-app/context/FuelContext";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
+import { silentPrintService } from "@/react-app/lib/silent-print-service";
 
 interface SalesEntry {
   date: string;
@@ -18,6 +19,7 @@ export default function FuelSalesReport() {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [reportData, setReportData] = useState<SalesEntry[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+  const [isPrinting, setIsPrinting] = useState(false);
   const [totals, setTotals] = useState({
     petrol: 0,
     diesel: 0,
@@ -236,6 +238,40 @@ export default function FuelSalesReport() {
     printWindow.print();
   };
 
+  // Silent print using print service
+  const handleSilentPrint = async () => {
+    if (reportData.length === 0) return;
+
+    setIsPrinting(true);
+    try {
+      const reportHTML = document.getElementById("report-content");
+      const reportDataForPrint = {
+        stationName: state.companyData.name || 'FuelPro Station',
+        monthYear: `${months[selectedMonth - 1]} ${selectedYear}`,
+        period: `${months[selectedMonth - 1]} ${selectedYear}`,
+        currency: state.companyData.currency || 'Ksh',
+        entries: reportData.map(entry => ({
+          date: entry.date,
+          petrolSales: entry.petrolSales,
+          dieselSales: entry.dieselSales,
+          totalSales: entry.totalSales,
+        })),
+        totals: {
+          petrol: totals.petrol,
+          diesel: totals.diesel,
+          total: totals.total,
+        },
+      };
+
+      await silentPrintService.queueSalesReport(reportDataForPrint);
+      
+      setTimeout(() => setIsPrinting(false), 1500);
+    } catch (error) {
+      console.error("Silent print error:", error);
+      setIsPrinting(false);
+    }
+  };
+
   const handleSaveReport = async () => {
     try {
       setIsSaving(true);
@@ -410,6 +446,24 @@ export default function FuelSalesReport() {
             >
               <Printer size={16} />
               Print Report
+            </button>
+
+            <button
+              onClick={handleSilentPrint}
+              disabled={isPrinting || reportData.length === 0}
+              className="bg-green-600 hover:bg-green-700 disabled:bg-green-800 text-white px-4 py-2 rounded flex items-center gap-2 text-sm"
+            >
+              {isPrinting ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" />
+                  Printing...
+                </>
+              ) : (
+                <>
+                  <Printer size={16} />
+                  Silent Print
+                </>
+              )}
             </button>
           </div>
         </div>
