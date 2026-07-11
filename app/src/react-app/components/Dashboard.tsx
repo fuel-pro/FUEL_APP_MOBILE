@@ -3,7 +3,7 @@ import { useLocation } from "@/react-app/context/LocationContext";
 import { useStations } from "@/react-app/context/StationContext";
 import { useAutoSync } from "@/react-app/hooks/useAutoSync";
 import { getPriceForCity } from "@/react-app/services/DataSyncService";
-import { getDemoKPIs, getDemoChartData, hasRealData } from "@/react-app/lib/demoData";
+// Demo data imports removed for production mode
 import RegulatoryAlerts from "@/react-app/components/RegulatoryAlerts";
 import SyncStatusIndicator from "@/react-app/components/SyncStatusIndicator";
 import WeatherWidget from "@/react-app/components/WeatherWidget";
@@ -158,9 +158,11 @@ export default function Dashboard() {
     return () => clearInterval(timer);
   }, []);
 
-  // Animate KPI values on mount - use backend data if available, then local, then demo
+  // Animate KPI values on mount - use backend data if available, then local
+  // PRODUCTION MODE: Never show demo data - always use real data
   useEffect(() => {
-    // Prefer backend stats over local calculation, then demo data
+    // Prefer backend stats over local calculation
+    // In production, we NEVER show demo data
     let targets = {
       revenue: 0,
       profit: 0,
@@ -175,6 +177,7 @@ export default function Dashboard() {
         fuelSold: backendStats.fuelSold,
         debt: backendStats.balanceDue,
       };
+      setUsingDemoData(false);
     } else if (totalRevenue > 0 || totalFuelSold > 0) {
       targets = {
         revenue: totalRevenue,
@@ -182,16 +185,16 @@ export default function Dashboard() {
         fuelSold: totalFuelSold,
         debt: totalDebt,
       };
+      setUsingDemoData(false);
     } else {
-      // Use demo data
-      const demoKPIs = getDemoKPIs();
+      // Production mode: Don't show demo data, show empty state
       targets = {
-        revenue: demoKPIs.totalRevenue,
-        profit: demoKPIs.netProfit,
-        fuelSold: demoKPIs.fuelSold,
-        debt: demoKPIs.balanceDue,
+        revenue: 0,
+        profit: 0,
+        fuelSold: 0,
+        debt: 0,
       };
-      setUsingDemoData(true);
+      setUsingDemoData(false);
     }
     
     const duration = 1000;

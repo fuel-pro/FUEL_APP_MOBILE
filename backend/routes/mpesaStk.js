@@ -24,8 +24,8 @@ const { getDb } = require('../database/sqlite');
 const { protect } = require('../middleware/auth');
 const AuditLog = require('../models/AuditLog');
 
-const MPESA_ENV = process.env.MPESA_ENV || 'sandbox';
-const BASE_URL = MPESA_ENV === 'live' 
+const MPESA_ENV = process.env.MPESA_ENV || 'production';
+const BASE_URL = MPESA_ENV === 'production' 
   ? 'https://api.safaricom.co.ke'
   : 'https://sandbox.safaricom.co.ke';
 

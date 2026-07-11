@@ -122,7 +122,7 @@ const COUNTRY_CONNECTORS: Record<string, CountryConnectorSet> = {
           consumerSecret: "",
           shortcode: "578590",
           passkey: "",
-          env: "sandbox",
+          env: "production",
         },
         features: [
           "STK Push",
@@ -217,7 +217,7 @@ const COUNTRY_CONNECTORS: Record<string, CountryConnectorSet> = {
         cat: "Payments",
         desc: "Airtel Money API for collections and disbursements",
         icon: "Phone",
-        config: { clientId: "", clientSecret: "", env: "sandbox" },
+        config: { clientId: "", clientSecret: "", env: "production" },
         features: [
           "Collect payments",
           "Send money",
@@ -405,7 +405,7 @@ const COUNTRY_CONNECTORS: Record<string, CountryConnectorSet> = {
           apiUser: "",
           apiKey: "",
           subscriptionKey: "",
-          env: "sandbox",
+          env: "production",
         },
         features: [
           "Request payment",
@@ -591,7 +591,7 @@ const COUNTRY_CONNECTORS: Record<string, CountryConnectorSet> = {
         cat: "Payments",
         desc: "Vodacom M-PESA API for payments",
         icon: "Banknote",
-        config: { apiKey: "", apiSecret: "", shortcode: "", env: "sandbox" },
+        config: { apiKey: "", apiSecret: "", shortcode: "", env: "production" },
         features: [
           "C2B payments",
           "B2C transfers",
@@ -605,7 +605,7 @@ const COUNTRY_CONNECTORS: Record<string, CountryConnectorSet> = {
         cat: "Payments",
         desc: "Tigo Pesa mobile money API",
         icon: "Banknote",
-        config: { clientId: "", clientSecret: "", env: "sandbox" },
+        config: { clientId: "", clientSecret: "", env: "production" },
         features: [
           "Collect payments",
           "Transfer funds",
@@ -619,7 +619,7 @@ const COUNTRY_CONNECTORS: Record<string, CountryConnectorSet> = {
         cat: "Payments",
         desc: "Airtel Money TZ API",
         icon: "Banknote",
-        config: { clientId: "", clientSecret: "", env: "sandbox" },
+        config: { clientId: "", clientSecret: "", env: "production" },
         features: ["Accept payments", "Send money", "Balance", "History"],
       },
     ],
@@ -781,7 +781,7 @@ const COUNTRY_CONNECTORS: Record<string, CountryConnectorSet> = {
         cat: "Payments",
         desc: "OPay mobile payment platform",
         icon: "Banknote",
-        config: { merchantId: "", apiKey: "", env: "sandbox" },
+        config: { merchantId: "", apiKey: "", env: "production" },
         features: [
           "Accept payments",
           "Transfer funds",
@@ -1037,7 +1037,7 @@ const COUNTRY_CONNECTORS: Record<string, CountryConnectorSet> = {
           apiUser: "",
           apiKey: "",
           subscriptionKey: "",
-          env: "sandbox",
+          env: "production",
         },
         features: [
           "Request payment",
@@ -1052,7 +1052,7 @@ const COUNTRY_CONNECTORS: Record<string, CountryConnectorSet> = {
         cat: "Payments",
         desc: "Vodafone Cash mobile money",
         icon: "Banknote",
-        config: { apiKey: "", merchantId: "", env: "sandbox" },
+        config: { apiKey: "", merchantId: "", env: "production" },
         features: [
           "Collect payments",
           "Send money",
@@ -1148,7 +1148,7 @@ const COUNTRY_CONNECTORS: Record<string, CountryConnectorSet> = {
         cat: "Payments",
         desc: "MTN Mobile Money Rwanda API",
         icon: "Banknote",
-        config: { apiUser: "", apiKey: "", env: "sandbox" },
+        config: { apiUser: "", apiKey: "", env: "production" },
         features: [
           "Request payment",
           "Transfer funds",
@@ -1162,7 +1162,7 @@ const COUNTRY_CONNECTORS: Record<string, CountryConnectorSet> = {
         cat: "Payments",
         desc: "Airtel Money Rwanda API",
         icon: "Banknote",
-        config: { clientId: "", clientSecret: "", env: "sandbox" },
+        config: { clientId: "", clientSecret: "", env: "production" },
         features: ["Collect payments", "Send money", "Balance", "Reports"],
       },
     ],
@@ -1243,7 +1243,7 @@ const COUNTRY_CONNECTORS: Record<string, CountryConnectorSet> = {
         cat: "Payments",
         desc: "Ethio Telecom Telebirr mobile money",
         icon: "Banknote",
-        config: { apiKey: "", merchantId: "", env: "sandbox" },
+        config: { apiKey: "", merchantId: "", env: "production" },
         features: [
           "Accept payments",
           "Transfer funds",
@@ -1361,7 +1361,7 @@ function generateConnectorsForCountry(
       cat: "Payments",
       desc: `${provider} payment integration`,
       icon: "Banknote",
-      config: { clientId: "", clientSecret: "", env: "sandbox" },
+      config: { clientId: "", clientSecret: "", env: "production" },
       features: [
         "Accept payments",
         "Transfer funds",
@@ -1396,7 +1396,7 @@ function generateConnectorsForCountry(
       cat: "Payments",
       desc: "PayPal payment integration",
       icon: "CreditCard",
-      config: { clientId: "", clientSecret: "", env: "sandbox" },
+      config: { clientId: "", clientSecret: "", env: "production" },
       features: ["Accept payments", "Send payouts", "Transaction history"],
     });
   }

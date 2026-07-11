@@ -41,7 +41,7 @@ function loadConfig(): DarajaConfig {
         businessShortCode: apiKeys.mpesaShortCode || "174379",
         callbackUrl:
           apiKeys.mpesaCallbackUrl || "https://fuelpro.app/api/mpesa/callback",
-        environment: apiKeys.mpesaEnvironment || "sandbox",
+        environment: apiKeys.mpesaEnvironment || "production",
       };
     }
   } catch (err) {
@@ -53,7 +53,7 @@ function loadConfig(): DarajaConfig {
     passkey: "",
     businessShortCode: "174379",
     callbackUrl: "https://fuelpro.app/api/mpesa/callback",
-    environment: "sandbox",
+    environment: "production",
   };
 }
 

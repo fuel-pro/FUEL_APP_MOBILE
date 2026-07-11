@@ -111,12 +111,7 @@ export default function AuthLogin() {
     }
   };
 
-  const fillDemoCredentials = () => {
-    setEmail("demo@fuelpro.demo");
-    setPassword("demo");
-    setLocalError("");
-    clearError();
-  };
+  // Demo credentials function removed for production mode
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 flex overflow-hidden">
@@ -190,21 +185,6 @@ export default function AuthLogin() {
             <div className="mb-4 flex items-center gap-2 text-green-400 bg-green-400/10 border border-green-400/20 rounded-xl px-4 py-3 text-sm">
               <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
               <span>{success}</span>
-            </div>
-          )}
-
-          {/* Demo Credentials Banner */}
-          {mode !== "register" && (
-            <div className="mb-4 bg-amber-500/10 border border-amber-500/20 rounded-xl px-4 py-3">
-              <p className="text-amber-300 text-xs font-semibold mb-1">🔑 Demo Access</p>
-              <p className="text-amber-200/70 text-xs">Email: <code className="font-mono">demo@fuelpro.demo</code> / Password: <code className="font-mono">demo</code></p>
-              <button
-                type="button"
-                onClick={fillDemoCredentials}
-                className="mt-2 text-xs text-amber-400 hover:text-amber-300 underline underline-offset-2 transition-colors"
-              >
-                Click to fill demo credentials
-              </button>
             </div>
           )}
 

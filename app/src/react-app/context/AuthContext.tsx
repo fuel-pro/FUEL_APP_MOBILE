@@ -10,16 +10,13 @@ import {
 import { getBackendUrl } from "@/utils/apiConfig";
 
 // ============================================================
-// AUTH CONTEXT v6 - Fixed: Demo mode works + closure bugs resolved
+// AUTH CONTEXT v6 - Production Mode
 // ============================================================
 
-// Demo mode enabled - real backend login attempted first, falls back to demo
-const DEMO_MODE = true;
+// PRODUCTION MODE: Demo mode disabled - requires real backend authentication
+const DEMO_MODE = false;
 const DEMO_USERS = [
-  { email: "admin@fuelpro.demo", password: "admin123", name: "Admin User", role: "admin" },
-  { email: "manager@fuelpro.demo", password: "manager123", name: "Manager User", role: "manager" },
-  { email: "staff@fuelpro.demo", password: "staff123", name: "Staff User", role: "staff" },
-  { email: "demo@fuelpro.demo", password: "demo", name: "Demo User", role: "owner" },
+  // Demo users removed for production mode
 ];
 
 const API_BASE = getBackendUrl();

@@ -14,7 +14,7 @@ const getClerkBackendUrl = () => {
   if (!key) return null;
   
   // Extract domain from publishable key
-  // Format: pk_test_xxx.api.clerk.琴m
+  // Format: pk_live_xxx.api.clerk.com
   const match = key.match(/api\.clerk\.(\S+)/);
   if (match) {
     return `https://api.clerk.${match[1]}`;

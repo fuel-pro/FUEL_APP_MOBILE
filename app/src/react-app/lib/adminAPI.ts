@@ -435,7 +435,7 @@ export const AdminWebhooksAPI = {
 };
 
 // ═══════════════════════════════════════════════════════════════════
-// FRONTEND-ONLY IMPLEMENTATION (for demo/dev)
+// FRONTEND-ONLY IMPLEMENTATION (for offline/local development)
 // In production, all these would be server-side only
 // ═══════════════════════════════════════════════════════════════════
 
@@ -520,7 +520,7 @@ export class AdminAPI {
         mfaRequired: false,
       },
       integrations: {
-        mpesa: { enabled: true, environment: "sandbox" },
+        mpesa: { enabled: true, environment: "production" },
         firebase: { enabled: false },
         supabase: { enabled: true },
         seafile: { enabled: false },

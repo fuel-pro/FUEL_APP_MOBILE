@@ -36,7 +36,7 @@ export default function MPesaConfig() {
       /* */
     }
     return {
-      mode: "sandbox",
+      mode: "production",
       consumerKey: "",
       consumerSecret: "",
       shortcode: "",
@@ -69,9 +69,9 @@ export default function MPesaConfig() {
   };
 
   const reset = () => {
-    if (confirm("Reset to default sandbox settings?")) {
+    if (confirm("Reset to default production settings?")) {
       setConfig({
-        mode: "sandbox",
+        mode: "production",
         consumerKey: "",
         consumerSecret: "",
         shortcode: "",
