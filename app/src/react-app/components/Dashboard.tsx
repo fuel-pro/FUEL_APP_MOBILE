@@ -182,15 +182,13 @@ export default function Dashboard() {
         debt: totalDebt,
       };
     } else {
-      // Production mode
-      const demoKPIs = getDemoKPIs();
+      // Production mode: no demo data
       targets = {
-        revenue: demoKPIs.totalRevenue,
-        profit: demoKPIs.netProfit,
-        fuelSold: demoKPIs.fuelSold,
-        debt: demoKPIs.balanceDue,
+        revenue: 0,
+        profit: 0,
+        fuelSold: 0,
+        debt: 0,
       };
-      setUsingDemoData(true);
     }
     
     const duration = 1000;
@@ -537,27 +535,6 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-3">
-      {/* Demo Data Banner */}
-      {usingDemoData && (
-        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 flex items-start gap-3">
-          <Info size={20} className="text-blue-500 flex-shrink-0 mt-0.5" />
-          <div>
-            <h3 className="text-sm font-semibold text-blue-700 dark:text-blue-300">
-            </h3>
-            <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
-            </p>
-            <button
-              onClick={() => {
-                
-                window.dispatchEvent(new CustomEvent("changeTab", { detail: "pos" }));
-              }}
-              className="mt-2 text-xs px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors"
-            >
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
