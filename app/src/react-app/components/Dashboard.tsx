@@ -3,7 +3,7 @@ import { useLocation } from "@/react-app/context/LocationContext";
 import { useStations } from "@/react-app/context/StationContext";
 import { useAutoSync } from "@/react-app/hooks/useAutoSync";
 import { getPriceForCity } from "@/react-app/services/DataSyncService";
-import { getDemoKPIs, getDemoChartData, hasRealData } from "@/react-app/lib/demoData";
+// Demo imports removed
 import RegulatoryAlerts from "@/react-app/components/RegulatoryAlerts";
 import SyncStatusIndicator from "@/react-app/components/SyncStatusIndicator";
 import WeatherWidget from "@/react-app/components/WeatherWidget";
@@ -83,7 +83,7 @@ export default function Dashboard() {
   } | null>(null);
   const [backendLoading, setBackendLoading] = useState(false);
   const [hasBackendData, setHasBackendData] = useState(false);
-  const [usingDemoData, setUsingDemoData] = useState(false);
+  // Demo mode removed
 
   // Use precise location-based fuel prices (auto-synced with GPS)
   const stationCity = currentStation?.location || "Nairobi";
@@ -158,9 +158,9 @@ export default function Dashboard() {
     return () => clearInterval(timer);
   }, []);
 
-  // Animate KPI values on mount - use backend data if available, then local, then demo
+  // Animate KPI values on mount
   useEffect(() => {
-    // Prefer backend stats over local calculation, then demo data
+    // Prefer backend stats over local calculation
     let targets = {
       revenue: 0,
       profit: 0,
@@ -183,7 +183,7 @@ export default function Dashboard() {
         debt: totalDebt,
       };
     } else {
-      // Use demo data
+      // Production mode
       const demoKPIs = getDemoKPIs();
       targets = {
         revenue: demoKPIs.totalRevenue,
@@ -544,19 +544,16 @@ export default function Dashboard() {
           <Info size={20} className="text-blue-500 flex-shrink-0 mt-0.5" />
           <div>
             <h3 className="text-sm font-semibold text-blue-700 dark:text-blue-300">
-              Welcome to FuelPro! 🎉
             </h3>
             <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
-              You're seeing demo data to help you explore the app. Start adding stations and sales to see your real data here.
             </p>
             <button
               onClick={() => {
-                setUsingDemoData(false);
+                
                 window.dispatchEvent(new CustomEvent("changeTab", { detail: "pos" }));
               }}
               className="mt-2 text-xs px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors"
             >
-              Start with Point of Sale →
             </button>
           </div>
         </div>
