@@ -34,13 +34,11 @@ jobs:
           CI: true
 
       - name: Deploy to Vercel
-        uses: amondnet/vercel-action@v25
-        if: env.VERCEL_TOKEN != ''
+        run: |
+          npx vercel@latest deploy \
+            --token=${{ secrets.VERCEL_TOKEN }} \
+            --prod \
+            --yes \
+            --cwd=./app
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        with:
-          vercel-token: ${{ secrets.VERCEL_TOKEN }}
-          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
-          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
-          working-directory: ./app
-          vercel-args: '--prod'
