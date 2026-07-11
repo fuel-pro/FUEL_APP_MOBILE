@@ -13,12 +13,6 @@ import { getBackendUrl } from "@/utils/apiConfig";
 // AUTH CONTEXT v6 - Production Mode
 // ============================================================
 
-// PRODUCTION MODE: Demo mode disabled - requires real backend authentication
-const DEMO_MODE = false;
-const DEMO_USERS = [
-  // Demo users removed for production mode
-];
-
 const API_BASE = getBackendUrl();
 
 export type AuthMethod = "google" | "email" | "username";
@@ -231,48 +225,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             return true;
           } else {
             const data = await res.json().catch(() => ({}));
-            // If backend explicitly rejects, only fall to demo if it looks like a demo email
-            if (!DEMO_MODE || !email.endsWith("@fuelpro.demo")) {
-              setError((data as any).error || "Login failed. Check your credentials.");
-              setIsPending(false);
-              return false;
-            }
-          }
-        } catch {
-          // Network error - fall through to demo mode if applicable
-          if (!DEMO_MODE) {
-            setError("Connection error. Please check your internet connection and try again.");
+            setError((data as any).error || "Login failed. Check your credentials.");
             setIsPending(false);
             return false;
           }
-        }
-      }
-
-      // Demo mode fallback
-      if (DEMO_MODE) {
-        const demoUser = DEMO_USERS.find(u => u.email === email && u.password === password);
-        if (demoUser) {
-          const newUser: AuthIdentity = {
-            id: `demo_${Date.now()}`,
-            authId: `demo_${email}`,
-            authMethod: "email",
-            email: demoUser.email,
-            name: demoUser.name,
-            role: demoUser.role,
-            permissions: ["read", "write", "admin"],
-          };
-          setUser(newUser);
-          const demoToken = `demo_token_${Date.now()}`;
-          setToken(demoToken);
-          localStorage.setItem(TOKEN_STORAGE_KEY, demoToken);
-          localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(newUser));
-          broadcastAuthUpdate(newUser, demoToken);
+        } catch {
+          setError("Connection error. Please check your internet connection and try again.");
           setIsPending(false);
-          return true;
+          return false;
         }
-        setError("Invalid credentials. Demo accounts: demo@fuelpro.demo / demo");
-        setIsPending(false);
-        return false;
       }
 
       setError("Login failed. Please try again.");
@@ -286,25 +247,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (email: string, password: string, name: string): Promise<boolean> => {
       setIsPending(true);
       setError(null);
-
-      if (DEMO_MODE && !API_BASE) {
-        const newUser: AuthIdentity = {
-          id: `demo_${Date.now()}`,
-          authId: `demo_${email}`,
-          authMethod: "email",
-          email,
-          name,
-          role: "staff",
-          permissions: ["read", "write"],
-        };
-        setUser(newUser);
-        const demoToken = `demo_token_${Date.now()}`;
-        setToken(demoToken);
-        localStorage.setItem(TOKEN_STORAGE_KEY, demoToken);
-        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(newUser));
-        setIsPending(false);
-        return true;
-      }
 
       try {
         const deviceId = getDeviceId();

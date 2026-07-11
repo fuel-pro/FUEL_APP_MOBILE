@@ -5,7 +5,7 @@ const publishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 
 /**
  * ClerkSignUp - Full Clerk-powered sign-up component
- * Falls back to local AuthLogin if Clerk is not configured (demo mode).
+ * Falls back to local AuthLogin if Clerk is not configured.
  */
 export default function ClerkSignUp() {
   if (!publishableKey) {

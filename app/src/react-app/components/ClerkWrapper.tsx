@@ -10,7 +10,7 @@ interface ClerkWrapperProps {
 }
 
 export default function ClerkWrapper({ children }: ClerkWrapperProps) {
-  // Skip ClerkProvider if not configured (demo mode)
+  // Skip ClerkProvider if not configured
   if (!isClerkConfigured) {
     return <>{children}</>;
   }
