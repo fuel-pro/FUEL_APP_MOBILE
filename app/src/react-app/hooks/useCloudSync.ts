@@ -161,12 +161,26 @@ export function useCloudUsers() {
     setError(undefined);
     
     try {
-      const result = await listRecords(Collections.USERS);
+      // Use the backend's /api/users endpoint to get all registered users
+      const result = await apiRequest<{ users: any[]; pagination?: any }>("GET", "/api/users");
       
       if (result.success && result.data) {
-        setUsers(result.data as CloudUser[]);
+        // Backend returns { users: [...] } format
+        const userData = result.data.users || result.data;
+        if (Array.isArray(userData)) {
+          setUsers(userData.map((u: any) => ({
+            id: u.id,
+            name: u.name,
+            email: u.email,
+            role: u.role,
+            createdAt: u.createdAt,
+            lastActive: u.lastLoginAt || u.lastActive,
+          })) as CloudUser[]);
+        } else {
+          setUsers([]);
+        }
       } else {
-        // API unavailable, check for pending local data
+        // API unavailable, return empty
         setUsers([]);
       }
     } catch (err: any) {
@@ -182,27 +196,18 @@ export function useCloudUsers() {
   }, [fetchUsers, isOnline]);
 
   const addUser = useCallback(async (user: Omit<CloudUser, "id" | "createdAt">) => {
-    const result = await createRecord(Collections.USERS, user);
-    
-    if (result.success && result.id) {
-      setUsers((prev) => [{ ...user, id: result.id!, createdAt: new Date().toISOString() } as CloudUser, ...prev]);
-      return { success: true, id: result.id };
-    }
-    
-    // Queue for later sync
-    queuePendingChange(Collections.USERS, "create", user);
-    return { success: false, error: result.error };
+    // User creation is handled by the registration flow, not here
+    return { success: false, error: "Use registration to create users" };
   }, []);
-
+	
   const updateUser = useCallback(async (id: string, data: Partial<CloudUser>) => {
-    const result = await updateRecord(Collections.USERS, id, data);
+    const result = await apiRequest("PUT", `/api/users/${id}`, data);
     
     if (result.success) {
       setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, ...data } : u)));
       return { success: true };
     }
     
-    queuePendingChange(Collections.USERS, "update", data, id);
     return { success: false, error: result.error };
   }, []);
 
