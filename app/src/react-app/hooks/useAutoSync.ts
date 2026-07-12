@@ -82,9 +82,10 @@ export function useAutoSync(
   );
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const updateLocationPrice = useCallback(() => {
+  const updateLocationPrice = useCallback(async () => {
     if (currentLocation) {
-      const price = getPriceForLocation(
+      // Use async version for dynamic price updates
+      const price = await getPriceForLocation(
         countryCode,
         currentLocation.latitude,
         currentLocation.longitude
