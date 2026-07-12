@@ -1,9 +1,9 @@
 {
   "version": 2,
-  "buildCommand": "cd app && npm run build:static",
-  "installCommand": "npm install",
   "framework": null,
-  "outputDirectory": "app/dist",
+  "buildCommand": "npm run build:static",
+  "outputDirectory": "dist",
+  "installCommand": "npm install --legacy-peer-deps",
   "headers": [
     {
       "source": "/(.*)",
@@ -14,8 +14,5 @@
         { "key": "Access-Control-Max-Age", "value": "86400" }
       ]
     }
-  ],
-  "env": {
-    "VITE_API_URL": "https://fuel-pro-tprc-api.up.railway.app"
-  }
+  ]
 }
