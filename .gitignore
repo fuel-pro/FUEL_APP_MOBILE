@@ -51,3 +51,7 @@ backend/render.yaml
 *.exe
 *.zip
 app/build-exe/
+
+# Serverless files (should not be deployed to Vercel static hosting)
+app/dist/boot.js
+app/public/boot.js

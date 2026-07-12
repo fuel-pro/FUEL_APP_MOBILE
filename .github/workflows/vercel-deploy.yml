@@ -30,16 +30,18 @@ jobs:
         run: |
           cd app
           npm run build:static
+          # Remove serverless files that shouldn't be deployed
+          rm -f dist/boot.js public/boot.js
         env:
           CI: true
 
       - name: Deploy to Vercel
         run: |
+          cd app
           npx vercel@latest deploy \
             --token=${{ secrets.VERCEL_TOKEN }} \
             --prod \
             --yes \
-            --cwd=./app \
             --project=fuel-app-mobile
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}

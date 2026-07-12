@@ -102,10 +102,15 @@ jobs:
         with:
           name: dist
           path: app/dist
-      - name: Deploy to Vercel
+      - name: Prepare Vercel deployment
         run: |
+          # Remove serverless files that shouldn't be deployed
+          rm -f app/dist/boot.js
           # Copy dist to public for vercel.json outputDirectory setting
           mkdir -p app/public && cp -r app/dist/* app/public/
+          rm -f app/public/boot.js
+      - name: Deploy to Vercel
+        run: |
           cd app && npx vercel@latest deploy --token=${{ secrets.VERCEL_TOKEN }} --prod --yes || echo "Vercel deployment skipped"
         continue-on-error: true
 
