@@ -39,6 +39,7 @@ jobs:
             --token=${{ secrets.VERCEL_TOKEN }} \
             --prod \
             --yes \
-            --cwd=./app
+            --cwd=./app \
+            --project=fuel-app-mobile
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
