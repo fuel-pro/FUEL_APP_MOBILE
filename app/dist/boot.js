@@ -466,10 +466,10 @@ var require_lib = __commonJS({
         millisecond = date6.getMilliseconds();
       } else {
         const timezoneOffsetMinutes = convertTimezone(timezone);
-        let time5 = date6.getTime();
+        let time4 = date6.getTime();
         if (timezoneOffsetMinutes !== false && timezoneOffsetMinutes !== 0)
-          time5 += timezoneOffsetMinutes * 6e4;
-        const adjustedDate = new Date(time5);
+          time4 += timezoneOffsetMinutes * 6e4;
+        const adjustedDate = new Date(time4);
         year3 = adjustedDate.getUTCFullYear();
         month = adjustedDate.getUTCMonth() + 1;
         day2 = adjustedDate.getUTCDate();
@@ -7398,7 +7398,7 @@ var require_utf32 = __commonJS({
     }
     Utf32Encoder.prototype.write = function(str) {
       var src = Buffer2.from(str, "ucs2");
-      var dst = Buffer2.alloc(src.length * 2 + 4);
+      var dst = Buffer2.alloc(src.length * 2);
       var write32 = this.isLE ? dst.writeUInt32LE : dst.writeUInt32BE;
       var offset = 0;
       for (var i = 0; i < src.length; i += 2) {
@@ -7465,9 +7465,9 @@ var require_utf32 = __commonJS({
         }
         if (overflow.length === 4) {
           if (isLE) {
-            codepoint = overflow[0] | overflow[1] << 8 | overflow[2] << 16 | overflow[3] << 24;
+            codepoint = overflow[i] | overflow[i + 1] << 8 | overflow[i + 2] << 16 | overflow[i + 3] << 24;
           } else {
-            codepoint = overflow[3] | overflow[2] << 8 | overflow[1] << 16 | overflow[0] << 24;
+            codepoint = overflow[i + 3] | overflow[i + 2] << 8 | overflow[i + 1] << 16 | overflow[i] << 24;
           }
           overflow.length = 0;
           offset = _writeCodepoint(dst, offset, codepoint, badChar);
@@ -7502,11 +7502,7 @@ var require_utf32 = __commonJS({
       return offset;
     }
     Utf32Decoder.prototype.end = function() {
-      if (this.overflow.length === 0) {
-        return;
-      }
       this.overflow.length = 0;
-      return String.fromCharCode(this.badChar);
     };
     exports.utf32 = Utf32AutoCodec;
     exports.ucs4 = "utf32";
@@ -8131,8 +8127,6 @@ var require_sbcs_data = __commonJS({
       elot928: "iso88597",
       hebrew: "iso88598",
       hebrew8: "iso88598",
-      iso88598i: "iso88598",
-      iso88598e: "iso88598",
       turkish: "iso88599",
       turkish8: "iso88599",
       thai: "iso885911",
@@ -12859,7 +12853,7 @@ var require_column_definition = __commonJS({
           decimals: this.decimals
         };
       }
-      [Symbol.for("nodejs.util.inspect.custom")](depth, inspectOptions, inspect) {
+      [/* @__PURE__ */ Symbol.for("nodejs.util.inspect.custom")](depth, inspectOptions, inspect) {
         const Types = require_types();
         const typeNames = [];
         for (const t4 in Types) {
@@ -18384,14 +18378,14 @@ var require_connection2 = __commonJS({
       for (let i = 0; functionsToWrap && i < functionsToWrap.length; i++) {
         const func = functionsToWrap[i];
         if (typeof BaseConnection.prototype[func] === "function" && PromiseConnection.prototype[func] === void 0) {
-          PromiseConnection.prototype[func] = /* @__PURE__ */ function factory(funcName) {
+          PromiseConnection.prototype[func] = /* @__PURE__ */ (function factory(funcName) {
             return function() {
               return BaseConnection.prototype[funcName].apply(
                 this.connection,
                 arguments
               );
             };
-          }(func);
+          })(func);
         }
       }
     })([
@@ -18923,11 +18917,11 @@ var require_pool2 = __commonJS({
       for (let i = 0; functionsToWrap && i < functionsToWrap.length; i++) {
         const func = functionsToWrap[i];
         if (typeof BasePool.prototype[func] === "function" && PromisePool.prototype[func] === void 0) {
-          PromisePool.prototype[func] = /* @__PURE__ */ function factory(funcName) {
+          PromisePool.prototype[func] = /* @__PURE__ */ (function factory(funcName) {
             return function() {
               return BasePool.prototype[funcName].apply(this.pool, arguments);
             };
-          }(func);
+          })(func);
         }
       }
     })([
@@ -19551,14 +19545,14 @@ var require_promise = __commonJS({
       for (let i = 0; functionsToWrap && i < functionsToWrap.length; i++) {
         const func = functionsToWrap[i];
         if (typeof PoolCluster.prototype[func] === "function" && PromisePoolCluster.prototype[func] === void 0) {
-          PromisePoolCluster.prototype[func] = /* @__PURE__ */ function factory(funcName) {
+          PromisePoolCluster.prototype[func] = /* @__PURE__ */ (function factory(funcName) {
             return function() {
               return PoolCluster.prototype[funcName].apply(
                 this.poolCluster,
                 arguments
               );
             };
-          }(func);
+          })(func);
         }
       }
     })(["add", "remove"]);
@@ -20130,7 +20124,7 @@ var init_dist = __esm({
       }
       return new Headers(headerRecord);
     };
-    wrapBodyStream = Symbol("wrapBodyStream");
+    wrapBodyStream = /* @__PURE__ */ Symbol("wrapBodyStream");
     newRequestFromIncoming = (method, url2, headers, incoming, abortController) => {
       const init = {
         method,
@@ -20178,13 +20172,13 @@ var init_dist = __esm({
       }
       return new Request2(url2, init);
     };
-    getRequestCache = Symbol("getRequestCache");
-    requestCache = Symbol("requestCache");
-    incomingKey = Symbol("incomingKey");
-    urlKey = Symbol("urlKey");
-    headersKey = Symbol("headersKey");
-    abortControllerKey = Symbol("abortControllerKey");
-    getAbortController = Symbol("getAbortController");
+    getRequestCache = /* @__PURE__ */ Symbol("getRequestCache");
+    requestCache = /* @__PURE__ */ Symbol("requestCache");
+    incomingKey = /* @__PURE__ */ Symbol("incomingKey");
+    urlKey = /* @__PURE__ */ Symbol("urlKey");
+    headersKey = /* @__PURE__ */ Symbol("headersKey");
+    abortControllerKey = /* @__PURE__ */ Symbol("abortControllerKey");
+    getAbortController = /* @__PURE__ */ Symbol("getAbortController");
     requestPrototype = {
       get method() {
         return this[incomingKey].method || "GET";
@@ -20237,7 +20231,7 @@ var init_dist = __esm({
         }
       });
     });
-    Object.defineProperty(requestPrototype, Symbol.for("nodejs.util.inspect.custom"), {
+    Object.defineProperty(requestPrototype, /* @__PURE__ */ Symbol.for("nodejs.util.inspect.custom"), {
       value: function(depth, options, inspectFn) {
         const props = {
           method: this.method,
@@ -20286,9 +20280,9 @@ var init_dist = __esm({
       req[urlKey] = url2.href;
       return req;
     };
-    responseCache = Symbol("responseCache");
-    getResponseCache = Symbol("getResponseCache");
-    cacheKey = Symbol("cache");
+    responseCache = /* @__PURE__ */ Symbol("responseCache");
+    getResponseCache = /* @__PURE__ */ Symbol("getResponseCache");
+    cacheKey = /* @__PURE__ */ Symbol("cache");
     GlobalResponse = global.Response;
     Response2 = class _Response {
       #body;
@@ -20352,7 +20346,7 @@ var init_dist = __esm({
         }
       });
     });
-    Object.defineProperty(Response2.prototype, Symbol.for("nodejs.util.inspect.custom"), {
+    Object.defineProperty(Response2.prototype, /* @__PURE__ */ Symbol.for("nodejs.util.inspect.custom"), {
       value: function(depth, options, inspectFn) {
         const props = {
           status: this.status,
@@ -20388,8 +20382,8 @@ var init_dist = __esm({
     if (typeof global.crypto === "undefined") {
       global.crypto = crypto4;
     }
-    outgoingEnded = Symbol("outgoingEnded");
-    incomingDraining = Symbol("incomingDraining");
+    outgoingEnded = /* @__PURE__ */ Symbol("outgoingEnded");
+    incomingDraining = /* @__PURE__ */ Symbol("incomingDraining");
     DRAIN_TIMEOUT_MS = 500;
     MAX_DRAIN_BYTES = 64 * 1024 * 1024;
     drainIncoming = (incoming) => {
@@ -20921,10 +20915,10 @@ __export(vite_exports, {
 });
 import fs from "fs";
 import path from "path";
-function serveStaticFiles(app3) {
+function serveStaticFiles(app2) {
   const distPath = path.resolve(import.meta.dirname, "../dist/public");
-  app3.use("*", serveStatic({ root: "./dist/public" }));
-  app3.notFound((c) => {
+  app2.use("*", serveStatic({ root: "./dist/public" }));
+  app2.notFound((c) => {
     const accept = c.req.header("accept") ?? "";
     if (!accept.includes("text/html")) {
       return c.json({ error: "Not Found" }, 404);
@@ -22144,14 +22138,14 @@ var Hono = class _Hono {
    * app.route("/api", app2) // GET /api/user
    * ```
    */
-  route(path2, app3) {
+  route(path2, app2) {
     const subApp = this.basePath(path2);
-    app3.routes.map((r) => {
+    app2.routes.map((r) => {
       let handler;
-      if (app3.errorHandler === errorHandler) {
+      if (app2.errorHandler === errorHandler) {
         handler = r.handler;
       } else {
-        handler = async (c, next) => (await compose([], app3.errorHandler)(c, () => r.handler(c, next))).res;
+        handler = async (c, next) => (await compose([], app2.errorHandler)(c, () => r.handler(c, next))).res;
         handler[COMPOSED_HANDLER] = r.handler;
       }
       subApp.#addRoute(r.method, r.path, handler, r.basePath);
@@ -22419,7 +22413,7 @@ var Hono = class _Hono {
 var emptyParam = [];
 function match(method, path2) {
   const matchers = this.buildAllMatchers();
-  const match2 = (method2, path22) => {
+  const match2 = ((method2, path22) => {
     const matcher = matchers[method2] || matchers[METHOD_NAME_ALL];
     const staticMatch = matcher[2][path22];
     if (staticMatch) {
@@ -22431,7 +22425,7 @@ function match(method, path2) {
     }
     const index2 = match3.indexOf("", 1);
     return [matcher[1][index2], match3];
-  };
+  });
   this.match = match2;
   return match2(method, path2);
 }
@@ -23096,88 +23090,6 @@ var bodyLimit = (options) => {
   };
 };
 
-// node_modules/hono/dist/middleware/cors/index.js
-var cors = (options) => {
-  const opts = {
-    origin: "*",
-    allowMethods: ["GET", "HEAD", "PUT", "POST", "DELETE", "PATCH"],
-    allowHeaders: [],
-    exposeHeaders: [],
-    ...options
-  };
-  const findAllowOrigin = ((optsOrigin) => {
-    if (typeof optsOrigin === "string") {
-      if (optsOrigin === "*") {
-        return () => optsOrigin;
-      } else {
-        return (origin) => optsOrigin === origin ? origin : null;
-      }
-    } else if (typeof optsOrigin === "function") {
-      return optsOrigin;
-    } else {
-      return (origin) => optsOrigin.includes(origin) ? origin : null;
-    }
-  })(opts.origin);
-  const findAllowMethods = ((optsAllowMethods) => {
-    if (typeof optsAllowMethods === "function") {
-      return optsAllowMethods;
-    } else if (Array.isArray(optsAllowMethods)) {
-      return () => optsAllowMethods;
-    } else {
-      return () => [];
-    }
-  })(opts.allowMethods);
-  return async function cors2(c, next) {
-    function set2(key, value) {
-      c.res.headers.set(key, value);
-    }
-    const allowOrigin = await findAllowOrigin(c.req.header("origin") || "", c);
-    if (allowOrigin) {
-      set2("Access-Control-Allow-Origin", allowOrigin);
-    }
-    if (opts.credentials) {
-      set2("Access-Control-Allow-Credentials", "true");
-    }
-    if (opts.exposeHeaders?.length) {
-      set2("Access-Control-Expose-Headers", opts.exposeHeaders.join(","));
-    }
-    if (c.req.method === "OPTIONS") {
-      if (opts.origin !== "*") {
-        set2("Vary", "Origin");
-      }
-      if (opts.maxAge != null) {
-        set2("Access-Control-Max-Age", opts.maxAge.toString());
-      }
-      const allowMethods = await findAllowMethods(c.req.header("origin") || "", c);
-      if (allowMethods.length) {
-        set2("Access-Control-Allow-Methods", allowMethods.join(","));
-      }
-      let headers = opts.allowHeaders;
-      if (!headers?.length) {
-        const requestHeaders = c.req.header("Access-Control-Request-Headers");
-        if (requestHeaders) {
-          headers = requestHeaders.split(/\s*,\s*/);
-        }
-      }
-      if (headers?.length) {
-        set2("Access-Control-Allow-Headers", headers.join(","));
-        c.res.headers.append("Vary", "Access-Control-Request-Headers");
-      }
-      c.res.headers.delete("Content-Length");
-      c.res.headers.delete("Content-Type");
-      return new Response(null, {
-        headers: c.res.headers,
-        status: 204,
-        statusText: "No Content"
-      });
-    }
-    await next();
-    if (opts.origin !== "*") {
-      c.header("Vary", "Origin", { append: true });
-    }
-  };
-};
-
 // node_modules/@trpc/server/dist/codes-DagpWZLc.mjs
 function mergeWithoutOverrides(obj1, ...objs) {
   const newObj = Object.assign(emptyObject(), obj1);
@@ -23540,7 +23452,7 @@ function transformTRPCResponse(config2, itemOrItems) {
 var import_objectSpread22 = __toESM2(require_objectSpread2(), 1);
 var lazyMarker = "lazyMarker";
 function once(fn) {
-  const uncalled = Symbol();
+  const uncalled = /* @__PURE__ */ Symbol();
   let result = uncalled;
   return () => {
     if (result === uncalled) result = fn();
@@ -23719,7 +23631,7 @@ function mergeRouters(...routerList) {
   })(record2);
   return router;
 }
-var trackedSymbol = Symbol();
+var trackedSymbol = /* @__PURE__ */ Symbol();
 function isTrackedEnvelope(value) {
   return Array.isArray(value) && value[2] === trackedSymbol;
 }
@@ -23829,7 +23741,7 @@ function getAcceptHeader(headers) {
 }
 function memo(fn) {
   let promise2 = null;
-  const sym = Symbol.for("@trpc/server/http/memo");
+  const sym = /* @__PURE__ */ Symbol.for("@trpc/server/http/memo");
   let value = sym;
   return {
     read: async () => {
@@ -24229,8 +24141,8 @@ var _Symbol;
 var _Symbol$dispose;
 var _Symbol2;
 var _Symbol2$asyncDispose;
-(_Symbol$dispose = (_Symbol = Symbol).dispose) !== null && _Symbol$dispose !== void 0 || (_Symbol.dispose = Symbol());
-(_Symbol2$asyncDispose = (_Symbol2 = Symbol).asyncDispose) !== null && _Symbol2$asyncDispose !== void 0 || (_Symbol2.asyncDispose = Symbol());
+(_Symbol$dispose = (_Symbol = Symbol).dispose) !== null && _Symbol$dispose !== void 0 || (_Symbol.dispose = /* @__PURE__ */ Symbol());
+(_Symbol2$asyncDispose = (_Symbol2 = Symbol).asyncDispose) !== null && _Symbol2$asyncDispose !== void 0 || (_Symbol2.asyncDispose = /* @__PURE__ */ Symbol());
 function makeResource(thing, dispose) {
   const it = thing;
   const existing = it[Symbol.dispose];
@@ -24249,7 +24161,7 @@ function makeAsyncResource(thing, dispose) {
   };
   return it;
 }
-var disposablePromiseTimerResult = Symbol();
+var disposablePromiseTimerResult = /* @__PURE__ */ Symbol();
 function timerResource(ms) {
   let timer = null;
   return makeResource({ start() {
@@ -24607,7 +24519,7 @@ function readableStreamFrom(iterable) {
 var import_usingCtx$2 = __toESM2(require_usingCtx(), 1);
 var import_awaitAsyncGenerator$2 = __toESM2(require_awaitAsyncGenerator(), 1);
 var import_wrapAsyncGenerator$3 = __toESM2(require_wrapAsyncGenerator(), 1);
-var PING_SYM = Symbol("ping");
+var PING_SYM = /* @__PURE__ */ Symbol("ping");
 function withPing(_x, _x2) {
   return _withPing.apply(this, arguments);
 }
@@ -24723,7 +24635,7 @@ function _createBatchStreamProducer() {
       return idx;
     }
     function encodePromise(promise2, path2) {
-      return registerAsync(/* @__PURE__ */ function() {
+      return registerAsync(/* @__PURE__ */ (function() {
         var _ref = (0, import_wrapAsyncGenerator$2.default)(function* (idx) {
           const error51 = checkMaxDepth(path2);
           if (error51) {
@@ -24762,10 +24674,10 @@ function _createBatchStreamProducer() {
         return function(_x) {
           return _ref.apply(this, arguments);
         };
-      }());
+      })());
     }
     function encodeAsyncIterable(iterable$1, path2) {
-      return registerAsync(/* @__PURE__ */ function() {
+      return registerAsync(/* @__PURE__ */ (function() {
         var _ref2 = (0, import_wrapAsyncGenerator$2.default)(function* (idx) {
           try {
             var _usingCtx$1 = (0, import_usingCtx$1.default)();
@@ -24813,7 +24725,7 @@ function _createBatchStreamProducer() {
         return function(_x2) {
           return _ref2.apply(this, arguments);
         };
-      }());
+      })());
     }
     function checkMaxDepth(path2) {
       if (opts.maxDepth && path2.length > opts.maxDepth) return new MaxDepthError(path2);
@@ -26656,7 +26568,7 @@ var t = initTRPC.context().create({
   transformer: dist_default
 });
 var createRouter = t.router;
-var publicQuery = t.procedure;
+var publicQuery2 = t.procedure;
 var requireAuth = t.middleware(async (opts) => {
   const { ctx, next } = opts;
   if (!ctx.user) {
@@ -27280,7 +27192,7 @@ function $constructor(name, initializer3, params) {
   Object.defineProperty(_, "name", { value: name });
   return _;
 }
-var $brand = Symbol("zod_brand");
+var $brand = /* @__PURE__ */ Symbol("zod_brand");
 var $ZodAsyncError = class extends Error {
   constructor() {
     super(`Encountered Promise during synchronous parse. Use .parseAsync() instead.`);
@@ -28338,13 +28250,13 @@ function time(args) {
   return new RegExp(`^${timeSource(args)}$`);
 }
 function datetime(args) {
-  const time5 = timeSource({ precision: args.precision });
+  const time4 = timeSource({ precision: args.precision });
   const opts = ["Z"];
   if (args.local)
     opts.push("");
   if (args.offset)
     opts.push(`([+-](?:[01]\\d|2[0-3]):[0-5]\\d)`);
-  const timeRegex = `${time5}(?:${opts.join("|")})`;
+  const timeRegex = `${time4}(?:${opts.join("|")})`;
   return new RegExp(`^${dateSource}T(?:${timeRegex})$`);
 }
 var string = (params) => {
@@ -37023,8 +36935,8 @@ function yo_default() {
 
 // node_modules/zod/v4/core/registries.js
 var _a2;
-var $output = Symbol("ZodOutput");
-var $input = Symbol("ZodInput");
+var $output = /* @__PURE__ */ Symbol("ZodOutput");
+var $input = /* @__PURE__ */ Symbol("ZodInput");
 var $ZodRegistry = class {
   constructor() {
     this._map = /* @__PURE__ */ new WeakMap();
@@ -38061,7 +37973,7 @@ function _stringbool(Classes, _params) {
     type: "pipe",
     in: stringSchema,
     out: booleanSchema,
-    transform: (input, payload) => {
+    transform: ((input, payload) => {
       let data = input;
       if (params.case !== "sensitive")
         data = data.toLowerCase();
@@ -38080,14 +37992,14 @@ function _stringbool(Classes, _params) {
         });
         return {};
       }
-    },
-    reverseTransform: (input, _payload) => {
+    }),
+    reverseTransform: ((input, _payload) => {
       if (input === true) {
         return truthyArray[0] || "true";
       } else {
         return falsyArray[0] || "false";
       }
-    },
+    }),
     error: params.error
   });
   return codec2;
@@ -41216,8 +41128,7 @@ function date4(params) {
 config(en_default());
 
 // node_modules/drizzle-orm/entity.js
-var entityKind = Symbol.for("drizzle:entityKind");
-var hasOwnEntityKind = Symbol.for("drizzle:hasOwnEntityKind");
+var entityKind = /* @__PURE__ */ Symbol.for("drizzle:entityKind");
 function is(value, type) {
   if (!value || typeof value !== "object") {
     return false;
@@ -41397,7 +41308,7 @@ var ColumnBuilder = class {
 };
 
 // node_modules/drizzle-orm/table.utils.js
-var TableName = Symbol.for("drizzle:Name");
+var TableName = /* @__PURE__ */ Symbol.for("drizzle:Name");
 
 // node_modules/drizzle-orm/pg-core/foreign-keys.js
 var ForeignKeyBuilder = class {
@@ -41798,7 +41709,7 @@ var PgEnumObjectColumn = class extends PgColumn {
     return this.enum.enumName;
   }
 };
-var isPgEnumSym = Symbol.for("drizzle:isPgEnum");
+var isPgEnumSym = /* @__PURE__ */ Symbol.for("drizzle:isPgEnum");
 function isPgEnum(obj) {
   return !!obj && typeof obj === "function" && isPgEnumSym in obj && obj[isPgEnumSym] === true;
 }
@@ -41889,17 +41800,17 @@ var tracer = {
 };
 
 // node_modules/drizzle-orm/view-common.js
-var ViewBaseConfig = Symbol.for("drizzle:ViewBaseConfig");
+var ViewBaseConfig = /* @__PURE__ */ Symbol.for("drizzle:ViewBaseConfig");
 
 // node_modules/drizzle-orm/table.js
-var Schema = Symbol.for("drizzle:Schema");
-var Columns = Symbol.for("drizzle:Columns");
-var ExtraConfigColumns = Symbol.for("drizzle:ExtraConfigColumns");
-var OriginalName = Symbol.for("drizzle:OriginalName");
-var BaseName = Symbol.for("drizzle:BaseName");
-var IsAlias = Symbol.for("drizzle:IsAlias");
-var ExtraConfigBuilder = Symbol.for("drizzle:ExtraConfigBuilder");
-var IsDrizzleTable = Symbol.for("drizzle:IsDrizzleTable");
+var Schema = /* @__PURE__ */ Symbol.for("drizzle:Schema");
+var Columns = /* @__PURE__ */ Symbol.for("drizzle:Columns");
+var ExtraConfigColumns = /* @__PURE__ */ Symbol.for("drizzle:ExtraConfigColumns");
+var OriginalName = /* @__PURE__ */ Symbol.for("drizzle:OriginalName");
+var BaseName = /* @__PURE__ */ Symbol.for("drizzle:BaseName");
+var IsAlias = /* @__PURE__ */ Symbol.for("drizzle:IsAlias");
+var ExtraConfigBuilder = /* @__PURE__ */ Symbol.for("drizzle:ExtraConfigBuilder");
+var IsDrizzleTable = /* @__PURE__ */ Symbol.for("drizzle:IsDrizzleTable");
 var Table = class {
   static [entityKind] = "Table";
   /** @internal */
@@ -42315,7 +42226,7 @@ function fillPlaceholders(params, values) {
     return p;
   });
 }
-var IsDrizzleView = Symbol.for("drizzle:IsDrizzleView");
+var IsDrizzleView = /* @__PURE__ */ Symbol.for("drizzle:IsDrizzleView");
 var View = class {
   static [entityKind] = "View";
   /** @internal */
@@ -42677,8 +42588,8 @@ function isConfig(data) {
 var textDecoder = typeof TextDecoder === "undefined" ? null : new TextDecoder();
 
 // node_modules/drizzle-orm/pg-core/table.js
-var InlineForeignKeys = Symbol.for("drizzle:PgInlineForeignKeys");
-var EnableRLS = Symbol.for("drizzle:EnableRLS");
+var InlineForeignKeys = /* @__PURE__ */ Symbol.for("drizzle:PgInlineForeignKeys");
+var EnableRLS = /* @__PURE__ */ Symbol.for("drizzle:EnableRLS");
 var PgTable = class extends Table {
   static [entityKind] = "PgTable";
   /** @internal */
@@ -44498,7 +44409,7 @@ function getMySqlColumnBuilders() {
 }
 
 // node_modules/drizzle-orm/mysql-core/table.js
-var InlineForeignKeys2 = Symbol.for("drizzle:MySqlInlineForeignKeys");
+var InlineForeignKeys2 = /* @__PURE__ */ Symbol.for("drizzle:MySqlInlineForeignKeys");
 var MySqlTable = class extends Table {
   static [entityKind] = "MySqlTable";
   /** @internal */
@@ -47288,11 +47199,11 @@ var MySqlTransaction = class extends MySqlDatabase {
 
 // node_modules/drizzle-orm/mysql2/session.js
 var MySql2PreparedQuery = class extends MySqlPreparedQuery {
-  constructor(client, queryString, params, logger2, cache2, queryMetadata, cacheConfig, fields, customResultMapper, generatedIds, returningIds) {
+  constructor(client, queryString, params, logger, cache2, queryMetadata, cacheConfig, fields, customResultMapper, generatedIds, returningIds) {
     super(cache2, queryMetadata, cacheConfig);
     this.client = client;
     this.params = params;
-    this.logger = logger2;
+    this.logger = logger;
     this.fields = fields;
     this.customResultMapper = customResultMapper;
     this.generatedIds = generatedIds;
@@ -47541,11 +47452,11 @@ var MySql2Database = class extends MySqlDatabase {
 };
 function construct(client, config2 = {}) {
   const dialect = new MySqlDialect({ casing: config2.casing });
-  let logger2;
+  let logger;
   if (config2.logger === true) {
-    logger2 = new DefaultLogger();
+    logger = new DefaultLogger();
   } else if (config2.logger !== false) {
-    logger2 = config2.logger;
+    logger = config2.logger;
   }
   const clientForInstance = isCallbackClient(client) ? client.promise() : client;
   let schema;
@@ -47566,7 +47477,7 @@ function construct(client, config2 = {}) {
     };
   }
   const mode = config2.mode ?? "default";
-  const driver = new MySql2Driver(clientForInstance, dialect, { logger: logger2, cache: config2.cache });
+  const driver = new MySql2Driver(clientForInstance, dialect, { logger, cache: config2.cache });
   const session = driver.createSession(schema, mode);
   const db4 = new MySql2Database(dialect, session, schema, mode);
   db4.$client = client;
@@ -47618,20 +47529,20 @@ function drizzle(...params) {
 })();
 
 // api/lib/env.ts
-function getEnv(name, required2 = false) {
+function required2(name) {
   const value = process.env[name];
-  if (!value && required2 && process.env.NODE_ENV === "production") {
+  if (!value && process.env.NODE_ENV === "production") {
     throw new Error(`Missing required environment variable: ${name}`);
   }
   return value ?? "";
 }
 var env = {
-  appId: getEnv("APP_ID"),
-  appSecret: getEnv("APP_SECRET"),
+  appId: required2("APP_ID"),
+  appSecret: required2("APP_SECRET"),
   isProduction: process.env.NODE_ENV === "production",
-  databaseUrl: getEnv("DATABASE_URL", true),
-  kimiAuthUrl: getEnv("KIMI_AUTH_URL"),
-  kimiOpenUrl: getEnv("KIMI_OPEN_URL"),
+  databaseUrl: required2("DATABASE_URL"),
+  kimiAuthUrl: required2("KIMI_AUTH_URL"),
+  kimiOpenUrl: required2("KIMI_OPEN_URL"),
   ownerUnionId: process.env.OWNER_UNION_ID ?? ""
 };
 
@@ -47646,7 +47557,7 @@ __export(schema_exports, {
   authEvents: () => authEvents,
   backups: () => backups,
   bankAccounts: () => bankAccounts,
-  configVersions: () => configVersions,
+  configVersions: () => configVersions2,
   coupons: () => coupons,
   crossTenantLinks: () => crossTenantLinks,
   dataAccessLog: () => dataAccessLog,
@@ -47662,7 +47573,7 @@ __export(schema_exports, {
   pricingPlans: () => pricingPlans,
   roles: () => roles,
   sales: () => sales,
-  siteConfigs: () => siteConfigs,
+  siteConfigs: () => siteConfigs2,
   stationUsers: () => stationUsers,
   stations: () => stations,
   subscriptions: () => subscriptions,
@@ -48246,7 +48157,7 @@ var dataAccessPolicies = mysqlTable("data_access_policies", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => /* @__PURE__ */ new Date())
 });
-var siteConfigs = mysqlTable("site_configs", {
+var siteConfigs2 = mysqlTable("site_configs", {
   id: serial("id").primaryKey(),
   key: varchar("configKey", { length: 255 }).notNull().unique(),
   value: text("configValue").notNull(),
@@ -48260,7 +48171,7 @@ var siteConfigs = mysqlTable("site_configs", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => /* @__PURE__ */ new Date())
 });
-var configVersions = mysqlTable("config_versions", {
+var configVersions2 = mysqlTable("config_versions", {
   id: serial("id").primaryKey(),
   version: varchar("version", { length: 50 }).notNull().unique(),
   name: varchar("name", { length: 255 }).notNull(),
@@ -48349,30 +48260,12 @@ var dataPartitionsRelations = relations(dataPartitions, ({ one, many }) => ({
 // api/queries/connection.ts
 var fullSchema = { ...schema_exports, ...relations_exports };
 var instance;
-var connectionError = null;
-var lastConnectionAttempt = 0;
-var CONNECTION_COOLDOWN = 5e3;
 function getDb() {
   if (!instance) {
-    const now = Date.now();
-    if (connectionError && now - lastConnectionAttempt < CONNECTION_COOLDOWN) {
-      throw connectionError;
-    }
-    lastConnectionAttempt = now;
-    try {
-      if (!env.databaseUrl) {
-        throw new Error("DATABASE_URL is not configured");
-      }
-      instance = drizzle(env.databaseUrl, {
-        mode: "planetscale",
-        schema: fullSchema
-      });
-      connectionError = null;
-    } catch (err) {
-      connectionError = err instanceof Error ? err : new Error(String(err));
-      console.error("[DB] Failed to initialize database connection:", connectionError.message);
-      throw connectionError;
-    }
+    instance = drizzle(env.databaseUrl, {
+      mode: "planetscale",
+      schema: fullSchema
+    });
   }
   return instance;
 }
@@ -49161,19 +49054,14 @@ var POOL_SIZE_MULTIPLIER = 128;
 var pool;
 var poolOffset;
 function fillPool(bytes) {
-  if (bytes < 0) throw new RangeError("Wrong ID size");
-  try {
-    if (!pool || pool.length < bytes) {
-      pool = Buffer.allocUnsafe(bytes * POOL_SIZE_MULTIPLIER);
-      crypto2.getRandomValues(pool);
-      poolOffset = 0;
-    } else if (poolOffset + bytes > pool.length) {
-      crypto2.getRandomValues(pool);
-      poolOffset = 0;
-    }
-  } catch (e) {
-    pool = void 0;
-    throw e;
+  if (bytes < 0 || bytes > 1024) throw new RangeError("Wrong ID size");
+  if (!pool || pool.length < bytes) {
+    pool = Buffer.allocUnsafe(bytes * POOL_SIZE_MULTIPLIER);
+    crypto2.getRandomValues(pool);
+    poolOffset = 0;
+  } else if (poolOffset + bytes > pool.length) {
+    crypto2.getRandomValues(pool);
+    poolOffset = 0;
   }
   poolOffset += bytes;
 }
@@ -49506,11 +49394,11 @@ var auditRouter = createRouter({
     if (input.actorEmail) conditions.push(eq(auditLogEntries.actorEmail, input.actorEmail));
     if (input.resourceType) conditions.push(eq(auditLogEntries.resourceType, input.resourceType));
     const logs = await db4.select().from(auditLogEntries).where(conditions.length > 0 ? and(...conditions) : void 0).orderBy(desc(auditLogEntries.eventTimestamp)).limit(input.limit).offset(input.offset);
-    return logs.map((log2) => ({
-      ...log2,
-      riskFactors: log2.riskFactors ? JSON.parse(log2.riskFactors) : null,
-      tags: log2.tags ? JSON.parse(log2.tags) : null,
-      metadata: log2.metadata ? JSON.parse(log2.metadata) : null
+    return logs.map((log) => ({
+      ...log,
+      riskFactors: log.riskFactors ? JSON.parse(log.riskFactors) : null,
+      tags: log.tags ? JSON.parse(log.tags) : null,
+      metadata: log.metadata ? JSON.parse(log.metadata) : null
     }));
   }),
   // ─── SOC-2 Auth Events ───
@@ -49549,7 +49437,7 @@ var auditRouter = createRouter({
     )).orderBy(desc(auditLogEntries.eventTimestamp)).limit(1e4);
     if (input.format === "csv") {
       const headers = ["id", "eventId", "eventType", "actorType", "actorId", "actorName", "actorEmail", "action", "actionResult", "resourceType", "resourceId", "ipAddress", "riskLevel", "eventTimestamp"];
-      const rows = logs.map((log2) => headers.map((h) => JSON.stringify(log2[h] ?? "")).join(","));
+      const rows = logs.map((log) => headers.map((h) => JSON.stringify(log[h] ?? "")).join(","));
       return {
         data: [headers.join(","), ...rows].join("\n"),
         contentType: "text/csv",
@@ -49676,7 +49564,7 @@ function getStoredCreds() {
 }
 var founderAuthRouter = createRouter({
   // ─── Register new user (public) ───
-  register: publicQuery.input(external_exports.object({
+  register: publicQuery2.input(external_exports.object({
     name: external_exports.string().min(1),
     email: external_exports.string().email(),
     password: external_exports.string().min(6)
@@ -49704,7 +49592,7 @@ var founderAuthRouter = createRouter({
     }
   }),
   // ─── Login ───
-  login: publicQuery.input(external_exports.object({
+  login: publicQuery2.input(external_exports.object({
     username: external_exports.string().min(1),
     password: external_exports.string().min(1)
   })).mutation(async ({ input }) => {
@@ -49746,7 +49634,7 @@ var founderAuthRouter = createRouter({
     };
   }),
   // ─── Validate Token ───
-  validate: publicQuery.input(external_exports.object({ token: external_exports.string() }).optional()).query(async ({ input }) => {
+  validate: publicQuery2.input(external_exports.object({ token: external_exports.string() }).optional()).query(async ({ input }) => {
     if (!input?.token) return { valid: false, username: null };
     const founder = validateFounderToken(input.token);
     return { valid: !!founder, username: founder?.username || null };
@@ -50190,9 +50078,7 @@ var accessControl = new AccessControlService();
 
 // api/access-control-router.ts
 var db3 = getDb();
-var t3 = initTRPC.context().create({
-  transformer: dist_default
-});
+var t3 = initTRPC.context().create();
 var requirePermission = (permission) => t3.middleware(async ({ ctx, next }) => {
   if (!ctx.user?.id) {
     throw new TRPCError({
@@ -50964,16 +50850,16 @@ var siteConfigRouter = createRouter({
     const configs = await db4.select().from(siteConfigs);
     const result = {};
     for (const c of configs) {
-      let val = c.value;
-      if (c.type === "number") val = Number(val);
-      else if (c.type === "boolean") val = val === "true" || val === "1";
+      let value = c.configValue;
+      if (c.type === "number") value = Number(value);
+      else if (c.type === "boolean") value = value === "true" || value === "1";
       else if (c.type === "json") {
         try {
-          val = JSON.parse(val);
+          value = JSON.parse(value);
         } catch {
         }
       }
-      result[c.key] = val;
+      result[c.configKey] = value;
     }
     return result;
   }),
@@ -50991,9 +50877,9 @@ var siteConfigRouter = createRouter({
     const existing = await db4.select().from(siteConfigs).where(eq(siteConfigs.key, input.key)).limit(1);
     if (existing.length > 0) {
       await db4.update(siteConfigs).set({
-        value: input.value,
-        type: input.type,
-        category: input.category,
+        configValue: input.value,
+        configType: input.type,
+        configCategory: input.category,
         description: input.description,
         isPublic: input.isPublic,
         isEncrypted: input.isEncrypted,
@@ -51003,10 +50889,10 @@ var siteConfigRouter = createRouter({
       return { success: true, action: "updated", key: input.key };
     } else {
       const [result] = await db4.insert(siteConfigs).values({
-        key: input.key,
-        value: input.value,
-        type: input.type,
-        category: input.category,
+        configKey: input.key,
+        configValue: input.value,
+        configType: input.type,
+        configCategory: input.category,
         description: input.description,
         isPublic: input.isPublic,
         isEncrypted: input.isEncrypted,
@@ -51030,10 +50916,10 @@ var siteConfigRouter = createRouter({
     const db4 = getDb();
     const configs = await db4.select().from(siteConfigs);
     const snapshot = JSON.stringify(configs.map((c) => ({
-      key: c.key,
-      value: c.value,
-      type: c.type,
-      category: c.category
+      key: c.configKey,
+      value: c.configValue,
+      type: c.configType,
+      category: c.configCategory
     })));
     const version3 = `v${Date.now()}`;
     await db4.update(configVersions).set({ status: "archived", archivedAt: /* @__PURE__ */ new Date() }).where(eq(configVersions.status, "published"));
@@ -51075,17 +50961,17 @@ var siteConfigRouter = createRouter({
       const existing = await db4.select().from(siteConfigs).where(eq(siteConfigs.key, item.key)).limit(1);
       if (existing.length > 0) {
         await db4.update(siteConfigs).set({
-          value: item.value,
-          type: item.type,
+          configValue: item.value,
+          configType: item.type,
           updatedBy: ctx.user?.id,
           updatedAt: /* @__PURE__ */ new Date()
         }).where(eq(siteConfigs.key, item.key));
       } else {
         await db4.insert(siteConfigs).values({
-          key: item.key,
-          value: item.value,
-          type: item.type,
-          category: item.category || "general",
+          configKey: item.key,
+          configValue: item.value,
+          configType: item.type,
+          configCategory: item.category || "general",
           createdBy: ctx.user?.id,
           updatedBy: ctx.user?.id
         });
@@ -51097,7 +50983,7 @@ var siteConfigRouter = createRouter({
 
 // api/router.ts
 var appRouter = createRouter({
-  ping: publicQuery.query(() => ({ ok: true, ts: Date.now() })),
+  ping: publicQuery2.query(() => ({ ok: true, ts: Date.now() })),
   auth: authRouter,
   station: stationRouter,
   sale: saleRouter,
@@ -52743,7 +52629,7 @@ if (typeof navigator === "undefined" || !navigator.userAgent?.startsWith?.("Mozi
   const VERSION = "v6.1.3";
   USER_AGENT = `${NAME}/${VERSION}`;
 }
-var customFetch = Symbol();
+var customFetch = /* @__PURE__ */ Symbol();
 async function fetchJwks(url2, headers, signal, fetchImpl = fetch) {
   const response = await fetchImpl(url2, {
     method: "GET",
@@ -52765,7 +52651,7 @@ async function fetchJwks(url2, headers, signal, fetchImpl = fetch) {
     throw new JOSEError("Failed to parse the JSON Web Key Set HTTP response as JSON");
   }
 }
-var jwksCache = Symbol();
+var jwksCache = /* @__PURE__ */ Symbol();
 function isFreshJwksCache(input, cacheMaxAge) {
   if (typeof input !== "object" || input === null) {
     return false;
@@ -53048,15 +52934,7 @@ function createOAuthCallbackHandler() {
       return c.json({ error: "code and state are required" }, 400);
     }
     try {
-      let redirectUri;
-      try {
-        redirectUri = atob(state);
-        if (!redirectUri || !redirectUri.startsWith("http")) {
-          throw new Error("Invalid redirect URI in state");
-        }
-      } catch {
-        return c.json({ error: "Invalid state parameter" }, 400);
-      }
+      const redirectUri = atob(state);
       const tokenResp = await exchangeAuthCode(code, redirectUri);
       const { userId } = await verifyAccessToken(tokenResp.access_token);
       const userProfile = await users2.getProfile(tokenResp.access_token);
@@ -53122,471 +53000,28 @@ async function createContext(opts) {
   return ctx;
 }
 
-// node_modules/hono/dist/utils/color.js
-function getColorEnabled() {
-  const { process: process3, Deno } = globalThis;
-  const isNoColor = typeof Deno?.noColor === "boolean" ? Deno.noColor : process3 !== void 0 ? (
-    // eslint-disable-next-line no-unsafe-optional-chaining
-    "NO_COLOR" in process3?.env
-  ) : false;
-  return !isNoColor;
-}
-async function getColorEnabledAsync() {
-  const { navigator: navigator2 } = globalThis;
-  const cfWorkers = "cloudflare:workers";
-  const isNoColor = navigator2 !== void 0 && navigator2.userAgent === "Cloudflare-Workers" ? await (async () => {
-    try {
-      return "NO_COLOR" in ((await import(cfWorkers)).env ?? {});
-    } catch {
-      return false;
-    }
-  })() : !getColorEnabled();
-  return !isNoColor;
-}
-
-// node_modules/hono/dist/middleware/logger/index.js
-var humanize = (times) => {
-  const [delimiter, separator] = [",", "."];
-  const orderTimes = times.map((v) => v.replace(/(\d)(?=(\d\d\d)+(?!\d))/g, "$1" + delimiter));
-  return orderTimes.join(separator);
-};
-var time4 = (start) => {
-  const delta = Date.now() - start;
-  return humanize([delta < 1e3 ? delta + "ms" : Math.round(delta / 1e3) + "s"]);
-};
-var colorStatus = async (status) => {
-  const colorEnabled = await getColorEnabledAsync();
-  if (colorEnabled) {
-    switch (status / 100 | 0) {
-      case 5:
-        return `\x1B[31m${status}\x1B[0m`;
-      case 4:
-        return `\x1B[33m${status}\x1B[0m`;
-      case 3:
-        return `\x1B[36m${status}\x1B[0m`;
-      case 2:
-        return `\x1B[32m${status}\x1B[0m`;
-    }
-  }
-  return `${status}`;
-};
-async function log(fn, prefix, method, path2, status = 0, elapsed) {
-  const out = prefix === "<--" ? `${prefix} ${method} ${path2}` : `${prefix} ${method} ${path2} ${await colorStatus(status)} ${elapsed}`;
-  fn(out);
-}
-var logger = (fn = console.log) => {
-  return async function logger2(c, next) {
-    const { method, url: url2 } = c.req;
-    const path2 = url2.slice(url2.indexOf("/", 8));
-    await log(fn, "<--", method, path2);
-    const start = Date.now();
-    await next();
-    await log(fn, "-->", method, path2, c.res.status, time4(start));
-  };
-};
-
-// api/routes/rest-api.ts
-var app = new Hono2();
-var restApiAllowedOrigins = process.env.CORS_ALLOWED_ORIGINS ? process.env.CORS_ALLOWED_ORIGINS.split(",") : process.env.NODE_ENV === "production" ? [] : ["*"];
-app.use("*", cors({
-  origin: (origin) => {
-    if (!origin) return origin || "";
-    if (restApiAllowedOrigins.includes("*")) return origin;
-    if (restApiAllowedOrigins.some((o) => origin === o || origin.endsWith(o.replace("*.", ".")))) {
-      return origin;
-    }
-    return process.env.NODE_ENV === "production" ? "" : origin;
-  },
-  allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowHeaders: ["Content-Type", "Authorization", "X-API-Key"],
-  credentials: true
-}));
-app.use("*", logger());
-var dataStore = {
-  users: {},
-  stations: {},
-  sales: {},
-  audit_log: {},
-  feature_flags: {},
-  config: {}
-};
-var PROTECTED_COLLECTIONS = ["users", "sales", "audit_log", "config"];
-var WRITE_ONLY_COLLECTIONS = ["secrets"];
-function generateId(prefix) {
-  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-}
-async function requireAuth2(c, next) {
-  const apiKey = c.req.header("X-API-Key") || c.req.header("Authorization")?.replace("Bearer ", "");
-  const collection = c.req.param("collection");
-  if (collection && !PROTECTED_COLLECTIONS.includes(collection)) {
-    return next();
-  }
-  const validKeys = (process.env.API_KEYS || "").split(",").filter(Boolean);
-  if (validKeys.length > 0) {
-    if (!apiKey || !validKeys.includes(apiKey)) {
-      return c.json({ success: false, error: "Unauthorized - valid API key required" }, 401);
-    }
-  }
-  return next();
-}
-app.get("/", (c) => {
-  return c.json({
-    status: "ok",
-    service: "FuelPro REST API",
-    version: "1.0.0",
-    timestamp: (/* @__PURE__ */ new Date()).toISOString(),
-    endpoints: [
-      "GET /api/health - Health check",
-      "GET /api/data/:collection - List all records",
-      "GET /api/data/:collection/:id - Get single record",
-      "POST /api/data/:collection - Create record",
-      "PUT /api/data/:collection/:id - Update record",
-      "DELETE /api/data/:collection/:id - Delete record"
-    ]
-  });
-});
-app.get("/api/health", (c) => {
-  return c.json({
-    status: "healthy",
-    timestamp: (/* @__PURE__ */ new Date()).toISOString(),
-    dataStore: {
-      collections: Object.keys(dataStore),
-      counts: Object.fromEntries(
-        Object.entries(dataStore).map(([k, v]) => [k, Object.keys(v).length])
-      )
-    }
-  });
-});
-app.get("/api/data/:collection", requireAuth2, (c) => {
-  const { collection } = c.req.param();
-  if (WRITE_ONLY_COLLECTIONS.includes(collection)) {
-    return c.json({ success: false, error: "Collection is write-only" }, 403);
-  }
-  if (!dataStore[collection]) {
-    dataStore[collection] = {};
-  }
-  const records = Object.entries(dataStore[collection]).map(([id, record2]) => ({
-    id,
-    ...record2
-  }));
-  return c.json({
-    success: true,
-    collection,
-    count: records.length,
-    data: records
-  });
-});
-app.get("/api/data/:collection/:id", requireAuth2, (c) => {
-  const { collection, id } = c.req.param();
-  if (WRITE_ONLY_COLLECTIONS.includes(collection)) {
-    return c.json({ success: false, error: "Collection is write-only" }, 403);
-  }
-  if (!dataStore[collection]?.[id]) {
-    return c.json({ success: false, error: "Not found" }, 404);
-  }
-  return c.json({
-    success: true,
-    data: { id, ...dataStore[collection][id] }
-  });
-});
-app.post("/api/data/:collection", requireAuth2, async (c) => {
-  const { collection } = c.req.param();
-  if (!dataStore[collection]) {
-    dataStore[collection] = {};
-  }
-  try {
-    const body = await c.req.json();
-    const payloadSize = JSON.stringify(body).length;
-    if (payloadSize > 1024 * 1024) {
-      return c.json({ success: false, error: "Payload too large" }, 413);
-    }
-    const id = body.id || generateId(collection);
-    const { id: _bodyId, ...bodyWithoutId } = body;
-    const record2 = {
-      ...bodyWithoutId,
-      createdAt: body.createdAt || (/* @__PURE__ */ new Date()).toISOString(),
-      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-    };
-    dataStore[collection][id] = record2;
-    return c.json({
-      success: true,
-      id,
-      data: { id, ...record2 }
-    }, 201);
-  } catch (err) {
-    return c.json({ success: false, error: "Invalid JSON body" }, 400);
-  }
-});
-app.put("/api/data/:collection/:id", requireAuth2, async (c) => {
-  const { collection, id } = c.req.param();
-  if (!dataStore[collection]?.[id]) {
-    return c.json({ success: false, error: "Not found" }, 404);
-  }
-  try {
-    const body = await c.req.json();
-    const payloadSize = JSON.stringify(body).length;
-    if (payloadSize > 1024 * 1024) {
-      return c.json({ success: false, error: "Payload too large" }, 413);
-    }
-    dataStore[collection][id] = {
-      ...dataStore[collection][id],
-      ...body,
-      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-    };
-    return c.json({
-      success: true,
-      data: { id, ...dataStore[collection][id] }
-    });
-  } catch (err) {
-    return c.json({ success: false, error: "Invalid JSON body" }, 400);
-  }
-});
-app.delete("/api/data/:collection/:id", requireAuth2, (c) => {
-  const { collection, id } = c.req.param();
-  if (!dataStore[collection]?.[id]) {
-    return c.json({ success: false, error: "Not found" }, 404);
-  }
-  delete dataStore[collection][id];
-  return c.json({ success: true, message: "Deleted" });
-});
-app.post("/api/seed", (c) => {
-  const featureFlags3 = [
-    { id: "pos_system", name: "POS System", description: "Point of Sale module", enabled: true },
-    { id: "mpesa_live", name: "M-PESA Live", description: "Real-time M-PESA transactions", enabled: true },
-    { id: "ai_chatbot", name: "AI Chatbot", description: "AI assistant for fuel management", enabled: true },
-    { id: "cloud_sync", name: "Cloud Sync", description: "Cross-device data synchronization", enabled: true },
-    { id: "integration_hub", name: "Integration Hub", description: "KRA, ETR, POS, Payroll connectors", enabled: true },
-    { id: "regional_compliance", name: "Regional Compliance", description: "Multi-country compliance features", enabled: true },
-    { id: "advanced_analytics", name: "Advanced Analytics", description: "Deep analytics and forecasting", enabled: true },
-    { id: "customer_loyalty", name: "Customer Loyalty", description: "Loyalty program management", enabled: true },
-    { id: "fuel_quality", name: "Fuel Quality Testing", description: "Quality control and testing", enabled: true },
-    { id: "credit_management", name: "Credit Management", description: "Credit and debt tracking", enabled: true }
-  ];
-  featureFlags3.forEach((flag) => {
-    dataStore.feature_flags[flag.id] = {
-      ...flag,
-      createdAt: (/* @__PURE__ */ new Date()).toISOString(),
-      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-    };
-  });
-  return c.json({
-    success: true,
-    message: "Seed data created",
-    counts: Object.fromEntries(
-      Object.entries(dataStore).map(([k, v]) => [k, Object.keys(v).length])
-    )
-  });
-});
-app.get("/api/dashboard/stats", requireAuth2, (c) => {
-  const sales2 = Object.values(dataStore.sales || {});
-  const stations2 = Object.values(dataStore.stations || {});
-  const users3 = Object.values(dataStore.users || {});
-  const totalRevenue = sales2.reduce((sum, sale) => sum + (sale.amount || 0), 0);
-  const todaySales = sales2.filter((sale) => {
-    const saleDate = new Date(sale.createdAt || sale.timestamp);
-    const today = /* @__PURE__ */ new Date();
-    return saleDate.toDateString() === today.toDateString();
-  }).length;
-  return c.json({
-    success: true,
-    data: {
-      totalRevenue,
-      netProfit: totalRevenue * 0.15,
-      // Estimated 15% margin
-      fuelSold: sales2.reduce((sum, sale) => sum + (sale.quantity || 0), 0),
-      balanceDue: 0,
-      todaySales,
-      totalStations: stations2.length,
-      totalUsers: users3.length,
-      timestamp: (/* @__PURE__ */ new Date()).toISOString()
-    }
-  });
-});
-app.get("/api/stations/:id/stats", requireAuth2, (c) => {
-  const { id } = c.req.param();
-  const station = dataStore.stations[id];
-  if (!station) {
-    return c.json({ error: "Station not found" }, 404);
-  }
-  const stationSales = Object.values(dataStore.sales || {}).filter((sale) => sale.stationId === id);
-  const totalRevenue = stationSales.reduce((sum, sale) => sum + (sale.amount || 0), 0);
-  return c.json({
-    success: true,
-    data: {
-      stationId: id,
-      totalSales: stationSales.length,
-      totalRevenue,
-      totalTransactions: stationSales.length,
-      todaySales: stationSales.filter((sale) => {
-        const saleDate = new Date(sale.createdAt || sale.timestamp);
-        const today = /* @__PURE__ */ new Date();
-        return saleDate.toDateString() === today.toDateString();
-      }).length
-    }
-  });
-});
-app.get("/api/inventory", requireAuth2, (c) => {
-  const records = Object.entries(dataStore.inventory || {}).map(([id, record2]) => ({
-    id,
-    ...record2
-  }));
-  return c.json({ success: true, data: records });
-});
-app.get("/api/inventory/:id", requireAuth2, (c) => {
-  const { id } = c.req.param();
-  if (!dataStore.inventory?.[id]) {
-    return c.json({ error: "Inventory item not found" }, 404);
-  }
-  return c.json({ success: true, data: { id, ...dataStore.inventory[id] } });
-});
-app.post("/api/inventory", requireAuth2, async (c) => {
-  if (!dataStore.inventory) dataStore.inventory = {};
-  try {
-    const body = await c.req.json();
-    const id = body.id || generateId("inventory");
-    dataStore.inventory[id] = {
-      ...body,
-      createdAt: (/* @__PURE__ */ new Date()).toISOString(),
-      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-    };
-    return c.json({ success: true, id, data: { id, ...dataStore.inventory[id] } }, 201);
-  } catch {
-    return c.json({ success: false, error: "Invalid JSON body" }, 400);
-  }
-});
-app.get("/api/payments", requireAuth2, (c) => {
-  const records = Object.entries(dataStore.payments || {}).map(([id, record2]) => ({
-    id,
-    ...record2
-  }));
-  return c.json({ success: true, data: records });
-});
-app.post("/api/payments", requireAuth2, async (c) => {
-  if (!dataStore.payments) dataStore.payments = {};
-  try {
-    const body = await c.req.json();
-    const id = body.id || generateId("payment");
-    dataStore.payments[id] = {
-      ...body,
-      status: "completed",
-      createdAt: (/* @__PURE__ */ new Date()).toISOString()
-    };
-    return c.json({ success: true, id, data: { id, ...dataStore.payments[id] } }, 201);
-  } catch {
-    return c.json({ success: false, error: "Invalid JSON body" }, 400);
-  }
-});
-app.get("/api/settings", requireAuth2, (c) => {
-  return c.json({
-    success: true,
-    data: {
-      currency: "KES",
-      currencySymbol: "KSh",
-      timezone: "Africa/Nairobi",
-      dateFormat: "DD/MM/YYYY",
-      language: "en",
-      fuelTypes: ["PMS", "AGO", "Kerosene"],
-      defaultPrices: { PMS: 183.5, AGO: 168.3, Kerosene: 103.5 },
-      taxRate: 0.16
-    }
-  });
-});
-app.put("/api/settings", requireAuth2, async (c) => {
-  if (!dataStore.config) dataStore.config = {};
-  try {
-    const body = await c.req.json();
-    dataStore.config.settings = { ...dataStore.config.settings, ...body, updatedAt: (/* @__PURE__ */ new Date()).toISOString() };
-    return c.json({ success: true, data: dataStore.config.settings });
-  } catch {
-    return c.json({ success: false, error: "Invalid JSON body" }, 400);
-  }
-});
-app.get("/api/feature-flags", (c) => {
-  const flags = Object.entries(dataStore.feature_flags || {}).map(([id, flag]) => ({
-    id,
-    ...flag
-  }));
-  return c.json({ success: true, data: flags });
-});
-app.get("/api/user-data", requireAuth2, (c) => {
-  const authHeader = c.req.header("Authorization")?.replace("Bearer ", "");
-  const userId = authHeader;
-  const userData = {
-    stations: Object.values(dataStore.stations || {}),
-    sales: Object.values(dataStore.sales || {}),
-    inventory: Object.values(dataStore.inventory || {}),
-    config: dataStore.config
-  };
-  return c.json({ success: true, data: userData });
-});
-var rest_api_default = app;
-
 // api/boot.ts
-var app2 = new Hono2();
-app2.use(bodyLimit({ maxSize: 50 * 1024 * 1024 }));
-var allowedOrigins = process.env.CORS_ALLOWED_ORIGINS ? process.env.CORS_ALLOWED_ORIGINS.split(",") : env.isProduction ? [] : ["*"];
-app2.use("*", cors({
-  origin: (origin) => {
-    if (!origin) return origin || "";
-    if (allowedOrigins.includes("*")) return origin;
-    if (allowedOrigins.some((o) => origin === o || origin.endsWith(o.replace("*.", ".")))) {
-      return origin;
-    }
-    return env.isProduction ? "" : origin;
-  },
-  allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowHeaders: ["Content-Type", "Authorization", "X-API-Key", "x-founder-token"],
-  credentials: true,
-  maxAge: 86400
-}));
-app2.get("/", (c) => c.json({
-  status: "ok",
-  message: "FuelPro Backend API",
-  version: "3.0-CLOUD-SYNC-REST",
-  timestamp: (/* @__PURE__ */ new Date()).toISOString()
-}));
-app2.route("/api", rest_api_default);
-app2.get(Paths.oauthCallback, createOAuthCallbackHandler());
-app2.use("/api/trpc/*", async (c) => {
-  if (c.req.method === "OPTIONS") {
-    return c.json({ ok: true });
-  }
-  try {
-    return await fetchRequestHandler({
-      endpoint: "/api/trpc",
-      req: c.req.raw,
-      router: appRouter,
-      createContext
-    });
-  } catch (err) {
-    console.error("[tRPC] Unhandled error:", err);
-    return c.json({
-      error: "Internal server error",
-      code: "INTERNAL_SERVER_ERROR",
-      path: c.req.path
-    }, 500);
-  }
+var app = new Hono2();
+app.use(bodyLimit({ maxSize: 50 * 1024 * 1024 }));
+app.get(Paths.oauthCallback, createOAuthCallbackHandler());
+app.use("/api/trpc/*", async (c) => {
+  return fetchRequestHandler({
+    endpoint: "/api/trpc",
+    req: c.req.raw,
+    router: appRouter,
+    createContext
+  });
 });
-app2.notFound((c) => c.json({
-  error: "Not Found",
-  path: c.req.path,
-  method: c.req.method,
-  hint: "Try /api/health or /api/data/:collection"
-}, 404));
-var boot_default = app2;
+app.all("/api/*", (c) => c.json({ error: "Not Found" }, 404));
+var boot_default = app;
 if (env.isProduction && !process.env.VERCEL) {
-  try {
-    const { serve: serve2 } = await Promise.resolve().then(() => (init_dist(), dist_exports));
-    const { serveStaticFiles: serveStaticFiles2 } = await Promise.resolve().then(() => (init_vite(), vite_exports));
-    serveStaticFiles2(app2);
-    const port = parseInt(process.env.PORT || "3000");
-    serve2({ fetch: app2.fetch, port }, () => {
-      console.log(`Server running on http://localhost:${port}/`);
-    });
-  } catch (err) {
-    console.error("[Server] Failed to start production server:", err);
-    process.exit(1);
-  }
+  const { serve: serve2 } = await Promise.resolve().then(() => (init_dist(), dist_exports));
+  const { serveStaticFiles: serveStaticFiles2 } = await Promise.resolve().then(() => (init_vite(), vite_exports));
+  serveStaticFiles2(app);
+  const port = parseInt(process.env.PORT || "3000");
+  serve2({ fetch: app.fetch, port }, () => {
+    console.log(`Server running on http://localhost:${port}/`);
+  });
 }
 export {
   boot_default as default
