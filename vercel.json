@@ -1,9 +1,9 @@
 {
   "version": 2,
   "framework": null,
-  "buildCommand": "npm run build:static",
-  "outputDirectory": "dist",
-  "installCommand": "npm install --legacy-peer-deps",
+  "buildCommand": "cd app && npm run build:static",
+  "outputDirectory": "app/dist",
+  "installCommand": "cd app && npm install --legacy-peer-deps",
   "headers": [
     {
       "source": "/(.*)",
