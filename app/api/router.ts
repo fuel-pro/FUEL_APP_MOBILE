@@ -6,6 +6,7 @@ import { paymentRouter } from "./payment-router";
 import { auditRouter } from "./audit-router";
 import { founderAuthRouter } from "./founder-auth-router";
 import { accessControlRouter } from "./access-control-router";
+import { syncRouter } from "./sync-router";
 import {
   featureFlagRouter,
   pricingRouter,
@@ -30,6 +31,8 @@ export const appRouter = createRouter({
   audit: auditRouter,
   // ─── Access Control ───
   accessControl: accessControlRouter,
+  // ─── Sync (cross-device consistency) ───
+  sync: syncRouter,
   // ─── Founder Authentication (public, for login) ───
   founderAuth: founderAuthRouter,
   // ─── Founder Access (admin-protected) ───

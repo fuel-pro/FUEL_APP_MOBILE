@@ -31,11 +31,17 @@ import {
   Info,
 } from "lucide-react";
 import { formatNumber } from "@/react-app/utils/formatUtils";
-import { getBackendUrl } from "@/utils/apiConfig";
 import { useState, useEffect, useMemo, useCallback } from "react";
 
-// Backend API configuration
-const API_BASE = getBackendUrl();
+// Lazy API base URL getter to avoid initialization order issues
+let _apiBase: string | null = null;
+function getApiBase(): string {
+  if (!_apiBase) {
+    const { getBackendUrl } = require("@/utils/apiConfig");
+    _apiBase = getBackendUrl();
+  }
+  return _apiBase;
+}
 
 // Import chart.js components
 import {
@@ -129,7 +135,7 @@ export default function Dashboard() {
     
     setBackendLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/api/dashboard/stats`, {
+      const res = await fetch(`${getApiBase()}/api/dashboard/stats`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.ok) {

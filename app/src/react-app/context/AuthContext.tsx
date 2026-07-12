@@ -7,14 +7,20 @@ import {
   useEffect,
   useRef,
 } from "react";
-import { getRestApiUrl } from "@/utils/apiConfig";
+
+// Lazy API base URL getter to avoid initialization order issues
+let _apiBase: string | null = null;
+function getApiBase(): string {
+  if (!_apiBase) {
+    const { getRestApiUrl } = require("@/utils/apiConfig");
+    _apiBase = getRestApiUrl();
+  }
+  return _apiBase;
+}
 
 // ============================================================
 // AUTH CONTEXT v6 - Production Mode
 // ============================================================
-
-// Use getRestApiUrl() which returns "/api" on Vercel (proxy) or full URL locally
-const API_BASE = getRestApiUrl();
 
 export type AuthMethod = "google" | "email" | "username";
 
@@ -135,7 +141,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           try {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 5000);
-            const res = await fetch(`${API_BASE}/auth/me`, {
+            const res = await fetch(`${getApiBase()}/auth/me`, {
               headers: { Authorization: `Bearer ${storedToken}` },
               signal: controller.signal,
             });
@@ -198,7 +204,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const deviceId = getDeviceId();
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 8000);
-        const res = await fetch(`${API_BASE}/auth/login`, {
+        const res = await fetch(`${getApiBase()}/auth/login`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ email, password, deviceId }),
@@ -245,7 +251,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       try {
         const deviceId = getDeviceId();
-        const res = await fetch(`${API_BASE}/auth/register`, {
+        const res = await fetch(`${getApiBase()}/auth/register`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email, password, name, deviceId }),
@@ -351,7 +357,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const storedToken = loadToken();
     if (!storedToken) return false;
     try {
-      const res = await fetch(`${API_BASE}/auth/me`, {
+      const res = await fetch(`${getApiBase()}/auth/me`, {
         headers: { Authorization: `Bearer ${storedToken}` },
       });
       if (res.ok) {

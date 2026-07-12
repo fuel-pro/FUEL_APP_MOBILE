@@ -3,10 +3,20 @@
  * Centralized API client for backend communication
  */
 
-import { getBackendUrl } from "@/utils/apiConfig";
+// Lazy API base URL getter to avoid initialization order issues
+let _apiBase: string | null = null;
+function getApiBase(): string {
+  if (!_apiBase) {
+    const { getBackendUrl } = require("@/utils/apiConfig");
+    _apiBase = getBackendUrl();
+  }
+  return _apiBase;
+}
 
 // Backend API URL - uses centralized config that handles Vercel proxy
-export const API_BASE_URL = getBackendUrl();
+export function getApiBaseUrl(): string {
+  return getApiBase();
+}
 
 // Get auth token from founder session
 export function getAuthToken(): string | null {
@@ -32,27 +42,27 @@ export function getAuthToken(): string | null {
   }
 }
 
-// API Endpoints
+// API Endpoints - using functions to ensure lazy evaluation
 export const API_ENDPOINTS = {
   // Dashboard
-  DASHBOARD_STATS: `${API_BASE_URL}/api/dashboard/stats`,
-  SALES_TREND: `${API_BASE_URL}/api/dashboard/sales-trend`,
-  FUEL_DISTRIBUTION: `${API_BASE_URL}/api/dashboard/fuel-distribution`,
-  CURRENT_PRICES: `${API_BASE_URL}/api/dashboard/current-prices`,
+  get DASHBOARD_STATS() { return `${getApiBase()}/api/dashboard/stats`; },
+  get SALES_TREND() { return `${getApiBase()}/api/dashboard/sales-trend`; },
+  get FUEL_DISTRIBUTION() { return `${getApiBase()}/api/dashboard/fuel-distribution`; },
+  get CURRENT_PRICES() { return `${getApiBase()}/api/dashboard/current-prices`; },
   
   // Authentication
-  LOGIN: `${API_BASE_URL}/api/auth/login`,
-  REGISTER: `${API_BASE_URL}/api/auth/register`,
-  ME: `${API_BASE_URL}/api/auth/me`,
+  get LOGIN() { return `${getApiBase()}/api/auth/login`; },
+  get REGISTER() { return `${getApiBase()}/api/auth/register`; },
+  get ME() { return `${getApiBase()}/api/auth/me`; },
   
   // M-PESA
-  MPESA_STK: `${API_BASE_URL}/api/mpesa/stkpush`,
-  MPESA_STATUS: `${API_BASE_URL}/api/mpesa/stkstatus`,
-  MPESA_CONFIG: `${API_BASE_URL}/api/mpesa/config`,
+  get MPESA_STK() { return `${getApiBase()}/api/mpesa/stkpush`; },
+  get MPESA_STATUS() { return `${getApiBase()}/api/mpesa/stkstatus`; },
+  get MPESA_CONFIG() { return `${getApiBase()}/api/mpesa/config`; },
   
   // Cloud Sync
-  CLOUD_DATA: `${API_BASE_URL}/api/data`,
-  USER_DATA: `${API_BASE_URL}/api/user-data`,
+  get CLOUD_DATA() { return `${getApiBase()}/api/data`; },
+  get USER_DATA() { return `${getApiBase()}/api/user-data`; },
 };
 
 // API Request Helper
@@ -146,7 +156,7 @@ export const dashboardApi = {
 };
 
 export default {
-  API_BASE_URL,
+  getApiBaseUrl,
   API_ENDPOINTS,
   apiRequest,
   dashboardApi,

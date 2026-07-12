@@ -7,6 +7,17 @@ import React, {
 } from "react";
 import { getCountryByCode } from "@/react-app/lib/world-country-utils";
 
+// Lazy API base URL getter to avoid initialization order issues
+let _apiBase: string | null = null;
+function getApiBase(): string {
+  if (!_apiBase) {
+    // Dynamic import to avoid circular dependencies
+    const { getBackendUrl } = require("@/utils/apiConfig");
+    _apiBase = getBackendUrl();
+  }
+  return _apiBase;
+}
+
 // Encryption helper for sensitive data
 const encrypt = (text: string, key: string): string => {
   try {
@@ -42,6 +53,8 @@ const ADMIN_KEY = "fuelpro_admin_v3";
 const SESSION_KEY = "fuelpro_session_v3";
 const CURRENT_STATION_KEY = "fuelpro_current_station_v3";
 const ACCESS_LOG_KEY = "fuelpro_access_log_v3";
+const BACKEND_SYNC_KEY = "fuelpro_backend_synced";
+const BACKEND_SYNC_TIMESTAMP = "fuelpro_backend_sync_time";
 
 export interface StationAccess {
   username: string;
@@ -74,6 +87,9 @@ export interface Station {
     accessKey: string;
     grantedAt: string;
   }[];
+  // Backend sync fields (optional)
+  backendId?: number;
+  userRole?: string;
 }
 
 export interface AdminSettings {
@@ -124,6 +140,8 @@ interface StationContextType {
   isAdmin: boolean;
   adminSettings: AdminSettings;
   isStationLoading: boolean;
+  isBackendSyncing: boolean;
+  lastBackendSync: number | null;
   // Station CRUD
   createStation: (station: Partial<Station>) => Station;
   updateStation: (id: string, data: Partial<Station>) => void;
@@ -160,6 +178,10 @@ interface StationContextType {
   importAllData: (json: string) => void;
   encryptSensitive: (text: string) => string;
   decryptSensitive: (encoded: string) => string;
+  // Backend Sync (cross-device consistency)
+  syncFromBackend: () => Promise<void>;
+  syncToBackend: () => Promise<void>;
+  hasBackendData: boolean;
 }
 
 const defaultAdminSettings: AdminSettings = {
@@ -318,6 +340,193 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
     useState<AdminSettings>(defaultAdminSettings);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isStationLoading, setIsStationLoading] = useState(true);
+  const [isBackendSyncing, setIsBackendSyncing] = useState(false);
+  const [lastBackendSync, setLastBackendSync] = useState<number | null>(() => {
+    const saved = localStorage.getItem(BACKEND_SYNC_TIMESTAMP);
+    return saved ? parseInt(saved, 10) : null;
+  });
+  const [hasBackendData, setHasBackendData] = useState(false);
+
+  // Get auth token from storage
+  const getAuthToken = useCallback((): string | null => {
+    // Try different storage keys for auth tokens
+    const keys = [
+      "fuelpro_founder_session",
+      "clerk_token",
+      "auth_token",
+      "fuelpro_auth_token",
+    ];
+    for (const key of keys) {
+      try {
+        const val = localStorage.getItem(key);
+        if (val) {
+          const parsed = JSON.parse(val);
+          if (parsed.token) return parsed.token;
+          if (parsed.accessToken) return parsed.accessToken;
+          if (typeof parsed === "string") return parsed;
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+    return null;
+  }, []);
+
+  // Sync stations FROM the backend server
+  const syncFromBackend = useCallback(async (): Promise<void> => {
+    const token = getAuthToken();
+    if (!token) {
+      console.log("[StationContext] No auth token, skipping backend sync");
+      return;
+    }
+
+    setIsBackendSyncing(true);
+    try {
+      const response = await fetch(`${getApiBase()}/api/trpc/sync.fullSync`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Backend sync failed: ${response.status}`);
+      }
+
+      const result = await response.json();
+      const data = result.result?.data?.json || result.data;
+
+      if (data && data.success && data.stations && data.stations.length > 0) {
+        // Map backend stations to local format
+        const backendStations: Station[] = data.stations.map((s: any) => ({
+          id: `backend_${s.id}`,
+          name: s.name,
+          location: s.location || "",
+          phone: s.phone || "",
+          email: s.managerName || "",
+          kraPin: "",
+          etrSerial: "",
+          taxRate: parseFloat(s.taxRate) || 16,
+          theme: "dark",
+          logo: "",
+          description: "",
+          createdAt: s.createdAt || new Date().toISOString(),
+          updatedAt: s.updatedAt || new Date().toISOString(),
+          data: {},
+          access: [
+            {
+              username: s.managerName || "owner",
+              passwordHash: encrypt(s.code || "default", adminSettings.secretKey),
+              role: "owner" as const,
+              permissions: ["all"],
+              grantedAt: s.createdAt || new Date().toISOString(),
+              grantedBy: "system",
+            },
+          ],
+          sharedUsers: [],
+          // Store backend ID for reference
+          backendId: s.id,
+          userRole: s.userRole,
+        }));
+
+        // Merge with local stations (prefer backend data for shared stations)
+        setStations(prevStations => {
+          const localOnlyStations = prevStations.filter(
+            s => !s.id.startsWith("backend_") && !s.backendId
+          );
+          return [...localOnlyStations, ...backendStations];
+        });
+
+        // Save sync timestamp
+        const now = Date.now();
+        setLastBackendSync(now);
+        localStorage.setItem(BACKEND_SYNC_TIMESTAMP, String(now));
+        setHasBackendData(true);
+        localStorage.setItem(BACKEND_SYNC_KEY, "true");
+
+        console.log(`[StationContext] Synced ${backendStations.length} stations from backend`);
+      } else {
+        console.log("[StationContext] No stations found on backend");
+        setHasBackendData(data?.stations?.length > 0);
+      }
+    } catch (error) {
+      console.error("[StationContext] Backend sync error:", error);
+    } finally {
+      setIsBackendSyncing(false);
+    }
+  }, [getAuthToken, adminSettings.secretKey]);
+
+  // Sync stations TO the backend server
+  const syncToBackend = useCallback(async (): Promise<void> => {
+    const token = getAuthToken();
+    if (!token) {
+      console.log("[StationContext] No auth token, skipping push");
+      return;
+    }
+
+    // Find stations that need to be pushed (local-only, not yet on backend)
+    const stationsToPush = stations.filter(
+      s => !s.id.startsWith("backend_") && !s.backendId
+    );
+
+    if (stationsToPush.length === 0) {
+      console.log("[StationContext] No local stations to push");
+      return;
+    }
+
+    setIsBackendSyncing(true);
+    try {
+      const stationData = stationsToPush.map(s => ({
+        name: s.name,
+        code: s.name.toLowerCase().replace(/\s+/g, "_").substring(0, 20),
+        location: s.location,
+        phone: s.phone,
+        managerName: s.email || s.name,
+        taxRate: String(s.taxRate || 16),
+      }));
+
+      const response = await fetch(`${getApiBase()}/api/trpc/sync.pushChanges`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ stationData }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Backend push failed: ${response.status}`);
+      }
+
+      const result = await response.json();
+      const data = result.result?.data?.json || result.data;
+
+      if (data && data.success && data.results?.stations) {
+        // Update local stations with backend IDs
+        setStations(prevStations =>
+          prevStations.map(s => {
+            if (s.id.startsWith("backend_") || s.backendId) return s;
+            const pushed = data.results.stations.find(
+              (p: any) => p.action === "created"
+            );
+            if (pushed) {
+              return { ...s, backendId: pushed.id, id: `backend_${pushed.id}` };
+            }
+            return s;
+          })
+        );
+
+        const now = Date.now();
+        setLastBackendSync(now);
+        localStorage.setItem(BACKEND_SYNC_TIMESTAMP, String(now));
+        console.log(`[StationContext] Pushed ${stationsToPush.length} stations to backend`);
+      }
+    } catch (error) {
+      console.error("[StationContext] Backend push error:", error);
+    } finally {
+      setIsBackendSyncing(false);
+    }
+  }, [getAuthToken, stations]);
 
   // Load from storage on mount
   useEffect(() => {
@@ -342,6 +551,10 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
+    // Check if we have backend data
+    const backendSynced = localStorage.getItem(BACKEND_SYNC_KEY);
+    setHasBackendData(backendSynced === "true");
+
     // Set current station
     if (currentId) {
       const found = loadedStations.find(s => s.id === currentId);
@@ -351,7 +564,10 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem(CURRENT_STATION_KEY, loadedStations[0].id);
     }
     setIsStationLoading(false);
-  }, []);
+
+    // Try to sync from backend on mount
+    syncFromBackend();
+  }, [syncFromBackend]);
 
   // Persist to storage
   const persist = useCallback(
@@ -803,6 +1019,8 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
         isAdmin,
         adminSettings,
         isStationLoading,
+        isBackendSyncing,
+        lastBackendSync,
         createStation,
         updateStation,
         deleteStation,
@@ -828,6 +1046,9 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
         importAllData,
         encryptSensitive,
         decryptSensitive,
+        syncFromBackend,
+        syncToBackend,
+        hasBackendData,
       }}
     >
       {children}
