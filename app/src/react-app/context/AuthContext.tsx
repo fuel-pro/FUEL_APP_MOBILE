@@ -7,13 +7,14 @@ import {
   useEffect,
   useRef,
 } from "react";
-import { getBackendUrl } from "@/utils/apiConfig";
+import { getRestApiUrl } from "@/utils/apiConfig";
 
 // ============================================================
 // AUTH CONTEXT v6 - Production Mode
 // ============================================================
 
-const API_BASE = getBackendUrl();
+// Use getRestApiUrl() which returns "/api" on Vercel (proxy) or full URL locally
+const API_BASE = getRestApiUrl();
 
 export type AuthMethod = "google" | "email" | "username";
 
@@ -130,11 +131,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const initAuth = async () => {
       try {
         const storedToken = loadToken();
-        if (storedToken && API_BASE) {
+        if (storedToken) {
           try {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 5000);
-            const res = await fetch(`${API_BASE}/api/auth/me`, {
+            const res = await fetch(`${API_BASE}/auth/me`, {
               headers: { Authorization: `Bearer ${storedToken}` },
               signal: controller.signal,
             });
@@ -192,13 +193,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsPending(true);
       setError(null);
 
-      // Try backend first if API_BASE is configured
-      if (API_BASE) {
-        try {
-          const deviceId = getDeviceId();
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 8000);
-          const res = await fetch(`${API_BASE}/api/auth/login`, {
+      // API_BASE is already the full path (e.g., "/api" on Vercel or "https://..." locally)
+      try {
+        const deviceId = getDeviceId();
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 8000);
+        const res = await fetch(`${API_BASE}/auth/login`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ email, password, deviceId }),
@@ -234,11 +234,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setIsPending(false);
           return false;
         }
-      }
-
-      setError("Login failed. Please try again.");
-      setIsPending(false);
-      return false;
     },
     [broadcastAuthUpdate]
   );
@@ -250,7 +245,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       try {
         const deviceId = getDeviceId();
-        const res = await fetch(`${API_BASE}/api/auth/register`, {
+        const res = await fetch(`${API_BASE}/auth/register`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email, password, name, deviceId }),
@@ -354,9 +349,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // ---- REFRESH AUTH ----
   const refreshAuth = useCallback(async (): Promise<boolean> => {
     const storedToken = loadToken();
-    if (!storedToken || !API_BASE) return false;
+    if (!storedToken) return false;
     try {
-      const res = await fetch(`${API_BASE}/api/auth/me`, {
+      const res = await fetch(`${API_BASE}/auth/me`, {
         headers: { Authorization: `Bearer ${storedToken}` },
       });
       if (res.ok) {

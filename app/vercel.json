@@ -4,6 +4,12 @@
   "buildCommand": "npm run build:static",
   "outputDirectory": "dist",
   "installCommand": "npm install --legacy-peer-deps",
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "https://fuel-pro-backend-v2-production-7c2b.up.railway.app/api/$1"
+    }
+  ],
   "headers": [
     {
       "source": "/(.*)",
