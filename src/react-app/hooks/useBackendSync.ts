@@ -5,10 +5,20 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import { getBackendUrl } from "@/utils/apiConfig";
-
+// Lazy API base URL getter using dynamic import to avoid circular deps
+let _apiBase: string | null = null;
+let _apiPromise: Promise<string> | null = null;
 function getApiBase(): string {
-  return getBackendUrl();
+  if (_apiBase) return _apiBase;
+  return "https://fuel-pro-backend-v2-production-7c2b.up.railway.app";
+}
+async function getApiBaseAsync(): Promise<string> {
+  if (_apiBase) return _apiBase;
+  if (!_apiPromise) {
+    _apiPromise = import("@/utils/apiConfig").then(m => m.getBackendUrl());
+  }
+  _apiBase = await _apiPromise;
+  return _apiBase;
 }
 
 // Token storage keys to try

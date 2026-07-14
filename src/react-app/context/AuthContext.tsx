@@ -8,11 +8,20 @@ import {
   useRef,
 } from "react";
 
-import { getRestApiUrl } from "@/utils/apiConfig";
-
-// Direct import - no lazy require needed in ESM
+// Lazy API base URL getter using dynamic import to avoid circular deps
+let _apiBase: string | null = null;
+let _apiPromise: Promise<string> | null = null;
 function getApiBase(): string {
-  return getRestApiUrl();
+  if (_apiBase) return _apiBase;
+  return "/api";
+}
+async function getApiBaseAsync(): Promise<string> {
+  if (_apiBase) return _apiBase;
+  if (!_apiPromise) {
+    _apiPromise = import("@/utils/apiConfig").then(m => m.getRestApiUrl());
+  }
+  _apiBase = await _apiPromise;
+  return _apiBase;
 }
 
 // ============================================================

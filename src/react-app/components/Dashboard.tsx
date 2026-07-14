@@ -33,10 +33,25 @@ import {
 import { formatNumber } from "@/react-app/utils/formatUtils";
 import { useState, useEffect, useMemo, useCallback } from "react";
 
-import { getBackendUrl } from "@/utils/apiConfig";
-
+// Lazy API base URL getter using dynamic import to avoid circular deps
+let _apiBase: string | null = null;
+let _apiPromise: Promise<string> | null = null;
 function getApiBase(): string {
-  return getBackendUrl();
+  if (!_apiPromise) {
+    _apiPromise = import("@/utils/apiConfig").then(m => m.getBackendUrl());
+  }
+  if (_apiBase) return _apiBase;
+  // Synchronous fallback for existing calls
+  return "https://fuel-pro-backend-v2-production-7c2b.up.railway.app";
+}
+// Async version for callers that can await
+async function getApiBaseAsync(): Promise<string> {
+  if (_apiBase) return _apiBase;
+  if (!_apiPromise) {
+    _apiPromise = import("@/utils/apiConfig").then(m => m.getBackendUrl());
+  }
+  _apiBase = await _apiPromise;
+  return _apiBase;
 }
 
 // Import chart.js components
