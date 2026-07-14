@@ -3,14 +3,10 @@
  * Centralized API client for backend communication
  */
 
-// Lazy API base URL getter to avoid initialization order issues
-let _apiBase: string | null = null;
+import { getBackendUrl } from "@/utils/apiConfig";
+
 function getApiBase(): string {
-  if (!_apiBase) {
-    const { getBackendUrl } = require("@/utils/apiConfig");
-    _apiBase = getBackendUrl();
-  }
-  return _apiBase;
+  return getBackendUrl();
 }
 
 // Backend API URL - uses centralized config that handles Vercel proxy
