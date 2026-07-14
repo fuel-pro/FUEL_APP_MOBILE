@@ -8,14 +8,11 @@ import {
   useRef,
 } from "react";
 
-// Lazy API base URL getter to avoid initialization order issues
-let _apiBase: string | null = null;
+import { getRestApiUrl } from "@/utils/apiConfig";
+
+// Direct import - no lazy require needed in ESM
 function getApiBase(): string {
-  if (!_apiBase) {
-    const { getRestApiUrl } = require("@/utils/apiConfig");
-    _apiBase = getRestApiUrl();
-  }
-  return _apiBase;
+  return getRestApiUrl();
 }
 
 // ============================================================

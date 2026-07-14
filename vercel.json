@@ -1,6 +1,5 @@
 {
   "version": 2,
-  "framework": null,
   "buildCommand": "npm run build:static",
   "outputDirectory": "dist",
   "installCommand": "npm install --legacy-peer-deps",
@@ -10,7 +9,7 @@
       "destination": "https://fuel-pro-backend-v2-production-7c2b.up.railway.app/api/$1"
     },
     {
-      "source": "/((?!assets/|.*\\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|json|txt|xml|webmanifest|pdf)).*)",
+      "source": "/(.*)",
       "destination": "/index.html"
     }
   ],
