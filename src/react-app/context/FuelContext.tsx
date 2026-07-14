@@ -7,6 +7,18 @@ import React, {
 } from "react";
 import { useAuth } from "@/react-app/context/AuthContext";
 
+// Token storage key (must match AuthContext)
+const TOKEN_STORAGE_KEY = "fuelpro_token";
+
+// Helper to get auth token
+function getAuthToken(): string | null {
+  try {
+    return localStorage.getItem(TOKEN_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
 // Types
 export interface Station {
   id: string;
@@ -1177,11 +1189,17 @@ export function FuelProvider({ children }: { children: ReactNode }) {
       if (state.dataBackups?.length > 0)
         compactData.dataBackups = state.dataBackups.slice(-3); // Keep only last 3 backups in cloud
 
+      const authToken = getAuthToken();
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+      if (authToken) {
+        headers["Authorization"] = `Bearer ${authToken}`;
+      }
+
       const response = await fetch("/api/user-data", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers,
         body: JSON.stringify({ data: compactData }),
       });
 
@@ -1209,7 +1227,13 @@ export function FuelProvider({ children }: { children: ReactNode }) {
     if (!user) return;
 
     try {
-      const response = await fetch("/api/user-data");
+      const authToken = getAuthToken();
+      const headers: Record<string, string> = {};
+      if (authToken) {
+        headers["Authorization"] = `Bearer ${authToken}`;
+      }
+
+      const response = await fetch("/api/user-data", { headers });
 
       if (!response.ok) {
         throw new Error(
