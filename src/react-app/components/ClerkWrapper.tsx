@@ -1,18 +1,21 @@
 import { ClerkProvider } from "@clerk/clerk-react";
-import { ReactNode } from "react";
+import { ReactNode, useMemo } from "react";
 
-// Get publishable key from multiple sources
+// Get publishable key from multiple sources - called at render time
 function getPublishableKey(): string {
+  // Check environment variable first
   const envKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
   if (envKey) return envKey;
   
-  // Try window object (for runtime injection)
+  // Check window object
   const windowKey = (window as any).__CLERK_PUBLISHABLE_KEY__;
   if (windowKey) return windowKey;
   
-  // Try meta tag
-  const metaKey = document.querySelector('meta[name="clerk-publishable-key"]')?.getAttribute('content');
-  if (metaKey) return metaKey;
+  // Check meta tag (document might not be ready at module load)
+  if (typeof document !== 'undefined') {
+    const metaKey = document.querySelector('meta[name="clerk-publishable-key"]')?.getAttribute('content');
+    if (metaKey) return metaKey;
+  }
   
   return "";
 }
@@ -22,26 +25,27 @@ function getClerkFrontendApi(): string {
   const envKey = import.meta.env.VITE_CLERK_FRONTEND_API;
   if (envKey) return envKey;
   
-  // Try window object
   const windowKey = (window as any).__CLERK_FRONTEND_API__;
   if (windowKey) return windowKey;
   
-  // Try meta tag
-  const metaKey = document.querySelector('meta[name="clerk-frontend-api"]')?.getAttribute('content');
-  if (metaKey) return metaKey;
+  if (typeof document !== 'undefined') {
+    const metaKey = document.querySelector('meta[name="clerk-frontend-api"]')?.getAttribute('content');
+    if (metaKey) return metaKey;
+  }
   
   return "clerk.fuelpro.com";
 }
-
-const publishableKey = getPublishableKey();
-const clerkFrontendApi = getClerkFrontendApi();
-const isClerkConfigured = !!publishableKey;
 
 interface ClerkWrapperProps {
   children: ReactNode;
 }
 
 export default function ClerkWrapper({ children }: ClerkWrapperProps) {
+  // Get keys at render time when DOM is available
+  const publishableKey = useMemo(() => getPublishableKey(), []);
+  const clerkFrontendApi = useMemo(() => getClerkFrontendApi(), []);
+  const isClerkConfigured = !!publishableKey;
+
   // Skip ClerkProvider if not configured
   if (!isClerkConfigured) {
     return <>{children}</>;

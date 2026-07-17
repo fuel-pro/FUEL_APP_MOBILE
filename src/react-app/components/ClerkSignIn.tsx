@@ -1,18 +1,19 @@
 import { SignIn } from "@clerk/clerk-react";
 import AuthLogin from "@/react-app/components/AuthLogin";
+import { useMemo } from "react";
 
 // Get publishable key from multiple sources
 function getPublishableKey(): string {
   const envKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
   if (envKey) return envKey;
   
-  // Try window object
   const windowKey = (window as any).__CLERK_PUBLISHABLE_KEY__;
   if (windowKey) return windowKey;
   
-  // Try meta tag
-  const metaKey = document.querySelector('meta[name="clerk-publishable-key"]')?.getAttribute('content');
-  if (metaKey) return metaKey;
+  if (typeof document !== 'undefined') {
+    const metaKey = document.querySelector('meta[name="clerk-publishable-key"]')?.getAttribute('content');
+    if (metaKey) return metaKey;
+  }
   
   return "";
 }
@@ -25,20 +26,22 @@ function getClerkFrontendApi(): string {
   const windowKey = (window as any).__CLERK_FRONTEND_API__;
   if (windowKey) return windowKey;
   
-  const metaKey = document.querySelector('meta[name="clerk-frontend-api"]')?.getAttribute('content');
-  if (metaKey) return metaKey;
+  if (typeof document !== 'undefined') {
+    const metaKey = document.querySelector('meta[name="clerk-frontend-api"]')?.getAttribute('content');
+    if (metaKey) return metaKey;
+  }
   
   return "clerk.fuelpro.com";
 }
-
-const publishableKey = getPublishableKey();
-const clerkFrontendApi = getClerkFrontendApi();
 
 /**
  * ClerkSignIn - Full Clerk-powered sign-in component
  * Falls back to local AuthLogin if Clerk is not configured.
  */
 export default function ClerkSignIn() {
+  const publishableKey = useMemo(() => getPublishableKey(), []);
+  const clerkFrontendApi = useMemo(() => getClerkFrontendApi(), []);
+  
   if (!publishableKey) {
     return <AuthLogin />;
   }
