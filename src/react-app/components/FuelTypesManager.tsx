@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { KENYA_BASE_PRICES, KENYA_SPECIALTY_PRICES } from "@/react-app/config/pricing";
 import {
   Fuel,
   Plus,
@@ -46,7 +47,7 @@ const DEFAULT_FUEL_TYPES: CustomFuelType[] = [
     code: "PMS",
     name: "Premium Motor Spirit",
     localName: "Petrol",
-    price: 220.3,
+    price: KENYA_BASE_PRICES.petrol,
     costPrice: 190.0,
     taxRate: 16,
     levyRate: 0,
@@ -61,7 +62,7 @@ const DEFAULT_FUEL_TYPES: CustomFuelType[] = [
     code: "AGO",
     name: "Automotive Gas Oil",
     localName: "Diesel",
-    price: 250.01,
+    price: KENYA_BASE_PRICES.diesel,
     costPrice: 189.5,
     taxRate: 16,
     levyRate: 0,

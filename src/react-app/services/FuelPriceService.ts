@@ -2,10 +2,13 @@
  * FuelPriceService - Auto-detects fuel prices based on location
  * Uses a hidden mini-browser approach to fetch real-time fuel prices
  * Runs once per day to avoid excessive API calls
+ * 
+ * Now uses unified pricing from @/react-app/config/pricing
  */
 
 // Use relative import since the path alias might not work in all contexts
 import { detectCountryFromTimezone } from "../config/countries";
+import { KENYA_BASE_PRICES, REGIONAL_PRICES, DEFAULT_PRICES } from "../config/pricing";
 
 // Storage keys
 const PRICES_CACHE_KEY = "fuelpro_daily_prices";
@@ -33,9 +36,9 @@ export interface LocationData {
   currencySymbol: string;
 }
 
-// Kenya fuel price sources (EPRA regulated prices)
-const KENYA_PETROL_PRICE = 220.3; // KSh per litre - Super Petrol
-const KENYA_DIESEL_PRICE = 250.01; // KSh per litre - Diesel
+// Use unified pricing constants
+const KENYA_PETROL_PRICE = KENYA_BASE_PRICES.petrol; // 220.30 KSh per litre
+const KENYA_DIESEL_PRICE = KENYA_BASE_PRICES.diesel; // 250.01 KSh per litre
 
 // Get today's date string for caching
 function getTodayString(): string {
@@ -174,8 +177,9 @@ async function scrapeFuelPrices(location: LocationData): Promise<FuelPrices> {
     ET: { petrol: 55, diesel: 52 }, // ETB per litre
   };
 
-  const prices = regionalPrices[location.countryCode] || { petrol: 1.5, diesel: 1.3 };
-  const currencyInfo = { KE: "KSh", UG: "USh", TZ: "TSh", NG: "₦", ZA: "R", GH: "GH₵", RW: "RF", ET: "Br" };
+  // Use unified regional prices
+  const regional = REGIONAL_PRICES[location.countryCode];
+  const prices = regional || { petrol: DEFAULT_PRICES.petrol, diesel: DEFAULT_PRICES.diesel };
   const currencySymbols: Record<string, string> = {
     KE: "KSh", UG: "USh", TZ: "TSh", NG: "₦", ZA: "R", GH: "GH₵", RW: "RF", ET: "Br",
     US: "$", GB: "£", EU: "€",
@@ -189,7 +193,7 @@ async function scrapeFuelPrices(location: LocationData): Promise<FuelPrices> {
     location: `${location.city}, ${location.country}`,
     countryCode: location.countryCode,
     fetchedAt: new Date().toISOString(),
-    source: "Regional Average Prices",
+    source: regional ? "Regional Average Prices" : "Default Prices",
   };
 }
 
@@ -223,11 +227,15 @@ export async function getFuelPrices(): Promise<FuelPrices> {
     
     // Return fallback prices based on timezone detection
     const countryCode = detectCountryFromTimezone();
+    // Use unified pricing for fallback
+    const regional = REGIONAL_PRICES[countryCode];
+    const petrolPrice = countryCode === "KE" ? KENYA_PETROL_PRICE : (regional?.petrol || DEFAULT_PRICES.petrol);
+    const dieselPrice = countryCode === "KE" ? KENYA_DIESEL_PRICE : (regional?.diesel || DEFAULT_PRICES.diesel);
     const fallbackPrices: FuelPrices = {
-      petrolPrice: countryCode === "KE" ? KENYA_PETROL_PRICE : 1.5,
-      dieselPrice: countryCode === "KE" ? KENYA_DIESEL_PRICE : 1.3,
-      currency: "KES",
-      currencySymbol: "KSh",
+      petrolPrice,
+      dieselPrice,
+      currency: regional?.currency || "KES",
+      currencySymbol: regional?.currencySymbol || "KSh",
       location: "Auto-detected",
       countryCode,
       fetchedAt: new Date().toISOString(),
@@ -273,11 +281,12 @@ export function getDisplayPrices(): { pmsPrice: number; agoPrice: number; curren
     };
   }
 
-  // Default fallback prices
+  // Default fallback prices using unified pricing
   const countryCode = detectCountryFromTimezone();
+  const regional = REGIONAL_PRICES[countryCode];
   return {
-    pmsPrice: countryCode === "KE" ? KENYA_PETROL_PRICE : 1.5,
-    agoPrice: countryCode === "KE" ? KENYA_DIESEL_PRICE : 1.3,
-    currencySymbol: countryCode === "KE" ? "KSh" : "$",
+    pmsPrice: countryCode === "KE" ? KENYA_PETROL_PRICE : (regional?.petrol || DEFAULT_PRICES.petrol),
+    agoPrice: countryCode === "KE" ? KENYA_DIESEL_PRICE : (regional?.diesel || DEFAULT_PRICES.diesel),
+    currencySymbol: regional?.currencySymbol || DEFAULT_PRICES.currencySymbol,
   };
 }

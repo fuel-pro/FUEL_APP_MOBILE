@@ -6,6 +6,8 @@ import React, {
   ReactNode,
 } from "react";
 import { useAuth } from "@/react-app/context/AuthContext";
+// Unified pricing - single source of truth for all fuel prices
+import { KENYA_BASE_PRICES, DEFAULT_PRICES } from "@/react-app/config/pricing";
 
 // Token storage key (must match AuthContext)
 const TOKEN_STORAGE_KEY = "fuelpro_token";
@@ -18,6 +20,10 @@ function getAuthToken(): string | null {
     return null;
   }
 }
+
+// Use unified pricing defaults (Kenya EPRA prices as default)
+const DEFAULT_PMS_PRICE = KENYA_BASE_PRICES.petrol; // 220.30 KES
+const DEFAULTAGO_PRICE = KENYA_BASE_PRICES.diesel;   // 250.01 KES
 
 // Types
 export interface Station {
@@ -475,10 +481,10 @@ const initialState: FuelState = {
   pmsTankClosing: 0,
   agoTankOpening: 0,
   agoTankClosing: 0,
-  pmsPrice: 180,
-  agoPrice: 170,
-  petrolPrice: 180,
-  dieselPrice: 170,
+  pmsPrice: DEFAULT_PMS_PRICE,  // 220.30 KES (Kenya EPRA)
+  agoPrice: DEFAULTAGO_PRICE,     // 250.01 KES (Kenya EPRA)
+  petrolPrice: DEFAULT_PMS_PRICE,
+  dieselPrice: DEFAULTAGO_PRICE,
   deliveredTo: "",
   totalOrder: "",
   deliveryYear: new Date().getFullYear(), // Auto-set to current year
@@ -1037,11 +1043,11 @@ export function FuelProvider({ children }: { children: ReactNode }) {
         compactData.agoTankOpening = state.agoTankOpening;
       if (state.agoTankClosing !== 0)
         compactData.agoTankClosing = state.agoTankClosing;
-      if (state.pmsPrice !== 180) compactData.pmsPrice = state.pmsPrice;
-      if (state.agoPrice !== 170) compactData.agoPrice = state.agoPrice;
-      if (state.petrolPrice !== 180)
+      if (state.pmsPrice !== DEFAULT_PMS_PRICE) compactData.pmsPrice = state.pmsPrice;
+      if (state.agoPrice !== DEFAULTAGO_PRICE) compactData.agoPrice = state.agoPrice;
+      if (state.petrolPrice !== DEFAULT_PMS_PRICE)
         compactData.petrolPrice = state.petrolPrice;
-      if (state.dieselPrice !== 170)
+      if (state.dieselPrice !== DEFAULTAGO_PRICE)
         compactData.dieselPrice = state.dieselPrice;
       if (state.deliveredTo) compactData.deliveredTo = state.deliveredTo;
       if (state.totalOrder) compactData.totalOrder = state.totalOrder;
@@ -1153,11 +1159,11 @@ export function FuelProvider({ children }: { children: ReactNode }) {
         compactData.agoTankOpening = state.agoTankOpening;
       if (state.agoTankClosing !== 0)
         compactData.agoTankClosing = state.agoTankClosing;
-      if (state.pmsPrice !== 180) compactData.pmsPrice = state.pmsPrice;
-      if (state.agoPrice !== 170) compactData.agoPrice = state.agoPrice;
-      if (state.petrolPrice !== 180)
+      if (state.pmsPrice !== DEFAULT_PMS_PRICE) compactData.pmsPrice = state.pmsPrice;
+      if (state.agoPrice !== DEFAULTAGO_PRICE) compactData.agoPrice = state.agoPrice;
+      if (state.petrolPrice !== DEFAULT_PMS_PRICE)
         compactData.petrolPrice = state.petrolPrice;
-      if (state.dieselPrice !== 170)
+      if (state.dieselPrice !== DEFAULTAGO_PRICE)
         compactData.dieselPrice = state.dieselPrice;
       if (state.deliveredTo) compactData.deliveredTo = state.deliveredTo;
       if (state.totalOrder) compactData.totalOrder = state.totalOrder;

@@ -1,4 +1,5 @@
 // ============================================================
+import { KENYA_BASE_PRICES, KENYA_CITIES } from "@/react-app/config/pricing";
 // DataSyncService - Comprehensive auto-update engine for FuelPro
 // Fetches real-time data from credible internet sources
 // Auto-syncs with precise location for exact fuel prices
@@ -16,9 +17,9 @@ import { getCountryById } from "@/react-app/config/countries";
 const PRICE_ESTIMATION_CONFIG = {
   // Base prices from last known EPRA prices (June 2026)
   lastKnownBase: {
-    petrol: 193.43,  // KES/litre - Nairobi Super Petrol
-    diesel: 178.56,   // KES/litre - Nairobi Diesel (ADO)
-    kerosene: 170.22, // KES/litre - Nairobi Kerosene
+    petrol: KENYA_BASE_PRICES.petrol,  // KES/litre - Nairobi Super Petrol
+    diesel: KENYA_BASE_PRICES.diesel,   // KES/litre - Nairobi Diesel (ADO)
+    kerosene: KENYA_BASE_PRICES.kerosene, // KES/litre - Nairobi Kerosene
   },
   // Estimated monthly change ranges (based on historical patterns)
   monthlyChangeRange: {
@@ -834,7 +835,7 @@ function getRegionalPriceEstimates(
     { petrol: number; diesel: number; kerosene: number }
   > = {
     // East Africa
-    KE: { petrol: 193.43, diesel: 178.56, kerosene: 170.22 },
+    KE: { petrol: KENYA_BASE_PRICES.petrol, diesel: KENYA_BASE_PRICES.diesel, kerosene: 170.22 },
     UG: { petrol: 5450, diesel: 4980, kerosene: 4500 },
     TZ: { petrol: 3199, diesel: 2943, kerosene: 2840 },
     RW: { petrol: 1680, diesel: 1620, kerosene: 1450 },

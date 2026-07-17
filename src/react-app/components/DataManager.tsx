@@ -1,4 +1,5 @@
 import React, { useState, useRef } from "react";
+import { KENYA_BASE_PRICES } from "@/react-app/config/pricing";
 import {
   Database,
   Download,
@@ -41,8 +42,8 @@ export default function DataManager() {
   const [activeTab, setActiveTab] = useState("overview");
 
   // Member-accessible pump settings
-  const [pmsPrice, setPmsPrice] = useState(state.pmsPrice || 180);
-  const [agoPrice, setAgoPrice] = useState(state.agoPrice || 170);
+  const [pmsPrice, setPmsPrice] = useState(state.pmsPrice || KENYA_BASE_PRICES.petrol);
+  const [agoPrice, setAgoPrice] = useState(state.agoPrice || KENYA_BASE_PRICES.diesel);
   const [pmsPumpCount, setPmsPumpCount] = useState(state.pmsPumps?.length || 1);
   const [agoPumpCount, setAgoPumpCount] = useState(state.agoPumps?.length || 1);
 

@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback } from "react";
+import { KENYA_BASE_PRICES } from "@/react-app/config/pricing";
 import {
   Plus,
   Save,
@@ -483,7 +484,7 @@ export default function SalesTracking() {
       dispatch({ type: "SET_TILL_PAYMENT", payload: 0 });
       dispatch({
         type: "SET_PRICES",
-        payload: { pmsPrice: 180, agoPrice: 170 },
+        payload: { pmsPrice: KENYA_BASE_PRICES.petrol, agoPrice: KENYA_BASE_PRICES.diesel },
       });
       dispatch({
         type: "SET_SALES_DATE",
@@ -541,8 +542,8 @@ export default function SalesTracking() {
     dispatch({
       type: "SET_PRICES",
       payload: {
-        pmsPrice: data.pmsPrice || 180,
-        agoPrice: data.agoPrice || 170,
+        pmsPrice: data.pmsPrice || KENYA_BASE_PRICES.petrol,
+        agoPrice: data.agoPrice || KENYA_BASE_PRICES.diesel,
       },
     });
     dispatch({
