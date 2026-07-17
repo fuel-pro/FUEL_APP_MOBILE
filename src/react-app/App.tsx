@@ -168,7 +168,7 @@ function MainAppLoader() {
     );
   }
 
-  // Loading state
+  // Loading state - show only when NOT using Clerk (Clerk handles its own loading)
   if (isLoading && !isClerkConfigured) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 flex items-center justify-center">
@@ -191,7 +191,7 @@ function MainAppLoader() {
     );
   }
 
-  // Clerk is configured - show Clerk auth or dashboard
+  // Clerk is configured - ClerkShow handles its own loading state
   if (isClerkConfigured) {
     return (
       <ClerkShow when="signed-in" fallback={<ClerkSignIn />}>
