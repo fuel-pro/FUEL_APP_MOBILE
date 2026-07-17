@@ -32,6 +32,7 @@ import {
   Wrench,
   Monitor,
   FileUp,
+  Gauge,
 } from "lucide-react";
 
 interface TabNavigationProps {
@@ -82,6 +83,7 @@ const TabNavigation: React.FC<TabNavigationProps> = ({
     expenses: <Receipt size={16} />,
     priceboard: <Monitor size={16} />,
     docconverter: <FileUp size={16} />,
+    pumpmapping: <Gauge size={16} />,
   };
 
   // Check scroll position for arrow visibility
