@@ -280,6 +280,7 @@ const defaultAdminSettings: AdminSettings = {
       order: 15,
     },
     ai: { label: "AI Assistant", icon: "Brain", enabled: true, order: 16 },
+    pumpmapping: { label: "Pump Mapping v1", icon: "Fuel", enabled: true, order: 17 },
     admin: {
       label: "Founder Access",
       icon: "Shield",

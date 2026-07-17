@@ -100,6 +100,7 @@ const ExpenseTracker = lazy(
   () => import("@/react-app/components/ExpenseTracker")
 );
 const PriceBoard = lazy(() => import("@/react-app/components/PriceBoard"));
+const PumpMappingV1 = lazy(() => import("@/react-app/components/PumpMappingV1"));
 
 // ─── Cross-Tab Data Sync ───
 // Shared state channel for real-time updates between tabs
@@ -379,6 +380,8 @@ function HomeContent() {
         return <ExpenseTracker />;
       case "priceboard":
         return <PriceBoard />;
+      case "pumpmapping":
+        return <PumpMappingV1 />;
       default:
         return <Dashboard />;
     }
