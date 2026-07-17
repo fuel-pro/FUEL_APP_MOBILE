@@ -42,6 +42,7 @@
     />
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#f59e0b" />
+    <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta
       name="apple-mobile-web-app-status-bar-style"
@@ -70,6 +71,9 @@
         } catch(e) {}
       })();
     </script>
+    <!-- Clerk publishable key injection for runtime -->
+    <meta name="clerk-publishable-key" content="pk_live_Y2xlcmsuZnVlbHByby5jb20k">
+    <meta name="clerk-frontend-api" content="https://clerk.fuelpro.com">
     <style>
       /* Critical CSS - Prevent flash of white background in dark mode */
       html.dark { background-color: #1a1a1a; }
