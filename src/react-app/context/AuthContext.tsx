@@ -140,6 +140,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Initialize - verify token with backend (runs once on mount)
   useEffect(() => {
     let cancelled = false;
+    // Safety timeout - ensure isLoading is always set to false
+    const safetyTimeout = setTimeout(() => {
+      if (!cancelled) {
+        console.info("[AuthContext] Safety timeout - completing initialization");
+        setIsLoading(false);
+      }
+    }, 8000); // 8 second safety timeout
+    
     const initAuth = async () => {
       try {
         const storedToken = loadToken();
@@ -181,11 +189,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch (err) {
         console.error("[AuthContext] Auth initialization error:", err);
       } finally {
+        clearTimeout(safetyTimeout);
         if (!cancelled) setIsLoading(false);
       }
     };
     initAuth();
-    return () => { cancelled = true; };
+    return () => { 
+      cancelled = true; 
+      clearTimeout(safetyTimeout);
+    };
   }, []);
 
   // Broadcast auth update - stable callback

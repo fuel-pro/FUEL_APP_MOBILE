@@ -1468,9 +1468,28 @@ export function FuelProvider({ children }: { children: ReactNode }) {
           tabVisibility: savedTabVisibility
             ? JSON.parse(savedTabVisibility)
             : initialState.tabVisibility,
-          tabConfigurations: savedTabConfigurations
-            ? JSON.parse(savedTabConfigurations)
-            : initialState.tabConfigurations,
+          tabConfigurations: (() => {
+            // FIX: Ensure new tabs are added for existing users
+            const savedConfigs = savedTabConfigurations ? JSON.parse(savedTabConfigurations) : null;
+            if (savedConfigs) {
+              // Check if pumpmapping tab exists, if not add it
+              const hasPumpMapping = savedConfigs.some((tab: TabConfiguration) => tab.id === "pumpmapping");
+              if (!hasPumpMapping) {
+                // Find the max order to place the new tab at the end
+                const maxOrder = Math.max(...savedConfigs.map((t: TabConfiguration) => t.order), 0);
+                savedConfigs.push({
+                  id: "pumpmapping",
+                  label: "Pump Mapping V1",
+                  originalLabel: "Pump Mapping V1",
+                  description: "AI-powered pump ledger parsing & extraction",
+                  order: maxOrder + 1,
+                  visible: true,
+                });
+              }
+              return savedConfigs;
+            }
+            return initialState.tabConfigurations;
+          })(),
           employees: savedEmployees
             ? JSON.parse(savedEmployees)
             : initialState.employees,
