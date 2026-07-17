@@ -385,7 +385,7 @@ export default function FirstLoginChoice({
             Welcome to FuelPro
           </h1>
           <p className="text-blue-200 text-sm">
-            Get started with your fuel station management
+            Auto-detecting fuel prices for your location
           </p>
         </div>
 
@@ -555,8 +555,8 @@ export default function FirstLoginChoice({
           {[
             {
               icon: Globe,
-              label: "EPRA Prices",
-              desc: "Lodwar rates",
+              label: "Auto-Pricing",
+              desc: "Location-based",
               action: null,
             },
             { icon: Lock, label: "Secure", desc: "Encrypted", action: null },

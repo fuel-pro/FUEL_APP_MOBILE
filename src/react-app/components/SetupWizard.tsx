@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Building2,
   MapPin,
@@ -14,9 +14,12 @@ import {
   Sparkles,
   Plus,
   Minus,
+  Loader2,
+  RefreshCw,
 } from "lucide-react";
 import { useFuel } from "../context/FuelContext";
 import { useStations } from "../context/StationContext";
+import { getFuelPrices, getDisplayPrices, FuelPrices } from "../services/FuelPriceService";
 
 const DEFAULT_CURRENCY = "KSh ";
 
@@ -60,24 +63,83 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
   const { state, dispatch } = useFuel();
   const { createStation, switchStation } = useStations();
   const [currentStep, setCurrentStep] = useState(1);
-  const [data, setData] = useState<WizardData>({
-    stationName: "",
-    location: "Auto-detected",
-    contacts: "",
-    email: "",
-    pmsTankCapacity: 20000,
-    agoTankCapacity: 20000,
-    pmsTankOpening: 0,
-    agoTankOpening: 0,
-    pmsCount: 2,
-    agoCount: 2,
-    pmsPrice: 220.3, // EPRA Lodwar Super Petrol price (AI confirmed May 2026)
-    agoPrice: 250.01, // EPRA Lodwar Diesel price (AI confirmed May 2026)
-    kraPin: "",
-    vatRegNo: "",
-    physicalAddress: "Auto-detected location",
-    etrSerialNo: "",
-  });
+  const [autoDetectedPrices, setAutoDetectedPrices] = useState<FuelPrices | null>(null);
+  const [isDetectingPrices, setIsDetectingPrices] = useState(false);
+  const [priceDetectionError, setPriceDetectionError] = useState<string | null>(null);
+
+  // Get default prices - try to auto-detect on mount
+  const getDefaultPrices = () => {
+    const displayPrices = getDisplayPrices();
+    return {
+      stationName: "",
+      location: "Auto-detected",
+      contacts: "",
+      email: "",
+      pmsTankCapacity: 20000,
+      agoTankCapacity: 20000,
+      pmsTankOpening: 0,
+      agoTankOpening: 0,
+      pmsCount: 2,
+      agoCount: 2,
+      pmsPrice: displayPrices.pmsPrice,
+      agoPrice: displayPrices.agoPrice,
+      kraPin: "",
+      vatRegNo: "",
+      physicalAddress: "Auto-detected location",
+      etrSerialNo: "",
+    };
+  };
+
+  const [data, setData] = useState<WizardData>(getDefaultPrices);
+
+  // Auto-detect fuel prices on component mount (runs once per day)
+  useEffect(() => {
+    const detectPrices = async () => {
+      setIsDetectingPrices(true);
+      setPriceDetectionError(null);
+      
+      try {
+        const prices = await getFuelPrices();
+        setAutoDetectedPrices(prices);
+        
+        // Update the data state with detected prices
+        setData(prev => ({
+          ...prev,
+          pmsPrice: prices.petrolPrice,
+          agoPrice: prices.dieselPrice,
+        }));
+        
+        console.log("[SetupWizard] Auto-detected prices:", prices);
+      } catch (error) {
+        console.error("[SetupWizard] Failed to detect prices:", error);
+        setPriceDetectionError("Could not auto-detect prices. Using default values.");
+      } finally {
+        setIsDetectingPrices(false);
+      }
+    };
+    
+    detectPrices();
+  }, []);
+
+  // Function to manually refresh prices
+  const refreshPrices = async () => {
+    setIsDetectingPrices(true);
+    setPriceDetectionError(null);
+    
+    try {
+      const prices = await getFuelPrices();
+      setAutoDetectedPrices(prices);
+      setData(prev => ({
+        ...prev,
+        pmsPrice: prices.petrolPrice,
+        agoPrice: prices.dieselPrice,
+      }));
+    } catch (error) {
+      setPriceDetectionError("Failed to refresh prices. Please try again.");
+    } finally {
+      setIsDetectingPrices(false);
+    }
+  };
 
   const updateField = (field: keyof WizardData, value: string | number) => {
     setData(prev => ({ ...prev, [field]: value }));
@@ -282,7 +344,16 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
       case 3:
         return <PumpsStep data={data} updateField={updateField} />;
       case 4:
-        return <PricingStep data={data} updateField={updateField} />;
+        return (
+          <PricingStep 
+            data={data} 
+            updateField={updateField}
+            isDetectingPrices={isDetectingPrices}
+            autoDetectedPrices={autoDetectedPrices}
+            onRefreshPrices={refreshPrices}
+            priceDetectionError={priceDetectionError}
+          />
+        );
       case 5:
         return <KRAStep data={data} updateField={updateField} />;
       default:
@@ -633,12 +704,78 @@ function PumpsStep({ data, updateField }: StepProps) {
   );
 }
 
-function PricingStep({ data, updateField }: StepProps) {
+function PricingStep({ data, updateField, isDetectingPrices, autoDetectedPrices, onRefreshPrices, priceDetectionError }: StepProps & {
+  isDetectingPrices?: boolean;
+  autoDetectedPrices?: FuelPrices | null;
+  onRefreshPrices?: () => void;
+  priceDetectionError?: string | null;
+}) {
+  // Determine currency symbol based on auto-detected location
+  const getCurrencySymbol = () => {
+    if (autoDetectedPrices?.currencySymbol) {
+      return autoDetectedPrices.currencySymbol + " ";
+    }
+    return DEFAULT_CURRENCY;
+  };
+
   return (
     <div className="space-y-6">
+      {/* Auto-detection status banner */}
+      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl p-4 border border-blue-200 dark:border-blue-800">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            {isDetectingPrices ? (
+              <div className="animate-spin w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full" />
+            ) : autoDetectedPrices ? (
+              <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
+                <Check size={12} className="text-white" />
+              </div>
+            ) : (
+              <div className="w-5 h-5 bg-slate-400 rounded-full flex items-center justify-center">
+                <MapPin size={12} className="text-white" />
+              </div>
+            )}
+            <div>
+              {isDetectingPrices ? (
+                <p className="text-sm font-medium text-blue-700 dark:text-blue-300">
+                  Detecting location and fuel prices...
+                </p>
+              ) : autoDetectedPrices ? (
+                <>
+                  <p className="text-sm font-medium text-green-700 dark:text-green-300">
+                    Prices auto-detected for {autoDetectedPrices.location}
+                  </p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Source: {autoDetectedPrices.source}
+                  </p>
+                </>
+              ) : priceDetectionError ? (
+                <p className="text-sm font-medium text-amber-700 dark:text-amber-300">
+                  Using default prices
+                </p>
+              ) : (
+                <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                  Prices will be auto-detected based on your location
+                </p>
+              )}
+            </div>
+          </div>
+          {!isDetectingPrices && (
+            <button
+              onClick={onRefreshPrices}
+              className="flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200 transition-colors"
+              title="Refresh prices"
+            >
+              <RefreshCw size={14} />
+              Refresh
+            </button>
+          )}
+        </div>
+      </div>
+
       <p className="text-sm text-slate-500 dark:text-slate-400">
         Set your current fuel prices. These are used for sales calculations and
-        receipts.
+        receipts. Prices have been pre-filled based on your detected location.
       </p>
 
       <div className="grid grid-cols-2 gap-6">
@@ -651,8 +788,8 @@ function PricingStep({ data, updateField }: StepProps) {
             </span>
           </div>
           <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-lg font-semibold text-green-600">
-              {DEFAULT_CURRENCY}
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-lg font-semibold text-green-600 dark:text-green-400">
+              {getCurrencySymbol()}
             </span>
             <input
               type="number"
@@ -675,8 +812,8 @@ function PricingStep({ data, updateField }: StepProps) {
             </span>
           </div>
           <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-lg font-semibold text-amber-600">
-              {DEFAULT_CURRENCY}
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-lg font-semibold text-amber-600 dark:text-amber-400">
+              {getCurrencySymbol()}
             </span>
             <input
               type="number"
