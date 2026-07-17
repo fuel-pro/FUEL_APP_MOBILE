@@ -317,7 +317,7 @@ const TenantContext = createContext<TenantContextType | null>(null);
 
 export function TenantProvider({
   children,
-  detectedCountry = "US",
+  detectedCountry = "KE",
 }: {
   children: ReactNode;
   detectedCountry?: string;
@@ -555,7 +555,7 @@ export function useTenant(): TenantContextType {
       featureFlags: defaultFlags,
       isFeatureEnabled: () => true,
       visibleTabs: [],
-      detectedCountry: "US",
+      detectedCountry: "KE",
       setDetectedCountry: () => {},
       settings: defaultSettings(),
       updateSettings: () => {},

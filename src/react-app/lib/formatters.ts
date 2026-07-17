@@ -2,6 +2,8 @@
 // Dynamic Formatting & Compliance Adapter for all 250+ countries
 
 import { WORLD_PAYMENT_CONFIGS } from "@/react-app/config/worldPaymentConfigs";
+// Unified tax rates - single source of truth
+import { getVATRate } from "@/react-app/config/pricing";
 
 // ─── Currency formatter with Intl.NumberFormat ───
 export function formatCurrency(
@@ -156,38 +158,10 @@ export function formatPercent(value: number, locale?: string): string {
   }
 }
 
-// ─── Tax rate lookup ───
+// ─── Tax rate lookup - uses unified tax rates from config/pricing.ts ───
 export function getTaxRate(country: string): number {
-  const rates: Record<string, number> = {
-    KE: 0.16,
-    UG: 0.18,
-    TZ: 0.18,
-    NG: 0.075,
-    ZA: 0.15,
-    GH: 0.15,
-    RW: 0.18,
-    ET: 0.15,
-    US: 0,
-    GB: 0.2,
-    DE: 0.19,
-    FR: 0.2,
-    IT: 0.22,
-    ES: 0.21,
-    NL: 0.21,
-    BR: 0.17,
-    MX: 0.16,
-    AR: 0.21,
-    CA: 0.13,
-    AU: 0.1,
-    IN: 0.18,
-    CN: 0.13,
-    JP: 0.1,
-    KR: 0.1,
-    SG: 0.09,
-    AE: 0.05,
-    SA: 0.15,
-  };
-  return rates[country.toUpperCase()] ?? 0;
+  // Use unified tax rates from config/pricing.ts
+  return getVATRate(country.toUpperCase());
 }
 
 // ─── Calculate price with tax ───

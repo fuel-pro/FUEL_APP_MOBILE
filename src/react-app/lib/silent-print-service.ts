@@ -8,11 +8,14 @@
  * - Support for receipts, reports, and documents
  * - Offline-first with local queuing
  * - IndexedDB persistence for print queue
+ * 
+ * Uses unified currency symbols from config/pricing.ts
  */
 
 import { CloudStorage } from './cloudStorage';
-import type { ReceiptData } from './pos/printer-service';
-import { printerService } from './pos/printer-service';
+import type { ReceiptData, getReceiptCurrency } from './pos/printer-service';
+import { printerService, getReceiptCurrency as getCurrencyInfo } from './pos/printer-service';
+import { getCurrencySymbol } from './currency';
 
 export interface SilentPrintJob {
   id: string;
@@ -468,22 +471,22 @@ class SilentPrintService {
           ${receipt.items.map(item => `
             <div style="display: flex; justify-content: space-between; padding: 1mm 0;">
               <span>${item.name} x${item.quantity}</span>
-              <span>${receipt.currency || 'Ksh'} ${item.total.toLocaleString()}</span>
+              <span>${getCurrencySymbol(receipt.currencyCode) || 'KSh'} ${item.total.toLocaleString()}</span>
             </div>
           `).join('')}
         </div>
         <div style="border-top: 1px dashed #000; padding-top: 3mm; margin-top: 3mm;">
-          <div style="display: flex; justify-content: space-between;">Subtotal: <span>${receipt.currency || 'Ksh'} ${receipt.subtotal.toLocaleString()}</span></div>
-          ${receipt.discount > 0 ? `<div style="display: flex; justify-content: space-between;">Discount: <span>-${receipt.currency || 'Ksh'} ${receipt.discount.toLocaleString()}</span></div>` : ''}
-          ${receipt.tax > 0 ? `<div style="display: flex; justify-content: space-between;">Tax (VAT): <span>${receipt.currency || 'Ksh'} ${receipt.tax.toLocaleString()}</span></div>` : ''}
+          <div style="display: flex; justify-content: space-between;">Subtotal: <span>${getCurrencySymbol(receipt.currencyCode) || 'KSh'} ${receipt.subtotal.toLocaleString()}</span></div>
+          ${receipt.discount > 0 ? `<div style="display: flex; justify-content: space-between;">Discount: <span>-${getCurrencySymbol(receipt.currencyCode) || 'KSh'} ${receipt.discount.toLocaleString()}</span></div>` : ''}
+          ${receipt.tax > 0 ? `<div style="display: flex; justify-content: space-between;">Tax (VAT): <span>${getCurrencySymbol(receipt.currencyCode) || 'KSh'} ${receipt.tax.toLocaleString()}</span></div>` : ''}
           <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: 12pt; margin-top: 2mm;">
-            <span>TOTAL:</span><span>${receipt.currency || 'Ksh'} ${receipt.total.toLocaleString()}</span>
+            <span>TOTAL:</span><span>${getCurrencySymbol(receipt.currencyCode) || 'KSh'} ${receipt.total.toLocaleString()}</span>
           </div>
         </div>
         <div style="border-top: 1px dashed #000; padding-top: 3mm; margin-top: 3mm;">
           <div style="display: flex; justify-content: space-between;">Payment: <span>${receipt.paymentMethod?.toUpperCase()}</span></div>
-          <div style="display: flex; justify-content: space-between;">Paid: <span>${receipt.currency || 'Ksh'} ${receipt.amountPaid.toLocaleString()}</span></div>
-          ${receipt.change > 0 ? `<div style="display: flex; justify-content: space-between; font-weight: bold;">CHANGE: <span>${receipt.currency || 'Ksh'} ${receipt.change.toLocaleString()}</span></div>` : ''}
+          <div style="display: flex; justify-content: space-between;">Paid: <span>${getCurrencySymbol(receipt.currencyCode) || 'KSh'} ${receipt.amountPaid.toLocaleString()}</span></div>
+          ${receipt.change > 0 ? `<div style="display: flex; justify-content: space-between; font-weight: bold;">CHANGE: <span>${getCurrencySymbol(receipt.currencyCode) || 'KSh'} ${receipt.change.toLocaleString()}</span></div>` : ''}
         </div>
         <div style="text-align: center; margin-top: 5mm; font-size: 8pt;">
           ${receipt.footerMessage || 'E&OE. Prices include VAT where applicable.'}<br/>
@@ -559,16 +562,16 @@ class SilentPrintService {
               <tr>
                 <td style="border: 1px solid #ddd; padding: 8px;">${item.desc || item.name || ''}</td>
                 <td style="border: 1px solid #ddd; padding: 8px;">${item.qty || 1}</td>
-                <td style="border: 1px solid #ddd; padding: 8px;">${invoiceData.currency || 'Ksh'} ${(item.price || 0).toLocaleString()}</td>
-                <td style="border: 1px solid #ddd; padding: 8px;">${invoiceData.currency || 'Ksh'} ${(item.total || item.qty * item.price || 0).toLocaleString()}</td>
+                <td style="border: 1px solid #ddd; padding: 8px;">${getCurrencySymbol(invoiceData.currencyCode || invoiceData.currency) || 'KSh'} ${(item.price || 0).toLocaleString()}</td>
+                <td style="border: 1px solid #ddd; padding: 8px;">${getCurrencySymbol(invoiceData.currencyCode || invoiceData.currency) || 'KSh'} ${(item.total || item.qty * item.price || 0).toLocaleString()}</td>
               </tr>
             `).join('')}
           </tbody>
         </table>
         <div style="text-align: right;">
-          <p><strong>Subtotal:</strong> ${invoiceData.currency || 'Ksh'} ${(invoiceData.subtotal || 0).toLocaleString()}</p>
-          ${invoiceData.tax > 0 ? `<p><strong>Tax:</strong> ${invoiceData.currency || 'Ksh'} ${invoiceData.tax.toLocaleString()}</p>` : ''}
-          <p style="font-size: 16pt;"><strong>Total Due:</strong> ${invoiceData.currency || 'Ksh'} ${(invoiceData.total || invoiceData.totalDue || 0).toLocaleString()}</p>
+          <p><strong>Subtotal:</strong> ${getCurrencySymbol(invoiceData.currencyCode || invoiceData.currency) || 'KSh'} ${(invoiceData.subtotal || 0).toLocaleString()}</p>
+          ${invoiceData.tax > 0 ? `<p><strong>Tax:</strong> ${getCurrencySymbol(invoiceData.currencyCode || invoiceData.currency) || 'KSh'} ${invoiceData.tax.toLocaleString()}</p>` : ''}
+          <p style="font-size: 16pt;"><strong>Total Due:</strong> ${getCurrencySymbol(invoiceData.currencyCode || invoiceData.currency) || 'KSh'} ${(invoiceData.total || invoiceData.totalDue || 0).toLocaleString()}</p>
         </div>
       </div>
     `;

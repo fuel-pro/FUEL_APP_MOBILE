@@ -1,5 +1,6 @@
 // ESC/POS Printer Service - Handles thermal printer communication
 import { hardwareManager, type PrinterDevice } from './hardware-manager';
+import { getCurrencySymbol } from '@/react-app/lib/currency';
 
 // Import type-only to ensure USB types are available
 import type {} from './hardware-manager';
@@ -22,6 +23,34 @@ export interface ReceiptData {
   attendantName: string;
   transactionRef?: string;
   footerMessage?: string;
+  currencyCode?: string; // Currency code (KES, UGX, etc.)
+  currencySymbol?: string; // Currency symbol (KSh, USh, etc.)
+}
+
+// Helper to get currency info for receipts
+export function getReceiptCurrency(currencyCode?: string): { code: string; symbol: string } {
+  const code = currencyCode || getDetectedCurrencyForReceipt();
+  const symbol = getCurrencySymbol(code);
+  return { code, symbol };
+}
+
+// Get detected currency for receipt (used when not specified)
+function getDetectedCurrencyForReceipt(): string {
+  try {
+    // Try to get from station context
+    const stationCurrency = localStorage.getItem("fuelpro_station_currency");
+    if (stationCurrency) return stationCurrency;
+    
+    // Try to get from location context
+    const location = localStorage.getItem("fuelpro_location_country");
+    if (location) {
+      const parsed = JSON.parse(location);
+      if (parsed.currency) return parsed.currency;
+    }
+  } catch {}
+  
+  // Fallback to Kenya
+  return "KES";
 }
 
 export interface ReceiptItem {

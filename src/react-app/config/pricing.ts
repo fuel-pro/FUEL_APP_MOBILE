@@ -266,6 +266,67 @@ export function getKenyaFuelTypes(): Array<{ id: string; name: string; price: nu
   ];
 }
 
+// ============================================
+// UNIFIED TAX RATES (Single Source of Truth)
+// Used across: regions.ts, compliance.ts, formatters.ts
+// ============================================
+
+export const TAX_RATES: Record<string, {
+  vatRate: number;
+  exciseDuty?: number;
+  withholdingTax?: number;
+  roadLevy?: number;
+  description: string;
+}> = {
+  KE: { vatRate: 0.16, exciseDuty: 0.2195, withholdingTax: 0.05, roadLevy: 0.25, description: "Kenya - VAT 16%, Excise 21.95%, Withholding 5%, Road Levy 25%/" },
+  UG: { vatRate: 0.18, withholdingTax: 0.06, description: "Uganda - VAT 18%, Withholding 6%" },
+  TZ: { vatRate: 0.18, withholdingTax: 0.10, description: "Tanzania - VAT 18%, Withholding 10%" },
+  NG: { vatRate: 0.075, description: "Nigeria - VAT 7.5%" },
+  ZA: { vatRate: 0.15, description: "South Africa - VAT 15%" },
+  GH: { vatRate: 0.15, description: "Ghana - VAT 15%" },
+  RW: { vatRate: 0.18, description: "Rwanda - VAT 18%" },
+  ET: { vatRate: 0.15, description: "Ethiopia - VAT 15%" },
+};
+
+/**
+ * Get VAT rate for a country
+ */
+export function getVATRate(countryCode: string): number {
+  return TAX_RATES[countryCode]?.vatRate || 0.16; // Default to 16%
+}
+
+/**
+ * Get all tax rates for a country
+ */
+export function getTaxRates(countryCode: string) {
+  return TAX_RATES[countryCode] || TAX_RATES.KE;
+}
+
+/**
+ * Calculate tax amount from base price
+ */
+export function calculateTax(basePrice: number, countryCode: string): {
+  vat: number;
+  excise: number;
+  withholding: number;
+  roadLevy: number;
+  totalTax: number;
+} {
+  const rates = getTaxRates(countryCode);
+  const vat = basePrice * (rates.vatRate || 0);
+  const excise = basePrice * (rates.exciseDuty || 0);
+  const withholding = basePrice * (rates.withholdingTax || 0);
+  const roadLevy = basePrice * (rates.roadLevy || 0);
+  
+  return {
+    vat,
+    excise,
+    withholding,
+    roadLevy,
+    totalTax: vat + excise + withholding + roadLevy,
+  };
+}
+
 // Export everything as default for convenience
 export default {
   KENYA_BASE_PRICES,
@@ -275,10 +336,14 @@ export default {
   DEFAULT_PRICES,
   FUEL_TYPES,
   PRICE_KEYS,
+  TAX_RATES,
   getBasePrice,
   getCountryPrice,
   getKenyaCityPrice,
   getClosestKenyaCityPrice,
   formatPrice,
   getKenyaFuelTypes,
+  getVATRate,
+  getTaxRates,
+  calculateTax,
 };
