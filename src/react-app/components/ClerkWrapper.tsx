@@ -5,6 +5,9 @@ import { ReactNode } from "react";
 const publishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 const isClerkConfigured = !!publishableKey;
 
+// Use custom Clerk frontend API if available
+const clerkFrontendApi = import.meta.env.VITE_CLERK_FRONTEND_API || "clerk.fuelpro.com";
+
 interface ClerkWrapperProps {
   children: ReactNode;
 }
@@ -17,6 +20,7 @@ export default function ClerkWrapper({ children }: ClerkWrapperProps) {
   return (
     <ClerkProvider 
       publishableKey={publishableKey}
+      frontendApi={clerkFrontendApi}
       afterSignInUrl="/#/dashboard"
       afterSignUpUrl="/#/welcome"
       afterSignOutUrl="/#/sign-in"
