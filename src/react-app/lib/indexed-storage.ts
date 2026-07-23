@@ -11,7 +11,8 @@
  * - Full offline capability with IndexedDB
  */
 
-import { CloudStorage, logAudit } from './cloudStorage';
+import { cloudStorage } from './cloudStorage';
+const CloudStorage = cloudStorage;
 
 export interface StorageEntry<T = any> {
   key: string;

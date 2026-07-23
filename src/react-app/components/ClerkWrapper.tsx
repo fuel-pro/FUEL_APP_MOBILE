@@ -53,7 +53,7 @@ export default function ClerkWrapper({ children }: ClerkWrapperProps) {
   return (
     <ClerkProvider 
       publishableKey={publishableKey}
-      frontendApi={clerkFrontendApi}
+      routerDebug={true}
       afterSignInUrl="/#/dashboard"
       afterSignUpUrl="/#/welcome"
       afterSignOutUrl="/#/sign-in"

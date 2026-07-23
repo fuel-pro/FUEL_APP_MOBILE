@@ -25,5 +25,5 @@
     "noUncheckedSideEffectImports": false,
     "types": ["node", "vite/client"]
   },
-  "include": ["src/react-app"]
+  "include": ["src/react-app", "api/router.ts"]
 }

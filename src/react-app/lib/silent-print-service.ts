@@ -12,10 +12,12 @@
  * Uses unified currency symbols from config/pricing.ts
  */
 
-import { CloudStorage } from './cloudStorage';
+import { cloudStorage } from './cloudStorage';
 import type { ReceiptData, getReceiptCurrency } from './pos/printer-service';
 import { printerService, getReceiptCurrency as getCurrencyInfo } from './pos/printer-service';
 import { getCurrencySymbol } from './currency';
+
+const CloudStorage = cloudStorage;
 
 export interface SilentPrintJob {
   id: string;

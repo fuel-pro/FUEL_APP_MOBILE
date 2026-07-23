@@ -7,8 +7,10 @@
 
 import { silentPrintService, type SilentPrintJob, type PrintSettings } from './silent-print-service';
 import { indexedStorage, type IndexedStorageStats } from './indexed-storage';
-import { cloudSync } from './cloudStorage';
+import { cloudStorage } from './cloudStorage';
 import type { ReceiptData } from './pos/printer-service';
+
+const cloudSync = cloudStorage;
 
 /**
  * Print Integration API
