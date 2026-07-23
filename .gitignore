@@ -21,6 +21,18 @@ dist-exe/
 !tsconfig*.json
 !vercel.json
 !manifest.json
+!firebase.json
+!firestore.rules
+!database.rules.json
+!storage.rules
+!firestore.indexes.json
+!.env.example
+!.firebaserc
+
+# Firebase service account (NEVER commit this!)
+service-account.json
+*service-account*.json
+*firebase-admin*.json
 
 .vercel
 .env*
