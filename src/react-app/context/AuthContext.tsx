@@ -28,6 +28,15 @@ async function getApiBaseAsync(): Promise<string> {
 // AUTH CONTEXT v6 - Production Mode
 // ============================================================
 
+// Demo mode - use local storage for authentication when backend is unavailable
+const DEMO_MODE = true;
+const DEMO_USERS = [
+  { email: "admin@fuelpro.demo", password: "admin123", name: "Admin User", role: "admin" },
+  { email: "manager@fuelpro.demo", password: "manager123", name: "Manager User", role: "manager" },
+  { email: "staff@fuelpro.demo", password: "staff123", name: "Staff User", role: "staff" },
+  { email: "demo@fuelpro.demo", password: "demo", name: "Demo User", role: "owner" },
+];
+
 export type AuthMethod = "google" | "email" | "username";
 
 export interface AuthIdentity {
@@ -206,6 +215,61 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setError(null);
 
       console.info("[AuthContext] Starting login for:", email);
+
+      // Demo mode - authenticate locally
+      if (DEMO_MODE) {
+        const demoUser = DEMO_USERS.find(u => u.email === email && u.password === password);
+        if (demoUser) {
+          console.info("[AuthContext] Demo login successful for:", demoUser.name);
+          const newUser: AuthIdentity = {
+            id: `demo_${Date.now()}`,
+            authId: `demo_${email}`,
+            authMethod: "email",
+            email: demoUser.email,
+            name: demoUser.name,
+            role: demoUser.role,
+            permissions: ["read", "write", "admin"],
+          };
+          const demoToken = `demo_token_${Date.now()}`;
+          setUser(newUser);
+          setToken(demoToken);
+          localStorage.setItem(TOKEN_STORAGE_KEY, demoToken);
+          localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(newUser));
+          broadcastAuthUpdate(newUser, demoToken);
+          setIsPending(false);
+          return { success: true };
+        } else {
+          // Try local storage users if not in demo
+          const localUsers = JSON.parse(localStorage.getItem("fuelpro_email_users") || "{}");
+          const found = Object.values(localUsers).find((u: any) => u.email === email && u.password === password);
+          if (found) {
+            const u = found as any;
+            console.info("[AuthContext] Local user login successful for:", u.name);
+            const newUser: AuthIdentity = {
+              id: `local_${Date.now()}`,
+              authId: `email_${email}`,
+              authMethod: "email",
+              email: u.email,
+              name: u.name,
+              role: u.role || "staff",
+              permissions: ["read", "write"],
+            };
+            const localToken = `local_token_${Date.now()}`;
+            setUser(newUser);
+            setToken(localToken);
+            localStorage.setItem(TOKEN_STORAGE_KEY, localToken);
+            localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(newUser));
+            broadcastAuthUpdate(newUser, localToken);
+            setIsPending(false);
+            return { success: true };
+          }
+          const errorMsg = "Invalid demo credentials. Try: demo@fuelpro.demo / demo";
+          setError(errorMsg);
+          setIsPending(false);
+          return { success: false, error: errorMsg };
+        }
+      }
+
       console.info("[AuthContext] API Base:", getApiBase());
       console.info("[AuthContext] Full URL:", `${getApiBase()}/auth/login`);
 
@@ -270,6 +334,51 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (email: string, password: string, name: string, retryCount = 0): Promise<boolean> => {
       setIsPending(true);
       setError(null);
+
+      // Demo mode - create local user
+      if (DEMO_MODE) {
+        // Check if email already exists in demo users
+        const existingDemo = DEMO_USERS.find(u => u.email === email);
+        if (existingDemo) {
+          setError("This email is already registered. Try logging in.");
+          setIsPending(false);
+          return false;
+        }
+        
+        // Check if email already exists in local storage
+        const localUsers = JSON.parse(localStorage.getItem("fuelpro_email_users") || "{}");
+        const existingLocal = Object.values(localUsers).find((u: any) => u.email === email);
+        if (existingLocal) {
+          setError("This email is already registered. Try logging in.");
+          setIsPending(false);
+          return false;
+        }
+
+        // Create local user
+        const userId = `local_${Date.now()}`;
+        const newUser: AuthIdentity = {
+          id: userId,
+          authId: `email_${email}`,
+          authMethod: "email",
+          email,
+          name,
+          role: "staff",
+          permissions: ["read", "write"],
+        };
+        
+        // Store in localStorage
+        localUsers[userId] = { email, password, name, role: "staff", createdAt: new Date().toISOString() };
+        localStorage.setItem("fuelpro_email_users", JSON.stringify(localUsers));
+        
+        const localToken = `local_token_${Date.now()}`;
+        setUser(newUser);
+        setToken(localToken);
+        localStorage.setItem(TOKEN_STORAGE_KEY, localToken);
+        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(newUser));
+        broadcastAuthUpdate(newUser, localToken);
+        setIsPending(false);
+        return true;
+      }
 
       try {
         const deviceId = getDeviceId();
