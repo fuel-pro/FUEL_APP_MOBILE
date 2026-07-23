@@ -14,6 +14,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   KENYA_BASE_PRICES,
+  KENYA_SPECIALTY_PRICES,
   REGIONAL_PRICES,
   DEFAULT_PRICES,
   getClosestKenyaCityPrice,
@@ -143,8 +144,8 @@ export function useFuelPrices() {
       petrol: KENYA_BASE_PRICES.petrol,
       diesel: KENYA_BASE_PRICES.diesel,
       kerosene: KENYA_BASE_PRICES.kerosene,
-      vPower: KENYA_BASE_PRICES.vPower || 214.35,
-      premiumDiesel: KENYA_BASE_PRICES.premiumDiesel || 213.72,
+      vPower: KENYA_SPECIALTY_PRICES.vPower || 214.35,
+      premiumDiesel: KENYA_SPECIALTY_PRICES.premiumDiesel || 213.72,
       lpg: 120.00,
       cng: 80.00,
       currency: "KES",

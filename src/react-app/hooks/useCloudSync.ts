@@ -9,6 +9,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { checkApiStatus, listRecords, createRecord, updateRecord, deleteRecord, Collections, getPendingCount, queuePendingChange } from "@/react-app/lib/restApiSync";
+import { apiRequest } from "@/react-app/lib/constants/api";
 
 // Types
 export interface CloudUser {
@@ -162,11 +163,11 @@ export function useCloudUsers() {
     
     try {
       // Use the backend's /api/users endpoint to get all registered users
-      const result = await apiRequest<{ users: any[]; pagination?: any }>("GET", "/api/users");
+      const result = await apiRequest<{ users: any[]; pagination?: any }>("/api/users", { method: "GET" });
       
-      if (result.success && result.data) {
+      if (result && result.users) {
         // Backend returns { users: [...] } format
-        const userData = result.data.users || result.data;
+        const userData = result.users;
         if (Array.isArray(userData)) {
           setUsers(userData.map((u: any) => ({
             id: u.id,
@@ -201,14 +202,14 @@ export function useCloudUsers() {
   }, []);
 	
   const updateUser = useCallback(async (id: string, data: Partial<CloudUser>) => {
-    const result = await apiRequest("PUT", `/api/users/${id}`, data);
+    const result = await apiRequest(`/api/users/${id}`, { method: "PUT", body: data });
     
-    if (result.success) {
+    if (result) {
       setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, ...data } : u)));
       return { success: true };
     }
     
-    return { success: false, error: result.error };
+    return { success: false, error: "Update failed" };
   }, []);
 
   return { users, loading, error, fetchUsers, addUser, updateUser };

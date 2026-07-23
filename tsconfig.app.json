@@ -23,6 +23,7 @@
     "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": false,
+    "noPropertyAccessFromIndexSignature": false,
     "types": ["node", "vite/client"]
   },
   "include": ["src/react-app"]

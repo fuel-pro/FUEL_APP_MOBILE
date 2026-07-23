@@ -32,8 +32,9 @@ const TOKEN_KEYS = [
 
 function getAuthToken(): string | null {
   for (const key of TOKEN_KEYS) {
+    let val: string | null = null;
     try {
-      const val = localStorage.getItem(key);
+      val = localStorage.getItem(key);
       if (!val) continue;
       
       // Try parsing as JSON
@@ -48,7 +49,7 @@ function getAuthToken(): string | null {
       }
     } catch {
       // If JSON parse fails, might be a plain token
-      if (key === "fuelpro_token" || key === "auth_token") {
+      if ((key === "fuelpro_token" || key === "auth_token") && val) {
         return val;
       }
     }
@@ -253,7 +254,7 @@ export function useBackendStations(): {
   stations: BackendStation[];
   isLoading: boolean;
   error: Error | null;
-  refresh: () => Promise<void>;
+  refresh: () => Promise<BackendSyncData | null>;
 } {
   const { syncData, isLoading, error, syncFromServer } = useBackendSync();
   
@@ -273,7 +274,7 @@ export function useBackendSales(): {
   stats: { totalRevenue: string; totalSales: number; totalLiters: string };
   isLoading: boolean;
   error: Error | null;
-  refresh: () => Promise<void>;
+  refresh: () => Promise<BackendSyncData | null>;
 } {
   const { syncData, isLoading, error, syncFromServer } = useBackendSync();
   
