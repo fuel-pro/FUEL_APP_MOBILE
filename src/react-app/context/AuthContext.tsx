@@ -7,29 +7,10 @@ import {
   useEffect,
   useRef,
 } from "react";
-import {
-  onAuthStateChanged,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  signOut as firebaseSignOut,
-  sendPasswordResetEmail,
-  updateProfile,
-  getIdToken,
-  GoogleAuthProvider,
-  signInWithPopup,
-} from "firebase/auth";
-import { getFirebaseAuth } from "@/firebase/client";
-import { browserLocalPersistence, setPersistence } from "firebase/auth";
-
-// Lazy API base URL getter using dynamic import to avoid circular deps
-let _apiBase: string | null = null;
-function getApiBase(): string {
-  if (_apiBase) return _apiBase;
-  return "/api";
-}
+import { getClerk, initClerk, getCurrentUser, getUserToken, signOut as clerkSignOut, getAuthHeaders } from "@/firebase/clerk";
 
 // ============================================================
-// AUTH CONTEXT v7 - Firebase Production Mode (No Demo)
+// AUTH CONTEXT v8 - Clerk Production Mode (Real Authentication)
 // ============================================================
 
 export type AuthMethod = "google" | "email" | "username";
@@ -141,53 +122,62 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const handleLogoutRef = useRef<(() => void) | null>(null);
   const refreshAuthRef = useRef<(() => Promise<boolean>) | null>(null);
 
-  // Initialize - listen to Firebase auth state
+  // Initialize - listen to Clerk auth state
   useEffect(() => {
     let cancelled = false;
-    let unsubscribe: (() => void) | null = null;
 
     const initAuth = async () => {
       try {
-        const auth = getFirebaseAuth();
+        // Initialize Clerk
+        const clerk = await initClerk();
+        if (cancelled || !clerk) return;
         
-        // Listen to Firebase auth state changes
-        unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+        // Check if user is signed in
+        const clerkUser = getCurrentUser();
+        if (clerkUser) {
+          const clerkToken = await getUserToken();
+          setUser(clerkUser);
+          setToken(clerkToken);
+          localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(clerkUser));
+          if (clerkToken) localStorage.setItem(TOKEN_STORAGE_KEY, clerkToken);
+        }
+        
+        // Set up auth state listener
+        const unsubscribe = clerk.addListener(({ session }) => {
           if (cancelled) return;
           
-          if (firebaseUser) {
-            try {
-              // Get fresh ID token
-              const idToken = await getIdToken(firebaseUser, true);
-              
-              const newUser: AuthIdentity = {
-                id: firebaseUser.uid,
-                authId: `firebase_${firebaseUser.uid}`,
-                authMethod: "email",
-                email: firebaseUser.email || "",
-                name: firebaseUser.displayName || firebaseUser.email?.split("@")[0] || "User",
-                picture: firebaseUser.photoURL || undefined,
-                role: "owner", // Default role
-                permissions: ["read", "write"],
-              };
-              
-              setUser(newUser);
-              setToken(idToken);
-              localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(newUser));
-              localStorage.setItem(TOKEN_STORAGE_KEY, idToken);
-            } catch (err) {
-              console.error("[AuthContext] Error getting Firebase token:", err);
-              // Use cached data if available
+          if (session?.user) {
+            const newUser: AuthIdentity = {
+              id: session.user.id,
+              authId: `clerk_${session.user.id}`,
+              authMethod: "email",
+              email: session.user.primaryEmailAddress?.emailAddress || "",
+              name: session.user.fullName || session.user.firstName || "User",
+              picture: session.user.imageUrl || undefined,
+              role: "owner",
+              permissions: ["read", "write"],
+            };
+            
+            getUserToken().then(t => {
               if (!cancelled) {
-                const cachedUser = loadUser();
-                if (cachedUser) setUser(cachedUser);
+                setUser(newUser);
+                setToken(t);
+                localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(newUser));
+                if (t) localStorage.setItem(TOKEN_STORAGE_KEY, t);
               }
-            }
+            });
           } else {
-            // User signed out
             setUser(null);
             setToken(null);
+            localStorage.removeItem(AUTH_STORAGE_KEY);
+            localStorage.removeItem(TOKEN_STORAGE_KEY);
           }
         });
+        
+        return () => {
+          cancelled = true;
+          unsubscribe();
+        };
       } catch (err) {
         console.error("[AuthContext] Auth initialization error:", err);
         // Use cached data if available
@@ -199,11 +189,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     initAuth();
-    
-    return () => {
-      cancelled = true;
-      unsubscribe?.();
-    };
   }, []);
 
   // Broadcast auth update - stable callback
