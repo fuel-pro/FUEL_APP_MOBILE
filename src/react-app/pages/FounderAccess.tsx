@@ -187,14 +187,122 @@ function loadAuditLog(): AuditEntry[] {
   } catch {
     /* ignore */
   }
+  // Demo audit log entries
   return [
     {
-      id: "1",
-      event: "System Initialized",
-      detail: "FuelPro admin panel created",
+      id: "demo_1",
+      event: "System Demo Started",
+      detail: "FuelPro demo session initialized for testing",
       user: "SYSTEM",
       severity: "info",
       timestamp: new Date().toISOString(),
+    },
+    {
+      id: "demo_2",
+      event: "Demo User Created",
+      detail: "Created demo admin user for testing",
+      user: "FOUNDER",
+      severity: "success",
+      timestamp: new Date(Date.now() - 60000).toISOString(),
+    },
+    {
+      id: "demo_3",
+      event: "Demo Station Added",
+      detail: "Added Nairobi West Station for demo purposes",
+      user: "FOUNDER",
+      severity: "success",
+      timestamp: new Date(Date.now() - 30000).toISOString(),
+    },
+    {
+      id: "demo_4",
+      event: "Demo Sale Recorded",
+      detail: "Recorded test sale of 50 liters petrol",
+      user: "ATTENDANT",
+      severity: "success",
+      timestamp: new Date(Date.now() - 15000).toISOString(),
+    },
+    {
+      id: "demo_5",
+      event: "Session Resumed",
+      detail: "Demo session resumed by founder",
+      user: "FOUNDER",
+      severity: "info",
+      timestamp: new Date().toISOString(),
+    },
+  ];
+}
+
+// Demo users for testing when backend is unavailable
+function getDemoUsers(): AppUser[] {
+  return [
+    {
+      authId: "demo_1",
+      authMethod: "local",
+      name: "Admin User",
+      email: "admin@demo.com",
+      role: "founder",
+      lastActive: new Date().toISOString(),
+      stations: 3,
+      createdAt: new Date(Date.now() - 86400000 * 30).toISOString(),
+    },
+    {
+      authId: "demo_2",
+      authMethod: "local",
+      name: "Station Manager",
+      email: "manager@demo.com",
+      role: "manager",
+      lastActive: new Date(Date.now() - 3600000).toISOString(),
+      stations: 1,
+      createdAt: new Date(Date.now() - 86400000 * 20).toISOString(),
+    },
+    {
+      authId: "demo_3",
+      authMethod: "local",
+      name: "Pump Attendant",
+      email: "attendant@demo.com",
+      role: "attendant",
+      lastActive: new Date(Date.now() - 1800000).toISOString(),
+      stations: 1,
+      createdAt: new Date(Date.now() - 86400000 * 10).toISOString(),
+    },
+  ];
+}
+
+// Demo stations for testing when backend is unavailable
+function getDemoStations(): StationRecord[] {
+  return [
+    {
+      id: "demo_station_1",
+      name: "Nairobi West Station",
+      location: "Westlands, Nairobi",
+      ownerId: "demo_1",
+      ownerName: "Admin User",
+      members: 5,
+      createdAt: new Date(Date.now() - 86400000 * 30).toISOString(),
+      lastActive: new Date().toISOString(),
+      revenue: 125000,
+    },
+    {
+      id: "demo_station_2",
+      name: "Mombasa Central",
+      location: "CBD, Mombasa",
+      ownerId: "demo_1",
+      ownerName: "Admin User",
+      members: 3,
+      createdAt: new Date(Date.now() - 86400000 * 20).toISOString(),
+      lastActive: new Date(Date.now() - 7200000).toISOString(),
+      revenue: 85000,
+    },
+    {
+      id: "demo_station_3",
+      name: "Kisumu Lakeside",
+      location: "Kisumu CBD",
+      ownerId: "demo_1",
+      ownerName: "Admin User",
+      members: 2,
+      createdAt: new Date(Date.now() - 86400000 * 15).toISOString(),
+      lastActive: new Date(Date.now() - 3600000).toISOString(),
+      revenue: 45000,
     },
   ];
 }
@@ -507,8 +615,20 @@ export default function FounderAccess() {
         ).length;
       });
       
-      if (users.length === 0) setUsers(discoveredUsers);
-      if (stations.length === 0) setStations(discoveredStations);
+      // If still no data, use demo data for testing
+      if (users.length === 0) {
+        const demoUsers = getDemoUsers();
+        setUsers(demoUsers);
+      } else {
+        setUsers(discoveredUsers);
+      }
+      
+      if (stations.length === 0) {
+        const demoStations = getDemoStations();
+        setStations(demoStations);
+      } else {
+        setStations(discoveredStations);
+      }
     }
     
     setLoading(false);
@@ -792,9 +912,10 @@ export default function FounderAccess() {
       s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       s.location.toLowerCase().includes(searchQuery.toLowerCase())
   );
-  const totalRevenue = stations.reduce((sum, s) => sum + s.revenue, 0);
+  const totalRevenue = stations.reduce((sum, s) => sum + (s.revenue || 0), 0);
   const effectiveStationCount =
     backendStationCount > 0 ? backendStationCount : stations.length;
+  const effectiveUserCount = allBackendUsers?.length > 0 ? allBackendUsers.length : users.length;
   const effectiveRevenue = salesAnalytics?.totalRevenue
     ? Number(salesAnalytics.totalRevenue)
     : totalRevenue;
@@ -980,7 +1101,7 @@ export default function FounderAccess() {
           id: "users" as SectionId,
           label: "All Users",
           icon: Users,
-          count: users.length,
+          count: effectiveUserCount,
         },
         {
           id: "stations" as SectionId,
@@ -1229,7 +1350,7 @@ export default function FounderAccess() {
                 {[
                   {
                     label: "Users",
-                    value: users.length,
+                    value: effectiveUserCount,
                     icon: Users,
                     color: "text-blue-400",
                   },

@@ -147,7 +147,7 @@ export default function Invoice() {
       const invoiceData = {
         invoiceNumber: getInvoiceNumber(),
         stationName: state.companyData.name || 'FuelPro Station',
-        stationLocation: state.companyData.poBox || state.companyData.address || '',
+        stationLocation: state.companyData.poBox || state.companyData.physicalAddress || '',
         date: invoiceDate,
         time: new Date().toLocaleTimeString(),
         customerName,

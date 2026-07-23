@@ -1,11 +1,11 @@
 // ============================================================
-import { KENYA_BASE_PRICES, KENYA_CITIES } from "@/react-app/config/pricing";
 // DataSyncService - Comprehensive auto-update engine for FuelPro
 // Fetches real-time data from credible internet sources
 // Auto-syncs with precise location for exact fuel prices
 // ============================================================
 
 import { getCountryById } from "@/react-app/config/countries";
+import { KENYA_BASE_PRICES } from "@/react-app/config/pricing";
 
 // --- AI-POWERED PRICE ESTIMATION ---
 // Since direct API access to EPRA is limited, we use AI estimation

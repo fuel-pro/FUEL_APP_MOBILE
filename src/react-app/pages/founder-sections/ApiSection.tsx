@@ -245,7 +245,7 @@ export default function ApiSection({ logAudit }: Props) {
     const hook: Webhook = {
       id: `wh_comp_${region}_${Date.now()}`,
       url: `${config.endpoint}/webhook`,
-      events: config.events,
+      events: [...config.events],
       active: true,
       createdAt: new Date().toISOString(),
       lastTriggered: null,

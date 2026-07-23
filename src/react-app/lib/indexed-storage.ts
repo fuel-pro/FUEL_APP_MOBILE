@@ -11,7 +11,8 @@
  * - Full offline capability with IndexedDB
  */
 
-import { CloudStorage, logAudit } from './cloudStorage';
+import { CloudStorage, logAudit } from '@/react-app/services/CloudStorageService';
+import { cloudStorage } from './cloudStorage';
 
 export interface StorageEntry<T = any> {
   key: string;
@@ -177,7 +178,7 @@ class IndexedDBStore {
       const range = IDBKeyRange.upperBound(now);
       const request = index.getAllKeys(range);
       request.onerror = () => reject(request.error);
-      request.onsuccess = () => resolve(request.result || []);
+      request.onsuccess = () => resolve((request.result || []).map(key => String(key)));
     });
   }
 
@@ -531,7 +532,7 @@ class IndexedStorageService {
       for (const item of toSync) {
         try {
           // Try to sync to cloud
-          const { cloudSync } = await import('./cloudStorage');
+          const { cloudSync } = await import('@/react-app/services/CloudStorageService');
           if (cloudSync && typeof cloudSync.isEnabled === 'function' && cloudSync.isEnabled()) {
             await cloudSync.queueSync(item.key, item.value);
           }

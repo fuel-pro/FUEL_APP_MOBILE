@@ -12,7 +12,7 @@
  * Uses unified currency symbols from config/pricing.ts
  */
 
-import { CloudStorage } from './cloudStorage';
+import { CloudStorage } from '@/react-app/services/CloudStorageService';
 import type { ReceiptData, getReceiptCurrency } from './pos/printer-service';
 import { printerService, getReceiptCurrency as getCurrencyInfo } from './pos/printer-service';
 import { getCurrencySymbol } from './currency';
@@ -46,6 +46,7 @@ export interface PrintSettings {
   timeout?: number;
   autoRetry?: boolean;
   fallbackToBrowser?: boolean;
+  printerId?: string;
 }
 
 const DEFAULT_SETTINGS: PrintSettings = {
@@ -264,7 +265,7 @@ class SilentPrintService {
 
     // Log to audit if available
     try {
-      const { logAudit } = await import('./cloudStorage');
+      const { logAudit } = await import('@/react-app/services/CloudStorageService');
       await logAudit({
         stationId: this.getStationId(),
         action: 'print_queued',

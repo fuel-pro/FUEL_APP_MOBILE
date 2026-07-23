@@ -25,6 +25,9 @@ export interface ReceiptData {
   footerMessage?: string;
   currencyCode?: string; // Currency code (KES, UGX, etc.)
   currencySymbol?: string; // Currency symbol (KSh, USh, etc.)
+  settings?: {
+    paperWidth?: number;
+  };
 }
 
 // Helper to get currency info for receipts

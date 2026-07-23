@@ -88,11 +88,18 @@ class Logger {
    * Log with custom level
    */
   log(level: LogLevel, message: string, ...args: unknown[]): void {
-    const levels = ["debug", "info", "warn", "error"] as const;
-    const method = levels[level] as keyof typeof console;
-    if (currentLevel <= level) {
-      console[method](this.formatMessage(message), ...args);
-    }
+    if (level === LOG_LEVELS.NONE) return;
+    if (currentLevel > level) return;
+    
+    const levelMethods: Record<number, (...data: unknown[]) => void> = {
+      [LOG_LEVELS.DEBUG]: console.debug.bind(console),
+      [LOG_LEVELS.INFO]: console.info.bind(console),
+      [LOG_LEVELS.WARN]: console.warn.bind(console),
+      [LOG_LEVELS.ERROR]: console.error.bind(console),
+    };
+    
+    const logFn = levelMethods[level] || console.log.bind(console);
+    logFn(this.formatMessage(message), ...args);
   }
 }
 
