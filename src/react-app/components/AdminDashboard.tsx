@@ -103,7 +103,7 @@ export default function AdminDashboard({ user }: AdminDashboardProps) {
               <div>
                 <h1 className="font-bold">FuelPro Admin</h1>
                 <p className="text-xs text-gray-400">
-                  {user.role.toUpperCase()}
+                  {user.role?.toUpperCase() || "USER"}
                 </p>
               </div>
             )}
@@ -217,16 +217,31 @@ function OverviewTab({ user }: { user: AdminUser }) {
     services: { api: "up", db: "up", cache: "up" },
   });
 
+  // Firebase data state
+  const [userCount, setUserCount] = useState(0);
+  const [stationCount, setStationCount] = useState(0);
+
+  // Load Firebase data on mount
+  useEffect(() => {
+    const loadData = async () => {
+      const users = await AdminAPI.getUsers();
+      const stations = await AdminAPI.getStations();
+      setUserCount(users.length);
+      setStationCount(stations.length);
+    };
+    loadData();
+  }, []);
+
   const statCards = [
     {
       label: "Total Users",
-      value: AdminAPI.getMockUsers().length,
+      value: userCount,
       icon: Users,
       color: "blue",
     },
     {
       label: "Active Stations",
-      value: AdminAPI.getMockStations().length,
+      value: stationCount,
       icon: Server,
       color: "green",
     },
@@ -380,14 +395,30 @@ function OverviewTab({ user }: { user: AdminUser }) {
 
 // ─── Users Tab ───
 function UsersTab() {
-  const [users] = useState(AdminAPI.getMockUsers());
+  const [users, setUsers] = useState<any[]>([]);
   const [search, setSearch] = useState("");
   const [showAddModal, setShowAddModal] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  // Load users from Firebase
+  useEffect(() => {
+    const loadUsers = async () => {
+      try {
+        const data = await AdminAPI.getUsers();
+        setUsers(data);
+      } catch (error) {
+        console.error("[AdminDashboard] Error loading users:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadUsers();
+  }, []);
 
   const filteredUsers = users.filter(
     u =>
-      u.name.toLowerCase().includes(search.toLowerCase()) ||
-      u.email.toLowerCase().includes(search.toLowerCase())
+      u.name?.toLowerCase().includes(search.toLowerCase()) ||
+      u.email?.toLowerCase().includes(search.toLowerCase())
   );
 
   return (
@@ -401,8 +432,9 @@ function UsersTab() {
           />
           <input
             type="text"
-            placeholder="Search users..."
+            placeholder={loading ? "Loading users..." : "Search users..."}
             value={search}
+            disabled={loading}
             onChange={e => setSearch(e.target.value)}
             className="pl-10 pr-4 py-2 w-64 border rounded-lg dark:bg-gray-800 dark:border-gray-700"
           />
@@ -468,7 +500,7 @@ function UsersTab() {
                             : "bg-gray-100 text-gray-700"
                     }`}
                   >
-                    {user.role}
+                    {user.role || "user"}
                   </span>
                 </td>
                 <td className="px-4 py-3">
@@ -509,7 +541,31 @@ function UsersTab() {
 
 // ─── Stations Tab ───
 function StationsTab() {
-  const [stations] = useState(AdminAPI.getMockStations());
+  const [stations, setStations] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Load stations from Firebase
+  useEffect(() => {
+    const loadStations = async () => {
+      try {
+        const data = await AdminAPI.getStations();
+        setStations(data);
+      } catch (error) {
+        console.error("[AdminDashboard] Error loading stations:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadStations();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-gray-500">Loading stations...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -558,7 +614,39 @@ function StationsTab() {
 
 // ─── Settings Tab ───
 function SettingsTab() {
-  const [settings] = useState(AdminAPI.getMockSettings());
+  const [settings, setSettings] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  // Load settings from Firebase
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const data = await AdminAPI.getSettings();
+        setSettings(data);
+      } catch (error) {
+        console.error("[AdminDashboard] Error loading settings:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadSettings();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-gray-500">Loading settings...</div>
+      </div>
+    );
+  }
+
+  if (!settings) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-red-500">Failed to load settings</div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -571,15 +659,15 @@ function SettingsTab() {
           <div className="space-y-3">
             <div>
               <label className="text-sm text-gray-500">Name</label>
-              <p className="font-medium">{settings.company.name}</p>
+              <p className="font-medium">{settings.company?.name}</p>
             </div>
             <div>
               <label className="text-sm text-gray-500">Email</label>
-              <p className="font-medium">{settings.company.email}</p>
+              <p className="font-medium">{settings.company?.email}</p>
             </div>
             <div>
               <label className="text-sm text-gray-500">Phone</label>
-              <p className="font-medium">{settings.company.phone}</p>
+              <p className="font-medium">{settings.company?.phone}</p>
             </div>
           </div>
           <button className="mt-4 text-sm text-amber-600 hover:underline">
@@ -596,18 +684,18 @@ function SettingsTab() {
             <div>
               <label className="text-sm text-gray-500">Currency</label>
               <p className="font-medium">
-                {settings.localization.currency} (
-                {settings.localization.currencySymbol})
+                {settings.localization?.currency} (
+                {settings.localization?.currencySymbol})
               </p>
             </div>
             <div>
               <label className="text-sm text-gray-500">Timezone</label>
-              <p className="font-medium">{settings.localization.timezone}</p>
+              <p className="font-medium">{settings.localization?.timezone}</p>
             </div>
             <div>
               <label className="text-sm text-gray-500">Tax Rate</label>
               <p className="font-medium">
-                {(settings.business.taxRate * 100).toFixed(0)}%
+                {((settings.business?.taxRate || 0) * 100).toFixed(0)}%
               </p>
             </div>
           </div>
@@ -622,17 +710,17 @@ function SettingsTab() {
             Integrations
           </h3>
           <div className="space-y-3">
-            {Object.entries(settings.integrations).map(([key, config]) => (
+            {Object.entries(settings.integrations || {}).map(([key, config]: [string, any]) => (
               <div key={key} className="flex items-center justify-between">
                 <span className="capitalize">{key}</span>
                 <span
                   className={`text-xs px-2 py-1 rounded-full ${
-                    config.enabled
+                    config?.enabled
                       ? "bg-green-100 text-green-700"
                       : "bg-gray-100 text-gray-500"
                   }`}
                 >
-                  {config.enabled ? "Enabled" : "Disabled"}
+                  {config?.enabled ? "Enabled" : "Disabled"}
                 </span>
               </div>
             ))}
