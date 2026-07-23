@@ -491,7 +491,8 @@ export default function FounderAccess() {
                   members: (s.sharedUsers || []).length + 1,
                   createdAt: s.createdAt || "Unknown",
                   lastActive: s.updatedAt || s.createdAt || "Unknown",
-                  revenue: Math.floor(Math.random() * 500000 + 50000),
+                  // Set revenue to 0 for local stations - actual revenue comes from salesAnalytics
+                  revenue: 0,
                 });
               }
             });
