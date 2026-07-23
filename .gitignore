@@ -24,3 +24,4 @@ dist-exe/
 
 .vercel
 .env*
+!.env.example

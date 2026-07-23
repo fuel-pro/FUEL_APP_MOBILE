@@ -4,11 +4,11 @@
 // All data encrypted locally before transmission
 // ============================================================
 
-// Firebase config - configure your own Firebase project
+// Firebase config from environment variables or defaults
 const FIREBASE_CONFIG = {
-  databaseURL: "https://fuelpro-cloud-default-rtdb.firebaseio.com",
-  apiKey: "YOUR_FIREBASE_API_KEY",
-  projectId: "fuelpro-cloud",
+  databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL || "https://fuel-pro-1.firebaseio.com",
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "fuel-pro-1",
 };
 
 interface CloudData {
