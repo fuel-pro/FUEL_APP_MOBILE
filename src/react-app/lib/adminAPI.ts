@@ -2,19 +2,88 @@
  * FuelPro Admin API Client
  * Frontend API client for secure backend communication
  *
- * NOTE: This is the frontend client. The actual backend implementation
- * should mirror these endpoints with proper server-side validation,
- * authentication middleware, and database queries.
+ * Uses Firebase Firestore for real-time data storage
  */
 
 import { AdminUser, AdminAPIClient } from "./adminAuth";
 import { AuditFilter, AuditLogEntry, auditLog } from "./auditLogger";
+import { getFirebaseFirestore } from "@/firebase/client";
+import { collection, getDocs, doc, getDoc, query, where, orderBy, limit, onSnapshot, Timestamp } from "firebase/firestore";
 
 // ═══════════════════════════════════════════════════════════════════
 // API CLIENT INSTANCE
 // ═══════════════════════════════════════════════════════════════════
 
 const api = new AdminAPIClient("/api");
+
+// ═══════════════════════════════════════════════════════════════════
+// FIREBASE HELPERS
+// ═══════════════════════════════════════════════════════════════════
+
+/**
+ * Get all users from Firebase Firestore
+ */
+async function getFirebaseUsers(): Promise<AdminUser[]> {
+  try {
+    const db = getFirebaseFirestore();
+    const usersRef = collection(db, "users");
+    const q = query(usersRef, orderBy("createdAt", "desc"));
+    const snapshot = await getDocs(q);
+    
+    return snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+      createdAt: doc.data().createdAt instanceof Timestamp 
+        ? doc.data().createdAt.toDate().toISOString() 
+        : doc.data().createdAt,
+      lastLogin: doc.data().lastLogin instanceof Timestamp 
+        ? doc.data().lastLogin.toDate().toISOString() 
+        : doc.data().lastLogin,
+    })) as AdminUser[];
+  } catch (error) {
+    console.error("[AdminAPI] Error fetching Firebase users:", error);
+    return [];
+  }
+}
+
+/**
+ * Get all stations from Firebase Firestore
+ */
+async function getFirebaseStations(): Promise<StationData[]> {
+  try {
+    const db = getFirebaseFirestore();
+    const stationsRef = collection(db, "stations");
+    const q = query(stationsRef, orderBy("createdAt", "desc"));
+    const snapshot = await getDocs(q);
+    
+    return snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+    })) as StationData[];
+  } catch (error) {
+    console.error("[AdminAPI] Error fetching Firebase stations:", error);
+    return [];
+  }
+}
+
+/**
+ * Get global settings from Firebase Firestore
+ */
+async function getFirebaseSettings(): Promise<GlobalSettings | null> {
+  try {
+    const db = getFirebaseFirestore();
+    const settingsRef = doc(db, "settings", "global");
+    const snapshot = await getDoc(settingsRef);
+    
+    if (snapshot.exists()) {
+      return snapshot.data() as GlobalSettings;
+    }
+    return null;
+  } catch (error) {
+    console.error("[AdminAPI] Error fetching Firebase settings:", error);
+    return null;
+  }
+}
 
 // ═══════════════════════════════════════════════════════════════════
 // TYPE DEFINITIONS (mirrors backend)
@@ -440,120 +509,125 @@ export const AdminWebhooksAPI = {
 // ═══════════════════════════════════════════════════════════════════
 
 export class AdminAPI {
-  // Simulated responses for frontend development
-  // These would be replaced by real API calls in production
+  // Firebase-powered API - Real-time data from Firestore
+  // Fallback to API calls when Firebase is not available
 
   static async simulateResponse<T>(data: T, delay = 300): Promise<T> {
     await new Promise(resolve => setTimeout(resolve, delay));
     return data;
   }
 
+  /**
+   * Get all users - First tries Firebase, then falls back to API
+   */
+  static async getUsers(): Promise<AdminUser[]> {
+    // Try Firebase first
+    const firebaseUsers = await getFirebaseUsers();
+    if (firebaseUsers.length > 0) {
+      console.info("[AdminAPI] Using Firebase users:", firebaseUsers.length);
+      return firebaseUsers;
+    }
+    
+    // Fallback to API
+    try {
+      return await AdminUsersAPI.list();
+    } catch (error) {
+      console.error("[AdminAPI] Error fetching users:", error);
+      return [];
+    }
+  }
+
+  /**
+   * Get all stations - First tries Firebase, then falls back to API
+   */
+  static async getStations(): Promise<StationData[]> {
+    // Try Firebase first
+    const firebaseStations = await getFirebaseStations();
+    if (firebaseStations.length > 0) {
+      console.info("[AdminAPI] Using Firebase stations:", firebaseStations.length);
+      return firebaseStations;
+    }
+    
+    // Fallback to API
+    try {
+      return await AdminStationsAPI.list();
+    } catch (error) {
+      console.error("[AdminAPI] Error fetching stations:", error);
+      return [];
+    }
+  }
+
+  /**
+   * Get global settings - First tries Firebase, then falls back to API/mock
+   */
+  static async getSettings(): Promise<GlobalSettings> {
+    // Try Firebase first
+    const firebaseSettings = await getFirebaseSettings();
+    if (firebaseSettings) {
+      console.info("[AdminAPI] Using Firebase settings");
+      return firebaseSettings;
+    }
+    
+    // Fallback to API
+    try {
+      return await AdminSettingsAPI.get();
+    } catch (error) {
+      console.error("[AdminAPI] Error fetching settings, using defaults:", error);
+      // Return default settings
+      return {
+        company: {
+          name: "FuelPro Kenya",
+          address: "123 Business Park, Nairobi",
+          phone: "+254700123456",
+          email: "info@fuelpro.app",
+        },
+        localization: {
+          currency: "KES",
+          currencySymbol: "KSh",
+          timezone: "Africa/Nairobi",
+          dateFormat: "DD/MM/YYYY",
+          language: "en",
+        },
+        business: {
+          fuelTypes: ["PMS", "AGO", "Kerosene"],
+          defaultPrices: { PMS: 183.5, AGO: 168.3, Kerosene: 103.5 },
+          taxRate: 0.16,
+        },
+        security: {
+          sessionTimeout: 3600,
+          passwordMinLength: 8,
+          mfaRequired: false,
+        },
+        integrations: {
+          mpesa: { enabled: true, environment: "production" },
+          firebase: { enabled: true },
+          supabase: { enabled: false },
+          seafile: { enabled: false },
+        },
+        features: {
+          loyalty: true,
+          payroll: true,
+          delivery: true,
+          creditSales: true,
+        },
+      };
+    }
+  }
+
+  // Keep legacy mock methods for backwards compatibility
   static getMockUsers(): AdminUser[] {
-    return [
-      {
-        id: "user_1",
-        email: "admin@fuelpro.app",
-        name: "Admin User",
-        role: "admin",
-        permissions: ["*"],
-        stationIds: ["*"],
-        isActive: true,
-        lastLogin: new Date().toISOString(),
-        createdAt: "2024-01-01T00:00:00Z",
-        updatedAt: new Date().toISOString(),
-      },
-      {
-        id: "user_2",
-        email: "founder@fuelpro.app",
-        name: "Leon Founder",
-        role: "founder",
-        permissions: ["*"],
-        stationIds: ["*"],
-        isActive: true,
-        lastLogin: new Date().toISOString(),
-        createdAt: "2024-01-01T00:00:00Z",
-        updatedAt: new Date().toISOString(),
-      },
-      {
-        id: "user_3",
-        email: "manager@station.com",
-        name: "Station Manager",
-        role: "manager",
-        permissions: [
-          "stations:view",
-          "stations:edit",
-          "sales:view",
-          "sales:create",
-        ],
-        stationIds: ["station_1"],
-        isActive: true,
-        lastLogin: "2024-06-01T10:00:00Z",
-        createdAt: "2024-02-01T00:00:00Z",
-        updatedAt: new Date().toISOString(),
-      },
-    ];
+    console.warn("[AdminAPI] getMockUsers() is deprecated. Use getUsers() instead.");
+    return [];
   }
 
   static getMockSettings(): GlobalSettings {
-    return {
-      company: {
-        name: "FuelPro Kenya",
-        address: "123 Business Park, Nairobi",
-        phone: "+254700123456",
-        email: "info@fuelpro.app",
-      },
-      localization: {
-        currency: "KES",
-        currencySymbol: "KSh",
-        timezone: "Africa/Nairobi",
-        dateFormat: "DD/MM/YYYY",
-        language: "en",
-      },
-      business: {
-        fuelTypes: ["PMS", "AGO", "Kerosene"],
-        defaultPrices: { PMS: 183.5, AGO: 168.3, Kerosene: 103.5 },
-        taxRate: 0.16,
-      },
-      security: {
-        sessionTimeout: 3600,
-        passwordMinLength: 8,
-        mfaRequired: false,
-      },
-      integrations: {
-        mpesa: { enabled: true, environment: "production" },
-        firebase: { enabled: false },
-        supabase: { enabled: true },
-        seafile: { enabled: false },
-      },
-      features: {
-        loyalty: true,
-        payroll: true,
-        delivery: true,
-        creditSales: true,
-      },
-    };
+    console.warn("[AdminAPI] getMockSettings() is deprecated. Use getSettings() instead.");
+    return this.getSettings as any;
   }
 
   static getMockStations(): StationData[] {
-    return [
-      {
-        id: "station_1",
-        name: "Downtown Station",
-        location: "Nairobi CBD",
-        address: "123 Main Street, Nairobi",
-        managerId: "user_3",
-        isActive: true,
-        settings: {},
-      },
-      {
-        id: "station_2",
-        name: "Westlands Fuel Center",
-        location: "Westlands",
-        address: "456 Waiyaki Way, Westlands",
-        isActive: true,
-        settings: {},
-      },
-    ];
+    console.warn("[AdminAPI] getMockStations() is deprecated. Use getStations() instead.");
+    return [];
   }
 }
 

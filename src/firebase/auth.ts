@@ -11,8 +11,6 @@
 import {
   getFirebaseAuth,
   getFirebaseApp,
-  verifyIdToken,
-  createCustomToken,
 } from './client';
 import {
   onAuthStateChanged,

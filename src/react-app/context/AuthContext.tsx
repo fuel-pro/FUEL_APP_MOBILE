@@ -7,35 +7,30 @@ import {
   useEffect,
   useRef,
 } from "react";
+import {
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut as firebaseSignOut,
+  sendPasswordResetEmail,
+  updateProfile,
+  getIdToken,
+  GoogleAuthProvider,
+  signInWithPopup,
+} from "firebase/auth";
+import { getFirebaseAuth } from "@/firebase/client";
+import { browserLocalPersistence, setPersistence } from "firebase/auth";
 
 // Lazy API base URL getter using dynamic import to avoid circular deps
 let _apiBase: string | null = null;
-let _apiPromise: Promise<string> | null = null;
 function getApiBase(): string {
   if (_apiBase) return _apiBase;
   return "/api";
 }
-async function getApiBaseAsync(): Promise<string> {
-  if (_apiBase) return _apiBase;
-  if (!_apiPromise) {
-    _apiPromise = import("@/utils/apiConfig").then(m => m.getRestApiUrl());
-  }
-  _apiBase = await _apiPromise;
-  return _apiBase;
-}
 
 // ============================================================
-// AUTH CONTEXT v6 - Production Mode
+// AUTH CONTEXT v7 - Firebase Production Mode (No Demo)
 // ============================================================
-
-// Demo mode - use local storage for authentication when backend is unavailable
-const DEMO_MODE = true;
-const DEMO_USERS = [
-  { email: "admin@fuelpro.demo", password: "admin123", name: "Admin User", role: "admin" },
-  { email: "manager@fuelpro.demo", password: "manager123", name: "Manager User", role: "manager" },
-  { email: "staff@fuelpro.demo", password: "staff123", name: "Staff User", role: "staff" },
-  { email: "demo@fuelpro.demo", password: "demo", name: "Demo User", role: "owner" },
-];
 
 export type AuthMethod = "google" | "email" | "username";
 
@@ -146,55 +141,69 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const handleLogoutRef = useRef<(() => void) | null>(null);
   const refreshAuthRef = useRef<(() => Promise<boolean>) | null>(null);
 
-  // Initialize - verify token with backend (runs once on mount)
+  // Initialize - listen to Firebase auth state
   useEffect(() => {
     let cancelled = false;
+    let unsubscribe: (() => void) | null = null;
+
     const initAuth = async () => {
       try {
-        const storedToken = loadToken();
-        if (storedToken) {
-          try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 5000);
-            const res = await fetch(`${getApiBase()}/auth/me`, {
-              headers: { Authorization: `Bearer ${storedToken}` },
-              signal: controller.signal,
-            });
-            clearTimeout(timeoutId);
-            if (!cancelled) {
-              if (res.ok) {
-                const data = await res.json();
-                const backendUser = data.user || data;
-                setUser({
-                  id: backendUser.id,
-                  authId: `email_${backendUser.email}`,
-                  authMethod: "email",
-                  email: backendUser.email,
-                  name: backendUser.name,
-                  role: backendUser.role,
-                  permissions: backendUser.permissions,
-                });
-                setToken(storedToken);
-              } else {
-                localStorage.removeItem(AUTH_STORAGE_KEY);
-                localStorage.removeItem(TOKEN_STORAGE_KEY);
-                setUser(null);
-                setToken(null);
+        const auth = getFirebaseAuth();
+        
+        // Listen to Firebase auth state changes
+        unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+          if (cancelled) return;
+          
+          if (firebaseUser) {
+            try {
+              // Get fresh ID token
+              const idToken = await getIdToken(firebaseUser, true);
+              
+              const newUser: AuthIdentity = {
+                id: firebaseUser.uid,
+                authId: `firebase_${firebaseUser.uid}`,
+                authMethod: "email",
+                email: firebaseUser.email || "",
+                name: firebaseUser.displayName || firebaseUser.email?.split("@")[0] || "User",
+                picture: firebaseUser.photoURL || undefined,
+                role: "owner", // Default role
+                permissions: ["read", "write"],
+              };
+              
+              setUser(newUser);
+              setToken(idToken);
+              localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(newUser));
+              localStorage.setItem(TOKEN_STORAGE_KEY, idToken);
+            } catch (err) {
+              console.error("[AuthContext] Error getting Firebase token:", err);
+              // Use cached data if available
+              if (!cancelled) {
+                const cachedUser = loadUser();
+                if (cachedUser) setUser(cachedUser);
               }
             }
-          } catch {
-            // Offline - keep cached data, do not clear
-            console.info("[AuthContext] Using cached auth (offline or API unavailable)");
+          } else {
+            // User signed out
+            setUser(null);
+            setToken(null);
           }
-        }
+        });
       } catch (err) {
         console.error("[AuthContext] Auth initialization error:", err);
+        // Use cached data if available
+        const cachedUser = loadUser();
+        if (cachedUser) setUser(cachedUser);
       } finally {
         if (!cancelled) setIsLoading(false);
       }
     };
+
     initAuth();
-    return () => { cancelled = true; };
+    
+    return () => {
+      cancelled = true;
+      unsubscribe?.();
+    };
   }, []);
 
   // Broadcast auth update - stable callback
@@ -210,301 +219,235 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // ---- EMAIL AUTH ----
   const loginWithEmail = useCallback(
-    async (email: string, password: string, retryCount = 0): Promise<{ success: boolean; error?: string }> => {
+    async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
       setIsPending(true);
       setError(null);
 
-      console.info("[AuthContext] Starting login for:", email);
+      console.info("[AuthContext] Starting Firebase login for:", email);
 
-      // Demo mode - authenticate locally
-      if (DEMO_MODE) {
-        const demoUser = DEMO_USERS.find(u => u.email === email && u.password === password);
-        if (demoUser) {
-          console.info("[AuthContext] Demo login successful for:", demoUser.name);
-          const newUser: AuthIdentity = {
-            id: `demo_${Date.now()}`,
-            authId: `demo_${email}`,
-            authMethod: "email",
-            email: demoUser.email,
-            name: demoUser.name,
-            role: demoUser.role,
-            permissions: ["read", "write", "admin"],
-          };
-          const demoToken = `demo_token_${Date.now()}`;
-          setUser(newUser);
-          setToken(demoToken);
-          localStorage.setItem(TOKEN_STORAGE_KEY, demoToken);
-          localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(newUser));
-          broadcastAuthUpdate(newUser, demoToken);
-          setIsPending(false);
-          return { success: true };
-        } else {
-          // Try local storage users if not in demo
-          const localUsers = JSON.parse(localStorage.getItem("fuelpro_email_users") || "{}");
-          const found = Object.values(localUsers).find((u: any) => u.email === email && u.password === password);
-          if (found) {
-            const u = found as any;
-            console.info("[AuthContext] Local user login successful for:", u.name);
-            const newUser: AuthIdentity = {
-              id: `local_${Date.now()}`,
-              authId: `email_${email}`,
-              authMethod: "email",
-              email: u.email,
-              name: u.name,
-              role: u.role || "staff",
-              permissions: ["read", "write"],
-            };
-            const localToken = `local_token_${Date.now()}`;
-            setUser(newUser);
-            setToken(localToken);
-            localStorage.setItem(TOKEN_STORAGE_KEY, localToken);
-            localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(newUser));
-            broadcastAuthUpdate(newUser, localToken);
-            setIsPending(false);
-            return { success: true };
-          }
-          const errorMsg = "Invalid demo credentials. Try: demo@fuelpro.demo / demo";
-          setError(errorMsg);
-          setIsPending(false);
-          return { success: false, error: errorMsg };
-        }
-      }
-
-      console.info("[AuthContext] API Base:", getApiBase());
-      console.info("[AuthContext] Full URL:", `${getApiBase()}/auth/login`);
-
-      // API_BASE is already the full path (e.g., "/api" on Vercel or "https://..." locally)
       try {
-        const deviceId = getDeviceId();
-        console.info("[AuthContext] Device ID:", deviceId);
+        const auth = getFirebaseAuth();
         
-        const res = await fetch(`${getApiBase()}/auth/login`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ email, password, deviceId }),
-          });
-          
-        console.info("[AuthContext] Response status:", res.status);
+        // Set persistence to local
+        await setPersistence(auth, browserLocalPersistence);
         
-        if (res.ok) {
-            const data = await res.json();
-            console.info("[AuthContext] Login successful, user:", data.user?.email);
-            const backendUser = data.user;
-            const newUser: AuthIdentity = {
-              id: backendUser.id,
-              authId: `email_${backendUser.email}`,
-              authMethod: "email",
-              email: backendUser.email,
-              name: backendUser.name,
-              role: backendUser.role,
-              permissions: backendUser.permissions,
-            };
-            setUser(newUser);
-            setToken(data.token);
-            localStorage.setItem(TOKEN_STORAGE_KEY, data.token);
-            broadcastAuthUpdate(newUser, data.token);
-            setIsPending(false);
-            return { success: true };
-          } else {
-            const data = await res.json().catch(() => ({}));
-            console.info("[AuthContext] Login failed:", data.error);
-            const errorMsg = (data as any).error || "Login failed. Check your credentials.";
-            setError(errorMsg);
-            setIsPending(false);
-            return { success: false, error: errorMsg };
-          }
-        } catch (err: any) {
-          console.error("[AuthContext] Login error:", err);
-          // Retry once on network errors
-          if (retryCount === 0 && (err.name === 'AbortError' || err.message?.includes('network'))) {
-            console.info("[AuthContext] Retrying login after network error...");
-            setIsPending(false);
-            return loginWithEmail(email, password, 1);
-          }
-          const errorMsg = "Connection error. Please check your internet connection and try again.";
-          setError(errorMsg);
-          setIsPending(false);
-          return { success: false, error: errorMsg };
+        // Sign in with Firebase
+        const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        const firebaseUser = userCredential.user;
+        
+        // Get ID token
+        const idToken = await getIdToken(firebaseUser, true);
+
+        // Create AuthIdentity from Firebase user
+        const newUser: AuthIdentity = {
+          id: firebaseUser.uid,
+          authId: `firebase_${firebaseUser.uid}`,
+          authMethod: "email",
+          email: firebaseUser.email || email,
+          name: firebaseUser.displayName || firebaseUser.email?.split("@")[0] || email.split("@")[0],
+          picture: firebaseUser.photoURL || undefined,
+          role: "owner",
+          permissions: ["read", "write"],
+        };
+
+        setUser(newUser);
+        setToken(idToken);
+        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(newUser));
+        localStorage.setItem(TOKEN_STORAGE_KEY, idToken);
+        broadcastAuthUpdate(newUser, idToken);
+        setIsPending(false);
+        return { success: true };
+      } catch (err: any) {
+        console.error("[AuthContext] Firebase login error:", err);
+        
+        let errorMsg = "Login failed. Please try again.";
+        
+        if (err.code === "auth/user-not-found") {
+          errorMsg = "No account found with this email.";
+        } else if (err.code === "auth/wrong-password") {
+          errorMsg = "Incorrect password.";
+        } else if (err.code === "auth/invalid-email") {
+          errorMsg = "Invalid email address.";
+        } else if (err.code === "auth/too-many-requests") {
+          errorMsg = "Too many failed attempts. Please try again later.";
+        } else if (err.code === "auth/invalid-credential" || err.code === "auth/user-disabled") {
+          errorMsg = "Invalid email or password.";
         }
+        
+        setError(errorMsg);
+        setIsPending(false);
+        return { success: false, error: errorMsg };
+      }
     },
     [broadcastAuthUpdate]
   );
 
+  // ---- EMAIL REGISTRATION ----
   const registerWithEmail = useCallback(
-    async (email: string, password: string, name: string, retryCount = 0): Promise<boolean> => {
+    async (email: string, password: string, name: string): Promise<boolean> => {
       setIsPending(true);
       setError(null);
 
-      // Demo mode - create local user
-      if (DEMO_MODE) {
-        // Check if email already exists in demo users
-        const existingDemo = DEMO_USERS.find(u => u.email === email);
-        if (existingDemo) {
-          setError("This email is already registered. Try logging in.");
-          setIsPending(false);
-          return false;
-        }
-        
-        // Check if email already exists in local storage
-        const localUsers = JSON.parse(localStorage.getItem("fuelpro_email_users") || "{}");
-        const existingLocal = Object.values(localUsers).find((u: any) => u.email === email);
-        if (existingLocal) {
-          setError("This email is already registered. Try logging in.");
-          setIsPending(false);
-          return false;
-        }
-
-        // Create local user
-        const userId = `local_${Date.now()}`;
-        const newUser: AuthIdentity = {
-          id: userId,
-          authId: `email_${email}`,
-          authMethod: "email",
-          email,
-          name,
-          role: "staff",
-          permissions: ["read", "write"],
-        };
-        
-        // Store in localStorage
-        localUsers[userId] = { email, password, name, role: "staff", createdAt: new Date().toISOString() };
-        localStorage.setItem("fuelpro_email_users", JSON.stringify(localUsers));
-        
-        const localToken = `local_token_${Date.now()}`;
-        setUser(newUser);
-        setToken(localToken);
-        localStorage.setItem(TOKEN_STORAGE_KEY, localToken);
-        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(newUser));
-        broadcastAuthUpdate(newUser, localToken);
-        setIsPending(false);
-        return true;
-      }
+      console.info("[AuthContext] Registering new user:", email);
 
       try {
-        const deviceId = getDeviceId();
-        const controller = new AbortController();
-        // Increased timeout to 30 seconds with retry support
-        const timeoutId = setTimeout(() => controller.abort(), 30000);
-        const res = await fetch(`${getApiBase()}/auth/register`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password, name, deviceId }),
-          signal: controller.signal,
-        });
-        clearTimeout(timeoutId);
+        const auth = getFirebaseAuth();
         
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          setError((data as any).error || data.message || "Registration failed");
-          setIsPending(false);
-          return false;
-        }
+        // Set persistence to local
+        await setPersistence(auth, browserLocalPersistence);
         
-        const data = await res.json();
+        // Create user with Firebase
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        const firebaseUser = userCredential.user;
         
-        // Registration successful - use the token returned directly
-        if (data.token && data.user) {
-          const backendUser = data.user;
-          const newUser: AuthIdentity = {
-            id: backendUser.id,
-            authId: `email_${backendUser.email}`,
-            authMethod: "email",
-            email: backendUser.email,
-            name: backendUser.name,
-            role: backendUser.role,
-            permissions: backendUser.permissions,
-          };
-          setUser(newUser);
-          setToken(data.token);
-          localStorage.setItem(TOKEN_STORAGE_KEY, data.token);
-          localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(newUser));
-          broadcastAuthUpdate(newUser, data.token);
-          setIsPending(false);
-          return true;
-        }
+        // Update display name
+        await updateProfile(firebaseUser, { displayName: name });
         
-        // Fallback: try login if no token returned
+        // Get ID token
+        const idToken = await getIdToken(firebaseUser, true);
+
+        // Create AuthIdentity from Firebase user
+        const newUser: AuthIdentity = {
+          id: firebaseUser.uid,
+          authId: `firebase_${firebaseUser.uid}`,
+          authMethod: "email",
+          email: firebaseUser.email || email,
+          name: name,
+          role: "owner",
+          permissions: ["read", "write"],
+        };
+
+        setUser(newUser);
+        setToken(idToken);
+        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(newUser));
+        localStorage.setItem(TOKEN_STORAGE_KEY, idToken);
+        broadcastAuthUpdate(newUser, idToken);
         setIsPending(false);
-        const loginResult = await loginWithEmail(email, password);
-        return loginResult.success;
+        return true;
       } catch (err: any) {
-        console.error("Registration error:", err);
-        // Retry once on network errors
-        if (retryCount === 0 && (err.name === 'AbortError' || err.message?.includes('network'))) {
-          console.info("[AuthContext] Retrying registration after network error...");
-          setIsPending(false);
-          return registerWithEmail(email, password, name, 1);
+        console.error("[AuthContext] Firebase registration error:", err);
+        
+        let errorMsg = "Registration failed. Please try again.";
+        
+        if (err.code === "auth/email-already-in-use") {
+          errorMsg = "An account with this email already exists.";
+        } else if (err.code === "auth/invalid-email") {
+          errorMsg = "Invalid email address.";
+        } else if (err.code === "auth/weak-password") {
+          errorMsg = "Password should be at least 6 characters.";
         }
-        if (err.name === 'AbortError') {
-          setError("Registration is taking longer than expected. Please try again.");
-        } else {
-          setError("Connection error. Please try again.");
-        }
+        
+        setError(errorMsg);
         setIsPending(false);
         return false;
       }
     },
-    [loginWithEmail, broadcastAuthUpdate]
+    [broadcastAuthUpdate]
   );
 
-  // ---- USERNAME AUTH ----
+  // ---- GOOGLE AUTH ----
+  const loginWithGoogle = useCallback(
+    async (): Promise<{ success: boolean; error?: string }> => {
+      setIsPending(true);
+      setError(null);
+
+      console.info("[AuthContext] Starting Google login");
+
+      try {
+        const auth = getFirebaseAuth();
+        const googleProvider = new GoogleAuthProvider();
+        
+        // Set persistence to local
+        await setPersistence(auth, browserLocalPersistence);
+        
+        // Sign in with Google
+        const userCredential = await signInWithPopup(auth, googleProvider);
+        const firebaseUser = userCredential.user;
+        
+        // Get ID token
+        const idToken = await getIdToken(firebaseUser, true);
+
+        // Create AuthIdentity from Firebase user
+        const newUser: AuthIdentity = {
+          id: firebaseUser.uid,
+          authId: `google_${firebaseUser.uid}`,
+          authMethod: "google",
+          email: firebaseUser.email || "",
+          name: firebaseUser.displayName || "User",
+          picture: firebaseUser.photoURL || undefined,
+          role: "owner",
+          permissions: ["read", "write"],
+        };
+
+        setUser(newUser);
+        setToken(idToken);
+        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(newUser));
+        localStorage.setItem(TOKEN_STORAGE_KEY, idToken);
+        broadcastAuthUpdate(newUser, idToken);
+        setIsPending(false);
+        return { success: true };
+      } catch (err: any) {
+        console.error("[AuthContext] Google login error:", err);
+        
+        let errorMsg = "Google login failed. Please try again.";
+        
+        if (err.code === "auth/popup-closed-by-user") {
+          errorMsg = "Sign-in popup was closed.";
+        } else if (err.code === "auth/account-exists-with-different-credential") {
+          errorMsg = "An account already exists with this email using a different sign-in method.";
+        }
+        
+        setError(errorMsg);
+        setIsPending(false);
+        return { success: false, error: errorMsg };
+      }
+    },
+    [broadcastAuthUpdate]
+  );
+
+  // ---- USERNAME AUTH (Local Fallback) ----
   const loginWithUsername = useCallback(
     async (username: string, password: string): Promise<boolean> => {
       setIsPending(true);
       setError(null);
-      if (!username || !password) {
-        setError("Username and password are required");
-        setIsPending(false);
-        return false;
-      }
-      try {
-        const users = JSON.parse(localStorage.getItem("fuelpro_username_users") || "{}");
-        const found = users[username];
-        if (!found || found.password !== password) {
-          setError("Invalid username or password");
-          setIsPending(false);
-          return false;
-        }
-        const usernameToken = `username_token_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+      const users: Record<string, any> = JSON.parse(localStorage.getItem("fuelpro_username_users") || "{}");
+      const found = Object.values(users).find((u: any) => u.username === username && u.password === password);
+      if (found) {
+        const u = found as any;
+        console.info("[AuthContext] Username login successful for:", u.name);
         const newUser: AuthIdentity = {
           id: `username_${username}`,
           authId: `username_${username}`,
           authMethod: "username",
-          email: found.email || "",
-          name: found.name || username,
+          email: u.email || "",
+          name: u.name || username,
+          role: u.role || "user",
         };
         setUser(newUser);
-        setToken(usernameToken);
-        localStorage.setItem(TOKEN_STORAGE_KEY, usernameToken);
-        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(newUser));
-        broadcastAuthUpdate(newUser, usernameToken);
         setIsPending(false);
         return true;
-      } catch {
-        setError("Login failed. Please try again.");
-        setIsPending(false);
-        return false;
       }
+      setError("Invalid username or password");
+      setIsPending(false);
+      return false;
     },
-    [broadcastAuthUpdate]
+    []
   );
 
   const registerWithUsername = useCallback(
     async (username: string, password: string, name: string, email: string): Promise<boolean> => {
       setIsPending(true);
       setError(null);
-      if (!username || !password || password.length < 4) {
-        setError("Username required, password must be at least 4 characters");
-        setIsPending(false);
-        return false;
-      }
-      const users = JSON.parse(localStorage.getItem("fuelpro_username_users") || "{}");
+
+      const users: Record<string, any> = JSON.parse(localStorage.getItem("fuelpro_username_users") || "{}");
       if (users[username]) {
-        setError("This username is already taken");
+        setError("Username already exists");
         setIsPending(false);
         return false;
       }
-      users[username] = { password, name, email, createdAt: new Date().toISOString() };
+
+      users[username] = { username, password, name, email, role: "user", createdAt: new Date().toISOString() };
       localStorage.setItem("fuelpro_username_users", JSON.stringify(users));
       setUser({ id: `username_${username}`, authId: `username_${username}`, authMethod: "username", email: email || "", name: name || username });
       setIsPending(false);
@@ -514,7 +457,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   // ---- LOGOUT ----
-  const handleLogout = useCallback(() => {
+  const handleLogout = useCallback(async () => {
+    try {
+      const auth = getFirebaseAuth();
+      await firebaseSignOut(auth);
+    } catch (err) {
+      console.error("[AuthContext] Firebase sign out error:", err);
+    }
+    
     setUser(null);
     setToken(null);
     setBindings([]);
@@ -532,23 +482,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const storedToken = loadToken();
     if (!storedToken) return false;
     try {
-      const res = await fetch(`${getApiBase()}/auth/me`, {
-        headers: { Authorization: `Bearer ${storedToken}` },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        const backendUser = data.user || data;
-        const newUser: AuthIdentity = {
-          id: backendUser.id,
-          authId: `email_${backendUser.email}`,
-          authMethod: "email",
-          email: backendUser.email,
-          name: backendUser.name,
-          role: backendUser.role,
-          permissions: backendUser.permissions,
-        };
-        setUser(newUser);
-        setToken(storedToken);
+      const auth = getFirebaseAuth();
+      const firebaseUser = auth.currentUser;
+      if (firebaseUser) {
+        const newToken = await getIdToken(firebaseUser, true);
+        setToken(newToken);
         return true;
       }
     } catch {
@@ -652,31 +590,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [bindings, user]);
 
   // ---- PASSWORD RESET ----
-  const RESET_CODES_KEY = "fuelpro_password_reset_codes";
-
   const requestPasswordReset = useCallback(
     async (email: string): Promise<{ success: boolean; code?: string; message: string }> => {
       setIsPending(true);
       setError(null);
-      const code = Math.floor(100000 + Math.random() * 900000).toString();
-      const codes: Record<string, { code: string; expiresAt: string }> = JSON.parse(localStorage.getItem(RESET_CODES_KEY) || "{}");
-      codes[email] = { code, expiresAt: new Date(Date.now() + 15 * 60000).toISOString() };
-      localStorage.setItem(RESET_CODES_KEY, JSON.stringify(codes));
-      console.log(`[Password Reset] Code for ${email}: ${code}`);
-      setIsPending(false);
-      return { success: true, code, message: `Reset code: ${code} (valid 15 min)` };
+
+      try {
+        const auth = getFirebaseAuth();
+        await sendPasswordResetEmail(auth, email);
+        console.log("[Password Reset] Reset email sent to:", email);
+        setIsPending(false);
+        return { success: true, message: "Password reset email sent. Check your inbox." };
+      } catch (err: any) {
+        console.error("[AuthContext] Password reset error:", err);
+        
+        let errorMsg = "Failed to send reset email.";
+        if (err.code === "auth/user-not-found") {
+          errorMsg = "No account found with this email.";
+        }
+        
+        setError(errorMsg);
+        setIsPending(false);
+        return { success: false, message: errorMsg };
+      }
     },
     []
   );
 
   const verifyResetCode = useCallback(
     (email: string, code: string): boolean => {
-      const codes: Record<string, { code: string; expiresAt: string }> = JSON.parse(localStorage.getItem(RESET_CODES_KEY) || "{}");
-      const entry = codes[email];
-      if (!entry) { setError("No reset code found. Request a new one."); return false; }
-      if (new Date(entry.expiresAt) < new Date()) { setError("Reset code has expired. Request a new one."); return false; }
-      if (entry.code !== code) { setError("Invalid reset code"); return false; }
-      return true;
+      setError("Firebase handles password reset via email link. Code verification not needed.");
+      return false;
     },
     []
   );
@@ -685,22 +629,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (email: string, newPassword: string): Promise<boolean> => {
       setIsPending(true);
       setError(null);
+
       if (!newPassword || newPassword.length < 6) {
         setError("Password must be at least 6 characters");
         setIsPending(false);
         return false;
       }
-      const users: Record<string, any> = JSON.parse(localStorage.getItem("fuelpro_email_users") || "{}");
-      const entry = Object.entries(users).find(([, u]: [string, any]) => u.email === email);
-      if (!entry) { setError("Account not found"); setIsPending(false); return false; }
-      const [userId, userData] = entry;
-      users[userId] = { ...userData, password: newPassword };
-      localStorage.setItem("fuelpro_email_users", JSON.stringify(users));
-      const codes: Record<string, any> = JSON.parse(localStorage.getItem(RESET_CODES_KEY) || "{}");
-      delete codes[email];
-      localStorage.setItem(RESET_CODES_KEY, JSON.stringify(codes));
-      setIsPending(false);
-      return true;
+
+      try {
+        // Firebase password reset is done via email link, not code
+        setError("Use the password reset email to change your password.");
+        setIsPending(false);
+        return false;
+      } catch (err: any) {
+        setError(err.message || "Failed to reset password");
+        setIsPending(false);
+        return false;
+      }
     },
     []
   );
