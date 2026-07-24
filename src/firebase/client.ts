@@ -17,14 +17,14 @@ import { getStorage, FirebaseStorage, connectStorageEmulator } from 'firebase/st
 
 // Firebase configuration from environment variables
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || '',
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || '',
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaSyCgIOzDrLRpFVBVlABmgMJnX0iLa9c8J98',
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'fuel-pro-1.firebaseapp.com',
   databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL || 'https://fuel-pro-1.firebaseio.com',
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || 'fuel-pro-1',
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || 'fuel-pro-1.appspot.com',
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '123456789',
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || '1:123456789:web:abcdef123456',
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || 'G-XXXXXXXXXX',
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || 'fuel-pro-1.firebasestorage.app',
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '434474929988',
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || '1:434474929988:web:f141473bd3acfba6d41111',
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || 'G-XYZ4QZX2Z4',
 };
 
 // Singleton Firebase app instance
