@@ -642,6 +642,43 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
       } catch (e) {
         console.error("Failed to persist station:", e);
       }
+      
+      // ============================================
+      // FIRESTORE REAL-TIME SYNC
+      // Sync new station to Firestore for cross-device/browser sync
+      // ============================================
+      (async () => {
+        try {
+          // Dynamic import to avoid circular dependencies
+          const { saveStation } = await import('@/firebase/firestore');
+          // Transform to Firestore format
+          const firestoreStation = {
+            id: newStation.id,
+            ownerId: 'user_' + (newStation.email || 'anonymous').replace(/[^a-zA-Z0-9]/g, '_'),
+            ownerEmail: newStation.email || 'unknown@fuelpro.app',
+            name: newStation.name,
+            location: newStation.location,
+            phone: newStation.phone,
+            email: newStation.email,
+            kraPin: newStation.kraPin,
+            etrSerial: newStation.etrSerial,
+            taxRate: newStation.taxRate,
+            theme: newStation.theme,
+            logo: newStation.logo,
+            description: newStation.description,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            data: newStation.data || {},
+            access: newStation.access || [],
+            sharedUsers: newStation.sharedUsers || [],
+          };
+          await saveStation(firestoreStation);
+          console.log('[StationContext] Station synced to Firestore:', newStation.name);
+        } catch (error) {
+          console.error('[StationContext] Failed to sync station to Firestore:', error);
+        }
+      })();
+      
       return newStation;
     },
     [stations, adminSettings.secretKey]
@@ -663,8 +700,26 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
             : null
         );
       }
+      
+      // ============================================
+      // FIRESTORE REAL-TIME SYNC
+      // Sync ALL station updates to Firestore
+      // ============================================
+      const updatedStation = stations.find(s => s.id === id);
+      if (updatedStation) {
+        const stationToSync = { ...updatedStation, ...data };
+        (async () => {
+          try {
+            const { updateStation } = await import('@/firebase/firestore');
+            await updateStation(stationToSync.id, stationToSync);
+            console.log('[StationContext] Station updated in Firestore:', stationToSync.name);
+          } catch (error) {
+            console.error('[StationContext] Failed to sync station update to Firestore:', error);
+          }
+        })();
+      }
     },
-    [currentStation]
+    [currentStation, stations]
   );
 
   const deleteStation = useCallback(
@@ -760,6 +815,7 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
   // Station Access
   const shareStation = useCallback(
     (stationId: string, email: string, password: string) => {
+      const station = stations.find(s => s.id === stationId);
       setStations(prev =>
         prev.map(s => {
           if (s.id !== stationId) return s;
@@ -789,11 +845,51 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
           };
         })
       );
+      
+      // ============================================
+      // FIRESTORE REAL-TIME SYNC
+      // Sync shared users to Firestore
+      // ============================================
+      if (station) {
+        (async () => {
+          try {
+            const { updateStation } = await import('@/firebase/firestore');
+            const updatedStation = {
+              ...station,
+              sharedUsers: [
+                ...station.sharedUsers,
+                {
+                  email,
+                  stationId,
+                  accessKey: Math.random().toString(36).substr(2, 16),
+                  grantedAt: new Date().toISOString(),
+                },
+              ],
+              access: [
+                ...station.access,
+                {
+                  username: email,
+                  passwordHash: encrypt(password, adminSettings.secretKey),
+                  role: "shared",
+                  permissions: ["view", "edit_sales", "edit_delivery"],
+                  grantedAt: new Date().toISOString(),
+                  grantedBy: station.access[0]?.username || "owner",
+                },
+              ],
+            };
+            await updateStation(stationId, updatedStation);
+            console.log('[StationContext] Shared users synced to Firestore:', email);
+          } catch (error) {
+            console.error('[StationContext] Failed to sync shared users to Firestore:', error);
+          }
+        })();
+      }
     },
-    [adminSettings.secretKey]
+    [adminSettings.secretKey, stations]
   );
 
   const revokeAccess = useCallback((stationId: string, email: string) => {
+    const station = stations.find(s => s.id === stationId);
     setStations(prev =>
       prev.map(s => {
         if (s.id !== stationId) return s;
@@ -804,7 +900,28 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
         };
       })
     );
-  }, []);
+    
+    // ============================================
+    // FIRESTORE REAL-TIME SYNC
+    // Sync revoked access to Firestore
+    // ============================================
+    if (station) {
+      (async () => {
+        try {
+          const { updateStation } = await import('@/firebase/firestore');
+          const updatedStation = {
+            ...station,
+            sharedUsers: station.sharedUsers.filter(u => u.email !== email),
+            access: station.access.filter(a => a.username !== email),
+          };
+          await updateStation(stationId, updatedStation);
+          console.log('[StationContext] Revoked access synced to Firestore:', email);
+        } catch (error) {
+          console.error('[StationContext] Failed to sync revoked access to Firestore:', error);
+        }
+      })();
+    }
+  }, [stations]);
 
   const verifyStationAccess = useCallback(
     (stationId: string, password: string): boolean => {
@@ -887,8 +1004,23 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
   const updateAdminSettings = useCallback(
     (settings: Partial<AdminSettings>) => {
       setAdminSettings(prev => ({ ...prev, ...settings }));
+      
+      // ============================================
+      // FIRESTORE REAL-TIME SYNC
+      // Sync admin settings to Firestore for cross-device/browser sync
+      // ============================================
+      (async () => {
+        try {
+          const { saveAdminSettings } = await import('@/firebase/firestore');
+          const updatedSettings = { ...adminSettings, ...settings };
+          await saveAdminSettings(updatedSettings);
+          console.log('[StationContext] Admin settings synced to Firestore');
+        } catch (error) {
+          console.error('[StationContext] Failed to sync admin settings to Firestore:', error);
+        }
+      })();
     },
-    []
+    [adminSettings]
   );
 
   const addUpdateRecord = useCallback(
@@ -902,6 +1034,20 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
         ...prev,
         updateHistory: [newRecord, ...prev.updateHistory].slice(0, 100),
       }));
+      
+      // ============================================
+      // FIRESTORE REAL-TIME SYNC
+      // Sync update record to Firestore
+      // ============================================
+      (async () => {
+        try {
+          const { addUpdateRecord: firestoreAddUpdateRecord } = await import('@/firebase/firestore');
+          await firestoreAddUpdateRecord(newRecord);
+          console.log('[StationContext] Update record synced to Firestore');
+        } catch (error) {
+          console.error('[StationContext] Failed to sync update record to Firestore:', error);
+        }
+      })();
     },
     []
   );
@@ -919,23 +1065,53 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
 
   const updateTabConfig = useCallback(
     (tabId: string, config: Partial<AdminSettings["tabConfig"][string]>) => {
+      const newTabConfig = {
+        ...adminSettings.tabConfig,
+        [tabId]: { ...adminSettings.tabConfig[tabId], ...config },
+      };
       setAdminSettings(prev => ({
         ...prev,
-        tabConfig: {
-          ...prev.tabConfig,
-          [tabId]: { ...prev.tabConfig[tabId], ...config },
-        },
+        tabConfig: newTabConfig,
       }));
+      
+      // ============================================
+      // FIRESTORE REAL-TIME SYNC
+      // Sync tab configuration to Firestore
+      // ============================================
+      (async () => {
+        try {
+          const { updateTabConfig: firestoreUpdateTabConfig } = await import('@/firebase/firestore');
+          await firestoreUpdateTabConfig(tabId, newTabConfig[tabId]);
+          console.log('[StationContext] Tab config synced to Firestore:', tabId);
+        } catch (error) {
+          console.error('[StationContext] Failed to sync tab config to Firestore:', error);
+        }
+      })();
     },
-    []
+    [adminSettings.tabConfig]
   );
 
   const updateApiKey = useCallback((keyName: string, value: string) => {
+    const newApiKeys = { ...adminSettings.apiKeys, [keyName]: value };
     setAdminSettings(prev => ({
       ...prev,
-      apiKeys: { ...prev.apiKeys, [keyName]: value },
+      apiKeys: newApiKeys,
     }));
-  }, []);
+    
+    // ============================================
+    // FIRESTORE REAL-TIME SYNC
+    // Sync API keys to Firestore
+    // ============================================
+    (async () => {
+      try {
+        const { updateAdminSetting } = await import('@/firebase/firestore');
+        await updateAdminSetting('apiKeys', newApiKeys);
+        console.log('[StationContext] API keys synced to Firestore');
+      } catch (error) {
+        console.error('[StationContext] Failed to sync API keys to Firestore:', error);
+      }
+    })();
+  }, [adminSettings.apiKeys]);
 
   // Access Log
   const addAccessLog = useCallback(
@@ -952,6 +1128,20 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
         ACCESS_LOG_KEY,
         JSON.stringify([log, ...existing].slice(0, 500))
       );
+      
+      // ============================================
+      // FIRESTORE REAL-TIME SYNC
+      // Sync access logs to Firestore
+      // ============================================
+      (async () => {
+        try {
+          const { addAccessLog: firestoreAddAccessLog } = await import('@/firebase/firestore');
+          await firestoreAddAccessLog(log);
+          console.log('[StationContext] Access log synced to Firestore:', action);
+        } catch (error) {
+          console.error('[StationContext] Failed to sync access log to Firestore:', error);
+        }
+      })();
     },
     [currentStation]
   );
@@ -980,7 +1170,36 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
           : s
       )
     );
-  }, []);
+    
+    // ============================================
+    // FIRESTORE REAL-TIME SYNC
+    // Sync ALL station data (tabs, subtabs, files, documents, settings, etc.)
+    // to Firestore for comprehensive cross-device/browser sync
+    // ============================================
+    const station = stations.find(s => s.id === stationId);
+    if (station) {
+      (async () => {
+        try {
+          const { updateStationData, syncStationToFirestore } = await import('@/firebase/firestore');
+          // Sync specific data keys for granular updates
+          const dataKeys = Object.keys(data);
+          for (const key of dataKeys) {
+            await updateStationData(stationId, key, data[key]);
+          }
+          // Also do a full sync to ensure all data is preserved
+          const fullStation = {
+            ...station,
+            data,
+            updatedAt: new Date(),
+          };
+          await syncStationToFirestore(fullStation);
+          console.log('[StationContext] Station data synced to Firestore:', station.name, '- Keys:', dataKeys.join(', '));
+        } catch (error) {
+          console.error('[StationContext] Failed to sync station data to Firestore:', error);
+        }
+      })();
+    }
+  }, [stations]);
 
   // Export/Import
   const exportAllData = useCallback((): string => {
