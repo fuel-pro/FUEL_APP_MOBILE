@@ -15,7 +15,7 @@ import InviteAccept from "@/react-app/pages/InviteAccept";
 import FounderAccess from "@/react-app/pages/FounderAccess";
 import OfflineIndicator from "@/react-app/components/OfflineIndicator";
 
-// Demo mode - skip Clerk if not configured
+// Load Clerk configuration from environment
 const publishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 const isClerkConfigured = !!publishableKey;
 

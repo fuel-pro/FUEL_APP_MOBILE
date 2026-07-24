@@ -354,7 +354,6 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
   // Simple QR detection simulation (in production, use a library like jsQR)
   const handleScan = useCallback(() => {
     // This is a placeholder - in production, use actual QR detection
-    // For demo purposes, we'll simulate finding a card
     const mockData = {
       cardNumber: "FP00100011",
       phone: "",

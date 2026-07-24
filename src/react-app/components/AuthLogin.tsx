@@ -111,7 +111,7 @@ export default function AuthLogin() {
     }
   };
 
-  // Demo credentials function removed for production mode
+  // Production mode - no demo credentials
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 flex overflow-hidden">

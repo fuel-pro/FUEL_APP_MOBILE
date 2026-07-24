@@ -3,7 +3,6 @@ import { useLocation } from "@/react-app/context/LocationContext";
 import { useStations } from "@/react-app/context/StationContext";
 import { useAutoSync } from "@/react-app/hooks/useAutoSync";
 import { getPriceForCity } from "@/react-app/services/DataSyncService";
-// Demo imports removed
 import RegulatoryAlerts from "@/react-app/components/RegulatoryAlerts";
 import SyncStatusIndicator from "@/react-app/components/SyncStatusIndicator";
 import WeatherWidget from "@/react-app/components/WeatherWidget";
@@ -100,7 +99,7 @@ export default function Dashboard() {
   } | null>(null);
   const [backendLoading, setBackendLoading] = useState(false);
   const [hasBackendData, setHasBackendData] = useState(false);
-  // Demo mode removed
+  // Production mode - use real data
 
   // Use precise location-based fuel prices (auto-synced with GPS)
   const stationCity = currentStation?.location || "Nairobi";
@@ -175,9 +174,9 @@ export default function Dashboard() {
     return () => clearInterval(timer);
   }, []);
 
-  // Animate KPI values on mount - use backend data if available, then local, then demo
+  // Animate KPI values on mount - use backend data if available, then local
   useEffect(() => {
-    // Prefer backend stats over local calculation, then demo data
+    // Prefer backend stats over local calculation
     let targets = {
       revenue: 0,
       profit: 0,
@@ -200,7 +199,7 @@ export default function Dashboard() {
         debt: totalDebt,
       };
     } else {
-      // Production mode: no demo data
+      // Production mode
       targets = {
         revenue: 0,
         profit: 0,

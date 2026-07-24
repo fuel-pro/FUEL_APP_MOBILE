@@ -366,46 +366,9 @@ const PumpMappingV1: React.FC = () => {
     } catch (error) {
       console.error('Extraction error:', error);
       showToast('error', 'Failed to process files. Please try again.');
-      
-      // Fallback: Simulate extraction for demo purposes
-      const demoData = generateDemoData();
-      setExtractedData(demoData);
-      showToast('info', 'Using demo data - configure AI API for real extraction');
     } finally {
       setProcessing(false);
     }
-  };
-
-  // Generate demo data for testing
-  const generateDemoData = (): ExtractedData => {
-    const currency = localStorage.getItem('fuelpro_currency') || 'KES';
-    const currencyInfo = CURRENCY_MAP[currency] || CURRENCY_MAP['KES'];
-    
-    return {
-      pumps: [
-        { pump_id: 'P1', fuel_type: 'PMS', fuel_name: 'Petrol', opening_reading: 12500.50, closing_reading: 12750.25, total_sales_litres: 249.75, total_sales_value: 44955.00, unit_price: 180.00, shift: anchorShift, confidence: 0.95 },
-        { pump_id: 'P2', fuel_type: 'PMS', fuel_name: 'Petrol', opening_reading: 9800.00, closing_reading: 10100.50, total_sales_litres: 300.50, total_sales_value: 54090.00, unit_price: 180.00, shift: anchorShift, confidence: 0.92 },
-        { pump_id: 'P3', fuel_type: 'AGO', fuel_name: 'Diesel', opening_reading: 8500.25, closing_reading: 8700.00, total_sales_litres: 199.75, total_sales_value: 33957.50, unit_price: 170.00, shift: anchorShift, confidence: 0.94 },
-        { pump_id: 'P4', fuel_type: 'AGO', fuel_name: 'Diesel', opening_reading: 6200.00, closing_reading: 6350.25, total_sales_litres: 150.25, total_sales_value: 25542.50, unit_price: 170.00, shift: anchorShift, confidence: 0.93 },
-      ],
-      metadata: {
-        station_name: 'Demo Fuel Station',
-        station_location: 'Nairobi, Kenya',
-        date: anchorDate,
-        shift: anchorShift,
-        currency: currencyInfo.symbol,
-        currency_symbol: currencyInfo.symbol,
-        currency_code: currencyInfo.code,
-        language_detected: 'English',
-        pumps_count: 4,
-        total_litres: 900.25,
-        total_value: 158545.00,
-        extraction_time: new Date().toISOString(),
-      },
-      anomalies: [],
-      warnings: ['Demo data - configure AI API for real extraction'],
-      processingLog: ['Demo mode: Using simulated extraction', 'Configure OPENAI_API_KEY for real AI-powered extraction'],
-    };
   };
 
   // Handle chat submission

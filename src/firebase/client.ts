@@ -17,8 +17,8 @@ import { getStorage, FirebaseStorage, connectStorageEmulator } from 'firebase/st
 
 // Firebase configuration from environment variables
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaSyDemoKeyForFuelPro',
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'fuel-pro-1.firebaseapp.com',
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || '',
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || '',
   databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL || 'https://fuel-pro-1.firebaseio.com',
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || 'fuel-pro-1',
   storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || 'fuel-pro-1.appspot.com',
