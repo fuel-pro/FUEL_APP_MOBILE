@@ -1,1 +1,1 @@
-export default {}
+export const boot = () => ({ timestamp: Date.now(), status: "ok" });
