@@ -7,10 +7,22 @@ import {
   useEffect,
   useRef,
 } from "react";
-import { getClerk, initClerk, getCurrentUser, getUserToken, signOut as clerkSignOut, getAuthHeaders } from "@/firebase/clerk";
+import { getFirebaseAuth } from "@/firebase/client";
+import {
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut as firebaseSignOut,
+  sendPasswordResetEmail,
+  getIdToken,
+  GoogleAuthProvider,
+  signInWithPopup,
+  browserLocalPersistence,
+  setPersistence,
+} from "firebase/auth";
 
 // ============================================================
-// AUTH CONTEXT v8 - Clerk Production Mode (Real Authentication)
+// AUTH CONTEXT v9 - Firebase Production Mode (No Clerk)
 // ============================================================
 
 export type AuthMethod = "google" | "email" | "username";
@@ -122,62 +134,53 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const handleLogoutRef = useRef<(() => void) | null>(null);
   const refreshAuthRef = useRef<(() => Promise<boolean>) | null>(null);
 
-  // Initialize - listen to Clerk auth state
+  // Initialize - listen to Firebase auth state
   useEffect(() => {
     let cancelled = false;
+    let unsubscribe: (() => void) | null = null;
 
     const initAuth = async () => {
       try {
-        // Initialize Clerk
-        const clerk = await initClerk();
-        if (cancelled || !clerk) return;
+        const auth = getFirebaseAuth();
         
-        // Check if user is signed in
-        const clerkUser = getCurrentUser();
-        if (clerkUser) {
-          const clerkToken = await getUserToken();
-          setUser(clerkUser);
-          setToken(clerkToken);
-          localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(clerkUser));
-          if (clerkToken) localStorage.setItem(TOKEN_STORAGE_KEY, clerkToken);
-        }
-        
-        // Set up auth state listener
-        const unsubscribe = clerk.addListener(({ session }) => {
+        // Listen to Firebase auth state changes
+        unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
           if (cancelled) return;
           
-          if (session?.user) {
-            const newUser: AuthIdentity = {
-              id: session.user.id,
-              authId: `clerk_${session.user.id}`,
-              authMethod: "email",
-              email: session.user.primaryEmailAddress?.emailAddress || "",
-              name: session.user.fullName || session.user.firstName || "User",
-              picture: session.user.imageUrl || undefined,
-              role: "owner",
-              permissions: ["read", "write"],
-            };
-            
-            getUserToken().then(t => {
+          if (firebaseUser) {
+            try {
+              // Get fresh ID token
+              const idToken = await getIdToken(firebaseUser, true);
+              
+              const newUser: AuthIdentity = {
+                id: firebaseUser.uid,
+                authId: `firebase_${firebaseUser.uid}`,
+                authMethod: "email",
+                email: firebaseUser.email || "",
+                name: firebaseUser.displayName || firebaseUser.email?.split("@")[0] || "User",
+                picture: firebaseUser.photoURL || undefined,
+                role: "owner",
+                permissions: ["read", "write"],
+              };
+              
+              setUser(newUser);
+              setToken(idToken);
+              localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(newUser));
+              localStorage.setItem(TOKEN_STORAGE_KEY, idToken);
+            } catch (err) {
+              console.error("[AuthContext] Error getting Firebase token:", err);
+              // Use cached data if available
               if (!cancelled) {
-                setUser(newUser);
-                setToken(t);
-                localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(newUser));
-                if (t) localStorage.setItem(TOKEN_STORAGE_KEY, t);
+                const cachedUser = loadUser();
+                if (cachedUser) setUser(cachedUser);
               }
-            });
+            }
           } else {
+            // User signed out
             setUser(null);
             setToken(null);
-            localStorage.removeItem(AUTH_STORAGE_KEY);
-            localStorage.removeItem(TOKEN_STORAGE_KEY);
           }
         });
-        
-        return () => {
-          cancelled = true;
-          unsubscribe();
-        };
       } catch (err) {
         console.error("[AuthContext] Auth initialization error:", err);
         // Use cached data if available
@@ -189,6 +192,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     initAuth();
+    
+    return () => {
+      cancelled = true;
+      unsubscribe?.();
+    };
   }, []);
 
   // Broadcast auth update - stable callback

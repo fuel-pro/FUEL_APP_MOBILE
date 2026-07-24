@@ -14,20 +14,11 @@ import { Suspense, useMemo, useState, useEffect, Component, ReactNode } from "re
 import InviteAccept from "@/react-app/pages/InviteAccept";
 import FounderAccess from "@/react-app/pages/FounderAccess";
 import OfflineIndicator from "@/react-app/components/OfflineIndicator";
-
-// Load Clerk configuration from environment
-const publishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
-const isClerkConfigured = !!publishableKey;
-
-// Lazy load Clerk components only when needed
-import ClerkWrapper from "@/react-app/components/ClerkWrapper";
-import ClerkSignIn from "@/react-app/components/ClerkSignIn";
-import ClerkSignUp from "@/react-app/components/ClerkSignUp";
-import ClerkBridge from "@/react-app/components/ClerkBridge";
-import ClerkShow from "@/react-app/components/ClerkShow";
-import ClerkUserButton from "@/react-app/components/ClerkUserButton";
 import { TRPCProvider } from "@/providers/trpc";
 import { AlertTriangle, RefreshCw } from "lucide-react";
+
+// Firebase Configuration - No Clerk
+const firebaseConfigured = !!import.meta.env.VITE_FIREBASE_API_KEY;
 
 // Simple fallback for lazy-loaded routes
 function RouteFallback() {
@@ -128,8 +119,8 @@ function useDetectedCountry(): string {
 function MainAppLoader() {
   const { user, isPending: isLoading } = useAuth();
   const detectedCountry = useDetectedCountry();
-  const publishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
-  const isClerkConfigured = !!publishableKey;
+  // Firebase is always configured - no Clerk
+  const isFirebaseConfigured = true;
 
   // Add loading timeout - show error after 15 seconds
   const [loadTimeout, setLoadTimeout] = useState(false);
@@ -169,7 +160,7 @@ function MainAppLoader() {
   }
 
   // Loading state
-  if (isLoading && !isClerkConfigured) {
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 flex items-center justify-center">
         <div className="bg-white/10 backdrop-blur-xl rounded-2xl p-8 shadow-2xl border border-white/20 text-center">
@@ -178,7 +169,7 @@ function MainAppLoader() {
             FuelPro
           </h2>
           <p className="text-gray-300 mt-2 text-sm">
-            Initializing multi-tenant systems...
+            Initializing Firebase authentication...
           </p>
           <div className="mt-4 flex items-center gap-2 justify-center">
             <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
@@ -191,23 +182,7 @@ function MainAppLoader() {
     );
   }
 
-  // Clerk is configured - show Clerk auth or dashboard
-  if (isClerkConfigured) {
-    return (
-      <ClerkShow when="signed-in" fallback={<ClerkSignIn />}>
-        <ClerkBridge />
-        <TenantProvider detectedCountry={detectedCountry}>
-          <StationProvider>
-            <FuelProvider>
-              <HomePage />
-            </FuelProvider>
-          </StationProvider>
-        </TenantProvider>
-      </ClerkShow>
-    );
-  }
-
-  // Legacy auth (no Clerk configured)
+  // Firebase auth - show dashboard if user is logged in, otherwise show login
   return user ? (
     <TenantProvider detectedCountry={detectedCountry}>
       <StationProvider>
@@ -222,8 +197,8 @@ function MainAppLoader() {
 }
 
 export default function App() {
-  // Wrap with ClerkProvider only if configured
-  const appContent = (
+  // Firebase only - no Clerk
+  return (
     <ErrorBoundary>
       <AuthProvider>
         <ThemeProvider>
@@ -233,12 +208,12 @@ export default function App() {
                 <TRPCProvider>
                   <Router>
                     <Routes>
-                      {/* Clerk Authentication Routes */}
-                      <Route path="/sign-in" element={<ClerkSignIn />} />
-                      <Route path="/sign-up" element={<ClerkSignUp />} />
+                      {/* Firebase Authentication - handled by AuthLogin component */}
+                      <Route path="/sign-in" element={<AuthLogin />} />
+                      <Route path="/sign-up" element={<AuthLogin />} />
                       <Route path="/dashboard" element={<MainAppLoader />} />
 
-                      {/* Founder Access - public, no auth required, rendered BEFORE auth check */}
+                      {/* Founder Access - public, no auth required */}
                       <Route
                         path="/founder"
                         element={<FounderAccess />}
@@ -274,11 +249,5 @@ export default function App() {
         </ThemeProvider>
       </AuthProvider>
     </ErrorBoundary>
-  );
-
-  return isClerkConfigured ? (
-    <ClerkWrapper>{appContent}</ClerkWrapper>
-  ) : (
-    appContent
   );
 }

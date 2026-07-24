@@ -48,21 +48,23 @@ function getApiUrl(): string {
   return import.meta.env.VITE_API_URL || "https://fuel-pro-backend-v2-production-7c2b.up.railway.app/api/trpc";
 }
 
-// Check if Clerk is configured
-const isClerkConfigured = () => !!import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
+// Check if Firebase is configured
+const isFirebaseConfigured = () => !!import.meta.env.VITE_FIREBASE_API_KEY;
 
-// Get Clerk session token (async)
-async function getClerkToken(): Promise<string | null> {
-  if (!isClerkConfigured()) return null;
+// Get Firebase auth token (async)
+async function getFirebaseToken(): Promise<string | null> {
+  if (!isFirebaseConfigured()) return null;
   
   try {
-    // @ts-ignore - Clerk exposes this in the browser
-    const clerk = window.Clerk;
-    if (clerk?.session) {
-      return await clerk.session.getToken();
+    // Dynamic import to avoid circular dependencies
+    const { getFirebaseAuth } = await import("@/firebase/client");
+    const { getIdToken } = await import("firebase/auth");
+    const auth = getFirebaseAuth();
+    if (auth?.currentUser) {
+      return await getIdToken(auth.currentUser, true);
     }
   } catch {
-    /* Clerk not available */
+    /* Firebase not available */
   }
   return null;
 }
@@ -79,11 +81,11 @@ function createTrpcClient() {
         async headers() {
           const headers: Record<string, string> = {};
           
-          // Include Clerk auth token if configured
-          const clerkToken = await getClerkToken();
-          if (clerkToken) {
-            headers["Authorization"] = `Bearer ${clerkToken}`;
-            headers["X-Clerk-Auth"] = "true";
+          // Include Firebase auth token if configured
+          const firebaseToken = await getFirebaseToken();
+          if (firebaseToken) {
+            headers["Authorization"] = `Bearer ${firebaseToken}`;
+            headers["X-Firebase-Auth"] = "true";
           }
           
           // Include founder session token if available (for Founder Access)

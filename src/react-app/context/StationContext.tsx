@@ -358,7 +358,7 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
     // Try different storage keys for auth tokens
     const keys = [
       "fuelpro_founder_session",
-      "clerk_token",
+      "firebase_token",
       "auth_token",
       "fuelpro_auth_token",
     ];
