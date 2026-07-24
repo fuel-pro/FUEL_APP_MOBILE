@@ -211,52 +211,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // ---- EMAIL AUTH ----
-  // Demo users for testing (when Firebase is not configured)
-  const DEMO_USERS: Record<string, { password: string; name: string; role: string }> = {
-    "demo@fuelpro.demo": { password: "demo", name: "Demo User", role: "owner" },
-    "demo@demo.com": { password: "demo", name: "Test Demo", role: "owner" },
-    "admin@fuelpro.app": { password: "admin123", name: "Admin User", role: "admin" },
-  };
-
-  // Initialize demo users in localStorage on first load
-  useEffect(() => {
-    const storedDemo = localStorage.getItem("fuelpro_demo_users");
-    if (!storedDemo) {
-      localStorage.setItem("fuelpro_demo_users", JSON.stringify(DEMO_USERS));
-    }
-  }, []);
-
   const loginWithEmail = useCallback(
     async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
       setIsPending(true);
       setError(null);
 
-      console.info("[AuthContext] Starting login for:", email);
-
-      // ---- LOCAL STORAGE FALLBACK (for demo/testing) ----
-      const demoUsers = JSON.parse(localStorage.getItem("fuelpro_demo_users") || JSON.stringify(DEMO_USERS));
-      const normalizedEmail = email.toLowerCase();
-      if (demoUsers[normalizedEmail] && demoUsers[normalizedEmail].password === password) {
-        console.info("[AuthContext] Local fallback login successful for:", email);
-        const demoUser = demoUsers[normalizedEmail];
-        const newUser: AuthIdentity = {
-          id: `local_${normalizedEmail}`,
-          authId: `local_${normalizedEmail}`,
-          authMethod: "email",
-          email: normalizedEmail,
-          name: demoUser.name,
-          role: demoUser.role || "owner",
-          permissions: ["read", "write"],
-        };
-        setUser(newUser);
-        const localToken = `local_token_${Date.now()}`;
-        setToken(localToken);
-        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(newUser));
-        localStorage.setItem(TOKEN_STORAGE_KEY, localToken);
-        broadcastAuthUpdate(newUser, localToken);
-        setIsPending(false);
-        return { success: true };
-      }
+      console.info("[AuthContext] Starting Firebase login for:", email);
 
       try {
         const auth = getFirebaseAuth();
