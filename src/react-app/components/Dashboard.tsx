@@ -245,6 +245,7 @@ export default function Dashboard() {
     let profit = 0;
 
     history.forEach((entry: any) => {
+      // Read from pump readings (Sales Tracking)
       const pmsTotal = (entry.pmsPumps || []).reduce(
         (s: number, p: any) => s + (p.salesKsh || 0),
         0
@@ -253,15 +254,22 @@ export default function Dashboard() {
         (s: number, p: any) => s + (p.salesKsh || 0),
         0
       );
-      revenue += pmsTotal + agoTotal;
+      // Read from POS sales (Point of Sale)
+      const posSales = entry.posSales || {};
+      const posPmsAmount = posSales.pmsAmount || 0;
+      const posAgoAmount = posSales.agoAmount || 0;
+      const posPmsLitres = posSales.pmsLitres || 0;
+      const posAgoLitres = posSales.agoLitres || 0;
+      // Total revenue = pump readings + POS sales
+      revenue += pmsTotal + agoTotal + posPmsAmount + posAgoAmount;
+      // Total fuel = pump readings + POS sales
       fuel += (entry.pmsPumps || []).reduce(
         (s: number, p: any) => s + (p.salesL || 0),
         0
-      );
-      fuel += (entry.agoPumps || []).reduce(
+      ) + (entry.agoPumps || []).reduce(
         (s: number, p: any) => s + (p.salesL || 0),
         0
-      );
+      ) + posPmsLitres + posAgoLitres;
       expenses += (entry.expenses || []).reduce(
         (s: number, e: any) => s + (e.amount || 0),
         0
@@ -279,6 +287,7 @@ export default function Dashboard() {
     const tSales = todayEntry
       ? (() => {
           const e = todayEntry[1] as any;
+          // Read from pump readings
           const pms = (e.pmsPumps || []).reduce(
             (s: number, p: any) => s + (p.salesKsh || 0),
             0
@@ -287,7 +296,11 @@ export default function Dashboard() {
             (s: number, p: any) => s + (p.salesKsh || 0),
             0
           );
-          return pms + ago;
+          // Read from POS sales
+          const posSales = e.posSales || {};
+          const posPmsAmount = posSales.pmsAmount || 0;
+          const posAgoAmount = posSales.agoAmount || 0;
+          return pms + ago + posPmsAmount + posAgoAmount;
         })()
       : 0;
 
@@ -318,6 +331,7 @@ export default function Dashboard() {
       Object.entries(state.salesHistory).forEach(
         ([key, entry]: [string, any]) => {
           if (key.startsWith(dateStr)) {
+            // Read from pump readings
             pms += (entry.pmsPumps || []).reduce(
               (s: number, p: any) => s + (p.salesKsh || 0),
               0
@@ -326,6 +340,10 @@ export default function Dashboard() {
               (s: number, p: any) => s + (p.salesKsh || 0),
               0
             );
+            // Read from POS sales
+            const posSales = entry.posSales || {};
+            pms += posSales.pmsAmount || 0;
+            ago += posSales.agoAmount || 0;
           }
         }
       );
@@ -366,6 +384,7 @@ export default function Dashboard() {
     let pms = 0,
       ago = 0;
     history.forEach((entry: any) => {
+      // Read from pump readings
       pms += (entry.pmsPumps || []).reduce(
         (s: number, p: any) => s + (p.salesL || 0),
         0
@@ -374,6 +393,10 @@ export default function Dashboard() {
         (s: number, p: any) => s + (p.salesL || 0),
         0
       );
+      // Read from POS sales
+      const posSales = entry.posSales || {};
+      pms += posSales.pmsLitres || 0;
+      ago += posSales.agoLitres || 0;
     });
     if (pms === 0 && ago === 0) {
       pms = 1;

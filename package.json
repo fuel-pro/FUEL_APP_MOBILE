@@ -89,9 +89,9 @@
     "vitest": "^4.0.16"
   },
   "scripts": {
-    "build": "vite build && esbuild api/boot.ts --platform=node --bundle --format=esm --outdir=dist --banner:js=\"import { createRequire } from 'module';const require = createRequire(import.meta.url);\"",
-    "build:api": "esbuild api/boot.ts --platform=node --bundle --format=esm --outdir=dist-api --banner:js=\"import { createRequire } from 'module';const require = createRequire(import.meta.url);\"",
-    "build:vercel": "vite build && esbuild api/boot.ts --platform=node --bundle --format=esm --outfile=../api/handler.mjs --tsconfig=tsconfig.server.json",
+    "build": "vite build",
+    "build:api": "echo 'API build not needed for static deployment'",
+    "build:vercel": "vite build",
     "build:static": "vite build",
     "dev": "vite",
     "start": "NODE_ENV=production node dist/boot.js",
