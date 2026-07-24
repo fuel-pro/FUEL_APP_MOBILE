@@ -230,6 +230,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
       setIsPending(true);
       setError(null);
+
       console.info("[AuthContext] Starting login for:", email);
 
       // ---- LOCAL STORAGE FALLBACK (for demo/testing) ----
@@ -259,10 +260,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       try {
         const auth = getFirebaseAuth();
+        
+        // Set persistence to local
         await setPersistence(auth, browserLocalPersistence);
+        
+        // Sign in with Firebase
         const userCredential = await signInWithEmailAndPassword(auth, email, password);
         const firebaseUser = userCredential.user;
+        
+        // Get ID token
         const idToken = await getIdToken(firebaseUser, true);
+
+        // Create AuthIdentity from Firebase user
         const newUser: AuthIdentity = {
           id: firebaseUser.uid,
           authId: `firebase_${firebaseUser.uid}`,
@@ -273,6 +282,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           role: "owner",
           permissions: ["read", "write"],
         };
+
         setUser(newUser);
         setToken(idToken);
         localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(newUser));
@@ -282,14 +292,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { success: true };
       } catch (err: any) {
         console.error("[AuthContext] Firebase login error:", err.code || err.message);
+        
         let errorMsg = "Invalid email or password.";
-        if (err.code === "auth/user-not-found") errorMsg = "No account found with this email.";
-        else if (err.code === "auth/wrong-password") errorMsg = "Incorrect password.";
-        else if (err.code === "auth/invalid-email") errorMsg = "Invalid email address.";
-        else if (err.code === "auth/too-many-requests") errorMsg = "Too many failed attempts. Please try again later.";
-        else if (err.code === "auth/network-request-failed") errorMsg = "Network error. Please check your connection.";
-        else if (err.code === "auth/invalid-api-key") errorMsg = "Firebase configuration error. Please contact support.";
-        else if (err.code === "auth/app-not-authorized") errorMsg = "Firebase authorization error. Please contact support.";
+        
+        if (err.code === "auth/user-not-found") {
+          errorMsg = "No account found with this email.";
+        } else if (err.code === "auth/wrong-password") {
+          errorMsg = "Incorrect password.";
+        } else if (err.code === "auth/invalid-email") {
+          errorMsg = "Invalid email address.";
+        } else if (err.code === "auth/too-many-requests") {
+          errorMsg = "Too many failed attempts. Please try again later.";
+        } else if (err.code === "auth/network-request-failed") {
+          errorMsg = "Network error. Please check your connection.";
+        } else if (err.code === "auth/invalid-api-key") {
+          errorMsg = "Firebase configuration error. Please contact support.";
+        } else if (err.code === "auth/app-not-authorized") {
+          errorMsg = "Firebase authorization error. Please contact support.";
+        }
+        
         setError(errorMsg);
         setIsPending(false);
         return { success: false, error: errorMsg };
@@ -298,6 +319,202 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [broadcastAuthUpdate]
   );
 
+  // ---- EMAIL REGISTRATION ----
+  const registerWithEmail = useCallback(
+    async (email: string, password: string, name: string): Promise<boolean> => {
+      setIsPending(true);
+      setError(null);
+
+      console.info("[AuthContext] Registering new user:", email);
+
+      try {
+        const auth = getFirebaseAuth();
+        
+        // Set persistence to local
+        await setPersistence(auth, browserLocalPersistence);
+        
+        // Create user with Firebase
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        const firebaseUser = userCredential.user;
+        
+        // Update display name
+        await updateProfile(firebaseUser, { displayName: name });
+        
+        // Get ID token
+        const idToken = await getIdToken(firebaseUser, true);
+
+        // Create AuthIdentity from Firebase user
+        const newUser: AuthIdentity = {
+          id: firebaseUser.uid,
+          authId: `firebase_${firebaseUser.uid}`,
+          authMethod: "email",
+          email: firebaseUser.email || email,
+          name: name,
+          role: "owner",
+          permissions: ["read", "write"],
+        };
+
+        setUser(newUser);
+        setToken(idToken);
+        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(newUser));
+        localStorage.setItem(TOKEN_STORAGE_KEY, idToken);
+        broadcastAuthUpdate(newUser, idToken);
+        setIsPending(false);
+        return true;
+      } catch (err: any) {
+        console.error("[AuthContext] Firebase registration error:", err.code || err.message);
+        
+        // Handle specific Firebase errors
+        if (err.code === "auth/email-already-in-use") {
+          setError("An account with this email already exists.");
+        } else if (err.code === "auth/invalid-email") {
+          setError("Invalid email address.");
+        } else if (err.code === "auth/weak-password") {
+          setError("Password should be at least 6 characters.");
+        } else if (err.code === "auth/invalid-api-key") {
+          setError("Firebase configuration error. Please contact support.");
+        } else if (err.code === "auth/app-not-authorized") {
+          setError("Firebase authorization error. Please contact support.");
+        } else {
+          setError("Registration failed. Please try again.");
+        }
+        
+        setIsPending(false);
+        return false;
+      }
+    },
+    [broadcastAuthUpdate]
+  );
+
+  // ---- GOOGLE AUTH ----
+  const loginWithGoogle = useCallback(
+    async (): Promise<{ success: boolean; error?: string }> => {
+      setIsPending(true);
+      setError(null);
+
+      console.info("[AuthContext] Starting Google login");
+
+      try {
+        const auth = getFirebaseAuth();
+        const googleProvider = new GoogleAuthProvider();
+        
+        // Set persistence to local
+        await setPersistence(auth, browserLocalPersistence);
+        
+        // Sign in with Google
+        const userCredential = await signInWithPopup(auth, googleProvider);
+        const firebaseUser = userCredential.user;
+        
+        // Get ID token
+        const idToken = await getIdToken(firebaseUser, true);
+
+        // Create AuthIdentity from Firebase user
+        const newUser: AuthIdentity = {
+          id: firebaseUser.uid,
+          authId: `google_${firebaseUser.uid}`,
+          authMethod: "google",
+          email: firebaseUser.email || "",
+          name: firebaseUser.displayName || "User",
+          picture: firebaseUser.photoURL || undefined,
+          role: "owner",
+          permissions: ["read", "write"],
+        };
+
+        setUser(newUser);
+        setToken(idToken);
+        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(newUser));
+        localStorage.setItem(TOKEN_STORAGE_KEY, idToken);
+        broadcastAuthUpdate(newUser, idToken);
+        setIsPending(false);
+        return { success: true };
+      } catch (err: any) {
+        console.error("[AuthContext] Google login error:", err);
+        
+        let errorMsg = "Google login failed. Please try again.";
+        
+        if (err.code === "auth/popup-closed-by-user") {
+          errorMsg = "Sign-in popup was closed.";
+        } else if (err.code === "auth/account-exists-with-different-credential") {
+          errorMsg = "An account already exists with this email using a different sign-in method.";
+        }
+        
+        setError(errorMsg);
+        setIsPending(false);
+        return { success: false, error: errorMsg };
+      }
+    },
+    [broadcastAuthUpdate]
+  );
+
+  // ---- USERNAME AUTH (Local Fallback) ----
+  const loginWithUsername = useCallback(
+    async (username: string, password: string): Promise<boolean> => {
+      setIsPending(true);
+      setError(null);
+
+      const users: Record<string, any> = JSON.parse(localStorage.getItem("fuelpro_username_users") || "{}");
+      const found = Object.values(users).find((u: any) => u.username === username && u.password === password);
+      if (found) {
+        const u = found as any;
+        console.info("[AuthContext] Username login successful for:", u.name);
+        const newUser: AuthIdentity = {
+          id: `username_${username}`,
+          authId: `username_${username}`,
+          authMethod: "username",
+          email: u.email || "",
+          name: u.name || username,
+          role: u.role || "user",
+        };
+        setUser(newUser);
+        setIsPending(false);
+        return true;
+      }
+      setError("Invalid username or password");
+      setIsPending(false);
+      return false;
+    },
+    []
+  );
+
+  const registerWithUsername = useCallback(
+    async (username: string, password: string, name: string, email: string): Promise<boolean> => {
+      setIsPending(true);
+      setError(null);
+
+      const users: Record<string, any> = JSON.parse(localStorage.getItem("fuelpro_username_users") || "{}");
+      if (users[username]) {
+        setError("Username already exists");
+        setIsPending(false);
+        return false;
+      }
+
+      users[username] = { username, password, name, email, role: "user", createdAt: new Date().toISOString() };
+      localStorage.setItem("fuelpro_username_users", JSON.stringify(users));
+      setUser({ id: `username_${username}`, authId: `username_${username}`, authMethod: "username", email: email || "", name: name || username });
+      setIsPending(false);
+      return true;
+    },
+    []
+  );
+
+  // ---- LOGOUT ----
+  const handleLogout = useCallback(async () => {
+    try {
+      const auth = getFirebaseAuth();
+      await firebaseSignOut(auth);
+    } catch (err) {
+      console.error("[AuthContext] Firebase sign out error:", err);
+    }
+    
+    setUser(null);
+    setToken(null);
+    setBindings([]);
+    setError(null);
+    localStorage.removeItem(AUTH_STORAGE_KEY);
+    localStorage.removeItem(TOKEN_STORAGE_KEY);
+    localStorage.removeItem(BINDINGS_STORAGE_KEY);
+    broadcastAuthUpdate(null, null);
+  }, [broadcastAuthUpdate]);
 
   const logout = handleLogout;
 
