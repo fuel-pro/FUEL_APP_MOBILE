@@ -1,21 +1,48 @@
 // ============================================================
 // FirebaseService - Cloud persistence for FuelPro
-// Uses Firebase Realtime Database (free tier: 1GB storage)
+// Uses Firebase Firestore for cloud storage
 // All data encrypted locally before transmission
 // ============================================================
 
-// Firebase config from environment variables or defaults
-const FIREBASE_CONFIG = {
-  databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL || "https://fuel-pro-1.firebaseio.com",
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "fuel-pro-1",
+import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
+import { getFirestore, Firestore, doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
+
+// Firebase config from environment variables
+const firebaseConfig = {
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaSyCgIOzDrLRpFVBVlABmgMJnX0iLa9c8J98',
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'fuel-pro-1.firebaseapp.com',
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || 'fuel-pro-1',
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || 'fuel-pro-1.firebasestorage.app',
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '434474929988',
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || '1:434474929988:web:f141473bd3acfba6d41111',
 };
+
+// Initialize Firebase app
+let firebaseApp: FirebaseApp | null = null;
+let firestoreDb: Firestore | null = null;
+
+function getFirebaseApp(): FirebaseApp {
+  if (firebaseApp) return firebaseApp;
+  const existingApps = getApps();
+  if (existingApps.length > 0) {
+    firebaseApp = existingApps[0];
+    return firebaseApp;
+  }
+  firebaseApp = initializeApp(firebaseConfig);
+  return firebaseApp;
+}
+
+function getFirestoreDb(): Firestore {
+  if (firestoreDb) return firestoreDb;
+  firestoreDb = getFirestore(getFirebaseApp());
+  return firestoreDb;
+}
 
 interface CloudData {
   stationId: string;
   data: Record<string, any>;
   version: number;
-  lastModified: string;
+  lastModified: Date;
   deviceId: string;
 }
 
@@ -78,11 +105,25 @@ export const FirebaseService = {
     localStorage.setItem("fuelpro_cloud_key", key);
   },
 
-  // Sync all data to cloud
+  // Check if Firebase/Firestore is connected
+  async isConnected(): Promise<boolean> {
+    try {
+      const db = getFirestoreDb();
+      const testDoc = doc(db, '_health', 'check');
+      await getDoc(testDoc);
+      return true;
+    } catch (error) {
+      console.log("[Firebase] Connection check:", error);
+      return false;
+    }
+  },
+
+  // Sync all data to cloud using Firestore
   async syncToCloud(stationId: string): Promise<boolean> {
     if (!this.isEnabled()) return false;
 
     try {
+      const db = getFirestoreDb();
       const allData: Record<string, any> = {};
 
       // Collect all relevant localStorage data
@@ -113,7 +154,7 @@ export const FirebaseService = {
         stationId,
         data: allData,
         version: Date.now(),
-        lastModified: new Date().toISOString(),
+        lastModified: new Date(),
         deviceId: getDeviceId(),
       };
 
@@ -122,46 +163,45 @@ export const FirebaseService = {
         getEncryptionKey(stationId)
       );
 
-      const response = await fetch(
-        `${FIREBASE_CONFIG.databaseURL}/stations/${stationId}.json`,
+      // Store in Firestore using stationId as document ID
+      await setDoc(
+        doc(db, 'stations', stationId),
         {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ encrypted, timestamp: Date.now() }),
-        }
+          encrypted,
+          timestamp: serverTimestamp(),
+          deviceId: getDeviceId(),
+        },
+        { merge: true }
       );
 
-      if (response.ok) {
-        localStorage.setItem(
-          "fuelpro_last_cloud_sync",
-          new Date().toISOString()
-        );
-        // Dispatch event for UI update
-        window.dispatchEvent(
-          new CustomEvent("fuelpro-cloud-sync", {
-            detail: { success: true, stationId },
-          })
-        );
-        return true;
-      }
-      return false;
+      localStorage.setItem(
+        "fuelpro_last_cloud_sync",
+        new Date().toISOString()
+      );
+      // Dispatch event for UI update
+      window.dispatchEvent(
+        new CustomEvent("fuelpro-cloud-sync", {
+          detail: { success: true, stationId },
+        })
+      );
+      return true;
     } catch (error) {
       console.error("[Firebase] Sync failed:", error);
       return false;
     }
   },
 
-  // Restore data from cloud
+  // Restore data from cloud using Firestore
   async restoreFromCloud(stationId: string): Promise<boolean> {
     if (!this.isEnabled()) return false;
 
     try {
-      const response = await fetch(
-        `${FIREBASE_CONFIG.databaseURL}/stations/${stationId}.json`
-      );
-      if (!response.ok) return false;
-
-      const result = await response.json();
+      const db = getFirestoreDb();
+      const docSnap = await getDoc(doc(db, 'stations', stationId));
+      
+      if (!docSnap.exists()) return false;
+      
+      const result = docSnap.data();
       if (!result?.encrypted) return false;
 
       const decrypted = decrypt(result.encrypted, getEncryptionKey(stationId));
@@ -224,13 +264,13 @@ export const FirebaseService = {
   // Clear all cloud data for a station
   async clearCloudData(stationId: string): Promise<boolean> {
     try {
-      const response = await fetch(
-        `${FIREBASE_CONFIG.databaseURL}/stations/${stationId}.json`,
-        {
-          method: "DELETE",
-        }
+      const db = getFirestoreDb();
+      await setDoc(
+        doc(db, 'stations', stationId),
+        { deleted: true, deletedAt: serverTimestamp() },
+        { merge: true }
       );
-      return response.ok;
+      return true;
     } catch {
       return false;
     }

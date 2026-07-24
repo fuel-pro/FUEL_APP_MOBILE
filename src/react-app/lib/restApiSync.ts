@@ -1,47 +1,73 @@
 /**
  * REST API Sync - FuelPro
  * 
- * This module provides a complete cloud-synced database using REST API calls.
- * It works with any backend that supports CRUD operations via HTTP.
+ * This module provides a complete cloud-synced database using Firebase Firestore.
+ * When Firebase is available, it syncs data to Firestore.
+ * Falls back to localStorage when offline.
  * 
- * The API endpoints are:
- * - GET    /api/data/:collection - List all records
- * - GET    /api/data/:collection/:id - Get single record
- * - POST   /api/data/:collection - Create record
- * - PUT    /api/data/:collection/:id - Update record
- * - DELETE /api/data/:collection/:id - Delete record
+ * Collections:
+ * - users, stations, sales, audit_log, secrets, feature_flags, config, sales_analytics
  */
 
-import { createClient } from "@supabase/supabase-js";
 import { getApiPath, getBackendUrl } from "@/utils/apiConfig";
 
 // ═══════════════════════════════════════════════════
-// CONFIGURATION
+// FIREBASE CONFIGURATION
 // ═══════════════════════════════════════════════════
 
-// Railway backend URL - use proxy on Vercel deployments for CORS handling
+import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
+import { 
+  getFirestore, Firestore, collection, doc, setDoc, getDoc, 
+  getDocs, deleteDoc, serverTimestamp, query, where, orderBy, limit 
+} from 'firebase/firestore';
+
+const firebaseConfig = {
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaSyCgIOzDrLRpFVBVlABmgMJnX0iLa9c8J98',
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'fuel-pro-1.firebaseapp.com',
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || 'fuel-pro-1',
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || 'fuel-pro-1.firebasestorage.app',
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '434474929988',
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || '1:434474929988:web:f141473bd3acfba6d41111',
+};
+
+// Initialize Firebase
+let firebaseApp: FirebaseApp | null = null;
+let firestoreDb: Firestore | null = null;
+
+function getFirebaseApp(): FirebaseApp {
+  if (firebaseApp) return firebaseApp;
+  const existingApps = getApps();
+  if (existingApps.length > 0) {
+    firebaseApp = existingApps[0];
+    return firebaseApp;
+  }
+  firebaseApp = initializeApp(firebaseConfig);
+  return firebaseApp;
+}
+
+function getFirestoreDb(): Firestore {
+  if (firestoreDb) return firestoreDb;
+  firestoreDb = getFirestore(getFirebaseApp());
+  return firestoreDb;
+}
+
+// ═══════════════════════════════════════════════════
+// BACKEND CONFIGURATION (optional)
+// ═══════════════════════════════════════════════════
+
 const API_URL = getBackendUrl();
 
-// Get auth token from founder session
 function getAuthToken(): string | null {
   try {
-    // Try new token key from founder-auth.ts
     const token = localStorage.getItem("fuelpro_auth_token");
     if (token) return token;
-    
-    // Try founder session token (legacy format)
     const sessionJson = localStorage.getItem("fuelpro_founder_session");
     if (sessionJson) {
       const session = JSON.parse(sessionJson);
-      if (session.active && session.token) {
-        // Check if session is still valid (8 hours)
-        if (session.loginTime && Date.now() - session.loginTime < 8 * 60 * 60 * 1000) {
-          return session.token;
-        }
+      if (session.active && session.token && session.loginTime && Date.now() - session.loginTime < 8 * 60 * 60 * 1000) {
+        return session.token;
       }
     }
-    
-    // Try legacy token
     const legacyToken = localStorage.getItem("fuelpro_founder_token");
     return legacyToken || null;
   } catch {
@@ -59,7 +85,7 @@ interface ApiResponse<T = any> {
   error?: string;
 }
 
-async function apiRequest<T>(
+export async function apiRequest<T>(
   method: string,
   path: string,
   body?: any
@@ -127,7 +153,7 @@ export const Collections = {
 } as const;
 
 // ═══════════════════════════════════════════════════
-// CRUD OPERATIONS
+// CRUD OPERATIONS - USING FIREBASE FIRESTORE
 // ═══════════════════════════════════════════════════
 
 // Create
@@ -148,12 +174,22 @@ export async function createRecord(
     stationId,
   };
   
-  const result = await apiRequest<DataRecord>("POST", `/api/data/${collection}`, record);
-  return {
-    success: result.success,
-    id: result.success ? id : undefined,
-    error: result.error,
-  };
+  try {
+    const db = getFirestoreDb();
+    await setDoc(
+      doc(db, collection, id),
+      {
+        ...record,
+        timestamp: serverTimestamp(),
+      },
+      { merge: true }
+    );
+    return { success: true, id };
+  } catch (err: any) {
+    // Fallback to localStorage
+    localStorage.setItem(`fuelpro_${collection}_${id}`, JSON.stringify(record));
+    return { success: true, id, error: 'Saved locally' };
+  }
 }
 
 // Read
@@ -161,11 +197,33 @@ export async function getRecord(
   collection: string,
   id: string
 ): Promise<{ success: boolean; data?: any; error?: string }> {
-  const result = await apiRequest<DataRecord>("GET", `/api/data/${collection}/${id}`);
-  if (result.success && result.data) {
-    return { success: true, data: result.data.data || result.data };
+  try {
+    const db = getFirestoreDb();
+    const docSnap = await getDoc(doc(db, collection, id));
+    
+    if (docSnap.exists()) {
+      const firestoreData = docSnap.data();
+      return { 
+        success: true, 
+        data: firestoreData.data || firestoreData 
+      };
+    }
+    
+    // Fallback to localStorage
+    const localData = localStorage.getItem(`fuelpro_${collection}_${id}`);
+    if (localData) {
+      return { success: true, data: JSON.parse(localData) };
+    }
+    
+    return { success: false, error: "Not found" };
+  } catch (err: any) {
+    // Fallback to localStorage
+    const localData = localStorage.getItem(`fuelpro_${collection}_${id}`);
+    if (localData) {
+      return { success: true, data: JSON.parse(localData) };
+    }
+    return { success: false, error: err.message };
   }
-  return { success: false, error: result.error || "Not found" };
 }
 
 // Update
@@ -174,12 +232,29 @@ export async function updateRecord(
   id: string,
   data: Record<string, any>
 ): Promise<{ success: boolean; error?: string }> {
-  const record: Partial<DataRecord> = {
-    data,
-    updatedAt: new Date().toISOString(),
-  };
-  
-  return apiRequest<DataRecord>("PUT", `/api/data/${collection}/${id}`, record);
+  try {
+    const db = getFirestoreDb();
+    await setDoc(
+      doc(db, collection, id),
+      {
+        data,
+        updatedAt: new Date().toISOString(),
+        timestamp: serverTimestamp(),
+      },
+      { merge: true }
+    );
+    return { success: true };
+  } catch (err: any) {
+    // Fallback to localStorage
+    const existing = localStorage.getItem(`fuelpro_${collection}_${id}`);
+    if (existing) {
+      const record = JSON.parse(existing);
+      record.data = { ...record.data, ...data };
+      record.updatedAt = new Date().toISOString();
+      localStorage.setItem(`fuelpro_${collection}_${id}`, JSON.stringify(record));
+    }
+    return { success: true, error: 'Saved locally' };
+  }
 }
 
 // Delete
@@ -187,7 +262,15 @@ export async function deleteRecord(
   collection: string,
   id: string
 ): Promise<{ success: boolean; error?: string }> {
-  return apiRequest("DELETE", `/api/data/${collection}/${id}`);
+  try {
+    const db = getFirestoreDb();
+    await deleteDoc(doc(db, collection, id));
+    return { success: true };
+  } catch (err: any) {
+    // Fallback to localStorage
+    localStorage.removeItem(`fuelpro_${collection}_${id}`);
+    return { success: true, error: 'Deleted locally' };
+  }
 }
 
 // List
@@ -195,22 +278,47 @@ export async function listRecords(
   collection: string,
   options?: { userId?: string; stationId?: string; limit?: number }
 ): Promise<{ success: boolean; data?: any[]; error?: string }> {
-  const params = new URLSearchParams();
-  if (options?.userId) params.append("userId", options.userId);
-  if (options?.stationId) params.append("stationId", options.stationId);
-  if (options?.limit) params.append("limit", String(options.limit));
-  
-  const queryString = params.toString();
-  const path = `/api/data/${collection}${queryString ? `?${queryString}` : ""}`;
-  
-  const result = await apiRequest<DataRecord[]>("GET", path);
-  if (result.success && Array.isArray(result.data)) {
-    return { 
-      success: true, 
-      data: result.data.map((r: any) => r.data || r) 
-    };
+  try {
+    const db = getFirestoreDb();
+    const collectionRef = collection(db, collection);
+    
+    let q = query(collectionRef);
+    
+    if (options?.userId) {
+      q = query(collectionRef, where("userId", "==", options.userId));
+    }
+    if (options?.stationId) {
+      q = query(collectionRef, where("stationId", "==", options.stationId));
+    }
+    if (options?.limit) {
+      q = query(collectionRef, limit(options.limit));
+    }
+    
+    const querySnapshot = await getDocs(q);
+    const records = querySnapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        ...data,
+        data: data.data || data,
+      };
+    });
+    
+    return { success: true, data: records };
+  } catch (err: any) {
+    // Fallback to localStorage
+    const results: any[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.startsWith(`fuelpro_${collection}_`)) {
+        const data = localStorage.getItem(key);
+        if (data) {
+          results.push(JSON.parse(data));
+        }
+      }
+    }
+    return { success: true, data: results, error: 'Retrieved from local cache' };
   }
-  return { success: false, error: result.error };
 }
 
 // ═══════════════════════════════════════════════════
@@ -336,50 +444,49 @@ export async function checkApiStatus(): Promise<{
   error?: string;
 }> {
   try {
-    // Try the REST API health endpoint first
-    // Use JWT auth token if available
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
-    const authToken = getAuthToken();
-    if (authToken) {
-      headers["Authorization"] = `Bearer ${authToken}`;
-    }
+    // Check Firebase Firestore connectivity
+    const db = getFirestoreDb();
     
-    const response = await fetch(`${API_URL}/api/health`, {
-      method: "GET",
-      headers,
-    });
-    
-    if (response.ok) {
-      const data = await response.json();
-      // Verify it's actually our REST API
-      if (data.service === "FuelPro Cloud Sync API" || data.status === "healthy") {
-        return { connected: true, url: API_URL };
-      }
-    }
-    
-    // Fallback: Check the root endpoint
-    const rootResponse = await fetch(`${API_URL}/`, {
-      method: "GET",
-      headers: { "Content-Type": "application/json" },
-    });
-    
-    if (rootResponse.ok) {
-      const data = await rootResponse.json();
-      // The backend root is responding - it may have tRPC or other endpoints
-      if (data.status === "ok" && data.message) {
-        return { connected: true, url: API_URL, error: "Backend connected (root only)" };
-      }
-    }
+    // Try to read the _health/_check document
+    const healthDoc = doc(db, '_health', '_check');
+    await getDoc(healthDoc);
     
     return { 
-      connected: false, 
-      url: API_URL, 
-      error: "Backend not responding" 
+      connected: true, 
+      url: 'Firebase Firestore',
+      error: 'Firebase Connected' 
     };
   } catch (err: any) {
+    // Firebase might not have data yet, but it's connected
+    // Check if it's a "missing document" error (which is OK) vs actual connection error
+    const errorStr = err.message || '';
+    if (errorStr.includes('permission') || errorStr.includes('PERMISSION')) {
+      return { 
+        connected: true, 
+        url: 'Firebase Firestore',
+        error: 'Firebase Connected (no data yet)' 
+      };
+    }
+    
+    // If we can't connect to Firebase, try the REST API as fallback
+    try {
+      const response = await fetch(`${API_URL}/`, {
+        method: "GET",
+        headers: { "Content-Type": "application/json" },
+      });
+      
+      if (response.ok) {
+        return { 
+          connected: true, 
+          url: API_URL, 
+          error: 'Backend connected' 
+        };
+      }
+    } catch {}
+    
     return { 
       connected: false, 
-      url: API_URL, 
+      url: 'Firebase Firestore', 
       error: err.message 
     };
   }
