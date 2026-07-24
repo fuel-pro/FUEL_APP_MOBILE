@@ -40,12 +40,16 @@ function getApiUrl(): string {
   if (typeof window !== "undefined") {
     const host = window.location.hostname;
     if (host.includes("vercel.app") || host.includes("netlify.app") || host.includes("github.io")) {
-      // Use relative path - Vercel will proxy to Railway backend
-      return "/api/trpc";
+      // Use relative path - but only if backend is configured
+      // Otherwise use Firebase-only mode
+      if (import.meta.env.VITE_TRPC_URL || import.meta.env.VITE_BACKEND_URL) {
+        return "/api/trpc";
+      }
     }
   }
   // For other environments, use the configured backend URL
-  return import.meta.env.VITE_API_URL || "https://fuel-pro-backend-v2-production-7c2b.up.railway.app/api/trpc";
+  // Return empty string if not configured (Firebase-only mode)
+  return import.meta.env.VITE_TRPC_URL || import.meta.env.VITE_BACKEND_URL + "/api/trpc" || "";
 }
 
 // Check if Firebase is configured

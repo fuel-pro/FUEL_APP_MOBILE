@@ -1287,7 +1287,9 @@ export default function FounderAccess() {
                       {cloudStatus.status?.includes("root only") && (
                         <div className="mb-4">
                           <p className="text-xs text-emerald-400 mb-2">✓ Backend Connected:</p>
-                          <p className="text-xs text-gray-500 font-mono">https://fuel-pro-backend-v2-production-7c2b.up.railway.app</p>
+                          <p className="text-xs text-gray-500 font-mono">
+                            {import.meta.env.VITE_BACKEND_URL || "Railway Backend (deprecated)"}
+                          </p>
                         </div>
                       )}
                       <button

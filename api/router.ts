@@ -2,10 +2,11 @@
  * App Router Type Definition
  * 
  * This is a stub file for static Vercel deployments.
- * In production, the actual router is defined on the backend at:
- * https://fuel-pro-backend-v2-production-7c2b.up.railway.app/api/trpc
+ * Primary cloud storage is now Firebase Firestore.
  * 
- * The frontend uses Vercel rewrites to proxy /api/* requests to the backend.
+ * Optional REST API backend can be configured via VITE_BACKEND_URL.
+ * If not configured, the app uses Firebase-only mode with local storage fallback.
+ * 
  * For TypeScript to compile without the actual backend, we define a minimal
  * type structure that matches what the frontend expects.
  * 

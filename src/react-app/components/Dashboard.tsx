@@ -36,12 +36,9 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 let _apiBase: string | null = null;
 let _apiPromise: Promise<string> | null = null;
 function getApiBase(): string {
-  if (!_apiPromise) {
-    _apiPromise = import("@/utils/apiConfig").then(m => m.getBackendUrl());
-  }
   if (_apiBase) return _apiBase;
-  // Synchronous fallback for existing calls
-  return "https://fuel-pro-backend-v2-production-7c2b.up.railway.app";
+  // Use environment variable or empty string (Firebase-only mode)
+  return import.meta.env.VITE_BACKEND_URL || "";
 }
 // Async version for callers that can await
 async function getApiBaseAsync(): Promise<string> {
@@ -50,7 +47,7 @@ async function getApiBaseAsync(): Promise<string> {
     _apiPromise = import("@/utils/apiConfig").then(m => m.getBackendUrl());
   }
   _apiBase = await _apiPromise;
-  return _apiBase;
+  return _apiBase || "";
 }
 
 // Import chart.js components

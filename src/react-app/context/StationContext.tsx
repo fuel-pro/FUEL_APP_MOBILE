@@ -12,7 +12,8 @@ let _apiBase: string | null = null;
 let _apiPromise: Promise<string> | null = null;
 function getApiBase(): string {
   if (_apiBase) return _apiBase;
-  return "https://fuel-pro-backend-v2-production-7c2b.up.railway.app";
+  // Use environment variable or empty string (Firebase-only mode)
+  return import.meta.env.VITE_BACKEND_URL || "";
 }
 async function getApiBaseAsync(): Promise<string> {
   if (_apiBase) return _apiBase;
@@ -20,7 +21,7 @@ async function getApiBaseAsync(): Promise<string> {
     _apiPromise = import("@/utils/apiConfig").then(m => m.getBackendUrl());
   }
   _apiBase = await _apiPromise;
-  return _apiBase;
+  return _apiBase || "";
 }
 
 // Encryption helper for sensitive data

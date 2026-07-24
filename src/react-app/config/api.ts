@@ -1,15 +1,21 @@
 /**
  * FuelPro API Configuration
  * Centralized API client for backend communication
+ * 
+ * Note: Primary cloud storage is now Firebase Firestore.
+ * This API is optional for features not yet migrated to Firebase.
  */
 
 // Lazy API base URL getter using dynamic import to avoid circular deps
 let _apiBase: string | null = null;
 let _apiPromise: Promise<string> | null = null;
+
 function getApiBase(): string {
   if (_apiBase) return _apiBase;
-  return "https://fuel-pro-backend-v2-production-7c2b.up.railway.app";
+  // Try environment variable first, then fall back to empty string (Firebase-only mode)
+  return import.meta.env.VITE_BACKEND_URL || "";
 }
+
 async function getApiBaseAsync(): Promise<string> {
   if (_apiBase) return _apiBase;
   if (!_apiPromise) {
@@ -22,6 +28,11 @@ async function getApiBaseAsync(): Promise<string> {
 // Backend API URL - uses centralized config that handles Vercel proxy
 export function getApiBaseUrl(): string {
   return getApiBase();
+}
+
+// Check if backend API is configured
+export function isBackendConfigured(): boolean {
+  return !!import.meta.env.VITE_BACKEND_URL;
 }
 
 // Get auth token from founder session
@@ -83,6 +94,14 @@ export async function apiRequest<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<ApiResponse<T>> {
+  // If endpoint is empty, backend is not configured - use Firebase instead
+  if (!endpoint) {
+    return {
+      success: false,
+      error: 'Backend not configured - using local storage only'
+    };
+  }
+
   const token = getAuthToken();
   
   const headers: Record<string, string> = {

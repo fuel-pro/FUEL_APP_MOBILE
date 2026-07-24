@@ -3,20 +3,7 @@
   "buildCommand": "npm run build:static",
   "outputDirectory": "dist",
   "installCommand": "npm install --legacy-peer-deps",
-  "rewrites": [
-    {
-      "source": "/api/(.*)",
-      "destination": "https://fuel-pro-backend-v2-production-7c2b.up.railway.app/api/$1"
-    }
-  ],
   "headers": [
-    {
-      "source": "/api/(.*)",
-      "headers": [
-        { "key": "Access-Control-Allow-Credentials", "value": "true" },
-        { "key": "Access-Control-Allow-Origin", "value": "https://fuel-app-mobile.vercel.app" }
-      ]
-    },
     {
       "source": "/(.*)",
       "headers": [
@@ -39,15 +26,12 @@
     }
   ],
   "env": {
-    "VITE_FIREBASE_API_KEY": "AIzaSyDemoKeyForFuelPro",
+    "VITE_FIREBASE_API_KEY": "AIzaSyCgIOzDrLRpFVBVlABmgMJnX0iLa9c8J98",
     "VITE_FIREBASE_AUTH_DOMAIN": "fuel-pro-1.firebaseapp.com",
     "VITE_FIREBASE_DATABASE_URL": "https://fuel-pro-1.firebaseio.com",
     "VITE_FIREBASE_PROJECT_ID": "fuel-pro-1",
-    "VITE_FIREBASE_STORAGE_BUCKET": "fuel-pro-1.appspot.com",
-    "VITE_FIREBASE_MESSAGING_SENDER_ID": "123456789",
-    "VITE_FIREBASE_APP_ID": "1:123456789:web:abcdef123456",
-    "FIREBASE_PROJECT_ID": "fuel-pro-1",
-    "FIREBASE_CLIENT_EMAIL": "firebase-adminsdk-fbsvc@fuel-pro-1.iam.gserviceaccount.com",
-    "FIREBASE_DATABASE_URL": "https://fuel-pro-1.firebaseio.com"
+    "VITE_FIREBASE_STORAGE_BUCKET": "fuel-pro-1.firebasestorage.app",
+    "VITE_FIREBASE_MESSAGING_SENDER_ID": "434474929988",
+    "VITE_FIREBASE_APP_ID": "1:434474929988:web:f141473bd3acfba6d41111"
   }
 }

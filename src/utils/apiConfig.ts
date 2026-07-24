@@ -1,15 +1,20 @@
 /**
- * API Configuration Utility - Fixed v4
+ * API Configuration Utility - Firebase-first
  *
- * Uses direct backend URL for auth endpoints.
- * Uses Vercel proxy for tRPC calls.
+ * Primary cloud storage: Firebase Firestore
+ * Backend API: Railway (optional - graceful degradation if unavailable)
  */
 
-// Production REST API backend (Railway)
-const BACKEND_URL = "https://fuel-pro-backend-v2-production-7c2b.up.railway.app";
+// Check if backend is available - returns false gracefully if not
+export function isBackendAvailable(): boolean {
+  // For now, we don't require the backend - Firebase handles cloud sync
+  // This can be enabled later if needed
+  return false;
+}
 
-// tRPC API (may differ from REST backend)
-const TRPC_API_URL = import.meta.env.VITE_API_URL || "https://fuel-pro-backend-v2-production-7c2b.up.railway.app";
+// Optional REST API backend (for features not yet in Firebase)
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "";
+const TRPC_API_URL = import.meta.env.VITE_TRPC_URL || "";
 
 // Google Gemini API Key (for AI features)
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || "";
@@ -28,35 +33,41 @@ function isVercelDeployment(): boolean {
 
 /**
  * Get the API base URL.
- * Always uses direct backend URL to avoid proxy issues.
+ * Returns empty string if backend not configured.
  */
 export function getApiUrl(): string {
   return BACKEND_URL;
 }
 
 export function getApiPath(path: string): string {
-  return `${BACKEND_URL}${path}`;
+  return BACKEND_URL ? `${BACKEND_URL}${path}` : "";
 }
 
 /** Get tRPC endpoint URL */
 export function getTrpcUrl(): string {
+  if (TRPC_API_URL) {
+    return TRPC_API_URL;
+  }
   if (typeof window !== "undefined" && isVercelDeployment()) {
     return "/api/trpc";
   }
-  return `${TRPC_API_URL}/api/trpc`;
+  return "";
 }
 
 /** Get REST API base URL */
 export function getRestApiUrl(): string {
+  if (BACKEND_URL) {
+    return BACKEND_URL;
+  }
   if (typeof window !== "undefined" && isVercelDeployment()) {
     return "/api";
   }
-  return `${BACKEND_URL}/api`;
+  return "";
 }
 
 /**
  * Get backend URL for auth and data fetching.
- * Always uses direct backend URL.
+ * Returns empty string if backend not configured.
  */
 export function getBackendUrl(): string {
   return BACKEND_URL;
