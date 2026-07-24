@@ -52,79 +52,39 @@ function getFirestoreDb(): Firestore {
 }
 
 // ═══════════════════════════════════════════════════
-// BACKEND CONFIGURATION (optional)
+// FIREBASE-FIRST SYNC (Primary Method)
 // ═══════════════════════════════════════════════════
 
-const API_URL = getBackendUrl();
+// Collections enum
+export enum Collections {
+  USERS = 'users',
+  STATIONS = 'stations',
+  SALES = 'sales',
+  AUDIT_LOG = 'audit_log',
+  SECRETS = 'secrets',
+  FEATURE_FLAGS = 'feature_flags',
+  CONFIG = 'config',
+  SALES_ANALYTICS = 'sales_analytics',
+}
 
-function getAuthToken(): string | null {
+// Get user ID from localStorage
+function getCurrentUserId(): string | null {
   try {
-    const token = localStorage.getItem("fuelpro_auth_token");
-    if (token) return token;
-    const sessionJson = localStorage.getItem("fuelpro_founder_session");
-    if (sessionJson) {
-      const session = JSON.parse(sessionJson);
-      if (session.active && session.token && session.loginTime && Date.now() - session.loginTime < 8 * 60 * 60 * 1000) {
-        return session.token;
-      }
+    const authIdentity = localStorage.getItem("fuelpro_auth_identity");
+    if (authIdentity) {
+      const user = JSON.parse(authIdentity);
+      return user?.id || null;
     }
-    const legacyToken = localStorage.getItem("fuelpro_founder_token");
-    return legacyToken || null;
+    return null;
   } catch {
     return null;
   }
 }
 
 // ═══════════════════════════════════════════════════
-// REST API CLIENT
+// BACKEND CONFIGURATION (optional - for legacy support)
 // ═══════════════════════════════════════════════════
 
-interface ApiResponse<T = any> {
-  success: boolean;
-  data?: T;
-  error?: string;
-}
-
-export async function apiRequest<T>(
-  method: string,
-  path: string,
-  body?: any
-): Promise<ApiResponse<T>> {
-  try {
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-    };
-    
-    // Use real JWT auth token instead of static API key
-    const authToken = getAuthToken();
-    if (authToken) {
-      headers["Authorization"] = `Bearer ${authToken}`;
-    }
-    
-    // Use proxy path on Vercel deployments for CORS handling
-    const url = getApiPath(path);
-    const response = await fetch(url, {
-      method,
-      headers,
-      body: body ? JSON.stringify({ json: body }) : undefined,
-    });
-    
-    if (!response.ok) {
-      return { success: false, error: `HTTP ${response.status}: ${response.statusText}` };
-    }
-    
-    const result = await response.json();
-    
-    // Handle tRPC response format
-    if (result?.result?.data?.json) {
-      return { success: true, data: result.result.data.json };
-    }
-    
-    return { success: true, data: result };
-  } catch (err: any) {
-    return { success: false, error: err.message };
-  }
-}
 
 // ═══════════════════════════════════════════════════
 // UNIFIED DATA STORE
@@ -140,17 +100,6 @@ export interface DataRecord {
   stationId?: string;
 }
 
-// Collection names
-export const Collections = {
-  USERS: "users",
-  STATIONS: "stations",
-  SALES: "sales",
-  AUDIT_LOG: "audit_log",
-  SECRETS: "secrets",
-  FEATURE_FLAGS: "feature_flags",
-  CONFIG: "config",
-  SALES_ANALYTICS: "sales_analytics",
-} as const;
 
 // ═══════════════════════════════════════════════════
 // CRUD OPERATIONS - USING FIREBASE FIRESTORE
