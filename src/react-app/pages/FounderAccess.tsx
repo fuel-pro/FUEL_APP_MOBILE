@@ -78,6 +78,11 @@ import {
   PaymentMethodsSection,
 } from "./founder-sections";
 import { useFounderBackend } from "@/react-app/hooks/useFounderBackend";
+
+// ============================================
+// FIRESTORE REAL-TIME SYNC IMPORTS
+// ============================================
+import { useFirestoreSync, useFirestoreAdminDashboard } from "@/react-app/hooks/useFirestoreSync";
 import { useCloudSync, useCloudUsers, useCloudStations, useCloudAuditLog, useCloudSecrets, useCloudFeatureFlags } from "@/react-app/hooks/useCloudSync";
 import { checkApiStatus } from "@/react-app/lib/restApiSync";
 import { getBackendUrl } from "@/utils/apiConfig";
@@ -322,6 +327,24 @@ export default function FounderAccess() {
     allBackendStations,
     allStationsLoading,
   } = useFounderBackend();
+
+  /* ─── Firestore Real-Time Sync ─── */
+  // Subscribe to all Firestore data for real-time dashboard updates
+  const { 
+    syncStatus: firestoreStatus,
+    firestoreUsers,
+    firestoreStations,
+    firestoreSales,
+    firestoreAdminSettings,
+  } = useFirestoreSync('founder-admin');
+  
+  // Get admin dashboard data with real-time updates
+  const { 
+    dashboardData,
+    loading: firestoreLoading,
+    error: firestoreError,
+    refresh: refreshFirestore 
+  } = useFirestoreAdminDashboard();
 
   /* ─── Auth State ─── */
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -1219,6 +1242,23 @@ export default function FounderAccess() {
                 </>
               )}
             </div>
+            {/* Firebase Real-Time Sync Status */}
+            <div className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg ${firestoreStatus.connected ? 'bg-blue-500/10 border border-blue-500/20' : 'bg-gray-500/10 border border-gray-500/20'}`}>
+              {firestoreStatus.connected ? (
+                <>
+                  <Radio size={10} className="text-blue-400 animate-pulse" />
+                  <span className="text-[10px] text-blue-300">Firebase</span>
+                  <span className="text-[10px] text-gray-500">
+                    ({firestoreStatus.usersCount} users, {firestoreStatus.stationsCount} stations)
+                  </span>
+                </>
+              ) : (
+                <>
+                  <Wifi size={10} className="text-gray-400" />
+                  <span className="text-[10px] text-gray-400">Firebase Ready</span>
+                </>
+              )}
+            </div>
           </div>
         </header>
 
@@ -1226,6 +1266,44 @@ export default function FounderAccess() {
           {/* ══════ OVERVIEW ══════ */}
           {activeSection === "overview" && (
             <div className="space-y-6">
+              {/* Firebase Real-Time Sync Stats */}
+              {firestoreStatus.connected && (
+                <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-4">
+                  <div className="flex items-center gap-3 mb-3">
+                    <Radio size={16} className="text-blue-400 animate-pulse" />
+                    <h3 className="text-sm font-medium text-blue-300">
+                      Firebase Real-Time Sync Active
+                    </h3>
+                    <span className="text-[10px] text-gray-400 bg-gray-800/50 px-2 py-0.5 rounded-full">
+                      LIVE
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-4 gap-4">
+                    <div className="bg-[#161618]/50 rounded-lg p-3">
+                      <p className="text-[10px] text-gray-500 mb-1">Users Synced</p>
+                      <p className="text-lg font-bold text-white">{firestoreStatus.usersCount}</p>
+                    </div>
+                    <div className="bg-[#161618]/50 rounded-lg p-3">
+                      <p className="text-[10px] text-gray-500 mb-1">Stations Synced</p>
+                      <p className="text-lg font-bold text-white">{firestoreStatus.stationsCount}</p>
+                    </div>
+                    <div className="bg-[#161618]/50 rounded-lg p-3">
+                      <p className="text-[10px] text-gray-500 mb-1">Sales Synced</p>
+                      <p className="text-lg font-bold text-white">{firestoreStatus.salesCount}</p>
+                    </div>
+                    <div className="bg-[#161618]/50 rounded-lg p-3">
+                      <p className="text-[10px] text-gray-500 mb-1">Last Sync</p>
+                      <p className="text-sm font-bold text-white">
+                        {firestoreStatus.lastSync 
+                          ? new Date(firestoreStatus.lastSync).toLocaleTimeString()
+                          : 'Now'
+                        }
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
               <div className="grid grid-cols-4 gap-4">
                 {[
                   {
