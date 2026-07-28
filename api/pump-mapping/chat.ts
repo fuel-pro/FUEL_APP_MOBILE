@@ -5,8 +5,6 @@
  * for fuel pump ledger documents
  */
 
-import type { APIRoute } from 'astro';
-
 // Currency rules
 const CURRENCY_RULES: Record<string, { symbol: string; code: string; name: string }> = {
   'kes': { symbol: 'KSh', code: 'KES', name: 'Kenyan Shilling' },

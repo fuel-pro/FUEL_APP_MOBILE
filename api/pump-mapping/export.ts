@@ -5,7 +5,7 @@
  * and sharing via email, WhatsApp, Telegram, SMS
  */
 
-import type { APIRoute } from 'astro';
+// API Route - compatible with Vercel/Node.js
 
 // Types
 interface PumpReading {

@@ -40,6 +40,7 @@ export interface SilentPrintJob {
 }
 
 export interface PrintSettings {
+  printerId?: string;
   paperWidth?: number;
   copies?: number;
   layout?: 'portrait' | 'landscape';
