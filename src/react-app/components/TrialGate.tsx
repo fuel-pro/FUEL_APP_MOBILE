@@ -4,7 +4,10 @@ interface TrialGateProps {
   children: ReactNode;
 }
 
-// Trial gate disabled - all users have full access
+/**
+ * Trial gate component - currently disabled
+ * All users have full access to all features
+ */
 export default function TrialGate({ children }: TrialGateProps) {
   return <>{children}</>;
 }

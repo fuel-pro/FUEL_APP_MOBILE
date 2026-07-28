@@ -154,6 +154,7 @@ export const useFuelStore = create<FuelState>()(
         priceAlerts: state.priceAlerts,
         notifications: state.notifications.filter(n => !n.read).slice(0, 20),
       }),
+      skipHydration: true, // Prevent SSR/hydration mismatches in StrictMode
     }
   )
 );

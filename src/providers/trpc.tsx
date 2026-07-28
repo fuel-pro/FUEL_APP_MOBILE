@@ -55,16 +55,34 @@ function getApiUrl(): string {
 // Check if Firebase is configured
 const isFirebaseConfigured = () => !!import.meta.env.VITE_FIREBASE_API_KEY;
 
-// Get Firebase auth token (async)
+// Get Firebase auth token (async) with proper auth state waiting
 async function getFirebaseToken(): Promise<string | null> {
   if (!isFirebaseConfigured()) return null;
   
   try {
     // Dynamic import to avoid circular dependencies
     const { getFirebaseAuth } = await import("@/firebase/client");
-    const { getIdToken } = await import("firebase/auth");
+    const { getIdToken, onAuthStateChanged } = await import("firebase/auth");
     const auth = getFirebaseAuth();
-    if (auth?.currentUser) {
+    
+    if (!auth) return null;
+    
+    // Wait for auth to initialize if currentUser is not yet available
+    if (!auth.currentUser) {
+      await new Promise<void>((resolve) => {
+        const unsubscribe = onAuthStateChanged(auth, () => {
+          unsubscribe();
+          resolve();
+        });
+        // Timeout after 5 seconds to prevent infinite waiting
+        setTimeout(() => {
+          unsubscribe();
+          resolve();
+        }, 5000);
+      });
+    }
+    
+    if (auth.currentUser) {
       return await getIdToken(auth.currentUser, true);
     }
   } catch {
@@ -97,15 +115,19 @@ function createTrpcClient() {
             const sessionJson = localStorage.getItem("fuelpro_founder_session");
             if (sessionJson) {
               const session = JSON.parse(sessionJson);
-              // Check if session is still valid (8 hours)
+              // Check if session is still valid (8 hours) with type guards
               if (
-                session.active &&
-                session.loginTime &&
+                session?.active === true &&
+                typeof session.loginTime === "number" &&
+                typeof session.token === "string" &&
                 Date.now() - session.loginTime < 8 * 60 * 60 * 1000
               ) {
                 if (session.token) {
                   headers["x-founder-token"] = session.token;
                 }
+              } else {
+                // Clear expired or invalid session
+                localStorage.removeItem("fuelpro_founder_session");
               }
             }
           } catch {

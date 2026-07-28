@@ -14,7 +14,7 @@ import "core-js/stable/fetch";
 
 // Polyfill for URL and URLSearchParams
 import "core-js/stable/url";
-import "core-js/stable/url-search-keys";
+import "core-js/stable/url-search-params";
 
 // Polyfill for Symbol
 import "core-js/stable/symbol";

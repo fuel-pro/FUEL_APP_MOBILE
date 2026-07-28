@@ -35,12 +35,19 @@ self.addEventListener("fetch", event => {
     return;
   }
   
-  // Network-first for API calls
+  // Network-first for API calls with proper tRPC error format
   if (url.pathname.startsWith("/api/")) {
     event.respondWith(
-      fetch(event.request).catch(() => new Response('{"error":"offline"}', {
-        headers: { 'Content-Type': 'application/json' }
-      }))
+      fetch(event.request).catch(() => 
+        new Response(JSON.stringify({
+          jsonrpc: "2.0",
+          error: { code: -32000, message: "Network error / offline" },
+          id: null
+        }), { 
+          status: 503,
+          headers: { 'Content-Type': 'application/json' }
+        })
+      )
     );
     return;
   }

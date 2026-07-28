@@ -20,6 +20,11 @@ export default defineConfig({
           // Split heavy vendor libraries
           trpc: ["@trpc/react-query", "@trpc/client", "@tanstack/react-query"],
           vendor: ["react", "react-dom", "react-router"],
+          // Code split large components to prevent chunk loading failures
+          founder: ["./src/react-app/pages/FounderAccess.tsx"],
+          admin: ["./src/react-app/components/AdminPanel.tsx"],
+          pos: ["./src/react-app/components/PointOfSale.tsx"],
+          reports: ["./src/react-app/components/ReportsCenter.tsx"],
         },
       },
     },

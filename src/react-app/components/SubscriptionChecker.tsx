@@ -4,9 +4,12 @@ interface SubscriptionCheckerProps {
   children: ReactNode;
 }
 
+/**
+ * Subscription checker component - currently disabled
+ * All users have full access to all features
+ */
 export default function SubscriptionChecker({
   children,
 }: SubscriptionCheckerProps) {
-  // Subscription checking disabled - all users have full access
   return <>{children}</>;
 }
