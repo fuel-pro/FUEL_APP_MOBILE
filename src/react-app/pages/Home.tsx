@@ -15,7 +15,7 @@ import { LocationProvider } from "@/react-app/context/LocationContext";
 import Header from "@/react-app/components/Header";
 import TabNavigation from "@/react-app/components/TabNavigation";
 import MobileBottomNav from "@/react-app/components/MobileBottomNav";
-import CloudSyncIndicator from "@/react-app/components/CloudSyncIndicator";
+import { CloudSyncIndicator } from "@/react-app/components/CloudSyncIndicator";
 import AIChatbot from "@/react-app/components/AIChatbot";
 // Shell components loaded eagerly
 import StationManager from "@/react-app/components/StationManager";
