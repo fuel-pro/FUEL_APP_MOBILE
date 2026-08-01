@@ -1,0 +1,58 @@
+/**
+ * Login Page E2E Tests
+ * 
+ * Tests for the authentication flow.
+ */
+
+import { test, expect } from '@playwright/test';
+
+test.describe('Login Page', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/');
+  });
+
+  test('should display the login page correctly', async ({ page }) => {
+    // Check for main heading
+    await expect(page.getByRole('heading', { name: /FuelPro/i })).toBeVisible();
+    
+    // Check for login form elements
+    await expect(page.getByPlaceholder(/you@company\.com/i)).toBeVisible();
+    await expect(page.getByPlaceholder(/Enter your password/i)).toBeVisible();
+    await expect(page.getByRole('button', { name: /Sign In/i })).toBeVisible();
+  });
+
+  test('should show error for invalid credentials', async ({ page }) => {
+    await page.getByPlaceholder(/you@company\.com/i).fill('test@invalid.com');
+    await page.getByPlaceholder(/Enter your password/i).fill('wrongpassword');
+    await page.getByRole('button', { name: /Sign In/i }).click();
+    
+    // Should show error message
+    await expect(page.getByText(/invalid email or password/i)).toBeVisible({ timeout: 10000 });
+  });
+
+  test('should have working toggle between Email and Username', async ({ page }) => {
+    // Check Email button is active by default
+    await expect(page.getByRole('button', { name: /Email/i })).toHaveClass(/active/);
+    
+    // Click Username
+    await page.getByRole('button', { name: /Username/i }).click();
+    
+    // Username button should now be active
+    await expect(page.getByRole('button', { name: /Username/i })).toHaveClass(/active/);
+  });
+
+  test('should have forgot password link', async ({ page }) => {
+    const forgotLink = page.getByRole('link', { name: /Forgot Password/i });
+    await expect(forgotLink).toBeVisible();
+  });
+
+  test('should navigate to reset password page', async ({ page }) => {
+    await page.getByRole('link', { name: /Forgot Password/i }).click();
+    await expect(page).toHaveURL(/\/reset-password/);
+  });
+
+  test('should have create account link', async ({ page }) => {
+    const createLink = page.getByRole('link', { name: /Create one/i });
+    await expect(createLink).toBeVisible();
+  });
+});
