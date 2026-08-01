@@ -7,22 +7,11 @@ import {
   useEffect,
   useRef,
 } from "react";
-import { getFirebaseAuth } from "@/firebase/client";
-import {
-  onAuthStateChanged,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  signOut as firebaseSignOut,
-  sendPasswordResetEmail,
-  getIdToken,
-  GoogleAuthProvider,
-  signInWithPopup,
-  browserLocalPersistence,
-  setPersistence,
-} from "firebase/auth";
+import { supabase } from "@/supabase/client";
+import type { User, Session } from "@supabase/supabase-js";
 
 // ============================================================
-// AUTH CONTEXT v9 - Firebase Production Mode (No Clerk)
+// AUTH CONTEXT v10 - Supabase Production Mode
 // ============================================================
 
 export type AuthMethod = "google" | "email" | "username";
@@ -114,6 +103,20 @@ function loadBindings(): StationRoleBinding[] {
   return [];
 }
 
+// Convert Supabase user to AuthIdentity
+function supabaseUserToIdentity(user: User, session: Session | null): AuthIdentity {
+  return {
+    id: user.id,
+    authId: `supabase_${user.id}`,
+    authMethod: "email",
+    email: user.email || "",
+    name: user.user_metadata?.full_name || user.email?.split("@")[0] || "User",
+    picture: user.user_metadata?.avatar_url || undefined,
+    role: "owner",
+    permissions: ["read", "write"],
+  };
+}
+
 let syncChannel: BroadcastChannel | null = null;
 try {
   syncChannel = new BroadcastChannel("fuelpro_auth_sync");
@@ -134,68 +137,68 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const handleLogoutRef = useRef<(() => void) | null>(null);
   const refreshAuthRef = useRef<(() => Promise<boolean>) | null>(null);
 
-  // Initialize - listen to Firebase auth state
+  // Initialize - listen to Supabase auth state
   useEffect(() => {
     let cancelled = false;
-    let unsubscribe: (() => void) | null = null;
 
     const initAuth = async () => {
       try {
-        const auth = getFirebaseAuth();
+        // Get current session
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
         
-        // Listen to Firebase auth state changes
-        unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-          if (cancelled) return;
-          
-          if (firebaseUser) {
-            try {
-              // Get fresh ID token
-              const idToken = await getIdToken(firebaseUser, true);
-              
-              const newUser: AuthIdentity = {
-                id: firebaseUser.uid,
-                authId: `firebase_${firebaseUser.uid}`,
-                authMethod: "email",
-                email: firebaseUser.email || "",
-                name: firebaseUser.displayName || firebaseUser.email?.split("@")[0] || "User",
-                picture: firebaseUser.photoURL || undefined,
-                role: "owner",
-                permissions: ["read", "write"],
-              };
-              
-              setUser(newUser);
-              setToken(idToken);
-              localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(newUser));
-              localStorage.setItem(TOKEN_STORAGE_KEY, idToken);
-            } catch (err) {
-              console.error("[AuthContext] Error getting Firebase token:", err);
-              // Use cached data if available
-              if (!cancelled) {
-                const cachedUser = loadUser();
-                if (cachedUser) setUser(cachedUser);
-              }
-            }
-          } else {
-            // User signed out
-            setUser(null);
-            setToken(null);
-          }
-        });
+        if (cancelled) return;
+        
+        if (session?.user) {
+          const identity = supabaseUserToIdentity(session.user, session);
+          setUser(identity);
+          setToken(session.access_token);
+          localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(identity));
+          localStorage.setItem(TOKEN_STORAGE_KEY, session.access_token);
+        }
       } catch (err) {
         console.error("[AuthContext] Auth initialization error:", err);
         // Use cached data if available
-        const cachedUser = loadUser();
-        if (cachedUser) setUser(cachedUser);
+        if (!cancelled) {
+          const cachedUser = loadUser();
+          if (cachedUser) setUser(cachedUser);
+        }
       } finally {
         if (!cancelled) setIsLoading(false);
       }
     };
 
+    // Initial session check
     initAuth();
-    
+
+    // Subscribe to auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (cancelled) return;
+        
+        if (event === 'SIGNED_IN' && session?.user) {
+          const identity = supabaseUserToIdentity(session.user, session);
+          setUser(identity);
+          setToken(session.access_token);
+          localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(identity));
+          localStorage.setItem(TOKEN_STORAGE_KEY, session.access_token);
+        } else if (event === 'SIGNED_OUT') {
+          setUser(null);
+          setToken(null);
+          localStorage.removeItem(AUTH_STORAGE_KEY);
+          localStorage.removeItem(TOKEN_STORAGE_KEY);
+        } else if (event === 'TOKEN_REFRESHED' && session?.user) {
+          const identity = supabaseUserToIdentity(session.user, session);
+          setUser(identity);
+          setToken(session.access_token);
+          localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(identity));
+          localStorage.setItem(TOKEN_STORAGE_KEY, session.access_token);
+        }
+      }
+    );
+
     return () => {
       cancelled = true;
-      unsubscribe?.();
+      subscription.unsubscribe();
     };
   }, []);
 
@@ -216,64 +219,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsPending(true);
       setError(null);
 
-      console.info("[AuthContext] Starting Firebase login for:", email);
+      console.info("[AuthContext] Starting Supabase login for:", email);
 
       try {
-        const auth = getFirebaseAuth();
-        
-        // Set persistence to local
-        await setPersistence(auth, browserLocalPersistence);
-        
-        // Sign in with Firebase
-        const userCredential = await signInWithEmailAndPassword(auth, email, password);
-        const firebaseUser = userCredential.user;
-        
-        // Get ID token
-        const idToken = await getIdToken(firebaseUser, true);
+        const { data, error: supabaseError } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
 
-        // Create AuthIdentity from Firebase user
-        const newUser: AuthIdentity = {
-          id: firebaseUser.uid,
-          authId: `firebase_${firebaseUser.uid}`,
-          authMethod: "email",
-          email: firebaseUser.email || email,
-          name: firebaseUser.displayName || firebaseUser.email?.split("@")[0] || email.split("@")[0],
-          picture: firebaseUser.photoURL || undefined,
-          role: "owner",
-          permissions: ["read", "write"],
-        };
+        if (supabaseError) {
+          console.error("[AuthContext] Supabase login error:", supabaseError.message);
+          setError(supabaseError.message);
+          setIsPending(false);
+          return { success: false, error: supabaseError.message };
+        }
 
-        setUser(newUser);
-        setToken(idToken);
-        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(newUser));
-        localStorage.setItem(TOKEN_STORAGE_KEY, idToken);
-        broadcastAuthUpdate(newUser, idToken);
+        if (data.user && data.session) {
+          const newUser = supabaseUserToIdentity(data.user, data.session);
+
+          setUser(newUser);
+          setToken(data.session.access_token);
+          localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(newUser));
+          localStorage.setItem(TOKEN_STORAGE_KEY, data.session.access_token);
+          broadcastAuthUpdate(newUser, data.session.access_token);
+        }
+
         setIsPending(false);
         return { success: true };
       } catch (err: any) {
-        console.error("[AuthContext] Firebase login error:", err.code || err.message);
-        
-        let errorMsg = "Invalid email or password.";
-        
-        if (err.code === "auth/user-not-found") {
-          errorMsg = "No account found with this email.";
-        } else if (err.code === "auth/wrong-password") {
-          errorMsg = "Incorrect password.";
-        } else if (err.code === "auth/invalid-email") {
-          errorMsg = "Invalid email address.";
-        } else if (err.code === "auth/too-many-requests") {
-          errorMsg = "Too many failed attempts. Please try again later.";
-        } else if (err.code === "auth/network-request-failed") {
-          errorMsg = "Network error. Please check your connection.";
-        } else if (err.code === "auth/invalid-api-key") {
-          errorMsg = "Firebase configuration error. Please contact support.";
-        } else if (err.code === "auth/app-not-authorized") {
-          errorMsg = "Firebase authorization error. Please contact support.";
-        }
-        
-        setError(errorMsg);
+        console.error("[AuthContext] Supabase login error:", err.message);
+        setError(err.message || "Login failed. Please try again.");
         setIsPending(false);
-        return { success: false, error: errorMsg };
+        return { success: false, error: err.message };
       }
     },
     [broadcastAuthUpdate]
@@ -285,60 +262,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsPending(true);
       setError(null);
 
-      console.info("[AuthContext] Registering new user:", email);
+      console.info("[AuthContext] Registering new user with Supabase:", email);
 
       try {
-        const auth = getFirebaseAuth();
-        
-        // Set persistence to local
-        await setPersistence(auth, browserLocalPersistence);
-        
-        // Create user with Firebase
-        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-        const firebaseUser = userCredential.user;
-        
-        // Update display name
-        await updateProfile(firebaseUser, { displayName: name });
-        
-        // Get ID token
-        const idToken = await getIdToken(firebaseUser, true);
+        const { data, error: supabaseError } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              full_name: name,
+            },
+          },
+        });
 
-        // Create AuthIdentity from Firebase user
-        const newUser: AuthIdentity = {
-          id: firebaseUser.uid,
-          authId: `firebase_${firebaseUser.uid}`,
-          authMethod: "email",
-          email: firebaseUser.email || email,
-          name: name,
-          role: "owner",
-          permissions: ["read", "write"],
-        };
+        if (supabaseError) {
+          console.error("[AuthContext] Supabase registration error:", supabaseError.message);
+          setError(supabaseError.message);
+          setIsPending(false);
+          return false;
+        }
 
-        setUser(newUser);
-        setToken(idToken);
-        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(newUser));
-        localStorage.setItem(TOKEN_STORAGE_KEY, idToken);
-        broadcastAuthUpdate(newUser, idToken);
+        if (data.user && data.session) {
+          const newUser = supabaseUserToIdentity(data.user, data.session);
+
+          setUser(newUser);
+          setToken(data.session.access_token);
+          localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(newUser));
+          localStorage.setItem(TOKEN_STORAGE_KEY, data.session.access_token);
+          broadcastAuthUpdate(newUser, data.session.access_token);
+        } else if (data.user && !data.session) {
+          // Email confirmation required
+          console.info("[AuthContext] Registration successful, email confirmation required");
+        }
+
         setIsPending(false);
         return true;
       } catch (err: any) {
-        console.error("[AuthContext] Firebase registration error:", err.code || err.message);
-        
-        // Handle specific Firebase errors
-        if (err.code === "auth/email-already-in-use") {
-          setError("An account with this email already exists.");
-        } else if (err.code === "auth/invalid-email") {
-          setError("Invalid email address.");
-        } else if (err.code === "auth/weak-password") {
-          setError("Password should be at least 6 characters.");
-        } else if (err.code === "auth/invalid-api-key") {
-          setError("Firebase configuration error. Please contact support.");
-        } else if (err.code === "auth/app-not-authorized") {
-          setError("Firebase authorization error. Please contact support.");
-        } else {
-          setError("Registration failed. Please try again.");
-        }
-        
+        console.error("[AuthContext] Supabase registration error:", err.message);
+        setError(err.message || "Registration failed. Please try again.");
         setIsPending(false);
         return false;
       }
@@ -346,64 +307,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [broadcastAuthUpdate]
   );
 
-  // ---- GOOGLE AUTH ----
+  // ---- GOOGLE AUTH (Supabase OAuth) ----
   const loginWithGoogle = useCallback(
     async (): Promise<{ success: boolean; error?: string }> => {
       setIsPending(true);
       setError(null);
 
-      console.info("[AuthContext] Starting Google login");
+      console.info("[AuthContext] Starting Google login with Supabase");
 
       try {
-        const auth = getFirebaseAuth();
-        const googleProvider = new GoogleAuthProvider();
-        
-        // Set persistence to local
-        await setPersistence(auth, browserLocalPersistence);
-        
-        // Sign in with Google
-        const userCredential = await signInWithPopup(auth, googleProvider);
-        const firebaseUser = userCredential.user;
-        
-        // Get ID token
-        const idToken = await getIdToken(firebaseUser, true);
+        const { data, error: supabaseError } = await supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            redirectTo: window.location.origin,
+          },
+        });
 
-        // Create AuthIdentity from Firebase user
-        const newUser: AuthIdentity = {
-          id: firebaseUser.uid,
-          authId: `google_${firebaseUser.uid}`,
-          authMethod: "google",
-          email: firebaseUser.email || "",
-          name: firebaseUser.displayName || "User",
-          picture: firebaseUser.photoURL || undefined,
-          role: "owner",
-          permissions: ["read", "write"],
-        };
+        if (supabaseError) {
+          console.error("[AuthContext] Supabase Google login error:", supabaseError.message);
+          setError(supabaseError.message);
+          setIsPending(false);
+          return { success: false, error: supabaseError.message };
+        }
 
-        setUser(newUser);
-        setToken(idToken);
-        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(newUser));
-        localStorage.setItem(TOKEN_STORAGE_KEY, idToken);
-        broadcastAuthUpdate(newUser, idToken);
+        // OAuth will redirect, so we don't set user here
+        // The auth state change will be handled by onAuthStateChange
         setIsPending(false);
         return { success: true };
       } catch (err: any) {
-        console.error("[AuthContext] Google login error:", err);
-        
-        let errorMsg = "Google login failed. Please try again.";
-        
-        if (err.code === "auth/popup-closed-by-user") {
-          errorMsg = "Sign-in popup was closed.";
-        } else if (err.code === "auth/account-exists-with-different-credential") {
-          errorMsg = "An account already exists with this email using a different sign-in method.";
-        }
-        
-        setError(errorMsg);
+        console.error("[AuthContext] Supabase Google login error:", err.message);
+        setError(err.message || "Google login failed. Please try again.");
         setIsPending(false);
-        return { success: false, error: errorMsg };
+        return { success: false, error: err.message };
       }
     },
-    [broadcastAuthUpdate]
+    []
   );
 
   // ---- USERNAME AUTH (Local Fallback) ----
@@ -460,10 +398,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // ---- LOGOUT ----
   const handleLogout = useCallback(async () => {
     try {
-      const auth = getFirebaseAuth();
-      await firebaseSignOut(auth);
+      await supabase.auth.signOut();
     } catch (err) {
-      console.error("[AuthContext] Firebase sign out error:", err);
+      console.error("[AuthContext] Supabase sign out error:", err);
     }
     
     setUser(null);
@@ -480,14 +417,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // ---- REFRESH AUTH ----
   const refreshAuth = useCallback(async (): Promise<boolean> => {
-    const storedToken = loadToken();
-    if (!storedToken) return false;
     try {
-      const auth = getFirebaseAuth();
-      const firebaseUser = auth.currentUser;
-      if (firebaseUser) {
-        const newToken = await getIdToken(firebaseUser, true);
-        setToken(newToken);
+      const { data: { session }, error } = await supabase.auth.getSession();
+      if (error) throw error;
+      if (session) {
+        setToken(session.access_token);
         return true;
       }
     } catch {
@@ -597,22 +531,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setError(null);
 
       try {
-        const auth = getFirebaseAuth();
-        await sendPasswordResetEmail(auth, email);
+        const { error: supabaseError } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: `${window.location.origin}/reset-password`,
+        });
+
+        if (supabaseError) {
+          console.error("[AuthContext] Password reset error:", supabaseError.message);
+          setError(supabaseError.message);
+          setIsPending(false);
+          return { success: false, message: supabaseError.message };
+        }
+
         console.log("[Password Reset] Reset email sent to:", email);
         setIsPending(false);
         return { success: true, message: "Password reset email sent. Check your inbox." };
       } catch (err: any) {
-        console.error("[AuthContext] Password reset error:", err);
-        
-        let errorMsg = "Failed to send reset email.";
-        if (err.code === "auth/user-not-found") {
-          errorMsg = "No account found with this email.";
-        }
-        
-        setError(errorMsg);
+        console.error("[AuthContext] Password reset error:", err.message);
+        setError(err.message || "Failed to send reset email.");
         setIsPending(false);
-        return { success: false, message: errorMsg };
+        return { success: false, message: err.message || "Failed to send reset email." };
       }
     },
     []
@@ -620,7 +557,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const verifyResetCode = useCallback(
     (email: string, code: string): boolean => {
-      setError("Firebase handles password reset via email link. Code verification not needed.");
+      setError("Supabase handles password reset via email link. Code verification not needed.");
       return false;
     },
     []
@@ -638,8 +575,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       try {
-        // Firebase password reset is done via email link, not code
-        setError("Use the password reset email to change your password.");
+        // For Supabase, password update requires the user to be logged in
+        // or use the reset password flow with the token from email
+        setError("Please use the password reset link from your email to change your password.");
         setIsPending(false);
         return false;
       } catch (err: any) {
