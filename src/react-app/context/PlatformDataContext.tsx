@@ -186,8 +186,11 @@ export function PlatformDataProvider({ children }: { children: ReactNode }) {
   const metrics = calculateMetrics(stats);
 
   // Refresh data from localStorage
-  const refreshData = useCallback(() => {
-    setIsLoading(true);
+  // Only triggers loading state when explicitly requested
+  const refreshData = useCallback((showLoading = false) => {
+    if (showLoading) {
+      setIsLoading(true);
+    }
     try {
       setSales(getItem(KEYS.SALES, []));
       setUsers(getItem(KEYS.USERS, []));
@@ -195,7 +198,9 @@ export function PlatformDataProvider({ children }: { children: ReactNode }) {
       setInventory(getItem(KEYS.INVENTORY, []));
       setLastUpdated(new Date());
     } finally {
-      setIsLoading(false);
+      if (showLoading) {
+        setIsLoading(false);
+      }
     }
   }, []);
 
@@ -203,14 +208,29 @@ export function PlatformDataProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const handleStorage = (e: StorageEvent) => {
       if (e.key?.startsWith("fuelpro_")) {
-        refreshData();
+        // Only refresh specific data types, not all data
+        if (e.key.includes("sales")) {
+          setSales(getItem(KEYS.SALES, []));
+        } else if (e.key.includes("users")) {
+          setUsers(getItem(KEYS.USERS, []));
+        } else if (e.key.includes("stations")) {
+          setStations(getItem(KEYS.STATIONS, []));
+        } else if (e.key.includes("inventory")) {
+          setInventory(getItem(KEYS.INVENTORY, []));
+        }
       }
     };
 
     window.addEventListener("storage", handleStorage);
 
-    // Also poll periodically for same-tab updates
-    const interval = setInterval(refreshData, 5000);
+    // Only poll infrequently for same-tab updates (reduced from 5s to 60s)
+    // This is just a fallback - BroadcastChannel handles most sync
+    const interval = setInterval(() => {
+      // Only refresh if window is visible to avoid background drain
+      if (!document.hidden) {
+        refreshData();
+      }
+    }, 60000); // 60 seconds instead of 5 seconds
 
     return () => {
       window.removeEventListener("storage", handleStorage);

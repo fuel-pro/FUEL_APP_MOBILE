@@ -1,5 +1,5 @@
 import { useAuth } from "@/react-app/context/AuthContext";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router";
 import {
   ShieldCheck,
@@ -35,7 +35,14 @@ export default function AuthLogin() {
   } = useAuth();
 
   const [mode, setMode] = useState<LoginMode>("email");
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(() => {
+    // Try to restore from localStorage
+    try {
+      return localStorage.getItem("fuelpro_login_email") || "";
+    } catch {
+      return "";
+    }
+  });
   const [password, setPassword] = useState("");
   const [username, setUsername] = useState("");
   const [regName, setRegName] = useState("");
@@ -52,13 +59,39 @@ export default function AuthLogin() {
   const [showCompanyFields, setShowCompanyFields] = useState(false);
   const [localError, setLocalError] = useState("");
   const [success, setSuccess] = useState("");
+  
+  // Use refs to track form values without causing re-renders
+  const emailRef = useRef(email);
+  const passwordRef = useRef(password);
+  const usernameRef = useRef(username);
+  const regNameRef = useRef(regName);
+  const regEmailRef = useRef(regEmail);
+  const regPasswordRef = useRef(regPassword);
+  const regConfirmRef = useRef(regConfirm);
+
+  // Sync refs with state
+  useEffect(() => { emailRef.current = email; }, [email]);
+  useEffect(() => { passwordRef.current = password; }, [password]);
+  useEffect(() => { usernameRef.current = username; }, [username]);
+  useEffect(() => { regNameRef.current = regName; }, [regName]);
+  useEffect(() => { regEmailRef.current = regEmail; }, [regEmail]);
+  useEffect(() => { regPasswordRef.current = regPassword; }, [regPassword]);
+  useEffect(() => { regConfirmRef.current = regConfirm; }, [regConfirm]);
+
+  // Persist email to localStorage (for convenience)
+  const handleEmailChange = useCallback((value: string) => {
+    setEmail(value);
+    try {
+      localStorage.setItem("fuelpro_login_email", value);
+    } catch {}
+  }, []);
 
   // Redirect if already logged in
   useEffect(() => {
     if (user) navigate("/", { replace: true });
   }, [user, navigate]);
 
-  // Clear errors when switching modes
+  // Clear errors when switching modes (but preserve form values)
   useEffect(() => {
     setLocalError("");
     setSuccess("");
@@ -218,7 +251,7 @@ export default function AuthLogin() {
                   <input
                     type="email"
                     value={email}
-                    onChange={e => { setEmail(e.target.value); setLocalError(""); }}
+                    onChange={e => { handleEmailChange(e.target.value); }}
                     placeholder="you@company.com"
                     className="w-full pl-9 pr-4 py-2.5 bg-white/5 border border-white/20 rounded-xl text-white text-sm placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
                     autoFocus
@@ -238,7 +271,7 @@ export default function AuthLogin() {
                   <input
                     type={showPassword ? "text" : "password"}
                     value={password}
-                    onChange={e => { setPassword(e.target.value); setLocalError(""); }}
+                    onChange={e => setPassword(e.target.value)}
                     placeholder="Enter your password"
                     className="w-full pl-9 pr-10 py-2.5 bg-white/5 border border-white/20 rounded-xl text-white text-sm placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
                     autoComplete="current-password"
@@ -277,7 +310,7 @@ export default function AuthLogin() {
                   <input
                     type="text"
                     value={username}
-                    onChange={e => { setUsername(e.target.value); setLocalError(""); }}
+                    onChange={e => setUsername(e.target.value)}
                     placeholder="Enter your username"
                     className="w-full pl-9 pr-4 py-2.5 bg-white/5 border border-white/20 rounded-xl text-white text-sm placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
                     autoFocus
@@ -292,7 +325,7 @@ export default function AuthLogin() {
                   <input
                     type={showPassword ? "text" : "password"}
                     value={password}
-                    onChange={e => { setPassword(e.target.value); setLocalError(""); }}
+                    onChange={e => setPassword(e.target.value)}
                     placeholder="Enter your password"
                     className="w-full pl-9 pr-10 py-2.5 bg-white/5 border border-white/20 rounded-xl text-white text-sm placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
                     autoComplete="current-password"

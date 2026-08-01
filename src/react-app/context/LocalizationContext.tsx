@@ -120,9 +120,9 @@ export function LocalizationProvider({
     setConfig(buildLocalization(key));
   }, []);
 
-  // Auto-refresh every 5 seconds to catch country changes
+  // Auto-refresh infrequently to catch country changes (reduced from 5s to 60s)
   useEffect(() => {
-    const interval = setInterval(refresh, 5000);
+    const interval = setInterval(refresh, 60000); // 60 seconds instead of 5
     return () => clearInterval(interval);
   }, [refresh]);
 
