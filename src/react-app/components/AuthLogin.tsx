@@ -1,5 +1,5 @@
 import { useAuth } from "@/react-app/context/AuthContext";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router";
 import {
   ShieldCheck,
@@ -22,6 +22,32 @@ type LoginMode = "email" | "username" | "register";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// Persistent storage keys for form data
+const PERSISTED_EMAIL_KEY = "fuelpro_login_email";
+const PERSISTED_PASSWORD_KEY = "fuelpro_login_password";
+
+// Load persisted form data
+function loadPersistedFormData() {
+  try {
+    return {
+      email: localStorage.getItem(PERSISTED_EMAIL_KEY) || "",
+      password: localStorage.getItem(PERSISTED_PASSWORD_KEY) || "",
+    };
+  } catch {
+    return { email: "", password: "" };
+  }
+}
+
+// Save form data to localStorage
+function savePersistedFormData(email: string, password: string) {
+  try {
+    localStorage.setItem(PERSISTED_EMAIL_KEY, email);
+    localStorage.setItem(PERSISTED_PASSWORD_KEY, password);
+  } catch {
+    // Ignore storage errors
+  }
+}
+
 export default function AuthLogin() {
   const navigate = useNavigate();
   const {
@@ -34,9 +60,12 @@ export default function AuthLogin() {
     clearError,
   } = useAuth();
 
+  // Load persisted form data to prevent state loss on remount
+  const persistedData = useRef(loadPersistedFormData());
+
   const [mode, setMode] = useState<LoginMode>("email");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [email, setEmail] = useState(persistedData.current.email);
+  const [password, setPassword] = useState(persistedData.current.password);
   const [username, setUsername] = useState("");
   const [regName, setRegName] = useState("");
   const [regEmail, setRegEmail] = useState("");
@@ -52,6 +81,18 @@ export default function AuthLogin() {
   const [showCompanyFields, setShowCompanyFields] = useState(false);
   const [localError, setLocalError] = useState("");
   const [success, setSuccess] = useState("");
+
+  // Stable callback for email change with persistence
+  const handleEmailChange = useCallback((value: string) => {
+    setEmail(value);
+    savePersistedFormData(value, password);
+  }, [password]);
+
+  // Stable callback for password change with persistence
+  const handlePasswordChange = useCallback((value: string) => {
+    setPassword(value);
+    savePersistedFormData(email, value);
+  }, [email]);
 
   // Redirect if already logged in
   useEffect(() => {
@@ -69,6 +110,17 @@ export default function AuthLogin() {
   useEffect(() => {
     if (error) setLocalError(error);
   }, [error]);
+
+  // Clear password from persistence on successful login
+  useEffect(() => {
+    if (user) {
+      try {
+        localStorage.removeItem(PERSISTED_PASSWORD_KEY);
+      } catch {
+        // Ignore storage errors
+      }
+    }
+  }, [user]);
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -218,7 +270,7 @@ export default function AuthLogin() {
                   <input
                     type="email"
                     value={email}
-                    onChange={e => { setEmail(e.target.value); setLocalError(""); }}
+                    onChange={e => { handleEmailChange(e.target.value); setLocalError(""); }}
                     placeholder="you@company.com"
                     className="w-full pl-9 pr-4 py-2.5 bg-white/5 border border-white/20 rounded-xl text-white text-sm placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
                     autoFocus
@@ -238,7 +290,7 @@ export default function AuthLogin() {
                   <input
                     type={showPassword ? "text" : "password"}
                     value={password}
-                    onChange={e => { setPassword(e.target.value); setLocalError(""); }}
+                    onChange={e => { handlePasswordChange(e.target.value); setLocalError(""); }}
                     placeholder="Enter your password"
                     className="w-full pl-9 pr-10 py-2.5 bg-white/5 border border-white/20 rounded-xl text-white text-sm placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
                     autoComplete="current-password"
@@ -292,7 +344,7 @@ export default function AuthLogin() {
                   <input
                     type={showPassword ? "text" : "password"}
                     value={password}
-                    onChange={e => { setPassword(e.target.value); setLocalError(""); }}
+                    onChange={e => { handlePasswordChange(e.target.value); setLocalError(""); }}
                     placeholder="Enter your password"
                     className="w-full pl-9 pr-10 py-2.5 bg-white/5 border border-white/20 rounded-xl text-white text-sm placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
                     autoComplete="current-password"
