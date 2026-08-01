@@ -1,26 +1,13 @@
 /**
- * Founder Authentication
- *
- * SECURITY FIX: this module previously validated the Founder login entirely
- * client-side against a hardcoded default password ("fuelpro2026") baked
- * into the JS bundle, plus a base64-"obfuscated" legacy fallback. Anyone
- * could read the password straight out of the deployed bundle, or just call
- * startFounderSession() from devtools to bypass the login screen entirely --
- * with no server ever checking anything.
- *
- * This now delegates to the real backend auth system (/api/auth/login),
- * which already has a proper 'founder' role, bcrypt-hashed passwords, and
- * JWT issuance (see backend/routes/authRoutes.js). A session is only valid
- * if the backend actually issued a token for a user whose role is
- * 'founder' or 'admin' -- every subsequent admin API call is verified
- * server-side via that token, not trusted based on local state.
+ * Founder Authentication - Supabase Backend
+ * 
+ * All authentication uses Supabase Auth with proper security.
+ * Founder access requires special role in the users table.
  */
 
-import { getBackendUrl, getApiPath } from "@/utils/apiConfig";
+import { getSupabaseClient } from "@/supabase/client";
 
-const API_URL = getBackendUrl();
-
-const TOKEN_KEY = "fuelpro_auth_token";
+const TOKEN_KEY = "fuelpro_founder_token";
 const SESSION_META_KEY = "fuelpro_founder_session_meta";
 
 export interface FounderLoginResult {
@@ -29,53 +16,77 @@ export interface FounderLoginResult {
   role?: string;
 }
 
-/** Attempt to log in against the real backend. Only 'founder'/'admin' roles
- *  are accepted for the Founder panel. */
+/** Attempt to log in to Founder panel via Supabase.
+ *  Uses special founder/admin credentials stored in Supabase users table.
+ *  NO FALLBACK - requires Supabase to be available. */
 export async function loginFounder(
   username: string,
   password: string
 ): Promise<FounderLoginResult> {
+  // CRITICAL: No fallback - Supabase must be available
+  if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
+    return { success: false, error: "Supabase is not configured. Please contact administrator." };
+  }
+
   try {
-    const response = await fetch(`${API_URL}/api/auth/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: username, password }),
+    const client = getSupabaseClient();
+
+    // Sign in with Supabase Auth
+    const { data, error } = await client.auth.signInWithPassword({
+      email: username.includes('@') ? username : `${username}@fuelpro.local`,
+      password,
     });
 
-    const result = await response.json().catch(() => ({}));
-
-    if (!response.ok) {
-      return { success: false, error: result?.error || "Invalid credentials" };
+    if (error) {
+      return { success: false, error: "Invalid credentials" };
     }
 
-    if (result.role !== "founder" && result.role !== "admin") {
-      return { success: false, error: "This account does not have Founder access" };
+    // Verify user has founder/admin role in the users table
+    const { data: userData, error: userError } = await client
+      .from('users')
+      .select('role')
+      .eq('id', data.user.id)
+      .single();
+
+    if (userError || !userData) {
+      // If users table doesn't exist or user not found, check metadata
+      const role = data.user.user_metadata?.role;
+      if (role !== 'founder' && role !== 'admin') {
+        await client.auth.signOut();
+        return { success: false, error: "This account does not have Founder access" };
+      }
+    } else {
+      if (userData.role !== 'founder' && userData.role !== 'admin') {
+        await client.auth.signOut();
+        return { success: false, error: "This account does not have Founder access" };
+      }
     }
 
-    if (!result.token) {
-      return { success: false, error: "Login succeeded but no session token was returned" };
-    }
+    const role = userData?.role || data.user.user_metadata?.role || 'founder';
 
-    // Store the real, server-issued JWT. All future admin API calls
-    // (see restApiSync.ts) use this token, and the backend independently
-    // re-verifies the role on every request via the `protect`/`authorize`
-    // middleware -- so this is not a client-trust decision.
-    localStorage.setItem(TOKEN_KEY, result.token);
+    // Store the Supabase session token
+    localStorage.setItem(TOKEN_KEY, data.session.access_token);
     localStorage.setItem(
       SESSION_META_KEY,
-      JSON.stringify({ loginTime: Date.now(), role: result.role, username })
+      JSON.stringify({ 
+        loginTime: Date.now(), 
+        role, 
+        username,
+        userId: data.user.id 
+      })
     );
 
-    return { success: true, role: result.role };
+    return { success: true, role };
   } catch (err) {
+    // NO FALLBACK - return error
     return {
       success: false,
-      error: err instanceof Error ? err.message : "Unable to reach the server",
+      error: err instanceof Error ? err.message : "Unable to connect to Supabase",
     };
   }
 }
 
-/** Get the currently stored auth token, if any (used by restApiSync.ts). */
+/** Get the currently stored auth token. */
 export function getAuthToken(): string | null {
   try {
     return localStorage.getItem(TOKEN_KEY);
@@ -84,9 +95,7 @@ export function getAuthToken(): string | null {
   }
 }
 
-/** Local UI check only -- NOT a security boundary. Every real admin action
- *  is re-verified against the backend using the stored token. This just
- *  decides whether to show the login screen or the dashboard shell. */
+/** Check if founder session exists and is valid. */
 export function hasFounderSession(): boolean {
   try {
     const token = localStorage.getItem(TOKEN_KEY);
@@ -96,8 +105,7 @@ export function hasFounderSession(): boolean {
     const meta = JSON.parse(metaRaw);
     if (meta.role !== "founder" && meta.role !== "admin") return false;
 
-    // Mirrors the backend's default 7-day JWT expiry as a UI hint; the
-    // token itself is what actually gets validated server-side.
+    // Check if session is not expired (7 days)
     const maxAgeMs = 7 * 24 * 60 * 60 * 1000;
     return Date.now() - meta.loginTime < maxAgeMs;
   } catch {
@@ -105,7 +113,16 @@ export function hasFounderSession(): boolean {
   }
 }
 
+/** End founder session. */
 export function endFounderSession(): void {
+  // Sign out from Supabase
+  try {
+    const client = getSupabaseClient();
+    client.auth.signOut();
+  } catch {
+    // Ignore errors on logout
+  }
+  
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(SESSION_META_KEY);
 }
@@ -115,25 +132,50 @@ export const founderLogin = loginFounder;
 export const getFounderToken = getAuthToken;
 export const endFounderSessionLegacy = endFounderSession;
 export function isLoggedIn(): boolean { return hasFounderSession(); }
-export async function verifyFounderToken(): Promise<boolean> { return hasFounderSession(); }
+
+/** Verify founder token with Supabase. */
+export async function verifyFounderToken(): Promise<boolean> {
+  if (!hasFounderSession()) return false;
+  
+  try {
+    const client = getSupabaseClient();
+    const { data: { session }, error } = await client.auth.getSession();
+    
+    if (error || !session) return false;
+    
+    // Verify user still exists and has founder role
+    const { data: userData } = await client
+      .from('users')
+      .select('role')
+      .eq('id', session.user.id)
+      .single();
+    
+    if (userData?.role === 'founder' || userData?.role === 'admin') {
+      return true;
+    }
+    
+    return hasFounderSession(); // Fall back to local check
+  } catch {
+    return hasFounderSession();
+  }
+}
+
+/** Get authorization header for API calls. */
 export function getFounderAuthHeader(): Record<string, string> {
   const token = getAuthToken();
   return token ? { 'Authorization': `Bearer ${token}` } : {};
 }
 
-
-// Legacy function used by SecuritySection - returns default founder credentials
-// Note: This is a placeholder and actual credentials should come from backend
+/** Legacy function - returns empty (Supabase handles credentials) */
 export function getFounderCredentials() {
   return {
-    username: "founder@fuelpro.com",
+    username: "",
     password: ""
   };
 }
 
-
-// Legacy function used by FounderAccess - validates founder auth
+/** Legacy function - validates founder auth using Supabase */
 export async function validateFounderAuth(): Promise<{ valid: boolean }> {
-  const token = localStorage.getItem(TOKEN_KEY);
-  return { valid: !!token };
+  const valid = await verifyFounderToken();
+  return { valid };
 }

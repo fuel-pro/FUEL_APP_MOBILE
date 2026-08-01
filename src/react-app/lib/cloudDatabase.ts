@@ -1,9 +1,8 @@
 /**
  * Cloud Database - FuelPro
  * 
- * This module provides a complete cloud-synced database that replaces localStorage.
- * All data is stored in Supabase (or PostgreSQL-compatible backend) and syncs
- * in real-time across all devices.
+ * This module provides a complete cloud-synced database using Supabase.
+ * All data is stored in Supabase and syncs in real-time across all devices.
  * 
  * Setup Required:
  * 1. Create a Supabase project at https://supabase.com

@@ -41,52 +41,36 @@ function getApiUrl(): string {
     const host = window.location.hostname;
     if (host.includes("vercel.app") || host.includes("netlify.app") || host.includes("github.io")) {
       // Use relative path - but only if backend is configured
-      // Otherwise use Firebase-only mode
+      // Otherwise use Supabase-only mode
       if (import.meta.env.VITE_TRPC_URL || import.meta.env.VITE_BACKEND_URL) {
         return "/api/trpc";
       }
     }
   }
   // For other environments, use the configured backend URL
-  // Return empty string if not configured (Firebase-only mode)
+  // Return empty string if not configured (Supabase-only mode)
   return import.meta.env.VITE_TRPC_URL || import.meta.env.VITE_BACKEND_URL + "/api/trpc" || "";
 }
 
-// Check if Firebase is configured
-const isFirebaseConfigured = () => !!import.meta.env.VITE_FIREBASE_API_KEY;
+// Check if Supabase is configured
+const isSupabaseConfigured = () => !!import.meta.env.VITE_SUPABASE_URL && !!import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-// Get Firebase auth token (async) with proper auth state waiting
-async function getFirebaseToken(): Promise<string | null> {
-  if (!isFirebaseConfigured()) return null;
+// Get Supabase auth token (async) with proper auth state waiting
+async function getSupabaseToken(): Promise<string | null> {
+  if (!isSupabaseConfigured()) return null;
   
   try {
     // Dynamic import to avoid circular dependencies
-    const { getFirebaseAuth } = await import("@/firebase/client");
-    const { getIdToken, onAuthStateChanged } = await import("firebase/auth");
-    const auth = getFirebaseAuth();
+    const { getSupabaseClient } = await import("@/supabase/client");
+    const client = getSupabaseClient();
     
-    if (!auth) return null;
+    const { data: { session }, error } = await client.auth.getSession();
     
-    // Wait for auth to initialize if currentUser is not yet available
-    if (!auth.currentUser) {
-      await new Promise<void>((resolve) => {
-        const unsubscribe = onAuthStateChanged(auth, () => {
-          unsubscribe();
-          resolve();
-        });
-        // Timeout after 5 seconds to prevent infinite waiting
-        setTimeout(() => {
-          unsubscribe();
-          resolve();
-        }, 5000);
-      });
-    }
+    if (error || !session) return null;
     
-    if (auth.currentUser) {
-      return await getIdToken(auth.currentUser, true);
-    }
+    return session.access_token;
   } catch {
-    /* Firebase not available */
+    /* Supabase not available */
   }
   return null;
 }
@@ -103,31 +87,30 @@ function createTrpcClient() {
         async headers() {
           const headers: Record<string, string> = {};
           
-          // Include Firebase auth token if configured
-          const firebaseToken = await getFirebaseToken();
-          if (firebaseToken) {
-            headers["Authorization"] = `Bearer ${firebaseToken}`;
-            headers["X-Firebase-Auth"] = "true";
+          // Include Supabase auth token if configured
+          const supabaseToken = await getSupabaseToken();
+          if (supabaseToken) {
+            headers["Authorization"] = `Bearer ${supabaseToken}`;
+            headers["X-Supabase-Auth"] = "true";
           }
           
           // Include founder session token if available (for Founder Access)
           try {
-            const sessionJson = localStorage.getItem("fuelpro_founder_session");
+            const sessionJson = localStorage.getItem("fuelpro_founder_session_meta");
             if (sessionJson) {
               const session = JSON.parse(sessionJson);
-              // Check if session is still valid (8 hours) with type guards
+              // Check if session is still valid (7 days) with type guards
               if (
-                session?.active === true &&
                 typeof session.loginTime === "number" &&
                 typeof session.token === "string" &&
-                Date.now() - session.loginTime < 8 * 60 * 60 * 1000
+                Date.now() - session.loginTime < 7 * 24 * 60 * 60 * 1000
               ) {
                 if (session.token) {
                   headers["x-founder-token"] = session.token;
                 }
               } else {
                 // Clear expired or invalid session
-                localStorage.removeItem("fuelpro_founder_session");
+                localStorage.removeItem("fuelpro_founder_session_meta");
               }
             }
           } catch {

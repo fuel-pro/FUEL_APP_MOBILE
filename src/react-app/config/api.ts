@@ -2,8 +2,8 @@
  * FuelPro API Configuration
  * Centralized API client for backend communication
  * 
- * Note: Primary cloud storage is now Firebase Firestore.
- * This API is optional for features not yet migrated to Firebase.
+ * Note: Primary cloud storage is now Supabase.
+ * This API is optional for features not yet migrated to Supabase.
  */
 
 // Lazy API base URL getter using dynamic import to avoid circular deps
@@ -12,7 +12,7 @@ let _apiPromise: Promise<string> | null = null;
 
 function getApiBase(): string {
   if (_apiBase) return _apiBase;
-  // Try environment variable first, then fall back to empty string (Firebase-only mode)
+  // Try environment variable first, then fall back to empty string (Supabase-only mode)
   return import.meta.env.VITE_BACKEND_URL || "";
 }
 
@@ -35,20 +35,20 @@ export function isBackendConfigured(): boolean {
   return !!import.meta.env.VITE_BACKEND_URL;
 }
 
-// Get auth token from founder session
+// Get auth token from founder session (Supabase-based)
 export function getAuthToken(): string | null {
   try {
-    // Try new token key from founder-auth.ts
-    const token = localStorage.getItem("fuelpro_auth_token");
+    // Try Supabase founder session token
+    const token = localStorage.getItem("fuelpro_founder_token");
     if (token) return token;
     
-    // Try founder session token (legacy format)
-    const sessionJson = localStorage.getItem("fuelpro_founder_session");
+    // Try Supabase session token (Supabase auth)
+    const sessionJson = localStorage.getItem("fuelpro_founder_session_meta");
     if (sessionJson) {
       const session = JSON.parse(sessionJson);
-      if (session.active && session.token) {
-        // Check if session is still valid (8 hours)
-        if (session.loginTime && Date.now() - session.loginTime < 8 * 60 * 60 * 1000) {
+      if (session.token) {
+        // Check if session is still valid (7 days)
+        if (session.loginTime && Date.now() - session.loginTime < 7 * 24 * 60 * 60 * 1000) {
           return session.token;
         }
       }
@@ -94,7 +94,7 @@ export async function apiRequest<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<ApiResponse<T>> {
-  // If endpoint is empty, backend is not configured - use Firebase instead
+  // If endpoint is empty, backend is not configured - use Supabase instead
   if (!endpoint) {
     return {
       success: false,
@@ -121,8 +121,8 @@ export async function apiRequest<T>(
     if (!response.ok) {
       if (response.status === 401) {
         // Handle unauthorized - clear session
-        localStorage.removeItem('fuelpro_auth_token');
-        localStorage.removeItem('fuelpro_founder_session');
+        localStorage.removeItem('fuelpro_founder_token');
+        localStorage.removeItem('fuelpro_founder_session_meta');
         console.warn('Session expired - please login again');
       }
       

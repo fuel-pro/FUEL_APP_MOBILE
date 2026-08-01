@@ -17,8 +17,8 @@ import OfflineIndicator from "@/react-app/components/OfflineIndicator";
 import { TRPCProvider } from "@/providers/trpc";
 import { AlertTriangle, RefreshCw } from "lucide-react";
 
-// Firebase Configuration - No Clerk
-const firebaseConfigured = !!import.meta.env.VITE_FIREBASE_API_KEY;
+// Supabase Configuration - Primary Auth & Database
+const supabaseConfigured = !!import.meta.env.VITE_SUPABASE_URL && !!import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 // Simple fallback for lazy-loaded routes
 function RouteFallback() {
@@ -119,8 +119,8 @@ function useDetectedCountry(): string {
 function MainAppLoader() {
   const { user, isPending: isLoading } = useAuth();
   const detectedCountry = useDetectedCountry();
-  // Firebase is always configured - no Clerk
-  const isFirebaseConfigured = true;
+  // Supabase is configured - primary auth and database
+  const isSupabaseConfigured = supabaseConfigured;
 
   // Add loading timeout - show error after 15 seconds
   const [loadTimeout, setLoadTimeout] = useState(false);
@@ -169,7 +169,7 @@ function MainAppLoader() {
             FuelPro
           </h2>
           <p className="text-gray-300 mt-2 text-sm">
-            Initializing Firebase authentication...
+            Initializing Supabase authentication...
           </p>
           <div className="mt-4 flex items-center gap-2 justify-center">
             <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
@@ -182,7 +182,7 @@ function MainAppLoader() {
     );
   }
 
-  // Firebase auth - show dashboard if user is logged in, otherwise show login
+  // Supabase auth - show dashboard if user is logged in, otherwise show login
   return user ? (
     <TenantProvider detectedCountry={detectedCountry}>
       <StationProvider>
@@ -197,7 +197,7 @@ function MainAppLoader() {
 }
 
 export default function App() {
-  // Firebase only - no Clerk
+  // Supabase - Primary Auth and Database
   return (
     <ErrorBoundary>
       <AuthProvider>
