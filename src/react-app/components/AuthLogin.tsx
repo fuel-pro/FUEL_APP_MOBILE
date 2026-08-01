@@ -38,11 +38,11 @@ function loadPersistedFormData() {
   }
 }
 
-// Save form data to localStorage
-function savePersistedFormData(email: string, password: string) {
+// Save form data to localStorage (email only for security)
+function savePersistedFormData(email: string, _password: string) {
   try {
+    // Only persist email, never persist password for security
     localStorage.setItem(PERSISTED_EMAIL_KEY, email);
-    localStorage.setItem(PERSISTED_PASSWORD_KEY, password);
   } catch {
     // Ignore storage errors
   }
