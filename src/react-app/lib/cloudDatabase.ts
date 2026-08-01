@@ -47,7 +47,7 @@ export async function initCloudDatabase(): Promise<boolean> {
     });
     
     // Test connection
-    const { data, error } = await supabase.from("health").select("id").limit(1);
+    const { data, error } = await supabase.from("_health").select("id").limit(1);
     if (error) {
       console.warn("Cloud Database: Connection test failed", error.message);
       // Try alternative tables
