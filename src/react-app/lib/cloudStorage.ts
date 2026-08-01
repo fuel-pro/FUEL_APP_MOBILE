@@ -1188,4 +1188,22 @@ export const cloudStorage = {
   getSWRStats,
 };
 
+// ─── CloudSync wrapper for compatibility ───
+const cloudSyncInstance = new FuelProCloudSync();
+
+export const cloudSync = {
+  isEnabled: () => cloudSyncInstance.isEnabled(),
+  queueSync: async (key: string, value: any) => {
+    return cloudSyncInstance.pushToCloud({ [key]: value });
+  },
+  syncAll: async () => {
+    return cloudSyncInstance.pushToCloud();
+  },
+  getStatus: () => cloudSyncInstance.getStatus(),
+  logAudit: async (event: string, detail: string, severity: string) => {
+    // Stub for compatibility
+    console.log('[CloudSync Audit]', event, detail, severity);
+  },
+};
+
 export default cloudStorage;

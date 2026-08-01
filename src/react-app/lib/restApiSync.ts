@@ -21,6 +21,43 @@ import {
   getDocs, deleteDoc, serverTimestamp, query, where, orderBy, limit 
 } from 'firebase/firestore';
 
+// ═══════════════════════════════════════════════════
+// BACKEND API CONFIGURATION
+// ═══════════════════════════════════════════════════
+
+const API_URL = import.meta.env.VITE_API_URL || "https://fuel-pro-backend-v2-production-7c2b.up.railway.app";
+
+// Export apiRequest for use in other modules
+export async function apiRequest(
+  method: string = "GET",
+  endpoint: string,
+  data?: Record<string, any>
+): Promise<{ success: boolean; data?: any; error?: string }> {
+  const url = `${API_URL}${endpoint}`;
+  try {
+    const response = await fetch(url, {
+      method,
+      headers: { 
+        "Content-Type": "application/json",
+        ...(data && { body: JSON.stringify(data) })
+      },
+      ...(data && { body: JSON.stringify(data) }),
+    });
+    
+    if (!response.ok) {
+      return { success: false, error: `API error: ${response.status}` };
+    }
+    
+    const result = await response.json();
+    return { success: true, data: result };
+  } catch (error) {
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : "Unknown error" 
+    };
+  }
+}
+
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaSyCgIOzDrLRpFVBVlABmgMJnX0iLa9c8J98',
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'fuel-pro-1.firebaseapp.com',
@@ -419,7 +456,7 @@ export async function checkApiStatus(): Promise<{
     
     // If we can't connect to Firebase, try the REST API as fallback
     try {
-      const response = await fetch(`${API_URL}/`, {
+      const response = await fetch(`${API_URL || ""}/`, {
         method: "GET",
         headers: { "Content-Type": "application/json" },
       });
@@ -427,7 +464,7 @@ export async function checkApiStatus(): Promise<{
       if (response.ok) {
         return { 
           connected: true, 
-          url: API_URL, 
+          url: API_URL || "", 
           error: 'Backend connected' 
         };
       }

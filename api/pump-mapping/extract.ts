@@ -5,7 +5,7 @@
  * from fuel pump ledger documents (PDF, Images, Spreadsheets)
  */
 
-import type { APIRoute } from 'astro';
+// API Route - compatible with Vercel/Node.js
 
 // Types
 interface PumpReading {

@@ -19,6 +19,7 @@ import {
   signInWithPopup,
   browserLocalPersistence,
   setPersistence,
+  updateProfile,
 } from "firebase/auth";
 
 // ============================================================

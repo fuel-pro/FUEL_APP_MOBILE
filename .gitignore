@@ -34,6 +34,14 @@ service-account.json
 *service-account*.json
 *firebase-admin*.json
 
+# Sensitive configuration files (contains API keys and secrets)
 .vercel
 .env*
 !.env.example
+API KEYS.txt
+FIREBASE BACKEND.txt
+*API*KEYS*
+*SECRET*
+*.pem
+*.key
+credentials.json

@@ -4,7 +4,7 @@
  * Central entry point for all Pump Mapping v1 API endpoints
  */
 
-import type { APIRoute } from 'astro';
+// API Route - compatible with Vercel/Node.js
 
 export async function GET(): Promise<Response> {
   return new Response(JSON.stringify({

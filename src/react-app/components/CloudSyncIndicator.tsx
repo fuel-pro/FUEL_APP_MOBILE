@@ -10,3 +10,5 @@ export function CloudSyncIndicator() {
     </span>
   );
 }
+
+export default CloudSyncIndicator;
