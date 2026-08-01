@@ -7,12 +7,11 @@ import {
   useEffect,
   useRef,
 } from "react";
-import { getSupabaseClient } from "@/supabase/client";
-import type { User, Session, AuthChangeEvent } from "@supabase/supabase-js";
+import { supabase } from "@/supabase/client";
+import type { User, Session } from "@supabase/supabase-js";
 
 // ============================================================
-// AUTH CONTEXT v2 - Supabase Production Mode
-// All authentication uses Supabase Auth
+// AUTH CONTEXT v10 - Supabase Production Mode
 // ============================================================
 
 export type AuthMethod = "google" | "email" | "username";
@@ -26,7 +25,6 @@ export interface AuthIdentity {
   picture?: string;
   role?: string;
   permissions?: string[];
-  user_metadata?: Record<string, any>;
 }
 
 export interface StationRoleBinding {
@@ -105,18 +103,17 @@ function loadBindings(): StationRoleBinding[] {
   return [];
 }
 
-// Convert Supabase User to AuthIdentity
-function supabaseUserToIdentity(user: User, session?: Session | null): AuthIdentity {
+// Convert Supabase user to AuthIdentity
+function supabaseUserToIdentity(user: User, session: Session | null): AuthIdentity {
   return {
     id: user.id,
     authId: `supabase_${user.id}`,
-    authMethod: user.app_metadata?.provider === "google" ? "google" : "email",
+    authMethod: "email",
     email: user.email || "",
-    name: user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split("@")[0] || "User",
-    picture: user.user_metadata?.avatar_url || user.user_metadata?.picture || undefined,
-    role: user.user_metadata?.role || "owner",
+    name: user.user_metadata?.full_name || user.email?.split("@")[0] || "User",
+    picture: user.user_metadata?.avatar_url || undefined,
+    role: "owner",
     permissions: ["read", "write"],
-    user_metadata: user.user_metadata,
   };
 }
 
@@ -146,19 +143,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const initAuth = async () => {
       try {
-        const client = getSupabaseClient();
-        
-        // Get initial session
-        const { data: { session } } = await client.auth.getSession();
+        // Get current session
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
         
         if (cancelled) return;
         
         if (session?.user) {
-          const supabaseUser = session.user;
-          const newUser = supabaseUserToIdentity(supabaseUser, session);
-          setUser(newUser);
+          const identity = supabaseUserToIdentity(session.user, session);
+          setUser(identity);
           setToken(session.access_token);
-          localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(newUser));
+          localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(identity));
           localStorage.setItem(TOKEN_STORAGE_KEY, session.access_token);
         }
       } catch (err) {
@@ -173,32 +167,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     };
 
+    // Initial session check
     initAuth();
 
     // Subscribe to auth state changes
-    const client = getSupabaseClient();
-    const { data: { subscription } } = client.auth.onAuthStateChange(
-      (event: AuthChangeEvent, session: Session | null) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
         if (cancelled) return;
         
-        if (event === "SIGNED_IN" && session?.user) {
-          const newUser = supabaseUserToIdentity(session.user, session);
-          setUser(newUser);
+        if (event === 'SIGNED_IN' && session?.user) {
+          const identity = supabaseUserToIdentity(session.user, session);
+          setUser(identity);
           setToken(session.access_token);
-          localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(newUser));
+          localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(identity));
           localStorage.setItem(TOKEN_STORAGE_KEY, session.access_token);
-          broadcastAuthUpdate(newUser, session.access_token);
-        } else if (event === "SIGNED_OUT") {
+        } else if (event === 'SIGNED_OUT') {
           setUser(null);
           setToken(null);
-          broadcastAuthUpdate(null, null);
-        } else if (event === "TOKEN_REFRESHED" && session) {
+          localStorage.removeItem(AUTH_STORAGE_KEY);
+          localStorage.removeItem(TOKEN_STORAGE_KEY);
+        } else if (event === 'TOKEN_REFRESHED' && session?.user) {
+          const identity = supabaseUserToIdentity(session.user, session);
+          setUser(identity);
           setToken(session.access_token);
+          localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(identity));
           localStorage.setItem(TOKEN_STORAGE_KEY, session.access_token);
-        } else if (event === "USER_UPDATED" && session?.user) {
-          const newUser = supabaseUserToIdentity(session.user, session);
-          setUser(newUser);
-          localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(newUser));
         }
       }
     );
@@ -229,51 +222,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.info("[AuthContext] Starting Supabase login for:", email);
 
       try {
-        const client = getSupabaseClient();
-        
-        // Sign in with Supabase
-        const { data, error } = await client.auth.signInWithPassword({
+        const { data, error: supabaseError } = await supabase.auth.signInWithPassword({
           email,
           password,
         });
 
-        if (error) {
-          throw error;
+        if (supabaseError) {
+          console.error("[AuthContext] Supabase login error:", supabaseError.message);
+          setError(supabaseError.message);
+          setIsPending(false);
+          return { success: false, error: supabaseError.message };
         }
 
-        const supabaseUser = data.user;
-        const session = data.session;
-        
-        // Create AuthIdentity from Supabase user
-        const newUser = supabaseUserToIdentity(supabaseUser, session);
+        if (data.user && data.session) {
+          const newUser = supabaseUserToIdentity(data.user, data.session);
 
-        setUser(newUser);
-        setToken(session.access_token);
-        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(newUser));
-        localStorage.setItem(TOKEN_STORAGE_KEY, session.access_token);
-        broadcastAuthUpdate(newUser, session.access_token);
+          setUser(newUser);
+          setToken(data.session.access_token);
+          localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(newUser));
+          localStorage.setItem(TOKEN_STORAGE_KEY, data.session.access_token);
+          broadcastAuthUpdate(newUser, data.session.access_token);
+        }
+
         setIsPending(false);
         return { success: true };
       } catch (err: any) {
         console.error("[AuthContext] Supabase login error:", err.message);
-        
-        let errorMsg = "Invalid email or password.";
-        
-        if (err.message?.includes("Invalid login credentials")) {
-          errorMsg = "Invalid email or password.";
-        } else if (err.message?.includes("Email not confirmed")) {
-          errorMsg = "Please verify your email address.";
-        } else if (err.message?.includes("User not found")) {
-          errorMsg = "No account found with this email.";
-        } else if (err.status === 429) {
-          errorMsg = "Too many failed attempts. Please try again later.";
-        } else if (err.message?.includes("fetch")) {
-          errorMsg = "Network error. Please check your connection.";
-        }
-        
-        setError(errorMsg);
+        setError(err.message || "Login failed. Please try again.");
         setIsPending(false);
-        return { success: false, error: errorMsg };
+        return { success: false, error: err.message };
       }
     },
     [broadcastAuthUpdate]
@@ -288,10 +265,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.info("[AuthContext] Registering new user with Supabase:", email);
 
       try {
-        const client = getSupabaseClient();
-        
-        // Sign up with Supabase
-        const { data, error } = await client.auth.signUp({
+        const { data, error: supabaseError } = await supabase.auth.signUp({
           email,
           password,
           options: {
@@ -301,45 +275,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           },
         });
 
-        if (error) {
-          throw error;
+        if (supabaseError) {
+          console.error("[AuthContext] Supabase registration error:", supabaseError.message);
+          setError(supabaseError.message);
+          setIsPending(false);
+          return false;
         }
 
-        if (data.user) {
-          const supabaseUser = data.user;
-          const session = data.session;
-          
-          // Create AuthIdentity from Supabase user
-          const newUser = supabaseUserToIdentity(supabaseUser, session);
+        if (data.user && data.session) {
+          const newUser = supabaseUserToIdentity(data.user, data.session);
 
           setUser(newUser);
-          if (session) {
-            setToken(session.access_token);
-            localStorage.setItem(TOKEN_STORAGE_KEY, session.access_token);
-          }
+          setToken(data.session.access_token);
           localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(newUser));
-          if (session) {
-            broadcastAuthUpdate(newUser, session.access_token);
-          }
-          setIsPending(false);
-          return true;
+          localStorage.setItem(TOKEN_STORAGE_KEY, data.session.access_token);
+          broadcastAuthUpdate(newUser, data.session.access_token);
+        } else if (data.user && !data.session) {
+          // Email confirmation required
+          console.info("[AuthContext] Registration successful, email confirmation required");
         }
-        
+
         setIsPending(false);
-        return false;
+        return true;
       } catch (err: any) {
         console.error("[AuthContext] Supabase registration error:", err.message);
-        
-        if (err.message?.includes("already registered")) {
-          setError("An account with this email already exists.");
-        } else if (err.message?.includes("invalid email")) {
-          setError("Invalid email address.");
-        } else if (err.message?.includes("Password should be at least")) {
-          setError(err.message);
-        } else {
-          setError("Registration failed. Please try again.");
-        }
-        
+        setError(err.message || "Registration failed. Please try again.");
         setIsPending(false);
         return false;
       }
@@ -347,55 +307,71 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [broadcastAuthUpdate]
   );
 
-  // ---- USERNAME AUTH (Supabase - email format) ----
+  // ---- GOOGLE AUTH (Supabase OAuth) ----
+  const loginWithGoogle = useCallback(
+    async (): Promise<{ success: boolean; error?: string }> => {
+      setIsPending(true);
+      setError(null);
+
+      console.info("[AuthContext] Starting Google login with Supabase");
+
+      try {
+        const { data, error: supabaseError } = await supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            redirectTo: window.location.origin,
+          },
+        });
+
+        if (supabaseError) {
+          console.error("[AuthContext] Supabase Google login error:", supabaseError.message);
+          setError(supabaseError.message);
+          setIsPending(false);
+          return { success: false, error: supabaseError.message };
+        }
+
+        // OAuth will redirect, so we don't set user here
+        // The auth state change will be handled by onAuthStateChange
+        setIsPending(false);
+        return { success: true };
+      } catch (err: any) {
+        console.error("[AuthContext] Supabase Google login error:", err.message);
+        setError(err.message || "Google login failed. Please try again.");
+        setIsPending(false);
+        return { success: false, error: err.message };
+      }
+    },
+    []
+  );
+
+  // ---- USERNAME AUTH (Local Fallback) ----
   const loginWithUsername = useCallback(
     async (username: string, password: string): Promise<boolean> => {
       setIsPending(true);
       setError(null);
 
-      // Convert username to email format for Supabase
-      const email = `${username}@fuelpro.local`;
-      
-      try {
-        const client = getSupabaseClient();
-        
-        const { data, error } = await client.auth.signInWithPassword({
-          email,
-          password,
-        });
-
-        if (error) {
-          throw error;
-        }
-
-        const supabaseUser = data.user;
-        const session = data.session;
-        
+      const users: Record<string, any> = JSON.parse(localStorage.getItem("fuelpro_username_users") || "{}");
+      const found = Object.values(users).find((u: any) => u.username === username && u.password === password);
+      if (found) {
+        const u = found as any;
+        console.info("[AuthContext] Username login successful for:", u.name);
         const newUser: AuthIdentity = {
-          id: supabaseUser.id,
-          authId: `supabase_${supabaseUser.id}`,
+          id: `username_${username}`,
+          authId: `username_${username}`,
           authMethod: "username",
-          email: supabaseUser.email || email,
-          name: supabaseUser.user_metadata?.full_name || username,
-          role: "owner",
-          permissions: ["read", "write"],
+          email: u.email || "",
+          name: u.name || username,
+          role: u.role || "user",
         };
-
         setUser(newUser);
-        setToken(session.access_token);
-        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(newUser));
-        localStorage.setItem(TOKEN_STORAGE_KEY, session.access_token);
-        broadcastAuthUpdate(newUser, session.access_token);
         setIsPending(false);
         return true;
-      } catch (err: any) {
-        console.error("[AuthContext] Username login error:", err.message);
-        setError("Invalid username or password");
-        setIsPending(false);
-        return false;
       }
+      setError("Invalid username or password");
+      setIsPending(false);
+      return false;
     },
-    [broadcastAuthUpdate]
+    []
   );
 
   const registerWithUsername = useCallback(
@@ -403,65 +379,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsPending(true);
       setError(null);
 
-      // Convert username to email format for Supabase
-      const supabaseEmail = `${username}@fuelpro.local`;
-      
-      try {
-        const client = getSupabaseClient();
-        
-        const { data, error } = await client.auth.signUp({
-          email: supabaseEmail,
-          password,
-          options: {
-            data: {
-              full_name: name,
-              username,
-            },
-          },
-        });
-
-        if (error) {
-          throw error;
-        }
-
-        if (data.user) {
-          const supabaseUser = data.user;
-          const session = data.session;
-          
-          const newUser: AuthIdentity = {
-            id: supabaseUser.id,
-            authId: `supabase_${supabaseUser.id}`,
-            authMethod: "username",
-            email: supabaseEmail,
-            name,
-            role: "owner",
-            permissions: ["read", "write"],
-          };
-
-          setUser(newUser);
-          if (session) {
-            setToken(session.access_token);
-            localStorage.setItem(TOKEN_STORAGE_KEY, session.access_token);
-          }
-          localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(newUser));
-          setIsPending(false);
-          return true;
-        }
-        
-        setIsPending(false);
-        return false;
-      } catch (err: any) {
-        console.error("[AuthContext] Username registration error:", err.message);
-        
-        if (err.message?.includes("already registered")) {
-          setError("Username already exists");
-        } else {
-          setError("Registration failed. Please try again.");
-        }
-        
+      const users: Record<string, any> = JSON.parse(localStorage.getItem("fuelpro_username_users") || "{}");
+      if (users[username]) {
+        setError("Username already exists");
         setIsPending(false);
         return false;
       }
+
+      users[username] = { username, password, name, email, role: "user", createdAt: new Date().toISOString() };
+      localStorage.setItem("fuelpro_username_users", JSON.stringify(users));
+      setUser({ id: `username_${username}`, authId: `username_${username}`, authMethod: "username", email: email || "", name: name || username });
+      setIsPending(false);
+      return true;
     },
     []
   );
@@ -469,13 +398,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // ---- LOGOUT ----
   const handleLogout = useCallback(async () => {
     try {
-      const client = getSupabaseClient();
-      const { error } = await client.auth.signOut();
-      if (error) {
-        console.error("[AuthContext] Supabase sign out error:", error);
-      }
+      await supabase.auth.signOut();
     } catch (err) {
-      console.error("[AuthContext] Sign out error:", err);
+      console.error("[AuthContext] Supabase sign out error:", err);
     }
     
     setUser(null);
@@ -493,8 +418,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // ---- REFRESH AUTH ----
   const refreshAuth = useCallback(async (): Promise<boolean> => {
     try {
-      const client = getSupabaseClient();
-      const { data: { session } } = await client.auth.getSession();
+      const { data: { session }, error } = await supabase.auth.getSession();
+      if (error) throw error;
       if (session) {
         setToken(session.access_token);
         return true;
@@ -509,17 +434,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => { handleLogoutRef.current = handleLogout; }, [handleLogout]);
   useEffect(() => { refreshAuthRef.current = refreshAuth; }, [refreshAuth]);
 
-  // Token refresh - Supabase handles this automatically via autoRefreshToken
+  // Token refresh interval
   useEffect(() => {
     if (refreshIntervalRef.current) {
       clearInterval(refreshIntervalRef.current);
       refreshIntervalRef.current = null;
     }
     if (token) {
-      // Check session every 5 minutes
       refreshIntervalRef.current = setInterval(() => {
         refreshAuthRef.current?.();
-      }, 5 * 60 * 1000);
+      }, 14 * 60 * 1000);
     }
     return () => {
       if (refreshIntervalRef.current) {
@@ -527,7 +451,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         refreshIntervalRef.current = null;
       }
     };
-  }, [token, refreshAuth]);
+  }, [token]);
 
   // Cross-tab sync
   useEffect(() => {
@@ -600,21 +524,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return bindings.some(b => b.active && b.authId === user.authId);
   }, [bindings, user]);
 
-  // ---- PASSWORD RESET (Supabase) ----
+  // ---- PASSWORD RESET ----
   const requestPasswordReset = useCallback(
     async (email: string): Promise<{ success: boolean; code?: string; message: string }> => {
       setIsPending(true);
       setError(null);
 
       try {
-        const client = getSupabaseClient();
-        
-        const { error } = await client.auth.resetPasswordForEmail(email, {
-          redirectTo: `${window.location.origin}/#/reset-password`,
+        const { error: supabaseError } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: `${window.location.origin}/reset-password`,
         });
 
-        if (error) {
-          throw error;
+        if (supabaseError) {
+          console.error("[AuthContext] Password reset error:", supabaseError.message);
+          setError(supabaseError.message);
+          setIsPending(false);
+          return { success: false, message: supabaseError.message };
         }
 
         console.log("[Password Reset] Reset email sent to:", email);
@@ -622,15 +547,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { success: true, message: "Password reset email sent. Check your inbox." };
       } catch (err: any) {
         console.error("[AuthContext] Password reset error:", err.message);
-        
-        let errorMsg = "Failed to send reset email.";
-        if (err.message?.includes("User not found")) {
-          errorMsg = "No account found with this email.";
-        }
-        
-        setError(errorMsg);
+        setError(err.message || "Failed to send reset email.");
         setIsPending(false);
-        return { success: false, message: errorMsg };
+        return { success: false, message: err.message || "Failed to send reset email." };
       }
     },
     []
@@ -638,8 +557,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const verifyResetCode = useCallback(
     (email: string, code: string): boolean => {
-      // Supabase handles password reset via email link, not code verification
-      setError("Supabase handles password reset via email link.");
+      setError("Supabase handles password reset via email link. Code verification not needed.");
       return false;
     },
     []
@@ -657,18 +575,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       try {
-        const client = getSupabaseClient();
-        
-        const { error } = await client.auth.updateUser({
-          password: newPassword,
-        });
-
-        if (error) {
-          throw error;
-        }
-
+        // For Supabase, password update requires the user to be logged in
+        // or use the reset password flow with the token from email
+        setError("Please use the password reset link from your email to change your password.");
         setIsPending(false);
-        return true;
+        return false;
       } catch (err: any) {
         setError(err.message || "Failed to reset password");
         setIsPending(false);

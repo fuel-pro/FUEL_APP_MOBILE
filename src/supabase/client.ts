@@ -1,31 +1,29 @@
 /**
  * Supabase Client Configuration
  * 
- * This file configures the Supabase client for the FuelPro application.
- * Replace Firebase with Supabase for authentication and database.
+ * This file configures Supabase for the FuelPro application.
+ * Used for:
+ * - User authentication (sign-in/sign-up)
+ * - Database access (PostgreSQL)
+ * - Real-time subscriptions
+ * - File storage
  */
 
-// Supabase configuration from environment variables
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
-
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+
+// Supabase configuration from environment variables
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://ojjscjwatikixlpshmub.supabase.co';
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInJlZiI6Im9qanNjandhdGlraXhscHNobXViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU1NTI3MjcsImV4cCI6MjEwMTEyODcyN30.nw9Agib1JGJE_atO-AJChf-OHdz8g_gauwL7u0CpNfY';
 
 // Singleton Supabase client instance
 let supabaseClient: SupabaseClient | null = null;
 
 /**
- * Initialize and get Supabase client (singleton pattern)
+ * Initialize Supabase client (singleton pattern)
  */
 export function getSupabaseClient(): SupabaseClient {
   if (supabaseClient) {
     return supabaseClient;
-  }
-
-  if (!supabaseUrl || !supabaseAnonKey) {
-    console.error('Supabase configuration missing!');
-    console.error('Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY environment variables');
-    throw new Error('Supabase not configured');
   }
 
   supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
@@ -44,22 +42,17 @@ export function getSupabaseClient(): SupabaseClient {
         setItem: (key, value) => {
           try {
             localStorage.setItem(key, value);
-          } catch (error) {
-            console.error('Error saving to localStorage:', error);
+          } catch {
+            // Ignore storage errors
           }
         },
         removeItem: (key) => {
           try {
             localStorage.removeItem(key);
-          } catch (error) {
-            console.error('Error removing from localStorage:', error);
+          } catch {
+            // Ignore storage errors
           }
         },
-      },
-    },
-    global: {
-      headers: {
-        'x-client-info': 'fuelpro-app',
       },
     },
   });
@@ -67,25 +60,11 @@ export function getSupabaseClient(): SupabaseClient {
   return supabaseClient;
 }
 
-// Export a convenience reference
+// Export singleton instance
 export const supabase = getSupabaseClient();
 
-// Export types
-export type { SupabaseClient };
+// Export config for debugging
+export { supabaseUrl, supabaseAnonKey };
 
-// Re-export Supabase types for convenience
-export type {
-  User,
-  Session,
-  AuthError,
-  AuthChangeEvent,
-  SupabaseAuthClient,
-  SupabaseQueryData,
-  RealtimeChannel,
-  RealtimePostgresChanges,
-} from '@supabase/supabase-js';
-
-export default {
-  getClient: getSupabaseClient,
-  client: supabase,
-};
+// Default export
+export default supabase;

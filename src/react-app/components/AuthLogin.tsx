@@ -1,5 +1,5 @@
 import { useAuth } from "@/react-app/context/AuthContext";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router";
 import {
   ShieldCheck,
@@ -17,18 +17,34 @@ import {
   Fuel,
   User,
 } from "lucide-react";
-import { useInputStability, useClickGuard } from "@/react-app/hooks/useInputStability";
 
 type LoginMode = "email" | "username" | "register";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-// Load persisted email from localStorage
-function loadPersistedEmail(): string {
+// Persistent storage keys for form data
+const PERSISTED_EMAIL_KEY = "fuelpro_login_email";
+const PERSISTED_PASSWORD_KEY = "fuelpro_login_password";
+
+// Load persisted form data
+function loadPersistedFormData() {
   try {
-    return localStorage.getItem("fuelpro_login_email") || "";
+    return {
+      email: localStorage.getItem(PERSISTED_EMAIL_KEY) || "",
+      password: localStorage.getItem(PERSISTED_PASSWORD_KEY) || "",
+    };
   } catch {
-    return "";
+    return { email: "", password: "" };
+  }
+}
+
+// Save form data to localStorage (email only for security)
+function savePersistedFormData(email: string, _password: string) {
+  try {
+    // Only persist email, never persist password for security
+    localStorage.setItem(PERSISTED_EMAIL_KEY, email);
+  } catch {
+    // Ignore storage errors
   }
 }
 
@@ -44,73 +60,46 @@ export default function AuthLogin() {
     clearError,
   } = useAuth();
 
+  // Load persisted form data to prevent state loss on remount
+  const persistedData = useRef(loadPersistedFormData());
+
   const [mode, setMode] = useState<LoginMode>("email");
-  
-  // Use stable input hooks to prevent clearing
-  const emailState = useInputStability(loadPersistedEmail());
-  const passwordState = useInputStability("");
-  const usernameState = useInputStability("");
-  const regNameState = useInputStability("");
-  const regEmailState = useInputStability("");
-  const regPasswordState = useInputStability("");
-  const regConfirmState = useInputStability("");
-  const companyNameState = useInputStability("");
-  const companyPhoneState = useInputStability("");
-  const companyAddressState = useInputStability("");
-  const companyRegNoState = useInputStability("");
-  const taxIdState = useInputStability("");
-  
+  const [email, setEmail] = useState(persistedData.current.email);
+  const [password, setPassword] = useState(persistedData.current.password);
+  const [username, setUsername] = useState("");
+  const [regName, setRegName] = useState("");
+  const [regEmail, setRegEmail] = useState("");
+  const [regPassword, setRegPassword] = useState("");
+  const [regConfirm, setRegConfirm] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [companyName, setCompanyName] = useState("");
+  const [companyPhone, setCompanyPhone] = useState("");
+  const [companyAddress, setCompanyAddress] = useState("");
   const [companyIndustry, setCompanyIndustry] = useState("fuel_retail");
+  const [companyRegNo, setCompanyRegNo] = useState("");
+  const [taxId, setTaxId] = useState("");
   const [showCompanyFields, setShowCompanyFields] = useState(false);
   const [localError, setLocalError] = useState("");
   const [success, setSuccess] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  
-  // Use click guard to prevent rapid clicking
-  const { withClickGuard } = useClickGuard({ minClickInterval: 300 });
-  
-  // Refs to track values for form submission
-  const emailRef = useRef(emailState.value);
-  const passwordRef = useRef(passwordState.value);
-  const usernameRef = useRef(usernameState.value);
-  const regNameRef = useRef(regNameState.value);
-  const regEmailRef = useRef(regEmailState.value);
-  const regPasswordRef = useRef(regPasswordState.value);
-  const regConfirmRef = useRef(regConfirmState.value);
-  const companyNameRef = useRef(companyNameState.value);
-  const companyPhoneRef = useRef(companyPhoneState.value);
-  const companyAddressRef = useRef(companyAddressState.value);
-  const companyRegNoRef = useRef(companyRegNoState.value);
-  const taxIdRef = useRef(taxIdState.value);
 
-  // Sync refs with stable state values
-  useEffect(() => { emailRef.current = emailState.value; }, [emailState.value]);
-  useEffect(() => { passwordRef.current = passwordState.value; }, [passwordState.value]);
-  useEffect(() => { usernameRef.current = usernameState.value; }, [usernameState.value]);
-  useEffect(() => { regNameRef.current = regNameState.value; }, [regNameState.value]);
-  useEffect(() => { regEmailRef.current = regEmailState.value; }, [regEmailState.value]);
-  useEffect(() => { regPasswordRef.current = regPasswordState.value; }, [regPasswordState.value]);
-  useEffect(() => { regConfirmRef.current = regConfirmState.value; }, [regConfirmState.value]);
-  useEffect(() => { companyNameRef.current = companyNameState.value; }, [companyNameState.value]);
-  useEffect(() => { companyPhoneRef.current = companyPhoneState.value; }, [companyPhoneState.value]);
-  useEffect(() => { companyAddressRef.current = companyAddressState.value; }, [companyAddressState.value]);
-  useEffect(() => { companyRegNoRef.current = companyRegNoState.value; }, [companyRegNoState.value]);
-  useEffect(() => { taxIdRef.current = taxIdState.value; }, [taxIdState.value]);
-
-  // Persist email to localStorage (for convenience)
+  // Stable callback for email change with persistence
   const handleEmailChange = useCallback((value: string) => {
-    emailState.setValue(value);
-    try {
-      localStorage.setItem("fuelpro_login_email", value);
-    } catch {}
-  }, [emailState]);
+    setEmail(value);
+    savePersistedFormData(value, password);
+  }, [password]);
+
+  // Stable callback for password change with persistence
+  const handlePasswordChange = useCallback((value: string) => {
+    setPassword(value);
+    savePersistedFormData(email, value);
+  }, [email]);
 
   // Redirect if already logged in
   useEffect(() => {
     if (user) navigate("/", { replace: true });
   }, [user, navigate]);
 
-  // Clear errors when switching modes (but preserve form values)
+  // Clear errors when switching modes
   useEffect(() => {
     setLocalError("");
     setSuccess("");
@@ -121,47 +110,34 @@ export default function AuthLogin() {
   useEffect(() => {
     if (error) setLocalError(error);
   }, [error]);
-  
-  // Get current values from refs for form submission
-  const email = emailRef.current;
-  const password = passwordRef.current;
-  const username = usernameRef.current;
-  const regName = regNameRef.current;
-  const regEmail = regEmailRef.current;
-  const regPassword = regPasswordRef.current;
-  const regConfirm = regConfirmRef.current;
-  const companyName = companyNameRef.current;
-  const companyPhone = companyPhoneRef.current;
-  const companyAddress = companyAddressRef.current;
-  const companyRegNo = companyRegNoRef.current;
-  const taxId = taxIdRef.current;
+
+  // Clear password from persistence on successful login
+  useEffect(() => {
+    if (user) {
+      try {
+        localStorage.removeItem(PERSISTED_PASSWORD_KEY);
+      } catch {
+        // Ignore storage errors
+      }
+    }
+  }, [user]);
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLocalError("");
-    // Use refs to get latest values
-    const currentEmail = emailRef.current;
-    const currentPassword = passwordRef.current;
-    
-    if (!currentEmail.trim()) { setLocalError("Please enter your email"); return; }
-    if (!EMAIL_REGEX.test(currentEmail.trim())) { setLocalError("Please enter a valid email address"); return; }
-    if (!currentPassword) { setLocalError("Please enter your password"); return; }
-    
-    const result = await loginWithEmail(currentEmail.trim(), currentPassword);
+    if (!email.trim()) { setLocalError("Please enter your email"); return; }
+    if (!EMAIL_REGEX.test(email.trim())) { setLocalError("Please enter a valid email address"); return; }
+    if (!password) { setLocalError("Please enter your password"); return; }
+    const result = await loginWithEmail(email.trim(), password);
     if (!result.success) setLocalError(result.error || "Invalid email or password");
   };
 
   const handleUsernameLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLocalError("");
-    // Use refs to get latest values
-    const currentUsername = usernameRef.current;
-    const currentPassword = passwordRef.current;
-    
-    if (!currentUsername.trim()) { setLocalError("Please enter your username"); return; }
-    if (!currentPassword) { setLocalError("Please enter your password"); return; }
-    
-    const ok = await loginWithUsername(currentUsername.trim(), currentPassword);
+    if (!username.trim()) { setLocalError("Please enter your username"); return; }
+    if (!password) { setLocalError("Please enter your password"); return; }
+    const ok = await loginWithUsername(username.trim(), password);
     if (!ok) setLocalError(error || "Invalid username or password");
   };
 
@@ -169,29 +145,17 @@ export default function AuthLogin() {
     e.preventDefault();
     setLocalError("");
     setSuccess("");
-    // Use refs to get latest values
-    const currentRegName = regNameRef.current;
-    const currentRegEmail = regEmailRef.current;
-    const currentRegPassword = regPasswordRef.current;
-    const currentRegConfirm = regConfirmRef.current;
-    const currentCompanyName = companyNameRef.current;
-    const currentCompanyPhone = companyPhoneRef.current;
-    const currentCompanyAddress = companyAddressRef.current;
-    const currentCompanyRegNo = companyRegNoRef.current;
-    const currentTaxId = taxIdRef.current;
-    
-    if (!currentRegName.trim()) { setLocalError("Please enter your name"); return; }
-    if (!currentRegEmail.trim()) { setLocalError("Please enter your email"); return; }
-    if (!EMAIL_REGEX.test(currentRegEmail.trim())) { setLocalError("Please enter a valid email address"); return; }
-    if (!currentRegPassword || currentRegPassword.length < 6) { setLocalError("Password must be at least 6 characters"); return; }
-    if (currentRegPassword !== currentRegConfirm) { setLocalError("Passwords do not match"); return; }
-    
-    const ok = await registerWithEmail(currentRegEmail.trim(), currentRegPassword, currentRegName.trim());
+    if (!regName.trim()) { setLocalError("Please enter your name"); return; }
+    if (!regEmail.trim()) { setLocalError("Please enter your email"); return; }
+    if (!EMAIL_REGEX.test(regEmail.trim())) { setLocalError("Please enter a valid email address"); return; }
+    if (!regPassword || regPassword.length < 6) { setLocalError("Password must be at least 6 characters"); return; }
+    if (regPassword !== regConfirm) { setLocalError("Passwords do not match"); return; }
+    const ok = await registerWithEmail(regEmail.trim(), regPassword, regName.trim());
     if (ok) {
-      if (currentCompanyName || currentCompanyRegNo || currentTaxId) {
+      if (companyName || companyRegNo || taxId) {
         localStorage.setItem("fuelpro_company_profile", JSON.stringify({
-          name: currentCompanyName || currentRegName.trim(), phone: currentCompanyPhone, address: currentCompanyAddress,
-          industry: companyIndustry, regNo: currentCompanyRegNo, taxId: currentTaxId, createdAt: new Date().toISOString(),
+          name: companyName || regName.trim(), phone: companyPhone, address: companyAddress,
+          industry: companyIndustry, regNo: companyRegNo, taxId, createdAt: new Date().toISOString(),
         }));
       }
       setSuccess("Account created! Logging you in...");
@@ -305,14 +269,12 @@ export default function AuthLogin() {
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                   <input
                     type="email"
-                    value={emailState.value}
-                    onChange={e => { handleEmailChange(e.target.value); }}
+                    value={email}
+                    onChange={e => { handleEmailChange(e.target.value); setLocalError(""); }}
                     placeholder="you@company.com"
                     className="w-full pl-9 pr-4 py-2.5 bg-white/5 border border-white/20 rounded-xl text-white text-sm placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
                     autoFocus
                     autoComplete="email"
-                    onBlur={emailState.handleBlur}
-                    onFocus={emailState.handleFocus}
                   />
                 </div>
               </div>
@@ -327,10 +289,8 @@ export default function AuthLogin() {
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                   <input
                     type={showPassword ? "text" : "password"}
-                    value={passwordState.value}
-                    onChange={e => passwordState.setValue(e.target.value)}
-                    onBlur={passwordState.handleBlur}
-                    onFocus={passwordState.handleFocus}
+                    value={password}
+                    onChange={e => { handlePasswordChange(e.target.value); setLocalError(""); }}
                     placeholder="Enter your password"
                     className="w-full pl-9 pr-10 py-2.5 bg-white/5 border border-white/20 rounded-xl text-white text-sm placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
                     autoComplete="current-password"
@@ -368,14 +328,12 @@ export default function AuthLogin() {
                   <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                   <input
                     type="text"
-                    value={usernameState.value}
-                    onChange={e => usernameState.setValue(e.target.value)}
+                    value={username}
+                    onChange={e => { setUsername(e.target.value); setLocalError(""); }}
                     placeholder="Enter your username"
                     className="w-full pl-9 pr-4 py-2.5 bg-white/5 border border-white/20 rounded-xl text-white text-sm placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
                     autoFocus
                     autoComplete="username"
-                    onBlur={usernameState.handleBlur}
-                    onFocus={usernameState.handleFocus}
                   />
                 </div>
               </div>
@@ -385,13 +343,11 @@ export default function AuthLogin() {
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                   <input
                     type={showPassword ? "text" : "password"}
-                    value={passwordState.value}
-                    onChange={e => passwordState.setValue(e.target.value)}
+                    value={password}
+                    onChange={e => { handlePasswordChange(e.target.value); setLocalError(""); }}
                     placeholder="Enter your password"
                     className="w-full pl-9 pr-10 py-2.5 bg-white/5 border border-white/20 rounded-xl text-white text-sm placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
                     autoComplete="current-password"
-                    onBlur={passwordState.handleBlur}
-                    onFocus={passwordState.handleFocus}
                   />
                   <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors">
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -417,39 +373,18 @@ export default function AuthLogin() {
             <form onSubmit={handleRegister} className="space-y-3" noValidate>
               <div>
                 <label className="text-xs font-medium text-gray-300 mb-1 block">Full Name *</label>
-                <input 
-                  type="text" 
-                  value={regNameState.value} 
-                  onChange={e => regNameState.setValue(e.target.value)} 
-                  onBlur={regNameState.handleBlur}
-                  onFocus={regNameState.handleFocus}
-                  placeholder="Your full name" 
-                  autoComplete="name"
+                <input type="text" value={regName} onChange={e => setRegName(e.target.value)} placeholder="Your full name" autoComplete="name"
                   className="w-full px-4 py-2.5 bg-white/5 border border-white/20 rounded-xl text-white text-sm placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 outline-none transition-all" />
               </div>
               <div>
                 <label className="text-xs font-medium text-gray-300 mb-1 block">Email Address *</label>
-                <input 
-                  type="email" 
-                  value={regEmailState.value} 
-                  onChange={e => regEmailState.setValue(e.target.value)} 
-                  onBlur={regEmailState.handleBlur}
-                  onFocus={regEmailState.handleFocus}
-                  placeholder="you@company.com" 
-                  autoComplete="email"
+                <input type="email" value={regEmail} onChange={e => setRegEmail(e.target.value)} placeholder="you@company.com" autoComplete="email"
                   className="w-full px-4 py-2.5 bg-white/5 border border-white/20 rounded-xl text-white text-sm placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 outline-none transition-all" />
               </div>
               <div>
                 <label className="text-xs font-medium text-gray-300 mb-1 block">Password *</label>
                 <div className="relative">
-                  <input 
-                    type={showPassword ? "text" : "password"} 
-                    value={regPasswordState.value} 
-                    onChange={e => regPasswordState.setValue(e.target.value)} 
-                    onBlur={regPasswordState.handleBlur}
-                    onFocus={regPasswordState.handleFocus}
-                    placeholder="Min 6 characters" 
-                    autoComplete="new-password"
+                  <input type={showPassword ? "text" : "password"} value={regPassword} onChange={e => setRegPassword(e.target.value)} placeholder="Min 6 characters" autoComplete="new-password"
                     className="w-full pl-4 pr-10 py-2.5 bg-white/5 border border-white/20 rounded-xl text-white text-sm placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 outline-none transition-all" />
                   <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white">
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -458,14 +393,7 @@ export default function AuthLogin() {
               </div>
               <div>
                 <label className="text-xs font-medium text-gray-300 mb-1 block">Confirm Password *</label>
-                <input 
-                  type={showPassword ? "text" : "password"} 
-                  value={regConfirmState.value} 
-                  onChange={e => regConfirmState.setValue(e.target.value)} 
-                  onBlur={regConfirmState.handleBlur}
-                  onFocus={regConfirmState.handleFocus}
-                  placeholder="Repeat password" 
-                  autoComplete="new-password"
+                <input type={showPassword ? "text" : "password"} value={regConfirm} onChange={e => setRegConfirm(e.target.value)} placeholder="Repeat password" autoComplete="new-password"
                   className="w-full px-4 py-2.5 bg-white/5 border border-white/20 rounded-xl text-white text-sm placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 outline-none transition-all" />
               </div>
 
@@ -475,38 +403,10 @@ export default function AuthLogin() {
               </button>
               {showCompanyFields && (
                 <div className="space-y-2 pt-2 border-t border-white/10">
-                  <input 
-                    type="text" 
-                    value={companyNameState.value} 
-                    onChange={e => companyNameState.setValue(e.target.value)} 
-                    onBlur={companyNameState.handleBlur}
-                    onFocus={companyNameState.handleFocus}
-                    placeholder="Company name" 
-                    className="w-full px-4 py-2 bg-white/5 border border-white/20 rounded-xl text-white text-xs placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 outline-none" />
-                  <input 
-                    type="text" 
-                    value={companyPhoneState.value} 
-                    onChange={e => companyPhoneState.setValue(e.target.value)} 
-                    onBlur={companyPhoneState.handleBlur}
-                    onFocus={companyPhoneState.handleFocus}
-                    placeholder="Phone number" 
-                    className="w-full px-4 py-2 bg-white/5 border border-white/20 rounded-xl text-white text-xs placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 outline-none" />
-                  <input 
-                    type="text" 
-                    value={companyRegNoState.value} 
-                    onChange={e => companyRegNoState.setValue(e.target.value)} 
-                    onBlur={companyRegNoState.handleBlur}
-                    onFocus={companyRegNoState.handleFocus}
-                    placeholder="Registration number" 
-                    className="w-full px-4 py-2 bg-white/5 border border-white/20 rounded-xl text-white text-xs placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 outline-none" />
-                  <input 
-                    type="text" 
-                    value={taxIdState.value} 
-                    onChange={e => taxIdState.setValue(e.target.value)} 
-                    onBlur={taxIdState.handleBlur}
-                    onFocus={taxIdState.handleFocus}
-                    placeholder="Tax ID / KRA PIN" 
-                    className="w-full px-4 py-2 bg-white/5 border border-white/20 rounded-xl text-white text-xs placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 outline-none" />
+                  <input type="text" value={companyName} onChange={e => setCompanyName(e.target.value)} placeholder="Company name" className="w-full px-4 py-2 bg-white/5 border border-white/20 rounded-xl text-white text-xs placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 outline-none" />
+                  <input type="text" value={companyPhone} onChange={e => setCompanyPhone(e.target.value)} placeholder="Phone number" className="w-full px-4 py-2 bg-white/5 border border-white/20 rounded-xl text-white text-xs placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 outline-none" />
+                  <input type="text" value={companyRegNo} onChange={e => setCompanyRegNo(e.target.value)} placeholder="Registration number" className="w-full px-4 py-2 bg-white/5 border border-white/20 rounded-xl text-white text-xs placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 outline-none" />
+                  <input type="text" value={taxId} onChange={e => setTaxId(e.target.value)} placeholder="Tax ID / KRA PIN" className="w-full px-4 py-2 bg-white/5 border border-white/20 rounded-xl text-white text-xs placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 outline-none" />
                 </div>
               )}
 
