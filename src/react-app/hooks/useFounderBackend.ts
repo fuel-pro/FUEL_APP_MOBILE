@@ -1,50 +1,96 @@
-import { trpc } from "@/providers/trpc";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
+import {
+  fetchFounderAuditLog,
+  writeFounderAudit,
+  fetchAuditSummary,
+  fetchFounderSession,
+  updateFounderSession,
+  fetchFounderUsers,
+  fetchFounderStations,
+  fetchFounderSalesAnalytics,
+  AuditSeverity,
+  AuditEntry,
+  FounderSessionData,
+  CloudUser,
+  CloudStation,
+} from "@/react-app/features/founder/founderAccessApi";
 
-export type AuditSeverity = "info" | "success" | "warning" | "danger";
-
-export interface AuditEntry {
-  id: string;
-  event: string;
-  detail: string;
-  user: string;
-  severity: "success" | "warning" | "danger" | "info";
-  timestamp: string;
-}
-
-export interface FounderSessionData {
-  twoFactorEnabled: boolean;
-  twoFactorSecret: string | null;
-  contactEmail: string | null;
-  contactPhone: string | null;
-  passwordHash: string | null;
-}
+export type { AuditSeverity, AuditEntry, FounderSessionData, CloudUser, CloudStation };
 
 /**
- * useFounderBackend — Integrates Founder Access with the tRPC backend.
+ * useFounderBackend — Real Supabase-backed integration for Founder Access Panel.
  *
+ * Replaces the stubbed tRPC layer with actual Supabase queries.
  * Provides:
- *   - Audit logging (persisted to MySQL via audit.log, and localStorage for backup)
- *   - Audit log retrieval (from DB, falls back to localStorage)
- *   - Founder session management (2FA, password, contact via founder_sessions table)
- *   - Station & sales analytics (from DB)
- * 
- * Always attempts backend connection - falls back to localStorage only if backend is unavailable.
+ *   - Audit logging (persisted to Supabase via writeFounderAudit)
+ *   - Audit log retrieval (from Supabase founder_audit_log table)
+ *   - Founder session management (2FA, password, contact)
+ *   - Station & sales analytics (from Supabase)
+ *   - User management (from Supabase profiles table)
+ *
+ * Falls back to localStorage only if Supabase is unavailable.
  */
 export function useFounderBackend() {
-  const utils = trpc.useUtils();
-  
-  // Always try backend - no static mode blocking
-  const isStatic = false;
+  const queryClient = useQueryClient();
 
-  /* ─── Audit Logging ─── */
-  // Skip mutation in static mode - only log to localStorage
-  // Note: We intentionally do NOT invalidate queries on audit log mutation
-  // to prevent potential cascade effects that could cause batch overflow
-  const logMutation = trpc.audit.log.useMutation({
+  /* ─── Audit Log List ─── */
+  const {
+    data: auditLogData,
+    isLoading: auditLoading,
+    refetch: refetchAudit,
+  } = useQuery({
+    queryKey: ["founder", "audit"],
+    queryFn: () => fetchFounderAuditLog({ limit: 100 }),
+    staleTime: 1000 * 60 * 2,
     retry: 1,
-    // Don't invalidate on success - audit log mutations should be fire-and-forget
-    // This prevents potential cascade effects from invalidating multiple queries
+  });
+
+  // Transform data or use localStorage fallback
+  const auditLog: AuditEntry[] = useMemo(() => {
+    if (auditLogData && auditLogData.length > 0) {
+      return auditLogData;
+    }
+    // Fallback to localStorage
+    try {
+      const stored = localStorage.getItem("fuelpro_founder_audit");
+      if (stored) return JSON.parse(stored);
+    } catch {
+      /* ignore */
+    }
+    return [
+      {
+        id: "1",
+        event: "System Initialized",
+        detail: "FuelPro admin panel created",
+        user: "SYSTEM",
+        severity: "info" as const,
+        timestamp: new Date().toISOString(),
+      },
+    ];
+  }, [auditLogData]);
+
+  /* ─── Audit Summary ─── */
+  const { data: auditSummary } = useQuery({
+    queryKey: ["founder", "audit", "summary"],
+    queryFn: fetchAuditSummary,
+    staleTime: 1000 * 60 * 5,
+    retry: 1,
+  });
+
+  /* ─── Audit Logging Mutation ─── */
+  const logAuditMutation = useMutation({
+    mutationFn: ({
+      event,
+      detail,
+      severity,
+    }: {
+      event: string;
+      detail: string;
+      severity: AuditSeverity;
+    }) => writeFounderAudit(event, detail, severity),
+    // Don't throw on error - audit logging is fire-and-forget
+    onError: () => {/* ignore */},
   });
 
   const logAudit = useCallback(
@@ -71,90 +117,27 @@ export function useFounderBackend() {
         /* ignore */
       }
 
-      // Also persist to backend (non-blocking) - only if not static mode
-      if (!isStatic) {
-        logMutation.mutate({ event, detail, severity });
-      }
+      // Also persist to Supabase (non-blocking)
+      logAuditMutation.mutate({ event, detail, severity });
     },
-    [logMutation, isStatic]
+    [logAuditMutation]
   );
 
-  /* ─── Audit Log List ─── */
-  // Use enabled: false in static mode to skip the query
-  const { data: dbAuditLogs, isLoading: auditLoading } = trpc.audit.listAll.useQuery(
-    undefined,
-    {
-      enabled: !isStatic,
-      staleTime: 1000 * 60 * 2,
-      retry: 1,
-    }
-  );
-
-  // Merge DB logs with localStorage fallback
-  const auditLog: AuditEntry[] = useMemo(() => {
-    if (dbAuditLogs && dbAuditLogs.length > 0) {
-      return dbAuditLogs.map((log: any) => ({
-        id: String(log.id),
-        event: log.event,
-        detail: log.detail || "",
-        user: "FOUNDER",
-        severity: (log.severity as AuditSeverity) || "info",
-        timestamp: log.createdAt
-          ? new Date(log.createdAt).toISOString()
-          : new Date().toISOString(),
-      }));
-    }
-    // Fallback to localStorage
-    try {
-      const stored = localStorage.getItem("fuelpro_founder_audit");
-      if (stored) return JSON.parse(stored);
-    } catch {
-      /* ignore */
-    }
-    return [
-      {
-        id: "1",
-        event: "System Initialized",
-        detail: "FuelPro admin panel created",
-        user: "SYSTEM",
-        severity: "info" as const,
-        timestamp: new Date().toISOString(),
-      },
-    ];
-  }, [dbAuditLogs]);
-
-  /* ─── Audit Summary (analytics) ─── */
-  const { data: auditSummary } = trpc.audit.summary.useQuery(undefined, {
-    enabled: !isStatic,
+  /* ─── Founder Session ─── */
+  const {
+    data: founderSessionData,
+    isLoading: sessionLoading,
+    refetch: refetchSession,
+  } = useQuery({
+    queryKey: ["founder", "session"],
+    queryFn: fetchFounderSession,
     staleTime: 1000 * 60 * 5,
     retry: 1,
   });
 
-  /* ─── Founder Session (2FA / Password / Contact) ─── */
-  const { data: dbFounderSession } = trpc.audit.getFounderSession.useQuery(
-    undefined,
-    {
-      enabled: !isStatic,
-      staleTime: 1000 * 60 * 5,
-      retry: 1,
-    }
-  );
-
-  const upsertSessionMutation = trpc.audit.upsertFounderSession.useMutation({
-    onSuccess: () => {
-      utils.audit.getFounderSession.invalidate();
-    },
-  });
-
   const founderSession: FounderSessionData = useMemo(() => {
-    if (dbFounderSession) {
-      return {
-        twoFactorEnabled: dbFounderSession.twoFactorEnabled || false,
-        twoFactorSecret: dbFounderSession.twoFactorSecret || null,
-        contactEmail: dbFounderSession.contactEmail || null,
-        contactPhone: dbFounderSession.contactPhone || null,
-        passwordHash: dbFounderSession.passwordHash || null,
-      };
+    if (founderSessionData) {
+      return founderSessionData;
     }
     // Fallback to localStorage
     try {
@@ -179,20 +162,19 @@ export function useFounderBackend() {
       contactPhone: null,
       passwordHash: null,
     };
-  }, [dbFounderSession]);
+  }, [founderSessionData]);
+
+  const saveFounderSessionMutation = useMutation({
+    mutationFn: (data: Partial<FounderSessionData>) => updateFounderSession(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["founder", "session"] });
+    },
+  });
 
   const saveFounderSession = useCallback(
     (data: Partial<FounderSessionData>) => {
-      // Persist to backend only in non-static mode
-      if (!isStatic) {
-        upsertSessionMutation.mutate({
-          twoFactorEnabled: data.twoFactorEnabled,
-          twoFactorSecret: data.twoFactorSecret,
-          contactEmail: data.contactEmail,
-          contactPhone: data.contactPhone,
-          passwordHash: data.passwordHash,
-        });
-      }
+      // Persist to Supabase
+      saveFounderSessionMutation.mutate(data);
 
       // Always persist to localStorage for offline fallback
       if (data.twoFactorEnabled !== undefined) {
@@ -237,47 +219,51 @@ export function useFounderBackend() {
         }
       }
     },
-    [upsertSessionMutation, isStatic]
+    [saveFounderSessionMutation]
   );
 
-  /* ─── Stations (from backend) ─── */
-  const { data: stationsData, isLoading: stationsLoading } = trpc.station.list.useQuery(
-    undefined,
-    {
-      enabled: !isStatic,
-      staleTime: 1000 * 60 * 2,
-      retry: 1,
-    }
-  );
-
-  const stationCount = stationsData?.length || 0;
-
-  /* ─── Sales Analytics (from backend) ─── */
-  const { data: salesAnalytics } = trpc.sale.analytics.useQuery(undefined, {
-    enabled: !isStatic,
+  /* ─── Users (from Supabase profiles) ─── */
+  const {
+    data: allBackendUsers,
+    isLoading: usersLoading,
+    refetch: refetchUsers,
+  } = useQuery({
+    queryKey: ["founder", "users"],
+    queryFn: fetchFounderUsers,
     staleTime: 1000 * 60 * 2,
     retry: 1,
   });
 
-  /* ─── All Users (from backend founder auth) ─── */
-  const { data: allBackendUsers, isLoading: usersLoading } = trpc.founderAuth.getAllUsers.useQuery(
-    undefined,
-    {
-      enabled: !isStatic,
-      staleTime: 1000 * 60 * 2,
-      retry: 1,
-    }
-  );
+  /* ─── Stations (from Supabase) ─── */
+  const {
+    data: allBackendStations,
+    isLoading: allStationsLoading,
+    refetch: refetchStations,
+  } = useQuery({
+    queryKey: ["founder", "stations"],
+    queryFn: fetchFounderStations,
+    staleTime: 1000 * 60 * 2,
+    retry: 1,
+  });
 
-  /* ─── All Stations (from backend founder auth) ─── */
-  const { data: allBackendStations, isLoading: allStationsLoading } = trpc.founderAuth.getAllStations.useQuery(
-    undefined,
-    {
-      enabled: !isStatic,
-      staleTime: 1000 * 60 * 2,
-      retry: 1,
-    }
-  );
+  const stationCount = allBackendStations?.length || 0;
+
+  /* ─── Sales Analytics ─── */
+  const { data: salesAnalytics, refetch: refetchAnalytics } = useQuery({
+    queryKey: ["founder", "sales", "analytics"],
+    queryFn: fetchFounderSalesAnalytics,
+    staleTime: 1000 * 60 * 2,
+    retry: 1,
+  });
+
+  /* ─── Refresh Helper ─── */
+  const refresh = useCallback(() => {
+    refetchAudit();
+    refetchSession();
+    refetchUsers();
+    refetchStations();
+    refetchAnalytics();
+  }, [refetchAudit, refetchSession, refetchUsers, refetchStations, refetchAnalytics]);
 
   return {
     // Audit
@@ -289,11 +275,10 @@ export function useFounderBackend() {
     // Founder Session (2FA / Password)
     founderSession,
     saveFounderSession,
-    sessionSaving: upsertSessionMutation.isPending,
+    sessionSaving: saveFounderSessionMutation.isPending,
 
     // Stations
-    stationsData,
-    stationsLoading,
+    stationsLoading: allStationsLoading,
     stationCount,
 
     // All Users (for founder dashboard)
@@ -307,17 +292,7 @@ export function useFounderBackend() {
     // Sales Analytics
     salesAnalytics,
 
-    // Refresh helpers - only works in non-static mode
-    refresh: useCallback(() => {
-      if (!isStatic) {
-        utils.audit.listAll.invalidate();
-        utils.audit.summary.invalidate();
-        utils.audit.getFounderSession.invalidate();
-        utils.station.list.invalidate();
-        utils.sale.analytics.invalidate();
-        utils.founderAuth.getAllUsers.invalidate();
-        utils.founderAuth.getAllStations.invalidate();
-      }
-    }, [utils, isStatic]),
+    // Refresh helpers
+    refresh,
   };
 }
