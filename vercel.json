@@ -1,5 +1,6 @@
 {
   "version": 2,
+  "project": "fuel-app-mobile",
   "buildCommand": "npm run build:static",
   "outputDirectory": "dist",
   "installCommand": "npm install --legacy-peer-deps",
