@@ -172,7 +172,7 @@ export default function Invoice() {
         tax: 0,
         discount: 0,
         totalDue: totalDue,
-        currency: state.companyData.currency || 'Ksh',
+        currency: state.companyData.currency || 'KSh',
         attendantName: 'System',
         footerMessage: 'Thank you for your business',
       };

@@ -233,6 +233,14 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
         name: data.stationName || "My Fuel Station",
         location: data.location || "Auto-detected",
         description: `PMS: ${data.pmsCount || 0} pumps, AGO: ${data.agoCount || 0} pumps`,
+        // Pass through the contact/tax details captured in the wizard so the
+        // station record (and downstream cloud sync) carries them instead of
+        // defaulting to empty strings.
+        phone: data.contacts || "",
+        email: data.email || "",
+        kraPin: data.kraPin || "",
+        etrSerial: data.etrSerialNo || "",
+        taxRate: 16,
       });
       if (newStation && newStation.id) {
         newStationId = newStation.id;
