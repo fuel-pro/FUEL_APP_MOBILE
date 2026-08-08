@@ -199,7 +199,12 @@ function HomeContent() {
           const raw = localStorage.getItem("fuelpro_stations_v3");
           if (raw) {
             const parsed = JSON.parse(raw);
-            if (parsed.length > 0) {
+            // fuelpro_stations_v3 is stored as { stations: [...], version }
+            // (an object), NOT a bare array. Check the nested stations list.
+            const stationList = Array.isArray(parsed)
+              ? parsed
+              : parsed?.stations;
+            if (stationList && stationList.length > 0) {
               clearInterval(interval);
               window.location.reload();
             }
