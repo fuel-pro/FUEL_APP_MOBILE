@@ -116,10 +116,9 @@ export default function SalesTracking() {
 
   // Local AI extraction simulation - works without server
   const simulateAIExtraction = (fileName: string): ScanResultData => {
-    // Simulate realistic fuel station data extraction
+    // Generate placeholder data - user needs to enter actual values
     const today = new Date().toISOString().split("T")[0];
-    const randomAmount = () => Math.floor(Math.random() * 50000) + 10000;
-    const randomLitres = () => Math.floor(Math.random() * 500) + 50;
+    const currentReading = Math.round((state.pmsSales || 0) / 1000) * 1000;
 
     return {
       date: today,
@@ -128,41 +127,37 @@ export default function SalesTracking() {
         {
           name: "PMS-1",
           fuelType: "Petrol",
-          openingReading: randomAmount(),
-          closingReading: randomAmount() + 15000,
-          salesAmount: 15000,
+          openingReading: 0,
+          closingReading: 0,
+          salesAmount: 0,
         },
         {
           name: "PMS-2",
           fuelType: "Petrol",
-          openingReading: randomAmount(),
-          closingReading: randomAmount() + 12000,
-          salesAmount: 12000,
+          openingReading: 0,
+          closingReading: 0,
+          salesAmount: 0,
         },
         {
           name: "AGO-1",
           fuelType: "Diesel",
-          openingReading: randomAmount(),
-          closingReading: randomAmount() + 8000,
-          salesAmount: 8000,
+          openingReading: 0,
+          closingReading: 0,
+          salesAmount: 0,
         },
         {
           name: "AGO-2",
           fuelType: "Diesel",
-          openingReading: randomAmount(),
-          closingReading: randomAmount() + 9500,
-          salesAmount: 9500,
+          openingReading: 0,
+          closingReading: 0,
+          salesAmount: 0,
         },
       ],
-      expenses: [
-        { name: "Power Bill", amount: 3500 },
-        { name: "Staff Tea", amount: 500 },
-        { name: "Stationery", amount: 250 },
-      ],
-      tillAmount: Math.floor(Math.random() * 20000) + 5000,
-      cashAmount: Math.floor(Math.random() * 10000) + 2000,
-      confidence: "medium",
-      additionalNotes: `Extracted from ${fileName}. Please review and adjust values as needed.`,
+      expenses: [],
+      tillAmount: 0,
+      cashAmount: 0,
+      confidence: "low",
+      additionalNotes: `Please enter pump readings manually. Document: ${fileName}`,
     };
   };
 

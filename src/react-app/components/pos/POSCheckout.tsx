@@ -179,13 +179,9 @@ export default function POSCheckout({
       // In production, this would call the backend API
       const result = await new Promise<{ success: boolean; transactionId?: string; error?: string }>((resolve) => {
         setTimeout(() => {
-          // Simulate 90% success rate
-          if (Math.random() > 0.1) {
-            resolve({ success: true, transactionId: `MPE${Date.now()}` });
-          } else {
-            resolve({ success: false, error: 'M-Pesa request timed out' });
-          }
-        }, 3000);
+          // Generate a deterministic transaction ID based on timestamp
+          resolve({ success: true, transactionId: `MPE${Date.now()}` });
+        }, 2000);
       });
 
       if (result.success) {

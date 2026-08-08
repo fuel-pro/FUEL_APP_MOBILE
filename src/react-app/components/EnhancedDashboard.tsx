@@ -22,6 +22,7 @@ import {
   fetchInventoryValuation,
   fetchExpensesReport,
 } from "@/react-app/lib/pos-service";
+import { supabase } from "@/supabase/client";
 
 // Format currency
 const formatMoney = (amount: number, currency = "KES") => {
@@ -259,7 +260,6 @@ export default function EnhancedDashboard() {
       ]);
 
       // Calculate real sales trend from actual data
-      const { supabase } = await import("@/supabase/client");
       const trendEnd = new Date();
       const trendStart = new Date();
       trendStart.setDate(trendStart.getDate() - 6);
