@@ -635,7 +635,11 @@ export const SeafileSync = {
         method: "POST",
         headers: { Authorization: `Token ${token}` },
         body: JSON.stringify({ operation: "mkdir", dirname: "" }),
-      }).catch(() => {});
+      }).catch(err =>
+        // mkdir is best-effort (the dir may already exist); log so a genuine
+        // auth/network failure isn't completely invisible.
+        console.warn("[CloudStorage] mkdir failed (may be harmless if dir exists):", err)
+      );
 
       // Upload file
       const formData = new FormData();
