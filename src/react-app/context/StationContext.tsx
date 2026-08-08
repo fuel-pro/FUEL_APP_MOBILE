@@ -490,6 +490,19 @@ async function syncStationsWithSupabase(
     stationRowToStation(row, dataBlobs[row.id], cachedById.get(row.id))
   );
 
+  // Preserve local stations that have valid UUIDs but aren't in the cloud yet.
+  // This prevents a race where a station was just created locally (and pushed
+  // to Supabase fire-and-forget) but the push hasn't completed/propagated by
+  // the time the next mount's sync runs. Without this, the cloud fetch
+  // returns [] and overwrites the local station, causing data loss and
+  // stranding the user on the "create station" screen.
+  const cloudIds = new Set((rows || []).map((r: any) => r.id));
+  for (const local of localStations) {
+    if (isValidUuid(local.id) && !cloudIds.has(local.id)) {
+      merged.push(local);
+    }
+  }
+
   return merged;
 }
 
