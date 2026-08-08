@@ -13,7 +13,7 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 // Supabase configuration from environment variables
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://ojjscjwatikixlpshmub.supabase.co';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInJlZiI6Im9qanNjandhdGlraXhscHNobXViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU1NTI3MjcsImV4cCI6MjEwMTEyODcyN30.nw9Agib1JGJE_atO-AJChf-OHdz8g_gauwL7u0CpNfY';
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_-uUkeBG1KzESv3O4v90rcw_jY9NxTc4';
 
 // Singleton Supabase client instance
 let supabaseClient: SupabaseClient | null = null;

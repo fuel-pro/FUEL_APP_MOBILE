@@ -18,8 +18,8 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
 // CONFIGURATION
 // ═══════════════════════════════════════════════════
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://placeholder.supabase.co";
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "placeholder-key";
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://ojjscjwatikixlpshmub.supabase.co";
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "sb_publishable_-uUkeBG1KzESv3O4v90rcw_jY9NxTc4";
 
 let supabase: SupabaseClient | null = null;
 let isInitialized = false;

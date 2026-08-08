@@ -215,8 +215,8 @@ export const R2Storage = {
 };
 
 // ─── Supabase Storage ───
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "";
-const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://ojjscjwatikixlpshmub.supabase.co";
+const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "sb_publishable_-uUkeBG1KzESv3O4v90rcw_jY9NxTc4";
 
 export const SupabaseStorage = {
   async uploadFile(file: File | Blob, path: string): Promise<string | null> {

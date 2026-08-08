@@ -37,8 +37,8 @@ async function initFirebase(): Promise<boolean> {
 // PROVIDER 2: Supabase
 // ═══════════════════════════════════════════════════
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "";
-const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_KEY || "";
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://ojjscjwatikixlpshmub.supabase.co";
+const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.VITE_SUPABASE_KEY || "sb_publishable_-uUkeBG1KzESv3O4v90rcw_jY9NxTc4";
 
 let supabaseClient: any = null;
 
