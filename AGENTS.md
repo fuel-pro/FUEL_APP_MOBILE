@@ -37,7 +37,14 @@ React + Vite + TypeScript SPA for fuel station management. Deployed at
 - GitHub→Vercel push webhook created 2026-08-08 (hook id 663051160) pointing
   at deploy hook `JMTnTAENkY`. Before this, pushes did NOT auto-deploy.
 - Vercel `api-deployments-free-per-day` limit (100/day) can be exhausted.
-  Resets ~24h. Deploy hooks and CLI deploys hit the same limit.
+  Resets ~24h. Deploy hooks and CLI deploys hit the same limit. Read-only
+  API calls (GET deployments) use a separate 1000/min bucket and still work.
+- **2026-08-08 state**: rate limit exhausted; resets ~2026-08-09 17:15 UTC.
+  An autodeploy watcher (`/tmp/fuelpro_autodeploy.sh`, PID 4189) fires the
+  deploy hook ~5 min after reset. The GitHub webhook also deploys on the next
+  push once the limit clears. Pending undeployed commits on main: 40da883
+  (persist-guard), 6931731 (catch-block + AI-URL fixes). Production is still
+  on 57c35e2 (old code without these fixes).
 
 ## Build / Test
 - `npx tsc --noEmit` — typecheck (must pass before commit).
