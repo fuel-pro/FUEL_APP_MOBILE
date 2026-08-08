@@ -168,6 +168,33 @@ they're worth cleaning up or finishing later:
   `AuthContext` (which is 100% Supabase), so these were just stale metadata
   from an earlier auth approach. Rebuilt clean afterward.
 
+## Station Manager Upgrade (update-6)
+
+6. **Station Manager upgraded (update-6).**
+    Rewrote `src/react-app/components/StationManager.tsx` on top of the existing
+    `useStations()` context and added `src/react-app/lib/station-stats.ts`:
+    - Live stat cards (stations, combined revenue, today's revenue, shared users)
+      plus cloud sync status and a "Sync Now" button wired to
+      `syncToBackend()` + `syncFromBackend()` (update-22 Supabase layer).
+    - Search, status filter chips (All/Active/Inactive/Maintenance) and sorting
+      (Name / Revenue / Recently updated / Oldest).
+    - Enriched station cards: per-station revenue (today/month/total), sales
+      count, one-tap status toggle, relative "updated" time, cloud-sync badge
+      (UUID-backed vs legacy local id), Open/Edit/Share/Export/Delete actions.
+    - New modals: Create/Edit station (validated), Share Access (grant + revoke
+      list), Access Station (password unlock via `verifyStationAccess`),
+      Combined View (aggregated totals via `combineStations()`), and a delete
+      confirmation dialog. Skeleton loaders, empty state, no-results state,
+      auto-dismissing notices.
+    - UPDATE-4 compliance: every subcomponent (StatCard, StatusBadge,
+      StationCard, all modals, SkeletonCard, EmptyState) is defined at module
+      scope — no component is ever defined inside a render function, so inputs
+      cannot remount/clear while typing. All callbacks memoized; derived lists
+      via useMemo keyed on station.id.
+    - All analytics are computed defensively from the free-form `station.data`
+      blob (`station-stats.ts`) and never throw; currency symbol auto-detects
+      from `fuelpro_location_country` (defaults to Ksh).
+
 ## Still worth doing (not done this pass — flagging so it's not lost)
 
 - Delete or fix `src/react-app/lib/open-source/{chatwootIntegration,
