@@ -42,7 +42,7 @@ export default function Compliance() {
     if (tz.includes("Dar")) return "TZ";
     if (tz.includes("Kampala")) return "UG";
     if (tz.includes("Accra")) return "GH";
-    return "US";
+    return "KE";
   });
 
   const [expandedSection, setExpandedSection] = useState<string | null>(

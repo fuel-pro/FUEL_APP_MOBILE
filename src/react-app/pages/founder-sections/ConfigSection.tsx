@@ -44,7 +44,7 @@ function resolveDetectedConfig(): Partial<ConfigData> {
     /* */
   }
   return {
-    currency: "USD",
+    currency: "KES",
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
   };
 }
@@ -53,7 +53,7 @@ const detected = resolveDetectedConfig();
 
 const DEFAULT_CONFIG: ConfigData = {
   siteName: "FuelPro",
-  currency: detected.currency || "USD",
+  currency: detected.currency || "KES",
   timezone: detected.timezone || "UTC",
   dateFormat: "DD/MM/YYYY",
   language: "en",
