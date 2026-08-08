@@ -327,7 +327,26 @@ const loadFromStorage = (): {
     const currentId = localStorage.getItem(CURRENT_STATION_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      const admin = adminRaw ? JSON.parse(adminRaw) : defaultAdminSettings;
+      let admin = adminRaw ? JSON.parse(adminRaw) : defaultAdminSettings;
+
+      // Upgrade a stale admin currency. Older versions defaulted to "USD"
+      // (or left it unset while a CDN IP was misdetected as US). If the
+      // persisted admin currency is USD/empty but location/timezone detection
+      // resolves a real currency (e.g. KES for a Kenya station), adopt the
+      // detected value so the whole app stops showing "$" to Kenyan users.
+      try {
+        const detected = getDetectedCurrency();
+        const persisted = admin?.systemConfig?.currency;
+        if ((!persisted || persisted === "USD") && detected && detected !== "USD") {
+          admin = {
+            ...admin,
+            systemConfig: { ...admin.systemConfig, currency: detected },
+          };
+        }
+      } catch {
+        /* detection failed — keep persisted value */
+      }
+
       return { stations: parsed.stations || [], admin, currentId };
     }
   } catch {
