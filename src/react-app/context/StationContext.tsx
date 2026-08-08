@@ -5,7 +5,6 @@ import React, {
   useCallback,
   useEffect,
 } from "react";
-import { getCountryByCode } from "@/react-app/lib/world-country-utils";
 import { getDetectedCurrency } from "@/react-app/lib/currency";
 import { supabase } from "@/supabase/client";
 
