@@ -195,6 +195,20 @@ they're worth cleaning up or finishing later:
       blob (`station-stats.ts`) and never throw; currency symbol auto-detects
       from `fuelpro_location_country` (defaults to Ksh).
 
+## Invoice & Number Input Fixes
+
+7. **Fixed Qty (DAYS) and other number inputs not being editable.**
+    - `Invoice.tsx`: Fixed `updateInvoiceItem` to create new object references
+      instead of mutating state directly (React anti-pattern fix). Also ensured
+      qty and price inputs use `value={item.qty ?? ""}` and `value={item.price ?? ""}`
+      so they properly handle undefined/null values.
+    - `FuelOffloading.tsx`: Fixed quantity, rate, and totalAmount inputs to use
+      `value={formData.field ?? ""}` for proper number input handling.
+    - `DeliveryTracker.tsx`: Fixed deliveryYear, petrolPrice, and dieselPrice
+      inputs to use `value={state.field ?? ""}`.
+    - All inputs now have `step` attributes for proper decimal handling and
+      `cursor-text` class for consistent cursor behavior.
+
 ## Still worth doing (not done this pass — flagging so it's not lost)
 
 - Delete or fix `src/react-app/lib/open-source/{chatwootIntegration,
