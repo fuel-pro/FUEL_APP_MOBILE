@@ -14,7 +14,10 @@ import {
   getFuelTaxBreakdown,
   COUNTRY_LIST,
 } from "@/react-app/config/countries";
-import { getCountryByCode } from "@/react-app/lib/world-country-utils";
+import {
+  getCountryByCode,
+  getCountryFromLocation,
+} from "@/react-app/lib/world-country-utils";
 
 /** Get the first available country profile as universal fallback */
 function getUniversalFallback(): CountryProfile {
@@ -422,9 +425,15 @@ function saveStationCountries(data: Record<string, StationLocation>) {
 export function LocationProvider({
   children,
   stationId,
+  stationLocation,
 }: {
   children: React.ReactNode;
   stationId?: string;
+  // The active station's free-text location string (e.g. "Nairobi, Kenya").
+  // Used to derive the country when no explicit station country has been set,
+  // so IP/CDN geolocation (which often returns the server's country, e.g. US)
+  // does not override the station's real location.
+  stationLocation?: string;
 }) {
   const [stationCountries, setStationCountries] =
     useState<Record<string, StationLocation>>(loadStationCountries);
@@ -446,10 +455,19 @@ export function LocationProvider({
         getCountryById(currentLocation.countryCode) || getUniversalFallback()
       );
     }
+    // Derive the country from the station's configured location string before
+    // falling back to browser/IP detection, since the latter frequently
+    // resolves to the CDN edge country rather than the user's real country.
+    if (stationLocation) {
+      const derived = getCountryFromLocation(stationLocation)?.code;
+      if (derived) {
+        return getCountryById(derived) || getUniversalFallback();
+      }
+    }
     // Auto-detect from browser timezone or resolved country
     const resolved = resolveUserCountry();
     return getCountryById(resolved) || getUniversalFallback();
-  }, [currentLocation]);
+  }, [currentLocation, stationLocation]);
 
   // Persist changes
   useEffect(() => {

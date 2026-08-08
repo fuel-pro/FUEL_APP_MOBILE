@@ -9,6 +9,7 @@
 // Use relative import since the path alias might not work in all contexts
 import { detectCountryFromTimezone } from "../config/countries";
 import { KENYA_BASE_PRICES, REGIONAL_PRICES, DEFAULT_PRICES } from "../config/pricing";
+import { getCountryFromLocation } from "../lib/world-country-utils";
 
 // Storage keys
 const PRICES_CACHE_KEY = "fuelpro_daily_prices";
@@ -82,14 +83,66 @@ function savePricesToCache(prices: FuelPrices): void {
   }
 }
 
+// Currency lookup shared across detection paths.
+const currencyMap: Record<string, { currency: string; symbol: string }> = {
+  KE: { currency: "KES", symbol: "KSh" },
+  UG: { currency: "UGX", symbol: "USh" },
+  TZ: { currency: "TZS", symbol: "TSh" },
+  NG: { currency: "NGN", symbol: "₦" },
+  ZA: { currency: "ZAR", symbol: "R" },
+  GH: { currency: "GHS", symbol: "GH₵" },
+  RW: { currency: "RWF", symbol: "RF" },
+  ET: { currency: "ETB", symbol: "Br" },
+};
+
 // Get location data using multiple methods.
 // Timezone is the PRIMARY signal because IP geolocation often resolves to the
 // CDN/edge node (e.g. a US IP on Vercel) rather than the user's real location.
 // IP geolocation is only used to fill in the city/country display name and to
 // CONFIRM the timezone-derived country; it never overrides a valid timezone
 // detection with a conflicting CDN-derived country.
-async function detectUserLocation(): Promise<LocationData> {
+//
+// `locationHint` is an optional free-text location string (e.g. "Nairobi, Kenya")
+// — typically the station's configured location. When provided, the country
+// parsed from it takes priority over timezone/IP detection so that a station
+// in Kenya always resolves to Kenyan prices even when the app is served from a
+// US CDN edge with a non-mapped browser timezone.
+async function detectUserLocation(locationHint?: string): Promise<LocationData> {
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+  // If a location hint was supplied, derive the country from it FIRST. This is
+  // the station's own configured location, so it is the most authoritative
+  // signal and must not be overridden by CDN-derived IP/timezone detection.
+  if (locationHint) {
+    const derived = getCountryFromLocation(locationHint);
+    if (derived) {
+      const currencyInfo = currencyMap[derived.code] || {
+        currency: "USD",
+        symbol: "$",
+      };
+      // Pull the city portion (first non-country segment) for display.
+      const city =
+        locationHint
+          .split(/[,;|]/)
+          .map(s => s.trim())
+          .find(
+            s => s && !s.toLowerCase().includes(derived.name.toLowerCase())
+          ) || derived.name;
+      const locationData: LocationData = {
+        country: derived.name,
+        countryCode: derived.code,
+        city,
+        timezone,
+        currency: currencyInfo.currency,
+        currencySymbol: currencyInfo.symbol,
+      };
+      try {
+        localStorage.setItem(LOCATION_CACHE_KEY, JSON.stringify(locationData));
+      } catch {}
+      return locationData;
+    }
+  }
+
   const tzCountry = detectCountryFromTimezone();
 
   // Method 1: Try to get from cached location — but only trust it if it still
@@ -136,18 +189,6 @@ async function detectUserLocation(): Promise<LocationData> {
   } catch {
     console.log("[FuelPrice] IP geolocation failed, using timezone detection");
   }
-
-  // Map country codes to currency info
-  const currencyMap: Record<string, { currency: string; symbol: string }> = {
-    KE: { currency: "KES", symbol: "KSh" },
-    UG: { currency: "UGX", symbol: "USh" },
-    TZ: { currency: "TZS", symbol: "TSh" },
-    NG: { currency: "NGN", symbol: "₦" },
-    ZA: { currency: "ZAR", symbol: "R" },
-    GH: { currency: "GHS", symbol: "GH₵" },
-    RW: { currency: "RWF", symbol: "RF" },
-    ET: { currency: "ETB", symbol: "Br" },
-  };
 
   const currencyInfo = currencyMap[countryCode] || { currency: "USD", symbol: "$" };
 
@@ -239,12 +280,16 @@ async function scrapeFuelPrices(location: LocationData): Promise<FuelPrices> {
 }
 
 // Main function: Get fuel prices (uses cache if available)
-export async function getFuelPrices(): Promise<FuelPrices> {
-  // Check cache first
-  const cached = getCachedPrices();
-  if (cached) {
-    console.log("[FuelPrice] Using cached prices from", cached.fetchedAt);
-    return cached;
+export async function getFuelPrices(locationHint?: string): Promise<FuelPrices> {
+  // When a location hint is provided, bypass the daily cache so the prices
+  // always reflect the (possibly changed) station location rather than a
+  // stale CDN-derived detection from earlier in the day.
+  if (!locationHint) {
+    const cached = getCachedPrices();
+    if (cached) {
+      console.log("[FuelPrice] Using cached prices from", cached.fetchedAt);
+      return cached;
+    }
   }
 
   // Need to fetch new prices
@@ -252,7 +297,7 @@ export async function getFuelPrices(): Promise<FuelPrices> {
 
   try {
     // Step 1: Detect user location
-    const location = await detectUserLocation();
+    const location = await detectUserLocation(locationHint);
     console.log("[FuelPrice] Detected location:", location);
 
     // Step 2: Scrape/fetch fuel prices

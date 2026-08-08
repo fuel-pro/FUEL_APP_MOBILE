@@ -101,7 +101,7 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
       setPriceDetectionError(null);
       
       try {
-        const prices = await getFuelPrices();
+        const prices = await getFuelPrices(data.location || undefined);
         setAutoDetectedPrices(prices);
         
         // Update the data state with detected prices
@@ -121,7 +121,9 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
     };
     
     detectPrices();
-  }, []);
+    // Re-detect when the user-entered location changes so prices track the
+    // station's real country instead of the CDN/browser timezone.
+  }, [data.location]);
 
   // Function to manually refresh prices
   const refreshPrices = async () => {
@@ -129,7 +131,7 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
     setPriceDetectionError(null);
     
     try {
-      const prices = await getFuelPrices();
+      const prices = await getFuelPrices(data.location || undefined);
       setAutoDetectedPrices(prices);
       setData(prev => ({
         ...prev,

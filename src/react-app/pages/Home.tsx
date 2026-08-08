@@ -628,7 +628,10 @@ export default function Home() {
   }, []);
 
   return (
-    <LocationProvider stationId={stationId}>
+    <LocationProvider
+      stationId={stationId}
+      stationLocation={currentStation?.location}
+    >
       <HomeContent />
     </LocationProvider>
   );
