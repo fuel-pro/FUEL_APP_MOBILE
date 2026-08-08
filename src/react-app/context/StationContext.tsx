@@ -6,6 +6,7 @@ import React, {
   useEffect,
 } from "react";
 import { getCountryByCode } from "@/react-app/lib/world-country-utils";
+import { getDetectedCurrency } from "@/react-app/lib/currency";
 import { supabase } from "@/supabase/client";
 
 // Lazy API base URL getter using dynamic import to avoid circular deps
@@ -298,21 +299,18 @@ const defaultAdminSettings: AdminSettings = {
     enableWhatsApp: false,
     enableEmail: false,
     enableAI: true,
+    // Resolve the default currency from the timezone/location detection in
+    // lib/currency.ts (which inspects station data, the location cache, and
+    // the browser timezone, in that order) instead of hard-coding "USD".
+    // This Kenyan-focused app defaults to KES when detection is inconclusive.
     currency: (() => {
       try {
-        const saved = localStorage.getItem("fuelpro_location_country");
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          const cc = parsed.currentCountry || parsed.country;
-          if (cc) {
-            const country = getCountryByCode(cc);
-            if (country) return country.currency;
-          }
-        }
+        const detected = getDetectedCurrency();
+        if (detected) return detected;
       } catch {
         /* */
       }
-      return "USD";
+      return "KES";
     })(),
     language: "en",
   },
