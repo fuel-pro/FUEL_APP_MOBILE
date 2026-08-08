@@ -22,8 +22,6 @@ import StationManager from "@/react-app/components/StationManager";
 import CombinedStationsView from "@/react-app/components/CombinedStationsView";
 import SetupWizard from "@/react-app/components/SetupWizard";
 import FirstLoginChoice from "@/react-app/components/FirstLoginChoice";
-// Business Suite (SalesZote-style POS)
-import BusinessSuite from "@/react-app/components/BusinessSuite";
 
 // All tab content lazy-loaded to reduce main bundle
 const Dashboard = lazy(() => import("@/react-app/components/Dashboard"));
@@ -103,6 +101,28 @@ const ExpenseTracker = lazy(
 );
 const PriceBoard = lazy(() => import("@/react-app/components/PriceBoard"));
 const PumpMappingV1 = lazy(() => import("@/react-app/components/PumpMappingV1"));
+
+// ─── SalesZote-style POS business suite modules ───
+// These are ADDITIVE features layered onto the existing FuelPro tab system
+// (not a replica/replacement of app.saleszote.com). Only the modules that
+// provide genuinely new capability not already covered by a FuelPro tab are
+// wired in here; modules that duplicate an existing FuelPro tab reuse the
+// FuelPro component instead.
+const EnhancedDashboard = lazy(
+  () => import("@/react-app/components/EnhancedDashboard")
+);
+const ProductsManagement = lazy(
+  () => import("@/react-app/components/ProductsManagement")
+);
+const SalesInvoices = lazy(
+  () => import("@/react-app/components/SalesInvoices")
+);
+const PurchasesSuppliers = lazy(
+  () => import("@/react-app/components/PurchasesSuppliers")
+);
+const TerminalSessions = lazy(
+  () => import("@/react-app/components/TerminalSessions")
+);
 
 // ─── Cross-Tab Data Sync ───
 // Shared state channel for real-time updates between tabs
@@ -389,6 +409,17 @@ function HomeContent() {
         return <PriceBoard />;
       case "pumpmapping":
         return <PumpMappingV1 />;
+      // ─── SalesZote-style additive modules ───
+      // Each maps to a genuinely-new capability. Where a SalesZote module
+      // duplicates a FuelPro tab, the FuelPro component is reused above.
+      case "products":
+        return <ProductsManagement />;
+      case "sales-invoices":
+        return <SalesInvoices />;
+      case "purchases":
+        return <PurchasesSuppliers />;
+      case "terminal":
+        return <TerminalSessions />;
       default:
         return <Dashboard />;
     }
@@ -499,11 +530,12 @@ function HomeContent() {
   }
 
   // ─── MAIN APP ───
-  // If station is selected, render BusinessSuite (SalesZote-style)
-  if (currentStation) {
-    return <BusinessSuite />;
-  }
-
+  // The original FuelPro tab system is the primary app shell. SalesZote-style
+  // POS modules are layered in as ADDITIONAL tabs (see renderTabContent) rather
+  // than replacing the whole interface, so existing FuelPro features (Delivery,
+  // Offloading, Invoice, Debt, M-PESA, Payroll, Pump Mapping, etc.) remain
+  // first-class and the result is an enhancement, not a replica of
+  // app.saleszote.com.
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-20 md:pb-0 transition-colors duration-300">
       <Header

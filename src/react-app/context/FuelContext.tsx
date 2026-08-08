@@ -773,6 +773,42 @@ const initialState: FuelState = {
       order: 31,
       visible: true,
     },
+    // ─── SalesZote-style additive POS modules ───
+    // New capabilities layered onto the FuelPro tab system (not a replica of
+    // app.saleszote.com). Tabs that already exist in FuelPro (POS, Inventory,
+    // Customers, Expenses, Reports) are NOT duplicated here.
+    {
+      id: "products",
+      label: "Products Catalog",
+      originalLabel: "Products Catalog",
+      description: "Manage non-fuel products, prices & categories (POS catalog)",
+      order: 32,
+      visible: true,
+    },
+    {
+      id: "sales-invoices",
+      label: "Sales Invoices",
+      originalLabel: "Sales Invoices",
+      description: "Issue and track detailed sales invoices",
+      order: 33,
+      visible: true,
+    },
+    {
+      id: "purchases",
+      label: "Purchases & Suppliers",
+      originalLabel: "Purchases & Suppliers",
+      description: "Purchase orders and supplier management",
+      order: 34,
+      visible: true,
+    },
+    {
+      id: "terminal",
+      label: "Terminal Sessions",
+      originalLabel: "Terminal Sessions",
+      description: "POS terminal session open/close & reconciliation",
+      order: 35,
+      visible: true,
+    },
   ],
   employees: [],
   payrollRecords: [],

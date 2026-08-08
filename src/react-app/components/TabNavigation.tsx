@@ -33,6 +33,10 @@ import {
   Monitor,
   FileUp,
   Gauge,
+  PackageSearch,
+  FileText,
+  ShoppingCart,
+  Store,
 } from "lucide-react";
 
 interface TabNavigationProps {
@@ -84,6 +88,11 @@ const TabNavigation: React.FC<TabNavigationProps> = ({
     priceboard: <Monitor size={16} />,
     docconverter: <FileUp size={16} />,
     pumpmapping: <Gauge size={16} />,
+    // SalesZote-style additive modules
+    products: <PackageSearch size={16} />,
+    "sales-invoices": <FileText size={16} />,
+    purchases: <ShoppingCart size={16} />,
+    terminal: <Store size={16} />,
   };
 
   // Check scroll position for arrow visibility

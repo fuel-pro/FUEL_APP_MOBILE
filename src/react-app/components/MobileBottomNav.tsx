@@ -190,6 +190,11 @@ export default function MobileBottomNav({
       icon: FileUp,
       color: "text-amber-500",
     },
+    // SalesZote-style additive modules
+    { id: "products", label: "Products", icon: Package, color: "text-indigo-400" },
+    { id: "sales-invoices", label: "Invoices", icon: FileText, color: "text-sky-400" },
+    { id: "purchases", label: "Purchases", icon: ShoppingCart, color: "text-emerald-400" },
+    { id: "terminal", label: "Terminal", icon: Monitor, color: "text-cyan-400" },
   ].filter(item => isTabAllowed(item.id));
 
   // M-PESA is ONLY shown if feature flag enabled (Kenya/TZ only)
