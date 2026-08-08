@@ -546,7 +546,7 @@ export default function Header({
                   }
                   className="w-full px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-white text-sm focus:outline-none focus:ring-1 focus:ring-amber-400"
                 >
-                  <option value="Ksh" className="bg-gray-800">
+                  <option value="KSh" className="bg-gray-800">
                     Ksh — Kenyan Shilling
                   </option>
                   <option value="UGX" className="bg-gray-800">

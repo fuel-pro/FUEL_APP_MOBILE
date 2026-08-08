@@ -249,7 +249,7 @@ export default function FuelSalesReport() {
         stationName: state.companyData.name || 'FuelPro Station',
         monthYear: `${months[selectedMonth - 1]} ${selectedYear}`,
         period: `${months[selectedMonth - 1]} ${selectedYear}`,
-        currency: state.companyData.currency || 'Ksh',
+        currency: state.companyData.currency || 'KSh',
         entries: reportData.map(entry => ({
           date: entry.date,
           petrolSales: entry.petrolSales,
@@ -393,7 +393,7 @@ export default function FuelSalesReport() {
     }
   };
 
-  const currency = state.companyData.currency || "Ksh";
+  const currency = state.companyData.currency || "KSh";
 
   return (
     <div className="p-4 md:p-6 space-y-6 text-white min-h-screen">

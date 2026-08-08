@@ -5,7 +5,7 @@
 export type StationStatus = "active" | "inactive" | "maintenance";
 
 const CURRENCY_BY_COUNTRY: Record<string, string> = {
-  KE: "Ksh",
+  KE: "KSh",
   TZ: "TSh",
   UG: "USh",
   NG: "₦",
@@ -17,14 +17,20 @@ const CURRENCY_BY_COUNTRY: Record<string, string> = {
 
 export function getCurrencySymbol(): string {
   try {
-    const saved = localStorage.getItem("fuelpro_location_country");
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      const cc = String(parsed?.currentCountry || parsed?.country || "").toUpperCase();
-      if (cc && CURRENCY_BY_COUNTRY[cc]) return CURRENCY_BY_COUNTRY[cc];
+    // Check both the current location cache key (fuelpro_user_location, written
+    // by FuelPriceService) and the legacy fuelpro_location_country key.
+    for (const key of ["fuelpro_user_location", "fuelpro_location_country"]) {
+      const saved = localStorage.getItem(key);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        const cc = String(
+          parsed?.countryCode || parsed?.currentCountry || parsed?.country || ""
+        ).toUpperCase();
+        if (cc && CURRENCY_BY_COUNTRY[cc]) return CURRENCY_BY_COUNTRY[cc];
+      }
     }
   } catch { /* ignore */ }
-  return "Ksh"; // default market
+  return "KSh"; // default market
 }
 
 export function formatMoney(amount: number): string {

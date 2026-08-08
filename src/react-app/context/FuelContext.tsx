@@ -401,7 +401,7 @@ const initialState: FuelState = {
     language: "en",
     dateFormat: "DD/MM/YYYY",
     timeFormat: "24h",
-    currency: "Ksh",
+    currency: "KSh",
     notifications: {
       email: true,
       push: true,
@@ -427,7 +427,7 @@ const initialState: FuelState = {
     contacts: "",
     email: "",
     logo: "",
-    currency: "Ksh",
+    currency: "KSh",
     bankName: "",
     branchName: "",
     accountHolder: "",

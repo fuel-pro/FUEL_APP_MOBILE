@@ -610,18 +610,18 @@ class SilentPrintService {
             ${(reportData.entries || []).map((entry: any) => `
               <tr>
                 <td style="border: 1px solid #ddd; padding: 8px;">${entry.date}</td>
-                <td style="border: 1px solid #ddd; padding: 8px;">${reportData.currency || 'Ksh'} ${(entry.petrolSales || 0).toLocaleString()}</td>
-                <td style="border: 1px solid #ddd; padding: 8px;">${reportData.currency || 'Ksh'} ${(entry.dieselSales || 0).toLocaleString()}</td>
-                <td style="border: 1px solid #ddd; padding: 8px;">${reportData.currency || 'Ksh'} ${(entry.totalSales || 0).toLocaleString()}</td>
+                <td style="border: 1px solid #ddd; padding: 8px;">${reportData.currency || 'KSh'} ${(entry.petrolSales || 0).toLocaleString()}</td>
+                <td style="border: 1px solid #ddd; padding: 8px;">${reportData.currency || 'KSh'} ${(entry.dieselSales || 0).toLocaleString()}</td>
+                <td style="border: 1px solid #ddd; padding: 8px;">${reportData.currency || 'KSh'} ${(entry.totalSales || 0).toLocaleString()}</td>
               </tr>
             `).join('')}
           </tbody>
           <tfoot>
             <tr style="font-weight: bold; background: #e0e0e0;">
               <td style="border: 1px solid #ddd; padding: 8px;">TOTAL</td>
-              <td style="border: 1px solid #ddd; padding: 8px;">${reportData.currency || 'Ksh'} ${(reportData.totals?.petrol || 0).toLocaleString()}</td>
-              <td style="border: 1px solid #ddd; padding: 8px;">${reportData.currency || 'Ksh'} ${(reportData.totals?.diesel || 0).toLocaleString()}</td>
-              <td style="border: 1px solid #ddd; padding: 8px;">${reportData.currency || 'Ksh'} ${(reportData.totals?.total || 0).toLocaleString()}</td>
+              <td style="border: 1px solid #ddd; padding: 8px;">${reportData.currency || 'KSh'} ${(reportData.totals?.petrol || 0).toLocaleString()}</td>
+              <td style="border: 1px solid #ddd; padding: 8px;">${reportData.currency || 'KSh'} ${(reportData.totals?.diesel || 0).toLocaleString()}</td>
+              <td style="border: 1px solid #ddd; padding: 8px;">${reportData.currency || 'KSh'} ${(reportData.totals?.total || 0).toLocaleString()}</td>
             </tr>
           </tfoot>
         </table>

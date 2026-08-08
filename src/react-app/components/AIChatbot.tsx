@@ -85,7 +85,7 @@ export default function AIChatbot() {
     const context: any = {
       timestamp: new Date().toISOString(),
       businessName: state.companyData.name || "Fuel Station",
-      currency: state.companyData.currency || "Ksh",
+      currency: state.companyData.currency || "KSh",
       theme: state.theme,
       currentDate: state.salesDate,
       currentShift: state.shift,
@@ -413,7 +413,7 @@ export default function AIChatbot() {
   // Local AI response generator - analyzes business data and generates intelligent responses
   const generateLocalResponse = (message: string, context: any): string => {
     const lowerMsg = message.toLowerCase();
-    const currency = context.currency || "Ksh";
+    const currency = context.currency || "KSh";
     const {
       todaySales,
       deliveryTracker,

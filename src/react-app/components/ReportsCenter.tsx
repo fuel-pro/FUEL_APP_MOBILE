@@ -512,7 +512,7 @@ export default function ReportsCenter() {
     const doc = new jsPDF();
     const reportTitle = getReportTitle();
     const pageWidth = doc.internal.pageSize.getWidth();
-    const currency = state.companyData.currency || "Ksh";
+    const currency = state.companyData.currency || "KSh";
 
     // Professional Header with KRA Compliance
     const addProfessionalHeader = (y: number) => {
@@ -1121,7 +1121,7 @@ export default function ReportsCenter() {
 
   const exportToTXT = () => {
     const reportTitle = getReportTitle();
-    const currency = state.companyData.currency || "Ksh";
+    const currency = state.companyData.currency || "KSh";
     let txt = `${"=".repeat(60)}\n`;
     txt += `${state.companyData.name}\n`;
     txt += `${"=".repeat(60)}\n\n`;
@@ -1190,7 +1190,7 @@ export default function ReportsCenter() {
     txt: exportToTXT,
     whatsapp: () => {
       const reportTitle = getReportTitle();
-      const currency = state.companyData.currency || "Ksh";
+      const currency = state.companyData.currency || "KSh";
       let msg = `*${state.companyData.name}*\n`;
       msg += `KRA PIN: ${state.companyData.kraPin || "N/A"}\n\n`;
       msg += `*${reportTitle}*\n`;
@@ -1214,7 +1214,7 @@ export default function ReportsCenter() {
     },
     email: () => {
       const reportTitle = getReportTitle();
-      const currency = state.companyData.currency || "Ksh";
+      const currency = state.companyData.currency || "KSh";
       const subject = `${reportTitle} - ${state.companyData.name}`;
       let body = `${state.companyData.name}\n`;
       body += `KRA PIN: ${state.companyData.kraPin || "N/A"}\n\n`;

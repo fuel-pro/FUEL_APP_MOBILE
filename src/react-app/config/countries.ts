@@ -151,7 +151,7 @@ const kenya: CountryProfile = {
   defaultLanguage: "en",
   currency: {
     code: "KES",
-    symbol: "Ksh",
+    symbol: "KSh",
     name: "Kenyan Shilling",
     isoCode: "KES",
     subunit: "Cents",
