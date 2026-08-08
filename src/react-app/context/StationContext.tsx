@@ -4,25 +4,10 @@ import React, {
   useState,
   useCallback,
   useEffect,
+  useRef,
 } from "react";
 import { getCountryByCode } from "@/react-app/lib/world-country-utils";
-
-// Lazy API base URL getter using dynamic import to avoid circular deps
-let _apiBase: string | null = null;
-let _apiPromise: Promise<string> | null = null;
-function getApiBase(): string {
-  if (_apiBase) return _apiBase;
-  // Use environment variable or empty string (Firebase-only mode)
-  return import.meta.env.VITE_BACKEND_URL || "";
-}
-async function getApiBaseAsync(): Promise<string> {
-  if (_apiBase) return _apiBase;
-  if (!_apiPromise) {
-    _apiPromise = import("@/utils/apiConfig").then(m => m.getBackendUrl());
-  }
-  _apiBase = await _apiPromise;
-  return _apiBase || "";
-}
+import { supabase } from "@/supabase/client";
 
 // Encryption helper for sensitive data
 const encrypt = (text: string, key: string): string => {
@@ -53,6 +38,101 @@ const decrypt = (encoded: string, key: string): string => {
     return atob(encoded);
   }
 };
+
+// ---------------------------------------------------------------------------
+// Cross-device sync helpers (Supabase-backed)
+// ---------------------------------------------------------------------------
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[89ab][0-9a-f]{12}$/i;
+
+function newUuid(): string {
+  try {
+    if (
+      typeof crypto !== "undefined" &&
+      typeof crypto.randomUUID === "function"
+    ) {
+      return crypto.randomUUID();
+    }
+  } catch {
+    /* fall through */
+  }
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
+interface StationBlob {
+  data: any;
+  access: StationAccess[];
+  sharedUsers: Station["sharedUsers"];
+}
+
+/** Station (app shape) -> `stations` table row. */
+function stationToRow(station: Station, ownerId: string) {
+  return {
+    id: station.id,
+    name: station.name,
+    location: station.location || null,
+    phone: station.phone || null,
+    email: station.email || null,
+    kra_pin: station.kraPin || null,
+    etr_serial: station.etrSerial || null,
+    tax_rate: station.taxRate ?? 16,
+    theme: station.theme || "default",
+    logo: station.logo || null,
+    description: station.description || null,
+    owner_id: ownerId,
+    is_active: true,
+  };
+}
+
+/** Everything without a dedicated column -> `app_kv.data` (collection 'station_data'). */
+function stationToBlob(station: Station): StationBlob {
+  return {
+    data: station.data ?? {},
+    access: station.access ?? [],
+    sharedUsers: station.sharedUsers ?? [],
+  };
+}
+
+/** `stations` row + optional blob -> Station (app shape). */
+function rowToStation(
+  row: any,
+  blob: StationBlob | null | undefined,
+  secretKey: string
+): Station {
+  return {
+    id: row.id,
+    name: row.name,
+    location: row.location || "",
+    phone: row.phone || "",
+    email: row.email || "",
+    kraPin: row.kra_pin || "",
+    etrSerial: row.etr_serial || "",
+    taxRate: Number(row.tax_rate ?? 16),
+    theme: row.theme || "dark",
+    logo: row.logo || "",
+    description: row.description || "",
+    createdAt: row.created_at || new Date().toISOString(),
+    updatedAt: row.updated_at || new Date().toISOString(),
+    data: blob?.data ?? {},
+    access:
+      blob?.access?.length ? blob.access : [
+        {
+          username: (row.name || "station").toLowerCase().replace(/\s+/g, "_"),
+          passwordHash: encrypt("default", secretKey),
+          role: "owner" as const,
+          permissions: ["all"],
+          grantedAt: row.created_at || new Date().toISOString(),
+          grantedBy: "system",
+        },
+      ],
+    sharedUsers: blob?.sharedUsers ?? [],
+  };
+}
 
 const STORAGE_KEY = "fuelpro_stations_v3";
 const ADMIN_KEY = "fuelpro_admin_v3";
@@ -353,195 +433,188 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
     return saved ? parseInt(saved, 10) : null;
   });
   const [hasBackendData, setHasBackendData] = useState(false);
+  const didInitialSync = useRef(false);
 
-  // Get auth token from storage
-  const getAuthToken = useCallback((): string | null => {
-    // Try different storage keys for auth tokens
-    const keys = [
-      "fuelpro_founder_session",
-      "firebase_token",
-      "auth_token",
-      "fuelpro_auth_token",
-    ];
-    for (const key of keys) {
+  // ------------------------------------------------------------------
+  // Persist (local cache). Declared BEFORE syncFromBackend so the sync
+  // layer can re-hydrate the cache after every pull.
+  // ------------------------------------------------------------------
+  const persist = useCallback(
+    (newStations?: Station[], newAdmin?: AdminSettings) => {
+      const s = newStations || stations;
+      const a = newAdmin || adminSettings;
       try {
-        const val = localStorage.getItem(key);
-        if (val) {
-          const parsed = JSON.parse(val);
-          if (parsed.token) return parsed.token;
-          if (parsed.accessToken) return parsed.accessToken;
-          if (typeof parsed === "string") return parsed;
-        }
-      } catch {
-        /* ignore */
-      }
-    }
-    return null;
-  }, []);
-
-  // Sync stations FROM the backend server
-  const syncFromBackend = useCallback(async (): Promise<void> => {
-    const token = getAuthToken();
-    if (!token) {
-      console.log("[StationContext] No auth token, skipping backend sync");
-      return;
-    }
-
-    setIsBackendSyncing(true);
-    try {
-      const response = await fetch(`${getApiBase()}/api/trpc/sync.fullSync`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`Backend sync failed: ${response.status}`);
-      }
-
-      const result = await response.json();
-      const data = result.result?.data?.json || result.data;
-
-      if (data && data.success && data.stations && data.stations.length > 0) {
-        // Map backend stations to local format
-        const backendStations: Station[] = data.stations.map((s: any) => ({
-          id: `backend_${s.id}`,
-          name: s.name,
-          location: s.location || "",
-          phone: s.phone || "",
-          email: s.managerName || "",
-          kraPin: "",
-          etrSerial: "",
-          taxRate: parseFloat(s.taxRate) || 16,
-          theme: "dark",
-          logo: "",
-          description: "",
-          createdAt: s.createdAt || new Date().toISOString(),
-          updatedAt: s.updatedAt || new Date().toISOString(),
-          data: {},
-          access: [
-            {
-              username: s.managerName || "owner",
-              passwordHash: encrypt(s.code || "default", adminSettings.secretKey),
-              role: "owner" as const,
-              permissions: ["all"],
-              grantedAt: s.createdAt || new Date().toISOString(),
-              grantedBy: "system",
-            },
-          ],
-          sharedUsers: [],
-          // Store backend ID for reference
-          backendId: s.id,
-          userRole: s.userRole,
-        }));
-
-        // Merge with local stations (prefer backend data for shared stations)
-        setStations(prevStations => {
-          const localOnlyStations = prevStations.filter(
-            s => !s.id.startsWith("backend_") && !s.backendId
-          );
-          return [...localOnlyStations, ...backendStations];
-        });
-
-        // Save sync timestamp
-        const now = Date.now();
-        setLastBackendSync(now);
-        localStorage.setItem(BACKEND_SYNC_TIMESTAMP, String(now));
-        setHasBackendData(true);
-        localStorage.setItem(BACKEND_SYNC_KEY, "true");
-
-        console.log(`[StationContext] Synced ${backendStations.length} stations from backend`);
-      } else {
-        console.log("[StationContext] No stations found on backend");
-        setHasBackendData(data?.stations?.length > 0);
-      }
-    } catch (error) {
-      console.error("[StationContext] Backend sync error:", error);
-    } finally {
-      setIsBackendSyncing(false);
-    }
-  }, [getAuthToken, adminSettings.secretKey]);
-
-  // Sync stations TO the backend server
-  const syncToBackend = useCallback(async (): Promise<void> => {
-    const token = getAuthToken();
-    if (!token) {
-      console.log("[StationContext] No auth token, skipping push");
-      return;
-    }
-
-    // Find stations that need to be pushed (local-only, not yet on backend)
-    const stationsToPush = stations.filter(
-      s => !s.id.startsWith("backend_") && !s.backendId
-    );
-
-    if (stationsToPush.length === 0) {
-      console.log("[StationContext] No local stations to push");
-      return;
-    }
-
-    setIsBackendSyncing(true);
-    try {
-      const stationData = stationsToPush.map(s => ({
-        name: s.name,
-        code: s.name.toLowerCase().replace(/\s+/g, "_").substring(0, 20),
-        location: s.location,
-        phone: s.phone,
-        managerName: s.email || s.name,
-        taxRate: String(s.taxRate || 16),
-      }));
-
-      const response = await fetch(`${getApiBase()}/api/trpc/sync.pushChanges`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ stationData }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Backend push failed: ${response.status}`);
-      }
-
-      const result = await response.json();
-      const data = result.result?.data?.json || result.data;
-
-      if (data && data.success && data.results?.stations) {
-        // Update local stations with backend IDs
-        setStations(prevStations =>
-          prevStations.map(s => {
-            if (s.id.startsWith("backend_") || s.backendId) return s;
-            const pushed = data.results.stations.find(
-              (p: any) => p.action === "created"
-            );
-            if (pushed) {
-              return { ...s, backendId: pushed.id, id: `backend_${pushed.id}` };
-            }
-            return s;
-          })
+        localStorage.setItem(
+          STORAGE_KEY,
+          JSON.stringify({ stations: s, version: "3.0" })
         );
+        localStorage.setItem(ADMIN_KEY, JSON.stringify(a));
+      } catch (e) {
+        console.error("[StationContext] persist failed:", e);
+      }
+    },
+    [stations, adminSettings]
+  );
+
+  useEffect(() => {
+    persist();
+  }, [stations, adminSettings, persist]);
+
+  // ------------------------------------------------------------------
+  // Push ONE station (row + data blob) to Supabase.
+  // RLS satisfied because owner_id = auth.uid() on every write.
+  // ------------------------------------------------------------------
+  const pushStationToBackend = useCallback(
+    async (station: Station): Promise<boolean> => {
+      try {
+        const { data: sess } = await supabase.auth.getSession();
+        if (!sess.session) return false;
+        const ownerId = sess.session.user.id;
+
+        let target = station;
+        if (!UUID_RE.test(target.id)) {
+          // Legacy `station_<ts>_<rand>` id -> mint a UUID, remap locally.
+          const fresh: Station = { ...target, id: newUuid() };
+          setStations(prev =>
+            prev.map(s => (s.id === target.id ? fresh : s))
+          );
+          setCurrentStation(prev =>
+            prev && prev.id === target.id ? fresh : prev
+          );
+          try {
+            if (localStorage.getItem(CURRENT_STATION_KEY) === target.id) {
+              localStorage.setItem(CURRENT_STATION_KEY, fresh.id);
+            }
+          } catch { /* ignore */ }
+          target = fresh;
+        }
+
+        const { error: rowErr } = await supabase
+          .from("stations")
+          .upsert(stationToRow(target, ownerId), { onConflict: "id" });
+        if (rowErr) throw rowErr;
+
+        const { error: kvErr } = await supabase
+          .from("app_kv")
+          .upsert(
+            {
+              id: `station_data:${target.id}`,
+              collection: "station_data",
+              owner_id: ownerId,
+              station_id: target.id,
+              data: stationToBlob(target),
+            },
+            { onConflict: "id" }
+          );
+        if (kvErr) throw kvErr;
+
+        return true;
+      } catch (error) {
+        console.error("[StationContext] pushStationToBackend error:", error);
+        return false;
+      }
+    },
+    []
+  );
+
+  // ------------------------------------------------------------------
+  // Pull everything for the signed-in owner; merge; re-push local-only.
+  // ------------------------------------------------------------------
+  const syncFromBackend = useCallback(
+    async (base?: Station[]): Promise<void> => {
+      setIsBackendSyncing(true);
+      try {
+        const { data: sess } = await supabase.auth.getSession();
+        if (!sess.session) {
+          setHasBackendData(false);
+          return;
+        }
+        const ownerId = sess.session.user.id;
+
+        const { data: rows, error } = await supabase
+          .from("stations")
+          .select("*")
+          .eq("owner_id", ownerId)
+          .order("created_at", { ascending: true });
+        if (error) throw error;
+
+        const remote: Station[] = [];
+        for (const row of rows ?? []) {
+          const { data: kv } = await supabase
+            .from("app_kv")
+            .select("data")
+            .eq("id", `station_data:${row.id}`)
+            .maybeSingle();
+          remote.push(
+            rowToStation(row, (kv?.data as StationBlob) ?? null, adminSettings.secretKey)
+          );
+        }
+
+        const local = base ?? stations;
+        const remoteIds = new Set(remote.map(r => r.id));
+        const localOnly = local.filter(s => !remoteIds.has(s.id));
+        const merged = [...localOnly, ...remote];
+
+        setStations(merged);
+        persist(merged);
+
+        // Best-effort upload of anything that only exists on this device.
+        for (const s of localOnly) void pushStationToBackend(s);
+
+        setCurrentStation(prev => {
+          if (prev && remoteIds.has(prev.id)) return prev;
+          return remote[0] ?? prev;
+        });
+        try {
+          if (!localStorage.getItem(CURRENT_STATION_KEY) && remote.length > 0) {
+            localStorage.setItem(CURRENT_STATION_KEY, remote[0].id);
+          }
+        } catch { /* ignore */ }
 
         const now = Date.now();
         setLastBackendSync(now);
+        setHasBackendData(remote.length > 0);
         localStorage.setItem(BACKEND_SYNC_TIMESTAMP, String(now));
-        console.log(`[StationContext] Pushed ${stationsToPush.length} stations to backend`);
+        localStorage.setItem(BACKEND_SYNC_KEY, remote.length > 0 ? "true" : "false");
+      } catch (error) {
+        console.error("[StationContext] syncFromBackend error:", error);
+      } finally {
+        setIsBackendSyncing(false);
       }
+    },
+    [stations, adminSettings.secretKey, persist, pushStationToBackend]
+  );
+
+  // ------------------------------------------------------------------
+  // Bulk push (manual "Sync now" / UI callers).
+  // ------------------------------------------------------------------
+  const syncToBackend = useCallback(async (): Promise<void> => {
+    setIsBackendSyncing(true);
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      if (!sess.session) return;
+      for (const s of stations) {
+        await pushStationToBackend(s);
+      }
+      const now = Date.now();
+      setLastBackendSync(now);
+      localStorage.setItem(BACKEND_SYNC_TIMESTAMP, String(now));
+      localStorage.setItem(BACKEND_SYNC_KEY, "true");
     } catch (error) {
-      console.error("[StationContext] Backend push error:", error);
+      console.error("[StationContext] syncToBackend error:", error);
     } finally {
       setIsBackendSyncing(false);
     }
-  }, [getAuthToken, stations]);
+  }, [stations, pushStationToBackend]);
 
-  // Load from storage on mount
+  // ------------------------------------------------------------------
+  // Mount: hydrate local cache once, then do the real cloud pull.
+  // ------------------------------------------------------------------
   useEffect(() => {
     const { stations: loadedStations, admin, currentId } = loadFromStorage();
     setStations(loadedStations);
     setAdminSettings(admin);
 
-    // Check admin session
     const session = localStorage.getItem(SESSION_KEY);
     if (session) {
       try {
@@ -558,11 +631,8 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
-    // Check if we have backend data
-    const backendSynced = localStorage.getItem(BACKEND_SYNC_KEY);
-    setHasBackendData(backendSynced === "true");
+    setHasBackendData(localStorage.getItem(BACKEND_SYNC_KEY) === "true");
 
-    // Set current station
     if (currentId) {
       const found = loadedStations.find(s => s.id === currentId);
       if (found) setCurrentStation(found);
@@ -570,34 +640,42 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
       setCurrentStation(loadedStations[0]);
       localStorage.setItem(CURRENT_STATION_KEY, loadedStations[0].id);
     }
+
     setIsStationLoading(false);
 
-    // Try to sync from backend on mount
-    syncFromBackend();
+    if (!didInitialSync.current) {
+      didInitialSync.current = true;
+      void syncFromBackend(loadedStations);
+    }
   }, [syncFromBackend]);
 
-  // Persist to storage
-  const persist = useCallback(
-    (newStations?: Station[], newAdmin?: AdminSettings) => {
-      const s = newStations || stations;
-      const a = newAdmin || adminSettings;
-      localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify({ stations: s, version: "3.0" })
-      );
-      localStorage.setItem(ADMIN_KEY, JSON.stringify(a));
-    },
-    [stations, adminSettings]
-  );
-
+  // ------------------------------------------------------------------
+  // Auth listener: logging in mid-session (no reload) also triggers a pull.
+  // ------------------------------------------------------------------
   useEffect(() => {
-    persist();
-  }, [stations, adminSettings, persist]);
+    const { data } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_OUT") {
+        setHasBackendData(false);
+        return;
+      }
+      if (
+        (event === "SIGNED_IN" || event === "INITIAL_SESSION") &&
+        session
+      ) {
+        // Defer: onAuthStateChange holds Supabase's internal auth lock —
+        // never run queries inside the callback.
+        window.setTimeout(() => {
+          void syncFromBackend();
+        }, 0);
+      }
+    });
+    return () => data.subscription.unsubscribe();
+  }, [syncFromBackend]);
 
   // Station CRUD
   const createStation = useCallback(
     (stationData: Partial<Station>): Station => {
-      const id = `station_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const id = newUuid(); // was: `station_<ts>_<rand>` (not a UUID)
       const password =
         Math.random().toString(36).substr(2, 8) +
         Math.random().toString(36).substr(2, 4);
@@ -630,10 +708,12 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
         ],
         sharedUsers: [],
       };
+
       setStations(prev => [...prev, newStation]);
       setCurrentStation(newStation);
       localStorage.setItem(CURRENT_STATION_KEY, id);
-      // Also save directly to ensure persistence even if useEffect hasn't fired
+
+      // Local cache write (unchanged behaviour) + NEW: cloud push.
       try {
         const existing = JSON.parse(
           localStorage.getItem(STORAGE_KEY) || '{"stations":[],"version":"3.0"}'
@@ -643,29 +723,27 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
       } catch (e) {
         console.error("Failed to persist station:", e);
       }
+      void pushStationToBackend(newStation);
+
       return newStation;
     },
-    [stations, adminSettings.secretKey]
+    [stations, adminSettings.secretKey, pushStationToBackend]
   );
 
   const updateStation = useCallback(
     (id: string, data: Partial<Station>) => {
-      setStations(prev =>
-        prev.map(s =>
-          s.id === id
-            ? { ...s, ...data, updatedAt: new Date().toISOString() }
-            : s
-        )
-      );
-      if (currentStation?.id === id) {
-        setCurrentStation(prev =>
-          prev
-            ? { ...prev, ...data, updatedAt: new Date().toISOString() }
-            : null
-        );
-      }
+      const existing = stations.find(s => s.id === id);
+      if (!existing) return;
+      const updated: Station = {
+        ...existing,
+        ...data,
+        updatedAt: new Date().toISOString(),
+      };
+      setStations(prev => prev.map(s => (s.id === id ? updated : s)));
+      if (currentStation?.id === id) setCurrentStation(updated);
+      void pushStationToBackend(updated);
     },
-    [currentStation]
+    [stations, currentStation, pushStationToBackend]
   );
 
   const deleteStation = useCallback(
@@ -676,6 +754,13 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
         setCurrentStation(remaining.length > 0 ? remaining[0] : null);
         if (remaining.length > 0)
           localStorage.setItem(CURRENT_STATION_KEY, remaining[0].id);
+      }
+      // Remote delete; app_kv blob cascades via station_id FK.
+      if (UUID_RE.test(id)) {
+        void (async () => {
+          const { error } = await supabase.from("stations").delete().eq("id", id);
+          if (error) console.error("[StationContext] remote delete failed:", error);
+        })();
       }
     },
     [currentStation, stations]
@@ -974,14 +1059,17 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
   );
 
   const saveStationData = useCallback((stationId: string, data: any) => {
-    setStations(prev =>
-      prev.map(s =>
-        s.id === stationId
-          ? { ...s, data, updatedAt: new Date().toISOString() }
-          : s
-      )
-    );
-  }, []);
+    const existing = stations.find(s => s.id === stationId);
+    if (!existing) return;
+    const updated: Station = {
+      ...existing,
+      data,
+      updatedAt: new Date().toISOString(),
+    };
+    setStations(prev => prev.map(s => (s.id === stationId ? updated : s)));
+    if (currentStation?.id === stationId) setCurrentStation(updated);
+    void pushStationToBackend(updated);
+  }, [stations, currentStation, pushStationToBackend]);
 
   // Export/Import
   const exportAllData = useCallback((): string => {

@@ -32,7 +32,51 @@
    `@clerk/clerk-react`, which isn't even in `package.json` — it wasn't
    used anywhere else in the app, so it was just confusing debt. Deleted.
 
-4. Set real working env values in `.env.local` (your live Supabase project
+4. **Cross-device login & station data sync — root-caused and fixed.**
+   `src/react-app/context/StationContext.tsx` (the context behind
+   `useStations()`, which gates the entire app UI) was 100%
+   localStorage-based. Supabase auth worked on every device, but station /
+   business data never left the device, so a second device or browser saw
+   zero stations and dropped the owner into the "create your first station"
+   setup flow. The previous `syncFromBackend` / `syncToBackend` were dead
+   code: they called a nonexistent tRPC endpoint
+   (`${getApiBase()}/api/trpc/sync.fullSync` / `sync.pushChanges` with
+   `VITE_BACKEND_URL` unset) and hunted for auth tokens under keys Supabase
+   never writes (`fuelpro_founder_session`, `firebase_token`, `auth_token`,
+   `fuelpro_auth_token`), then bailed silently.
+
+   Rewrote the sync layer to run directly on Supabase (the schema already
+   had `stations.owner_id` + RLS and `app_kv` from migration 002):
+   - New top-level mappers `stationToRow` / `rowToStation` /
+     `stationToBlob` + `newUuid()`; station ids are now UUIDs so they can
+     be Postgres PK / `onConflict` targets.
+   - `syncFromBackend()` pulls `stations` (`eq owner_id auth.uid()`) plus
+     each station's `station_data` blob from `app_kv`, merges with the
+     local cache (remote wins on id conflicts), re-persists localStorage,
+     and best-effort pushes local-only stations back up.
+   - `pushStationToBackend()` upserts row + blob with
+     `owner_id = auth.uid()` on every write (satisfies RLS); legacy
+     `station_<ts>_<rand>` ids are minted a UUID and remapped locally.
+   - `createStation` / `updateStation` / `deleteStation` /
+     `saveStationData` push to Supabase immediately; delete cascades the
+     `app_kv` blob via the `station_id` FK.
+   - `persist` moved above `syncFromBackend` (it was previously declared
+     after code that referenced it — a temporal-dead-zone hazard).
+   - `supabase.auth.onAuthStateChange` listener (`SIGNED_IN`,
+     `INITIAL_SESSION`) triggers a pull when logging in mid-session
+     without a full reload; the callback defers via `setTimeout` so no
+     query ever runs inside Supabase's auth lock.
+   - Deleted the dead tRPC/fetch sync and the fake-token `getAuthToken`.
+
+   Result: signing in with the same email on any device/browser now loads
+   your stations and their data from Supabase instead of showing the setup
+   wizard. Verified with typecheck, production build, and a live
+   two-profile smoke test.
+   Supporting SQL: `supabase/migrations/004_cross_device_guard.sql`
+   (idempotent guard; only strictly needed for projects provisioned from
+   the legacy `database_schema.sql`).
+
+5. Set real working env values in `.env.local` (your live Supabase project
    URL/anon key, `VITE_DEMO_MODE=false`) so the app runs against your actual
    backend out of the box.
 
