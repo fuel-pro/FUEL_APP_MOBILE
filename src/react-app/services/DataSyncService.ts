@@ -586,21 +586,60 @@ export function getPriceForCity(
       cityName: city,
     };
   }
-  // Search regional prices case-insensitively
+  // Search regional prices case-insensitively.
+  // Match priority (most specific first) so that a road name like
+  // "Mombasa Road, Nairobi" does NOT match the city "Mombasa" before the
+  // actual city "Nairobi":
+  //   1. Exact full-string match.
+  //   2. The location is a comma-separated address ("street, city, country");
+  //      match a regional city against an exact trimmed address segment.
+  //   3. Last resort: loose substring containment (kept for backwards
+  //      compatibility with simple "Nairobi"-only inputs).
   if (data.regionalPrices && data.regionalPrices.length > 0) {
-    const match = data.regionalPrices.find(
-      r =>
-        r.city.toLowerCase() === city.toLowerCase() ||
-        city.toLowerCase().includes(r.city.toLowerCase()) ||
-        r.city.toLowerCase().includes(city.toLowerCase())
+    const loc = city.toLowerCase();
+    const segments = loc
+      .split(",")
+      .map(s => s.trim())
+      .filter(Boolean);
+
+    const exact = data.regionalPrices.find(
+      r => r.city.toLowerCase() === loc
     );
-    if (match) {
+    if (exact) {
       return {
-        petrol: match.petrolPrice,
-        diesel: match.dieselPrice,
-        kerosene: match.kerosenePrice ?? 0,
+        petrol: exact.petrolPrice,
+        diesel: exact.dieselPrice,
+        kerosene: exact.kerosenePrice ?? 0,
         isRegional: true,
-        cityName: match.city,
+        cityName: exact.city,
+      };
+    }
+
+    const segmentMatch = data.regionalPrices.find(r =>
+      segments.some(seg => seg === r.city.toLowerCase())
+    );
+    if (segmentMatch) {
+      return {
+        petrol: segmentMatch.petrolPrice,
+        diesel: segmentMatch.dieselPrice,
+        kerosene: segmentMatch.kerosenePrice ?? 0,
+        isRegional: true,
+        cityName: segmentMatch.city,
+      };
+    }
+
+    const loose = data.regionalPrices.find(
+      r =>
+        loc.includes(r.city.toLowerCase()) ||
+        r.city.toLowerCase().includes(loc)
+    );
+    if (loose) {
+      return {
+        petrol: loose.petrolPrice,
+        diesel: loose.dieselPrice,
+        kerosene: loose.kerosenePrice ?? 0,
+        isRegional: true,
+        cityName: loose.city,
       };
     }
   }
