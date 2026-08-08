@@ -40,6 +40,40 @@ export function getCountryByCode(code: string): CountryInfo | undefined {
   return ALL_COUNTRIES.find(c => c.code === code.toUpperCase());
 }
 
+// ─── Get country by name (case-insensitive, trimmed) ───
+// Used to resolve a country NAME embedded in a free-text location string
+// (e.g. "Nairobi, Kenya" → Kenya → KE → KES) when no country code is stored.
+export function getCountryByName(name: string): CountryInfo | undefined {
+  const n = name.trim().toLowerCase();
+  if (!n) return undefined;
+  return ALL_COUNTRIES.find(c => c.name.toLowerCase() === n);
+}
+
+// ─── Extract a country from a free-text location string ───
+// Handles "City, Country", "Country", and common variants. Returns the
+// matched CountryInfo, or undefined if no known country is found.
+export function getCountryFromLocation(location: string): CountryInfo | undefined {
+  if (!location) return undefined;
+  // Split on commas / semicolons / pipes and try each segment, longest first
+  // so "Mombasa Road, Nairobi, Kenya" prefers the most specific match.
+  const segments = location
+    .split(/[,;|]/)
+    .map(s => s.trim())
+    .filter(Boolean)
+    .sort((a, b) => b.length - a.length);
+  for (const seg of segments) {
+    const direct = getCountryByName(seg);
+    if (direct) return direct;
+    // Also try matching a country name that appears as a substring
+    // (e.g. "Nairobi Kenya" without a separator, or "Mombasa Road Kenya").
+    const contained = ALL_COUNTRIES.find(
+      c => seg.toLowerCase().includes(c.name.toLowerCase())
+    );
+    if (contained) return contained;
+  }
+  return undefined;
+}
+
 // ─── Get payment methods for a country ───
 export function getCountryPaymentMethods(countryCode: string) {
   const config = WORLD_PAYMENT_CONFIGS[countryCode.toUpperCase()];

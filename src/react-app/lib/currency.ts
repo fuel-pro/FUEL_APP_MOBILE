@@ -5,7 +5,7 @@
  * 
  * Uses unified currency symbols from config/pricing.ts for consistency.
  */
-import { getCountryByCode } from "./world-country-utils";
+import { getCountryByCode, getCountryFromLocation } from "./world-country-utils";
 import { REGIONAL_PRICES } from "@/react-app/config/pricing";
 
 // Build currency symbols from unified pricing config
@@ -42,6 +42,18 @@ export function getDetectedCurrency(): string {
         const cc = current.country || current.countryCode;
         if (cc) {
           const country = getCountryByCode(cc);
+          if (country?.currency) {
+            CURRENCY_CACHE[cacheKey] = country.currency;
+            return country.currency;
+          }
+        }
+        // No explicit country/currency stored on the station. Try to derive
+        // one from the free-text location string (e.g. "Nairobi, Kenya" →
+        // Kenya → KES). This fixes the common case where a station is created
+        // with a location but no country code, which otherwise falls through
+        // to the (often server-IP-based, inaccurate) cached user location.
+        if (current.location) {
+          const country = getCountryFromLocation(current.location);
           if (country?.currency) {
             CURRENCY_CACHE[cacheKey] = country.currency;
             return country.currency;

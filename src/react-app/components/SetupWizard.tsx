@@ -20,6 +20,8 @@ import {
 import { useFuel } from "../context/FuelContext";
 import { useStations } from "../context/StationContext";
 import { getFuelPrices, getDisplayPrices, FuelPrices } from "../services/FuelPriceService";
+import { getCountryFromLocation } from "../lib/world-country-utils";
+import { getCurrencySymbol as getCurrencySymbolForCode } from "../lib/currency";
 
 const DEFAULT_CURRENCY = "KSh ";
 
@@ -718,8 +720,18 @@ function PricingStep({ data, updateField, isDetectingPrices, autoDetectedPrices,
   onRefreshPrices?: () => void;
   priceDetectionError?: string | null;
 }) {
-  // Determine currency symbol based on auto-detected location
+  // Determine currency symbol. The station's entered location takes priority
+  // over auto-detected prices because IP geolocation frequently returns the
+  // server/CDN location (e.g. a US Vercel edge) instead of the user's real
+  // country, which would wrongly show "$" for a Kenyan station.
   const getCurrencySymbol = () => {
+    if (data.location) {
+      const country = getCountryFromLocation(data.location);
+      if (country?.currency) {
+        const sym = getCurrencySymbolForCode(country.currency);
+        if (sym) return sym + " ";
+      }
+    }
     if (autoDetectedPrices?.currencySymbol) {
       return autoDetectedPrices.currencySymbol + " ";
     }
