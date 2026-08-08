@@ -82,42 +82,58 @@ function savePricesToCache(prices: FuelPrices): void {
   }
 }
 
-// Get location data using multiple methods
+// Get location data using multiple methods.
+// Timezone is the PRIMARY signal because IP geolocation often resolves to the
+// CDN/edge node (e.g. a US IP on Vercel) rather than the user's real location.
+// IP geolocation is only used to fill in the city/country display name and to
+// CONFIRM the timezone-derived country; it never overrides a valid timezone
+// detection with a conflicting CDN-derived country.
 async function detectUserLocation(): Promise<LocationData> {
-  // Method 1: Try to get from cached location
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const tzCountry = detectCountryFromTimezone();
+
+  // Method 1: Try to get from cached location — but only trust it if it still
+  // agrees with the current timezone-derived country. A stale cache that
+  // conflicts with the timezone (e.g. cached "US" while the browser reports
+  // Africa/Nairobi) is discarded so a bad CDN-based detection can't persist.
   try {
     const cachedLoc = localStorage.getItem(LOCATION_CACHE_KEY);
     if (cachedLoc) {
       const loc: LocationData = JSON.parse(cachedLoc);
-      // Check if cache is recent (within 24 hours)
-      return loc;
+      if (loc.countryCode === tzCountry) {
+        return loc;
+      }
+      // Mismatch: the cached value was likely a CDN-derived false positive.
+      // Fall through to re-detect.
+      console.log("[FuelPrice] Discarding stale location cache (country mismatch with timezone)");
     }
   } catch {}
 
-  // Method 2: Use timezone detection as an initial guess
-  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  let countryCode = detectCountryFromTimezone();
-
-  // Method 3: Try IP geolocation via free service (more accurate than timezone alone)
+  // Method 2: Timezone-derived country is our trusted baseline
+  let countryCode = tzCountry;
   let city = "Unknown";
   let country = "Unknown";
 
+  // Method 3: Try IP geolocation ONLY to fill in city/country display names,
+  // and only adopt its country code if it agrees with the timezone country.
+  // This keeps the CDN's IP from overriding the user's real locale.
   try {
-    // ipwho.is: free, no API key, HTTPS (ip-api.com's free tier is HTTP-only,
-    // which gets silently blocked as mixed content on an HTTPS-served app)
     const response = await fetch("https://ipwho.is/?fields=success,country,country_code,city,timezone");
     if (response.ok) {
       const data = await response.json();
       if (data.success !== false) {
         city = data.city || city;
         country = data.country || country;
-        if (data.country_code) {
-          countryCode = data.country_code; // IP geolocation is more reliable than timezone alone
+        // Only trust IP country code when it confirms the timezone detection,
+        // OR when timezone detection was inconclusive (neutral "US" default
+        // from a non-mapped timezone). This prevents a US CDN IP from
+        // overriding an Africa/Nairobi timezone.
+        if (data.country_code && data.country_code === tzCountry) {
+          countryCode = data.country_code;
         }
       }
     }
   } catch {
-    // Fallback to timezone-based detection
     console.log("[FuelPrice] IP geolocation failed, using timezone detection");
   }
 

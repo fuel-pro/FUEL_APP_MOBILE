@@ -23,15 +23,29 @@ export function getDetectedCurrency(): string {
   // 1. Try station data (highest priority)
   try {
     const stationsJson = localStorage.getItem("fuelpro_stations_v3");
-    const currentStationId = localStorage.getItem("fuelpro_current_station");
+    // The current-station key is fuelpro_current_station_v3 (the older
+    // fuelpro_current_station key is no longer written anywhere).
+    const currentStationId =
+      localStorage.getItem("fuelpro_current_station_v3") ||
+      localStorage.getItem("fuelpro_current_station");
     if (stationsJson && currentStationId) {
-      const stations = JSON.parse(stationsJson);
-      const current = stations.find((s: any) => s.id === currentStationId);
-      if (current?.country) {
-        const country = getCountryByCode(current.country);
-        if (country?.currency) {
-          CURRENCY_CACHE[cacheKey] = country.currency;
-          return country.currency;
+      const parsed = JSON.parse(stationsJson);
+      const stationList = Array.isArray(parsed) ? parsed : parsed?.stations;
+      const current = stationList?.find((s: any) => s.id === currentStationId);
+      // A station may carry either a country code (e.g. "KE") or a full
+      // currency code (e.g. "KES"); resolve whichever is present.
+      if (current) {
+        if (current.currency) {
+          CURRENCY_CACHE[cacheKey] = current.currency;
+          return current.currency;
+        }
+        const cc = current.country || current.countryCode;
+        if (cc) {
+          const country = getCountryByCode(cc);
+          if (country?.currency) {
+            CURRENCY_CACHE[cacheKey] = country.currency;
+            return country.currency;
+          }
         }
       }
     }
@@ -39,17 +53,21 @@ export function getDetectedCurrency(): string {
     /* */
   }
 
-  // 2. Try location country detection
+  // 2. Try location country detection (fuelpro_user_location, written by
+  //    FuelPriceService, or the legacy fuelpro_location_country key)
   try {
-    const saved = localStorage.getItem("fuelpro_location_country");
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      const cc = parsed.currentCountry || parsed.country;
-      if (cc) {
-        const country = getCountryByCode(cc);
-        if (country?.currency) {
-          CURRENCY_CACHE[cacheKey] = country.currency;
-          return country.currency;
+    for (const key of ["fuelpro_user_location", "fuelpro_location_country"]) {
+      const saved = localStorage.getItem(key);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        const cc =
+          parsed.countryCode || parsed.currentCountry || parsed.country;
+        if (cc) {
+          const country = getCountryByCode(cc);
+          if (country?.currency) {
+            CURRENCY_CACHE[cacheKey] = country.currency;
+            return country.currency;
+          }
         }
       }
     }
