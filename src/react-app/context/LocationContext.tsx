@@ -494,10 +494,12 @@ export function LocationProvider({
       const loc = stationCountries[sid];
       if (loc?.countryCode)
         return getCountryById(loc.countryCode) || getUniversalFallback();
-      const resolved = resolveUserCountry();
-      return getCountryById(resolved) || getUniversalFallback();
+      // Fall back to currentCountry, which already derives the country from the
+      // active station's location string (preferred) before timezone/IP. This
+      // keeps the header selector in sync with the station's real country.
+      return currentCountry;
     },
-    [stationCountries]
+    [stationCountries, currentCountry]
   );
 
   const fmtCurrency = useCallback(
