@@ -1,4 +1,4 @@
-const CACHE_NAME = "fuelpro-v2";
+const CACHE_NAME = "fuelpro-v3";
 
 self.addEventListener("install", event => {
   self.skipWaiting();

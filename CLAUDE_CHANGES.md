@@ -110,6 +110,24 @@
    - Added `cart` and `activeShift` to the `partialize` whitelist so critical
      POS state survives browser restarts.
 
+7. **"P.subscribe is not a function" crash screen — fixed.**
+   The global ErrorBoundary was catching `TypeError: <minified>.subscribe is not a
+   function`. Audited every `.subscribe(` call site in the app:
+   `OfflineIndicator.tsx` (`silentPrintService.subscribe`, `indexedStorage.subscribe`),
+   the Supabase auth listener in `StationContext.tsx`, and realtime/tRPC
+   subscription paths. Fixes:
+   - `OfflineIndicator.tsx` now uses a `safeSubscribe()` guard + try/catch; a
+     missing or broken status service can no longer unmount the entire app.
+   - `silent-print-service.ts` and `indexed-storage.ts` already ship with complete
+     `subscribe()` implementations (verified).
+   - `StationContext.tsx` auth listener uses Zustand's `useAuth.subscribe`
+     (not Supabase) with mount-only `[]` deps.
+   - `App.tsx` ErrorBoundary now persists the full error + component stack to
+     `localStorage["fuelpro_last_error"]` and renders the stack in a
+     `<details>` block for future diagnostics.
+   - `public/sw.js` cache bumped to `fuelpro-v3` to purge stale cached chunks
+     from previous deploys (mixed old/new bundles produce the same error class).
+
 ## Verified working
 
 - `npm install --legacy-peer-deps` — installs clean

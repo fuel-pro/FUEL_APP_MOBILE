@@ -56,9 +56,22 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     console.error("[ErrorBoundary] Caught error:", error, errorInfo);
+    // Persist full diagnostic so it can be inspected after the crash screen loads
+    try {
+      localStorage.setItem(
+        "fuelpro_last_error",
+        JSON.stringify({
+          message: error?.message ?? String(error),
+          stack: error?.stack ?? null,
+          componentStack: errorInfo?.componentStack ?? null,
+          at: new Date().toISOString(),
+        })
+      );
+    } catch { /* ignore */ }
   }
 
   handleReload = () => {
+    try { localStorage.removeItem("fuelpro_last_error"); } catch { /* ignore */ }
     this.setState({ hasError: false, error: null });
     window.location.reload();
   };
@@ -66,17 +79,22 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   render() {
     if (this.state.hasError) {
       if (this.props.fallback) return this.props.fallback;
-      
       return (
         <div className="min-h-screen bg-gradient-to-br from-slate-900 via-red-900/20 to-slate-900 flex items-center justify-center p-4">
-          <div className="bg-white/10 backdrop-blur-xl rounded-2xl p-8 shadow-2xl border border-red-500/30 text-center max-w-md">
+          <div className="bg-white/10 backdrop-blur-xl rounded-2xl p-8 shadow-2xl border border-red-500/30 text-center max-w-lg w-full">
             <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
               <AlertTriangle className="w-8 h-8 text-red-400" />
             </div>
             <h2 className="text-xl font-semibold text-white mb-2">Something went wrong</h2>
-            <p className="text-gray-400 text-sm mb-4">
+            <p className="text-gray-400 text-sm mb-2">
               {this.state.error?.message || "An unexpected error occurred"}
             </p>
+            {this.state.error?.stack && (
+              <details className="text-left text-xs text-gray-500 bg-black/30 rounded-lg p-3 mb-4 overflow-auto max-h-40">
+                <summary className="cursor-pointer select-none">Technical details</summary>
+                <pre className="whitespace-pre-wrap mt-2">{this.state.error.stack}</pre>
+              </details>
+            )}
             <button
               onClick={this.handleReload}
               className="inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white font-semibold py-2 px-4 rounded-xl transition-colors"
