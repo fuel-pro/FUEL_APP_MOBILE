@@ -55,7 +55,7 @@ import {
   Cloud,
   CloudOff,
 } from "lucide-react";
-import { validateFounderAuth } from "@/react-app/lib/founder-auth";
+import { loginFounder } from "@/react-app/lib/founder-auth";
 import {
   SecuritySection,
   BackupSection,
@@ -146,13 +146,8 @@ interface StationData {
   updatedAt?: string;
 }
 
-const FOUNDER_PASSWORD_KEY = "fuelpro_founder_password";
 const FOUNDER_SESSION_KEY = "fuelpro_founder_session";
 const FOUNDER_2FA_KEY = "fuelpro_founder_2fa";
-
-function getDefaultPassword() {
-  return { username: "FOUNDER", password: "fuelpro2026" };
-}
 
 function loadSecrets(): Secret[] {
   try {
@@ -524,32 +519,26 @@ export default function FounderAccess() {
   }, [featureFlags]);
   // Audit log now persisted via backend (useFounderBackend.logAudit) — no localStorage sync needed
 
-  /* ─── Login Handler ─── */
-  const handleLogin = () => {
+  /* ─── Login Handler ───
+   * SECURITY: This previously fell back to a hardcoded default credential
+   * (FOUNDER / fuelpro2026) and had a logic bug where the validity check's
+   * right-hand operand was an async IIFE — which returns a Promise object.
+   * Promise objects are truthy, so `isValid` evaluated to true almost
+   * unconditionally regardless of the password entered. Both issues meant
+   * founder/admin access could be obtained without real credentials.
+   * Fixed to authenticate exclusively via Supabase (loginFounder), which
+   * performs a real sign-in and checks the founder/admin role server-side. */
+  const handleLogin = async () => {
     if (isLocked) return;
     if (!loginUsername.trim() || !loginPassword) {
       setLoginError("Username and password are required");
       return;
     }
 
-    // Load stored credentials or use default
-    let stored = getDefaultPassword();
-    try {
-      const saved = localStorage.getItem(FOUNDER_PASSWORD_KEY);
-      if (saved) stored = JSON.parse(saved);
-    } catch {
-      /* use default */
-    }
+    setLoginError("");
+    const result = await loginFounder(loginUsername.trim(), loginPassword);
 
-    // Use founder-auth for validation (supports configurable credentials)
-    // Also support legacy base64-encoded stored passwords
-    const legacyPwMatch = stored.password.startsWith("cHVibGljYW4")
-      ? loginPassword === atob(stored.password)
-      : loginPassword === stored.password;
-    const isValid =
-      (loginUsername.trim().toLowerCase() === stored.username.toLowerCase() && legacyPwMatch) ||
-      (async () => validateFounderAuth().then(r => r.valid))();
-    if (isValid) {
+    if (result.success) {
       // Check if 2FA is enabled
       let faConfig: FAConfig | null = null;
       try {
@@ -569,7 +558,7 @@ export default function FounderAccess() {
     } else {
       const nextAttempts = loginAttempts + 1;
       setLoginAttempts(nextAttempts);
-      setLoginError(`Invalid credentials. Attempt ${nextAttempts}/5`);
+      setLoginError(result.error || `Invalid credentials. Attempt ${nextAttempts}/5`);
       logAudit(
         "Login Failed",
         `Invalid login attempt #${nextAttempts}`,
