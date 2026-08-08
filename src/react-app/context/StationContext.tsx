@@ -4,10 +4,30 @@ import React, {
   useState,
   useCallback,
   useEffect,
-  useRef,
 } from "react";
 import { getCountryByCode } from "@/react-app/lib/world-country-utils";
-import { supabase } from "@/supabase/client";
+import { useAuth } from "@/react-app/context/AuthContext";
+import {
+  pullStationSnapshot,
+  pushStationSnapshot,
+} from "@/react-app/lib/stationCloudSync";
+
+// Lazy API base URL getter using dynamic import to avoid circular deps
+let _apiBase: string | null = null;
+let _apiPromise: Promise<string> | null = null;
+function getApiBase(): string {
+  if (_apiBase) return _apiBase;
+  // Use environment variable or empty string (Firebase-only mode)
+  return import.meta.env.VITE_BACKEND_URL || "";
+}
+async function getApiBaseAsync(): Promise<string> {
+  if (_apiBase) return _apiBase;
+  if (!_apiPromise) {
+    _apiPromise = import("@/utils/apiConfig").then(m => m.getBackendUrl());
+  }
+  _apiBase = await _apiPromise;
+  return _apiBase || "";
+}
 
 // Encryption helper for sensitive data
 const encrypt = (text: string, key: string): string => {
@@ -38,101 +58,6 @@ const decrypt = (encoded: string, key: string): string => {
     return atob(encoded);
   }
 };
-
-// ---------------------------------------------------------------------------
-// Cross-device sync helpers (Supabase-backed)
-// ---------------------------------------------------------------------------
-
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[89ab][0-9a-f]{12}$/i;
-
-function newUuid(): string {
-  try {
-    if (
-      typeof crypto !== "undefined" &&
-      typeof crypto.randomUUID === "function"
-    ) {
-      return crypto.randomUUID();
-    }
-  } catch {
-    /* fall through */
-  }
-  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    const v = c === "x" ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
-  });
-}
-
-interface StationBlob {
-  data: any;
-  access: StationAccess[];
-  sharedUsers: Station["sharedUsers"];
-}
-
-/** Station (app shape) -> `stations` table row. */
-function stationToRow(station: Station, ownerId: string) {
-  return {
-    id: station.id,
-    name: station.name,
-    location: station.location || null,
-    phone: station.phone || null,
-    email: station.email || null,
-    kra_pin: station.kraPin || null,
-    etr_serial: station.etrSerial || null,
-    tax_rate: station.taxRate ?? 16,
-    theme: station.theme || "default",
-    logo: station.logo || null,
-    description: station.description || null,
-    owner_id: ownerId,
-    is_active: true,
-  };
-}
-
-/** Everything without a dedicated column -> `app_kv.data` (collection 'station_data'). */
-function stationToBlob(station: Station): StationBlob {
-  return {
-    data: station.data ?? {},
-    access: station.access ?? [],
-    sharedUsers: station.sharedUsers ?? [],
-  };
-}
-
-/** `stations` row + optional blob -> Station (app shape). */
-function rowToStation(
-  row: any,
-  blob: StationBlob | null | undefined,
-  secretKey: string
-): Station {
-  return {
-    id: row.id,
-    name: row.name,
-    location: row.location || "",
-    phone: row.phone || "",
-    email: row.email || "",
-    kraPin: row.kra_pin || "",
-    etrSerial: row.etr_serial || "",
-    taxRate: Number(row.tax_rate ?? 16),
-    theme: row.theme || "dark",
-    logo: row.logo || "",
-    description: row.description || "",
-    createdAt: row.created_at || new Date().toISOString(),
-    updatedAt: row.updated_at || new Date().toISOString(),
-    data: blob?.data ?? {},
-    access:
-      blob?.access?.length ? blob.access : [
-        {
-          username: (row.name || "station").toLowerCase().replace(/\s+/g, "_"),
-          passwordHash: encrypt("default", secretKey),
-          role: "owner" as const,
-          permissions: ["all"],
-          grantedAt: row.created_at || new Date().toISOString(),
-          grantedBy: "system",
-        },
-      ],
-    sharedUsers: blob?.sharedUsers ?? [],
-  };
-}
 
 const STORAGE_KEY = "fuelpro_stations_v3";
 const ADMIN_KEY = "fuelpro_admin_v3";
@@ -433,188 +358,86 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
     return saved ? parseInt(saved, 10) : null;
   });
   const [hasBackendData, setHasBackendData] = useState(false);
-  const didInitialSync = useRef(false);
+  // Guards the cloud-push effect below so it can never fire before the
+  // initial cloud pull has resolved (would otherwise risk overwriting a
+  // real cloud snapshot with an empty/stale local one on first load).
+  const [hasHydratedFromCloud, setHasHydratedFromCloud] = useState(false);
 
-  // ------------------------------------------------------------------
-  // Persist (local cache). Declared BEFORE syncFromBackend so the sync
-  // layer can re-hydrate the cache after every pull.
-  // ------------------------------------------------------------------
-  const persist = useCallback(
-    (newStations?: Station[], newAdmin?: AdminSettings) => {
-      const s = newStations || stations;
-      const a = newAdmin || adminSettings;
-      try {
-        localStorage.setItem(
-          STORAGE_KEY,
-          JSON.stringify({ stations: s, version: "3.0" })
-        );
-        localStorage.setItem(ADMIN_KEY, JSON.stringify(a));
-      } catch (e) {
-        console.error("[StationContext] persist failed:", e);
-      }
-    },
-    [stations, adminSettings]
-  );
+  const { user } = useAuth();
 
-  useEffect(() => {
-    persist();
-  }, [stations, adminSettings, persist]);
+  // Sync stations FROM Supabase (see stationCloudSync.ts for why this
+  // replaced the old /api/trpc/sync.fullSync call, which hit a backend
+  // that doesn't exist in this deployment and silently failed every time).
+  const syncFromBackend = useCallback(async (): Promise<void> => {
+    if (!user?.id) {
+      setHasHydratedFromCloud(true);
+      return;
+    }
 
-  // ------------------------------------------------------------------
-  // Push ONE station (row + data blob) to Supabase.
-  // RLS satisfied because owner_id = auth.uid() on every write.
-  // ------------------------------------------------------------------
-  const pushStationToBackend = useCallback(
-    async (station: Station): Promise<boolean> => {
-      try {
-        const { data: sess } = await supabase.auth.getSession();
-        if (!sess.session) return false;
-        const ownerId = sess.session.user.id;
+    setIsBackendSyncing(true);
+    try {
+      const snapshot = await pullStationSnapshot(user.id);
 
-        let target = station;
-        if (!UUID_RE.test(target.id)) {
-          // Legacy `station_<ts>_<rand>` id -> mint a UUID, remap locally.
-          const fresh: Station = { ...target, id: newUuid() };
-          setStations(prev =>
-            prev.map(s => (s.id === target.id ? fresh : s))
-          );
-          setCurrentStation(prev =>
-            prev && prev.id === target.id ? fresh : prev
-          );
-          try {
-            if (localStorage.getItem(CURRENT_STATION_KEY) === target.id) {
-              localStorage.setItem(CURRENT_STATION_KEY, fresh.id);
-            }
-          } catch { /* ignore */ }
-          target = fresh;
-        }
-
-        const { error: rowErr } = await supabase
-          .from("stations")
-          .upsert(stationToRow(target, ownerId), { onConflict: "id" });
-        if (rowErr) throw rowErr;
-
-        const { error: kvErr } = await supabase
-          .from("app_kv")
-          .upsert(
-            {
-              id: `station_data:${target.id}`,
-              collection: "station_data",
-              owner_id: ownerId,
-              station_id: target.id,
-              data: stationToBlob(target),
-            },
-            { onConflict: "id" }
-          );
-        if (kvErr) throw kvErr;
-
-        return true;
-      } catch (error) {
-        console.error("[StationContext] pushStationToBackend error:", error);
-        return false;
-      }
-    },
-    []
-  );
-
-  // ------------------------------------------------------------------
-  // Pull everything for the signed-in owner; merge; re-push local-only.
-  // ------------------------------------------------------------------
-  const syncFromBackend = useCallback(
-    async (base?: Station[]): Promise<void> => {
-      setIsBackendSyncing(true);
-      try {
-        const { data: sess } = await supabase.auth.getSession();
-        if (!sess.session) {
-          setHasBackendData(false);
-          return;
-        }
-        const ownerId = sess.session.user.id;
-
-        const { data: rows, error } = await supabase
-          .from("stations")
-          .select("*")
-          .eq("owner_id", ownerId)
-          .order("created_at", { ascending: true });
-        if (error) throw error;
-
-        const remote: Station[] = [];
-        for (const row of rows ?? []) {
-          const { data: kv } = await supabase
-            .from("app_kv")
-            .select("data")
-            .eq("id", `station_data:${row.id}`)
-            .maybeSingle();
-          remote.push(
-            rowToStation(row, (kv?.data as StationBlob) ?? null, adminSettings.secretKey)
-          );
-        }
-
-        const local = base ?? stations;
-        const remoteIds = new Set(remote.map(r => r.id));
-        const localOnly = local.filter(s => !remoteIds.has(s.id));
-        const merged = [...localOnly, ...remote];
-
-        setStations(merged);
-        persist(merged);
-
-        // Best-effort upload of anything that only exists on this device.
-        for (const s of localOnly) void pushStationToBackend(s);
-
-        setCurrentStation(prev => {
-          if (prev && remoteIds.has(prev.id)) return prev;
-          return remote[0] ?? prev;
-        });
-        try {
-          if (!localStorage.getItem(CURRENT_STATION_KEY) && remote.length > 0) {
-            localStorage.setItem(CURRENT_STATION_KEY, remote[0].id);
-          }
-        } catch { /* ignore */ }
+      if (snapshot && Array.isArray(snapshot.stations) && snapshot.stations.length > 0) {
+        setStations(snapshot.stations);
+        if (snapshot.admin) setAdminSettings(snapshot.admin);
 
         const now = Date.now();
         setLastBackendSync(now);
-        setHasBackendData(remote.length > 0);
         localStorage.setItem(BACKEND_SYNC_TIMESTAMP, String(now));
-        localStorage.setItem(BACKEND_SYNC_KEY, remote.length > 0 ? "true" : "false");
-      } catch (error) {
-        console.error("[StationContext] syncFromBackend error:", error);
-      } finally {
-        setIsBackendSyncing(false);
-      }
-    },
-    [stations, adminSettings.secretKey, persist, pushStationToBackend]
-  );
+        setHasBackendData(true);
+        localStorage.setItem(BACKEND_SYNC_KEY, "true");
 
-  // ------------------------------------------------------------------
-  // Bulk push (manual "Sync now" / UI callers).
-  // ------------------------------------------------------------------
+        console.log(`[StationContext] Synced ${snapshot.stations.length} station(s) from Supabase`);
+      } else {
+        // No cloud snapshot yet for this account — keep whatever is local
+        // (e.g. a station created before this device ever synced) and let
+        // the push effect below upload it.
+        console.log("[StationContext] No cloud data yet for this account");
+      }
+    } catch (error) {
+      console.error("[StationContext] Cloud sync error:", error);
+    } finally {
+      setIsBackendSyncing(false);
+      setHasHydratedFromCloud(true);
+    }
+  }, [user?.id]);
+
+  // Sync stations TO Supabase. Debounced by the caller (see the effect
+  // below) rather than fired on every keystroke-level state change.
   const syncToBackend = useCallback(async (): Promise<void> => {
+    if (!user?.id) {
+      console.log("[StationContext] Not signed in, skipping cloud push");
+      return;
+    }
+
     setIsBackendSyncing(true);
     try {
-      const { data: sess } = await supabase.auth.getSession();
-      if (!sess.session) return;
-      for (const s of stations) {
-        await pushStationToBackend(s);
+      const result = await pushStationSnapshot(user.id, {
+        stations,
+        admin: adminSettings,
+      });
+
+      if (result.success) {
+        const now = Date.now();
+        setLastBackendSync(now);
+        localStorage.setItem(BACKEND_SYNC_TIMESTAMP, String(now));
+        setHasBackendData(true);
+        localStorage.setItem(BACKEND_SYNC_KEY, "true");
+        console.log(`[StationContext] Pushed ${stations.length} station(s) to Supabase`);
       }
-      const now = Date.now();
-      setLastBackendSync(now);
-      localStorage.setItem(BACKEND_SYNC_TIMESTAMP, String(now));
-      localStorage.setItem(BACKEND_SYNC_KEY, "true");
-    } catch (error) {
-      console.error("[StationContext] syncToBackend error:", error);
     } finally {
       setIsBackendSyncing(false);
     }
-  }, [stations, pushStationToBackend]);
+  }, [user?.id, stations, adminSettings]);
 
-  // ------------------------------------------------------------------
-  // Mount: hydrate local cache once, then do the real cloud pull.
-  // ------------------------------------------------------------------
+  // Load from storage on mount
   useEffect(() => {
     const { stations: loadedStations, admin, currentId } = loadFromStorage();
     setStations(loadedStations);
     setAdminSettings(admin);
 
+    // Check admin session
     const session = localStorage.getItem(SESSION_KEY);
     if (session) {
       try {
@@ -631,8 +454,11 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
-    setHasBackendData(localStorage.getItem(BACKEND_SYNC_KEY) === "true");
+    // Check if we have backend data
+    const backendSynced = localStorage.getItem(BACKEND_SYNC_KEY);
+    setHasBackendData(backendSynced === "true");
 
+    // Set current station
     if (currentId) {
       const found = loadedStations.find(s => s.id === currentId);
       if (found) setCurrentStation(found);
@@ -640,42 +466,48 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
       setCurrentStation(loadedStations[0]);
       localStorage.setItem(CURRENT_STATION_KEY, loadedStations[0].id);
     }
-
     setIsStationLoading(false);
 
-    if (!didInitialSync.current) {
-      didInitialSync.current = true;
-      void syncFromBackend(loadedStations);
-    }
+    // Try to sync from backend on mount
+    syncFromBackend();
   }, [syncFromBackend]);
 
-  // ------------------------------------------------------------------
-  // Auth listener: logging in mid-session (no reload) also triggers a pull.
-  // ------------------------------------------------------------------
+  // Persist to storage
+  const persist = useCallback(
+    (newStations?: Station[], newAdmin?: AdminSettings) => {
+      const s = newStations || stations;
+      const a = newAdmin || adminSettings;
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({ stations: s, version: "3.0" })
+      );
+      localStorage.setItem(ADMIN_KEY, JSON.stringify(a));
+    },
+    [stations, adminSettings]
+  );
+
   useEffect(() => {
-    const { data } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "SIGNED_OUT") {
-        setHasBackendData(false);
-        return;
-      }
-      if (
-        (event === "SIGNED_IN" || event === "INITIAL_SESSION") &&
-        session
-      ) {
-        // Defer: onAuthStateChange holds Supabase's internal auth lock —
-        // never run queries inside the callback.
-        window.setTimeout(() => {
-          void syncFromBackend();
-        }, 0);
-      }
-    });
-    return () => data.subscription.unsubscribe();
-  }, [syncFromBackend]);
+    persist();
+  }, [stations, adminSettings, persist]);
+
+  // Push to Supabase whenever station/admin data changes, debounced so
+  // rapid edits (typing, POS entries) collapse into one request. Gated on
+  // hasHydratedFromCloud so this can never fire before the initial pull
+  // above has resolved — otherwise a fresh device could push its empty
+  // local state and wipe out real data already in the cloud.
+  useEffect(() => {
+    if (!user?.id || !hasHydratedFromCloud) return;
+    const timeout = setTimeout(() => {
+      syncToBackend();
+    }, 1500);
+    return () => clearTimeout(timeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stations, adminSettings, user?.id, hasHydratedFromCloud]);
 
   // Station CRUD
   const createStation = useCallback(
     (stationData: Partial<Station>): Station => {
-      const id = newUuid(); // was: `station_<ts>_<rand>` (not a UUID)
+      const id = `station_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       const password =
         Math.random().toString(36).substr(2, 8) +
         Math.random().toString(36).substr(2, 4);
@@ -708,12 +540,10 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
         ],
         sharedUsers: [],
       };
-
       setStations(prev => [...prev, newStation]);
       setCurrentStation(newStation);
       localStorage.setItem(CURRENT_STATION_KEY, id);
-
-      // Local cache write (unchanged behaviour) + NEW: cloud push.
+      // Also save directly to ensure persistence even if useEffect hasn't fired
       try {
         const existing = JSON.parse(
           localStorage.getItem(STORAGE_KEY) || '{"stations":[],"version":"3.0"}'
@@ -723,27 +553,29 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
       } catch (e) {
         console.error("Failed to persist station:", e);
       }
-      void pushStationToBackend(newStation);
-
       return newStation;
     },
-    [stations, adminSettings.secretKey, pushStationToBackend]
+    [stations, adminSettings.secretKey]
   );
 
   const updateStation = useCallback(
     (id: string, data: Partial<Station>) => {
-      const existing = stations.find(s => s.id === id);
-      if (!existing) return;
-      const updated: Station = {
-        ...existing,
-        ...data,
-        updatedAt: new Date().toISOString(),
-      };
-      setStations(prev => prev.map(s => (s.id === id ? updated : s)));
-      if (currentStation?.id === id) setCurrentStation(updated);
-      void pushStationToBackend(updated);
+      setStations(prev =>
+        prev.map(s =>
+          s.id === id
+            ? { ...s, ...data, updatedAt: new Date().toISOString() }
+            : s
+        )
+      );
+      if (currentStation?.id === id) {
+        setCurrentStation(prev =>
+          prev
+            ? { ...prev, ...data, updatedAt: new Date().toISOString() }
+            : null
+        );
+      }
     },
-    [stations, currentStation, pushStationToBackend]
+    [currentStation]
   );
 
   const deleteStation = useCallback(
@@ -754,13 +586,6 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
         setCurrentStation(remaining.length > 0 ? remaining[0] : null);
         if (remaining.length > 0)
           localStorage.setItem(CURRENT_STATION_KEY, remaining[0].id);
-      }
-      // Remote delete; app_kv blob cascades via station_id FK.
-      if (UUID_RE.test(id)) {
-        void (async () => {
-          const { error } = await supabase.from("stations").delete().eq("id", id);
-          if (error) console.error("[StationContext] remote delete failed:", error);
-        })();
       }
     },
     [currentStation, stations]
@@ -1059,17 +884,14 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
   );
 
   const saveStationData = useCallback((stationId: string, data: any) => {
-    const existing = stations.find(s => s.id === stationId);
-    if (!existing) return;
-    const updated: Station = {
-      ...existing,
-      data,
-      updatedAt: new Date().toISOString(),
-    };
-    setStations(prev => prev.map(s => (s.id === stationId ? updated : s)));
-    if (currentStation?.id === stationId) setCurrentStation(updated);
-    void pushStationToBackend(updated);
-  }, [stations, currentStation, pushStationToBackend]);
+    setStations(prev =>
+      prev.map(s =>
+        s.id === stationId
+          ? { ...s, data, updatedAt: new Date().toISOString() }
+          : s
+      )
+    );
+  }, []);
 
   // Export/Import
   const exportAllData = useCallback((): string => {
