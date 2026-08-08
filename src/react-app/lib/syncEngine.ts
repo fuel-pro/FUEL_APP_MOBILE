@@ -195,7 +195,7 @@ export function onMutation(callback: (item: SyncItem) => void): () => void {
             if (item.deviceId !== getDeviceId()) callback(item);
           });
         })
-        .catch(() => {});
+        .catch((err) => console.warn("[syncEngine] async op failed:", err));
     }
   };
 
@@ -309,7 +309,7 @@ export class SyncMonitor {
     // Initial call
     getSyncState()
       .then(state => callback(state))
-      .catch(() => {});
+      .catch((err) => console.warn("[syncEngine] async op failed:", err));
     return () => this.listeners.delete(callback);
   }
 }

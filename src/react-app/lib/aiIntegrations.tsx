@@ -53,14 +53,14 @@ const DEFAULT_CONFIG: Record<string, AIConfig> = {
   },
   ollama: {
     provider: 'ollama',
-    baseUrl: 'http://localhost:11434/api',
+    baseUrl: import.meta.env.VITE_OLLAMA_URL || 'http://localhost:11434/api',
     model: 'llama2',
     maxTokens: 2000,
     temperature: 0.7,
   },
   lmstudio: {
     provider: 'lmstudio',
-    baseUrl: 'http://localhost:1234/v1',
+    baseUrl: import.meta.env.VITE_LMSTUDIO_URL || 'http://localhost:1234/v1',
     model: 'local-model',
     maxTokens: 2000,
     temperature: 0.7,

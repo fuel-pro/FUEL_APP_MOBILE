@@ -83,7 +83,7 @@ export class ErrorBoundary extends React.Component<
         .then(Sentry => {
           Sentry.captureException(error, { extra: errorInfo as any });
         })
-        .catch(() => {});
+        .catch((err) => console.warn("[ErrorMonitoring] Failed to load Sentry:", err));
     }
   }
 
@@ -160,7 +160,7 @@ export const analytics = {
         timestamp: Date.now(),
         referrer: document.referrer,
       }),
-    }).catch(() => {});
+    }).catch((err) => console.warn("[ErrorMonitoring] async report failed:", err));
 
     // Also log in development
     if (import.meta.env.DEV) {
@@ -181,7 +181,7 @@ export const analytics = {
         properties,
         timestamp: Date.now(),
       }),
-    }).catch(() => {});
+    }).catch((err) => console.warn("[ErrorMonitoring] async report failed:", err));
 
     if (import.meta.env.DEV) {
       console.log("[Analytics] Event:", name, properties);
@@ -199,7 +199,7 @@ export const analytics = {
         stack,
         timestamp: Date.now(),
       }),
-    }).catch(() => {});
+    }).catch((err) => console.warn("[ErrorMonitoring] async report failed:", err));
   },
 };
 

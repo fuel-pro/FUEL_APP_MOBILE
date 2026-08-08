@@ -366,7 +366,7 @@ export default function News() {
     if (navigator.share) {
       navigator
         .share({ title: item.title, text, url: item.sourceUrl })
-        .catch(() => {});
+        .catch((err) => console.warn("[News] async fetch failed:", err));
     } else {
       navigator.clipboard
         .writeText(text)
