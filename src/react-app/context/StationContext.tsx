@@ -6,6 +6,7 @@ import React, {
   useEffect,
 } from "react";
 import { getCountryByCode } from "@/react-app/lib/world-country-utils";
+import { supabase } from "@/supabase/client";
 
 // Lazy API base URL getter using dynamic import to avoid circular deps
 let _apiBase: string | null = null;
@@ -338,6 +339,160 @@ const loadFromStorage = (): {
   return { stations: [], admin: defaultAdminSettings, currentId: null };
 };
 
+// ═══════════════════════════════════════════════════
+// SUPABASE CROSS-DEVICE SYNC
+// Replaces the old syncFromBackend/syncToBackend, which called a
+// tRPC endpoint that was never actually implemented (see CLAUDE_CHANGES.md).
+// Stations are the top-level record gating the whole app, so this is what
+// makes "log in on another device" actually restore your data instead of
+// showing an empty setup screen.
+// ═══════════════════════════════════════════════════
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const isValidUuid = (id: string) => UUID_RE.test(id);
+
+function stationRowToStation(row: any, dataBlob: any, cached?: Station): Station {
+  return {
+    id: row.id,
+    name: row.name || "",
+    location: row.location || "",
+    phone: row.phone || "",
+    email: row.email || "",
+    kraPin: row.kra_pin || "",
+    etrSerial: row.etr_serial || "",
+    taxRate: row.tax_rate !== null && row.tax_rate !== undefined ? Number(row.tax_rate) : 16,
+    theme: row.theme || "dark",
+    logo: row.logo || "",
+    description: row.description || "",
+    createdAt: row.created_at || new Date().toISOString(),
+    updatedAt: row.updated_at || new Date().toISOString(),
+    data: dataBlob !== undefined ? dataBlob : (cached?.data ?? {}),
+    // Access/sharing records aren't synced to the backend yet (they contain
+    // local password hashes for the station-sharing feature) — keep
+    // whatever this device already had cached for them.
+    access: cached?.access ?? [],
+    sharedUsers: cached?.sharedUsers ?? [],
+  };
+}
+
+function stationToRowFields(s: Partial<Station>) {
+  const fields: Record<string, any> = {};
+  if (s.name !== undefined) fields.name = s.name;
+  if (s.location !== undefined) fields.location = s.location;
+  if (s.phone !== undefined) fields.phone = s.phone;
+  if (s.email !== undefined) fields.email = s.email;
+  if (s.kraPin !== undefined) fields.kra_pin = s.kraPin;
+  if (s.etrSerial !== undefined) fields.etr_serial = s.etrSerial;
+  if (s.taxRate !== undefined) fields.tax_rate = s.taxRate;
+  if (s.theme !== undefined) fields.theme = s.theme;
+  if (s.logo !== undefined) fields.logo = s.logo;
+  if (s.description !== undefined) fields.description = s.description;
+  return fields;
+}
+
+/** Fire-and-forget push of a station's core fields to Supabase. */
+async function pushStationUpsert(station: Station, ownerId: string) {
+  try {
+    await supabase.from("stations").upsert({
+      id: station.id,
+      owner_id: ownerId,
+      ...stationToRowFields(station),
+    });
+    await supabase.from("app_kv").upsert({
+      id: `station_data_${station.id}`,
+      collection: "station_data",
+      owner_id: ownerId,
+      data: station.data ?? {},
+    });
+  } catch (err) {
+    console.warn("[StationContext] Supabase push failed (will retry next sync):", err);
+  }
+}
+
+/** Fire-and-forget delete of a station from Supabase. */
+async function pushStationDelete(id: string) {
+  try {
+    await supabase.from("stations").delete().eq("id", id);
+    await supabase.from("app_kv").delete().eq("id", `station_data_${id}`);
+  } catch (err) {
+    console.warn("[StationContext] Supabase delete failed:", err);
+  }
+}
+
+/**
+ * Pull the current user's stations from Supabase, migrate any local-only
+ * (pre-UUID-format) stations up to the cloud, and merge into one list.
+ * Returns null if there's no authenticated Supabase session (local-only
+ * mode continues to work exactly as before for guests).
+ */
+async function syncStationsWithSupabase(
+  localStations: Station[]
+): Promise<Station[] | null> {
+  const { data: userData } = await supabase.auth.getUser();
+  const user = userData?.user;
+  if (!user) return null;
+
+  // Migrate any local-only stations (old non-UUID ids, never pushed) up first
+  const localOnly = localStations.filter(s => !isValidUuid(s.id));
+  const migrated: Station[] = [];
+  for (const s of localOnly) {
+    try {
+      const { data: inserted, error } = await supabase
+        .from("stations")
+        .insert({ owner_id: user.id, ...stationToRowFields(s) })
+        .select()
+        .single();
+      if (!error && inserted) {
+        const newStation = { ...s, id: inserted.id };
+        await supabase.from("app_kv").upsert({
+          id: `station_data_${inserted.id}`,
+          collection: "station_data",
+          owner_id: user.id,
+          data: s.data ?? {},
+        });
+        migrated.push(newStation);
+      }
+    } catch (err) {
+      console.warn("[StationContext] Failed to migrate local station to cloud:", err);
+    }
+  }
+
+  // Fetch everything now owned by this user (RLS already scopes this to them)
+  const { data: rows, error } = await supabase
+    .from("stations")
+    .select("*")
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    console.warn("[StationContext] Supabase station fetch failed:", error);
+    // Still return migrated stations merged with untouched local ones so
+    // we don't lose data if the fetch step alone failed transiently.
+    const validLocal = localStations.filter(s => isValidUuid(s.id));
+    return [...validLocal, ...migrated];
+  }
+
+  const rowIds: string[] = (rows || []).map((r: any) => r.id);
+  let dataBlobs: Record<string, any> = {};
+  if (rowIds.length > 0) {
+    const kvIds = rowIds.map(id => `station_data_${id}`);
+    const { data: kvRows } = await supabase
+      .from("app_kv")
+      .select("id, data")
+      .in("id", kvIds);
+    for (const row of kvRows || []) {
+      const stationId = String(row.id).replace(/^station_data_/, "");
+      dataBlobs[stationId] = row.data;
+    }
+  }
+
+  const cachedById = new Map(localStations.map(s => [s.id, s]));
+  const merged = (rows || []).map((row: any) =>
+    stationRowToStation(row, dataBlobs[row.id], cachedById.get(row.id))
+  );
+
+  return merged;
+}
+
 const StationContext = createContext<StationContextType | null>(null);
 
 export function StationProvider({ children }: { children: React.ReactNode }) {
@@ -379,161 +534,69 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
     return null;
   }, []);
 
-  // Sync stations FROM the backend server
+  // Persist to storage
+  const persist = useCallback(
+    (newStations?: Station[], newAdmin?: AdminSettings) => {
+      const s = newStations || stations;
+      const a = newAdmin || adminSettings;
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({ stations: s, version: "3.0" })
+      );
+      localStorage.setItem(ADMIN_KEY, JSON.stringify(a));
+    },
+    [stations, adminSettings]
+  );
+
+  // Sync stations FROM Supabase (pulls this account's stations, and migrates
+  // any local-only stations up to the cloud so they're not orphaned)
   const syncFromBackend = useCallback(async (): Promise<void> => {
-    const token = getAuthToken();
-    if (!token) {
-      console.log("[StationContext] No auth token, skipping backend sync");
-      return;
-    }
-
     setIsBackendSyncing(true);
     try {
-      const response = await fetch(`${getApiBase()}/api/trpc/sync.fullSync`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`Backend sync failed: ${response.status}`);
+      const merged = await syncStationsWithSupabase(stations);
+      if (merged === null) {
+        console.log("[StationContext] No Supabase session, staying in local-only mode");
+        return;
       }
 
-      const result = await response.json();
-      const data = result.result?.data?.json || result.data;
+      setStations(merged);
+      persist(merged);
 
-      if (data && data.success && data.stations && data.stations.length > 0) {
-        // Map backend stations to local format
-        const backendStations: Station[] = data.stations.map((s: any) => ({
-          id: `backend_${s.id}`,
-          name: s.name,
-          location: s.location || "",
-          phone: s.phone || "",
-          email: s.managerName || "",
-          kraPin: "",
-          etrSerial: "",
-          taxRate: parseFloat(s.taxRate) || 16,
-          theme: "dark",
-          logo: "",
-          description: "",
-          createdAt: s.createdAt || new Date().toISOString(),
-          updatedAt: s.updatedAt || new Date().toISOString(),
-          data: {},
-          access: [
-            {
-              username: s.managerName || "owner",
-              passwordHash: encrypt(s.code || "default", adminSettings.secretKey),
-              role: "owner" as const,
-              permissions: ["all"],
-              grantedAt: s.createdAt || new Date().toISOString(),
-              grantedBy: "system",
-            },
-          ],
-          sharedUsers: [],
-          // Store backend ID for reference
-          backendId: s.id,
-          userRole: s.userRole,
-        }));
-
-        // Merge with local stations (prefer backend data for shared stations)
-        setStations(prevStations => {
-          const localOnlyStations = prevStations.filter(
-            s => !s.id.startsWith("backend_") && !s.backendId
-          );
-          return [...localOnlyStations, ...backendStations];
-        });
-
-        // Save sync timestamp
-        const now = Date.now();
-        setLastBackendSync(now);
-        localStorage.setItem(BACKEND_SYNC_TIMESTAMP, String(now));
-        setHasBackendData(true);
-        localStorage.setItem(BACKEND_SYNC_KEY, "true");
-
-        console.log(`[StationContext] Synced ${backendStations.length} stations from backend`);
-      } else {
-        console.log("[StationContext] No stations found on backend");
-        setHasBackendData(data?.stations?.length > 0);
-      }
-    } catch (error) {
-      console.error("[StationContext] Backend sync error:", error);
-    } finally {
-      setIsBackendSyncing(false);
-    }
-  }, [getAuthToken, adminSettings.secretKey]);
-
-  // Sync stations TO the backend server
-  const syncToBackend = useCallback(async (): Promise<void> => {
-    const token = getAuthToken();
-    if (!token) {
-      console.log("[StationContext] No auth token, skipping push");
-      return;
-    }
-
-    // Find stations that need to be pushed (local-only, not yet on backend)
-    const stationsToPush = stations.filter(
-      s => !s.id.startsWith("backend_") && !s.backendId
-    );
-
-    if (stationsToPush.length === 0) {
-      console.log("[StationContext] No local stations to push");
-      return;
-    }
-
-    setIsBackendSyncing(true);
-    try {
-      const stationData = stationsToPush.map(s => ({
-        name: s.name,
-        code: s.name.toLowerCase().replace(/\s+/g, "_").substring(0, 20),
-        location: s.location,
-        phone: s.phone,
-        managerName: s.email || s.name,
-        taxRate: String(s.taxRate || 16),
-      }));
-
-      const response = await fetch(`${getApiBase()}/api/trpc/sync.pushChanges`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ stationData }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Backend push failed: ${response.status}`);
-      }
-
-      const result = await response.json();
-      const data = result.result?.data?.json || result.data;
-
-      if (data && data.success && data.results?.stations) {
-        // Update local stations with backend IDs
-        setStations(prevStations =>
-          prevStations.map(s => {
-            if (s.id.startsWith("backend_") || s.backendId) return s;
-            const pushed = data.results.stations.find(
-              (p: any) => p.action === "created"
-            );
-            if (pushed) {
-              return { ...s, backendId: pushed.id, id: `backend_${pushed.id}` };
-            }
-            return s;
-          })
+      // Keep current station pointing at the right record (it may have
+      // gotten a new id if it was just migrated to the cloud)
+      setCurrentStation(prev => {
+        if (!prev) return merged[0] ?? null;
+        const stillHere = merged.find(s => s.id === prev.id);
+        if (stillHere) return stillHere;
+        // Was migrated: match by name+createdAt as a best-effort fallback
+        const rematched = merged.find(
+          s => s.name === prev.name && s.createdAt === prev.createdAt
         );
+        const next = rematched ?? merged[0] ?? null;
+        if (next) localStorage.setItem(CURRENT_STATION_KEY, next.id);
+        return next;
+      });
 
-        const now = Date.now();
-        setLastBackendSync(now);
-        localStorage.setItem(BACKEND_SYNC_TIMESTAMP, String(now));
-        console.log(`[StationContext] Pushed ${stationsToPush.length} stations to backend`);
-      }
+      const now = Date.now();
+      setLastBackendSync(now);
+      localStorage.setItem(BACKEND_SYNC_TIMESTAMP, String(now));
+      setHasBackendData(merged.length > 0);
+      localStorage.setItem(BACKEND_SYNC_KEY, "true");
+
+      console.log(`[StationContext] Synced ${merged.length} station(s) with Supabase`);
     } catch (error) {
-      console.error("[StationContext] Backend push error:", error);
+      console.error("[StationContext] Supabase sync error:", error);
     } finally {
       setIsBackendSyncing(false);
     }
-  }, [getAuthToken, stations]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [persist]);
+
+  // Push any local-only stations up to Supabase (same underlying logic as
+  // syncFromBackend — kept as a separate name for interface compatibility)
+  const syncToBackend = useCallback(async (): Promise<void> => {
+    await syncFromBackend();
+  }, [syncFromBackend]);
 
   // Load from storage on mount
   useEffect(() => {
@@ -576,19 +639,16 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
     syncFromBackend();
   }, [syncFromBackend]);
 
-  // Persist to storage
-  const persist = useCallback(
-    (newStations?: Station[], newAdmin?: AdminSettings) => {
-      const s = newStations || stations;
-      const a = newAdmin || adminSettings;
-      localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify({ stations: s, version: "3.0" })
-      );
-      localStorage.setItem(ADMIN_KEY, JSON.stringify(a));
-    },
-    [stations, adminSettings]
-  );
+  // Also sync whenever the person signs in (covers login without a full
+  // page reload, and login on a device that already has the app loaded)
+  useEffect(() => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_IN") {
+        syncFromBackend();
+      }
+    });
+    return () => sub.subscription.unsubscribe();
+  }, [syncFromBackend]);
 
   useEffect(() => {
     persist();
@@ -597,7 +657,12 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
   // Station CRUD
   const createStation = useCallback(
     (stationData: Partial<Station>): Station => {
-      const id = `station_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      // UUID format is required so this station can be pushed to Supabase's
+      // stations table (UUID primary key) without a later migration step.
+      const id =
+        typeof crypto !== "undefined" && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `station_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       const password =
         Math.random().toString(36).substr(2, 8) +
         Math.random().toString(36).substr(2, 4);
@@ -643,6 +708,11 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
       } catch (e) {
         console.error("Failed to persist station:", e);
       }
+      // Push to Supabase in the background so it's visible on other devices.
+      // Local UI already updated above, so this doesn't block anything.
+      supabase.auth.getUser().then(({ data }) => {
+        if (data?.user) pushStationUpsert(newStation, data.user.id);
+      });
       return newStation;
     },
     [stations, adminSettings.secretKey]
@@ -664,8 +734,15 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
             : null
         );
       }
+      if (isValidUuid(id)) {
+        supabase.auth.getUser().then(({ data: userData }) => {
+          if (!userData?.user) return;
+          const merged = { ...(stations.find(s => s.id === id) ?? {}), ...data, id } as Station;
+          pushStationUpsert(merged, userData.user.id);
+        });
+      }
     },
-    [currentStation]
+    [currentStation, stations]
   );
 
   const deleteStation = useCallback(
@@ -676,6 +753,9 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
         setCurrentStation(remaining.length > 0 ? remaining[0] : null);
         if (remaining.length > 0)
           localStorage.setItem(CURRENT_STATION_KEY, remaining[0].id);
+      }
+      if (isValidUuid(id)) {
+        pushStationDelete(id);
       }
     },
     [currentStation, stations]

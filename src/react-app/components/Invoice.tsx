@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Plus,
   Save,
@@ -33,6 +33,9 @@ export default function Invoice() {
   const [quantityLabel, setQuantityLabel] = useState(
     state.invoiceSettings.quantityLabel
   );
+  // Tracks the last value *this component* wrote, so the sync-from-global
+  // effect below never fights the user's own typing.
+  const lastDispatchedLabel = useRef(state.invoiceSettings.quantityLabel);
   const [isPrinting, setIsPrinting] = useState(false);
   const [printError, setPrintError] = useState<string | null>(null);
 
@@ -43,12 +46,18 @@ export default function Invoice() {
   }, []);
 
   useEffect(() => {
-    // Update quantity label when invoice settings change
-    setQuantityLabel(state.invoiceSettings.quantityLabel);
+    // Only pull in the global value if it changed for a reason OTHER than
+    // this component's own edit (e.g. loadInvoice() set it, or another tab
+    // synced in). Prevents the input from ever snapping back mid-edit.
+    if (state.invoiceSettings.quantityLabel !== lastDispatchedLabel.current) {
+      setQuantityLabel(state.invoiceSettings.quantityLabel);
+      lastDispatchedLabel.current = state.invoiceSettings.quantityLabel;
+    }
   }, [state.invoiceSettings.quantityLabel]);
 
   const updateQuantityLabel = (newLabel: string) => {
     setQuantityLabel(newLabel);
+    lastDispatchedLabel.current = newLabel;
     dispatch({
       type: "SET_INVOICE_SETTINGS",
       payload: { quantityLabel: newLabel },
@@ -69,31 +78,17 @@ export default function Invoice() {
   };
 
   const updateInvoiceItem = (index: number, field: string, value: any) => {
-    const item = state.invoiceItems[index];
-    let newValue: any = value;
-    
-    if (field === "qty" || field === "price") {
-      newValue = parseFloat(value) || 0;
-    }
-
-    // Create new item object to ensure React detects the change
-    const updatedItem = {
-      ...item,
-      [field]: newValue,
-      total: field === "qty" || field === "price"
-        ? Math.round((field === "qty" ? (parseFloat(value) || 0) : item.qty) * (field === "price" ? (parseFloat(value) || 0) : item.price) * 100) / 100
-        : item.total
-    };
-
-    // Recalculate total if qty or price changed
-    if (field === "qty" || field === "price") {
-      const qty = field === "qty" ? newValue : item.qty;
-      const price = field === "price" ? newValue : item.price;
-      updatedItem.total = Math.round((qty * price) * 100) / 100;
-    }
-
     const updatedItems = [...state.invoiceItems];
-    updatedItems[index] = updatedItem;
+    const item = updatedItems[index];
+
+    if (field === "qty" || field === "price") {
+      (item as any)[field] = parseFloat(value) || 0;
+    } else {
+      (item as any)[field] = value;
+    }
+
+    // FIX: Round to 2 decimal places to prevent floating point errors
+    item.total = Math.round((item.qty * item.price) * 100) / 100;
 
     dispatch({ type: "SET_INVOICE_ITEMS", payload: updatedItems });
   };
@@ -207,6 +202,7 @@ export default function Invoice() {
     // Load custom quantity label if saved with invoice
     if (inv.quantityLabel) {
       setQuantityLabel(inv.quantityLabel);
+      lastDispatchedLabel.current = inv.quantityLabel;
       dispatch({
         type: "SET_INVOICE_SETTINGS",
         payload: { quantityLabel: inv.quantityLabel },
@@ -547,13 +543,12 @@ export default function Invoice() {
                   <td className="border border-gray-300 p-3 text-center">
                     <input
                       type="number"
-                      value={item.qty ?? ""}
+                      value={item.qty}
                       onChange={e =>
                         updateInvoiceItem(index, "qty", e.target.value)
                       }
-                      className="w-full bg-transparent border-none outline-none text-center cursor-text"
-                      min="0"
-                      step="1"
+                      className="w-full bg-transparent border-none outline-none text-center"
+                      min="1"
                     />
                   </td>
                   <td className="border border-gray-300 p-3 text-right">
@@ -561,13 +556,12 @@ export default function Invoice() {
                       <span className="mr-1">Ksh</span>
                       <input
                         type="number"
-                        value={item.price ?? ""}
+                        value={item.price}
                         onChange={e =>
                           updateInvoiceItem(index, "price", e.target.value)
                         }
-                        className="w-24 bg-transparent border-none outline-none text-right cursor-text"
+                        className="w-24 bg-transparent border-none outline-none text-right"
                         min="0"
-                        step="0.01"
                       />
                     </div>
                   </td>
