@@ -2145,22 +2145,44 @@ export function detectCountryFromTimezone(): string {
     "Africa/Addis_Ababa": "ET",
     "Africa/Kigali": "RW",
     "Africa/Accra": "GH",
-    "Africa/Mogadishu": "KE",
-    "Africa/Juba": "UG",
-    "Africa/Bujumbura": "TZ",
-    "Africa/Luanda": "ZA",
-    "Africa/Lusaka": "ZA",
-    "Africa/Harare": "ZA",
-    "Africa/Maputo": "ZA",
-    "Africa/Gaborone": "ZA",
-    "Africa/Windhoek": "ZA",
-    "Africa/Maseru": "ZA",
-    "Africa/Mbabane": "ZA",
-    "Africa/Abidjan": "GH",
-    "Africa/Lome": "GH",
-    "Africa/Monrovia": "GH",
+    "Africa/Mogadishu": "SO",
+    "Africa/Juba": "SS",
+    "Africa/Bujumbura": "BI",
+    "Africa/Luanda": "AO",
+    "Africa/Lusaka": "ZM",
+    "Africa/Harare": "ZW",
+    "Africa/Maputo": "MZ",
+    "Africa/Gaborone": "BW",
+    "Africa/Windhoek": "NA",
+    "Africa/Maseru": "LS",
+    "Africa/Mbabane": "SZ",
+    "Africa/Abidjan": "CI",
+    "Africa/Lome": "TG",
+    "Africa/Monrovia": "LR",
+    // Common non-African timezones so non-African users aren't misdetected either
+    "America/New_York": "US",
+    "America/Chicago": "US",
+    "America/Denver": "US",
+    "America/Los_Angeles": "US",
+    "Europe/London": "GB",
+    "Europe/Berlin": "DE",
+    "Europe/Paris": "FR",
+    "Europe/Madrid": "ES",
+    "Asia/Kolkata": "IN",
+    "Asia/Shanghai": "CN",
+    "Asia/Dubai": "AE",
+    "Australia/Sydney": "AU",
   };
-  return tzCountryMap[tz] || "KE"; // Default to Kenya
+  if (tzCountryMap[tz]) return tzCountryMap[tz];
+
+  // Only fall back to Kenya for genuinely unmapped *African* timezones —
+  // never default a non-African timezone to Kenya.
+  if (tz.startsWith("Africa/")) return "KE";
+  if (tz.startsWith("America/")) return "US";
+  if (tz.startsWith("Europe/")) return "GB";
+  if (tz.startsWith("Asia/")) return "AE";
+  if (tz.startsWith("Australia/")) return "AU";
+  return "US"; // neutral global default, not Kenya-biased
 }
 
 export function formatPhoneForCountry(

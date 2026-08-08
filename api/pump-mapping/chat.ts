@@ -5,7 +5,6 @@
  * for fuel pump ledger documents
  */
 
-import type { APIRoute } from 'astro';
 
 // Currency rules
 const CURRENCY_RULES: Record<string, { symbol: string; code: string; name: string }> = {
@@ -64,7 +63,7 @@ const FUEL_RULES: Record<string, string> = {
 };
 
 // Parse user request and update rules
-function parseRulesUpdate(currentRules: string, userRequest: string): { updatedRules: string; explanation: string } {
+function parseRulesUpdate(currentRules: string, userRequest: string): { updatedRules: string; response: string } {
   const lowerRequest = userRequest.toLowerCase();
   let rules = JSON.parse(currentRules);
   let explanation = '';
@@ -219,7 +218,7 @@ function parseRulesUpdate(currentRules: string, userRequest: string): { updatedR
 
   return {
     updatedRules: JSON.stringify(rules, null, 2),
-    explanation,
+    response: explanation,
   };
 }
 
@@ -231,7 +230,7 @@ async function generateAIResponse(
   chatHistory: any[]
 ): Promise<{ response: string; updatedRules: string }> {
   // Check for OpenAI API key
-  const openaiKey = import.meta.env.OPENAI_API_KEY || import.meta.env.VITE_OPENAI_API_KEY;
+  const openaiKey = process.env.OPENAI_API_KEY || process.env.VITE_OPENAI_API_KEY;
   
   if (!openaiKey) {
     // Use rule-based parsing
@@ -298,7 +297,7 @@ Provide your response in JSON format.`;
       throw new Error('OpenAI API error');
     }
 
-    const data = await response.json();
+    const data = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
     const content = data.choices?.[0]?.message?.content;
 
     if (content) {
@@ -327,7 +326,12 @@ Provide your response in JSON format.`;
 // Main handler
 export async function POST(request: Request): Promise<Response> {
   try {
-    const body = await request.json();
+    const body = await request.json() as {
+      currentRules?: string;
+      userRequest?: string;
+      extractedData?: any;
+      chatHistory?: any[];
+    };
     const { currentRules, userRequest, extractedData, chatHistory } = body;
 
     if (!userRequest) {

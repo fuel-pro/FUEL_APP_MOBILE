@@ -592,11 +592,15 @@ export function LocationProvider({
         if ("geolocation" in navigator) {
           navigator.geolocation.getCurrentPosition(
             position => {
-              const detected = detectCountryFromTimezone();
+              const coordCountry = detectCountryFromCoords(
+                position.coords.latitude,
+                position.coords.longitude
+              );
+              const detected = coordCountry || detectCountryFromTimezone();
               const loc: StationLocation = {
                 stationId: sid,
                 countryCode: detected,
-                city: "Auto-detected",
+                city: "GPS-detected",
                 timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
                 coordinates: {
                   lat: position.coords.latitude,
@@ -609,7 +613,7 @@ export function LocationProvider({
                   lng: position.coords.longitude,
                   accuracy: position.coords.accuracy,
                 },
-                preciseAddress: "Auto-detected",
+                preciseAddress: "GPS-detected",
                 preciseTimestamp: new Date().toISOString(),
               };
               setStationCountries(prev => ({ ...prev, [sid]: loc }));

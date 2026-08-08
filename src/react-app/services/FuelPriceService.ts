@@ -94,24 +94,26 @@ async function detectUserLocation(): Promise<LocationData> {
     }
   } catch {}
 
-  // Method 2: Use timezone detection
+  // Method 2: Use timezone detection as an initial guess
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const countryCode = detectCountryFromTimezone();
-  
-  // Method 3: Try IP geolocation via free service
+  let countryCode = detectCountryFromTimezone();
+
+  // Method 3: Try IP geolocation via free service (more accurate than timezone alone)
   let city = "Unknown";
   let country = "Unknown";
-  
+
   try {
-    // Use ip-api.com for geolocation (free, no API key required)
-    const response = await fetch("http://ip-api.com/json/?fields=status,country,countryCode,city,timezone,currency", {
-      headers: { "User-Agent": "FuelPro/1.0" },
-    });
+    // ipwho.is: free, no API key, HTTPS (ip-api.com's free tier is HTTP-only,
+    // which gets silently blocked as mixed content on an HTTPS-served app)
+    const response = await fetch("https://ipwho.is/?fields=success,country,country_code,city,timezone");
     if (response.ok) {
       const data = await response.json();
-      if (data.status === "success") {
+      if (data.success !== false) {
         city = data.city || city;
         country = data.country || country;
+        if (data.country_code) {
+          countryCode = data.country_code; // IP geolocation is more reliable than timezone alone
+        }
       }
     }
   } catch {
@@ -152,8 +154,31 @@ async function detectUserLocation(): Promise<LocationData> {
 
 // Scrape fuel prices using hidden iframe approach
 async function scrapeFuelPrices(location: LocationData): Promise<FuelPrices> {
-  // For Kenya, use EPRA regulated prices
+  // For Kenya, try live EPRA-sourced prices first (via serverless /api/fuel-prices,
+  // which keeps the oilpriceapi.com key server-side). Falls back to the static
+  // regulated baseline below if the endpoint isn't configured or fails.
   if (location.countryCode === "KE") {
+    try {
+      const res = await fetch("/api/fuel-prices");
+      if (res.ok) {
+        const live = await res.json();
+        if (live.success && live.petrolPrice && live.dieselPrice) {
+          return {
+            petrolPrice: live.petrolPrice,
+            dieselPrice: live.dieselPrice,
+            currency: "KES",
+            currencySymbol: "KSh",
+            location: `${location.city}, ${location.country}`,
+            countryCode: "KE",
+            fetchedAt: live.fetchedAt || new Date().toISOString(),
+            source: live.source || "EPRA (live)",
+          };
+        }
+      }
+    } catch {
+      // Fall through to static baseline below
+    }
+
     return {
       petrolPrice: KENYA_PETROL_PRICE,
       dieselPrice: KENYA_DIESEL_PRICE,
@@ -162,7 +187,7 @@ async function scrapeFuelPrices(location: LocationData): Promise<FuelPrices> {
       location: `${location.city}, ${location.country}`,
       countryCode: "KE",
       fetchedAt: new Date().toISOString(),
-      source: "EPRA Regulated Prices",
+      source: "EPRA Regulated Prices (static baseline — set OILPRICE_API_KEY for live updates)",
     };
   }
 

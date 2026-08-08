@@ -4,7 +4,6 @@
  * Central entry point for all Pump Mapping v1 API endpoints
  */
 
-import type { APIRoute } from 'astro';
 
 export async function GET(): Promise<Response> {
   return new Response(JSON.stringify({

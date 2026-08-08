@@ -5,7 +5,6 @@
  * from fuel pump ledger documents (PDF, Images, Spreadsheets)
  */
 
-import type { APIRoute } from 'astro';
 
 // Types
 interface PumpReading {
