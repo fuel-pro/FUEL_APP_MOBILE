@@ -258,45 +258,134 @@ export default function EnhancedDashboard() {
         fetchInventoryValuation(currentStation.id),
       ]);
 
-      // Calculate sales trend (mocked as weekly data)
-      const salesTrend = [];
+      // Calculate real sales trend from actual data
+      const { supabase } = await import("@/supabase/client");
+      const trendEnd = new Date();
+      const trendStart = new Date();
+      trendStart.setDate(trendStart.getDate() - 6);
+      
+      const { data: dailySales } = await supabase
+        .from("sales_enhanced")
+        .select("sale_date, total_amount")
+        .eq("station_id", currentStation.id)
+        .gte("sale_date", trendStart.toISOString().split("T")[0])
+        .lte("sale_date", trendEnd.toISOString().split("T")[0])
+        .order("sale_date", { ascending: true });
+
+      // Initialize all 7 days
+      const salesByDay: Record<string, number> = {};
       for (let i = 6; i >= 0; i--) {
         const date = new Date();
         date.setDate(date.getDate() - i);
-        salesTrend.push({
-          label: date.toLocaleDateString("en-US", { weekday: "short" }),
-          value: Math.random() * 10000 + 5000, // Mock data
+        const key = date.toISOString().split("T")[0];
+        salesByDay[key] = 0;
+      }
+
+      // Fill in actual sales
+      if (dailySales) {
+        dailySales.forEach((sale: any) => {
+          const key = new Date(sale.sale_date).toISOString().split("T")[0];
+          if (salesByDay[key] !== undefined) {
+            salesByDay[key] += sale.total_amount || 0;
+          }
         });
       }
 
-      // Top products (mocked)
-      const topProducts = [
-        { name: "Super Petrol", quantity: 1250, revenue: 1875000 },
-        { name: "Diesel", quantity: 980, revenue: 1274000 },
-        { name: "Engine Oil", quantity: 145, revenue: 217500 },
-      ];
+      const salesTrend = Object.entries(salesByDay).map(([date, value]) => ({
+        label: new Date(date).toLocaleDateString("en-US", { weekday: "short" }),
+        value: value,
+      }));
+
+      // Calculate previous period for comparison
+      const prevEnd = new Date(trendStart);
+      prevEnd.setDate(prevEnd.getDate() - 1);
+      const prevStart = new Date(prevEnd);
+      prevStart.setDate(prevStart.getDate() - 7);
+
+      const { data: prevSales } = await supabase
+        .from("sales_enhanced")
+        .select("total_amount")
+        .eq("station_id", currentStation.id)
+        .gte("sale_date", prevStart.toISOString().split("T")[0])
+        .lte("sale_date", prevEnd.toISOString().split("T")[0]);
+
+      const currentTotal = salesData.totalRevenue || 0;
+      const prevTotal = prevSales?.reduce((sum: number, s: any) => sum + (s.total_amount || 0), 0) || 0;
+      const salesChange = prevTotal > 0 ? ((currentTotal - prevTotal) / prevTotal) * 100 : 0;
+
+      const { data: prevExpenses } = await supabase
+        .from("expenses")
+        .select("amount")
+        .eq("station_id", currentStation.id)
+        .gte("expense_date", prevStart.toISOString().split("T")[0])
+        .lte("expense_date", prevEnd.toISOString().split("T")[0]);
+
+      const currentExpenses = expensesData.totalExpenses || 0;
+      const prevExpensesTotal = prevExpenses?.reduce((sum: number, e: any) => sum + (e.amount || 0), 0) || 0;
+      const expensesChange = prevExpensesTotal > 0 ? ((currentExpenses - prevExpensesTotal) / prevExpensesTotal) * 100 : 0;
+
+      // Fetch top products from POS sales
+      const { data: productSales } = await supabase
+        .from("pos_sales_items")
+        .select("product_id, quantity, unit_price, products(name)")
+        .eq("station_id", currentStation.id)
+        .gte("created_at", startDate)
+        .lte("created_at", endDate);
+
+      const productTotals: Record<string, { name: string; quantity: number; revenue: number }> = {};
+      if (productSales) {
+        productSales.forEach((item: any) => {
+          const key = item.product_id;
+          if (!productTotals[key]) {
+            productTotals[key] = {
+              name: item.products?.name || "Unknown Product",
+              quantity: 0,
+              revenue: 0,
+            };
+          }
+          productTotals[key].quantity += item.quantity || 0;
+          productTotals[key].revenue += (item.quantity || 0) * (item.unit_price || 0);
+        });
+      }
+      const topProducts = Object.values(productTotals)
+        .sort((a, b) => b.revenue - a.revenue)
+        .slice(0, 5);
+
+      // Fetch customer count
+      const { count: customerCount } = await supabase
+        .from("customers")
+        .select("*", { count: "exact", head: true })
+        .eq("station_id", currentStation.id);
 
       setDashboardData({
-        totalSales: salesData.totalRevenue,
-        totalExpenses: expensesData.totalExpenses,
-        netProfit: salesData.totalRevenue - expensesData.totalExpenses,
+        totalSales: currentTotal,
+        totalExpenses: currentExpenses,
+        netProfit: currentTotal - currentExpenses,
         inventoryValue: inventoryData.totalValue,
-        totalCustomers: 0,
+        totalCustomers: customerCount || 0,
         totalOrders: salesData.sales.length,
-        salesChange: 12.5, // Mock
-        expensesChange: -3.2, // Mock
+        salesChange,
+        expensesChange,
         salesTrend,
         topProducts,
         paymentBreakdown: salesData.paymentBreakdown,
         recentActivity: salesData.sales.slice(0, 5).map((sale: any) => ({
           type: "sale",
-          description: `Sale #${sale.invoice_number}`,
-          time: new Date(sale.created_at).toLocaleString(),
+          description: `Sale #${sale.invoice_number || sale.id}`,
+          time: new Date(sale.created_at || sale.sale_date).toLocaleString(),
           amount: sale.total_amount,
         })),
       });
     } catch (error) {
       console.error("Failed to load dashboard data:", error);
+      // Set fallback data on error
+      setDashboardData(prev => ({
+        ...prev,
+        salesTrend: Array(7).fill({ label: "", value: 0 }),
+        salesChange: 0,
+        expensesChange: 0,
+        topProducts: [],
+      }));
     } finally {
       setLoading(false);
     }
