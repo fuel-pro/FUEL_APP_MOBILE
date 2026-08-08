@@ -686,7 +686,36 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
     return () => sub.subscription.unsubscribe();
   }, [syncFromBackend]);
 
+  // Persist stations/admin to localStorage whenever they change.
+  // GUARD: on the very first mount, `stations` is still the initial empty []
+  // (the load-from-storage effect below hasn't committed yet). Writing that
+  // empty array to localStorage here would WIPE a station that exists in
+  // storage — and the subsequent Supabase sync would then read fresh=[] and
+  // strand the user on the "create station" screen. Skip the persist write
+  // while stations is empty AND storage already has a non-empty list, so the
+  // load effect can repopulate state first.
+  const didHydrateRef = React.useRef(false);
   useEffect(() => {
+    if (
+      !didHydrateRef.current &&
+      stations.length === 0
+    ) {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        const parsed = raw ? JSON.parse(raw) : null;
+        const stored = Array.isArray(parsed)
+          ? parsed
+          : parsed?.stations;
+        if (stored && stored.length > 0) {
+          // Storage has stations but state hasn't hydrated yet — don't overwrite.
+          didHydrateRef.current = true;
+          return;
+        }
+      } catch {
+        /* ignore — fall through to normal persist */
+      }
+    }
+    didHydrateRef.current = true;
     persist();
   }, [stations, adminSettings, persist]);
 
