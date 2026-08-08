@@ -595,6 +595,18 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
+      // Re-read localStorage immediately before persisting. A station may have
+      // been created locally (createStation writes directly to localStorage)
+      // during the network await above. If we persist `merged` (which was
+      // computed from the pre-await `fresh` read) we'd clobber that just-created
+      // station with an empty/shorter list and strand the user on the "create
+      // station" screen. Merge any local stations not represented in `merged`.
+      const latest = loadFromStorage().stations;
+      const mergedIds = new Set(merged.map(s => s.id));
+      for (const s of latest) {
+        if (!mergedIds.has(s.id)) merged.push(s);
+      }
+
       setStations(merged);
       persist(merged);
 
@@ -687,28 +699,26 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
   }, [syncFromBackend]);
 
   // Persist stations/admin to localStorage whenever they change.
-  // GUARD: on the very first mount, `stations` is still the initial empty []
-  // (the load-from-storage effect below hasn't committed yet). Writing that
-  // empty array to localStorage here would WIPE a station that exists in
-  // storage — and the subsequent Supabase sync would then read fresh=[] and
-  // strand the user on the "create station" screen. Skip the persist write
-  // while stations is empty AND storage already has a non-empty list, so the
-  // load effect can repopulate state first.
+  // GUARD: never write an empty stations array over a non-empty localStorage
+  // list. syncFromBackend can transiently set `stations` to [] when the
+  // Supabase fetch returns [] during the createStation→push race (the
+  // fire-and-forget cloud push hasn't propagated yet). Writing [] here would
+  // wipe the locally-created station and strand the user on the "create
+  // station" screen. The only legitimate path to an empty list is
+  // deleteStation of the last station, which calls persist directly — so
+  // skipping an empty-state write here is safe.
   const didHydrateRef = React.useRef(false);
   useEffect(() => {
-    if (
-      !didHydrateRef.current &&
-      stations.length === 0
-    ) {
+    if (stations.length === 0) {
       try {
         const raw = localStorage.getItem(STORAGE_KEY);
         const parsed = raw ? JSON.parse(raw) : null;
-        const stored = Array.isArray(parsed)
-          ? parsed
-          : parsed?.stations;
+        const stored = Array.isArray(parsed) ? parsed : parsed?.stations;
         if (stored && stored.length > 0) {
-          // Storage has stations but state hasn't hydrated yet — don't overwrite.
+          // Storage has stations but state is empty — a transient sync race.
+          // Don't overwrite. Re-hydrate state from storage so UI matches.
           didHydrateRef.current = true;
+          setStations(stored);
           return;
         }
       } catch {
@@ -812,18 +822,25 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
 
   const deleteStation = useCallback(
     (id: string) => {
-      setStations(prev => prev.filter(s => s.id !== id));
-      if (currentStation?.id === id) {
-        const remaining = stations.filter(s => s.id !== id);
-        setCurrentStation(remaining.length > 0 ? remaining[0] : null);
-        if (remaining.length > 0)
-          localStorage.setItem(CURRENT_STATION_KEY, remaining[0].id);
-      }
+      setStations(prev => {
+        const remaining = prev.filter(s => s.id !== id);
+        // Persist the (possibly empty) result directly. The persist useEffect
+        // guard skips writing empty arrays over non-empty storage, so an
+        // explicit clear on last-station-delete must go through persist() to
+        // actually empty localStorage.
+        persist(remaining);
+        if (currentStation?.id === id) {
+          setCurrentStation(remaining.length > 0 ? remaining[0] : null);
+          if (remaining.length > 0)
+            localStorage.setItem(CURRENT_STATION_KEY, remaining[0].id);
+        }
+        return remaining;
+      });
       if (isValidUuid(id)) {
         pushStationDelete(id);
       }
     },
-    [currentStation, stations]
+    [currentStation, persist]
   );
 
   const switchStation = useCallback(
