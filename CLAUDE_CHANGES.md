@@ -220,6 +220,66 @@ they're worth cleaning up or finishing later:
     - `useFuelStore.ts`: Using working version with proper Zustand store
       configuration for state persistence.
 
+## SalesZote Business Suite Integration (update-8)
+
+9. **Full SalesZote-style POS & Inventory feature set integrated.**
+    Based on the FuelPro × SalesZote Business Suit implementation guide:
+    
+    - **SQL Migration** (`supabase/migrations/005_saleszote_features.sql`): 15 new tables
+      with RLS policies for products, customers, suppliers, sales_enhanced,
+      sale_items, inventory_transactions, stock_transfers, purchase_orders,
+      purchase_order_items, expenses, expense_categories, terminal_sessions,
+      and integrations.
+    
+    - **pos-service.ts**: Central checkout + stock-movement engine. Every sale,
+      adjustment, transfer, count, wastage, and PO-receipt writes an
+      inventory_transactions row and keeps products.stock_quantity in sync.
+    
+    - **BusinessSuite.tsx**: Full SalesZote-style sidebar navigation shell with
+      collapsible sections for Overview, POS, Catalog, Stock Management,
+      Sales, Purchases, Customers, Expenses, Reports, and Settings.
+    
+    - **EnhancedDashboard.tsx**: KPI cards (sales, expenses, profit, inventory),
+      sales trend chart, payment breakdown, top products, and recent activity.
+    
+    - **AdvancedPOS.tsx**: Full-featured POS with product grid, cart, customer
+      selector, multiple payment methods (cash/M-PESA/card), terminal session
+      integration, and success/completion screens.
+    
+    - **ProductsManagement.tsx**: Product CRUD with categories, barcode support,
+      pricing (cost/selling), stock levels, reorder alerts, and active status.
+    
+    - **InventoryManagement.tsx**: Stock adjustments, transfers between stations,
+      stock counts with variance calculation, wastage recording, and full
+      transaction history.
+    
+    - **SalesInvoices.tsx**: Sales listing with search, date filter, and
+      invoice detail modal with line items.
+    
+    - **PurchasesSuppliers.tsx**: Purchase order creation with line items,
+      receive-to-stock flow, and supplier CRUD.
+    
+    - **CustomersManagement.tsx**: Customer profiles with contact info, credit
+      limits, and purchase history.
+    
+    - **ExpensesManagement.tsx**: Auto-seeded expense categories, period
+      filters, and category totals with P&L contribution.
+    
+    - **ReportsAnalytics.tsx**: P&L report, payment breakdown, top products,
+      inventory valuation, and real CSV exports.
+    
+    - **TerminalSessions.tsx**: Open/close shifts, cash reconciliation,
+      and variance computation.
+    
+    - **SettingsPanel.tsx**: Station info, tax rates, and integrations
+      placeholder (M-PESA, Kopo Kopo).
+    
+    - **Home.tsx**: Wired to render BusinessSuite when a station is selected.
+
+    Architecture compliance: all subcomponents module-scoped (UPDATE-4),
+    all callbacks memoized, no effect-dependency loops, all inserts set
+    owner_id from the Supabase session (UPDATE-22 RLS).
+
 ## Still worth doing (not done this pass — flagging so it's not lost)
 
 - Delete or fix `src/react-app/lib/open-source/{chatwootIntegration,
