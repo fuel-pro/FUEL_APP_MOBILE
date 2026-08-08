@@ -86,6 +86,7 @@
     "firebase-tools": "^15.24.0",
     "globals": "15.15.0",
     "jsdom": "^30.0.1",
+    "pg": "^8.22.0",
     "postcss": "^8.5.3",
     "prettier": "^3.7.4",
     "tailwindcss": "^3.4.17",
