@@ -22,6 +22,8 @@ import StationManager from "@/react-app/components/StationManager";
 import CombinedStationsView from "@/react-app/components/CombinedStationsView";
 import SetupWizard from "@/react-app/components/SetupWizard";
 import FirstLoginChoice from "@/react-app/components/FirstLoginChoice";
+// Business Suite (SalesZote-style POS)
+import BusinessSuite from "@/react-app/components/BusinessSuite";
 
 // All tab content lazy-loaded to reduce main bundle
 const Dashboard = lazy(() => import("@/react-app/components/Dashboard"));
@@ -492,6 +494,11 @@ function HomeContent() {
   }
 
   // ─── MAIN APP ───
+  // If station is selected, render BusinessSuite (SalesZote-style)
+  if (currentStation) {
+    return <BusinessSuite />;
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-20 md:pb-0 transition-colors duration-300">
       <Header
