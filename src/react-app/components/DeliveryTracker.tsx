@@ -473,7 +473,7 @@ export default function DeliveryTracker() {
             <label>Year</label>
             <input
               type="number"
-              value={state.deliveryYear}
+              value={state.deliveryYear ?? ""}
               onChange={e =>
                 dispatch({
                   type: "SET_DELIVERY_INFO",
@@ -486,7 +486,7 @@ export default function DeliveryTracker() {
             <label>Petrol Price (Ksh/L)</label>
             <input
               type="number"
-              value={state.petrolPrice}
+              value={state.petrolPrice ?? ""}
               onChange={e =>
                 dispatch({
                   type: "SET_PRICES",
@@ -500,7 +500,7 @@ export default function DeliveryTracker() {
             <label>Diesel Price (Ksh/L)</label>
             <input
               type="number"
-              value={state.dieselPrice}
+              value={state.dieselPrice ?? ""}
               onChange={e =>
                 dispatch({
                   type: "SET_PRICES",

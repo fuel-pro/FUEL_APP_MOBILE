@@ -69,17 +69,31 @@ export default function Invoice() {
   };
 
   const updateInvoiceItem = (index: number, field: string, value: any) => {
-    const updatedItems = [...state.invoiceItems];
-    const item = updatedItems[index];
-
+    const item = state.invoiceItems[index];
+    let newValue: any = value;
+    
     if (field === "qty" || field === "price") {
-      (item as any)[field] = parseFloat(value) || 0;
-    } else {
-      (item as any)[field] = value;
+      newValue = parseFloat(value) || 0;
     }
 
-    // FIX: Round to 2 decimal places to prevent floating point errors
-    item.total = Math.round((item.qty * item.price) * 100) / 100;
+    // Create new item object to ensure React detects the change
+    const updatedItem = {
+      ...item,
+      [field]: newValue,
+      total: field === "qty" || field === "price"
+        ? Math.round((field === "qty" ? (parseFloat(value) || 0) : item.qty) * (field === "price" ? (parseFloat(value) || 0) : item.price) * 100) / 100
+        : item.total
+    };
+
+    // Recalculate total if qty or price changed
+    if (field === "qty" || field === "price") {
+      const qty = field === "qty" ? newValue : item.qty;
+      const price = field === "price" ? newValue : item.price;
+      updatedItem.total = Math.round((qty * price) * 100) / 100;
+    }
+
+    const updatedItems = [...state.invoiceItems];
+    updatedItems[index] = updatedItem;
 
     dispatch({ type: "SET_INVOICE_ITEMS", payload: updatedItems });
   };
@@ -533,12 +547,13 @@ export default function Invoice() {
                   <td className="border border-gray-300 p-3 text-center">
                     <input
                       type="number"
-                      value={item.qty}
+                      value={item.qty ?? ""}
                       onChange={e =>
                         updateInvoiceItem(index, "qty", e.target.value)
                       }
-                      className="w-full bg-transparent border-none outline-none text-center"
-                      min="1"
+                      className="w-full bg-transparent border-none outline-none text-center cursor-text"
+                      min="0"
+                      step="1"
                     />
                   </td>
                   <td className="border border-gray-300 p-3 text-right">
@@ -546,12 +561,13 @@ export default function Invoice() {
                       <span className="mr-1">Ksh</span>
                       <input
                         type="number"
-                        value={item.price}
+                        value={item.price ?? ""}
                         onChange={e =>
                           updateInvoiceItem(index, "price", e.target.value)
                         }
-                        className="w-24 bg-transparent border-none outline-none text-right"
+                        className="w-24 bg-transparent border-none outline-none text-right cursor-text"
                         min="0"
+                        step="0.01"
                       />
                     </div>
                   </td>

@@ -601,7 +601,7 @@ export default function FuelOffloading() {
                 <label>Quantity (Litres) *</label>
                 <input
                   type="number"
-                  value={formData.quantity}
+                  value={formData.quantity ?? ""}
                   onChange={e =>
                     handleInputChange(
                       "quantity",
@@ -618,7 +618,7 @@ export default function FuelOffloading() {
                 <label>Rate per Litre ({state.companyData.currency}) *</label>
                 <input
                   type="number"
-                  value={formData.rate}
+                  value={formData.rate ?? ""}
                   onChange={e =>
                     handleInputChange("rate", parseFloat(e.target.value) || 0)
                   }
@@ -632,7 +632,7 @@ export default function FuelOffloading() {
                 <label>Total Amount ({state.companyData.currency})</label>
                 <input
                   type="number"
-                  value={formData.totalAmount}
+                  value={formData.totalAmount ?? ""}
                   readOnly
                   className="bg-gray-100 dark:bg-gray-700"
                 />
