@@ -503,21 +503,18 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
     persist();
   }, [stations, adminSettings, persist]);
 
-  // FIX: Auth listener with EMPTY dependency array. Prevents tearing down and
-  // re-subscribing on every render, which was causing extra sync calls.
+  // FIX: Auth listener - react to user changes from useAuth() hook.
+  // The previous code incorrectly called useAuth.subscribe() (hook as object).
+  // user is already declared at line 376 from useAuth() call.
   useEffect(() => {
-    const unsubscribe = useAuth.subscribe((state) => {
-      if (state.user) {
-        // User signed in - trigger sync
-        setTimeout(() => { syncFromBackend(); }, 0);
-      } else {
-        // User signed out
-        setHasBackendData(false);
-      }
-    });
-    return unsubscribe;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // EMPTY ARRAY: Only subscribes once.
+    if (user) {
+      // User signed in - trigger sync
+      setTimeout(() => { syncFromBackend(); }, 0);
+    } else {
+      // User signed out
+      setHasBackendData(false);
+    }
+  }, [user]); // React to user changes only
 
   // Push to Supabase whenever station/admin data changes, debounced so
   // rapid edits (typing, POS entries) collapse into one request. Gated on
