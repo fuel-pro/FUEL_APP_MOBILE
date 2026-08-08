@@ -149,12 +149,17 @@ export const useFuelStore = create<FuelState>()(
     }),
     {
       name: "fuelpro_store_v2",
+      // FIX: Added cart and activeShift to partialize so POS state survives browser restart.
+      // REMOVED skipHydration: true - this is a pure Vite SPA with no SSR.
+      // The flag was preventing the store from rehydrating from localStorage on reload,
+      // causing POS carts, active shifts, and notifications to vanish.
       partialize: state => ({
+        cart: state.cart,
         selectedStation: state.selectedStation,
+        activeShift: state.activeShift,
         priceAlerts: state.priceAlerts,
         notifications: state.notifications.filter(n => !n.read).slice(0, 20),
       }),
-      skipHydration: true, // Prevent SSR/hydration mismatches in StrictMode
     }
   )
 );

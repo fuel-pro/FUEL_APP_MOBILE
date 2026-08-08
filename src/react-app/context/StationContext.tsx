@@ -4,6 +4,7 @@ import React, {
   useState,
   useCallback,
   useEffect,
+  useRef,
 } from "react";
 import { getCountryByCode } from "@/react-app/lib/world-country-utils";
 import { useAuth } from "@/react-app/context/AuthContext";
@@ -363,6 +364,15 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
   // real cloud snapshot with an empty/stale local one on first load).
   const [hasHydratedFromCloud, setHasHydratedFromCloud] = useState(false);
 
+  // FIX: Use Refs to stabilize callbacks and prevent infinite re-hydration loops.
+  // Every state update caused syncFromBackend/syncToBackend references to change,
+  // which triggered the mount effect again, which reset state, creating an infinite loop.
+  const stationsRef = useRef(stations);
+  useEffect(() => { stationsRef.current = stations; }, [stations]);
+
+  const adminSettingsRef = useRef(adminSettings);
+  useEffect(() => { adminSettingsRef.current = adminSettings; }, [adminSettings]);
+
   const { user } = useAuth();
 
   // Sync stations FROM Supabase (see stationCloudSync.ts for why this
@@ -405,6 +415,7 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
 
   // Sync stations TO Supabase. Debounced by the caller (see the effect
   // below) rather than fired on every keystroke-level state change.
+  // FIX: Uses refs to stabilize the callback reference.
   const syncToBackend = useCallback(async (): Promise<void> => {
     if (!user?.id) {
       console.log("[StationContext] Not signed in, skipping cloud push");
@@ -414,8 +425,8 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
     setIsBackendSyncing(true);
     try {
       const result = await pushStationSnapshot(user.id, {
-        stations,
-        admin: adminSettings,
+        stations: stationsRef.current,
+        admin: adminSettingsRef.current,
       });
 
       if (result.success) {
@@ -424,12 +435,12 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
         localStorage.setItem(BACKEND_SYNC_TIMESTAMP, String(now));
         setHasBackendData(true);
         localStorage.setItem(BACKEND_SYNC_KEY, "true");
-        console.log(`[StationContext] Pushed ${stations.length} station(s) to Supabase`);
+        console.log(`[StationContext] Pushed ${stationsRef.current.length} station(s) to Supabase`);
       }
     } finally {
       setIsBackendSyncing(false);
     }
-  }, [user?.id, stations, adminSettings]);
+  }, [user?.id]); // Stable! Uses refs internally.
 
   // Load from storage on mount
   useEffect(() => {
@@ -469,26 +480,44 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
     setIsStationLoading(false);
 
     // Try to sync from backend on mount
-    syncFromBackend();
-  }, [syncFromBackend]);
+    // Use setTimeout to avoid calling async function directly in useEffect
+    setTimeout(() => { syncFromBackend(); }, 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // EMPTY ARRAY: Only runs once on mount. Prevents infinite re-hydration loop.
 
-  // Persist to storage
+  // Persist to storage - FIX: Uses refs to avoid dependency on state
   const persist = useCallback(
     (newStations?: Station[], newAdmin?: AdminSettings) => {
-      const s = newStations || stations;
-      const a = newAdmin || adminSettings;
+      const s = newStations || stationsRef.current;
+      const a = newAdmin || adminSettingsRef.current;
       localStorage.setItem(
         STORAGE_KEY,
         JSON.stringify({ stations: s, version: "3.0" })
       );
       localStorage.setItem(ADMIN_KEY, JSON.stringify(a));
     },
-    [stations, adminSettings]
+    [] // Stable! Uses refs internally.
   );
 
   useEffect(() => {
     persist();
   }, [stations, adminSettings, persist]);
+
+  // FIX: Auth listener with EMPTY dependency array. Prevents tearing down and
+  // re-subscribing on every render, which was causing extra sync calls.
+  useEffect(() => {
+    const unsubscribe = useAuth.subscribe((state) => {
+      if (state.user) {
+        // User signed in - trigger sync
+        setTimeout(() => { syncFromBackend(); }, 0);
+      } else {
+        // User signed out
+        setHasBackendData(false);
+      }
+    });
+    return unsubscribe;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // EMPTY ARRAY: Only subscribes once.
 
   // Push to Supabase whenever station/admin data changes, debounced so
   // rapid edits (typing, POS entries) collapse into one request. Gated on

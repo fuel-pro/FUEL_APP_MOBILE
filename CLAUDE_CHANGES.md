@@ -80,6 +80,36 @@
    URL/anon key, `VITE_DEMO_MODE=false`) so the app runs against your actual
    backend out of the box.
 
+6. **Global input loss, browser timeouts, and data erasure on restart — root-caused and fixed.**
+
+   **"Everywhere" input clearing / browser restarts:**
+   Found a systemic infinite loop in `src/react-app/context/StationContext.tsx`.
+   The mount `useEffect` and Supabase auth listener depended on `syncFromBackend`,
+   which in turn depended on the `stations` state array. Every single keystroke
+   in any input updated `stations`, which changed the `syncFromBackend`
+   reference, which triggered the mount `useEffect` to run again. The effect
+   immediately called `setStations(loadFromStorage())`, which parses
+   `localStorage` and returns a Brand-new object reference. This triggered
+   another state change, creating a violent infinite loop that reset app state
+   on every keystroke (causing React to unmount/remount inputs) and eventually
+   crashed the browser tab via CPU exhaustion.
+   - **Fix:** Added `useRef` (`stationsRef`, `adminSettingsRef`) to hold
+     current state without triggering dependency updates. Rewrote `persist`,
+     `syncToBackend`, and the mount/auth listener effects to be stable.
+   - Set the mount `useEffect` and auth listener `useEffect` dependency arrays
+     to `[]` so they only execute exactly once on mount/auth-change, entirely
+     breaking the infinite re-hydration loop.
+
+   **Data erasing on browser restart:**
+   Found that `src/react-app/hooks/useFuelStore.ts` (Zustand store) was
+   configured with `skipHydration: true` (originally added to prevent SSR
+   mismatches). Since FuelPro is a pure Vite SPA with no SSR, this flag was
+   actively preventing the store from rehydrating from `localStorage` on
+   reload, causing POS carts, active shifts, and notifications to vanish.
+   - **Fix:** Removed `skipHydration: true`.
+   - Added `cart` and `activeShift` to the `partialize` whitelist so critical
+     POS state survives browser restarts.
+
 ## Verified working
 
 - `npm install --legacy-peer-deps` — installs clean
