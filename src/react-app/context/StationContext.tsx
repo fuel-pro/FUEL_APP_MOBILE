@@ -563,7 +563,14 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
   const syncFromBackend = useCallback(async (): Promise<void> => {
     setIsBackendSyncing(true);
     try {
-      const merged = await syncStationsWithSupabase(stations);
+      // ALWAYS re-read the freshest stations from localStorage before syncing.
+      // syncFromBackend is also called on mount, and at that point the `stations`
+      // closure is still the stale empty array from initial state — passing it
+      // to syncStationsWithSupabase would tell the merge "I have nothing local"
+      // so a cloud that returns [] overwrites localStorage and strands the user
+      // on the "create station" screen. Reading fresh avoids that race entirely.
+      const fresh = loadFromStorage().stations;
+      const merged = await syncStationsWithSupabase(fresh);
       if (merged === null) {
         console.log("[StationContext] No Supabase session, staying in local-only mode");
         return;
