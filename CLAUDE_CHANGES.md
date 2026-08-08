@@ -209,6 +209,17 @@ they're worth cleaning up or finishing later:
     - All inputs now have `step` attributes for proper decimal handling and
       `cursor-text` class for consistent cursor behavior.
 
+## Working Version Sync (from FuelPro-working.zip)
+
+8. **Synced key files with working version for consistency:**
+    - `StationContext.tsx`: Added Supabase cross-device sync functions
+      (`pushStationUpsert`, `pushStationDelete`, `syncStationsWithSupabase`)
+      for proper station data synchronization across devices.
+    - `Invoice.tsx`: Added `useRef` to track `lastDispatchedLabel` to prevent
+      the quantity label input from fighting with global state changes.
+    - `useFuelStore.ts`: Using working version with proper Zustand store
+      configuration for state persistence.
+
 ## Still worth doing (not done this pass — flagging so it's not lost)
 
 - Delete or fix `src/react-app/lib/open-source/{chatwootIntegration,
