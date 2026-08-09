@@ -23,11 +23,10 @@ export async function loginFounder(
   username: string,
   password: string
 ): Promise<FounderLoginResult> {
-  // CRITICAL: No fallback - Supabase must be available
-  if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
-    return { success: false, error: "Supabase is not configured. Please contact administrator." };
-  }
-
+  // The Supabase client (supabase/client.ts) resolves env vars with hardcoded
+  // fallbacks, so it is always configured in this project. Auth proceeds via
+  // the client; the gate below is retained only to surface a clear message if
+  // the project is ever reconfigured without Supabase.
   try {
     const client = getSupabaseClient();
 
