@@ -729,10 +729,14 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
       setCurrentStation(loadedStations[0]);
       localStorage.setItem(CURRENT_STATION_KEY, loadedStations[0].id);
     }
-    setIsStationLoading(false);
 
-    // Try to sync from backend on mount
-    syncFromBackend();
+    // Try to sync from backend on mount. Keep isStationLoading TRUE until
+    // the first cloud sync completes — otherwise Home.tsx sees stations=[]
+    // (from the empty localStorage on a new device) and flashes the
+    // SetupWizard before cloud stations arrive.
+    syncFromBackend().finally(() => {
+      setIsStationLoading(false);
+    });
   }, [syncFromBackend]);
 
   // Also sync whenever the person signs in (covers login without a full
@@ -740,7 +744,12 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const { data: sub } = supabase.auth.onAuthStateChange((event) => {
       if (event === "SIGNED_IN") {
-        syncFromBackend();
+        // Re-show loading screen while we fetch cloud stations, so the
+        // SetupWizard doesn't flash on a new device before stations arrive.
+        setIsStationLoading(true);
+        syncFromBackend().finally(() => {
+          setIsStationLoading(false);
+        });
       }
     });
     return () => sub.subscription.unsubscribe();

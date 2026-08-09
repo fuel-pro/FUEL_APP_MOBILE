@@ -8,7 +8,9 @@ import {
   useRef,
 } from "react";
 import { supabase } from "@/supabase/client";
+import { getSupabaseClient } from "@/supabase/client";
 import type { User, Session } from "@supabase/supabase-js";
+import { cloudStorageService } from "@/react-app/lib/cloud-storage-service";
 
 // ============================================================
 // AUTH CONTEXT v10 - Supabase Production Mode
@@ -64,6 +66,7 @@ interface AuthContextType {
   terminateRole: (stationId: string) => void;
   getActiveBinding: (stationId: string) => StationRoleBinding | null;
   hasAnyBinding: () => boolean;
+  syncBindingsFromCloud: () => Promise<void>;
 }
 
 const AUTH_STORAGE_KEY = "fuelpro_auth_identity";
@@ -108,7 +111,42 @@ function loadBindings(): StationRoleBinding[] {
   return [];
 }
 
-// Convert Supabase user to AuthIdentity
+// Convert Supabase user to AuthIdentity (enriched with profiles table data)
+async function supabaseUserToIdentityEnriched(user: User, session: Session | null): Promise<AuthIdentity> {
+  const base: AuthIdentity = {
+    id: user.id,
+    authId: `supabase_${user.id}`,
+    authMethod: "email",
+    email: user.email || "",
+    name: user.user_metadata?.full_name || user.email?.split("@")[0] || "User",
+    picture: user.user_metadata?.avatar_url || undefined,
+    role: "owner",
+    permissions: ["read", "write"],
+    phone: user.user_metadata?.phone || undefined,
+    username: user.user_metadata?.username || undefined,
+  };
+  // Enrich from profiles table if available
+  try {
+    const sc = getSupabaseClient();
+    const { data: profile } = await sc
+      .from("profiles")
+      .select("name, phone, username, avatar_url, role")
+      .eq("id", user.id)
+      .maybeSingle();
+    if (profile) {
+      if (profile.name) base.name = profile.name;
+      if (profile.phone) base.phone = profile.phone;
+      if (profile.username) base.username = profile.username;
+      if (profile.avatar_url) base.picture = profile.avatar_url;
+      if (profile.role) base.role = profile.role;
+    }
+  } catch {
+    // profiles table may not be accessible yet; fall back to base identity
+  }
+  return base;
+}
+
+// Convert Supabase user to AuthIdentity (synchronous, from metadata only)
 function supabaseUserToIdentity(user: User, session: Session | null): AuthIdentity {
   return {
     id: user.id,
@@ -156,7 +194,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (cancelled) return;
         
         if (session?.user) {
-          const identity = supabaseUserToIdentity(session.user, session);
+          const identity = await supabaseUserToIdentityEnriched(session.user, session);
           setUser(identity);
           setToken(session.access_token);
           localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(identity));
@@ -183,7 +221,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (cancelled) return;
         
         if (event === 'SIGNED_IN' && session?.user) {
-          const identity = supabaseUserToIdentity(session.user, session);
+          const identity = await supabaseUserToIdentityEnriched(session.user, session);
           setUser(identity);
           setToken(session.access_token);
           localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(identity));
@@ -194,7 +232,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           localStorage.removeItem(AUTH_STORAGE_KEY);
           localStorage.removeItem(TOKEN_STORAGE_KEY);
         } else if (event === 'TOKEN_REFRESHED' && session?.user) {
-          const identity = supabaseUserToIdentity(session.user, session);
+          const identity = await supabaseUserToIdentityEnriched(session.user, session);
           setUser(identity);
           setToken(session.access_token);
           localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(identity));
@@ -242,7 +280,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         if (data.user && data.session) {
-          const newUser = supabaseUserToIdentity(data.user, data.session);
+          const newUser = await supabaseUserToIdentityEnriched(data.user, data.session);
 
           setUser(newUser);
           setToken(data.session.access_token);
@@ -298,6 +336,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(newUser));
           localStorage.setItem(TOKEN_STORAGE_KEY, data.session.access_token);
           broadcastAuthUpdate(newUser, data.session.access_token);
+
+          // Explicitly upsert profiles row (the DB trigger should also do this, but
+          // we add a belt-and-suspenders upsert in case trigger timing or RLS blocks it)
+          try {
+            await supabase
+              .from("profiles")
+              .upsert({
+                id: data.user.id,
+                email: email,
+                name: name,
+              }, { onConflict: "id" });
+          } catch (profileErr) {
+            console.warn("[AuthContext] profiles upsert failed (trigger should handle it):", profileErr);
+          }
         } else if (data.user && !data.session) {
           // Email confirmation required
           console.info("[AuthContext] Registration successful, email confirmation required");
@@ -506,6 +558,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const clearError = useCallback(() => setError(null), []);
 
   // ---- ROLE BINDING ----
+  // Sync cloud station_members → local bindings whenever user changes (login, device switch)
+  useEffect(() => {
+    if (user) {
+      syncBindingsFromCloud().catch(() => {});
+    }
+  }, [user, syncBindingsFromCloud]);
+
   const bindRole = useCallback(
     (stationId: string, stationName: string, role: StationRoleBinding["role"], invitedBy: string, expiresAt?: string) => {
       if (!user) return;
@@ -531,6 +590,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!user) return false;
     return bindings.some(b => b.active && b.authId === user.authId);
   }, [bindings, user]);
+
+  // Sync role bindings from cloud (station_members table) — ensures cross-device station access
+  const syncBindingsFromCloud = useCallback(async () => {
+    if (!user) return;
+    try {
+      const sc = getSupabaseClient();
+      // Fetch accepted memberships for this user (by user_id or invited_email)
+      const { data: members, error } = await sc
+        .from("station_members")
+        .select("station_id, role, status, name")
+        .or(`user_id.eq.${user.id},invited_email.eq.${user.email}`)
+        .eq("status", "accepted");
+      if (error) {
+        console.warn("[AuthContext] syncBindingsFromCloud error:", error.message);
+        return;
+      }
+      if (members && members.length > 0) {
+        setBindings(prev => {
+          const cloudBindings: StationRoleBinding[] = members.map(m => ({
+            stationId: m.station_id,
+            stationName: m.name || "Shared Station",
+            role: (m.role as StationRoleBinding["role"]) || "staff",
+            invitedBy: "cloud",
+            joinedAt: new Date().toISOString(),
+            active: true,
+            authId: user.authId,
+          }));
+          // Merge: keep existing owner bindings, add/update cloud bindings
+          const existingIds = new Set(cloudBindings.map(b => b.stationId));
+          const merged = [
+            ...prev.filter(b => !existingIds.has(b.stationId)),
+            ...cloudBindings,
+          ];
+          return merged;
+        });
+      }
+    } catch (err) {
+      console.warn("[AuthContext] syncBindingsFromCloud failed:", err);
+    }
+  }, [user]);
 
   // ---- PASSWORD RESET ----
   const requestPasswordReset = useCallback(
@@ -747,7 +846,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         logout, clearError, refreshAuth,
         requestPasswordReset, verifyResetCode, resetPassword,
         updateProfile, updateEmail, updatePassword,
-        bindRole, terminateRole, getActiveBinding, hasAnyBinding,
+        bindRole, terminateRole, getActiveBinding, hasAnyBinding, syncBindingsFromCloud,
       }}
     >
       {children}

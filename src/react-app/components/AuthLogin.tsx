@@ -55,6 +55,7 @@ export default function AuthLogin() {
     loginWithEmail,
     registerWithEmail,
     loginWithUsername,
+    updateProfile,
     user,
     isPending,
     error,
@@ -76,6 +77,8 @@ export default function AuthLogin() {
   const [regEmail, setRegEmail] = useState("");
   const [regPassword, setRegPassword] = useState("");
   const [regConfirm, setRegConfirm] = useState("");
+  const [regPhone, setRegPhone] = useState("");
+  const [regUsername, setRegUsername] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [companyName, setCompanyName] = useState("");
   const [companyPhone, setCompanyPhone] = useState("");
@@ -157,11 +160,31 @@ export default function AuthLogin() {
     if (regPassword !== regConfirm) { setLocalError("Passwords do not match"); return; }
     const ok = await registerWithEmail(regEmail.trim(), regPassword, regName.trim());
     if (ok) {
+      // Save company profile to cloud (cross-device) + localStorage cache
       if (companyName || companyRegNo || taxId) {
-        localStorage.setItem("fuelpro_company_profile", JSON.stringify({
+        const companyProfile = {
           name: companyName || regName.trim(), phone: companyPhone, address: companyAddress,
           industry: companyIndustry, regNo: companyRegNo, taxId, createdAt: new Date().toISOString(),
-        }));
+        };
+        localStorage.setItem("fuelpro_company_profile", JSON.stringify(companyProfile));
+        // Also save to cloud KV store for cross-device access
+        try {
+          const { cloudStorageService } = await import("@/react-app/lib/cloud-storage-service");
+          await cloudStorageService.set("company_profile", companyProfile);
+        } catch (err) {
+          console.warn("[AuthLogin] company_profile cloud save failed:", err);
+        }
+      }
+      // Update profile with username + phone if provided (saves to profiles table + auth metadata)
+      if (regUsername.trim() || regPhone.trim()) {
+        try {
+          await updateProfile({
+            username: regUsername.trim() || undefined,
+            phone: regPhone.trim() || undefined,
+          });
+        } catch (err) {
+          console.warn("[AuthLogin] profile update (username/phone) failed:", err);
+        }
       }
       setSuccess("Account created! Logging you in...");
       setTimeout(() => setSuccess(""), 3000);
@@ -400,6 +423,18 @@ export default function AuthLogin() {
                 <label className="text-xs font-medium text-gray-300 mb-1 block">Confirm Password *</label>
                 <input type={showPassword ? "text" : "password"} value={regConfirm} onChange={e => setRegConfirm(e.target.value)} placeholder="Repeat password" autoComplete="new-password"
                   className="w-full px-4 py-2.5 bg-white/5 border border-white/20 rounded-xl text-white text-sm placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 outline-none transition-all" />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs font-medium text-gray-300 mb-1 block">Username</label>
+                  <input type="text" value={regUsername} onChange={e => setRegUsername(e.target.value)} placeholder="unique ID" autoComplete="username"
+                    className="w-full px-4 py-2.5 bg-white/5 border border-white/20 rounded-xl text-white text-sm placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 outline-none transition-all" />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-300 mb-1 block">Phone</label>
+                  <input type="tel" value={regPhone} onChange={e => setRegPhone(e.target.value)} placeholder="+254..." autoComplete="tel"
+                    className="w-full px-4 py-2.5 bg-white/5 border border-white/20 rounded-xl text-white text-sm placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 outline-none transition-all" />
+                </div>
               </div>
 
               {/* Optional company fields */}
