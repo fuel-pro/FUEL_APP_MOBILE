@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import cloudStorageService from "@/react-app/lib/cloud-storage-service";
+import { useAuth } from "@/react-app/context/AuthContext";
 import {
   Settings,
   Smartphone,
@@ -24,10 +26,12 @@ interface MpesaConfig {
 }
 
 const STORAGE_KEY = "fuelpro_mpesa_config";
+const CLOUD_KEY = "mpesa_config";
 const TEST_PASSKEY =
   "bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f235600b5509d608392";
 
 export default function MPesaConfig() {
+  const { user } = useAuth();
   const [config, setConfig] = useState<MpesaConfig>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -57,6 +61,7 @@ export default function MPesaConfig() {
     setError("");
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+      cloudStorageService.set(CLOUD_KEY, config).catch(() => {});
       setTimeout(() => {
         setSaving(false);
         setSaved(true);
@@ -67,6 +72,15 @@ export default function MPesaConfig() {
       setError("Failed to save configuration");
     }
   };
+
+  // Load from cloud on mount (cross-device sync)
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      const cloud = await cloudStorageService.get<MpesaConfig>(CLOUD_KEY);
+      if (cloud) setConfig(cloud);
+    })();
+  }, [user]);
 
   const reset = () => {
     if (confirm("Reset to default production settings?")) {

@@ -143,15 +143,22 @@ export async function getDocuments(stationId?: string): Promise<UserDocument[]> 
 
 export async function getDocumentUrl(doc: UserDocument): Promise<string | null> {
   const supabase = getSupabaseClient();
-  const { data, error } = await supabase.storage
+  // The fuelpro-files bucket is public, so a public URL works for reads from
+  // any device without a signed token. This is simpler and avoids the
+  // "signature verification failed" edge case with short-lived signed URLs.
+  const { data } = supabase.storage
+    .from(doc.storage_bucket || BUCKET)
+    .getPublicUrl(doc.file_path);
+  if (data?.publicUrl) return data.publicUrl;
+  // Fallback to a signed URL if public URL is unavailable for some reason.
+  const { data: signed, error } = await supabase.storage
     .from(doc.storage_bucket || BUCKET)
     .createSignedUrl(doc.file_path, 3600);
-
   if (error) {
     console.warn("[docService] getDocumentUrl error:", error.message);
     return null;
   }
-  return data?.signedUrl || null;
+  return signed?.signedUrl || null;
 }
 
 export async function deleteDocument(docId: string): Promise<{ success: boolean; error?: string }> {

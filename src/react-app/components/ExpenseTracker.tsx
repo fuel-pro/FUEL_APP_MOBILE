@@ -1,4 +1,6 @@
 import { useState, useEffect } from "react";
+import cloudStorageService from "@/react-app/lib/cloud-storage-service";
+import { useAuth } from "@/react-app/context/AuthContext";
 import {
   Receipt,
   Plus,
@@ -42,6 +44,7 @@ interface Expense {
 }
 
 const STORAGE_KEY = "fuelpro_expenses_v2";
+const CLOUD_KEY = "expenses_data";
 
 const EXPENSE_CATEGORIES = [
   { value: "fuel_purchase", label: "Fuel Purchase", icon: Zap },
@@ -67,6 +70,7 @@ function loadExpenses(): Expense[] {
 }
 
 export default function ExpenseTracker() {
+  const { user } = useAuth();
   const [expenses, setExpenses] = useState<Expense[]>(loadExpenses);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -93,7 +97,17 @@ export default function ExpenseTracker() {
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(expenses));
+    cloudStorageService.set(CLOUD_KEY, expenses).catch(() => {});
   }, [expenses]);
+
+  // Load from cloud on mount (cross-device sync)
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      const cloud = await cloudStorageService.get<Expense[]>(CLOUD_KEY);
+      if (cloud && Array.isArray(cloud)) setExpenses(cloud);
+    })();
+  }, [user]);
 
   const showNotification = (
     message: string,

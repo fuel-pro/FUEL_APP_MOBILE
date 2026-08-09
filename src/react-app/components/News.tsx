@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "@/react-app/context/LocationContext";
+import { useAuth } from "@/react-app/context/AuthContext";
+import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 import {
   Newspaper,
   ExternalLink,
@@ -261,6 +263,7 @@ function getCuratedNews(countryCode: string): DisplayNewsItem[] {
 
 export default function News() {
   const { currentCountry } = useLocation();
+  const { user } = useAuth();
   const [news, setNews] = useState<DisplayNewsItem[]>([]);
   const [activeFilter, setActiveFilter] = useState<string>("all");
   const [loading, setLoading] = useState(true);
@@ -286,6 +289,17 @@ export default function News() {
     }
     setLastFetch(NewsService.getLastFetchTime());
   }, []);
+
+  // Load bookmarks from cloud on mount (cross-device sync)
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      const cloud = await cloudStorageService.get<string[]>("news_bookmarks");
+      if (cloud && Array.isArray(cloud) && cloud.length > 0) {
+        setBookmarks(new Set<string>(cloud));
+      }
+    })();
+  }, [user]);
 
   // Load news on mount
   useEffect(() => {
@@ -346,10 +360,13 @@ export default function News() {
       const next = new Set<string>(Array.from(prev));
       if (next.has(id)) next.delete(id);
       else next.add(id);
+      const arr = Array.from(next);
       localStorage.setItem(
         "fuelpro_news_bookmarks",
-        JSON.stringify(Array.from(next))
+        JSON.stringify(arr)
       );
+      // Cross-device sync
+      cloudStorageService.set("news_bookmarks", arr).catch(() => {});
       return next;
     });
     setNews(prev =>

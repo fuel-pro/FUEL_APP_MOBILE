@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import cloudStorageService from "@/react-app/lib/cloud-storage-service";
+import { useAuth } from "@/react-app/context/AuthContext";
 import {
   Key,
   Plus,
@@ -65,8 +67,10 @@ const AVAILABLE_SCOPES = [
 ];
 
 const STORAGE_KEY = "fuelpro_apikeys_v2";
+const CLOUD_KEY = "apikeys_data";
 
 export default function APIKeyManager() {
+  const { user } = useAuth();
   const [apiKeys, setApiKeys] = useState<APIKey[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -92,7 +96,17 @@ export default function APIKeyManager() {
   const save = (list: APIKey[]) => {
     setApiKeys(list);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+    cloudStorageService.set(CLOUD_KEY, list).catch(() => {});
   };
+
+  // Load from cloud on mount (cross-device sync)
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      const cloud = await cloudStorageService.get<APIKey[]>(CLOUD_KEY);
+      if (cloud && Array.isArray(cloud)) setApiKeys(cloud);
+    })();
+  }, [user]);
 
   const showNotification = (
     message: string,

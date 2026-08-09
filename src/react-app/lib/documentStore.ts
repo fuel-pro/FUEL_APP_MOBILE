@@ -1,8 +1,11 @@
-// IndexedDB-based document storage for FuelPro Document Center
-const DB_NAME = "FuelPro_Documents";
-const DB_VERSION = 1;
-const STORE_NAME = "documents";
-const METADATA_KEY = "fuelpro_doc_metadata";
+// Supabase Storage + user_documents-backed document storage for FuelPro
+// Document Center. Files are stored as binary objects in the fuelpro-files
+// Storage bucket and metadata in the user_documents table — both sync
+// cross-device (RLS by owner_id = auth.uid()). This replaces the previous
+// IndexedDB implementation which was browser-local and did NOT sync.
+import { getSupabaseClient } from "@/supabase/client";
+
+const BUCKET = "fuelpro-files";
 
 interface DocMetadata {
   id: string;
@@ -18,78 +21,112 @@ interface DocMetadata {
   thumbnail?: string;
 }
 
-let dbInstance: IDBDatabase | null = null;
+/** Row shape in the user_documents table. */
+interface DocRow {
+  id: string;
+  owner_id: string;
+  file_name: string;
+  file_path: string;
+  file_type: string;
+  file_size: number;
+  mime_type: string | null;
+  category: string | null;
+  description: string | null;
+  storage_bucket: string | null;
+  created_at: string;
+  updated_at: string;
+  tags: string[] | null;
+  folder_path: string | null;
+  thumbnail: string | null;
+}
 
-function openDB(): Promise<IDBDatabase> {
-  if (dbInstance) return Promise.resolve(dbInstance);
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, DB_VERSION);
-    req.onerror = () => reject(req.error);
-    req.onsuccess = () => {
-      dbInstance = req.result;
-      resolve(req.result);
-    };
-    req.onupgradeneeded = e => {
-      const db = (e.target as IDBOpenDBRequest).result;
-      if (!db.objectStoreNames.contains(STORE_NAME)) {
-        const store = db.createObjectStore(STORE_NAME, { keyPath: "id" });
-        store.createIndex("name", "name", { unique: false });
-        store.createIndex("category", "category", { unique: false });
-        store.createIndex("uploadedAt", "uploadedAt", { unique: false });
-        store.createIndex("folderPath", "folderPath", { unique: false });
-      }
-    };
-  });
+function rowToMeta(r: DocRow): DocMetadata {
+  return {
+    id: r.id,
+    name: r.file_name,
+    size: r.file_size || 0,
+    type: r.mime_type || r.file_type || "application/octet-stream",
+    category: r.category || "General",
+    tags: Array.isArray(r.tags) ? r.tags : [],
+    uploadedAt: r.created_at,
+    updatedAt: r.updated_at || r.created_at,
+    folderPath: r.folder_path || "",
+    thumbnail: r.thumbnail || undefined,
+  };
 }
 
 export async function saveDocument(
   file: File,
   opts?: { folderPath?: string; content?: string; thumbnail?: string }
 ): Promise<DocMetadata> {
-  const db = await openDB();
-  const id = `doc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-  const category = autoCategorize(file.name);
-  const meta: DocMetadata = {
-    id,
-    name: file.name,
-    size: file.size,
-    type: file.type,
-    category,
-    tags: getTags(file.name, category),
-    uploadedAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    folderPath: opts?.folderPath || "",
-    content: opts?.content,
-    thumbnail: opts?.thumbnail,
-  };
+  const supabase = getSupabaseClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Not authenticated — cannot upload document.");
 
-  const data = await file.arrayBuffer();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, "readwrite");
-    const store = tx.objectStore(STORE_NAME);
-    const fullDoc = { ...meta, data };
-    const req = store.add(fullDoc);
-    req.onsuccess = () => resolve(meta);
-    req.onerror = () => reject(req.error);
-  });
+  const category = autoCategorize(file.name);
+  const tags = getTags(file.name, category);
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const filePath = `documents/${user.id}/${Date.now()}-${safeName}`;
+
+  // 1. Upload the file binary to Storage.
+  const { error: upErr } = await supabase.storage
+    .from(BUCKET)
+    .upload(filePath, file, {
+      cacheControl: "3600",
+      upsert: false,
+      contentType: file.type || undefined,
+    });
+  if (upErr) throw new Error(`Storage upload failed: ${upErr.message}`);
+
+  // 2. Insert metadata into user_documents.
+  const { data, error: dbErr } = await supabase
+    .from("user_documents")
+    .insert({
+      owner_id: user.id,
+      file_name: file.name,
+      file_path: filePath,
+      file_type: file.type || "application/octet-stream",
+      file_size: file.size,
+      mime_type: file.type || null,
+      category,
+      storage_bucket: BUCKET,
+      tags,
+      folder_path: opts?.folderPath || "",
+      thumbnail: opts?.thumbnail || null,
+    })
+    .select()
+    .single();
+
+  if (dbErr) {
+    // Rollback the Storage upload so we don't leave orphaned files.
+    await supabase.storage.from(BUCKET).remove([filePath]).catch(() => {});
+    throw new Error(`Metadata insert failed: ${dbErr.message}`);
+  }
+
+  return rowToMeta(data as DocRow);
 }
 
 export async function getDocument(
   id: string
 ): Promise<{ meta: DocMetadata; data: ArrayBuffer } | null> {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, "readonly");
-    const store = tx.objectStore(STORE_NAME);
-    const req = store.get(id);
-    req.onsuccess = () => {
-      const r = req.result;
-      if (!r) return resolve(null);
-      const { data, ...meta } = r;
-      resolve({ meta, data });
-    };
-    req.onerror = () => reject(req.error);
-  });
+  const supabase = getSupabaseClient();
+  const { data: row, error } = await supabase
+    .from("user_documents")
+    .select("*")
+    .eq("id", id)
+    .single();
+  if (error || !row) return null;
+
+  const r = row as DocRow;
+  const meta = rowToMeta(r);
+  // Fetch the file binary from the Storage public URL.
+  const { data: pubUrlData } = supabase.storage
+    .from(BUCKET)
+    .getPublicUrl(r.file_path);
+  const res = await fetch(pubUrlData.publicUrl);
+  if (!res.ok) return { meta, data: new ArrayBuffer(0) };
+  const data = await res.arrayBuffer();
+  return { meta, data };
 }
 
 export async function listDocuments(opts?: {
@@ -97,67 +134,61 @@ export async function listDocuments(opts?: {
   search?: string;
   folderPath?: string;
 }): Promise<DocMetadata[]> {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, "readonly");
-    const store = tx.objectStore(STORE_NAME);
-    const req = store.openCursor();
-    const results: DocMetadata[] = [];
-    req.onsuccess = e => {
-      const cursor = (e.target as IDBRequest).result;
-      if (cursor) {
-        const { data, ...meta } = cursor.value;
-        let match = true;
-        if (opts?.category && meta.category !== opts.category) match = false;
-        if (
-          opts?.search &&
-          !meta.name.toLowerCase().includes(opts.search.toLowerCase())
-        )
-          match = false;
-        if (
-          opts?.folderPath !== undefined &&
-          meta.folderPath !== opts.folderPath
-        )
-          match = false;
-        if (match) results.push(meta);
-        cursor.continue();
-      } else {
-        results.sort(
-          (a, b) =>
-            new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()
-        );
-        resolve(results);
-      }
-    };
-    req.onerror = () => reject(req.error);
-  });
+  const supabase = getSupabaseClient();
+  let query = supabase
+    .from("user_documents")
+    .select("*")
+    .order("created_at", { ascending: false });
+  if (opts?.category && opts.category !== "All") {
+    query = query.eq("category", opts.category);
+  }
+  if (opts?.search) {
+    query = query.ilike("file_name", `%${opts.search}%`);
+  }
+  if (opts?.folderPath !== undefined) {
+    query = query.eq("folder_path", opts.folderPath);
+  }
+  const { data, error } = await query;
+  if (error || !data) return [];
+  return (data as DocRow[]).map(rowToMeta);
 }
 
 export async function deleteDocument(id: string): Promise<void> {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, "readwrite");
-    const store = tx.objectStore(STORE_NAME);
-    const req = store.delete(id);
-    req.onsuccess = () => resolve();
-    req.onerror = () => reject(req.error);
-  });
+  const supabase = getSupabaseClient();
+  // 1. Fetch the row to get the file_path (for Storage cleanup).
+  const { data: row } = await supabase
+    .from("user_documents")
+    .select("file_path")
+    .eq("id", id)
+    .single();
+  // 2. Delete the metadata row.
+  const { error } = await supabase.from("user_documents").delete().eq("id", id);
+  if (error) throw new Error(`Delete failed: ${error.message}`);
+  // 3. Delete the file from Storage (best-effort).
+  if (row?.file_path) {
+    await supabase.storage.from(BUCKET).remove([row.file_path]).catch(() => {});
+  }
 }
 
 export async function countDocuments(): Promise<number> {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, "readonly");
-    const store = tx.objectStore(STORE_NAME);
-    const req = store.count();
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
+  const supabase = getSupabaseClient();
+  const { count, error } = await supabase
+    .from("user_documents")
+    .select("*", { count: "exact", head: true });
+  if (error) return 0;
+  return count || 0;
 }
 
 export async function getTotalStorageUsed(): Promise<number> {
-  const docs = await listDocuments();
-  return docs.reduce((sum, d) => sum + (d.size || 0), 0);
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from("user_documents")
+    .select("file_size");
+  if (error || !data) return 0;
+  return (data as { file_size: number }[]).reduce(
+    (sum, d) => sum + (d.file_size || 0),
+    0
+  );
 }
 
 // Auto-categorization engine

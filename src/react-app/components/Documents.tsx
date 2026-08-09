@@ -25,6 +25,7 @@ import {
 import { useAuth } from "@/react-app/context/AuthContext";
 import { useFuel } from "../context/FuelContext";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
+import { getSupabaseClient } from "@/supabase/client";
 
 interface DocumentFolder {
   id: number;
@@ -46,8 +47,15 @@ interface Document {
   ai_category: string | null;
   ai_description: string | null;
   created_at: string;
-  /** Stored file content as a data URL (base64). Used for preview/download
-   *  since there is no backend serving R2 objects on the static deployment. */
+  /** Public URL of the file in Supabase Storage (fuelpro-files bucket).
+   *  Files are stored as binary objects in Storage — NOT as base64 in the
+   *  app_kv JSON blob — so they sync cross-device without bloating localStorage
+   *  or hitting JSON size limits. */
+  public_url?: string;
+  /** Storage path within the fuelpro-files bucket: documents/<uid>/<file>. */
+  file_path?: string;
+  /** Stored file content as a data URL (base64). LEGACY only — documents
+   *  saved before the Storage migration. New uploads use public_url. */
   file_data?: string;
 }
 
@@ -96,20 +104,46 @@ const persistDocuments = async (docs: Document[]): Promise<void> => {
   }
 };
 
-/** Read a File/Blob into a base64 data URL so it can be stored as JSON. */
-const readFileAsDataURL = (file: Blob): Promise<string> =>
-  new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = () => reject(reader.error || new Error("Failed to read file"));
-    reader.readAsDataURL(file);
-  });
+/** Upload a file's BINARY content to Supabase Storage (fuelpro-files bucket)
+ *  and return its public URL + storage path. Files are stored as binary
+ *  objects — NOT base64 in JSON — so they sync cross-device without bloating
+ *  the app_kv blob or hitting localStorage/JSON size limits. */
+const uploadFileToStorage = async (
+  file: File
+): Promise<{ publicUrl: string; filePath: string } | null> => {
+  const supabase = getSupabaseClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
 
-/** Build a Document record from a data URL + file metadata. */
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const filePath = `documents/${user.id}/${Date.now()}-${safeName}`;
+
+  const { error } = await supabase.storage
+    .from("fuelpro-files")
+    .upload(filePath, file, {
+      cacheControl: "3600",
+      upsert: false,
+      contentType: file.type || undefined,
+    });
+
+  if (error) {
+    console.error("[Documents] Storage upload error:", error.message);
+    return null;
+  }
+
+  const { data } = supabase.storage
+    .from("fuelpro-files")
+    .getPublicUrl(filePath);
+
+  return { publicUrl: data.publicUrl, filePath };
+};
+
+/** Build a Document record from a public URL + file metadata. */
 const buildDocument = (
   docs: Document[],
   file: { name: string; type: string; size: number },
-  dataUrl: string
+  publicUrl: string,
+  filePath: string
 ): Document => {
   const id = nextDocId(docs);
   const folderId = categorizeByName(file.name);
@@ -125,24 +159,32 @@ const buildDocument = (
     ai_category: folder?.name || null,
     ai_description: null,
     created_at: new Date().toISOString(),
-    file_data: dataUrl,
+    public_url: publicUrl,
+    file_path: filePath,
   };
 };
 
 /**
  * Resolve a document's stored content to an object URL for preview/download.
- * Falls back to fetching via `r2_key` only when no inline `file_data` exists
- * (legacy documents saved before the static-deployment migration).
+ * New documents use the Supabase Storage public_url (binary file). Legacy
+ * documents (saved before the Storage migration) fall back to inline file_data
+ * (base64 data URL).
  */
 const docToObjectUrl = async (doc: Document): Promise<string> => {
+  if (doc.public_url) {
+    // Fetch the binary from Storage and create a revocable object URL so
+    // the preview/download flow is consistent with the legacy path.
+    const res = await fetch(doc.public_url);
+    if (!res.ok) throw new Error(`Failed to fetch file (HTTP ${res.status})`);
+    const blob = await res.blob();
+    return window.URL.createObjectURL(blob);
+  }
   if (doc.file_data) {
-    // data URLs can be used directly as href/src, but converting to a Blob
-    // gives a revocable object URL consistent with the previous flow.
     const res = await fetch(doc.file_data);
     const blob = await res.blob();
     return window.URL.createObjectURL(blob);
   }
-  // Legacy fallback: no inline data and no backend to serve it.
+  // Legacy fallback: no inline data and no Storage URL.
   throw new Error("Document content is unavailable (no stored file data).");
 };
 
@@ -575,13 +617,19 @@ export default function Documents() {
             doc.type
           );
           const blob = new Blob([htmlContent], { type: "text/html" });
+          const fileObj = new File([blob], doc.name, { type: "text/html" });
 
           try {
-            const dataUrl = await readFileAsDataURL(blob);
+            // Upload the generated HTML to Storage (consistent with manual uploads).
+            const uploaded = await uploadFileToStorage(fileObj);
+            if (!uploaded) {
+              throw new Error("Storage upload failed");
+            }
             const newDoc = buildDocument(
               currentDocs,
               { name: doc.name, type: "text/html", size: blob.size },
-              dataUrl
+              uploaded.publicUrl,
+              uploaded.filePath
             );
             currentDocs = [newDoc, ...currentDocs];
             modified = true;
@@ -625,11 +673,16 @@ export default function Documents() {
       const file = files[i];
 
       try {
-        const dataUrl = await readFileAsDataURL(file);
+        // Upload the file BINARY to Supabase Storage — NOT base64 in JSON.
+        const uploaded = await uploadFileToStorage(file);
+        if (!uploaded) {
+          throw new Error("Storage upload failed");
+        }
         const newDoc = buildDocument(
           currentDocs,
           { name: file.name, type: file.type, size: file.size },
-          dataUrl
+          uploaded.publicUrl,
+          uploaded.filePath
         );
         currentDocs = [newDoc, ...currentDocs];
         uploadedIds.push(newDoc.id);
@@ -638,7 +691,7 @@ export default function Documents() {
       } catch (err) {
         console.error(`[Documents] failed to upload ${file.name}:`, err);
         setError(`Error uploading ${file.name}`);
-        alert(`Failed to upload "${file.name}". Please try again.`);
+        alert(`Failed to upload "${file.name}": ${err instanceof Error ? err.message : "unknown error"}. Please try again.`);
       }
     }
 
@@ -751,16 +804,14 @@ export default function Documents() {
 
   const handleShare = async (doc: Document) => {
     try {
-      // With no backend, there is no public download URL to share. Share the
-      // inline data URL directly (works for navigator.share files and
-      // clipboard), or fall back to a descriptive message.
-      if (doc.file_data && navigator.share) {
-        // navigator.share supports File objects via shareData.files when
-        // available; otherwise share the data URL as text.
+      // Prefer the Storage public URL for sharing (works cross-device).
+      const shareUrl = doc.public_url || doc.file_data;
+      if (shareUrl && navigator.share) {
+        // For image/file types, try sharing as a File object when supported.
         const canShareFiles =
           navigator.canShare && typeof navigator.canShare === "function";
-        if (canShareFiles) {
-          const res = await fetch(doc.file_data);
+        if (canShareFiles && doc.public_url) {
+          const res = await fetch(doc.public_url);
           const blob = await res.blob();
           const file = new File([blob], doc.original_name, { type: blob.type });
           if (navigator.canShare({ files: [file] })) {
@@ -775,8 +826,13 @@ export default function Documents() {
         await navigator.share({
           title: doc.original_name,
           text: `Check out this document: ${doc.original_name}`,
-          url: doc.file_data,
+          url: shareUrl,
         });
+      } else if (shareUrl) {
+        await navigator.clipboard.writeText(shareUrl);
+        import("@/react-app/lib/toast").then(({ toastSuccess }) =>
+          toastSuccess("Document link copied to clipboard!")
+        );
       } else {
         const message = `Document: ${doc.original_name}`;
         await navigator.clipboard.writeText(message);
@@ -793,6 +849,15 @@ export default function Documents() {
     if (!confirm(`Delete "${doc.original_name}"?`)) return;
 
     try {
+      // Delete the binary from Supabase Storage (if it exists there).
+      if (doc.file_path) {
+        try {
+          const supabase = getSupabaseClient();
+          await supabase.storage.from("fuelpro-files").remove([doc.file_path]);
+        } catch (storageErr) {
+          console.warn("[Documents] storage delete failed (non-fatal):", storageErr);
+        }
+      }
       const current = (await cloudStorageService.get<Document[]>(DOCUMENTS_KEY)) || [];
       const updated = current.filter(d => d.id !== doc.id);
       await persistDocuments(updated);

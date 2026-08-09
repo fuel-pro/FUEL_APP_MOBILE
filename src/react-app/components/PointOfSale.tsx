@@ -18,10 +18,12 @@ import {
 } from "lucide-react";
 import { useFuel } from "@/react-app/context/FuelContext";
 import { useLocation } from "@/react-app/context/LocationContext";
+import { useAuth } from "@/react-app/context/AuthContext";
 import { formatNumber } from "@/react-app/utils/formatUtils";
 import QRCode from "qrcode";
 import { useLoyalty } from "@/react-app/lib/useLoyalty";
 import { LoyaltyCustomer, TIER_COLORS } from "@/react-app/lib/loyaltyProgram";
+import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 
 interface CartItem {
   id: string;
@@ -61,6 +63,7 @@ interface POSTransaction {
 export default function PointOfSale() {
   const { state, dispatch } = useFuel();
   const location = useLocation();
+  const { user } = useAuth();
   const [cart, setCart] = useState<CartItem[]>([]);
   const [paymentMethod, setPaymentMethod] = useState<
     "cash" | "mpesa" | "card" | "bank"
@@ -123,6 +126,15 @@ export default function PointOfSale() {
       setLoyaltyCustomer(null);
     }
   }, [customerPhone]);
+
+  // Load POS transactions from cloud on mount (cross-device sync)
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      const cloud = await cloudStorageService.get<POSTransaction[]>("pos_transactions");
+      if (cloud && Array.isArray(cloud)) setTransactions(cloud);
+    })();
+  }, [user]);
 
   // Award points after successful transaction
   const awardLoyaltyPoints = (transaction: POSTransaction) => {
@@ -407,10 +419,13 @@ export default function PointOfSale() {
         ...transaction,
         savedAt: new Date().toISOString(),
       });
+      const trimmed = localTransactions.slice(-100);
       localStorage.setItem(
         "fuelpro_pos_transactions",
-        JSON.stringify(localTransactions.slice(-100))
+        JSON.stringify(trimmed)
       );
+      // Cross-device sync
+      cloudStorageService.set("pos_transactions", trimmed).catch(() => {});
     } catch (error) {
       console.error("Failed to save POS transaction locally:", error);
     }

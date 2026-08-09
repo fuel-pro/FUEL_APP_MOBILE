@@ -1,4 +1,6 @@
 import { useState, useEffect } from "react";
+import cloudStorageService from "@/react-app/lib/cloud-storage-service";
+import { useAuth } from "@/react-app/context/AuthContext";
 import {
   Monitor,
   Plus,
@@ -47,6 +49,8 @@ interface PriceHistory {
 
 const STORAGE_KEY = "fuelpro_priceboard_v2";
 const HISTORY_KEY = "fuelpro_price_history_v2";
+const CLOUD_KEY = "priceboard_data";
+const CLOUD_HISTORY_KEY = "price_history_data";
 
 const FUEL_GRADES: Record<string, string[]> = {
   Petrol: ["Regular", "Premium", "V-Power"],
@@ -78,6 +82,7 @@ function loadHistory(): PriceHistory[] {
 export default function PriceBoard() {
   const location = useLocation();
   const { fuelPrice, isSyncing, syncNow, refreshPrices, arePricesStale } = useAutoSync(location.currentCountry.id);
+  const { user } = useAuth();
   const [prices, setPrices] = useState<PriceEntry[]>(loadPrices);
   const [history, setHistory] = useState<PriceHistory[]>(loadHistory);
   const [showForm, setShowForm] = useState(false);
@@ -201,10 +206,23 @@ export default function PriceBoard() {
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(prices));
+    cloudStorageService.set(CLOUD_KEY, prices).catch(() => {});
   }, [prices]);
   useEffect(() => {
     localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+    cloudStorageService.set(CLOUD_HISTORY_KEY, history).catch(() => {});
   }, [history]);
+
+  // Load from cloud on mount (cross-device sync)
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      const cloudPrices = await cloudStorageService.get<PriceEntry[]>(CLOUD_KEY);
+      if (cloudPrices && Array.isArray(cloudPrices)) setPrices(cloudPrices);
+      const cloudHistory = await cloudStorageService.get<PriceHistory[]>(CLOUD_HISTORY_KEY);
+      if (cloudHistory && Array.isArray(cloudHistory)) setHistory(cloudHistory);
+    })();
+  }, [user]);
 
   const showNotification = (
     message: string,

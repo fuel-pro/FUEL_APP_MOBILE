@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import cloudStorageService from "@/react-app/lib/cloud-storage-service";
+import { useAuth } from "@/react-app/context/AuthContext";
 import {
   Webhook,
   Plus,
@@ -67,8 +69,10 @@ const AVAILABLE_EVENTS = [
 ];
 
 const STORAGE_KEY = "fuelpro_webhooks_v2";
+const CLOUD_KEY = "webhooks_data";
 
 export default function WebhookManager() {
+  const { user } = useAuth();
   const [webhooks, setWebhooks] = useState<WebhookEndpoint[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -97,7 +101,17 @@ export default function WebhookManager() {
   const save = (list: WebhookEndpoint[]) => {
     setWebhooks(list);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+    cloudStorageService.set(CLOUD_KEY, list).catch(() => {});
   };
+
+  // Load from cloud on mount (cross-device sync)
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      const cloud = await cloudStorageService.get<WebhookEndpoint[]>(CLOUD_KEY);
+      if (cloud && Array.isArray(cloud)) setWebhooks(cloud);
+    })();
+  }, [user]);
 
   const showNotification = (
     message: string,

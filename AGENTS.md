@@ -30,10 +30,34 @@ React + Vite + TypeScript SPA for fuel station management. Deployed at
   `credit_transactions`), CustomerLoyalty (`loyalty_customers`),
   FuelTypesManager (`fuel_types_config`), MaintenanceTracker
   (`maintenance_records`), SupplierManagement (`suppliers_data`,
-  `purchase_orders`). Pattern: import service + `useAuth`, `const { user } =
-  useAuth()`, append `cloudStorageService.set(key, data).catch(()=>{})` to the
-  existing save fn, and add a `useEffect([user])` that `get`s the typed array
-  and `setState`s it when `Array.isArray`.
+  `purchase_orders`), ExpenseTracker (`expenses_data`), PriceBoard
+  (`priceboard_data`, `price_history_data`), APIKeyManager (`apikeys_data`),
+  MPesaConfig (`mpesa_config` — object, uses `if (cloud)` not Array.isArray),
+  SMSGatewayConfig (`sms_config` — object), WebhookManager (`webhooks_data`),
+  PointOfSale (`pos_transactions`), News (`news_bookmarks`).
+  Pattern: import service + `useAuth`, `const { user } = useAuth()`, append
+  `cloudStorageService.set(key, data).catch(()=>{})` to the existing save fn
+  (keep `localStorage.setItem` as cache), and add a `useEffect([user])` that
+  `get`s the typed array/object and `setState`s it — for arrays guard with
+  `Array.isArray`, for objects use `if (cloud)`. For components whose save is a
+  `useEffect` (e.g. ExpenseTracker/PriceBoard) put the `cloudStorageService.set`
+  inside that same effect. MIGRATED 2026-08-09: the 8 above (ExpenseTracker,
+  PriceBoard, APIKeyManager, MPesaConfig, SMSGatewayConfig, WebhookManager,
+  PointOfSale, News); `npx tsc --noEmit` clean (0 errors).
+- **Document Center — Supabase Storage migration (FIXED 2026-08-09)**: The
+  Document Center tab (`DocumentCenter.tsx`) used `documentStore.ts` which
+  stored files in **IndexedDB** (browser-local, NO cross-device sync — files
+  uploaded on one device were invisible on another). Rewrote `documentStore.ts`
+  to use Supabase Storage (`fuelpro-files` bucket, path
+  `documents/<uid>/<ts>-<name>`) + `user_documents` table (RLS by owner_id).
+  Same export API (saveDocument, getDocument, listDocuments, deleteDocument,
+  countDocuments, getTotalStorageUsed, CATEGORIES, DocMetadata) so
+  DocumentCenter.tsx needed NO changes. Migration 010 added `tags` (JSONB),
+  `folder_path` (TEXT), `thumbnail` (TEXT) columns to `user_documents` for the
+  extra metadata. E2E verified: upload → metadata insert → list → fetch via
+  public URL (HTTP 200) → delete, all with a user token. `Documents.tsx` (the
+  legacy Documents tab, NOT rendered but kept for reference) was also migrated
+  from base64-in-JSON to Storage uploads via `uploadFileToStorage()`.
 - **Schema Visualizer** (`src/react-app/pages/founder-sections/
   SchemaVisualizerSection.tsx`): uses an EMBEDDED authoritative schema map
   (SCHEMA constant — 13 live tables with all columns, types, PK/FK annotations,

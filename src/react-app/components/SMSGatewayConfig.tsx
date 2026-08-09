@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import cloudStorageService from "@/react-app/lib/cloud-storage-service";
+import { useAuth } from "@/react-app/context/AuthContext";
 import {
   MessageSquare,
   Key,
@@ -23,8 +25,10 @@ interface SMSConfig {
 }
 
 const STORAGE_KEY = "fuelpro_sms_config";
+const CLOUD_KEY = "sms_config";
 
 export default function SMSGatewayConfig() {
+  const { user } = useAuth();
   const [config, setConfig] = useState<SMSConfig>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -55,6 +59,7 @@ export default function SMSGatewayConfig() {
     setError("");
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+      cloudStorageService.set(CLOUD_KEY, config).catch(() => {});
       setTimeout(() => {
         setSaving(false);
         setSaved(true);
@@ -65,6 +70,15 @@ export default function SMSGatewayConfig() {
       setError("Failed to save configuration");
     }
   };
+
+  // Load from cloud on mount (cross-device sync)
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      const cloud = await cloudStorageService.get<SMSConfig>(CLOUD_KEY);
+      if (cloud) setConfig(cloud);
+    })();
+  }, [user]);
 
   const reset = () => {
     if (confirm("Reset SMS configuration to defaults?")) {
