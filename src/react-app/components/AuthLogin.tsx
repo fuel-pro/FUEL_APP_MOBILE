@@ -1,6 +1,6 @@
 import { useAuth } from "@/react-app/context/AuthContext";
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useNavigate } from "react-router";
+import { useNavigate, useLocation } from "react-router";
 import {
   ShieldCheck,
   Lock,
@@ -50,6 +50,7 @@ function savePersistedFormData(email: string, _password: string) {
 
 export default function AuthLogin() {
   const navigate = useNavigate();
+  const location = useLocation();
   const {
     loginWithEmail,
     registerWithEmail,
@@ -63,7 +64,11 @@ export default function AuthLogin() {
   // Load persisted form data to prevent state loss on remount
   const persistedData = useRef(loadPersistedFormData());
 
-  const [mode, setMode] = useState<LoginMode>("email");
+  // Default to register mode when the user lands on /sign-up (new users);
+  // otherwise default to email sign-in (returning users).
+  const [mode, setMode] = useState<LoginMode>(
+    location.pathname === "/sign-up" ? "register" : "email"
+  );
   const [email, setEmail] = useState(persistedData.current.email);
   const [password, setPassword] = useState(persistedData.current.password);
   const [username, setUsername] = useState("");
@@ -428,11 +433,11 @@ export default function AuthLogin() {
           <div className="mt-5 text-center text-xs text-gray-400">
             {mode === "register" ? (
               <>Already have an account?{" "}
-                <button type="button" onClick={() => setMode("email")} className="text-indigo-400 hover:text-indigo-300 font-semibold transition-colors">Sign In</button>
+                <button type="button" onClick={() => { setMode("email"); navigate("/sign-in", { replace: true }); }} className="text-indigo-400 hover:text-indigo-300 font-semibold transition-colors">Sign In</button>
               </>
             ) : (
               <>Don't have an account?{" "}
-                <button type="button" onClick={() => setMode("register")} className="text-indigo-400 hover:text-indigo-300 font-semibold transition-colors">Create one</button>
+                <button type="button" onClick={() => { setMode("register"); navigate("/sign-up", { replace: true }); }} className="text-indigo-400 hover:text-indigo-300 font-semibold transition-colors">Create one</button>
               </>
             )}
           </div>

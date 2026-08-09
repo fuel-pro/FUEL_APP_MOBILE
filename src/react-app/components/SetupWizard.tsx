@@ -16,6 +16,7 @@ import {
   Minus,
   Loader2,
   RefreshCw,
+  Link2,
 } from "lucide-react";
 import { useFuel } from "../context/FuelContext";
 import { useStations } from "../context/StationContext";
@@ -59,9 +60,11 @@ const STEPS = [
 
 interface SetupWizardProps {
   onComplete: () => void;
+  /** When provided, shows a link to access a shared station instead of creating one. */
+  onAccessShared?: () => void;
 }
 
-export default function SetupWizard({ onComplete }: SetupWizardProps) {
+export default function SetupWizard({ onComplete, onAccessShared }: SetupWizardProps) {
   const { state, dispatch } = useFuel();
   const { createStation, switchStation } = useStations();
   const [currentStep, setCurrentStep] = useState(1);
@@ -387,6 +390,14 @@ export default function SetupWizard({ onComplete }: SetupWizardProps) {
           <p className="text-blue-200">
             Let's set up your fuel station in a few easy steps
           </p>
+          {onAccessShared && (
+            <button
+              onClick={onAccessShared}
+              className="mt-3 inline-flex items-center gap-1.5 text-xs text-blue-300 hover:text-blue-200 underline-offset-2 hover:underline transition-colors"
+            >
+              <Link2 size={13} /> Access a shared station instead
+            </button>
+          )}
         </div>
 
         {/* Progress Steps */}

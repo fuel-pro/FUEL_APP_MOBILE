@@ -445,9 +445,14 @@ function HomeContent() {
     );
   }
 
-  // No stations: show FirstLoginChoice
+  // No stations: route based on whether the user has shared-station bindings.
+  //  - New user (no bindings): go straight to the SetupWizard — the station
+  //    setup is part of the "account sign up" flow, not a separate choice.
+  //  - Invited team member (has active bindings): show FirstLoginChoice so they
+  //    can access the shared station they were invited to.
+  const hasActiveBindings = bindings.some(b => b.active);
   if (stations.length === 0 || !currentStation) {
-    if (showSetupWizard) {
+    if (showSetupWizard || !hasActiveBindings) {
       return (
         <SetupWizard
           onComplete={() => {
@@ -457,6 +462,9 @@ function HomeContent() {
             // Force a complete page reload to reset all React state
             window.location.reload();
           }}
+          onAccessShared={
+            hasActiveBindings ? () => setShowSetupWizard(false) : undefined
+          }
         />
       );
     }
