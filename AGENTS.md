@@ -353,3 +353,49 @@ fallback preserves its existing data). Verified in bundle: the
 
 ## Cross-device file storage + station sharing (ADDED 2026-08-09)
 `src/react-app/lib/document-service.ts` uploads to Supabase Storage (`fuelpro-files`, path `documents/<uid>/<timestamp>-<name>`), metadata in `user_documents`. `src/react-app/lib/station-share-service.ts` is DB-backed sharing via `station_members` (invite link = `/?invite=<token>`). `src/react-app/components/UserProfileSettings.tsx` is the full UI (profile, email, password, sharing, files), embedded in SettingsPanel as a "User Profile" tab.
+
+## Cross-user overwrite fix — VERIFIED LIVE 2026-08-09 (deploy b2b98cd2)
+PR #94 (commit bb4f69e) deployed to Cloudflare Pages
+(https://fuel-app-mobile.pages.dev + preview
+https://b2b98cd2.fuel-app-mobile.pages.dev). Vercel production deploy
+BLOCKED by `api-deployments-free-per-day` (100/day exhausted, resets ~24h);
+read-only deployment GETs still work. The fix is LIVE on Cloudflare; Vercel
+will pick up the merged main on next deploy window (or via Git integration
+which uses a separate quota — last Vercel prod deploy was from commit
+"Update package-lock.json", NOT the latest main).
+**End-to-end verification (fresh-device login on b2b98cd2 preview)**:
+- Logged in as QA user 98ecc424 (qa.crossdevice.0809b@gmail.com) on a
+  FRESH deployment URL (no localStorage, no service worker cache).
+- App loaded station + FuelContext data from cloud → station
+  "Publican Energy Test Station", companyData "CrossDevice Fuel Station Ltd",
+  invoiceSettings.quantityLabel "Litres" all present.
+- DB check: the compact blob migrated to the scoped id
+  `user_98ecc424..._compact__98ecc424...` (updated 19:11:24 — the fresh-login
+  save wrote to the scoped id, NOT the legacy bare-key). Legacy bare-key row
+  still present (19:08:26) — the `get` fallback found it, then the next `set`
+  repersisted under the scoped id. Per-component keys (expenses_data,
+  priceboard_data, suppliers_data, etc.) remain under bare-key ids with
+  owner_id=98ecc424 (not yet re-saved on fresh login; they migrate to scoped
+  ids on the next edit via the same fallback+resave path).
+- Per-component data INTACT in app_kv: expenses_data=[EXP-2026-001 KES 12500
+  rent], priceboard_data=[Petrol Regular KES 180],
+  suppliers_data=[Total Kenya Marketing]. suppliers TABLE has 2 rows.
+  products TABLE has Castrol GTX 5W-30 (set is_active=true via DB so it
+  appears in POS dropdowns — pos-service fetchProducts filters is_active).
+- Founder panel (logged in as founder user 6220a16c,
+  fueltest_1786274010@testmail.com) renders: Overview shows All Users=1,
+  All Stations=3, Secrets=3, Audit Log=1000, Feature Flags=10. Founder auth
+  uses signInWithPassword + role check (users.role=founder/admin).
+- **NOTE**: QA user 98ecc424 is NOT in the `users` table (only `profiles`),
+  so it CANNOT access the founder panel. The `users` table has only 3 rows
+  (2 founders + 1 user). The founder "All Users=1" count reflects this.
+  stations TABLE is empty for 98ecc424 (station is in the StationContext
+  app_kv blob only, not pushed to the stations table — see the
+  `stations.code` NOT NULL fix; this user's station predates the code
+  backfill or was never pushed).
+
+## Founder test credentials (2026-08-09)
+- Founder user: fueltest_1786274010@testmail.com (uid 6220a16c, role=founder).
+  Password reset to `FounderTest2026!` via admin API (email_confirm=true).
+- QA user: qa.crossdevice.0809b@gmail.com (uid 98ecc424, profiles.username=
+  qacrossdevice). Password reset to `QATest2026!CrossDev`. NOT a founder.
