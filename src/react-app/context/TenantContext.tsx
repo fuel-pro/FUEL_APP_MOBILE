@@ -33,7 +33,7 @@ export interface Company {
 export interface CompanySettings {
   enableMultiStation: boolean;
   enableKRAIntegration: boolean;
-  enableMPesa: boolean;
+  enableMPesa?: boolean;
   enableCloudSync: boolean;
   enableAutoReports: boolean;
   enableAI: boolean;
@@ -131,7 +131,18 @@ const CURRENT_STATION_KEY = "fuelpro_current_tenant_station_v1";
 function loadCompany(): Company | null {
   try {
     const raw = localStorage.getItem(COMPANY_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      // Migrate: remove stale enableMPesa:false defaults so country-based
+      // auto-enable (?? isKenya) takes effect. Only keep explicit opt-in (true).
+      if (
+        parsed?.settings &&
+        parsed.settings.enableMPesa === false
+      ) {
+        delete parsed.settings.enableMPesa;
+      }
+      return parsed;
+    }
   } catch {}
   return null;
 }
@@ -148,7 +159,6 @@ function defaultSettings(): CompanySettings {
   return {
     enableMultiStation: true,
     enableKRAIntegration: false,
-    enableMPesa: false,
     enableCloudSync: false,
     enableAutoReports: true,
     enableAI: true,

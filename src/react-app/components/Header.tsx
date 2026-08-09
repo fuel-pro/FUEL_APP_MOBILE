@@ -73,10 +73,12 @@ export default function Header({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // CRITICAL: Sync logoPreview with state after loading from storage
-  // This fixes logo disappearing after refresh
+  // CRITICAL: Sync logoPreview with state after loading from storage.
+  // Always track the authoritative state.companyData.logo (no !logoPreview
+  // guard) so a cloud-loaded logo wins over a stale local blob URL preview
+  // after refresh. This fixes the "logo shows then disappears on refresh" race.
   useEffect(() => {
-    if (state.companyData.logo && !logoPreview) {
+    if (state.companyData.logo) {
       setLogoPreview(state.companyData.logo);
       setEditData(prev => ({ ...prev, logo: state.companyData.logo }));
     }

@@ -898,8 +898,17 @@ function fuelReducer(state: FuelState, action: FuelAction): FuelState {
       return { ...state, chatHistory: action.payload };
     case "SET_DATA_BACKUPS":
       return { ...state, dataBackups: action.payload };
-    case "LOAD_FROM_STORAGE":
-      return { ...state, ...action.payload };
+    case "LOAD_FROM_STORAGE": {
+      // Deep-merge companyData so a logo-less/stale payload cannot clobber a
+      // logo-bearing in-memory state (fixes logo disappearing after refresh
+      // when localStorage wins the race over cloud with stale data).
+      const incoming = action.payload;
+      return {
+        ...state,
+        ...incoming,
+        companyData: { ...state.companyData, ...(incoming.companyData || {}) },
+      };
+    }
     // Station management
     case "ADD_STATION":
       return {
