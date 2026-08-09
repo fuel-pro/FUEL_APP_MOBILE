@@ -137,6 +137,28 @@ React + Vite + TypeScript SPA for fuel station management. Deployed at
   The git-source deploy clones the full repo from GitHub (with package.json),
   runs the normal Vite build, and works. Deployment dpl_J4tCP1qdQDBjRgp24PA4d9jiwcR5,
   READY, aliased to fuel-app-mobile.vercel.app.
+- **2026-08-09 logo fix (commit 87425b1, DEPLOYED LIVE)**: station logo
+  disappeared on refresh/new session because it was stored as a base64 blob in
+  localStorage (quota-limited, per-browser). Now uploads to the `fuelpro-files`
+  Supabase Storage bucket (path `logos/<uid>/<ts>.<ext>`) and stores the PUBLIC
+  URL in `companyData.logo` — a real cross-device file. `FuelContext` mount
+  effect now ALWAYS consults cloud (app_kv) as source of truth on mount/user
+  change; localStorage is only a read-through cache. Migration 007 added RLS
+  policies for `fuelpro-files` bucket (the bucket had RLS enabled with ZERO
+  policies → all uploads were blocked). Deployed as dpl_GnnDeKBsKW (READY,
+  aliased to fuel-app-mobile.vercel.app).
+- **2026-08-09 wizard data-loss fix (commit 29abe6b, DEPLOYED LIVE)**: setup
+  wizard data (tanks, pumps, prices, KRA, companyData) was lost on reload
+  because `Home.tsx` called `window.location.reload()` inside `onComplete`
+  BEFORE the debounced (300ms) `saveToStorage`/`saveToCloud` could flush. The
+  reload aborted the pending timers. Fix: removed the reload call — the
+  completion flag now persists via `fuelpro_setup_complete` and React state
+  transitions the UI; the debounce is allowed to complete. Verified in bundle:
+  `fuelpro_setup_complete` present, the wizard `onComplete` reload removed.
+  Deployed as dpl_AqKBHnEtrdJFPSPja8ct5hp9aU96 (READY, PROMOTED, aliased to
+  fuel-app-mobile.vercel.app). Production chunk: index-CMtbBBDc.js.
+  **All functional fixes are now LIVE on fuel-app-mobile.vercel.app and the
+  Cloudflare Pages mirror (fuel-app-mobile.pages.dev).**
 
 ## FuelContext save/load race (FIXED 2026-08-09, commit b3d489e4)
 The load-from-storage `useEffect` had `saveToStorage` in its deps. Because
