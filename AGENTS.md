@@ -123,19 +123,21 @@ React + Vite + TypeScript SPA for fuel station management. Deployed at
 - Vercel `api-deployments-free-per-day` limit (100/day) can be exhausted. Resets ~24h.
   Read-only GET deployments use a separate 1000/min bucket and still work when the
   deploy bucket is exhausted.
-- **2026-08-09 state (commit 779a0fe, PENDING DEPLOY)**: bundled TWO cross-device
-  sync fixes into ONE commit (to save deploy-limit budget): (1) FuelContext #185
-  re-render-loop crash for returning users (loadFromStorage/saveToStorage/
-  loadFromCloud/saveToCloud wrapped in useCallback with stable deps); (2)
-  StationContext `stations.code` NOT NULL fix (see Gotchas above). Pushed to
-  origin/main. Production still serves 474bde9 (old code) because the
-  `api-deployments-free-per-day` limit is EXHAUSTED (0/100, resets
-  ~2026-08-10 07:45 UTC). An autodeploy watcher (`/tmp/fuelpro_combined_deploy.sh`,
-  PID 14814) polls every 5 min and fires ONE prebuilt deploy (files already
+- **2026-08-09 state (commit d4bf3bc, PENDING CODE DEPLOY; SCHEMA LIVE)**:
+  bundled ALL remaining cross-device sync fixes into ONE commit: (1) applied
+  migrations 005+006 to the live Supabase project — it had only 13 tables, so
+  every POS/expense/product/customer/supplier insert hit `PGRST205` (table not
+  found) and failed silently (errors unchecked) → the ENTIRE POS module lost
+  all data. Live now has 31 tables with RLS. SCHEMA FIX IS LIVE NOW, so those
+  features work immediately even before the code deploy. (2) Fixed unchecked
+  insert/update/delete results across pos-service.ts + management components
+  (supabase-js returns `{error}`, doesn't throw) → rollback orphaned parent
+  records + alert specific errors. Pushed to origin/main. Production CODE
+  deploy blocked by `api-deployments-free-per-day` limit (0/100, resets
+  ~2026-08-10 08:41 UTC). Autodeploy watcher (`/tmp/fuelpro_combined_deploy_v2.sh`,
+  PID 20192) polls every 5 min and fires ONE prebuilt deploy (files already
   uploaded/cached) once the limit resets, confirming via the deployments API
-  that 779a0fe is READY+aliased. The GitHub push webhook also deploys on the
-  next push once the limit clears. Prebuilt API deploy confirmed to hit the
-  SAME 100/day limit (402 payment_required) — no deploy method bypasses it.
+  that d4bf3bc is READY+aliased.
 
 ## Build / Test
 - `npx tsc --noEmit` — typecheck (must pass before commit).
