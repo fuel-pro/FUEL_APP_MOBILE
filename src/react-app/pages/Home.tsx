@@ -456,11 +456,17 @@ function HomeContent() {
       return (
         <SetupWizard
           onComplete={() => {
-            setShowSetupWizard(false);
-            // Clear localStorage flags and force full reload
+            // Mark setup complete WITHOUT reloading. The previous
+            // window.location.reload() fired synchronously right after the
+            // wizard dispatched SET_COMPANY_DATA / SET_TANK_VALUES /
+            // SET_PRICES / SET_PUMPS — before the debounced saveToStorage
+            // (100ms) and saveToCloud (300ms) could persist them. That wiped
+            // the wizard-entered tanks, pumps, prices, KRA PIN, and company
+            // data from memory, so they never reached localStorage or cloud
+            // and were lost on the reload. Keeping state in memory lets the
+            // normal debounced saves persist it.
             localStorage.setItem("fuelpro_setup_complete", "true");
-            // Force a complete page reload to reset all React state
-            window.location.reload();
+            setShowSetupWizard(false);
           }}
           onAccessShared={
             hasActiveBindings ? () => setShowSetupWizard(false) : undefined
