@@ -8,18 +8,9 @@ import React, {
 import { useAuth } from "@/react-app/context/AuthContext";
 // Unified pricing - single source of truth for all fuel prices
 import { KENYA_BASE_PRICES, DEFAULT_PRICES } from "@/react-app/config/pricing";
+// Cross-device cloud storage (Supabase app_kv-backed) — replaces /api/user-data
+import { cloudStorageService } from "@/react-app/lib/cloud-storage-service";
 
-// Token storage key (must match AuthContext)
-const TOKEN_STORAGE_KEY = "fuelpro_token";
-
-// Helper to get auth token
-function getAuthToken(): string | null {
-  try {
-    return localStorage.getItem(TOKEN_STORAGE_KEY);
-  } catch {
-    return null;
-  }
-}
 
 // Use unified pricing defaults (Kenya EPRA prices as default)
 const DEFAULT_PMS_PRICE = KENYA_BASE_PRICES.petrol; // 220.30 KES
@@ -1239,25 +1230,13 @@ export function FuelProvider({ children }: { children: ReactNode }) {
       if (state.dataBackups?.length > 0)
         compactData.dataBackups = state.dataBackups.slice(-3); // Keep only last 3 backups in cloud
 
-      const authToken = getAuthToken();
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-      };
-      if (authToken) {
-        headers["Authorization"] = `Bearer ${authToken}`;
-      }
-
-      const response = await fetch("/api/user-data", {
-        method: "POST",
-        headers,
-        body: JSON.stringify({ data: compactData }),
-      });
-
-      if (!response.ok) {
-        throw new Error(
-          `Failed to save to cloud: ${response.status} ${response.statusText}`
-        );
-      }
+      // Persist to Supabase app_kv (cross-device). Keyed per-user so each
+      // account's data is isolated and RLS-protected by owner_id. localStorage
+      // remains a read-through cache via saveToStorage for offline reads.
+      const cloudKey = user?.id
+        ? `user_${user.id}_compact`
+        : "guest_compact";
+      await cloudStorageService.set(cloudKey, compactData);
 
       setLastCloudSave(new Date());
 
@@ -1277,36 +1256,29 @@ export function FuelProvider({ children }: { children: ReactNode }) {
     if (!user) return;
 
     try {
-      const authToken = getAuthToken();
-      const headers: Record<string, string> = {};
-      if (authToken) {
-        headers["Authorization"] = `Bearer ${authToken}`;
-      }
+      // Read the user's compact data blob from Supabase app_kv (cross-device).
+      // Falls back to the local read-through cache when offline/unauthenticated.
+      const cloudKey = user?.id
+        ? `user_${user.id}_compact`
+        : "guest_compact";
+      const compactData = (await cloudStorageService.get<Record<string, unknown>>(cloudKey)) as
+        | Record<string, unknown>
+        | null;
 
-      const response = await fetch("/api/user-data", { headers });
-
-      if (!response.ok) {
-        throw new Error(
-          `Failed to load from cloud: ${response.status} ${response.statusText}`
-        );
-      }
-
-      const result = await response.json();
-
-      if (result.data && Object.keys(result.data).length > 0) {
+      if (compactData && Object.keys(compactData).length > 0) {
         // Validate that the loaded data has meaningful content
+        const cd = compactData as any;
         const hasData =
-          result.data.companyData?.name ||
-          (result.data.deliveryData?.rows &&
-            result.data.deliveryData.rows.length > 0) ||
-          (result.data.invoiceItems && result.data.invoiceItems.length > 0) ||
-          (result.data.pmsPumps && result.data.pmsPumps.length > 0) ||
-          (result.data.agoPumps && result.data.agoPumps.length > 0) ||
-          (result.data.stations && result.data.stations.length > 0);
+          cd.companyData?.name ||
+          (cd.deliveryData?.rows && cd.deliveryData.rows.length > 0) ||
+          (cd.invoiceItems && cd.invoiceItems.length > 0) ||
+          (cd.pmsPumps && cd.pmsPumps.length > 0) ||
+          (cd.agoPumps && cd.agoPumps.length > 0) ||
+          (cd.stations && cd.stations.length > 0);
 
-        if (hasData || result.data.theme || result.data.tabConfigurations) {
-          dispatch({ type: "LOAD_FROM_STORAGE", payload: result.data });
-          console.log("Data loaded from cloud successfully");
+        if (hasData || cd.theme || cd.tabConfigurations) {
+          dispatch({ type: "LOAD_FROM_STORAGE", payload: cd });
+          console.log("Data loaded from cloud (Supabase) successfully");
         } else {
           console.log("Cloud data appears empty, keeping current state");
         }
@@ -1315,7 +1287,8 @@ export function FuelProvider({ children }: { children: ReactNode }) {
       }
     } catch (error) {
       console.error("Error loading from cloud:", error);
-      throw error; // Re-throw so caller can handle fallback
+      // Re-throw so the caller can fall back to loadFromStorage.
+      throw error;
     }
   };
 

@@ -9,6 +9,7 @@ export { default as MaintenanceSection } from "./MaintenanceSection";
 export { default as EmailTemplatesSection } from "./EmailTemplatesSection";
 export { default as RateLimitSection } from "./RateLimitSection";
 export { default as DataManagementSection } from "./DataManagementSection";
+export { default as SchemaVisualizerSection } from "./SchemaVisualizerSection";
 export { default as PricingManagerSection } from "./PricingManagerSection";
 export { default as SubscriptionDashboardSection } from "./SubscriptionDashboardSection";
 export { default as CouponSection } from "./CouponSection";
