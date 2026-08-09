@@ -1284,6 +1284,7 @@ export function FuelProvider({ children }: { children: ReactNode }) {
         const cd = compactData as any;
         const hasData =
           cd.companyData?.name ||
+          cd.companyData?.logo ||
           (cd.deliveryData?.rows && cd.deliveryData.rows.length > 0) ||
           (cd.invoiceItems && cd.invoiceItems.length > 0) ||
           (cd.pmsPumps && cd.pmsPumps.length > 0) ||
@@ -1558,33 +1559,39 @@ export function FuelProvider({ children }: { children: ReactNode }) {
     };
   }, [user, state]);
 
-  // Load data from localStorage on mount AND when user changes
-  // Cloud sync: Load from cloud ONLY if localStorage is empty (first time on new device)
-  // After loading, always prefer localStorage (it's faster and more reliable)
+  // Load data on mount AND when user changes.
+  // Cloud (Supabase app_kv) is the source of truth — it is always consulted so
+  // that data entered on another device/browser is reflected here. localStorage
+  // is only a read-through cache (per cloud-storage-service.ts) and is used as a
+  // fallback when the network/auth is unavailable. Previously this effect skipped
+  // loadFromCloud whenever localStorage had data, which meant a refresh on the
+  // SAME browser never pulled the latest cloud state — so a logo (or any field)
+  // updated elsewhere vanished. It also broke cross-device sync entirely.
   useEffect(() => {
+    let cancelled = false;
     const timer = setTimeout(async () => {
-      // First, try to load from localStorage (always preferred)
+      if (cancelled) return;
+      // First, hydrate instantly from the local cache so the UI is never blank.
       loadFromStorage();
-      
-      // Then, if localStorage is empty, try to load from cloud
-      // This handles the case where a user logs in from a new device
-      const userKey = user?.id ? `user_${user.id}_compact` : "guest_compact";
-      const hasLocalData = localStorage.getItem(userKey);
-      
-      if (!hasLocalData && user) {
-        // No local data exists - this is a new device or first login
-        // Try to load from cloud
+
+      if (user) {
         try {
           await loadFromCloud();
-          // After loading from cloud, save to localStorage for faster future loads
-          saveToStorage();
+          if (!cancelled) {
+            // Mirror the freshly-loaded cloud state into the local cache so the
+            // next mount is instant and offline-capable.
+            saveToStorage();
+          }
         } catch (error) {
-          console.warn("Failed to load from cloud, will use defaults:", error);
+          console.warn("Failed to load from cloud, using local cache:", error);
         }
       }
     }, 100);
-    return () => clearTimeout(timer);
-  }, [user, loadFromCloud]);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [user, loadFromCloud, loadFromStorage, saveToStorage]);
 
   // Apply theme to body - robust for all browsers
   useEffect(() => {

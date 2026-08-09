@@ -9,6 +9,7 @@ import SyncStatusIndicator from "@/react-app/components/SyncStatusIndicator";
 import RoleSelector from "@/react-app/components/RoleSelector";
 import { useNavigate } from "react-router";
 import { useState, useEffect, useRef } from "react";
+import { uploadStationLogo } from "@/react-app/lib/logo-storage-service";
 import {
   Fuel,
   Sun,
@@ -30,6 +31,7 @@ import {
   Globe,
   LayoutDashboard,
   Crown,
+  Loader2,
 } from "lucide-react";
 
 interface HeaderProps {
@@ -54,6 +56,7 @@ export default function Header({
   const [showTabConfig, setShowTabConfig] = useState(false);
   const [editData, setEditData] = useState({ ...state.companyData });
   const [logoPreview, setLogoPreview] = useState(state.companyData.logo || "");
+  const [logoUploading, setLogoUploading] = useState(false);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
 
   // Close mobile menu on outside click
@@ -88,20 +91,39 @@ export default function Header({
     setShowEditInfo(false);
   };
 
-  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleLogoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const result = reader.result as string;
-        setLogoPreview(result);
-        setEditData(p => ({ ...p, logo: result }));
-        dispatch({
-          type: "SET_COMPANY_DATA",
-          payload: { ...state.companyData, logo: result },
-        });
-      };
-      reader.readAsDataURL(file);
+    if (!file) return;
+
+    // Show an instant local preview so the user gets feedback while uploading.
+    const localPreview = URL.createObjectURL(file);
+    setLogoPreview(localPreview);
+    setLogoUploading(true);
+
+    try {
+      if (!user?.id) {
+        throw new Error("You must be signed in to upload a logo.");
+      }
+      // Upload to Supabase Storage (cross-device) and store the public URL —
+      // NOT a base64 blob — so the logo survives refresh and syncs to every
+      // device signed into the same account.
+      const { url } = await uploadStationLogo(file, user.id);
+      setLogoPreview(url);
+      setEditData(p => ({ ...p, logo: url }));
+      dispatch({
+        type: "SET_COMPANY_DATA",
+        payload: { ...state.companyData, logo: url },
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("Logo upload failed:", msg);
+      alert(`Could not upload logo: ${msg}`);
+      // Revert preview to whatever was previously persisted.
+      setLogoPreview(state.companyData.logo || "");
+    } finally {
+      setLogoUploading(false);
+      // Reset the input so the same file can be re-selected.
+      if (e.target) e.target.value = "";
     }
   };
 
@@ -249,12 +271,13 @@ export default function Header({
               <span className="hidden lg:inline">Tabs</span>
             </button>
             <label className="px-2.5 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-xs text-gray-300 transition-colors flex items-center gap-1.5 cursor-pointer">
-              <Image size={12} />
-              <span className="hidden lg:inline">Logo</span>
+              {logoUploading ? <Loader2 size={12} className="animate-spin" /> : <Image size={12} />}
+              <span className="hidden lg:inline">{logoUploading ? "Uploading…" : "Logo"}</span>
               <input
                 type="file"
                 accept="image/*"
                 onChange={handleLogoChange}
+                disabled={logoUploading}
                 className="hidden"
               />
             </label>
@@ -377,11 +400,12 @@ export default function Header({
                 <span className="text-[10px] text-gray-400">Tabs</span>
               </button>
               <label className="flex flex-col items-center gap-1.5 p-3 bg-white/5 rounded-xl hover:bg-white/10 transition-colors cursor-pointer">
-                <Image size={16} className="text-gray-300" />
-                <span className="text-[10px] text-gray-400">Logo</span>
+                {logoUploading ? <Loader2 size={16} className="text-gray-300 animate-spin" /> : <Image size={16} className="text-gray-300" />}
+                <span className="text-[10px] text-gray-400">{logoUploading ? "Uploading…" : "Logo"}</span>
                 <input
                   type="file"
                   accept="image/*"
+                  disabled={logoUploading}
                   onChange={e => {
                     handleLogoChange(e);
                     setShowMobileMenu(false);
