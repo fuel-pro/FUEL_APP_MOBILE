@@ -171,6 +171,26 @@ React + Vite + TypeScript SPA for fuel station management. Deployed at
   fuel-app-mobile.vercel.app). Production chunk: index-CMtbBBDc.js.
   **All functional fixes are now LIVE on fuel-app-mobile.vercel.app and the
   Cloudflare Pages mirror (fuel-app-mobile.pages.dev).**
+- **2026-08-09 commit 3746b02 (DEPLOYED LIVE)** — React error #185 (Maximum
+  update depth exceeded) in StationContext. Root cause: a dependency-chain
+  cascade caused an infinite mount-effect loop: `persist` (deps
+  `[stations, adminSettings]`) was recreated on every state change →
+  `syncFromBackend` (deps `[persist]`) recreated whenever `persist` changed →
+  the mount effect (deps `[syncFromBackend]`) re-fired on every
+  `syncFromBackend` recreation, calling `setStations`/`setAdminSettings` →
+  recreating `persist` → infinite loop. Fix: `persist` is now stable
+  (`deps []`) by reading current stations/adminSettings from refs
+  (`stationsRef`/`adminSettingsRef`) instead of closure capture. Deployed as
+  `dpl_8rD75tGEkqD16pHWwDQEShtoePpy` (READY, PROMOTED, aliased to
+  fuel-app-mobile.vercel.app). Also bundles `3c28f5e` (replaced all broken
+  `/api/*` calls with `cloudStorageService` for cross-device persistence) and
+  `f0299c8` (profile management, password reset, cross-device sharing &
+  documents). Verified live: HTTP 200, prod chunk `index-gwkrD55k.js`.
+  Git-source API deploy method confirmed reliable: `POST /v13/deployments`
+  with body `gitSource.repoId=1241380610` + `ref=<sha>` and
+  `?projectId=prj_...` as QUERY param (NOT body — body `projectId` is rejected
+  with "should NOT have additional property"). Cloudflare Pages mirror also
+  updated: https://1c5565eb.fuel-app-mobile.pages.dev.
 
 ## FuelContext save/load race (FIXED 2026-08-09, commit b3d489e4)
 The load-from-storage `useEffect` had `saveToStorage` in its deps. Because
