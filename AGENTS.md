@@ -23,12 +23,27 @@ React + Vite + TypeScript SPA for fuel station management. Deployed at
   founder secrets) remain local; migrate them to `cloudStorageService` when
   they need cross-device.
 - **Schema Visualizer** (`src/react-app/pages/founder-sections/
-  SchemaVisualizerSection.tsx`): introspects the LIVE Supabase schema via the
-  PostgREST OpenAPI spec (`GET {supabaseUrl}/rest/v1/`), discovers every table
-  + column at runtime, queries real row counts via the authenticated client,
-  and renders an ER diagram with FK links (FK_MAP constant — authoritative,
-  derived from live column naming + migration DDL, since PostgREST does not
-  expose pg_constraint). Wired into `DataManagementSection` as a two-tab view.
+  SchemaVisualizerSection.tsx`): uses an EMBEDDED authoritative schema map
+  (SCHEMA constant — 13 live tables with all columns, types, PK/FK annotations,
+  derived from the actual live DB and kept in sync with `supabase/migrations/`).
+  PostgREST's OpenAPI root (`GET /rest/v1/`) is now restricted to the
+  service_role key (which can NEVER live in the client bundle — it bypasses
+  RLS), so runtime introspection was abandoned in favor of the embedded map.
+  Row counts are fetched LIVE via the authenticated client
+  (`select('*', {count:'exact', head:true})`) and are RLS-respecting: a user
+  sees counts only for rows they can read; tables they cannot access show "—"
+  (RLS-gated). Wired into `DataManagementSection` as a two-tab view (Schema
+  Visualizer + Storage). Reachable via Founder → Development → Data Manager.
+  **Verified live 2026-08-09**: renders all 13 tables with accurate live counts
+  (e.g. users=2) and FK links (→ users.id on owner_id columns).
+- **Founder auth gate** (`src/react-app/lib/founder-auth.ts`):
+  `loginFounder` must NOT check `import.meta.env.VITE_SUPABASE_URL`/
+  `VITE_SUPABASE_ANON_KEY` directly — no `.env` sets these in production, so the
+  gate always returned "Supabase is not configured" and the entire Founder
+  panel was unreachable. The fix: trust the configured `getSupabaseClient()`
+  (which resolves env vars with hardcoded fallbacks). Also: the Supabase user
+  must have role `founder`/`admin` in the `users` table AND a confirmed email
+  (`email_confirm:true` via admin API) before `signInWithPassword` succeeds.
 
 ## Critical Patterns / Gotchas
 - **Persist-effect race**: `StationProvider` has a persist `useEffect` that
@@ -68,10 +83,13 @@ React + Vite + TypeScript SPA for fuel station management. Deployed at
 - Vercel `api-deployments-free-per-day` limit (100/day) can be exhausted. Resets ~24h.
   Read-only GET deployments use a separate 1000/min bucket and still work when the
   deploy bucket is exhausted.
-- **2026-08-09 state**: ALL pending fixes bundled into ONE prebuilt production deploy
-  (dpl_EWoYGAJKzB1ZTmNa8B57MafvEJrD, READY/PROMOTED, aliased fuel-app-mobile.vercel.app,
-  serving commit 8711452 build index-CaU-pkZQ.js). Cloudflare Pages synced to same
-  build. Production is now current with origin/main HEAD 8711452.
+- **2026-08-09 state**: ALL fixes bundled into ONE prebuilt production deploy
+  (aliased fuel-app-mobile.vercel.app, serving founder-Cf4Jtld1.js with the
+  founder-auth fix). Cloudflare Pages synced to same build. Production is
+  current with origin/main HEAD 2787092. Cross-device storage verified
+  end-to-end: a value written to `app_kv` as user X from device A is readable
+  by user X on device B (RLS `owner_id = auth.uid()`). Schema Visualizer
+  verified live (13 tables, live RLS-respecting row counts, FK links).
 
 ## Build / Test
 - `npx tsc --noEmit` — typecheck (must pass before commit).
