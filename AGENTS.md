@@ -188,3 +188,68 @@ saved item (total Ksh 10,702) from cloud. Cross-device sync confirmed working.
 - Supabase service_role key and access token are in `/workspace/API KEYS.txt`
   (project `ojjscjwatikixlpshmub`). NEVER commit these.
 - Vercel token in `$VERCEL`. GitHub token in `$GITHUB_TOKEN`.
+
+## CRITICAL — Cross-device cloud data overwrite race (FIXED 2026-08-09, commit 00522ac)
+**Symptom**: When a user logs in on a NEW device/browser (empty local cache),
+ALL their cloud data (app_kv blob) was silently WIPED within ~2 seconds of
+login. Company info, invoices, sales history, debt, offloading, pumps,
+delivery records — everything gone. The user was then stranded with a
+default-state app and the overwritten empty cloud blob meant every
+subsequent device also saw empty data. This is the most severe bug found
+in the entire testing campaign — it destroys user data on every
+cross-device login.
+
+**Root cause**: Three effects run on login:
+1. Load effect (100ms timer, deps `[user, loadFromCloud, ...]`): calls
+   `loadFromStorage()` (instant, from localStorage cache — empty on new
+   device) then `await loadFromCloud()` (async Supabase fetch, ~200-500ms).
+2. Auto-save-to-cloud effect (1500ms timer, deps `[user, state]`): calls
+   `saveToCloud()` which reads `stateRef.current` and writes it to app_kv.
+3. Periodic cloud save (15000ms interval): also calls `saveToCloud()`.
+
+On a new device, `loadFromCloud` takes ~200-500ms but the 1500ms auto-save
+fires with the DEFAULT/EMPTY in-memory state (since loadFromStorage loaded
+nothing from the empty cache). `saveToCloud` then writes the empty state to
+app_kv, OVERWRITING all the user's real data BEFORE `loadFromCloud` even
+returns. The `finally` block then sets the ref, but the damage is done.
+
+**Fix** (`FuelContext.tsx`): `cloudLoadCompleteRef = useRef(false)`.
+- Reset to `false` on every `user` change (`useEffect(() => { ref.current = false }, [user])`).
+- `saveToCloud` early-returns if `!cloudLoadCompleteRef.current` (with a
+  console.log so it's debuggable).
+- The load effect's `finally` block sets `cloudLoadCompleteRef.current = true`
+  (guarded by `!cancelled`) — so saves are unblocked whether loadFromCloud
+  succeeded, found no data, or failed.
+
+This guarantees the initial cloud load is never overwritten by default
+state, while subsequent legitimate user edits still sync normally. Verified
+end-to-end: logged in on fresh deployment URL (e67aeef4.fuel-app-mobile.pages.dev),
+cloud data (company name, KRA PIN, bank details, invoice INV-2026-001,
+quantityLabel='Litres', sales history Ksh 200,000) loaded correctly AND
+remained intact after the auto-save fired (updated_at advanced but data
+preserved — the save was idempotent because it saved the loaded state).
+
+**ALSO FIXED** in same commit: `pushStationUpsert` in `StationContext.tsx`
+now checks `{ error }` from both Supabase upserts (stations table +
+app_kv station_data). Previously errors were silently swallowed, so a
+failed station push (RLS/schema/code constraint) left the station only in
+localStorage + FuelContext's app_kv blob — never in the `stations` table —
+and the user got stranded on the setup wizard on every other device. This
+was the secondary root cause of the Phase 2 cross-device failure.
+
+## Deployment — Cloudflare Pages (primary, Vercel rate-limited)
+Vercel's free tier limit (100 deploys/day) was exhausted. Cloudflare Pages
+is the unlimited mirror and is now the primary deploy target:
+`CLOUDFLARE_API_TOKEN=$CLOUDFLARE npx wrangler pages deploy dist
+--project-name=fuel-app-mobile --branch=main --commit-dirty=true`.
+Live at https://fuel-app-mobile.pages.dev (and unique preview URLs like
+https://e67aeef4.fuel-app-mobile.pages.dev per deployment). The unique
+preview URL is useful for testing because it has no cached service worker.
+
+**PWA service worker caching**: the app registers a service worker
+(generateSW, 119 precache entries). On reload, the SW serves CACHED old
+JS bundles, so code fixes don't take effect until the SW updates (which
+can lag by a page load or require a hard reload / SW unregister). To test
+a fresh build immediately, use the unique Cloudflare preview deployment
+URL (e.g. `https://<hash>.fuel-app-mobile.pages.dev/`) instead of the
+production alias — the preview URL has no registered SW.
