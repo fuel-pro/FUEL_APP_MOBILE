@@ -75,6 +75,7 @@ export interface StationAccess {
 export interface Station {
   id: string;
   name: string;
+  code: string;
   location: string;
   phone: string;
   email: string;
@@ -347,7 +348,15 @@ const loadFromStorage = (): {
         /* detection failed — keep persisted value */
       }
 
-      return { stations: parsed.stations || [], admin, currentId };
+      // Backfill `code` for stations created before this field existed. The
+      // stations table has a NOT NULL UNIQUE `code` column; without this,
+      // cross-device sync silently fails. Generate once and persist so the
+      // same code is reused on every subsequent push (avoids UNIQUE clashes).
+      const stations = (parsed.stations || []).map((s: Station) =>
+        s.code ? s : { ...s, code: generateStationCode(s.name) }
+      );
+
+      return { stations, admin, currentId };
     }
   } catch {
     /* ignore */
@@ -367,10 +376,23 @@ const loadFromStorage = (): {
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const isValidUuid = (id: string) => UUID_RE.test(id);
 
+// The `stations` table has a NOT NULL UNIQUE `code` column. Generate a short,
+// unique, URL-safe code from the station name so backend upserts succeed.
+function generateStationCode(name: string): string {
+  const slug = (name || "station")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 16) || "station";
+  const suffix = Math.random().toString(36).slice(2, 7);
+  return `${slug}-${suffix}`;
+}
+
 function stationRowToStation(row: any, dataBlob: any, cached?: Station): Station {
   return {
     id: row.id,
     name: row.name || "",
+    code: row.code || "",
     location: row.location || "",
     phone: row.phone || "",
     email: row.email || "",
@@ -394,6 +416,7 @@ function stationRowToStation(row: any, dataBlob: any, cached?: Station): Station
 function stationToRowFields(s: Partial<Station>) {
   const fields: Record<string, any> = {};
   if (s.name !== undefined) fields.name = s.name;
+  if (s.code !== undefined) fields.code = s.code;
   if (s.location !== undefined) fields.location = s.location;
   if (s.phone !== undefined) fields.phone = s.phone;
   if (s.email !== undefined) fields.email = s.email;
@@ -412,6 +435,9 @@ async function pushStationUpsert(station: Station, ownerId: string) {
     await supabase.from("stations").upsert({
       id: station.id,
       owner_id: ownerId,
+      // `code` is NOT NULL UNIQUE on the stations table — backfill one for
+      // any station created before this field existed so the upsert succeeds.
+      code: station.code || generateStationCode(station.name),
       ...stationToRowFields(station),
     });
     await supabase.from("app_kv").upsert({
@@ -455,11 +481,11 @@ async function syncStationsWithSupabase(
     try {
       const { data: inserted, error } = await supabase
         .from("stations")
-        .insert({ owner_id: user.id, ...stationToRowFields(s) })
+        .insert({ owner_id: user.id, code: s.code || generateStationCode(s.name), ...stationToRowFields(s) })
         .select()
         .single();
       if (!error && inserted) {
-        const newStation = { ...s, id: inserted.id };
+        const newStation = { ...s, id: inserted.id, code: inserted.code || s.code };
         await supabase.from("app_kv").upsert({
           id: `station_data_${inserted.id}`,
           collection: "station_data",
@@ -744,6 +770,7 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
       const newStation: Station = {
         id,
         name: stationData.name || `Station ${stations.length + 1}`,
+        code: stationData.code || generateStationCode(stationData.name || `Station ${stations.length + 1}`),
         location: stationData.location || "",
         phone: stationData.phone || "",
         email: stationData.email || "",

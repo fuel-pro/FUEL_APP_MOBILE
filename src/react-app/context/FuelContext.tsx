@@ -3,6 +3,7 @@ import React, {
   useContext,
   useReducer,
   useEffect,
+  useCallback,
   ReactNode,
 } from "react";
 import { useAuth } from "@/react-app/context/AuthContext";
@@ -1022,7 +1023,7 @@ export function FuelProvider({ children }: { children: ReactNode }) {
   const [isCloudSaving, setIsCloudSaving] = React.useState(false);
   const [lastCloudSave, setLastCloudSave] = React.useState<Date | null>(null);
 
-  const saveToStorage = () => {
+  const saveToStorage = useCallback(() => {
     try {
       // Compact storage: use single compressed JSON blob instead of individual keys
       const userKey = user?.id ? `user_${user.id}_compact` : "guest_compact";
@@ -1134,10 +1135,10 @@ export function FuelProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error("Error saving to localStorage:", error);
     }
-  };
+  }, [state, user]);
 
   // Cloud storage with compression
-  const saveToCloud = async () => {
+  const saveToCloud = useCallback(async () => {
     if (!user) return;
 
     try {
@@ -1250,9 +1251,9 @@ export function FuelProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsCloudSaving(false);
     }
-  };
+  }, [state, user]);
 
-  const loadFromCloud = async () => {
+  const loadFromCloud = useCallback(async () => {
     if (!user) return;
 
     try {
@@ -1290,9 +1291,9 @@ export function FuelProvider({ children }: { children: ReactNode }) {
       // Re-throw so the caller can fall back to loadFromStorage.
       throw error;
     }
-  };
+  }, [user]);
 
-  const loadFromStorage = () => {
+  const loadFromStorage = useCallback(() => {
     try {
       const userKey = user?.id ? `user_${user.id}_compact` : "guest_compact";
       
@@ -1511,7 +1512,7 @@ export function FuelProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error("Error loading from localStorage:", error);
     }
-  };
+  }, [user]);
 
   // INSTANT LOCAL AUTO-SAVE - saves to browser storage immediately for zero data loss
   useEffect(() => {
