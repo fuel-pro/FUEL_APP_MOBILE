@@ -9,11 +9,26 @@ React + Vite + TypeScript SPA for fuel station management. Deployed at
 - `src/react-app/context/StationContext.tsx` — station CRUD, localStorage
   persistence (`fuelpro_stations_v3`), Supabase cross-device sync.
 - `src/react-app/context/FuelContext.tsx` — tab configuration registry.
-- `src/react-app/pages/Home.tsx` — main app shell with tab system.
   SalesZote modules (Products, Sales Invoices, Purchases, Expenses, Reports,
   Terminal, EnhancedDashboard) are ADDITIVE lazy-loaded tabs, NOT a replacement
   of the FuelPro tab system.
 - `src/react-app/context/AuthContext.tsx` — Supabase auth + role bindings.
+- **Cross-device storage** (`src/react-app/lib/cloud-storage-service.ts`):
+  Supabase `app_kv`-backed async KV store (cloud-first, RLS by `owner_id`,
+  unlimited, accessible from any device). `FuelContext.saveToCloud`/
+  `loadFromCloud` use it (key `user_<id>_compact`, collection `fuel_data`)
+  instead of the removed `/api/user-data` endpoint. localStorage is kept ONLY
+  as a read-through cache (`fuelpro_cloud_` prefix) for offline reads — never
+  the source of truth. Other localStorage usages (UI prefs, prices cache,
+  founder secrets) remain local; migrate them to `cloudStorageService` when
+  they need cross-device.
+- **Schema Visualizer** (`src/react-app/pages/founder-sections/
+  SchemaVisualizerSection.tsx`): introspects the LIVE Supabase schema via the
+  PostgREST OpenAPI spec (`GET {supabaseUrl}/rest/v1/`), discovers every table
+  + column at runtime, queries real row counts via the authenticated client,
+  and renders an ER diagram with FK links (FK_MAP constant — authoritative,
+  derived from live column naming + migration DDL, since PostgREST does not
+  expose pg_constraint). Wired into `DataManagementSection` as a two-tab view.
 
 ## Critical Patterns / Gotchas
 - **Persist-effect race**: `StationProvider` has a persist `useEffect` that
