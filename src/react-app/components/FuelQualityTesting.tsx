@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "@/react-app/context/LocationContext";
 import {
   FlaskConical,
@@ -13,6 +13,8 @@ import {
   Beaker,
   Thermometer,
 } from "lucide-react";
+import cloudStorageService from "@/react-app/lib/cloud-storage-service";
+import { useAuth } from "@/react-app/context/AuthContext";
 
 interface QualityTest {
   id: string;
@@ -40,6 +42,7 @@ const QUALITY_STANDARDS = {
 
 export default function FuelQualityTesting() {
   const location = useLocation();
+  const { user } = useAuth();
   const [tests, setTests] = useState<QualityTest[]>(() => {
     try {
       return JSON.parse(localStorage.getItem("fuelpro_quality_tests") || "[]");
@@ -56,7 +59,17 @@ export default function FuelQualityTesting() {
   const save = (t: QualityTest[]) => {
     setTests(t);
     localStorage.setItem("fuelpro_quality_tests", JSON.stringify(t));
+    cloudStorageService.set("fuel_quality_tests", t).catch(() => {});
   };
+
+  // Load from cloud on mount (cross-device sync)
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      const cloudTests = await cloudStorageService.get<QualityTest[]>("fuel_quality_tests");
+      if (cloudTests && Array.isArray(cloudTests)) setTests(cloudTests);
+    })();
+  }, [user]);
 
   const passed = tests.filter(t => t.passed).length;
   const failed = tests.filter(t => !t.passed).length;

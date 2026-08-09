@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { useFuel } from "@/react-app/context/FuelContext";
 import { useAuth } from "@/react-app/context/AuthContext";
+import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -183,37 +184,33 @@ export default function PayrollSystem() {
   // API calls
   const fetchEmployees = async () => {
     try {
-      const response = await fetch("/api/payroll/employees", {
-        headers: { Authorization: `Bearer ${user?.id || "local"}` },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        const formattedEmployees = data.employees.map((emp: any) => ({
-          id: emp.id,
-          no: emp.employee_number,
-          firstName: emp.first_name,
-          lastName: emp.last_name,
-          fullName: emp.full_name,
-          employeeId: emp.employee_id,
-          role: emp.role,
-          department: emp.department,
-          basicSalary: emp.basic_salary,
-          sha: emp.sha_amount,
-          nssf: emp.nssf_amount,
-          advance: emp.advance_amount,
-          netPay: emp.net_pay,
-          bank: emp.bank_name,
-          bankCode: emp.bank_code,
-          idNo: emp.id_number,
-          kraPin: emp.kra_pin,
-          shaNo: emp.sha_number,
-          nssfNo: emp.nssf_number,
-          bankAccount: emp.bank_account,
-          phone: emp.phone,
-          email: emp.email,
-          employmentDate: emp.employment_date,
-          notes: emp.notes,
+      const cloudData = await cloudStorageService.get<any[]>("payroll_employees");
+      if (cloudData && Array.isArray(cloudData)) {
+        const formattedEmployees = cloudData.map((emp: any, i: number) => ({
+          id: emp.id || i + 1,
+          no: String(i + 1),
+          firstName: emp.first_name || emp.firstName || "",
+          lastName: emp.last_name || emp.lastName || "",
+          fullName: emp.full_name || `${emp.first_name || emp.firstName || ""} ${emp.last_name || emp.lastName || ""}`.trim(),
+          employeeId: emp.employee_id || emp.employeeId || "",
+          role: emp.role || "",
+          department: emp.department || "",
+          basicSalary: emp.basic_salary ?? emp.basicSalary ?? 0,
+          sha: emp.sha_amount ?? emp.sha ?? 0,
+          nssf: emp.nssf_amount ?? emp.nssf ?? 0,
+          advance: emp.advance_amount ?? emp.advance ?? 0,
+          netPay: emp.net_pay ?? emp.netPay ?? (emp.basic_salary ?? emp.basicSalary ?? 0) - (emp.advance_amount ?? emp.advance ?? 0),
+          bank: emp.bank_name ?? emp.bank ?? "",
+          bankCode: emp.bank_code ?? emp.bankCode ?? "",
+          idNo: emp.id_number ?? emp.idNo ?? "",
+          kraPin: emp.kra_pin ?? emp.kraPin ?? "",
+          shaNo: emp.sha_number ?? emp.shaNo ?? "",
+          nssfNo: emp.nssf_number ?? emp.nssfNo ?? "",
+          bankAccount: emp.bank_account ?? emp.bankAccount ?? "",
+          phone: emp.phone || "",
+          email: emp.email || "",
+          employmentDate: emp.employment_date ?? emp.employmentDate ?? "",
+          notes: emp.notes || "",
         }));
         setEmployees(formattedEmployees);
         return;
@@ -231,13 +228,13 @@ export default function PayrollSystem() {
           local.map((emp: any, i: number) => ({
             id: emp.id || i,
             no: String(i + 1),
-            firstName: emp.first_name || "",
-            lastName: emp.last_name || "",
-            fullName: `${emp.first_name || ""} ${emp.last_name || ""}`.trim(),
-            employeeId: emp.employee_id || "",
+            firstName: emp.first_name || emp.firstName || "",
+            lastName: emp.last_name || emp.lastName || "",
+            fullName: `${emp.first_name || emp.firstName || ""} ${emp.last_name || emp.lastName || ""}`.trim(),
+            employeeId: emp.employee_id || emp.employeeId || "",
             role: emp.role || "",
             department: emp.department || "",
-            basicSalary: emp.basic_salary || 0,
+            basicSalary: emp.basic_salary ?? emp.basicSalary ?? 0,
             sha: emp.sha || 0,
             nssf: emp.nssf || 0,
             advance: emp.advance || 0,
@@ -266,50 +263,43 @@ export default function PayrollSystem() {
 
   const fetchSettings = async () => {
     try {
-      const response = await fetch("/api/payroll/settings", {
-        headers: { Authorization: `Bearer ${user?.id}` },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data.settings) {
-          const backendSettings = data.settings;
-          setSettings(prev => ({
-            ...prev,
-            organizationName:
-              backendSettings.organization_name || prev.organizationName,
-            organizationAddress:
-              backendSettings.organization_address || prev.organizationAddress,
-            organizationPhone:
-              backendSettings.organization_phone || prev.organizationPhone,
-            organizationEmail:
-              backendSettings.organization_email || prev.organizationEmail,
-            organizationLogo:
-              backendSettings.organization_logo || prev.organizationLogo,
-            payrollMonth: backendSettings.payroll_month || prev.payrollMonth,
-            payrollYear: backendSettings.payroll_year || prev.payrollYear,
-            paymentMethod: backendSettings.payment_method || prev.paymentMethod,
-            currency: backendSettings.currency || prev.currency,
-            enableSha: backendSettings.enable_sha !== 0,
-            enableNssf: backendSettings.enable_nssf !== 0,
-            enableTax: backendSettings.enable_tax !== 0,
-            shaPercentage: backendSettings.sha_percentage || prev.shaPercentage,
-            nssfAmount: backendSettings.nssf_amount || prev.nssfAmount,
-            originatorAccount:
-              backendSettings.originator_account || prev.originatorAccount,
-            branchDao: backendSettings.branch_dao || prev.branchDao,
-            origCode: backendSettings.orig_code || prev.origCode,
-            reference: backendSettings.reference_code || prev.reference,
-            customRoles: backendSettings.custom_roles
-              ? backendSettings.custom_roles
-                  .split(",")
-                  .map((r: string) => r.trim())
-                  .filter((r: string) => r)
-              : prev.customRoles,
-          }));
-          setShaPercentage(backendSettings.sha_percentage || 2.75);
-          setNssfAmount(backendSettings.nssf_amount || 480);
-        }
+      const cloudSettings = await cloudStorageService.get<any>("payroll_settings");
+      const backendSettings = cloudSettings || JSON.parse(localStorage.getItem("fuelpro_payroll_settings") || "null");
+      if (backendSettings) {
+        setSettings(prev => ({
+          ...prev,
+          organizationName:
+            backendSettings.organization_name || backendSettings.organizationName || prev.organizationName,
+          organizationAddress:
+            backendSettings.organization_address || backendSettings.organizationAddress || prev.organizationAddress,
+          organizationPhone:
+            backendSettings.organization_phone || backendSettings.organizationPhone || prev.organizationPhone,
+          organizationEmail:
+            backendSettings.organization_email || backendSettings.organizationEmail || prev.organizationEmail,
+          organizationLogo:
+            backendSettings.organization_logo || backendSettings.organizationLogo || prev.organizationLogo,
+          payrollMonth: backendSettings.payroll_month || backendSettings.payrollMonth || prev.payrollMonth,
+          payrollYear: backendSettings.payroll_year || backendSettings.payrollYear || prev.payrollYear,
+          paymentMethod: backendSettings.payment_method || backendSettings.paymentMethod || prev.paymentMethod,
+          currency: backendSettings.currency || prev.currency,
+          enableSha: backendSettings.enable_sha ?? backendSettings.enableSha ?? prev.enableSha,
+          enableNssf: backendSettings.enable_nssf ?? backendSettings.enableNssf ?? prev.enableNssf,
+          enableTax: backendSettings.enable_tax ?? backendSettings.enableTax ?? prev.enableTax,
+          shaPercentage: backendSettings.sha_percentage ?? backendSettings.shaPercentage ?? prev.shaPercentage,
+          nssfAmount: backendSettings.nssf_amount ?? backendSettings.nssfAmount ?? prev.nssfAmount,
+          originatorAccount:
+            backendSettings.originator_account || backendSettings.originatorAccount || prev.originatorAccount,
+          branchDao: backendSettings.branch_dao || backendSettings.branchDao || prev.branchDao,
+          origCode: backendSettings.orig_code || backendSettings.origCode || prev.origCode,
+          reference: backendSettings.reference_code || backendSettings.reference || prev.reference,
+          customRoles: backendSettings.custom_roles
+            ? (Array.isArray(backendSettings.custom_roles)
+                ? backendSettings.custom_roles
+                : backendSettings.custom_roles.split(",").map((r: string) => r.trim()).filter((r: string) => r))
+            : prev.customRoles,
+        }));
+        setShaPercentage(backendSettings.sha_percentage ?? backendSettings.shaPercentage ?? 2.75);
+        setNssfAmount(backendSettings.nssf_amount ?? backendSettings.nssfAmount ?? 480);
       }
     } catch (error) {
       console.error("Error fetching settings:", error);
@@ -319,42 +309,34 @@ export default function PayrollSystem() {
   const saveSettings = async (newSettings: Partial<PayrollSettings>) => {
     try {
       setImporting(true);
-      const response = await fetch("/api/payroll/settings", {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${user?.id}`,
-        },
-        body: JSON.stringify({
-          organization_name: newSettings.organizationName,
-          organization_address: newSettings.organizationAddress,
-          organization_phone: newSettings.organizationPhone,
-          organization_email: newSettings.organizationEmail,
-          organization_logo: newSettings.organizationLogo,
-          payroll_month: newSettings.payrollMonth,
-          payroll_year: newSettings.payrollYear,
-          payment_method: newSettings.paymentMethod,
-          currency: newSettings.currency,
-          enable_sha: newSettings.enableSha,
-          enable_nssf: newSettings.enableNssf,
-          enable_tax: newSettings.enableTax,
-          sha_percentage: newSettings.shaPercentage,
-          nssf_amount: newSettings.nssfAmount,
-          originator_account: newSettings.originatorAccount,
-          branch_dao: newSettings.branchDao,
-          orig_code: newSettings.origCode,
-          reference_code: newSettings.reference,
-          custom_roles: newSettings.customRoles?.join(", "),
-        }),
-      });
-
-      if (response.ok) {
-        console.log("Settings saved successfully");
-      } else {
-        console.error("Failed to save settings");
-      }
+      const merged = { ...settings, ...newSettings };
+      // Persist to cloud (Supabase app_kv) + localStorage cache
+      const payload = {
+        organization_name: merged.organizationName,
+        organization_address: merged.organizationAddress,
+        organization_phone: merged.organizationPhone,
+        organization_email: merged.organizationEmail,
+        organization_logo: merged.organizationLogo,
+        payroll_month: merged.payrollMonth,
+        payroll_year: merged.payrollYear,
+        payment_method: merged.paymentMethod,
+        currency: merged.currency,
+        enable_sha: merged.enableSha,
+        enable_nssf: merged.enableNssf,
+        enable_tax: merged.enableTax,
+        sha_percentage: merged.shaPercentage,
+        nssf_amount: merged.nssfAmount,
+        originator_account: merged.originatorAccount,
+        branch_dao: merged.branchDao,
+        orig_code: merged.origCode,
+        reference_code: merged.reference,
+        custom_roles: merged.customRoles?.join(", "),
+      };
+      await cloudStorageService.set("payroll_settings", payload);
+      localStorage.setItem("fuelpro_payroll_settings", JSON.stringify(payload));
     } catch (error) {
       console.error("Error saving settings:", error);
+      alert("Failed to save payroll settings: " + (error as Error).message);
     } finally {
       setImporting(false);
     }
@@ -442,61 +424,59 @@ export default function PayrollSystem() {
   const saveEmployee = async () => {
     try {
       setSaving(true);
-      const method = editingEmployee ? "PUT" : "POST";
-      const url = editingEmployee
-        ? `/api/payroll/employees/${editingEmployee.id}`
-        : "/api/payroll/employees";
+      const empData = {
+        first_name: employeeForm.firstName,
+        last_name: employeeForm.lastName,
+        full_name: `${employeeForm.firstName} ${employeeForm.lastName}`.trim(),
+        employee_id: employeeForm.employeeId,
+        role: employeeForm.role,
+        department: employeeForm.department,
+        basic_salary: employeeForm.basicSalary,
+        id_number: employeeForm.idNo,
+        kra_pin: employeeForm.kraPin,
+        sha_number: employeeForm.shaNo,
+        nssf_number: employeeForm.nssfNo,
+        bank_account: employeeForm.bankAccount,
+        bank_name: employeeForm.bankName,
+        bank_code: employeeForm.bankCode,
+        phone: employeeForm.phone,
+        email: employeeForm.email,
+        employment_date: employeeForm.employmentDate,
+        advance_amount: employeeForm.advance,
+        sha_amount: employeeForm.sha || 0,
+        nssf_amount: employeeForm.nssf || 0,
+        net_pay: (employeeForm.basicSalary || 0) - (employeeForm.advance || 0) - (employeeForm.sha || 0) - (employeeForm.nssf || 0),
+        notes: employeeForm.notes,
+      };
 
-      const response = await fetch(url, {
-        method,
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${user?.id}`,
-        },
-        body: JSON.stringify({
-          first_name: employeeForm.firstName,
-          last_name: employeeForm.lastName,
-          employee_id: employeeForm.employeeId,
-          role: employeeForm.role,
-          department: employeeForm.department,
-          basic_salary: employeeForm.basicSalary,
-          id_number: employeeForm.idNo,
-          kra_pin: employeeForm.kraPin,
-          sha_number: employeeForm.shaNo,
-          nssf_number: employeeForm.nssfNo,
-          bank_account: employeeForm.bankAccount,
-          bank_name: employeeForm.bankName,
-          bank_code: employeeForm.bankCode,
-          phone: employeeForm.phone,
-          email: employeeForm.email,
-          employment_date: employeeForm.employmentDate,
-          advance_amount: employeeForm.advance,
-          notes: employeeForm.notes,
-        }),
-      });
-
-      if (response.ok) {
-        await fetchEmployees(); // Refresh the list
-        setShowEmployeeModal(false);
-        setEditingEmployee(null);
-
-        // Add role to custom roles if not already there
-        if (
-          !settings.customRoles.includes(employeeForm.role) &&
-          employeeForm.role
-        ) {
-          const updatedSettings = {
-            ...settings,
-            customRoles: [...settings.customRoles, employeeForm.role],
-          };
-          setSettings(updatedSettings);
-          saveSettings(updatedSettings);
-        }
+      const cloudData = (await cloudStorageService.get<any[]>("payroll_employees")) || [];
+      let updatedList: any[];
+      if (editingEmployee) {
+        const idx = cloudData.findIndex((e: any) => e.employee_id === editingEmployee.employeeId);
+        updatedList = idx >= 0
+          ? [...cloudData.slice(0, idx), { ...cloudData[idx], ...empData }, ...cloudData.slice(idx + 1)]
+          : [...cloudData, empData];
       } else {
-        console.error("Failed to save employee");
+        updatedList = [...cloudData, { ...empData, id: Date.now() }];
+      }
+      await cloudStorageService.set("payroll_employees", updatedList);
+      localStorage.setItem("fuelpro_payroll_employees", JSON.stringify(updatedList));
+
+      await fetchEmployees();
+      setShowEmployeeModal(false);
+      setEditingEmployee(null);
+
+      if (!settings.customRoles.includes(employeeForm.role) && employeeForm.role) {
+        const updatedSettings = {
+          ...settings,
+          customRoles: [...settings.customRoles, employeeForm.role],
+        };
+        setSettings(updatedSettings);
+        saveSettings(updatedSettings);
       }
     } catch (error) {
       console.error("Error saving employee:", error);
+      alert("Failed to save employee: " + (error as Error).message);
     } finally {
       setSaving(false);
     }
@@ -511,23 +491,17 @@ export default function PayrollSystem() {
     if (employeeToDelete) {
       try {
         setSaving(true);
-        const response = await fetch(
-          `/api/payroll/employees/${employeeToDelete}`,
-          {
-            method: "DELETE",
-            headers: { Authorization: `Bearer ${user?.id}` },
-          }
-        );
+        const cloudData = (await cloudStorageService.get<any[]>("payroll_employees")) || [];
+        const updatedList = cloudData.filter((e: any) => e.id !== employeeToDelete && e.employee_id !== employeeToDelete);
+        await cloudStorageService.set("payroll_employees", updatedList);
+        localStorage.setItem("fuelpro_payroll_employees", JSON.stringify(updatedList));
 
-        if (response.ok) {
-          await fetchEmployees(); // Refresh the list
-          setShowDeleteModal(false);
-          setEmployeeToDelete(null);
-        } else {
-          console.error("Failed to delete employee");
-        }
+        await fetchEmployees();
+        setShowDeleteModal(false);
+        setEmployeeToDelete(null);
       } catch (error) {
         console.error("Error deleting employee:", error);
+        alert("Failed to delete employee: " + (error as Error).message);
       } finally {
         setSaving(false);
       }
@@ -538,23 +512,19 @@ export default function PayrollSystem() {
   const applyShaToAll = async () => {
     try {
       setSaving(true);
-      const response = await fetch("/api/payroll/bulk-update-sha", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${user?.id}`,
-        },
-        body: JSON.stringify({ sha_percentage: shaPercentage }),
-      });
+      const cloudData = (await cloudStorageService.get<any[]>("payroll_employees")) || [];
+      const updatedList = cloudData.map((emp: any) => ({
+        ...emp,
+        sha_amount: (emp.basic_salary || 0) * (shaPercentage / 100),
+        net_pay: (emp.basic_salary || 0) - (emp.advance_amount || 0) - (emp.sha_amount || 0) - (emp.nssf_amount || 0),
+      }));
+      await cloudStorageService.set("payroll_employees", updatedList);
+      localStorage.setItem("fuelpro_payroll_employees", JSON.stringify(updatedList));
 
-      if (response.ok) {
-        await fetchEmployees(); // Refresh the list
-        const updatedSettings = { ...settings, shaPercentage };
-        setSettings(updatedSettings);
-        setShowShaModal(false);
-      } else {
-        console.error("Failed to update SHA for all employees");
-      }
+      await fetchEmployees();
+      const updatedSettings = { ...settings, shaPercentage };
+      setSettings(updatedSettings);
+      setShowShaModal(false);
     } catch (error) {
       console.error("Error updating SHA:", error);
     } finally {
@@ -565,25 +535,22 @@ export default function PayrollSystem() {
   const applyNssfToAll = async () => {
     try {
       setSaving(true);
-      const response = await fetch("/api/payroll/bulk-update-nssf", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${user?.id}`,
-        },
-        body: JSON.stringify({ nssf_amount: nssfAmount }),
-      });
+      const cloudData = (await cloudStorageService.get<any[]>("payroll_employees")) || [];
+      const updatedList = cloudData.map((emp: any) => ({
+        ...emp,
+        nssf_amount: nssfAmount,
+        net_pay: (emp.basic_salary || 0) - (emp.advance_amount || 0) - (emp.sha_amount || 0) - nssfAmount,
+      }));
+      await cloudStorageService.set("payroll_employees", updatedList);
+      localStorage.setItem("fuelpro_payroll_employees", JSON.stringify(updatedList));
 
-      if (response.ok) {
-        await fetchEmployees(); // Refresh the list
-        const updatedSettings = { ...settings, nssfAmount };
-        setSettings(updatedSettings);
-        setShowNssfModal(false);
-      } else {
-        console.error("Failed to update NSSF for all employees");
-      }
+      await fetchEmployees();
+      const updatedSettings = { ...settings, nssfAmount };
+      setSettings(updatedSettings);
+      setShowNssfModal(false);
     } catch (error) {
       console.error("Error updating NSSF:", error);
+      alert("Failed to update NSSF: " + (error as Error).message);
     } finally {
       setSaving(false);
     }
@@ -606,7 +573,7 @@ export default function PayrollSystem() {
     }
   };
 
-  // Update cell values directly in backend
+  // Update cell values — persist to cloud + localStorage
   const updateCell = async (employee: Employee, field: string, value: any) => {
     try {
       const updatedEmployee = { ...employee };
@@ -617,7 +584,6 @@ export default function PayrollSystem() {
         if (field === "nssf") updatedEmployee.nssf = numValue;
         if (field === "advance") updatedEmployee.advance = numValue;
 
-        // Recalculate net pay
         updatedEmployee.netPay =
           updatedEmployee.basicSalary -
           (updatedEmployee.sha +
@@ -627,16 +593,14 @@ export default function PayrollSystem() {
         (updatedEmployee as any)[field] = value;
       }
 
-      // Update in backend
-      const response = await fetch(`/api/payroll/employees/${employee.id}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${user?.id}`,
-        },
-        body: JSON.stringify({
+      const cloudData = (await cloudStorageService.get<any[]>("payroll_employees")) || [];
+      const idx = cloudData.findIndex((e: any) => e.employee_id === employee.employeeId);
+      if (idx >= 0) {
+        const updated = {
+          ...cloudData[idx],
           first_name: updatedEmployee.firstName,
           last_name: updatedEmployee.lastName,
+          full_name: updatedEmployee.fullName,
           employee_id: updatedEmployee.employeeId,
           role: updatedEmployee.role,
           department: updatedEmployee.department,
@@ -652,15 +616,21 @@ export default function PayrollSystem() {
           email: updatedEmployee.email,
           employment_date: updatedEmployee.employmentDate,
           advance_amount: updatedEmployee.advance,
+          sha_amount: updatedEmployee.sha,
+          nssf_amount: updatedEmployee.nssf,
+          net_pay: updatedEmployee.netPay,
           notes: updatedEmployee.notes,
-        }),
-      });
-
-      if (response.ok) {
-        await fetchEmployees(); // Refresh to get updated values
+        };
+        cloudData[idx] = updated;
+        await cloudStorageService.set("payroll_employees", cloudData);
+        localStorage.setItem("fuelpro_payroll_employees", JSON.stringify(cloudData));
       }
+
+      // Optimistically update local state
+      setEmployees(prev => prev.map(e => e.employeeId === employee.employeeId ? updatedEmployee : e));
     } catch (error) {
       console.error("Error updating cell:", error);
+      alert("Failed to update employee: " + (error as Error).message);
     }
   };
 
@@ -780,23 +750,16 @@ export default function PayrollSystem() {
     );
   };
 
-  // Enhanced export functions with backend data
+  // Enhanced export functions using local/cloud data
   const exportCombinedPayrollExcel = async () => {
     try {
       setSaving(true);
-      const response = await fetch("/api/payroll/export-combined", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${user?.id}` },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        generateCombinedExcel(data);
-      } else {
-        console.error("Failed to export combined payroll");
-      }
+      const cloudEmployees = (await cloudStorageService.get<any[]>("payroll_employees")) || [];
+      const cloudSettings = await cloudStorageService.get<any>("payroll_settings");
+      generateCombinedExcel({ employees: cloudEmployees, settings: cloudSettings || settings });
     } catch (error) {
       console.error("Error exporting combined payroll:", error);
+      alert("Failed to export: " + (error as Error).message);
     } finally {
       setSaving(false);
     }
@@ -805,19 +768,12 @@ export default function PayrollSystem() {
   const exportCPCCentralizedExcel = async () => {
     try {
       setSaving(true);
-      const response = await fetch("/api/payroll/export-cpc", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${user?.id}` },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        generateCPCExcel(data);
-      } else {
-        console.error("Failed to export CPC centralized");
-      }
+      const cloudEmployees = (await cloudStorageService.get<any[]>("payroll_employees")) || [];
+      const cloudSettings = await cloudStorageService.get<any>("payroll_settings");
+      generateCPCExcel({ employees: cloudEmployees, settings: cloudSettings || settings });
     } catch (error) {
       console.error("Error exporting CPC centralized:", error);
+      alert("Failed to export CPC: " + (error as Error).message);
     } finally {
       setSaving(false);
     }
@@ -1505,53 +1461,33 @@ export default function PayrollSystem() {
 
       if (!confirmImport) return;
 
-      // Import employees - try API first, fallback to localStorage
+      // Import employees directly to cloud storage + localStorage
       let successCount = 0;
-      let errorCount = 0;
       const localImported: any[] = [];
 
       for (const employeeData of importedEmployees) {
-        try {
-          const response = await fetch("/api/payroll/employees", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${user?.id || "local"}`,
-            },
-            body: JSON.stringify(employeeData),
-          });
-
-          if (response.ok) {
-            successCount++;
-          } else {
-            throw new Error("API failed");
-          }
-        } catch {
-          // Fallback: store in localStorage
-          localImported.push({
-            id: Date.now() + Math.random(),
-            ...employeeData,
-            sha: 0,
-            nssf: 0,
-            advance: employeeData.advance_amount || 0,
-            basicSalary: employeeData.basic_salary || 0,
-            netPay:
-              (employeeData.basic_salary || 0) -
-              (employeeData.advance_amount || 0),
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          });
-          successCount++;
-        }
+        localImported.push({
+          id: Date.now() + Math.random(),
+          ...employeeData,
+          sha: 0,
+          nssf: 0,
+          advance: employeeData.advance_amount || 0,
+          basicSalary: employeeData.basic_salary || 0,
+          netPay:
+            (employeeData.basic_salary || 0) -
+            (employeeData.advance_amount || 0),
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        });
+        successCount++;
       }
 
-      // Save locally imported employees to localStorage
+      // Save imported employees to cloud + localStorage
       if (localImported.length > 0) {
         try {
-          const existing = JSON.parse(
-            localStorage.getItem("fuelpro_payroll_employees") || "[]"
-          );
-          const updated = [...existing, ...localImported];
+          const cloudData = (await cloudStorageService.get<any[]>("payroll_employees")) || [];
+          const updated = [...cloudData, ...localImported];
+          await cloudStorageService.set("payroll_employees", updated);
           localStorage.setItem(
             "fuelpro_payroll_employees",
             JSON.stringify(updated)

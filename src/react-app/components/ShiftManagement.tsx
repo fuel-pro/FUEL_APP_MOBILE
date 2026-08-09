@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useLocation } from "@/react-app/context/LocationContext";
 import {
   Calendar,
@@ -14,6 +14,8 @@ import {
   Search,
   ChevronDown,
 } from "lucide-react";
+import cloudStorageService from "@/react-app/lib/cloud-storage-service";
+import { useAuth } from "@/react-app/context/AuthContext";
 
 interface Shift {
   id: string;
@@ -70,6 +72,7 @@ const SHIFT_TEMPLATES = [
 export default function ShiftManagement() {
   const location = useLocation();
   const currencySymbol = location.currencySymbol;
+  const { user } = useAuth();
   const [employees, setEmployees] = useState<Employee[]>(() => {
     try {
       return JSON.parse(localStorage.getItem("fuelpro_employees") || "[]");
@@ -106,11 +109,24 @@ export default function ShiftManagement() {
   const saveShifts = (s: Shift[]) => {
     setShifts(s);
     localStorage.setItem("fuelpro_shifts", JSON.stringify(s));
+    cloudStorageService.set("shift_data", s).catch(() => {});
   };
   const saveEmployees = (e: Employee[]) => {
     setEmployees(e);
     localStorage.setItem("fuelpro_employees", JSON.stringify(e));
+    cloudStorageService.set("shift_employees", e).catch(() => {});
   };
+
+  // Load from cloud on mount (cross-device sync)
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      const cloudEmps = await cloudStorageService.get<Employee[]>("shift_employees");
+      if (cloudEmps && Array.isArray(cloudEmps)) setEmployees(cloudEmps);
+      const cloudShifts = await cloudStorageService.get<Shift[]>("shift_data");
+      if (cloudShifts && Array.isArray(cloudShifts)) setShifts(cloudShifts);
+    })();
+  }, [user]);
 
   const dayShifts = useMemo(
     () => shifts.filter(s => s.date === selectedDate),

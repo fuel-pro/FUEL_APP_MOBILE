@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { useFuel } from "@/react-app/context/FuelContext";
 import { useAuth } from "@/react-app/context/AuthContext";
+import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 
 interface PaymentSource {
   id: number;
@@ -139,30 +140,26 @@ export default function LiveTransaction() {
 
   const loadPaymentSources = async () => {
     try {
-      const response = await fetch("/api/payment-sources");
-      if (response.ok) {
-        const data = await response.json();
-        setPaymentSources(data.sources || []);
-      } else {
-        console.error("Failed to load payment sources");
-      }
+      const sources =
+        (await cloudStorageService.get<PaymentSource[]>("payment_sources")) ||
+        [];
+      setPaymentSources(sources);
     } catch (error) {
       console.error("Error loading payment sources:", error);
+      alert("Failed to load payment sources. Please try again.");
     }
   };
 
   const loadLiveTransactions = async () => {
     try {
       setIsRefreshing(true);
-      const response = await fetch("/api/live-transactions");
-      if (response.ok) {
-        const data = await response.json();
-        setLiveTransactions(data.transactions || []);
-      } else {
-        console.error("Failed to load live transactions");
-      }
+      const transactions =
+        (await cloudStorageService.get<LiveTransaction[]>("live_transactions")) ||
+        [];
+      setLiveTransactions(transactions);
     } catch (error) {
       console.error("Error loading live transactions:", error);
+      alert("Failed to load live transactions. Please try again.");
     } finally {
       setIsRefreshing(false);
     }
@@ -178,23 +175,30 @@ export default function LiveTransaction() {
       setIsLoading(true);
       setError("");
 
-      const response = await fetch("/api/payment-sources", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(newSource),
-      });
+      const existing =
+        (await cloudStorageService.get<PaymentSource[]>("payment_sources")) ||
+        [];
+      const newSourceRecord: PaymentSource = {
+        id: Date.now(),
+        source_type: newSource.source_type,
+        source_name: newSource.source_name,
+        identifier: newSource.identifier,
+        account_info: newSource.account_info,
+        is_active: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      const updated = [...existing, newSourceRecord];
+      await cloudStorageService.set<PaymentSource[]>("payment_sources", updated);
 
-      if (response.ok) {
-        setSuccess("Payment source added successfully");
-        setShowAddSource(false);
-        resetNewSource();
-        loadPaymentSources();
-      } else {
-        const errorData = await response.json();
-        setError(errorData.error || "Failed to add payment source");
-      }
+      setSuccess("Payment source added successfully");
+      setShowAddSource(false);
+      resetNewSource();
+      setPaymentSources(updated);
     } catch (error) {
-      setError("Network error. Please try again.");
+      console.error("Error adding payment source:", error);
+      setError("Failed to add payment source. Please try again.");
+      alert("Failed to add payment source. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -214,27 +218,32 @@ export default function LiveTransaction() {
       setIsLoading(true);
       setError("");
 
-      const response = await fetch(
-        `/api/payment-sources/${selectedSource.id}`,
-        {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(newSource),
-        }
+      const existing =
+        (await cloudStorageService.get<PaymentSource[]>("payment_sources")) ||
+        [];
+      const updated = existing.map(source =>
+        source.id === selectedSource.id
+          ? {
+              ...source,
+              source_type: newSource.source_type,
+              source_name: newSource.source_name,
+              identifier: newSource.identifier,
+              account_info: newSource.account_info,
+              updated_at: new Date().toISOString(),
+            }
+          : source
       );
+      await cloudStorageService.set<PaymentSource[]>("payment_sources", updated);
 
-      if (response.ok) {
-        setSuccess("Payment source updated successfully");
-        setShowEditSource(false);
-        setSelectedSource(null);
-        resetNewSource();
-        loadPaymentSources();
-      } else {
-        const errorData = await response.json();
-        setError(errorData.error || "Failed to update payment source");
-      }
+      setSuccess("Payment source updated successfully");
+      setShowEditSource(false);
+      setSelectedSource(null);
+      resetNewSource();
+      setPaymentSources(updated);
     } catch (error) {
-      setError("Network error. Please try again.");
+      console.error("Error updating payment source:", error);
+      setError("Failed to update payment source. Please try again.");
+      alert("Failed to update payment source. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -247,24 +256,22 @@ export default function LiveTransaction() {
       setIsLoading(true);
       setError("");
 
-      const response = await fetch(
-        `/api/payment-sources/${selectedSource.id}`,
-        {
-          method: "DELETE",
-        }
+      const existing =
+        (await cloudStorageService.get<PaymentSource[]>("payment_sources")) ||
+        [];
+      const updated = existing.filter(
+        source => source.id !== selectedSource.id
       );
+      await cloudStorageService.set<PaymentSource[]>("payment_sources", updated);
 
-      if (response.ok) {
-        setSuccess("Payment source deleted successfully");
-        setShowDeleteConfirm(false);
-        setSelectedSource(null);
-        loadPaymentSources();
-      } else {
-        const errorData = await response.json();
-        setError(errorData.error || "Failed to delete payment source");
-      }
+      setSuccess("Payment source deleted successfully");
+      setShowDeleteConfirm(false);
+      setSelectedSource(null);
+      setPaymentSources(updated);
     } catch (error) {
-      setError("Network error. Please try again.");
+      console.error("Error deleting payment source:", error);
+      setError("Failed to delete payment source. Please try again.");
+      alert("Failed to delete payment source. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -292,6 +299,18 @@ export default function LiveTransaction() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(stkPushData),
       });
+
+      if (!response.ok) {
+        // 404 etc. on static deployments — surface the failure loudly.
+        const errorMsg = `M-Pesa STK push request failed (HTTP ${response.status}). This integration requires a backend server.`;
+        setStkPushStatus({
+          loading: false,
+          success: false,
+          error: errorMsg,
+        });
+        alert(errorMsg);
+        return;
+      }
 
       const data = await response.json();
 
@@ -321,18 +340,24 @@ export default function LiveTransaction() {
           loadLiveTransactions();
         }, 3000);
       } else {
+        const errorMsg = data.error || "Failed to initiate STK push";
         setStkPushStatus({
           loading: false,
           success: false,
-          error: data.error || "Failed to initiate STK push",
+          error: errorMsg,
         });
+        alert(errorMsg);
       }
     } catch (error) {
+      console.error("Error initiating STK push:", error);
+      const errorMsg =
+        "Network error reaching the M-Pesa STK push service. Please try again.";
       setStkPushStatus({
         loading: false,
         success: false,
-        error: "Network error. Please try again.",
+        error: errorMsg,
       });
+      alert(errorMsg);
     }
   };
 
@@ -371,22 +396,32 @@ export default function LiveTransaction() {
     const pollStatus = async () => {
       try {
         const response = await fetch(`/api/mpesa/query/${checkoutRequestId}`);
-        if (response.ok) {
-          const data = await response.json();
+        if (!response.ok) {
+          // Backend missing on static deployments — alert once and stop polling.
+          const errorMsg = `M-Pesa status query failed (HTTP ${response.status}). This integration requires a backend server.`;
+          setError(errorMsg);
+          alert(errorMsg);
+          return true; // Stop polling
+        }
+        const data = await response.json();
 
-          if (data.status === "completed") {
-            // Transaction successful, refresh the list
-            loadLiveTransactions();
-            setSuccess("Payment received successfully!");
-            return true; // Stop polling
-          } else if (data.status === "failed" || data.status === "cancelled") {
-            // Transaction failed, stop polling
-            setError(`Payment ${data.status}: ${data.message}`);
-            return true; // Stop polling
-          }
+        if (data.status === "completed") {
+          // Transaction successful, refresh the list
+          loadLiveTransactions();
+          setSuccess("Payment received successfully!");
+          return true; // Stop polling
+        } else if (data.status === "failed" || data.status === "cancelled") {
+          // Transaction failed, stop polling
+          setError(`Payment ${data.status}: ${data.message}`);
+          return true; // Stop polling
         }
       } catch (error) {
         console.error("Error polling transaction status:", error);
+        const errorMsg =
+          "Network error reaching the M-Pesa status query service. Please check your connection.";
+        setError(errorMsg);
+        alert(errorMsg);
+        return true; // Stop polling
       }
 
       attempts++;

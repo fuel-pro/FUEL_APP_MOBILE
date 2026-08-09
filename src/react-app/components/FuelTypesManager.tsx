@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { KENYA_BASE_PRICES, KENYA_SPECIALTY_PRICES } from "@/react-app/config/pricing";
 import {
   Fuel,
@@ -19,6 +19,8 @@ import {
   ChevronUp,
 } from "lucide-react";
 import { useFuel } from "@/react-app/context/FuelContext";
+import cloudStorageService from "@/react-app/lib/cloud-storage-service";
+import { useAuth } from "@/react-app/context/AuthContext";
 
 // ============================================================
 // CUSTOM FUEL TYPE MANAGER
@@ -269,6 +271,7 @@ function saveFuelTypes(types: CustomFuelType[]) {
 }
 
 export default function FuelTypesManager() {
+  const { user } = useAuth();
   const [fuelTypes, setFuelTypes] = useState<CustomFuelType[]>(loadFuelTypes);
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -290,7 +293,18 @@ export default function FuelTypesManager() {
   const persist = (types: CustomFuelType[]) => {
     setFuelTypes(types);
     saveFuelTypes(types);
+    cloudStorageService.set("fuel_types_config", types).catch(() => {});
   };
+
+  // Load from cloud on mount (cross-device sync)
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      const cloudData =
+        await cloudStorageService.get<CustomFuelType[]>("fuel_types_config");
+      if (cloudData && Array.isArray(cloudData)) setFuelTypes(cloudData);
+    })();
+  }, [user]);
 
   const resetForm = () => {
     setFormCode("");

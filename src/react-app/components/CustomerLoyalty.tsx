@@ -1,6 +1,8 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useFuel } from "@/react-app/context/FuelContext";
 import { useLocation } from "@/react-app/context/LocationContext";
+import cloudStorageService from "@/react-app/lib/cloud-storage-service";
+import { useAuth } from "@/react-app/context/AuthContext";
 import {
   Users,
   Star,
@@ -111,6 +113,7 @@ function tierColor(tier: Customer["tier"]): string {
 export default function CustomerLoyalty() {
   const { state } = useFuel();
   const location = useLocation();
+  const { user } = useAuth();
   const [customers, setCustomers] = useState<Customer[]>(() => {
     try {
       return JSON.parse(localStorage.getItem("fuelpro_customers") || "[]");
@@ -144,7 +147,18 @@ export default function CustomerLoyalty() {
   const save = (c: Customer[]) => {
     setCustomers(c);
     localStorage.setItem("fuelpro_customers", JSON.stringify(c));
+    cloudStorageService.set("loyalty_customers", c).catch(() => {});
   };
+
+  // Load from cloud on mount (cross-device sync)
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      const cloudData =
+        await cloudStorageService.get<Customer[]>("loyalty_customers");
+      if (cloudData && Array.isArray(cloudData)) setCustomers(cloudData);
+    })();
+  }, [user]);
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();

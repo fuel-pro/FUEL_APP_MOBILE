@@ -1,4 +1,6 @@
 import { useState, useEffect } from "react";
+import cloudStorageService from "@/react-app/lib/cloud-storage-service";
+import { useAuth } from "@/react-app/context/AuthContext";
 import {
   Wrench,
   Plus,
@@ -66,6 +68,7 @@ function loadRecords(): MaintenanceRecord[] {
 }
 
 export default function MaintenanceTracker() {
+  const { user } = useAuth();
   const [records, setRecords] = useState<MaintenanceRecord[]>(loadRecords);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -92,7 +95,18 @@ export default function MaintenanceTracker() {
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+    cloudStorageService.set("maintenance_records", records).catch(() => {});
   }, [records]);
+
+  // Load from cloud on mount (cross-device sync)
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      const cloudData =
+        await cloudStorageService.get<MaintenanceRecord[]>("maintenance_records");
+      if (cloudData && Array.isArray(cloudData)) setRecords(cloudData);
+    })();
+  }, [user]);
 
   const showNotification = (
     message: string,

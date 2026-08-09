@@ -22,6 +22,18 @@ React + Vite + TypeScript SPA for fuel station management. Deployed at
   the source of truth. Other localStorage usages (UI prefs, prices cache,
   founder secrets) remain local; migrate them to `cloudStorageService` when
   they need cross-device.
+- **Per-component cloud sync** (components with their own `cloudStorageService`
+  get/set + `useAuth` load-on-mount effect, mirroring `ShiftManagement.tsx`):
+  ShiftManagement (`shift_data`, `shift_employees`), PayrollSystem
+  (`payroll_employees`, `payroll_settings`), Communication (`comm_contacts`,
+  `comm_messages`, `comm_templates`), CreditManagement (`credit_accounts`,
+  `credit_transactions`), CustomerLoyalty (`loyalty_customers`),
+  FuelTypesManager (`fuel_types_config`), MaintenanceTracker
+  (`maintenance_records`), SupplierManagement (`suppliers_data`,
+  `purchase_orders`). Pattern: import service + `useAuth`, `const { user } =
+  useAuth()`, append `cloudStorageService.set(key, data).catch(()=>{})` to the
+  existing save fn, and add a `useEffect([user])` that `get`s the typed array
+  and `setState`s it when `Array.isArray`.
 - **Schema Visualizer** (`src/react-app/pages/founder-sections/
   SchemaVisualizerSection.tsx`): uses an EMBEDDED authoritative schema map
   (SCHEMA constant — 13 live tables with all columns, types, PK/FK annotations,

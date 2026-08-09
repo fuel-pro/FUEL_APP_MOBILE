@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/react-app/context/AuthContext";
 import { useFuel } from "../context/FuelContext";
+import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 
 interface DocumentFolder {
   id: number;
@@ -45,7 +46,105 @@ interface Document {
   ai_category: string | null;
   ai_description: string | null;
   created_at: string;
+  /** Stored file content as a data URL (base64). Used for preview/download
+   *  since there is no backend serving R2 objects on the static deployment. */
+  file_data?: string;
 }
+
+// Cloud storage keys (Supabase app_kv). localStorage is used as a read-through
+// cache by cloudStorageService, so no manual caching is needed here.
+const DOCUMENTS_KEY = "documents_list";
+const FOLDERS_KEY = "documents_folders";
+
+// Default smart folders used until the cloud store provides an organizing
+// pass. Mirrors the folder shape the backend previously returned.
+const DEFAULT_FOLDERS: DocumentFolder[] = [
+  { id: 1, name: "Clients", icon: "👥", color: "blue", document_count: 0, parent_id: null },
+  { id: 2, name: "Invoices", icon: "🧾", color: "amber", document_count: 0, parent_id: null },
+  { id: 3, name: "Fuel Records", icon: "⛽", color: "green", document_count: 0, parent_id: null },
+  { id: 4, name: "Sales", icon: "📊", color: "purple", document_count: 0, parent_id: null },
+  { id: 5, name: "M-PESA", icon: "📱", color: "emerald", document_count: 0, parent_id: null },
+  { id: 6, name: "Payroll", icon: "💼", color: "indigo", document_count: 0, parent_id: null },
+  { id: 7, name: "Reports", icon: "📄", color: "cyan", document_count: 0, parent_id: null },
+  { id: 8, name: "Other", icon: "📁", color: "gray", document_count: 0, parent_id: null },
+];
+
+/** Next unique document id based on the current set. */
+const nextDocId = (docs: Document[]): number =>
+  docs.reduce((max, d) => Math.max(max, Number(d.id) || 0), 0) + 1;
+
+/** Categorize a file name into one of the default smart folder ids. */
+const categorizeByName = (name: string): number => {
+  const n = name.toLowerCase();
+  if (n.includes("client")) return 1;
+  if (n.includes("invoice")) return 2;
+  if (n.includes("offload") || n.includes("fuel")) return 3;
+  if (n.includes("sale")) return 4;
+  if (n.includes("mpesa") || n.includes("m-pesa")) return 5;
+  if (n.includes("payroll") || n.includes("employee")) return 6;
+  if (n.includes("report")) return 7;
+  return 8;
+};
+
+/** Persist the documents array to cloud storage (and localStorage cache). */
+const persistDocuments = async (docs: Document[]): Promise<void> => {
+  try {
+    await cloudStorageService.set<Document[]>(DOCUMENTS_KEY, docs);
+  } catch (err) {
+    console.error("[Documents] failed to persist documents:", err);
+    alert("Failed to save documents to cloud storage. Your changes may not be saved.");
+  }
+};
+
+/** Read a File/Blob into a base64 data URL so it can be stored as JSON. */
+const readFileAsDataURL = (file: Blob): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(reader.error || new Error("Failed to read file"));
+    reader.readAsDataURL(file);
+  });
+
+/** Build a Document record from a data URL + file metadata. */
+const buildDocument = (
+  docs: Document[],
+  file: { name: string; type: string; size: number },
+  dataUrl: string
+): Document => {
+  const id = nextDocId(docs);
+  const folderId = categorizeByName(file.name);
+  const folder = DEFAULT_FOLDERS.find(f => f.id === folderId);
+  return {
+    id,
+    name: file.name.replace(/[^a-zA-Z0-9._-]/g, "_"),
+    original_name: file.name,
+    file_type: file.type || "application/octet-stream",
+    file_size: file.size,
+    r2_key: `documents/${id}/${file.name}`,
+    folder_id: folderId,
+    ai_category: folder?.name || null,
+    ai_description: null,
+    created_at: new Date().toISOString(),
+    file_data: dataUrl,
+  };
+};
+
+/**
+ * Resolve a document's stored content to an object URL for preview/download.
+ * Falls back to fetching via `r2_key` only when no inline `file_data` exists
+ * (legacy documents saved before the static-deployment migration).
+ */
+const docToObjectUrl = async (doc: Document): Promise<string> => {
+  if (doc.file_data) {
+    // data URLs can be used directly as href/src, but converting to a Blob
+    // gives a revocable object URL consistent with the previous flow.
+    const res = await fetch(doc.file_data);
+    const blob = await res.blob();
+    return window.URL.createObjectURL(blob);
+  }
+  // Legacy fallback: no inline data and no backend to serve it.
+  throw new Error("Document content is unavailable (no stored file data).");
+};
 
 const folderColors: Record<string, string> = {
   blue: "from-blue-500 to-blue-600",
@@ -109,59 +208,89 @@ export default function Documents() {
 
   const fetchDocuments = async () => {
     try {
-      const response = await fetch("/api/documents");
-      if (response.ok) {
-        const data = await response.json();
-        setDocuments(data.documents || []);
-      }
+      const data = await cloudStorageService.get<Document[]>(DOCUMENTS_KEY);
+      setDocuments(data || []);
     } catch (err) {
+      console.error("[Documents] failed to load documents:", err);
       setError("Failed to load documents");
     }
   };
 
   const fetchFolders = async () => {
     try {
-      const response = await fetch("/api/documents/folders");
-      if (response.ok) {
-        const data = await response.json();
-        setFolders(data.folders || []);
-      }
-    } catch {
-      // Non-critical error
+      const data = await cloudStorageService.get<DocumentFolder[]>(FOLDERS_KEY);
+      // document_count is recomputed live in render via getFolderDocCount,
+      // so we only need the folder definitions here.
+      setFolders(data && data.length > 0 ? data : DEFAULT_FOLDERS);
+    } catch (err) {
+      console.error("[Documents] failed to load folders:", err);
+      setFolders(DEFAULT_FOLDERS);
     }
   };
 
-  // Organize only NEW unorganized documents (default behavior)
+  // Organize only NEW unorganized documents (default behavior).
+  // With no backend, "organizing" means assigning unfiled documents
+  // (folder_id === null) to a smart folder based on their file name.
   const organizeNewDocuments = async () => {
     try {
-      const response = await fetch("/api/documents/organize-all", {
-        method: "POST",
-      });
-      if (response.ok) {
-        const data = await response.json();
-        // Always refresh after organization to get updated folder assignments
-        // Backend returns documents_organized count
-        if (data.documents_organized > 0 || data.folders_created > 0) {
-          await fetchData();
+      const current = await cloudStorageService.get<Document[]>(DOCUMENTS_KEY);
+      const docs = current || [];
+      let changed = false;
+      const organized = docs.map(doc => {
+        if (doc.folder_id == null) {
+          changed = true;
+          const folderId = categorizeByName(doc.original_name || doc.name);
+          const folder = DEFAULT_FOLDERS.find(f => f.id === folderId);
+          return {
+            ...doc,
+            folder_id: folderId,
+            ai_category: doc.ai_category || folder?.name || null,
+          };
         }
+        return doc;
+      });
+
+      if (changed) {
+        await persistDocuments(organized);
+        setDocuments(organized);
       }
-    } catch {
-      // Silent fail
+
+      // Ensure folders exist in cloud storage.
+      const storedFolders = await cloudStorageService.get<DocumentFolder[]>(FOLDERS_KEY);
+      if (!storedFolders || storedFolders.length === 0) {
+        await cloudStorageService.set<DocumentFolder[]>(FOLDERS_KEY, DEFAULT_FOLDERS);
+        setFolders(DEFAULT_FOLDERS);
+      }
+    } catch (err) {
+      console.error("[Documents] failed to organize documents:", err);
+      alert("Failed to organize documents. Please try again.");
     }
   };
 
-  // Force reorganize ALL documents (manual action only)
+  // Force reorganize ALL documents (manual action only).
+  // Re-derives the folder for every document from its file name.
   const forceReorganizeAll = async () => {
     setOrganizingStatus("Reorganizing all documents...");
     try {
-      const response = await fetch("/api/documents/organize-all?force=true", {
-        method: "POST",
+      const current = await cloudStorageService.get<Document[]>(DOCUMENTS_KEY);
+      const docs = current || [];
+      const organized = docs.map(doc => {
+        const folderId = categorizeByName(doc.original_name || doc.name);
+        const folder = DEFAULT_FOLDERS.find(f => f.id === folderId);
+        return {
+          ...doc,
+          folder_id: folderId,
+          ai_category: folder?.name || doc.ai_category || null,
+        };
       });
-      if (response.ok) {
-        await fetchData();
-      }
-    } catch {
-      // Silent fail
+
+      await persistDocuments(organized);
+      await cloudStorageService.set<DocumentFolder[]>(FOLDERS_KEY, DEFAULT_FOLDERS);
+      setDocuments(organized);
+      setFolders(DEFAULT_FOLDERS);
+    } catch (err) {
+      console.error("[Documents] failed to reorganize documents:", err);
+      alert("Failed to reorganize documents. Please try again.");
     } finally {
       setOrganizingStatus(null);
     }
@@ -428,10 +557,15 @@ export default function Documents() {
       },
     ];
 
+    // Load the latest documents from cloud storage so we don't clobber
+    // concurrent writes from other tabs/devices.
+    let currentDocs = (await cloudStorageService.get<Document[]>(DOCUMENTS_KEY)) || [];
+    let modified = false;
+
     for (const doc of documentsToSave) {
       if (doc.check) {
         // Check if document already exists today
-        const existingDoc = documents.find(
+        const existingDoc = currentDocs.find(
           d => d.name === doc.name || d.original_name === doc.name
         );
         if (!existingDoc) {
@@ -441,19 +575,26 @@ export default function Documents() {
             doc.type
           );
           const blob = new Blob([htmlContent], { type: "text/html" });
-          const formData = new FormData();
-          formData.append("file", blob, doc.name);
 
           try {
-            await fetch("/api/documents/upload", {
-              method: "POST",
-              body: formData,
-            });
-          } catch {
-            // Silent fail for individual document
+            const dataUrl = await readFileAsDataURL(blob);
+            const newDoc = buildDocument(
+              currentDocs,
+              { name: doc.name, type: "text/html", size: blob.size },
+              dataUrl
+            );
+            currentDocs = [newDoc, ...currentDocs];
+            modified = true;
+          } catch (err) {
+            console.error(`[Documents] failed to save ${doc.name}:`, err);
+            alert(`Failed to save document "${doc.name}".`);
           }
         }
       }
+    }
+
+    if (modified) {
+      await persistDocuments(currentDocs);
     }
 
     await fetchData();
@@ -475,31 +616,38 @@ export default function Documents() {
     setUploadProgress(0);
     setError(null);
 
+    // Load the latest documents from cloud storage so new uploads append to
+    // the current set rather than overwriting it.
+    let currentDocs = (await cloudStorageService.get<Document[]>(DOCUMENTS_KEY)) || [];
     const uploadedIds: number[] = [];
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
-      const formData = new FormData();
-      formData.append("file", file);
 
       try {
-        const response = await fetch("/api/documents/upload", {
-          method: "POST",
-          body: formData,
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          if (data.document?.id) {
-            uploadedIds.push(data.document.id);
-          }
-        } else {
-          throw new Error(`Failed to upload ${file.name}`);
-        }
+        const dataUrl = await readFileAsDataURL(file);
+        const newDoc = buildDocument(
+          currentDocs,
+          { name: file.name, type: file.type, size: file.size },
+          dataUrl
+        );
+        currentDocs = [newDoc, ...currentDocs];
+        uploadedIds.push(newDoc.id);
 
         setUploadProgress(((i + 1) / files.length) * 100);
-      } catch {
+      } catch (err) {
+        console.error(`[Documents] failed to upload ${file.name}:`, err);
         setError(`Error uploading ${file.name}`);
+        alert(`Failed to upload "${file.name}". Please try again.`);
+      }
+    }
+
+    if (uploadedIds.length > 0) {
+      try {
+        await cloudStorageService.set<Document[]>(DOCUMENTS_KEY, currentDocs);
+      } catch (err) {
+        console.error("[Documents] failed to persist uploaded documents:", err);
+        alert("Failed to save uploaded documents to cloud storage.");
       }
     }
 
@@ -525,15 +673,13 @@ export default function Documents() {
     setImageRotation(0);
 
     try {
-      const response = await fetch(`/api/documents/${doc.id}/download`);
-      if (!response.ok) throw new Error("Preview failed");
-
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
+      const url = await docToObjectUrl(doc);
       setPreviewUrl(url);
-    } catch {
+    } catch (err) {
+      console.error("[Documents] preview failed:", err);
       setError("Failed to load preview");
       setPreviewMode(false);
+      alert("Failed to load preview. The document content may be missing.");
     } finally {
       setPreviewLoading(false);
     }
@@ -566,15 +712,13 @@ export default function Documents() {
     setQuickPreviewUrl(null);
 
     try {
-      const response = await fetch(`/api/documents/${doc.id}/download`);
-      if (!response.ok) throw new Error("Preview failed");
-
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
+      const url = await docToObjectUrl(doc);
       setQuickPreviewUrl(url);
-    } catch {
+    } catch (err) {
+      console.error("[Documents] quick preview failed:", err);
       setError("Failed to load preview");
       setQuickPreviewDoc(null);
+      alert("Failed to load preview. The document content may be missing.");
     } finally {
       setQuickPreviewLoading(false);
     }
@@ -590,11 +734,7 @@ export default function Documents() {
 
   const handleDownload = async (doc: Document) => {
     try {
-      const response = await fetch(`/api/documents/${doc.id}/download`);
-      if (!response.ok) throw new Error("Download failed");
-
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
+      const url = await docToObjectUrl(doc);
       const a = document.createElement("a");
       a.href = url;
       a.download = doc.original_name;
@@ -602,25 +742,46 @@ export default function Documents() {
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
-    } catch {
+    } catch (err) {
+      console.error("[Documents] download failed:", err);
       setError("Failed to download document");
+      alert("Failed to download document. The file content may be missing.");
     }
   };
 
   const handleShare = async (doc: Document) => {
     try {
-      const shareUrl = `${window.location.origin}/api/documents/${doc.id}/download`;
-
-      if (navigator.share) {
+      // With no backend, there is no public download URL to share. Share the
+      // inline data URL directly (works for navigator.share files and
+      // clipboard), or fall back to a descriptive message.
+      if (doc.file_data && navigator.share) {
+        // navigator.share supports File objects via shareData.files when
+        // available; otherwise share the data URL as text.
+        const canShareFiles =
+          navigator.canShare && typeof navigator.canShare === "function";
+        if (canShareFiles) {
+          const res = await fetch(doc.file_data);
+          const blob = await res.blob();
+          const file = new File([blob], doc.original_name, { type: blob.type });
+          if (navigator.canShare({ files: [file] })) {
+            await navigator.share({
+              title: doc.original_name,
+              text: `Check out this document: ${doc.original_name}`,
+              files: [file],
+            });
+            return;
+          }
+        }
         await navigator.share({
           title: doc.original_name,
           text: `Check out this document: ${doc.original_name}`,
-          url: shareUrl,
+          url: doc.file_data,
         });
       } else {
-        await navigator.clipboard.writeText(shareUrl);
+        const message = `Document: ${doc.original_name}`;
+        await navigator.clipboard.writeText(message);
         import("@/react-app/lib/toast").then(({ toastSuccess }) =>
-          toastSuccess("Download link copied to clipboard!")
+          toastSuccess("Document name copied to clipboard!")
         );
       }
     } catch {
@@ -632,22 +793,18 @@ export default function Documents() {
     if (!confirm(`Delete "${doc.original_name}"?`)) return;
 
     try {
-      const response = await fetch(`/api/documents/${doc.id}`, {
-        method: "DELETE",
-      });
-
-      if (response.ok) {
-        setDocuments(prev => prev.filter(d => d.id !== doc.id));
-        if (selectedDoc?.id === doc.id) {
-          setSelectedDoc(null);
-          closePreview();
-        }
-        await fetchFolders();
-      } else {
-        throw new Error("Delete failed");
+      const current = (await cloudStorageService.get<Document[]>(DOCUMENTS_KEY)) || [];
+      const updated = current.filter(d => d.id !== doc.id);
+      await persistDocuments(updated);
+      setDocuments(updated);
+      if (selectedDoc?.id === doc.id) {
+        setSelectedDoc(null);
+        closePreview();
       }
-    } catch {
+    } catch (err) {
+      console.error("[Documents] delete failed:", err);
       setError("Failed to delete document");
+      alert("Failed to delete document. Please try again.");
     }
   };
 

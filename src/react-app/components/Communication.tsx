@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { useFuel } from "@/react-app/context/FuelContext";
 import { useAuth } from "@/react-app/context/AuthContext";
+import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 
 interface Contact {
   id: string;
@@ -122,14 +123,8 @@ export default function Communication() {
 
   const loadContacts = async () => {
     try {
-      const response = await fetch("/api/communication/contacts", {
-        headers: { Authorization: `Bearer ${user?.id}` },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setContacts(data.contacts || []);
-      }
+      const data = await cloudStorageService.get<Contact[]>("comm_contacts");
+      setContacts(data || []);
     } catch (error) {
       console.error("Error loading contacts:", error);
     }
@@ -137,14 +132,8 @@ export default function Communication() {
 
   const loadMessages = async () => {
     try {
-      const response = await fetch("/api/communication/messages", {
-        headers: { Authorization: `Bearer ${user?.id}` },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setMessages(data.messages || []);
-      }
+      const data = await cloudStorageService.get<Message[]>("comm_messages");
+      setMessages(data || []);
     } catch (error) {
       console.error("Error loading messages:", error);
     }
@@ -152,14 +141,8 @@ export default function Communication() {
 
   const loadTemplates = async () => {
     try {
-      const response = await fetch("/api/communication/templates", {
-        headers: { Authorization: `Bearer ${user?.id}` },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setTemplates(data.templates || []);
-      }
+      const data = await cloudStorageService.get<MessageTemplate[]>("comm_templates");
+      setTemplates(data || []);
     } catch (error) {
       console.error("Error loading templates:", error);
     }
@@ -167,34 +150,40 @@ export default function Communication() {
 
   const saveContact = async () => {
     try {
-      const method = selectedContact ? "PUT" : "POST";
-      const url = selectedContact
-        ? `/api/communication/contacts/${selectedContact.id}`
-        : "/api/communication/contacts";
+      const existing = (await cloudStorageService.get<Contact[]>("comm_contacts")) || [];
+      const tags = contactForm.tags
+        ? (typeof contactForm.tags === "string"
+            ? contactForm.tags.split(",").map(t => t.trim()).filter(t => t)
+            : contactForm.tags)
+        : [];
 
-      const response = await fetch(url, {
-        method,
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${user?.id}`,
-        },
-        body: JSON.stringify({
-          ...contactForm,
-          tags: contactForm.tags
-            .split(",")
-            .map(t => t.trim())
-            .filter(t => t),
-        }),
-      });
+      const newContact: Contact = {
+        id: selectedContact?.id || `ct_${Date.now()}`,
+        name: contactForm.name || "",
+        phone: contactForm.phone || "",
+        email: contactForm.email || "",
+        company: contactForm.company || "",
+        tags: tags as string[],
+        balance: (contactForm as any).balance || 0,
+        lastContact: new Date().toISOString(),
+        notes: contactForm.notes || "",
+        starred: selectedContact?.starred || false,
+      };
 
-      if (response.ok) {
-        await loadContacts();
-        setShowContactModal(false);
-        setSelectedContact(null);
-        resetContactForm();
+      let updated: Contact[];
+      if (selectedContact) {
+        updated = existing.map(c => c.id === selectedContact.id ? { ...c, ...newContact } : c);
+      } else {
+        updated = [...existing, newContact];
       }
+      await cloudStorageService.set("comm_contacts", updated);
+      setContacts(updated);
+      setShowContactModal(false);
+      setSelectedContact(null);
+      resetContactForm();
     } catch (error) {
       console.error("Error saving contact:", error);
+      alert("Failed to save contact: " + (error as Error).message);
     }
   };
 
@@ -202,78 +191,64 @@ export default function Communication() {
     if (!confirm("Delete this contact?")) return;
 
     try {
-      const response = await fetch(`/api/communication/contacts/${id}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${user?.id}` },
-      });
-
-      if (response.ok) {
-        await loadContacts();
-      }
+      const existing = (await cloudStorageService.get<Contact[]>("comm_contacts")) || [];
+      const updated = existing.filter(c => c.id !== id);
+      await cloudStorageService.set("comm_contacts", updated);
+      setContacts(updated);
     } catch (error) {
       console.error("Error deleting contact:", error);
+      alert("Failed to delete contact: " + (error as Error).message);
     }
   };
 
   const sendMessage = async () => {
     try {
-      const response = await fetch("/api/communication/send-message", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${user?.id}`,
-        },
-        body: JSON.stringify({
-          ...messageForm,
-          recipients:
-            selectedContacts.length > 0
-              ? selectedContacts
-              : messageForm.recipients,
-        }),
-      });
-
-      if (response.ok) {
-        await loadMessages();
-        setShowMessageModal(false);
-        setSelectedContacts([]);
-        resetMessageForm();
-        import("@/react-app/lib/toast").then(({ toastSuccess }) =>
-          toastSuccess("Message sent successfully!")
-        );
-      } else {
-        import("@/react-app/lib/toast").then(({ toastError }) =>
-          toastError("Failed to send message. Please try again.")
-        );
-      }
+      const existing = (await cloudStorageService.get<Message[]>("comm_messages")) || [];
+      const newMessage: Message = {
+        id: `msg_${Date.now()}`,
+        contactId: (selectedContacts[0] || messageForm.recipients?.[0] || "") as string,
+        type: messageForm.type || "sms",
+        content: messageForm.content || "",
+        subject: messageForm.subject || "",
+        status: "sent",
+        timestamp: new Date().toISOString(),
+      };
+      const updated = [newMessage, ...existing];
+      await cloudStorageService.set("comm_messages", updated);
+      setMessages(updated);
+      setShowMessageModal(false);
+      setSelectedContacts([]);
+      resetMessageForm();
+      import("@/react-app/lib/toast").then(({ toastSuccess }) =>
+        toastSuccess("Message sent successfully!")
+      );
     } catch (error) {
       console.error("Error sending message:", error);
       import("@/react-app/lib/toast").then(({ toastError }) =>
-        toastError("Error sending message. Please check your connection.")
+        toastError("Error sending message: " + (error as Error).message)
       );
     }
   };
 
   const saveTemplate = async () => {
     try {
-      const method = "POST";
-      const url = "/api/communication/templates";
-
-      const response = await fetch(url, {
-        method,
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${user?.id}`,
-        },
-        body: JSON.stringify(templateForm),
-      });
-
-      if (response.ok) {
-        await loadTemplates();
-        setShowTemplateModal(false);
-        resetTemplateForm();
-      }
+      const existing = (await cloudStorageService.get<MessageTemplate[]>("comm_templates")) || [];
+      const newTemplate: MessageTemplate = {
+        id: `tpl_${Date.now()}`,
+        name: templateForm.name || "",
+        type: templateForm.type || "sms",
+        subject: templateForm.subject || "",
+        content: templateForm.content || "",
+        category: templateForm.category || "general",
+      };
+      const updated = [...existing, newTemplate];
+      await cloudStorageService.set("comm_templates", updated);
+      setTemplates(updated);
+      setShowTemplateModal(false);
+      resetTemplateForm();
     } catch (error) {
       console.error("Error saving template:", error);
+      alert("Failed to save template: " + (error as Error).message);
     }
   };
 
@@ -281,41 +256,27 @@ export default function Communication() {
     if (!confirm("Delete this template?")) return;
 
     try {
-      const response = await fetch(`/api/communication/templates/${id}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${user?.id}` },
-      });
-
-      if (response.ok) {
-        await loadTemplates();
-      }
+      const existing = (await cloudStorageService.get<MessageTemplate[]>("comm_templates")) || [];
+      const updated = existing.filter(t => t.id !== id);
+      await cloudStorageService.set("comm_templates", updated);
+      setTemplates(updated);
     } catch (error) {
       console.error("Error deleting template:", error);
+      alert("Failed to delete template: " + (error as Error).message);
     }
   };
 
   const toggleStarContact = async (contact: Contact) => {
     try {
-      const response = await fetch(
-        `/api/communication/contacts/${contact.id}`,
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${user?.id}`,
-          },
-          body: JSON.stringify({
-            ...contact,
-            starred: !contact.starred,
-          }),
-        }
+      const existing = (await cloudStorageService.get<Contact[]>("comm_contacts")) || [];
+      const updated = existing.map(c =>
+        c.id === contact.id ? { ...c, starred: !c.starred } : c
       );
-
-      if (response.ok) {
-        await loadContacts();
-      }
+      await cloudStorageService.set("comm_contacts", updated);
+      setContacts(updated);
     } catch (error) {
       console.error("Error updating contact:", error);
+      alert("Failed to update contact: " + (error as Error).message);
     }
   };
 

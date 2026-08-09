@@ -1,6 +1,8 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useFuel } from "@/react-app/context/FuelContext";
 import { useLocation } from "@/react-app/context/LocationContext";
+import cloudStorageService from "@/react-app/lib/cloud-storage-service";
+import { useAuth } from "@/react-app/context/AuthContext";
 import {
   CreditCard,
   Plus,
@@ -46,6 +48,7 @@ export default function CreditManagement() {
   const { state } = useFuel();
   const location = useLocation();
   const currencySymbol = location.currencySymbol;
+  const { user } = useAuth();
   const [accounts, setAccounts] = useState<CreditAccount[]>(() => {
     try {
       return JSON.parse(
@@ -78,11 +81,26 @@ export default function CreditManagement() {
   const saveAcc = (a: CreditAccount[]) => {
     setAccounts(a);
     localStorage.setItem("fuelpro_credit_accounts", JSON.stringify(a));
+    cloudStorageService.set("credit_accounts", a).catch(() => {});
   };
   const saveTx = (t: CreditTransaction[]) => {
     setTransactions(t);
     localStorage.setItem("fuelpro_credit_tx", JSON.stringify(t));
+    cloudStorageService.set("credit_transactions", t).catch(() => {});
   };
+
+  // Load from cloud on mount (cross-device sync)
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      const cloudAccounts =
+        await cloudStorageService.get<CreditAccount[]>("credit_accounts");
+      if (cloudAccounts && Array.isArray(cloudAccounts)) setAccounts(cloudAccounts);
+      const cloudTx =
+        await cloudStorageService.get<CreditTransaction[]>("credit_transactions");
+      if (cloudTx && Array.isArray(cloudTx)) setTransactions(cloudTx);
+    })();
+  }, [user]);
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();

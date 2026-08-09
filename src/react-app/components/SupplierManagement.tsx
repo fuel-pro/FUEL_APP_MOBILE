@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/react-app/context/AuthContext";
 import { useStations } from "@/react-app/context/StationContext";
+import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 import {
   Truck,
   Plus,
@@ -131,10 +132,25 @@ export default function SupplierManagement() {
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(suppliers));
+    cloudStorageService.set("suppliers_data", suppliers).catch(() => {});
   }, [suppliers]);
   useEffect(() => {
     localStorage.setItem(ORDERS_KEY, JSON.stringify(orders));
+    cloudStorageService.set("purchase_orders", orders).catch(() => {});
   }, [orders]);
+
+  // Load from cloud on mount (cross-device sync)
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      const cloudSuppliers =
+        await cloudStorageService.get<Supplier[]>("suppliers_data");
+      if (cloudSuppliers && Array.isArray(cloudSuppliers)) setSuppliers(cloudSuppliers);
+      const cloudOrders =
+        await cloudStorageService.get<PurchaseOrder[]>("purchase_orders");
+      if (cloudOrders && Array.isArray(cloudOrders)) setOrders(cloudOrders);
+    })();
+  }, [user]);
 
   const showNotification = (
     message: string,
