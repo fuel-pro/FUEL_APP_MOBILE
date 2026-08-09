@@ -4,6 +4,7 @@ import React, {
   useState,
   useCallback,
   useEffect,
+  useRef,
 } from "react";
 import { getDetectedCurrency } from "@/react-app/lib/currency";
 import { supabase } from "@/supabase/client";
@@ -564,6 +565,17 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
     useState<AdminSettings>(defaultAdminSettings);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isStationLoading, setIsStationLoading] = useState(true);
+
+  // Refs that always point to the latest state, so callbacks that need
+  // stations/adminSettings can have stable identities (empty deps) without
+  // capturing stale values. Without this, `persist` is recreated on every
+  // state change, which cascades to `syncFromBackend`, which re-fires the
+  // mount effect (deps [syncFromBackend]) → setStations → recreate → re-fire
+  // → React error #185 (Maximum update depth exceeded).
+  const stationsRef = useRef(stations);
+  const adminSettingsRef = useRef(adminSettings);
+  useEffect(() => { stationsRef.current = stations; }, [stations]);
+  useEffect(() => { adminSettingsRef.current = adminSettings; }, [adminSettings]);
   const [isBackendSyncing, setIsBackendSyncing] = useState(false);
   const [lastBackendSync, setLastBackendSync] = useState<number | null>(() => {
     const saved = localStorage.getItem(BACKEND_SYNC_TIMESTAMP);
@@ -599,15 +611,18 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
   // Persist to storage
   const persist = useCallback(
     (newStations?: Station[], newAdmin?: AdminSettings) => {
-      const s = newStations || stations;
-      const a = newAdmin || adminSettings;
+      const s = newStations ?? stationsRef.current;
+      const a = newAdmin ?? adminSettingsRef.current;
       localStorage.setItem(
         STORAGE_KEY,
         JSON.stringify({ stations: s, version: "3.0" })
       );
       localStorage.setItem(ADMIN_KEY, JSON.stringify(a));
     },
-    [stations, adminSettings]
+    // Stable identity — reads current state from refs to avoid stale closures.
+    // Previously had [stations, adminSettings] which recreated persist on
+    // every state change and cascaded into an infinite mount-effect loop.
+    []
   );
 
   // Sync stations FROM Supabase (pulls this account's stations, and migrates

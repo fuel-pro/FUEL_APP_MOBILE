@@ -399,7 +399,11 @@ export default function AdminPanel() {
   const [securityAttempts, setSecurityAttempts] = useState(0);
   const [securityLocked, setSecurityLocked] = useState(false);
 
-  // Load API keys from admin settings + custom
+  // Load API keys from admin settings + custom.
+  // Sync local form state from context ONLY when isAdmin flips to true
+  // (i.e. when the panel is opened). Including `adminSettings` in deps would
+  // re-sync on every adminSettings change and overwrite the user's in-progress
+  // form edits before they click Save.
   useEffect(() => {
     if (isAdmin) {
       setApiKeys(adminSettings.apiKeys);
@@ -414,7 +418,8 @@ export default function AdminPanel() {
         /* ignore */
       }
     }
-  }, [isAdmin, adminSettings, getAccessLogs]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdmin]);
 
   // Persist modules
   useEffect(() => {
