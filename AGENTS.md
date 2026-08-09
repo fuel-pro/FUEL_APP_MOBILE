@@ -56,6 +56,22 @@ React + Vite + TypeScript SPA for fuel station management. Deployed at
   applied 2026-08-08 (see `/tmp/migration.sql` + `supabase/migrations/`).
   `pushStationUpsert` fails silently if these are missing — check schema if
   cross-device sync stops working.
+- **`stations.code` NOT NULL UNIQUE bug (fixed 2026-08-09, commit 779a0fe)**:
+  the live migration added a `code TEXT NOT NULL UNIQUE` column to `stations`,
+  but the app's `stationToRowFields`/`pushStationUpsert`/migration-insert NEVER
+  sent `code`. Every upsert failed with `23502 null value in column "code"
+  violates not-null constraint` and the error was swallowed by the
+  fire-and-forget `catch`. Result: stations persisted only to localStorage +
+  the FuelContext `app_kv` blob, NEVER to the `stations` table → other devices
+  never restored them → users got stranded on the "create station" screen.
+  Fix: added `code` to the `Station` interface, `generateStationCode()` helper,
+  backfill `code` in `createStation` + `loadFromStorage` (for pre-existing
+  local stations), and include `code` in `stationToRowFields`,
+  `pushStationUpsert`, and the local-only migration insert. Confirmed via
+  direct API: user-token upsert WITHOUT `code` → 23502; WITH `code` → success.
+- **RLS is NOT the blocker on `stations`**: user-token inserts/upserts
+  succeed (policy `auth.uid() = owner_id`). The anon key in client.ts is
+  `sb_publishable_-uUkeBG1KzESv3O4v90rcw_jY9NxTc4` (new publishable format).
 - **Currency**: `getDetectedCurrency()` resolves KES for Kenya. Admin config
   `fuelpro_admin_v3.systemConfig.currency` upgrades stale "USD" to detected
   value on load (see `loadFromStorage`).
@@ -83,13 +99,19 @@ React + Vite + TypeScript SPA for fuel station management. Deployed at
 - Vercel `api-deployments-free-per-day` limit (100/day) can be exhausted. Resets ~24h.
   Read-only GET deployments use a separate 1000/min bucket and still work when the
   deploy bucket is exhausted.
-- **2026-08-09 state**: ALL fixes bundled into ONE prebuilt production deploy
-  (aliased fuel-app-mobile.vercel.app, serving founder-Cf4Jtld1.js with the
-  founder-auth fix). Cloudflare Pages synced to same build. Production is
-  current with origin/main HEAD 2787092. Cross-device storage verified
-  end-to-end: a value written to `app_kv` as user X from device A is readable
-  by user X on device B (RLS `owner_id = auth.uid()`). Schema Visualizer
-  verified live (13 tables, live RLS-respecting row counts, FK links).
+- **2026-08-09 state (commit 779a0fe, PENDING DEPLOY)**: bundled TWO cross-device
+  sync fixes into ONE commit (to save deploy-limit budget): (1) FuelContext #185
+  re-render-loop crash for returning users (loadFromStorage/saveToStorage/
+  loadFromCloud/saveToCloud wrapped in useCallback with stable deps); (2)
+  StationContext `stations.code` NOT NULL fix (see Gotchas above). Pushed to
+  origin/main. Production still serves 474bde9 (old code) because the
+  `api-deployments-free-per-day` limit is EXHAUSTED (0/100, resets
+  ~2026-08-10 07:45 UTC). An autodeploy watcher (`/tmp/fuelpro_combined_deploy.sh`,
+  PID 14814) polls every 5 min and fires ONE prebuilt deploy (files already
+  uploaded/cached) once the limit resets, confirming via the deployments API
+  that 779a0fe is READY+aliased. The GitHub push webhook also deploys on the
+  next push once the limit clears. Prebuilt API deploy confirmed to hit the
+  SAME 100/day limit (402 payment_required) — no deploy method bypasses it.
 
 ## Build / Test
 - `npx tsc --noEmit` — typecheck (must pass before commit).
