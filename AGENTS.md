@@ -56,6 +56,30 @@ React + Vite + TypeScript SPA for fuel station management. Deployed at
   applied 2026-08-08 (see `/tmp/migration.sql` + `supabase/migrations/`).
   `pushStationUpsert` fails silently if these are missing — check schema if
   cross-device sync stops working.
+- **CRITICAL — missing POS tables (fixed 2026-08-09)**: the live project had
+  only 13 tables (the FuelPro originals). `pos-service.ts` and the management
+  components (Expenses/Products/Customers/Suppliers) insert into `products`,
+  `sales_enhanced`, `sale_items`, `inventory_transactions`, `stock_transfers`,
+  `purchase_orders`, `purchase_order_items`, `expenses`, `expense_categories`,
+  `terminal_sessions`, `integrations`, `suppliers`, `customers` — ALL of which
+  were missing → every insert returned `PGRST205` (table not found) but the
+  errors were unchecked → silent total data loss for the entire POS module.
+  Fixed by applying migrations 005 (`005_saleszote_features.sql`) + 006
+  (`006_complete_schema_applied.sql`, a cleaned variant that skips two index
+  statements referencing columns absent on the pre-existing live `inventory`/
+  `sales` tables). Live project now has 31 tables. Verified end-to-end: a
+  real user token can insert station+product+sale+sale_item+expense and the
+  founder page (service role) sees them. RLS on all new tables is
+  `owner_id = auth.uid()` or station-ownership-scoped.
+- **Silent insert failures (fixed 2026-08-09)**: `pos-service.ts`
+  `processPOSCheckout`/`createPurchaseOrder`/`updateProductStock`/
+  `recordInventoryTransaction` and the management components' `handleSave`/
+  `handleDelete` all did `await supabase.from(...).insert(...)` WITHOUT
+  checking the returned `{ error }` (supabase-js returns errors, does not
+  throw). Result: failures were invisible and the UI showed false success.
+  Fixed: all now check `error`/`result.success`, rollback orphaned parent
+  records (e.g. delete `sales_enhanced` header if a `sale_items` insert
+  fails), and `alert()` the specific error to the user.
 - **`stations.code` NOT NULL UNIQUE bug (fixed 2026-08-09, commit 779a0fe)**:
   the live migration added a `code TEXT NOT NULL UNIQUE` column to `stations`,
   but the app's `stationToRowFields`/`pushStationUpsert`/migration-insert NEVER

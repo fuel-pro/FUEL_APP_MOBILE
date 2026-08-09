@@ -39,21 +39,30 @@ export default function CustomersManagement() {
     const { data: userData } = await supabase.auth.getUser();
     try {
       if (editingCustomer) {
-        await supabase.from("customers").update(data).eq("id", editingCustomer.id);
+        const { error } = await supabase.from("customers").update(data).eq("id", editingCustomer.id);
+        if (error) throw error;
       } else {
-        await supabase.from("customers").insert({ ...data, station_id: currentStation.id, owner_id: userData?.user?.id });
+        const { error } = await supabase
+          .from("customers")
+          .insert({ ...data, station_id: currentStation.id, owner_id: userData?.user?.id });
+        if (error) throw error;
       }
       loadCustomers();
       setShowModal(false);
       setEditingCustomer(null);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed:", error);
+      alert("Failed to save customer: " + (error?.message || error));
     }
   };
 
   const handleDelete = async (id: string) => {
     if (!confirm("Delete this customer?")) return;
-    await supabase.from("customers").delete().eq("id", id);
+    const { error } = await supabase.from("customers").delete().eq("id", id);
+    if (error) {
+      alert("Failed to delete customer: " + error.message);
+      return;
+    }
     loadCustomers();
   };
 

@@ -214,11 +214,11 @@ async function recordInventoryTransaction(
   referenceType: string | null = null,
   notes: string | null = null,
   unitCost: number | null = null
-): Promise<void> {
+): Promise<{ error: string | null }> {
   const ownerId = await getCurrentUserId();
-  if (!ownerId) return;
+  if (!ownerId) return { error: 'Not authenticated' };
 
-  await supabase.from('inventory_transactions').insert({
+  const { error } = await supabase.from('inventory_transactions').insert({
     station_id: stationId,
     product_id: productId,
     transaction_type: transactionType,
@@ -232,6 +232,7 @@ async function recordInventoryTransaction(
     performed_by: ownerId,
     owner_id: ownerId,
   });
+  return { error: error?.message ?? null };
 }
 
 // ─── Update Product Stock ────────────────────────────────────────────────────
@@ -247,13 +248,17 @@ async function updateProductStock(
   referenceType: string | null = null,
   notes: string | null = null,
   unitCost: number | null = null
-): Promise<void> {
-  await supabase
+): Promise<{ error: string | null }> {
+  const { error: updateError } = await supabase
     .from('products')
     .update({ stock_quantity: newQuantity })
     .eq('id', productId);
 
-  await recordInventoryTransaction(
+  if (updateError) {
+    return { error: updateError.message };
+  }
+
+  const { error: txError } = await recordInventoryTransaction(
     stationId,
     productId,
     transactionType,
@@ -265,6 +270,7 @@ async function updateProductStock(
     notes,
     unitCost
   );
+  return { error: txError };
 }
 
 // ─── POS Checkout ─────────────────────────────────────────────────────────────
@@ -318,7 +324,7 @@ export async function processPOSCheckout(
   // Insert sale items and update stock
   for (const item of cart.items) {
     // Insert sale item
-    await supabase.from('sale_items').insert({
+    const { error: itemError } = await supabase.from('sale_items').insert({
       sale_id: sale.id,
       product_id: item.productId,
       product_name: item.name,
@@ -328,6 +334,15 @@ export async function processPOSCheckout(
       tax_amount: item.taxAmount,
       total_amount: item.totalAmount,
     });
+
+    if (itemError) {
+      // Roll back the orphaned sale header so reports/totals stay consistent.
+      await supabase.from('sales_enhanced').delete().eq('id', sale.id);
+      return {
+        success: false,
+        error: `Failed to save sale item "${item.name}": ${itemError.message}`,
+      };
+    }
 
     // Update product stock
     const { data: product } = await supabase
@@ -339,7 +354,7 @@ export async function processPOSCheckout(
     const previousQty = product?.stock_quantity || 0;
     const newQty = Math.max(0, previousQty - item.quantity);
 
-    await updateProductStock(
+    const { error: stockError } = await updateProductStock(
       item.productId,
       newQty,
       stationId,
@@ -351,6 +366,16 @@ export async function processPOSCheckout(
       `Sale ${invoiceNumber}`,
       item.unitPrice
     );
+
+    if (stockError) {
+      // Stock update failed — the sale is recorded but stock is stale.
+      // Roll back the sale to keep stock and sales in sync.
+      await supabase.from('sales_enhanced').delete().eq('id', sale.id);
+      return {
+        success: false,
+        error: `Failed to update stock for "${item.name}": ${stockError}`,
+      };
+    }
   }
 
   // Update terminal session if applicable
@@ -412,7 +437,7 @@ export async function adjustStock(
     const previousQty = product.stock_quantity || 0;
     const newQty = Math.max(0, adj.newQuantity);
 
-    await updateProductStock(
+    const { error: stockError } = await updateProductStock(
       adj.productId,
       newQty,
       stationId,
@@ -424,6 +449,10 @@ export async function adjustStock(
       notes || adj.reason,
       product.cost_price
     );
+
+    if (stockError) {
+      return { success: false, error: `Failed to adjust stock for product: ${stockError}` };
+    }
   }
 
   return { success: true };
@@ -496,7 +525,7 @@ export async function completeStockTransfer(
 
   if (fromProduct) {
     const newFromQty = Math.max(0, (fromProduct.stock_quantity || 0) - transfer.quantity);
-    await updateProductStock(
+    const { error: outErr } = await updateProductStock(
       transfer.product_id,
       newFromQty,
       transfer.from_station_id,
@@ -508,6 +537,9 @@ export async function completeStockTransfer(
       `Transfer ${transfer.transfer_number}`,
       fromProduct.cost_price
     );
+    if (outErr) {
+      return { success: false, error: `Failed to deduct source stock: ${outErr}` };
+    }
   }
 
   // Update destination station stock (or create product there)
@@ -520,7 +552,7 @@ export async function completeStockTransfer(
 
   if (toProduct) {
     const newToQty = (toProduct.stock_quantity || 0) + transfer.quantity;
-    await updateProductStock(
+    const { error: inErr } = await updateProductStock(
       transfer.product_id,
       newToQty,
       transfer.to_station_id,
@@ -532,13 +564,20 @@ export async function completeStockTransfer(
       `Transfer ${transfer.transfer_number}`,
       fromProduct?.cost_price
     );
+    if (inErr) {
+      return { success: false, error: `Failed to add destination stock: ${inErr}` };
+    }
   }
 
   // Update transfer status
-  await supabase
+  const { error: statusError } = await supabase
     .from('stock_transfers')
     .update({ status: 'completed' })
     .eq('id', transferId);
+
+  if (statusError) {
+    return { success: false, error: `Stock moved but failed to mark transfer complete: ${statusError.message}` };
+  }
 
   return { success: true };
 }
@@ -569,7 +608,7 @@ export async function processStockCount(
     const newQty = count.countedQuantity;
     const variance = count.variance;
 
-    await updateProductStock(
+    const { error: countError } = await updateProductStock(
       count.productId,
       newQty,
       stationId,
@@ -581,6 +620,10 @@ export async function processStockCount(
       notes || 'Stock count adjustment',
       product.cost_price
     );
+
+    if (countError) {
+      return { success: false, error: `Failed to apply stock count: ${countError}` };
+    }
   }
 
   return { success: true };
@@ -612,7 +655,7 @@ export async function recordWastage(
   const previousQty = product.stock_quantity || 0;
   const newQty = Math.max(0, previousQty - quantity);
 
-  await updateProductStock(
+  const { error: stockError } = await updateProductStock(
     productId,
     newQty,
     stationId,
@@ -624,6 +667,10 @@ export async function recordWastage(
     notes,
     product.cost_price
   );
+
+  if (stockError) {
+    return { success: false, error: `Failed to record wastage: ${stockError}` };
+  }
 
   return { success: true };
 }
@@ -692,10 +739,19 @@ export async function createPurchaseOrder(
 
   // Insert PO items
   for (const item of orderItems) {
-    await supabase.from('purchase_order_items').insert({
+    const { error: itemError } = await supabase.from('purchase_order_items').insert({
       purchase_order_id: po.id,
       ...item,
     });
+
+    if (itemError) {
+      // Roll back the orphaned PO header (cascade deletes any partial items).
+      await supabase.from('purchase_orders').delete().eq('id', po.id);
+      return {
+        success: false,
+        error: `Failed to save purchase order item "${item.product_name}": ${itemError.message}`,
+      };
+    }
   }
 
   return {

@@ -44,21 +44,30 @@ export default function PurchasesSuppliers() {
     const { data: userData } = await supabase.auth.getUser();
     try {
       if (editingSupplier) {
-        await supabase.from("suppliers").update(data).eq("id", editingSupplier.id);
+        const { error } = await supabase.from("suppliers").update(data).eq("id", editingSupplier.id);
+        if (error) throw error;
       } else {
-        await supabase.from("suppliers").insert({ ...data, station_id: currentStation.id, owner_id: userData?.user?.id });
+        const { error } = await supabase
+          .from("suppliers")
+          .insert({ ...data, station_id: currentStation.id, owner_id: userData?.user?.id });
+        if (error) throw error;
       }
       loadData();
       setShowSupplierModal(false);
       setEditingSupplier(null);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to save:", error);
+      alert("Failed to save supplier: " + (error?.message || error));
     }
   };
 
   const handleDeleteSupplier = async (id: string) => {
     if (!confirm("Delete this supplier?")) return;
-    await supabase.from("suppliers").delete().eq("id", id);
+    const { error } = await supabase.from("suppliers").delete().eq("id", id);
+    if (error) {
+      alert("Failed to delete supplier: " + error.message);
+      return;
+    }
     loadData();
   };
 
@@ -201,10 +210,15 @@ function OrderModal({ suppliers, onClose, onCreated }: { suppliers: any[]; onClo
     if (!currentStation?.id || !form.supplierId || items.length === 0) return;
     setLoading(true);
     try {
-      await createPurchaseOrder(currentStation.id, form.supplierId, items, form.expectedDate || null);
+      const result = await createPurchaseOrder(currentStation.id, form.supplierId, items, form.expectedDate || null);
+      if (!result.success) {
+        alert("Failed to create purchase order: " + (result.error || "Unknown error"));
+        return;
+      }
       onCreated();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed:", error);
+      alert("Failed to create purchase order: " + (error?.message || error));
     } finally {
       setLoading(false);
     }

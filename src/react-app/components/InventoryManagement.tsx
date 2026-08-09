@@ -307,7 +307,11 @@ const TransfersList = () => {
   }, [currentStation?.id]);
 
   const handleComplete = async (id: string) => {
-    await completeStockTransfer(id);
+    const result = await completeStockTransfer(id);
+    if (!result.success) {
+      alert("Failed to complete transfer: " + (result.error || "Unknown error"));
+      return;
+    }
     setTransfers(transfers.filter((t) => t.id !== id));
   };
 
@@ -577,10 +581,14 @@ export default function InventoryManagement() {
     if (!currentStation?.id) return;
     setProcessing(true);
     try {
-      await adjustStock(currentStation.id, adjustments.map((a) => ({ productId: a.productId, previousQuantity: products.find((p) => p.id === a.productId)?.stock_quantity || 0, newQuantity: a.newQuantity, reason: a.reason })));
+      const result = await adjustStock(currentStation.id, adjustments.map((a) => ({ productId: a.productId, previousQuantity: products.find((p) => p.id === a.productId)?.stock_quantity || 0, newQuantity: a.newQuantity, reason: a.reason })));
+      if (!result.success) {
+        alert("Failed to adjust stock: " + (result.error || "Unknown error"));
+        return;
+      }
       showNotice("Adjustments applied");
       loadData();
-    } catch { alert("Failed"); } finally { setProcessing(false); }
+    } catch (error: any) { alert("Failed: " + (error?.message || error)); } finally { setProcessing(false); }
   };
 
   const handleTransfer = async (data: { productId: string; toStationId: string; quantity: number; notes: string }) => {
@@ -596,20 +604,28 @@ export default function InventoryManagement() {
     if (!currentStation?.id) return;
     setProcessing(true);
     try {
-      await processStockCount(currentStation.id, counts.filter((c) => c.variance !== 0));
+      const result = await processStockCount(currentStation.id, counts.filter((c) => c.variance !== 0));
+      if (!result.success) {
+        alert("Failed to submit count: " + (result.error || "Unknown error"));
+        return;
+      }
       showNotice("Count submitted");
       loadData();
-    } catch { alert("Failed"); } finally { setProcessing(false); }
+    } catch (error: any) { alert("Failed: " + (error?.message || error)); } finally { setProcessing(false); }
   };
 
   const handleWastage = async (data: { productId: string; quantity: number; notes: string }) => {
     if (!currentStation?.id) return;
     setProcessing(true);
     try {
-      await recordWastage(currentStation.id, data.productId, data.quantity, data.notes);
+      const result = await recordWastage(currentStation.id, data.productId, data.quantity, data.notes);
+      if (!result.success) {
+        alert("Failed to record wastage: " + (result.error || "Unknown error"));
+        return;
+      }
       showNotice("Wastage recorded");
       loadData();
-    } catch { alert("Failed"); } finally { setProcessing(false); }
+    } catch (error: any) { alert("Failed: " + (error?.message || error)); } finally { setProcessing(false); }
   };
 
   if (loading) return <div className="flex justify-center h-full"><div className="text-center"><Loader2 className="w-12 h-12 text-amber-500 animate-spin mx-auto mb-4" /><p className="text-gray-400">Loading...</p></div></div>;

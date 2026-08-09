@@ -46,17 +46,25 @@ export default function ExpensesManagement() {
     if (!currentStation?.id) return;
     const { data: userData } = await supabase.auth.getUser();
     try {
-      await supabase.from("expenses").insert({ ...data, station_id: currentStation.id, owner_id: userData?.user?.id });
+      const { error } = await supabase
+        .from("expenses")
+        .insert({ ...data, station_id: currentStation.id, owner_id: userData?.user?.id });
+      if (error) throw error;
       loadData();
       setShowModal(false);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed:", error);
+      alert("Failed to save expense: " + (error?.message || error));
     }
   };
 
   const handleDelete = async (id: string) => {
     if (!confirm("Delete this expense?")) return;
-    await supabase.from("expenses").delete().eq("id", id);
+    const { error } = await supabase.from("expenses").delete().eq("id", id);
+    if (error) {
+      alert("Failed to delete expense: " + error.message);
+      return;
+    }
     loadData();
   };
 
