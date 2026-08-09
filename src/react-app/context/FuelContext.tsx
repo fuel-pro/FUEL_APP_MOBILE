@@ -1041,6 +1041,16 @@ export function FuelProvider({ children }: { children: ReactNode }) {
   const stateRef = useRef(state);
   useEffect(() => { stateRef.current = state; }, [state]);
 
+  // CRITICAL: Guards the cross-device cloud-sync race. On login, the
+  // aggressive auto-save effect (1500ms) can fire BEFORE loadFromCloud has
+  // finished hydrating state from Supabase app_kv. When that happens,
+  // saveToCloud overwrites the cloud blob with the default/empty in-memory
+  // state, silently WIPING all data entered on another device. This ref
+  // blocks saveToCloud until the initial cloud load has completed. It is
+  // reset to false whenever the user changes (so each login re-loads).
+  const cloudLoadCompleteRef = useRef(false);
+  useEffect(() => { cloudLoadCompleteRef.current = false; }, [user]);
+
   const saveToStorage = useCallback(() => {
     try {
       const s = stateRef.current;
@@ -1161,6 +1171,14 @@ export function FuelProvider({ children }: { children: ReactNode }) {
   // Cloud storage with compression
   const saveToCloud = useCallback(async () => {
     if (!user) return;
+    // Block cloud saves until the initial cloud load has completed. Without
+    // this, the auto-save effect (1500ms) races ahead of loadFromCloud and
+    // overwrites the cloud blob with default/empty state, destroying all
+    // data entered on another device.
+    if (!cloudLoadCompleteRef.current) {
+      console.log("[FuelContext] Skipping cloud save — initial cloud load not yet complete");
+      return;
+    }
 
     try {
       setIsCloudSaving(true);
@@ -1593,6 +1611,13 @@ export function FuelProvider({ children }: { children: ReactNode }) {
           }
         } catch (error) {
           console.warn("Failed to load from cloud, using local cache:", error);
+        } finally {
+          // Unblock cloud saves. Whether loadFromCloud succeeded, found no
+          // data, or failed, the initial cloud consultation is now done and
+          // subsequent saves are legitimate user edits (not default-state
+          // overwrites). Without this, the auto-save effect would keep
+          // skipping forever and real edits would never sync.
+          if (!cancelled) cloudLoadCompleteRef.current = true;
         }
       }
     }, 100);

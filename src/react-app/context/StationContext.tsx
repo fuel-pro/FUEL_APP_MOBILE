@@ -432,7 +432,7 @@ function stationToRowFields(s: Partial<Station>) {
 /** Fire-and-forget push of a station's core fields to Supabase. */
 async function pushStationUpsert(station: Station, ownerId: string) {
   try {
-    await supabase.from("stations").upsert({
+    const { error: upsertError } = await supabase.from("stations").upsert({
       id: station.id,
       owner_id: ownerId,
       // `code` is NOT NULL UNIQUE on the stations table — backfill one for
@@ -440,12 +440,19 @@ async function pushStationUpsert(station: Station, ownerId: string) {
       code: station.code || generateStationCode(station.name),
       ...stationToRowFields(station),
     });
-    await supabase.from("app_kv").upsert({
+    if (upsertError) {
+      console.error("[StationContext] Supabase station upsert failed:", upsertError.message, upsertError.code);
+      return;
+    }
+    const { error: kvError } = await supabase.from("app_kv").upsert({
       id: `station_data_${station.id}`,
       collection: "station_data",
       owner_id: ownerId,
       data: station.data ?? {},
     });
+    if (kvError) {
+      console.error("[StationContext] Supabase station_data upsert failed:", kvError.message);
+    }
   } catch (err) {
     console.warn("[StationContext] Supabase push failed (will retry next sync):", err);
   }
