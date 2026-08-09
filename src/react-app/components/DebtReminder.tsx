@@ -64,7 +64,7 @@ export default function DebtReminder() {
 
     const data = {
       name: debtCustomerName,
-      amount: debtAmount,
+      amount: formatNumber(parseNumberFromFormatted(debtAmount) || 0),
       till: buyGoodsNo,
       bank: bankName,
       acName: accountName,
