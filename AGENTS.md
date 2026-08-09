@@ -138,6 +138,25 @@ React + Vite + TypeScript SPA for fuel station management. Deployed at
   runs the normal Vite build, and works. Deployment dpl_J4tCP1qdQDBjRgp24PA4d9jiwcR5,
   READY, aliased to fuel-app-mobile.vercel.app.
 
+## FuelContext save/load race (FIXED 2026-08-09, commit b3d489e4)
+The load-from-storage `useEffect` had `saveToStorage` in its deps. Because
+`saveToStorage` was recreated on every state change (deps `[state, user]`),
+the load effect re-fired on every keystroke and overwrote edits with stale
+localStorage data (300ms save debounce vs 100ms load timer). This was the root
+cause of the "Qty (DAYS) field can't be edited/cleared" bug and affected ANY
+field with a default value (currency, invoice label, etc.). Fix applied:
+- `stateRef` (useRef) always points to current state; `saveToStorage`/
+  `saveToCloud` read from `stateRef.current`, deps changed to `[user]`.
+- `saveToStorage` removed from load effect deps (now `[user, loadFromCloud]`).
+- `SET_INVOICE_SETTINGS` reducer merges `{...state.invoiceSettings, ...action.payload}`
+  instead of replacing wholesale.
+- Compact data save always includes `invoiceSettings` (removed conditional
+  `!== "Qty (DAYS)"` check).
+Verified end-to-end: Phase 1 user edited label "Qty (DAYS)"→"Litres", saved;
+Supabase `app_kv` row contains `invoiceSettings.quantityLabel="Litres"`.
+Phase 2: cleared localStorage, reloaded — Invoice tab loaded "Litres" + the
+saved item (total Ksh 10,702) from cloud. Cross-device sync confirmed working.
+
 ## Build / Test
 - `npx tsc --noEmit` — typecheck (must pass before commit).
 - `npm run build` — Vite production build.
