@@ -25,6 +25,8 @@ export interface AuthIdentity {
   picture?: string;
   role?: string;
   permissions?: string[];
+  phone?: string;
+  username?: string;
 }
 
 export interface StationRoleBinding {
@@ -55,6 +57,9 @@ interface AuthContextType {
   requestPasswordReset: (email: string) => Promise<{ success: boolean; code?: string; message: string }>;
   verifyResetCode: (email: string, code: string) => boolean;
   resetPassword: (email: string, newPassword: string) => Promise<boolean>;
+  updateProfile: (updates: { name?: string; phone?: string; username?: string; avatarUrl?: string }) => Promise<{ success: boolean; error?: string }>;
+  updateEmail: (newEmail: string) => Promise<{ success: boolean; error?: string }>;
+  updatePassword: (newPassword: string) => Promise<{ success: boolean; error?: string }>;
   bindRole: (stationId: string, stationName: string, role: StationRoleBinding["role"], invitedBy: string, expiresAt?: string) => void;
   terminateRole: (stationId: string) => void;
   getActiveBinding: (stationId: string) => StationRoleBinding | null;
@@ -114,6 +119,8 @@ function supabaseUserToIdentity(user: User, session: Session | null): AuthIdenti
     picture: user.user_metadata?.avatar_url || undefined,
     role: "owner",
     permissions: ["read", "write"],
+    phone: user.user_metadata?.phone || undefined,
+    username: user.user_metadata?.username || undefined,
   };
 }
 
@@ -590,6 +597,148 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     []
   );
 
+  const updateProfile = useCallback(
+    async (updates: { name?: string; phone?: string; username?: string; avatarUrl?: string }): Promise<{ success: boolean; error?: string }> => {
+      if (!user) return { success: false, error: "Not logged in" };
+      setIsPending(true);
+      setError(null);
+      try {
+        const supabase = getSupabaseClient();
+
+        // 1. Update auth.user metadata (for name, avatar)
+        const authUpdates: { data?: Record<string, string> } = {};
+        if (updates.name) authUpdates.data = { ...authUpdates.data, full_name: updates.name };
+        if (updates.avatarUrl) authUpdates.data = { ...authUpdates.data, avatar_url: updates.avatarUrl };
+        if (updates.phone) authUpdates.data = { ...authUpdates.data, phone: updates.phone };
+        if (updates.username) authUpdates.data = { ...authUpdates.data, username: updates.username };
+
+        if (Object.keys(authUpdates).length > 0) {
+          const { error: authErr } = await supabase.auth.updateUser(authUpdates);
+          if (authErr) {
+            setError(authErr.message);
+            setIsPending(false);
+            return { success: false, error: authErr.message };
+          }
+        }
+
+        // 2. Update profiles table (phone, username, avatar_url, name)
+        const profileUpdates: Record<string, string> = {};
+        if (updates.name !== undefined) profileUpdates.name = updates.name;
+        if (updates.phone !== undefined) profileUpdates.phone = updates.phone;
+        if (updates.username !== undefined) profileUpdates.username = updates.username;
+        if (updates.avatarUrl !== undefined) profileUpdates.avatar_url = updates.avatarUrl;
+
+        if (Object.keys(profileUpdates).length > 0) {
+          const { error: profileErr } = await supabase
+            .from("profiles")
+            .update(profileUpdates)
+            .eq("id", user.id);
+          if (profileErr) {
+            // Unique username constraint violation
+            if (profileErr.code === "23505") {
+              const msg = "That username is already taken. Please choose another.";
+              setError(msg);
+              setIsPending(false);
+              return { success: false, error: msg };
+            }
+            setError(profileErr.message);
+            setIsPending(false);
+            return { success: false, error: profileErr.message };
+          }
+        }
+
+        // 3. Update local state
+        const updatedUser: AuthIdentity = {
+          ...user,
+          name: updates.name ?? user.name,
+          phone: updates.phone ?? user.phone,
+          username: updates.username ?? user.username,
+          picture: updates.avatarUrl ?? user.picture,
+        };
+        setUser(updatedUser);
+        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(updatedUser));
+        broadcastAuthUpdate(updatedUser, token);
+
+        setIsPending(false);
+        return { success: true };
+      } catch (err: any) {
+        setError(err.message || "Failed to update profile");
+        setIsPending(false);
+        return { success: false, error: err.message };
+      }
+    },
+    [user, token, broadcastAuthUpdate]
+  );
+
+  const updateEmail = useCallback(
+    async (newEmail: string): Promise<{ success: boolean; error?: string }> => {
+      if (!user) return { success: false, error: "Not logged in" };
+      if (!newEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) {
+        return { success: false, error: "Please enter a valid email address" };
+      }
+      setIsPending(true);
+      setError(null);
+      try {
+        const supabase = getSupabaseClient();
+        const { error: authErr } = await supabase.auth.updateUser({ email: newEmail });
+        if (authErr) {
+          setError(authErr.message);
+          setIsPending(false);
+          return { success: false, error: authErr.message };
+        }
+
+        // Update profiles table email
+        const { error: profileErr } = await supabase
+          .from("profiles")
+          .update({ email: newEmail })
+          .eq("id", user.id);
+        if (profileErr) {
+          console.warn("[AuthContext] profiles email update failed:", profileErr.message);
+        }
+
+        // Update local state (email change may require confirmation)
+        const updatedUser = { ...user, email: newEmail };
+        setUser(updatedUser);
+        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(updatedUser));
+        broadcastAuthUpdate(updatedUser, token);
+
+        setIsPending(false);
+        return { success: true };
+      } catch (err: any) {
+        setError(err.message || "Failed to update email");
+        setIsPending(false);
+        return { success: false, error: err.message };
+      }
+    },
+    [user, token, broadcastAuthUpdate]
+  );
+
+  const updatePassword = useCallback(
+    async (newPassword: string): Promise<{ success: boolean; error?: string }> => {
+      if (!newPassword || newPassword.length < 8) {
+        return { success: false, error: "Password must be at least 8 characters" };
+      }
+      setIsPending(true);
+      setError(null);
+      try {
+        const supabase = getSupabaseClient();
+        const { error: authErr } = await supabase.auth.updateUser({ password: newPassword });
+        if (authErr) {
+          setError(authErr.message);
+          setIsPending(false);
+          return { success: false, error: authErr.message };
+        }
+        setIsPending(false);
+        return { success: true };
+      } catch (err: any) {
+        setError(err.message || "Failed to update password");
+        setIsPending(false);
+        return { success: false, error: err.message };
+      }
+    },
+    []
+  );
+
   return (
     <AuthContext.Provider
       value={{
@@ -597,6 +746,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loginWithEmail, registerWithEmail, loginWithUsername, registerWithUsername,
         logout, clearError, refreshAuth,
         requestPasswordReset, verifyResetCode, resetPassword,
+        updateProfile, updateEmail, updatePassword,
         bindRole, terminateRole, getActiveBinding, hasAnyBinding,
       }}
     >

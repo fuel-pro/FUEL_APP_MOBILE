@@ -253,3 +253,18 @@ can lag by a page load or require a hard reload / SW unregister). To test
 a fresh build immediately, use the unique Cloudflare preview deployment
 URL (e.g. `https://<hash>.fuel-app-mobile.pages.dev/`) instead of the
 production alias — the preview URL has no registered SW.
+
+## Supabase Management API — DB access (FIXED 2026-08-09)
+The Supabase Management API (`https://api.supabase.com/v1/projects/{ref}/database/query`) is the way to apply migrations/DDL to the live DB. Direct DB connection (`db.{ref}.supabase.co:5432`) does NOT resolve (IPv6-only / no DNS) and the pooler rejects the tenant (`ENOTFOUND tenant/user postgres.{ref} not found`). The Management API requires a Supabase Personal Access Token (PAT, `sbp_` prefix — found in API KEYS.txt: `sbp_<PAT_FROM_API_KEYS_TXT>`), NOT the service_role JWT (returns 401). CRITICAL: `api.supabase.com` is behind Cloudflare which returns `error code: 1010` for requests WITHOUT a `User-Agent` header. Fix: always include `User-Agent: Mozilla/5.0 ...` — this bypasses the 1010 block. Apply migrations with `POST /v1/projects/{ref}/database/query` body `{"query": "<sql>"}`. SELECT returns rows as JSON array; DDL returns `[]`.
+
+## Migration 008 — profile sharing + documents (APPLIED LIVE 2026-08-09)
+`supabase/migrations/008_profile_sharing_documents.sql` applied live via Management API. Adds: `profiles.phone`, `profiles.username` (UNIQUE), `profiles.avatar_url`; `station_members` table (DB-backed cross-device station sharing, RLS: owner_id = auth.uid()); `user_documents` table (cross-device file metadata, RLS: owner_id = auth.uid()). Existing storage RLS for `fuelpro-files` checks `(storage.foldername(name))[2] = auth.uid()` — works for BOTH `logos/<uid>/...` and `documents/<uid>/...` paths.
+
+## AuthContext — profile management (ADDED 2026-08-09)
+`AuthContext.tsx` exposes `updateProfile`, `updateEmail`, `updatePassword`. `updateProfile` updates BOTH `supabase.auth.updateUser({data})` AND the `profiles` table; handles unique username violation (23505). `updateEmail` calls `supabase.auth.updateUser({email})` + updates `profiles.email`. `updatePassword` calls `supabase.auth.updateUser({password})` (min 8 chars, works when logged in).
+
+## PasswordReset — Supabase email-link flow (FIXED 2026-08-09)
+Old page had fake 6-digit code flow (`verifyResetCode` always false, `resetPassword` stub). Now uses Supabase's real email-link recovery: email -> `resetPasswordForEmail` sends link -> user clicks -> redirects to `/reset-password` with recovery token -> page detects `type=recovery`/`access_token` in URL OR `PASSWORD_RECOVERY` event -> skips to newpass -> `supabase.auth.updateUser({password})`.
+
+## Cross-device file storage + station sharing (ADDED 2026-08-09)
+`src/react-app/lib/document-service.ts` uploads to Supabase Storage (`fuelpro-files`, path `documents/<uid>/<timestamp>-<name>`), metadata in `user_documents`. `src/react-app/lib/station-share-service.ts` is DB-backed sharing via `station_members` (invite link = `/?invite=<token>`). `src/react-app/components/UserProfileSettings.tsx` is the full UI (profile, email, password, sharing, files), embedded in SettingsPanel as a "User Profile" tab.
