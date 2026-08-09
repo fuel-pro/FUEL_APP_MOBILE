@@ -22,6 +22,20 @@ function cacheKey(key: string): string {
   return `${CACHE_PREFIX}${key}`;
 }
 
+/**
+ * Build the user-scoped app_kv row id for a logical key.
+ *
+ * CRITICAL: the row id MUST be unique per user. Earlier versions used the bare
+ * key (e.g. "expenses_data") as the id with `onConflict: "id"`, which meant
+ * every user sharing that key name overwrote the same row — destroying other
+ * users' data and flipping `owner_id` so RLS (`owner_id = auth.uid()`) locked
+ * the original owner out of their own data. Scoping the id by owner_id gives
+ * each user an isolated row for the same logical key.
+ */
+function rowId(key: string, ownerId: string): string {
+  return `${key}__${ownerId}`;
+}
+
 /** Current authenticated user id, or null. */
 async function currentUserId(): Promise<string | null> {
   try {
@@ -84,10 +98,11 @@ class CloudStorageService {
 
     try {
       const client = getSupabaseClient();
+      const scopedId = rowId(key, ownerId);
       const { data, error } = await client
         .from("app_kv")
         .select("data")
-        .eq("id", key)
+        .eq("id", scopedId)
         .eq("owner_id", ownerId)
         .maybeSingle();
 
@@ -98,6 +113,24 @@ class CloudStorageService {
         this.memoryCache.set(key, { value, ts: Date.now() });
         writeCache(key, value);
         return value;
+      }
+
+      // Legacy fallback: before user-scoped ids, rows were stored under the
+      // bare key (owned by this user). Read once so existing data is not lost;
+      // the next set() repersistis it under the scoped id.
+      if (key !== scopedId) {
+        const { data: legacy } = await client
+          .from("app_kv")
+          .select("data")
+          .eq("id", key)
+          .eq("owner_id", ownerId)
+          .maybeSingle();
+        if (legacy?.data != null) {
+          const value = legacy.data as T;
+          this.memoryCache.set(key, { value, ts: Date.now() });
+          writeCache(key, value);
+          return value;
+        }
       }
       // No cloud row — fall back to cache (e.g. offline-first write not yet synced).
       return readCache<T>(key);
@@ -121,7 +154,7 @@ class CloudStorageService {
       const client = getSupabaseClient();
       const { error } = await client.from("app_kv").upsert(
         {
-          id: key,
+          id: rowId(key, ownerId),
           collection: COLLECTION,
           owner_id: ownerId,
           data: value as unknown as Json,
@@ -148,12 +181,17 @@ class CloudStorageService {
 
     try {
       const client = getSupabaseClient();
+      const scopedId = rowId(key, ownerId);
       const { error } = await client
         .from("app_kv")
         .delete()
-        .eq("id", key)
+        .eq("id", scopedId)
         .eq("owner_id", ownerId);
       if (error) throw error;
+      // Also clean up a legacy bare-key row if one exists for this owner.
+      if (scopedId !== key) {
+        await client.from("app_kv").delete().eq("id", key).eq("owner_id", ownerId);
+      }
     } catch (err) {
       console.warn(`[CloudStorage] delete failed for "${key}":`, err);
     }
@@ -167,8 +205,11 @@ class CloudStorageService {
     const ownerId = await currentUserId();
     if (!ownerId) return {};
 
+    const suffix = `__${ownerId}`;
     try {
       const client = getSupabaseClient();
+      // Only rows owned by this user (RLS also enforces this). The prefix is
+      // matched against the logical key, so scope it to the user's rows.
       let query = client
         .from("app_kv")
         .select("id, data")
@@ -179,7 +220,11 @@ class CloudStorageService {
 
       const out: Record<string, T> = {};
       for (const row of data ?? []) {
-        out[row.id] = row.data as T;
+        // Strip the user-scope suffix to recover the logical key callers use.
+        const logicalKey = row.id.endsWith(suffix)
+          ? row.id.slice(0, -suffix.length)
+          : row.id;
+        out[logicalKey] = row.data as T;
       }
       return out;
     } catch {
