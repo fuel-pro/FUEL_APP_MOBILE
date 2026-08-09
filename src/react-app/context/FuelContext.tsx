@@ -3,6 +3,7 @@ import React, {
   useContext,
   useReducer,
   useEffect,
+  useRef,
   useCallback,
   ReactNode,
 } from "react";
@@ -850,7 +851,7 @@ function fuelReducer(state: FuelState, action: FuelAction): FuelState {
     case "SET_INVOICE_ITEMS":
       return { ...state, invoiceItems: action.payload };
     case "SET_INVOICE_SETTINGS":
-      return { ...state, invoiceSettings: action.payload };
+      return { ...state, invoiceSettings: { ...state.invoiceSettings, ...action.payload } };
     case "SET_INVOICE_COUNTER":
       return { ...state, invoiceCounter: action.payload };
     case "SET_CLIENTS":
@@ -1023,105 +1024,116 @@ export function FuelProvider({ children }: { children: ReactNode }) {
   const [isCloudSaving, setIsCloudSaving] = React.useState(false);
   const [lastCloudSave, setLastCloudSave] = React.useState<Date | null>(null);
 
+  // Ref that always points to the latest state, so save/load callbacks can read
+  // current state WITHOUT being recreated on every state change. This breaks the
+  // save/load race where the load effect (which depended on saveToStorage) re-fired
+  // on every edit and overwrote fresh edits with stale localStorage data before the
+  // 300ms save debounce could persist them.
+  const stateRef = useRef(state);
+  useEffect(() => { stateRef.current = state; }, [state]);
+
   const saveToStorage = useCallback(() => {
     try {
+      const s = stateRef.current;
       // Compact storage: use single compressed JSON blob instead of individual keys
       const userKey = user?.id ? `user_${user.id}_compact` : "guest_compact";
 
       // Create compact data object with only non-empty values
       const compactData: any = {
-        theme: state.theme,
-        themeSettings: state.themeSettings,
-        userPreferences: state.userPreferences,
+        theme: s.theme,
+        themeSettings: s.themeSettings,
+        userPreferences: s.userPreferences,
       };
 
       // Only include non-empty data to minimize storage
       // Always save companyData if it exists (even without name, for logo persistence)
-      if (state.companyData) compactData.companyData = state.companyData;
-      if (state.signatures?.manager || state.signatures?.director)
-        compactData.signatures = state.signatures;
-      if (state.invoiceCounter > 1)
-        compactData.invoiceCounter = state.invoiceCounter;
-      if (Object.keys(state.clients).length > 0)
-        compactData.clients = state.clients;
-      if (Object.keys(state.invoices).length > 0)
-        compactData.invoices = state.invoices;
-      if (Object.keys(state.debtHistory).length > 0)
-        compactData.debtHistory = state.debtHistory;
-      if (Object.keys(state.salesHistory).length > 0)
-        compactData.salesHistory = state.salesHistory;
-      if (state.deliveryData?.rows?.length > 0)
-        compactData.deliveryData = state.deliveryData;
-      if (state.invoiceItems?.length > 0)
-        compactData.invoiceItems = state.invoiceItems;
-      if (state.invoiceSettings?.quantityLabel !== "Qty (DAYS)")
-        compactData.invoiceSettings = state.invoiceSettings;
-      if (state.tillPayment !== 0) compactData.tillPayment = state.tillPayment;
-      if (state.pmsPumps?.length > 0) compactData.pmsPumps = state.pmsPumps;
-      if (state.agoPumps?.length > 0) compactData.agoPumps = state.agoPumps;
-      if (state.expenses?.length > 0) compactData.expenses = state.expenses;
-      if (state.salesDate !== new Date().toISOString().split("T")[0])
-        compactData.salesDate = state.salesDate;
-      if (state.shift !== "Day") compactData.shift = state.shift;
-      if (state.pmsTankOpening !== 0)
-        compactData.pmsTankOpening = state.pmsTankOpening;
-      if (state.pmsTankClosing !== 0)
-        compactData.pmsTankClosing = state.pmsTankClosing;
-      if (state.agoTankOpening !== 0)
-        compactData.agoTankOpening = state.agoTankOpening;
-      if (state.agoTankClosing !== 0)
-        compactData.agoTankClosing = state.agoTankClosing;
-      if (state.pmsPrice !== DEFAULT_PMS_PRICE) compactData.pmsPrice = state.pmsPrice;
-      if (state.agoPrice !== DEFAULTAGO_PRICE) compactData.agoPrice = state.agoPrice;
-      if (state.petrolPrice !== DEFAULT_PMS_PRICE)
-        compactData.petrolPrice = state.petrolPrice;
-      if (state.dieselPrice !== DEFAULTAGO_PRICE)
-        compactData.dieselPrice = state.dieselPrice;
-      if (state.deliveredTo) compactData.deliveredTo = state.deliveredTo;
-      if (state.totalOrder) compactData.totalOrder = state.totalOrder;
-      if (state.deliveryYear !== initialState.deliveryYear)
-        compactData.deliveryYear = state.deliveryYear;
-      if (state.offloadingRecords?.length > 0)
-        compactData.offloadingRecords = state.offloadingRecords;
+      if (s.companyData) compactData.companyData = s.companyData;
+      if (s.signatures?.manager || s.signatures?.director)
+        compactData.signatures = s.signatures;
+      if (s.invoiceCounter > 1)
+        compactData.invoiceCounter = s.invoiceCounter;
+      if (Object.keys(s.clients).length > 0)
+        compactData.clients = s.clients;
+      if (Object.keys(s.invoices).length > 0)
+        compactData.invoices = s.invoices;
+      if (Object.keys(s.debtHistory).length > 0)
+        compactData.debtHistory = s.debtHistory;
+      if (Object.keys(s.salesHistory).length > 0)
+        compactData.salesHistory = s.salesHistory;
+      if (s.deliveryData?.rows?.length > 0)
+        compactData.deliveryData = s.deliveryData;
+      if (s.invoiceItems?.length > 0)
+        compactData.invoiceItems = s.invoiceItems;
+      // Always save invoiceSettings — the old "!== Qty (DAYS)" conditional caused
+      // the label to be dropped from storage, then the load effect overwrote the
+      // user's custom label with the default on every state change.
+      compactData.invoiceSettings = s.invoiceSettings;
+      if (s.tillPayment !== 0) compactData.tillPayment = s.tillPayment;
+      if (s.pmsPumps?.length > 0) compactData.pmsPumps = s.pmsPumps;
+      if (s.agoPumps?.length > 0) compactData.agoPumps = s.agoPumps;
+      if (s.expenses?.length > 0) compactData.expenses = s.expenses;
+      if (s.salesDate !== new Date().toISOString().split("T")[0])
+        compactData.salesDate = s.salesDate;
+      if (s.shift !== "Day") compactData.shift = s.shift;
+      if (s.pmsTankOpening !== 0)
+        compactData.pmsTankOpening = s.pmsTankOpening;
+      if (s.pmsTankClosing !== 0)
+        compactData.pmsTankClosing = s.pmsTankClosing;
+      if (s.agoTankOpening !== 0)
+        compactData.agoTankOpening = s.agoTankOpening;
+      if (s.agoTankClosing !== 0)
+        compactData.agoTankClosing = s.agoTankClosing;
+      if (s.pmsPrice !== DEFAULT_PMS_PRICE) compactData.pmsPrice = s.pmsPrice;
+      if (s.agoPrice !== DEFAULTAGO_PRICE) compactData.agoPrice = s.agoPrice;
+      if (s.petrolPrice !== DEFAULT_PMS_PRICE)
+        compactData.petrolPrice = s.petrolPrice;
+      if (s.dieselPrice !== DEFAULTAGO_PRICE)
+        compactData.dieselPrice = s.dieselPrice;
+      if (s.deliveredTo) compactData.deliveredTo = s.deliveredTo;
+      if (s.totalOrder) compactData.totalOrder = s.totalOrder;
+      if (s.deliveryYear !== initialState.deliveryYear)
+        compactData.deliveryYear = s.deliveryYear;
+      if (s.offloadingRecords?.length > 0)
+        compactData.offloadingRecords = s.offloadingRecords;
       if (
-        JSON.stringify(state.tabVisibility) !==
+        JSON.stringify(s.tabVisibility) !==
         JSON.stringify(initialState.tabVisibility)
       )
-        compactData.tabVisibility = state.tabVisibility;
+        compactData.tabVisibility = s.tabVisibility;
       if (
-        state.tabConfigurations?.some(
+        s.tabConfigurations?.some(
           t => t.label !== t.originalLabel || !t.visible
         )
       )
-        compactData.tabConfigurations = state.tabConfigurations;
-      if (state.employees?.length > 0) compactData.employees = state.employees;
-      if (state.payrollRecords?.length > 0)
-        compactData.payrollRecords = state.payrollRecords;
-      if (state.mpesaTransactions?.length > 0)
-        compactData.mpesaTransactions = state.mpesaTransactions;
+        compactData.tabConfigurations = s.tabConfigurations;
+      if (s.employees?.length > 0) compactData.employees = s.employees;
+      if (s.payrollRecords?.length > 0)
+        compactData.payrollRecords = s.payrollRecords;
+      if (s.mpesaTransactions?.length > 0)
+        compactData.mpesaTransactions = s.mpesaTransactions;
       // Multi-station support - always save station data
-      if (state.stations?.length > 0) compactData.stations = state.stations;
-      if (state.currentStationId)
-        compactData.currentStationId = state.currentStationId;
-      if (Object.keys(state.stationData || {}).length > 0)
-        compactData.stationData = state.stationData;
+      if (s.stations?.length > 0) compactData.stations = s.stations;
+      if (s.currentStationId)
+        compactData.currentStationId = s.currentStationId;
+      if (Object.keys(s.stationData || {}).length > 0)
+        compactData.stationData = s.stationData;
       if (
-        JSON.stringify(state.reportSettings) !==
+        JSON.stringify(s.reportSettings) !==
         JSON.stringify(initialState.reportSettings)
       )
-        compactData.reportSettings = state.reportSettings;
-      if (state.chatHistory?.length > 0)
-        compactData.chatHistory = state.chatHistory.slice(-50); // Keep only last 50 messages
-      if (state.dataBackups?.length > 0)
-        compactData.dataBackups = state.dataBackups.slice(-5); // Keep only last 5 backups
+        compactData.reportSettings = s.reportSettings;
+      if (s.chatHistory?.length > 0)
+        compactData.chatHistory = s.chatHistory.slice(-50); // Keep only last 50 messages
+      if (s.dataBackups?.length > 0)
+        compactData.dataBackups = s.dataBackups.slice(-5); // Keep only last 5 backups
 
       // Save as single compressed JSON string
       localStorage.setItem(userKey, JSON.stringify(compactData));
 
       // CRITICAL: Always save companyData to individual key for logo persistence
       // This ensures logo survives even if compact storage has issues
-      if (state.companyData) {
-        localStorage.setItem(`${userKey}companyData`, JSON.stringify(state.companyData));
+      if (s.companyData) {
+        localStorage.setItem(`${userKey}companyData`, JSON.stringify(s.companyData));
       }
 
       // Clean up old individual keys EXCEPT companyData (keep for logo backup)
@@ -1135,7 +1147,7 @@ export function FuelProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error("Error saving to localStorage:", error);
     }
-  }, [state, user]);
+  }, [user]);
 
   // Cloud storage with compression
   const saveToCloud = useCallback(async () => {
@@ -1144,92 +1156,93 @@ export function FuelProvider({ children }: { children: ReactNode }) {
     try {
       setIsCloudSaving(true);
 
+      const s = stateRef.current;
       // Create compact data object (same as localStorage logic)
       const compactData: any = {
-        theme: state.theme,
-        themeSettings: state.themeSettings,
-        userPreferences: state.userPreferences,
+        theme: s.theme,
+        themeSettings: s.themeSettings,
+        userPreferences: s.userPreferences,
       };
 
       // Only include non-default/non-empty values for maximum compression
       // Always save companyData if it exists (even without name, for logo persistence)
-      if (state.companyData) compactData.companyData = state.companyData;
-      if (state.signatures?.manager || state.signatures?.director)
-        compactData.signatures = state.signatures;
-      if (state.invoiceCounter > 1)
-        compactData.invoiceCounter = state.invoiceCounter;
-      if (Object.keys(state.clients).length > 0)
-        compactData.clients = state.clients;
-      if (Object.keys(state.invoices).length > 0)
-        compactData.invoices = state.invoices;
-      if (Object.keys(state.debtHistory).length > 0)
-        compactData.debtHistory = state.debtHistory;
-      if (Object.keys(state.salesHistory).length > 0)
-        compactData.salesHistory = state.salesHistory;
-      if (state.deliveryData?.rows?.length > 0)
-        compactData.deliveryData = state.deliveryData;
-      if (state.invoiceItems?.length > 0)
-        compactData.invoiceItems = state.invoiceItems;
-      if (state.invoiceSettings?.quantityLabel !== "Qty (DAYS)")
-        compactData.invoiceSettings = state.invoiceSettings;
-      if (state.tillPayment !== 0) compactData.tillPayment = state.tillPayment;
-      if (state.pmsPumps?.length > 0) compactData.pmsPumps = state.pmsPumps;
-      if (state.agoPumps?.length > 0) compactData.agoPumps = state.agoPumps;
-      if (state.expenses?.length > 0) compactData.expenses = state.expenses;
-      if (state.salesDate !== new Date().toISOString().split("T")[0])
-        compactData.salesDate = state.salesDate;
-      if (state.shift !== "Day") compactData.shift = state.shift;
-      if (state.pmsTankOpening !== 0)
-        compactData.pmsTankOpening = state.pmsTankOpening;
-      if (state.pmsTankClosing !== 0)
-        compactData.pmsTankClosing = state.pmsTankClosing;
-      if (state.agoTankOpening !== 0)
-        compactData.agoTankOpening = state.agoTankOpening;
-      if (state.agoTankClosing !== 0)
-        compactData.agoTankClosing = state.agoTankClosing;
-      if (state.pmsPrice !== DEFAULT_PMS_PRICE) compactData.pmsPrice = state.pmsPrice;
-      if (state.agoPrice !== DEFAULTAGO_PRICE) compactData.agoPrice = state.agoPrice;
-      if (state.petrolPrice !== DEFAULT_PMS_PRICE)
-        compactData.petrolPrice = state.petrolPrice;
-      if (state.dieselPrice !== DEFAULTAGO_PRICE)
-        compactData.dieselPrice = state.dieselPrice;
-      if (state.deliveredTo) compactData.deliveredTo = state.deliveredTo;
-      if (state.totalOrder) compactData.totalOrder = state.totalOrder;
-      if (state.deliveryYear !== initialState.deliveryYear)
-        compactData.deliveryYear = state.deliveryYear;
-      if (state.offloadingRecords?.length > 0)
-        compactData.offloadingRecords = state.offloadingRecords;
+      if (s.companyData) compactData.companyData = s.companyData;
+      if (s.signatures?.manager || s.signatures?.director)
+        compactData.signatures = s.signatures;
+      if (s.invoiceCounter > 1)
+        compactData.invoiceCounter = s.invoiceCounter;
+      if (Object.keys(s.clients).length > 0)
+        compactData.clients = s.clients;
+      if (Object.keys(s.invoices).length > 0)
+        compactData.invoices = s.invoices;
+      if (Object.keys(s.debtHistory).length > 0)
+        compactData.debtHistory = s.debtHistory;
+      if (Object.keys(s.salesHistory).length > 0)
+        compactData.salesHistory = s.salesHistory;
+      if (s.deliveryData?.rows?.length > 0)
+        compactData.deliveryData = s.deliveryData;
+      if (s.invoiceItems?.length > 0)
+        compactData.invoiceItems = s.invoiceItems;
+      // Always save invoiceSettings (see saveToStorage comment).
+      compactData.invoiceSettings = s.invoiceSettings;
+      if (s.tillPayment !== 0) compactData.tillPayment = s.tillPayment;
+      if (s.pmsPumps?.length > 0) compactData.pmsPumps = s.pmsPumps;
+      if (s.agoPumps?.length > 0) compactData.agoPumps = s.agoPumps;
+      if (s.expenses?.length > 0) compactData.expenses = s.expenses;
+      if (s.salesDate !== new Date().toISOString().split("T")[0])
+        compactData.salesDate = s.salesDate;
+      if (s.shift !== "Day") compactData.shift = s.shift;
+      if (s.pmsTankOpening !== 0)
+        compactData.pmsTankOpening = s.pmsTankOpening;
+      if (s.pmsTankClosing !== 0)
+        compactData.pmsTankClosing = s.pmsTankClosing;
+      if (s.agoTankOpening !== 0)
+        compactData.agoTankOpening = s.agoTankOpening;
+      if (s.agoTankClosing !== 0)
+        compactData.agoTankClosing = s.agoTankClosing;
+      if (s.pmsPrice !== DEFAULT_PMS_PRICE) compactData.pmsPrice = s.pmsPrice;
+      if (s.agoPrice !== DEFAULTAGO_PRICE) compactData.agoPrice = s.agoPrice;
+      if (s.petrolPrice !== DEFAULT_PMS_PRICE)
+        compactData.petrolPrice = s.petrolPrice;
+      if (s.dieselPrice !== DEFAULTAGO_PRICE)
+        compactData.dieselPrice = s.dieselPrice;
+      if (s.deliveredTo) compactData.deliveredTo = s.deliveredTo;
+      if (s.totalOrder) compactData.totalOrder = s.totalOrder;
+      if (s.deliveryYear !== initialState.deliveryYear)
+        compactData.deliveryYear = s.deliveryYear;
+      if (s.offloadingRecords?.length > 0)
+        compactData.offloadingRecords = s.offloadingRecords;
       if (
-        JSON.stringify(state.tabVisibility) !==
+        JSON.stringify(s.tabVisibility) !==
         JSON.stringify(initialState.tabVisibility)
       )
-        compactData.tabVisibility = state.tabVisibility;
+        compactData.tabVisibility = s.tabVisibility;
       if (
-        state.tabConfigurations?.some(
+        s.tabConfigurations?.some(
           t => t.label !== t.originalLabel || !t.visible
         )
       )
-        compactData.tabConfigurations = state.tabConfigurations;
-      if (state.employees?.length > 0) compactData.employees = state.employees;
-      if (state.payrollRecords?.length > 0)
-        compactData.payrollRecords = state.payrollRecords;
-      if (state.mpesaTransactions?.length > 0)
-        compactData.mpesaTransactions = state.mpesaTransactions.slice(-100); // Keep only last 100 transactions
+        compactData.tabConfigurations = s.tabConfigurations;
+      if (s.employees?.length > 0) compactData.employees = s.employees;
+      if (s.payrollRecords?.length > 0)
+        compactData.payrollRecords = s.payrollRecords;
+      if (s.mpesaTransactions?.length > 0)
+        compactData.mpesaTransactions = s.mpesaTransactions.slice(-100); // Keep only last 100 transactions
       // Multi-station support - always save station data
-      if (state.stations?.length > 0) compactData.stations = state.stations;
-      if (state.currentStationId)
-        compactData.currentStationId = state.currentStationId;
-      if (Object.keys(state.stationData || {}).length > 0)
-        compactData.stationData = state.stationData;
+      if (s.stations?.length > 0) compactData.stations = s.stations;
+      if (s.currentStationId)
+        compactData.currentStationId = s.currentStationId;
+      if (Object.keys(s.stationData || {}).length > 0)
+        compactData.stationData = s.stationData;
       if (
-        JSON.stringify(state.reportSettings) !==
+        JSON.stringify(s.reportSettings) !==
         JSON.stringify(initialState.reportSettings)
       )
-        compactData.reportSettings = state.reportSettings;
-      if (state.chatHistory?.length > 0)
-        compactData.chatHistory = state.chatHistory.slice(-50); // Keep only last 50 messages
-      if (state.dataBackups?.length > 0)
-        compactData.dataBackups = state.dataBackups.slice(-3); // Keep only last 3 backups in cloud
+        compactData.reportSettings = s.reportSettings;
+      if (s.chatHistory?.length > 0)
+        compactData.chatHistory = s.chatHistory.slice(-50); // Keep only last 50 messages
+      if (s.dataBackups?.length > 0)
+        compactData.dataBackups = s.dataBackups.slice(-3); // Keep only last 3 backups in cloud
 
       // Persist to Supabase app_kv (cross-device). Keyed per-user so each
       // account's data is isolated and RLS-protected by owner_id. localStorage
@@ -1242,7 +1255,7 @@ export function FuelProvider({ children }: { children: ReactNode }) {
       setLastCloudSave(new Date());
 
       // Calculate and log storage savings
-      const fullSize = JSON.stringify(state).length;
+      const fullSize = JSON.stringify(s).length;
       const compactSize = JSON.stringify(compactData).length;
       const savings = ((1 - compactSize / fullSize) * 100).toFixed(1);
       console.log(`Compact data saved to cloud (${savings}% smaller)`);
@@ -1251,7 +1264,7 @@ export function FuelProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsCloudSaving(false);
     }
-  }, [state, user]);
+  }, [user]);
 
   const loadFromCloud = useCallback(async () => {
     if (!user) return;
@@ -1571,7 +1584,7 @@ export function FuelProvider({ children }: { children: ReactNode }) {
       }
     }, 100);
     return () => clearTimeout(timer);
-  }, [user, loadFromStorage, saveToStorage, loadFromCloud]);
+  }, [user, loadFromCloud]);
 
   // Apply theme to body - robust for all browsers
   useEffect(() => {
