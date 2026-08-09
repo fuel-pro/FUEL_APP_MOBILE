@@ -123,21 +123,20 @@ React + Vite + TypeScript SPA for fuel station management. Deployed at
 - Vercel `api-deployments-free-per-day` limit (100/day) can be exhausted. Resets ~24h.
   Read-only GET deployments use a separate 1000/min bucket and still work when the
   deploy bucket is exhausted.
-- **2026-08-09 state (commit d4bf3bc, PENDING CODE DEPLOY; SCHEMA LIVE)**:
-  bundled ALL remaining cross-device sync fixes into ONE commit: (1) applied
-  migrations 005+006 to the live Supabase project — it had only 13 tables, so
-  every POS/expense/product/customer/supplier insert hit `PGRST205` (table not
-  found) and failed silently (errors unchecked) → the ENTIRE POS module lost
-  all data. Live now has 31 tables with RLS. SCHEMA FIX IS LIVE NOW, so those
-  features work immediately even before the code deploy. (2) Fixed unchecked
-  insert/update/delete results across pos-service.ts + management components
-  (supabase-js returns `{error}`, doesn't throw) → rollback orphaned parent
-  records + alert specific errors. Pushed to origin/main. Production CODE
-  deploy blocked by `api-deployments-free-per-day` limit (0/100, resets
-  ~2026-08-10 08:41 UTC). Autodeploy watcher (`/tmp/fuelpro_combined_deploy_v2.sh`,
-  PID 20192) polls every 5 min and fires ONE prebuilt deploy (files already
-  uploaded/cached) once the limit resets, confirming via the deployments API
-  that d4bf3bc is READY+aliased.
+- **2026-08-09 state (commit a8b497d, DEPLOYED LIVE)**: ALL fixes are in
+  production. Bundled into ONE deploy: (1) applied migrations 005+006 to live
+  Supabase (was 13 tables → now 31; the entire POS module was silently losing
+  all data because products/sales_enhanced/sale_items/expenses/etc. tables
+  didn't exist → PGRST205 errors unchecked). (2) Fixed unchecked insert/update/
+  delete results across pos-service.ts + management components (supabase-js
+  returns `{error}`, doesn't throw) → rollback orphaned parent records + alert
+  specific errors. Deployed via git-source API deploy (POST
+  /v13/deployments with gitSource.repoId=1241380610) — the prebuilt
+  /tmp/vercel_api_deploy_now.js script was BROKEN (uploaded only dist/ files,
+  Vercel still ran `npm install` → ENOENT package.json → 3 ERROR deployments).
+  The git-source deploy clones the full repo from GitHub (with package.json),
+  runs the normal Vite build, and works. Deployment dpl_J4tCP1qdQDBjRgp24PA4d9jiwcR5,
+  READY, aliased to fuel-app-mobile.vercel.app.
 
 ## Build / Test
 - `npx tsc --noEmit` — typecheck (must pass before commit).
