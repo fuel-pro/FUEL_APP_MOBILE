@@ -10,7 +10,6 @@ import {
 import { supabase } from "@/supabase/client";
 import { getSupabaseClient } from "@/supabase/client";
 import type { User, Session } from "@supabase/supabase-js";
-import { cloudStorageService } from "@/react-app/lib/cloud-storage-service";
 
 // ============================================================
 // AUTH CONTEXT v10 - Supabase Production Mode
@@ -558,13 +557,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const clearError = useCallback(() => setError(null), []);
 
   // ---- ROLE BINDING ----
-  // Sync cloud station_members → local bindings whenever user changes (login, device switch)
-  useEffect(() => {
-    if (user) {
-      syncBindingsFromCloud().catch(() => {});
-    }
-  }, [user, syncBindingsFromCloud]);
-
   const bindRole = useCallback(
     (stationId: string, stationName: string, role: StationRoleBinding["role"], invitedBy: string, expiresAt?: string) => {
       if (!user) return;
@@ -630,6 +622,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.warn("[AuthContext] syncBindingsFromCloud failed:", err);
     }
   }, [user]);
+
+  // Sync cloud station_members → local bindings whenever user changes (login, device switch)
+  useEffect(() => {
+    if (user) {
+      syncBindingsFromCloud().catch(() => {});
+    }
+  }, [user, syncBindingsFromCloud]);
 
   // ---- PASSWORD RESET ----
   const requestPasswordReset = useCallback(
