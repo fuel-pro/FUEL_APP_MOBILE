@@ -322,5 +322,34 @@ The Supabase Management API (`https://api.supabase.com/v1/projects/{ref}/databas
 ## PasswordReset — Supabase email-link flow (FIXED 2026-08-09)
 Old page had fake 6-digit code flow (`verifyResetCode` always false, `resetPassword` stub). Now uses Supabase's real email-link recovery: email -> `resetPasswordForEmail` sends link -> user clicks -> redirects to `/reset-password` with recovery token -> page detects `type=recovery`/`access_token` in URL OR `PASSWORD_RECOVERY` event -> skips to newpass -> `supabase.auth.updateUser({password})`.
 
+## Cross-user app_kv data overwrite (FIXED 2026-08-09, commit bb4f69e, PR #94)
+**Symptom**: Per-component cloud keys (expenses_data, priceboard_data,
+suppliers_data, shift_data, payroll_employees, maintenance_records,
+comm_contacts, credit_accounts, loyalty_customers, fuel_types_config,
+purchase_orders, pos_transactions, etc.) were stored in `app_kv` with a
+GLOBAL row id (the bare key name) and `onConflict: "id"`. Every user
+sharing a logical key name upserted the SAME row → the most recent write
+OVERWROTE the previous user's data AND flipped `owner_id`. With RLS
+(`owner_id = auth.uid()`), the original owner's subsequent `get` (which
+filters `id = key AND owner_id = auth.uid()`) returned `null` → silent,
+total cross-user data loss. Verified live: the `credit_accounts`,
+`loyalty_customers`, and `comm_contacts` rows in production had their
+`owner_id` flipped from `a17b4a8a` to `98ecc424`, destroying user
+a17b4a8a's data.
+
+**Fix** (`src/react-app/lib/cloud-storage-service.ts`): scope the `app_kv`
+row id by `owner_id` → `id = `${key}__${ownerId}`` in `set`/`get`/`delete`/
+`getAll`. Each user gets an isolated row for the same logical key; RLS
+enforces per-user isolation.
+- `get`: reads the scoped id first, falls back to the legacy bare-key row
+  (owned by this user) ONCE so existing data is migrated on first read; the
+  next `set` repersists it under the scoped id.
+- `set`: upserts under the scoped id.
+- `delete`: removes the scoped row + any legacy bare-key row for this owner.
+- `getAll`: strips the `__ownerId` suffix to return logical keys to callers.
+FuelContext's `user_<id>_compact` key is already user-scoped (the legacy
+fallback preserves its existing data). Verified in bundle: the
+``${key}__${ownerId}`` rowId pattern is present in the built JS.
+
 ## Cross-device file storage + station sharing (ADDED 2026-08-09)
 `src/react-app/lib/document-service.ts` uploads to Supabase Storage (`fuelpro-files`, path `documents/<uid>/<timestamp>-<name>`), metadata in `user_documents`. `src/react-app/lib/station-share-service.ts` is DB-backed sharing via `station_members` (invite link = `/?invite=<token>`). `src/react-app/components/UserProfileSettings.tsx` is the full UI (profile, email, password, sharing, files), embedded in SettingsPanel as a "User Profile" tab.
