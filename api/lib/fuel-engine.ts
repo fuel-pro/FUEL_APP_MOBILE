@@ -103,7 +103,11 @@ function getServerSupabase(): SupabaseClient | null {
 // ---------------------------------------------------------------------------
 
 async function getPlaceName(lat: number, lon: number): Promise<PlaceInfo> {
-  const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=18&addressdetails=1`;
+  // zoom=10 gives town/city-level resolution (not building-level like zoom=18).
+  // This returns the primary town name rather than a sub-village/hamlet, so
+  // the cache key is the town users actually recognise (e.g. "Lodwar" not
+  // "Nawoitorong").
+  const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=10&addressdetails=1`;
   const res = await fetch(url, {
     headers: { "User-Agent": "FuelPro/1.0 (contact@fuelpro.app)" },
   });
@@ -113,13 +117,16 @@ async function getPlaceName(lat: number, lon: number): Promise<PlaceInfo> {
     display_name?: string;
   };
   const addr = data.address || {};
-  // Prioritize the most local administrative unit: village > town > city.
+  // Prioritise the most recognisable administrative unit: city > town >
+  // county (for Kenya, the county seat is what people call "town") > village.
   const name =
-    addr.village ||
-    addr.town ||
     addr.city ||
+    addr.municipality ||
+    addr.town ||
     addr.county ||
     addr.state_district ||
+    addr.village ||
+    addr.hamlet ||
     addr.state ||
     "Unknown";
   const country = addr.country || "Unknown";
