@@ -132,25 +132,25 @@ export default function SupplierManagement() {
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(suppliers));
-    cloudStorageService.set("suppliers_data", suppliers).catch(() => {});
-  }, [suppliers]);
+    cloudStorageService.set("suppliers_data", suppliers, stationId).catch(() => {});
+  }, [suppliers, stationId]);
   useEffect(() => {
     localStorage.setItem(ORDERS_KEY, JSON.stringify(orders));
-    cloudStorageService.set("purchase_orders", orders).catch(() => {});
-  }, [orders]);
+    cloudStorageService.set("purchase_orders", orders, stationId).catch(() => {});
+  }, [orders, stationId]);
 
   // Load from cloud on mount (cross-device sync)
   useEffect(() => {
     if (!user) return;
     (async () => {
       const cloudSuppliers =
-        await cloudStorageService.get<Supplier[]>("suppliers_data");
+        await cloudStorageService.get<Supplier[]>("suppliers_data", stationId);
       if (cloudSuppliers && Array.isArray(cloudSuppliers)) setSuppliers(cloudSuppliers);
       const cloudOrders =
-        await cloudStorageService.get<PurchaseOrder[]>("purchase_orders");
+        await cloudStorageService.get<PurchaseOrder[]>("purchase_orders", stationId);
       if (cloudOrders && Array.isArray(cloudOrders)) setOrders(cloudOrders);
     })();
-  }, [user]);
+  }, [user, stationId]);
 
   const showNotification = (
     message: string,

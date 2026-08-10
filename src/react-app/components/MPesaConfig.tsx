@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 import { useAuth } from "@/react-app/context/AuthContext";
+import { useStations } from "@/react-app/context/StationContext";
 import {
   Settings,
   Smartphone,
@@ -32,6 +33,8 @@ const TEST_PASSKEY =
 
 export default function MPesaConfig() {
   const { user } = useAuth();
+  const { currentStation } = useStations();
+  const stationId = currentStation?.id;
   const [config, setConfig] = useState<MpesaConfig>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -61,7 +64,7 @@ export default function MPesaConfig() {
     setError("");
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
-      cloudStorageService.set(CLOUD_KEY, config).catch(() => {});
+      cloudStorageService.set(CLOUD_KEY, config, stationId).catch(() => {});
       setTimeout(() => {
         setSaving(false);
         setSaved(true);
@@ -77,10 +80,10 @@ export default function MPesaConfig() {
   useEffect(() => {
     if (!user) return;
     (async () => {
-      const cloud = await cloudStorageService.get<MpesaConfig>(CLOUD_KEY);
+      const cloud = await cloudStorageService.get<MpesaConfig>(CLOUD_KEY, stationId);
       if (cloud) setConfig(cloud);
     })();
-  }, [user]);
+  }, [user, stationId]);
 
   const reset = () => {
     if (confirm("Reset to default production settings?")) {

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 import { useAuth } from "@/react-app/context/AuthContext";
+import { useStations } from "@/react-app/context/StationContext";
 import {
   Receipt,
   Plus,
@@ -71,6 +72,8 @@ function loadExpenses(): Expense[] {
 
 export default function ExpenseTracker() {
   const { user } = useAuth();
+  const { currentStation } = useStations();
+  const stationId = currentStation?.id;
   const [expenses, setExpenses] = useState<Expense[]>(loadExpenses);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -97,17 +100,18 @@ export default function ExpenseTracker() {
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(expenses));
-    cloudStorageService.set(CLOUD_KEY, expenses).catch(() => {});
-  }, [expenses]);
+    cloudStorageService.set(CLOUD_KEY, expenses, stationId).catch(() => {});
+  }, [expenses, stationId]);
 
-  // Load from cloud on mount (cross-device sync)
+  // Load from cloud on mount AND when the station changes (cross-device +
+  // per-station sync). Each station has its own isolated expense set.
   useEffect(() => {
     if (!user) return;
     (async () => {
-      const cloud = await cloudStorageService.get<Expense[]>(CLOUD_KEY);
+      const cloud = await cloudStorageService.get<Expense[]>(CLOUD_KEY, stationId);
       if (cloud && Array.isArray(cloud)) setExpenses(cloud);
     })();
-  }, [user]);
+  }, [user, stationId]);
 
   const showNotification = (
     message: string,

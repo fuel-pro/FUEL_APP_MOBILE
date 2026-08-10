@@ -18,6 +18,7 @@ import {
 import { useFuel } from "@/react-app/context/FuelContext";
 import { useAuth } from "@/react-app/context/AuthContext";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
+import { useStations } from "@/react-app/context/StationContext";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -84,6 +85,8 @@ interface ColumnNames {
 export default function PayrollSystem() {
   // Get auth context
   const { user } = useAuth();
+  const { currentStation } = useStations();
+  const stationId = currentStation?.id;
   const { state: fuelState } = useFuel();
 
   // State
@@ -184,7 +187,7 @@ export default function PayrollSystem() {
   // API calls
   const fetchEmployees = async () => {
     try {
-      const cloudData = await cloudStorageService.get<any[]>("payroll_employees");
+      const cloudData = await cloudStorageService.get<any[]>("payroll_employees", stationId);
       if (cloudData && Array.isArray(cloudData)) {
         const formattedEmployees = cloudData.map((emp: any, i: number) => ({
           id: emp.id || i + 1,
@@ -263,7 +266,7 @@ export default function PayrollSystem() {
 
   const fetchSettings = async () => {
     try {
-      const cloudSettings = await cloudStorageService.get<any>("payroll_settings");
+      const cloudSettings = await cloudStorageService.get<any>("payroll_settings", stationId);
       const backendSettings = cloudSettings || JSON.parse(localStorage.getItem("fuelpro_payroll_settings") || "null");
       if (backendSettings) {
         setSettings(prev => ({
@@ -332,7 +335,7 @@ export default function PayrollSystem() {
         reference_code: merged.reference,
         custom_roles: merged.customRoles?.join(", "),
       };
-      await cloudStorageService.set("payroll_settings", payload);
+      await cloudStorageService.set("payroll_settings", payload, stationId);
       localStorage.setItem("fuelpro_payroll_settings", JSON.stringify(payload));
     } catch (error) {
       console.error("Error saving settings:", error);
@@ -368,7 +371,7 @@ export default function PayrollSystem() {
     if (user) {
       Promise.all([fetchEmployees(), fetchSettings()]);
     }
-  }, [user]);
+  }, [user, stationId]);
 
   // Employee CRUD operations
   const openAddEmployeeModal = () => {
@@ -449,7 +452,7 @@ export default function PayrollSystem() {
         notes: employeeForm.notes,
       };
 
-      const cloudData = (await cloudStorageService.get<any[]>("payroll_employees")) || [];
+      const cloudData = (await cloudStorageService.get<any[]>("payroll_employees", stationId)) || [];
       let updatedList: any[];
       if (editingEmployee) {
         const idx = cloudData.findIndex((e: any) => e.employee_id === editingEmployee.employeeId);
@@ -459,7 +462,7 @@ export default function PayrollSystem() {
       } else {
         updatedList = [...cloudData, { ...empData, id: Date.now() }];
       }
-      await cloudStorageService.set("payroll_employees", updatedList);
+      await cloudStorageService.set("payroll_employees", updatedList, stationId);
       localStorage.setItem("fuelpro_payroll_employees", JSON.stringify(updatedList));
 
       await fetchEmployees();
@@ -491,9 +494,9 @@ export default function PayrollSystem() {
     if (employeeToDelete) {
       try {
         setSaving(true);
-        const cloudData = (await cloudStorageService.get<any[]>("payroll_employees")) || [];
+        const cloudData = (await cloudStorageService.get<any[]>("payroll_employees", stationId)) || [];
         const updatedList = cloudData.filter((e: any) => e.id !== employeeToDelete && e.employee_id !== employeeToDelete);
-        await cloudStorageService.set("payroll_employees", updatedList);
+        await cloudStorageService.set("payroll_employees", updatedList, stationId);
         localStorage.setItem("fuelpro_payroll_employees", JSON.stringify(updatedList));
 
         await fetchEmployees();
@@ -512,13 +515,13 @@ export default function PayrollSystem() {
   const applyShaToAll = async () => {
     try {
       setSaving(true);
-      const cloudData = (await cloudStorageService.get<any[]>("payroll_employees")) || [];
+      const cloudData = (await cloudStorageService.get<any[]>("payroll_employees", stationId)) || [];
       const updatedList = cloudData.map((emp: any) => ({
         ...emp,
         sha_amount: (emp.basic_salary || 0) * (shaPercentage / 100),
         net_pay: (emp.basic_salary || 0) - (emp.advance_amount || 0) - (emp.sha_amount || 0) - (emp.nssf_amount || 0),
       }));
-      await cloudStorageService.set("payroll_employees", updatedList);
+      await cloudStorageService.set("payroll_employees", updatedList, stationId);
       localStorage.setItem("fuelpro_payroll_employees", JSON.stringify(updatedList));
 
       await fetchEmployees();
@@ -535,13 +538,13 @@ export default function PayrollSystem() {
   const applyNssfToAll = async () => {
     try {
       setSaving(true);
-      const cloudData = (await cloudStorageService.get<any[]>("payroll_employees")) || [];
+      const cloudData = (await cloudStorageService.get<any[]>("payroll_employees", stationId)) || [];
       const updatedList = cloudData.map((emp: any) => ({
         ...emp,
         nssf_amount: nssfAmount,
         net_pay: (emp.basic_salary || 0) - (emp.advance_amount || 0) - (emp.sha_amount || 0) - nssfAmount,
       }));
-      await cloudStorageService.set("payroll_employees", updatedList);
+      await cloudStorageService.set("payroll_employees", updatedList, stationId);
       localStorage.setItem("fuelpro_payroll_employees", JSON.stringify(updatedList));
 
       await fetchEmployees();
@@ -593,7 +596,7 @@ export default function PayrollSystem() {
         (updatedEmployee as any)[field] = value;
       }
 
-      const cloudData = (await cloudStorageService.get<any[]>("payroll_employees")) || [];
+      const cloudData = (await cloudStorageService.get<any[]>("payroll_employees", stationId)) || [];
       const idx = cloudData.findIndex((e: any) => e.employee_id === employee.employeeId);
       if (idx >= 0) {
         const updated = {
@@ -622,7 +625,7 @@ export default function PayrollSystem() {
           notes: updatedEmployee.notes,
         };
         cloudData[idx] = updated;
-        await cloudStorageService.set("payroll_employees", cloudData);
+        await cloudStorageService.set("payroll_employees", cloudData, stationId);
         localStorage.setItem("fuelpro_payroll_employees", JSON.stringify(cloudData));
       }
 
@@ -754,8 +757,8 @@ export default function PayrollSystem() {
   const exportCombinedPayrollExcel = async () => {
     try {
       setSaving(true);
-      const cloudEmployees = (await cloudStorageService.get<any[]>("payroll_employees")) || [];
-      const cloudSettings = await cloudStorageService.get<any>("payroll_settings");
+      const cloudEmployees = (await cloudStorageService.get<any[]>("payroll_employees", stationId)) || [];
+      const cloudSettings = await cloudStorageService.get<any>("payroll_settings", stationId);
       generateCombinedExcel({ employees: cloudEmployees, settings: cloudSettings || settings });
     } catch (error) {
       console.error("Error exporting combined payroll:", error);
@@ -768,8 +771,8 @@ export default function PayrollSystem() {
   const exportCPCCentralizedExcel = async () => {
     try {
       setSaving(true);
-      const cloudEmployees = (await cloudStorageService.get<any[]>("payroll_employees")) || [];
-      const cloudSettings = await cloudStorageService.get<any>("payroll_settings");
+      const cloudEmployees = (await cloudStorageService.get<any[]>("payroll_employees", stationId)) || [];
+      const cloudSettings = await cloudStorageService.get<any>("payroll_settings", stationId);
       generateCPCExcel({ employees: cloudEmployees, settings: cloudSettings || settings });
     } catch (error) {
       console.error("Error exporting CPC centralized:", error);
@@ -1485,9 +1488,9 @@ export default function PayrollSystem() {
       // Save imported employees to cloud + localStorage
       if (localImported.length > 0) {
         try {
-          const cloudData = (await cloudStorageService.get<any[]>("payroll_employees")) || [];
+          const cloudData = (await cloudStorageService.get<any[]>("payroll_employees", stationId)) || [];
           const updated = [...cloudData, ...localImported];
-          await cloudStorageService.set("payroll_employees", updated);
+          await cloudStorageService.set("payroll_employees", updated, stationId);
           localStorage.setItem(
             "fuelpro_payroll_employees",
             JSON.stringify(updated)

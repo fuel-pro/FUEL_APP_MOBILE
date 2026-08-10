@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { useFuel } from "@/react-app/context/FuelContext";
 import { useAuth } from "@/react-app/context/AuthContext";
+import { useStations } from "@/react-app/context/StationContext";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 
 interface Contact {
@@ -56,6 +57,8 @@ interface MessageTemplate {
 
 export default function Communication() {
   const { user } = useAuth();
+  const { currentStation } = useStations();
+  const stationId = currentStation?.id;
   const { state } = useFuel();
 
   // State management
@@ -108,7 +111,7 @@ export default function Communication() {
       loadMessages();
       loadTemplates();
     }
-  }, [user]);
+  }, [user, stationId]);
 
   // Auto-refresh messages every 30 seconds for live updates
   useEffect(() => {
@@ -123,7 +126,7 @@ export default function Communication() {
 
   const loadContacts = async () => {
     try {
-      const data = await cloudStorageService.get<Contact[]>("comm_contacts");
+      const data = await cloudStorageService.get<Contact[]>("comm_contacts", stationId);
       setContacts(data || []);
     } catch (error) {
       console.error("Error loading contacts:", error);
@@ -132,7 +135,7 @@ export default function Communication() {
 
   const loadMessages = async () => {
     try {
-      const data = await cloudStorageService.get<Message[]>("comm_messages");
+      const data = await cloudStorageService.get<Message[]>("comm_messages", stationId);
       setMessages(data || []);
     } catch (error) {
       console.error("Error loading messages:", error);
@@ -141,7 +144,7 @@ export default function Communication() {
 
   const loadTemplates = async () => {
     try {
-      const data = await cloudStorageService.get<MessageTemplate[]>("comm_templates");
+      const data = await cloudStorageService.get<MessageTemplate[]>("comm_templates", stationId);
       setTemplates(data || []);
     } catch (error) {
       console.error("Error loading templates:", error);
@@ -150,7 +153,7 @@ export default function Communication() {
 
   const saveContact = async () => {
     try {
-      const existing = (await cloudStorageService.get<Contact[]>("comm_contacts")) || [];
+      const existing = (await cloudStorageService.get<Contact[]>("comm_contacts", stationId)) || [];
       const tags = contactForm.tags
         ? (typeof contactForm.tags === "string"
             ? contactForm.tags.split(",").map(t => t.trim()).filter(t => t)
@@ -176,7 +179,7 @@ export default function Communication() {
       } else {
         updated = [...existing, newContact];
       }
-      await cloudStorageService.set("comm_contacts", updated);
+      await cloudStorageService.set("comm_contacts", updated, stationId);
       setContacts(updated);
       setShowContactModal(false);
       setSelectedContact(null);
@@ -191,9 +194,9 @@ export default function Communication() {
     if (!confirm("Delete this contact?")) return;
 
     try {
-      const existing = (await cloudStorageService.get<Contact[]>("comm_contacts")) || [];
+      const existing = (await cloudStorageService.get<Contact[]>("comm_contacts", stationId)) || [];
       const updated = existing.filter(c => c.id !== id);
-      await cloudStorageService.set("comm_contacts", updated);
+      await cloudStorageService.set("comm_contacts", updated, stationId);
       setContacts(updated);
     } catch (error) {
       console.error("Error deleting contact:", error);
@@ -203,7 +206,7 @@ export default function Communication() {
 
   const sendMessage = async () => {
     try {
-      const existing = (await cloudStorageService.get<Message[]>("comm_messages")) || [];
+      const existing = (await cloudStorageService.get<Message[]>("comm_messages", stationId)) || [];
       const newMessage: Message = {
         id: `msg_${Date.now()}`,
         contactId: (selectedContacts[0] || messageForm.recipients?.[0] || "") as string,
@@ -214,7 +217,7 @@ export default function Communication() {
         timestamp: new Date().toISOString(),
       };
       const updated = [newMessage, ...existing];
-      await cloudStorageService.set("comm_messages", updated);
+      await cloudStorageService.set("comm_messages", updated, stationId);
       setMessages(updated);
       setShowMessageModal(false);
       setSelectedContacts([]);
@@ -232,7 +235,7 @@ export default function Communication() {
 
   const saveTemplate = async () => {
     try {
-      const existing = (await cloudStorageService.get<MessageTemplate[]>("comm_templates")) || [];
+      const existing = (await cloudStorageService.get<MessageTemplate[]>("comm_templates", stationId)) || [];
       const newTemplate: MessageTemplate = {
         id: `tpl_${Date.now()}`,
         name: templateForm.name || "",
@@ -242,7 +245,7 @@ export default function Communication() {
         category: templateForm.category || "general",
       };
       const updated = [...existing, newTemplate];
-      await cloudStorageService.set("comm_templates", updated);
+      await cloudStorageService.set("comm_templates", updated, stationId);
       setTemplates(updated);
       setShowTemplateModal(false);
       resetTemplateForm();
@@ -256,9 +259,9 @@ export default function Communication() {
     if (!confirm("Delete this template?")) return;
 
     try {
-      const existing = (await cloudStorageService.get<MessageTemplate[]>("comm_templates")) || [];
+      const existing = (await cloudStorageService.get<MessageTemplate[]>("comm_templates", stationId)) || [];
       const updated = existing.filter(t => t.id !== id);
-      await cloudStorageService.set("comm_templates", updated);
+      await cloudStorageService.set("comm_templates", updated, stationId);
       setTemplates(updated);
     } catch (error) {
       console.error("Error deleting template:", error);
@@ -268,11 +271,11 @@ export default function Communication() {
 
   const toggleStarContact = async (contact: Contact) => {
     try {
-      const existing = (await cloudStorageService.get<Contact[]>("comm_contacts")) || [];
+      const existing = (await cloudStorageService.get<Contact[]>("comm_contacts", stationId)) || [];
       const updated = existing.map(c =>
         c.id === contact.id ? { ...c, starred: !c.starred } : c
       );
-      await cloudStorageService.set("comm_contacts", updated);
+      await cloudStorageService.set("comm_contacts", updated, stationId);
       setContacts(updated);
     } catch (error) {
       console.error("Error updating contact:", error);

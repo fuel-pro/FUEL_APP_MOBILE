@@ -23,16 +23,33 @@ function cacheKey(key: string): string {
 }
 
 /**
- * Build the user-scoped app_kv row id for a logical key.
+ * Build the app_kv row id for a logical key, scoped by user (and optionally
+ * by station).
  *
- * CRITICAL: the row id MUST be unique per user. Earlier versions used the bare
- * key (e.g. "expenses_data") as the id with `onConflict: "id"`, which meant
- * every user sharing that key name overwrote the same row — destroying other
- * users' data and flipping `owner_id` so RLS (`owner_id = auth.uid()`) locked
- * the original owner out of their own data. Scoping the id by owner_id gives
- * each user an isolated row for the same logical key.
+ * CRITICAL: the row id MUST be unique per user (+ station). Earlier versions
+ * used the bare key (e.g. "expenses_data") as the id with `onConflict: "id"`,
+ * which meant every user sharing that key name overwrote the same row —
+ * destroying other users' data and flipping `owner_id` so RLS
+ * (`owner_id = auth.uid()`) locked the original owner out of their own data.
+ *
+ * Scoping by owner_id gives each user an isolated row for the same logical
+ * key. Scoping additionally by station_id gives each station its own isolated
+ * data set (so a user with multiple stations has independent expenses, prices,
+ * suppliers, etc. per station), which is required unless a "Combined View" is
+ * explicitly selected.
+ *
+ * Row id shapes:
+ *   - station-scoped: `${key}__${ownerId}__${stationId}`
+ *   - user-scoped:    `${key}__${ownerId}`   (legacy / combined-view)
  */
-function rowId(key: string, ownerId: string): string {
+function rowId(key: string, ownerId: string, stationId?: string): string {
+  return stationId
+    ? `${key}__${ownerId}__${stationId}`
+    : `${key}__${ownerId}`;
+}
+
+/** The legacy user-scoped id (used for backward-compatible reads). */
+function userScopedId(key: string, ownerId: string): string {
   return `${key}__${ownerId}`;
 }
 
@@ -85,40 +102,63 @@ class CloudStorageService {
   /**
    * Get a value from cloud (app_kv). Falls back to the local cache when the
    * network or auth is unavailable so reads never block the UI.
+   *
+   * When `stationId` is provided, reads the station-scoped row first. If that
+   * does not exist, falls back to the user-scoped row (legacy / pre-station
+   * data) so existing data migrates transparently on first read. The next
+   * `set()` repersists it under the station-scoped id.
    */
-  async get<T = Json>(key: string): Promise<T | null> {
-    // Fast memory cache.
-    const mem = this.memoryCache.get(key);
+  async get<T = Json>(key: string, stationId?: string): Promise<T | null> {
+    // Fast memory cache (keyed by the effective cache key).
+    const ck = stationId ? `${key}__${stationId}` : key;
+    const mem = this.memoryCache.get(ck);
     if (mem && Date.now() - mem.ts < this.memTtlMs) {
       return mem.value as T;
     }
 
     const ownerId = await currentUserId();
-    if (!ownerId) return readCache<T>(key);
+    if (!ownerId) return readCache<T>(ck);
 
     try {
       const client = getSupabaseClient();
-      const scopedId = rowId(key, ownerId);
-      const { data, error } = await client
+      const scopedId = rowId(key, ownerId, stationId);
+
+      // 1. Station-scoped row (when stationId provided).
+      if (stationId) {
+        const { data, error } = await client
+          .from("app_kv")
+          .select("data")
+          .eq("id", scopedId)
+          .eq("owner_id", ownerId)
+          .maybeSingle();
+        if (error) throw error;
+        if (data?.data != null) {
+          const value = data.data as T;
+          this.memoryCache.set(ck, { value, ts: Date.now() });
+          writeCache(ck, value);
+          return value;
+        }
+      }
+
+      // 2. User-scoped row (legacy / combined-view / pre-station data).
+      const usId = userScopedId(key, ownerId);
+      const { data: usData, error: usError } = await client
         .from("app_kv")
         .select("data")
-        .eq("id", scopedId)
+        .eq("id", usId)
         .eq("owner_id", ownerId)
         .maybeSingle();
-
-      if (error) throw error;
-
-      if (data?.data != null) {
-        const value = data.data as T;
-        this.memoryCache.set(key, { value, ts: Date.now() });
-        writeCache(key, value);
+      if (usError) throw usError;
+      if (usData?.data != null) {
+        const value = usData.data as T;
+        this.memoryCache.set(ck, { value, ts: Date.now() });
+        writeCache(ck, value);
         return value;
       }
 
-      // Legacy fallback: before user-scoped ids, rows were stored under the
-      // bare key (owned by this user). Read once so existing data is not lost;
-      // the next set() repersistis it under the scoped id.
-      if (key !== scopedId) {
+      // 3. Legacy bare-key row (pre-user-scoping). Read once so existing data
+      // is not lost; the next set() repersists it under the scoped id.
+      if (key !== usId) {
         const { data: legacy } = await client
           .from("app_kv")
           .select("data")
@@ -127,25 +167,31 @@ class CloudStorageService {
           .maybeSingle();
         if (legacy?.data != null) {
           const value = legacy.data as T;
-          this.memoryCache.set(key, { value, ts: Date.now() });
-          writeCache(key, value);
+          this.memoryCache.set(ck, { value, ts: Date.now() });
+          writeCache(ck, value);
           return value;
         }
       }
       // No cloud row — fall back to cache (e.g. offline-first write not yet synced).
-      return readCache<T>(key);
+      return readCache<T>(ck);
     } catch {
-      return readCache<T>(key);
+      return readCache<T>(ck);
     }
   }
 
   /**
    * Persist a value to cloud (app_kv) upsert. Also writes the local cache so
    * subsequent reads are instant and offline-capable.
+   *
+   * When `stationId` is provided, writes the station-scoped row and sets the
+   * `station_id` column so station-filtered queries work. The legacy bare-key
+   * row (if any) is left in place for combined-view reads; it is NOT deleted
+   * so a user toggling Combined View still sees aggregated data.
    */
-  async set<T = Json>(key: string, value: T): Promise<void> {
-    writeCache(key, value);
-    this.memoryCache.set(key, { value, ts: Date.now() });
+  async set<T = Json>(key: string, value: T, stationId?: string): Promise<void> {
+    const ck = stationId ? `${key}__${stationId}` : key;
+    writeCache(ck, value);
+    this.memoryCache.set(ck, { value, ts: Date.now() });
 
     const ownerId = await currentUserId();
     if (!ownerId) return; // offline / unauthenticated — cached locally only
@@ -154,9 +200,10 @@ class CloudStorageService {
       const client = getSupabaseClient();
       const { error } = await client.from("app_kv").upsert(
         {
-          id: rowId(key, ownerId),
+          id: rowId(key, ownerId, stationId),
           collection: COLLECTION,
           owner_id: ownerId,
+          station_id: stationId ?? null,
           data: value as unknown as Json,
           updated_at: new Date().toISOString(),
         },
@@ -172,16 +219,17 @@ class CloudStorageService {
   }
 
   /** Delete from cloud + cache. */
-  async delete(key: string): Promise<void> {
-    clearCache(key);
-    this.memoryCache.delete(key);
+  async delete(key: string, stationId?: string): Promise<void> {
+    const ck = stationId ? `${key}__${stationId}` : key;
+    clearCache(ck);
+    this.memoryCache.delete(ck);
 
     const ownerId = await currentUserId();
     if (!ownerId) return;
 
     try {
       const client = getSupabaseClient();
-      const scopedId = rowId(key, ownerId);
+      const scopedId = rowId(key, ownerId, stationId);
       const { error } = await client
         .from("app_kv")
         .delete()
@@ -233,9 +281,13 @@ class CloudStorageService {
   }
 
   /** Drop the in-memory cache (forces next get to hit cloud). */
-  invalidate(key?: string): void {
-    if (key) this.memoryCache.delete(key);
-    else this.memoryCache.clear();
+  invalidate(key?: string, stationId?: string): void {
+    if (key) {
+      const ck = stationId ? `${key}__${stationId}` : key;
+      this.memoryCache.delete(ck);
+    } else {
+      this.memoryCache.clear();
+    }
   }
 }
 

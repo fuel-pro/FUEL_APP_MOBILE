@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 import { useAuth } from "@/react-app/context/AuthContext";
+import { useStations } from "@/react-app/context/StationContext";
 
 interface Shift {
   id: string;
@@ -73,6 +74,8 @@ export default function ShiftManagement() {
   const location = useLocation();
   const currencySymbol = location.currencySymbol;
   const { user } = useAuth();
+  const { currentStation } = useStations();
+  const stationId = currentStation?.id;
   const [employees, setEmployees] = useState<Employee[]>(() => {
     try {
       return JSON.parse(localStorage.getItem("fuelpro_employees") || "[]");
@@ -109,24 +112,24 @@ export default function ShiftManagement() {
   const saveShifts = (s: Shift[]) => {
     setShifts(s);
     localStorage.setItem("fuelpro_shifts", JSON.stringify(s));
-    cloudStorageService.set("shift_data", s).catch(() => {});
+    cloudStorageService.set("shift_data", s, stationId).catch(() => {});
   };
   const saveEmployees = (e: Employee[]) => {
     setEmployees(e);
     localStorage.setItem("fuelpro_employees", JSON.stringify(e));
-    cloudStorageService.set("shift_employees", e).catch(() => {});
+    cloudStorageService.set("shift_employees", e, stationId).catch(() => {});
   };
 
   // Load from cloud on mount (cross-device sync)
   useEffect(() => {
     if (!user) return;
     (async () => {
-      const cloudEmps = await cloudStorageService.get<Employee[]>("shift_employees");
+      const cloudEmps = await cloudStorageService.get<Employee[]>("shift_employees", stationId);
       if (cloudEmps && Array.isArray(cloudEmps)) setEmployees(cloudEmps);
-      const cloudShifts = await cloudStorageService.get<Shift[]>("shift_data");
+      const cloudShifts = await cloudStorageService.get<Shift[]>("shift_data", stationId);
       if (cloudShifts && Array.isArray(cloudShifts)) setShifts(cloudShifts);
     })();
-  }, [user]);
+  }, [user, stationId]);
 
   const dayShifts = useMemo(
     () => shifts.filter(s => s.date === selectedDate),
