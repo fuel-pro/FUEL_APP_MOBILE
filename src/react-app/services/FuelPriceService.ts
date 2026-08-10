@@ -321,6 +321,69 @@ export async function getFuelPrices(
     }
   }
 
+  // GPS-first path: when precise coordinates are available (written by
+  // LocationContext.detectPreciseLocation), call the hyper-local fuel-engine
+  // (/api/fuel-local → reverse-geocode → web search → AI parse → PostGIS
+  // nearest-neighbour). This gives village-level prices; the legacy detection
+  // below remains the fallback when GPS is unavailable or the engine has no
+  // data for the region.
+  try {
+    const coordsRaw =
+      typeof localStorage !== "undefined"
+        ? localStorage.getItem("fuelpro_user_coords")
+        : null;
+    if (coordsRaw) {
+      const { lat, lng } = JSON.parse(coordsRaw) as {
+        lat: number;
+        lng: number;
+      };
+      if (Number.isFinite(lat) && Number.isFinite(lng) && lat !== 0) {
+        const res = await fetch(
+          `/api/fuel-local?lat=${lat}&lon=${lng}`,
+        );
+        if (res.ok) {
+          const local = await res.json();
+          if (
+            local.success &&
+            local.prices &&
+            (local.prices.super_petrol != null ||
+              local.prices.diesel != null)
+          ) {
+            const countryCode = local.country_code || "KE";
+            const cur = currencyMap[countryCode] || {
+              currency: local.currency || "KES",
+              symbol: "KSh",
+            };
+            const prices: FuelPrices = {
+              petrolPrice:
+                local.prices.super_petrol ?? KENYA_PETROL_PRICE,
+              dieselPrice: local.prices.diesel ?? KENYA_DIESEL_PRICE,
+              currency: cur.currency,
+              currencySymbol: cur.symbol,
+              location: `${local.location}, ${local.country}`,
+              countryCode,
+              fetchedAt: local.last_updated || new Date().toISOString(),
+              source: local.is_approximate
+                ? `Approx. (nearest: ${local.nearest_town})`
+                : local.source || "AI-Verified",
+            };
+            savePricesToCache(prices);
+            console.log(
+              "[FuelPrice] Hyper-local engine prices:",
+              prices.location,
+            );
+            return prices;
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.warn(
+      "[FuelPrice] Hyper-local engine unavailable, falling back:",
+      e,
+    );
+  }
+
   // Need to fetch new prices
   console.log("[FuelPrice] Fetching fresh fuel prices...");
 

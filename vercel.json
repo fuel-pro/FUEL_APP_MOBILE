@@ -8,10 +8,17 @@
     {
       "path": "/api/cron-monthly-sync",
       "schedule": "0 0 1 * *"
+    },
+    {
+      "path": "/api/cron/monthly-fuel-sync",
+      "schedule": "0 0 1 * *"
     }
   ],
   "rewrites": [
-    { "source": "/((?!assets/|sw\\.js|api/).*)", "destination": "/index.html" }
+    {
+      "source": "/((?!assets/|sw\\.js|api/).*)",
+      "destination": "/index.html"
+    }
   ],
   "headers": [
     {
@@ -25,7 +32,10 @@
           "key": "Access-Control-Allow-Headers",
           "value": "Content-Type, Authorization, X-API-Key, x-founder-token, X-Requested-With, X-Clerk-Auth"
         },
-        { "key": "Access-Control-Max-Age", "value": "86400" }
+        {
+          "key": "Access-Control-Max-Age",
+          "value": "86400"
+        }
       ]
     },
     {
@@ -35,7 +45,10 @@
           "key": "Cache-Control",
           "value": "no-cache, no-store, must-revalidate"
         },
-        { "key": "Service-Worker-Allowed", "value": "/" }
+        {
+          "key": "Service-Worker-Allowed",
+          "value": "/"
+        }
       ]
     },
     {

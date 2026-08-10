@@ -779,6 +779,14 @@ const initialState: FuelState = {
       order: 31,
       visible: true,
     },
+    {
+      id: "fueltracker",
+      label: "Auto Fuel Price",
+      originalLabel: "Auto Fuel Price",
+      description: "GPS-detected hyper-local fuel prices (AI-parsed, PostGIS cached)",
+      order: 32,
+      visible: true,
+    },
     // ─── SalesZote-style additive POS modules ───
     // New capabilities layered onto the FuelPro tab system (not a replica of
     // app.saleszote.com). Tabs that already exist in FuelPro (POS, Inventory,
@@ -788,7 +796,7 @@ const initialState: FuelState = {
       label: "Products Catalog",
       originalLabel: "Products Catalog",
       description: "Manage non-fuel products, prices & categories (POS catalog)",
-      order: 32,
+      order: 33,
       visible: true,
     },
     {
@@ -796,7 +804,7 @@ const initialState: FuelState = {
       label: "Sales Invoices",
       originalLabel: "Sales Invoices",
       description: "Issue and track detailed sales invoices",
-      order: 33,
+      order: 34,
       visible: true,
     },
     {
@@ -804,7 +812,7 @@ const initialState: FuelState = {
       label: "Purchases & Suppliers",
       originalLabel: "Purchases & Suppliers",
       description: "Purchase orders and supplier management",
-      order: 34,
+      order: 35,
       visible: true,
     },
     {
@@ -812,7 +820,7 @@ const initialState: FuelState = {
       label: "Terminal Sessions",
       originalLabel: "Terminal Sessions",
       description: "POS terminal session open/close & reconciliation",
-      order: 35,
+      order: 36,
       visible: true,
     },
     {
@@ -820,7 +828,7 @@ const initialState: FuelState = {
       label: "Fuel Price Finder",
       originalLabel: "Fuel Price Finder",
       description: "GPS-based nearby fuel price locator & comparison",
-      order: 36,
+      order: 37,
       visible: true,
     },
   ],

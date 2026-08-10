@@ -1,53 +1,196 @@
--- Migration 012: fuel_prices PostGIS smart-cache (ADAPTED to existing schema)
+-- ============================================================
+-- Migration 012: Global Fuel Prices cache (PostGIS)
 --
--- The live `fuel_prices` table already existed (from earlier fuel-price work)
--- with a PostGIS `location` geography column, GiST index `idx_fuel_location`,
--- a `prices` jsonb column, and a unique constraint on (location_name, country).
--- This migration ADDS the two pieces the spec needs that were missing:
---   1. A trigger that auto-populates `location` from `lat`/`lon` on insert/update
---      (the existing trigger only refreshed `last_updated`).
---   2. The `get_nearest_fuel_prices` RPC used by the hybrid fetcher to find the
---      nearest cached town within a radius (saves SerpApi quota).
+-- Hyper-local fuel price cache. The serverless fuel-engine
+-- (api/lib/fuel-engine.ts) reverse-geocodes the user's GPS to a
+-- village/town name, web-searches local fuel prices, parses them
+-- with an LLM, and upserts a row here. When a user in a remote
+-- village has no exact match, get_nearest_fuel() returns the
+-- closest town's price (within a radius) via PostGIS proximity.
+--
+-- Safe to run on the existing live project — uses IF NOT EXISTS.
+-- PostGIS is enabled if available; if the extension cannot be
+-- enabled on the plan, the geography column + GIST index are
+-- skipped (the engine still works via the lat/lon fallback RPC).
+-- ============================================================
 
--- Enable PostGIS (idempotent; was already enabled by the earlier migration).
-create extension if not exists postgis;
+-- 1. Enable PostGIS (required for geography + ST_DWithin/ST_Distance).
+--    Wrapped in a DO block so a missing extension doesn't abort the
+--    whole migration on plans that disable it.
+DO $$
+BEGIN
+  BEGIN
+    CREATE EXTENSION IF NOT EXISTS postgis;
+  EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'PostGIS extension not available: %', SQLERRM;
+  END;
+END $$;
 
--- Trigger function: refresh last_updated AND auto-populate the geography
--- column from lat/lon so inserts that only provide coordinates still get a
--- spatial point (the RPC and GiST index depend on it).
-create or replace function update_fuel_prices_last_updated()
-returns trigger as $$
-begin
+-- 2. Global fuel price cache.
+CREATE TABLE IF NOT EXISTS fuel_prices (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  location_name TEXT NOT NULL,                 -- e.g. "Lodwar", "Kakuma"
+  country      TEXT NOT NULL,
+  country_code TEXT,
+  lat          NUMERIC,
+  lon          NUMERIC,
+  location     GEOGRAPHY(POINT, 4326),         -- precise distance calculations
+  prices       JSONB NOT NULL DEFAULT '{}'::jsonb,
+                                              -- {"super_petrol": 220.08, "diesel": 229.95, "kerosene": 198.50}
+  currency     TEXT NOT NULL DEFAULT 'Local',
+  source       TEXT NOT NULL DEFAULT 'AI-Verified',
+  last_updated TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  query_count  INT NOT NULL DEFAULT 1
+);
+
+-- Unique on (location_name, country) so upserts replace stale rows.
+DROP INDEX IF EXISTS fuel_prices_location_country_uniq;
+CREATE UNIQUE INDEX IF NOT EXISTS fuel_prices_location_country_uniq
+  ON fuel_prices (location_name, country);
+
+-- GIST index for lightning-fast nearest-neighbour searches.
+-- Only create if PostGIS is present (the geography column exists).
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_extension WHERE extname = 'postgis'
+  ) AND EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'fuel_prices' AND column_name = 'location'
+  ) THEN
+    CREATE INDEX IF NOT EXISTS idx_fuel_location ON fuel_prices USING GIST (location);
+  END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_fuel_name ON fuel_prices (location_name);
+CREATE INDEX IF NOT EXISTS idx_fuel_country ON fuel_prices (country);
+CREATE INDEX IF NOT EXISTS idx_fuel_query_count ON fuel_prices (query_count DESC);
+
+-- updated_at trigger (reuse the shared update_updated_at() function
+-- created in migration 002 if present; otherwise define a local one).
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_proc WHERE proname = 'update_updated_at'
+  ) THEN
+    CREATE OR REPLACE FUNCTION update_updated_at()
+    RETURNS TRIGGER AS $fn$
+    BEGIN
+      NEW.last_updated = NOW();
+      RETURN NEW;
+    END;
+    $fn$ LANGUAGE plpgsql;
+  END IF;
+END $$;
+
+-- Note: fuel_prices uses last_updated, not updated_at, so we use a
+-- dedicated trigger function instead of the generic one.
+DROP FUNCTION IF EXISTS update_fuel_prices_last_updated() CASCADE;
+CREATE OR REPLACE FUNCTION update_fuel_prices_last_updated()
+RETURNS TRIGGER AS $$
+BEGIN
   NEW.last_updated = NOW();
-  if NEW.lat is not null and NEW.lon is not null then
-    NEW.location := st_setSRID(st_makePoint(NEW.lon, NEW.lat), 4326)::geography;
-  end if;
-  return NEW;
-end;
-$$ language plpgsql;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
 
--- RPC: nearest cached town within `radius_km` of (user_lat, user_lon).
--- st_distance returns double precision, so the return column is double precision.
-drop function if exists get_nearest_fuel_prices(numeric, numeric, numeric);
-create function get_nearest_fuel_prices(user_lat numeric, user_lon numeric, radius_km numeric)
-returns table (
-  location_name text, country text, distance_km double precision,
-  prices jsonb, currency text, last_updated timestamp with time zone
-) as $$
-begin
-  return query
-  select
-    f.location_name, f.country,
-    st_distance(f.location, st_setSRID(st_makePoint(user_lon, user_lat), 4326)::geography) / 1000 as distance_km,
-    f.prices, f.currency, f.last_updated
-  from fuel_prices f
-  where st_dwithin(f.location, st_setSRID(st_makePoint(user_lon, user_lat), 4326)::geography, radius_km * 1000)
-  order by distance_km asc limit 1;
-end;
-$$ language plpgsql;
+DROP TRIGGER IF EXISTS update_fuel_prices_last_updated ON fuel_prices;
+CREATE TRIGGER update_fuel_prices_last_updated
+  BEFORE UPDATE ON fuel_prices
+  FOR EACH ROW EXECUTE FUNCTION update_fuel_prices_last_updated();
 
--- RLS: fuel prices are public reference data — anyone can read, only the
--- service role (server-side, bypasses RLS) can write.
-alter table fuel_prices enable row level security;
-drop policy if exists "fuel_prices_public_read" on fuel_prices;
-create policy "fuel_prices_public_read" on fuel_prices for select using (true);
+-- 3. Row Level Security.
+--    Price data is public (anyone can read). Writes are done with the
+--    service_role key (serverless engine), which bypasses RLS, so we
+--    only need a permissive read policy and no write policy for anon.
+ALTER TABLE fuel_prices ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "fuel_prices public read" ON fuel_prices;
+CREATE POLICY "fuel_prices public read"
+  ON fuel_prices FOR SELECT USING (true);
+
+-- Grant read access to anon + authenticated (writes go via service_role).
+GRANT SELECT ON fuel_prices TO anon, authenticated;
+
+-- 4. Nearest-neighbour RPC (PostGIS path).
+--    Returns the closest cached price within `radius_km` of the user.
+DROP FUNCTION IF EXISTS get_nearest_fuel(NUMERIC, NUMERIC, INT) CASCADE;
+CREATE OR REPLACE FUNCTION get_nearest_fuel(
+  user_lat  NUMERIC,
+  user_lon  NUMERIC,
+  radius_km INT DEFAULT 50
+)
+RETURNS TABLE (
+  location_name TEXT,
+  distance_km   NUMERIC,
+  prices        JSONB,
+  currency      TEXT,
+  source        TEXT,
+  last_updated  TIMESTAMPTZ
+) AS $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'postgis') THEN
+    RETURN QUERY
+    SELECT
+      f.location_name,
+      (ST_Distance(f.location, ST_Point(user_lon, user_lat)::geography) / 1000)::NUMERIC AS distance_km,
+      f.prices,
+      f.currency,
+      f.source,
+      f.last_updated
+    FROM fuel_prices f
+    WHERE f.location IS NOT NULL
+      AND ST_DWithin(f.location, ST_Point(user_lon, user_lat)::geography, radius_km * 1000)
+    ORDER BY distance_km ASC
+    LIMIT 1;
+  ELSE
+    -- PostGIS not available: approximate with planar haversine in SQL.
+    RETURN QUERY
+    SELECT
+      f.location_name,
+      (
+        6371 * 2 * ASIN(SQRT(
+          POWER(SIN(RADIANS(user_lat - f.lat) / 2), 2) +
+          COS(RADIANS(user_lat)) * COS(RADIANS(f.lat)) *
+          POWER(SIN(RADIANS(user_lon - f.lon) / 2), 2)
+        ))
+      )::NUMERIC AS distance_km,
+      f.prices,
+      f.currency,
+      f.source,
+      f.last_updated
+    FROM fuel_prices f
+    WHERE f.lat IS NOT NULL AND f.lon IS NOT NULL
+      AND (
+        6371 * 2 * ASIN(SQRT(
+          POWER(SIN(RADIANS(user_lat - f.lat) / 2), 2) +
+          COS(RADIANS(user_lat)) * COS(RADIANS(f.lat)) *
+          POWER(SIN(RADIANS(user_lon - f.lon) / 2), 2)
+        ))
+      ) <= radius_km
+    ORDER BY distance_km ASC
+    LIMIT 1;
+  END IF;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Allow anon/authenticated to call the nearest-neighbour RPC.
+GRANT EXECUTE ON FUNCTION get_nearest_fuel(NUMERIC, NUMERIC, INT) TO anon, authenticated;
+
+-- 5. Bump query_count atomically when an exact match is read.
+--    Called by the engine after a cache hit so the monthly cron can
+--    refresh the busiest locations first.
+DROP FUNCTION IF EXISTS bump_fuel_query_count(TEXT, TEXT) CASCADE;
+CREATE OR REPLACE FUNCTION bump_fuel_query_count(
+  p_location_name TEXT,
+  p_country TEXT
+)
+RETURNS VOID AS $$
+BEGIN
+  UPDATE fuel_prices
+    SET query_count = query_count + 1
+    WHERE location_name = p_location_name AND country = p_country;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+GRANT EXECUTE ON FUNCTION bump_fuel_query_count(TEXT, TEXT) TO anon, authenticated;
