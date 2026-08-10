@@ -399,3 +399,51 @@ which uses a separate quota — last Vercel prod deploy was from commit
   Password reset to `FounderTest2026!` via admin API (email_confirm=true).
 - QA user: qa.crossdevice.0809b@gmail.com (uid 98ecc424, profiles.username=
   qacrossdevice). Password reset to `QATest2026!CrossDev`. NOT a founder.
+
+## Real-time cross-device sync (ADDED 2026-08-09, commit f712549, PR #95)
+**Supabase Realtime** (postgres_changes) is now the mechanism for INSTANT
+cross-device sync. Both `app_kv` and `stations` are in the
+`supabase_realtime` publication (migration 011 documents the live change).
+
+### cloud-storage-service.ts — subscribe() / subscribeToStation()
+- `subscribe<T>(key, stationId, callback)` opens a Supabase real-time channel
+  filtered to the computed `app_kv` row id. On INSERT/UPDATE/DELETE, it
+  invalidates the in-memory cache and calls `callback(newValue)`. Returns an
+  unsubscribe fn.
+- `subscribeToStation<T>(stationId, callback)` subscribes to ALL app_kv rows
+  for a station (or all user rows if no station).
+- Both auto-resolve `ownerId` via `currentUserId()` and clean up on unmount.
+
+### FuelContext real-time
+- Subscribes to the compact blob (`compactCloudKey`). On a remote change,
+  dispatches `LOAD_FROM_STORAGE` so the new data reflects INSTANTLY.
+- Echo guard: `skipRemoteUpdateRef` is set `true` in `saveToCloud` BEFORE the
+  cloud write. When the real-time event echoes back, the subscription checks
+  the flag, skips the re-dispatch, and resets it.
+
+### StationContext real-time
+- Subscribes to the `stations` table. When ANY device creates/updates/deletes
+  a station, `syncFromBackend()` re-runs and the new station appears in the
+  UI without a page reload.
+
+### Per-component real-time
+- ShiftManagement, CreditManagement, SupplierManagement, MaintenanceTracker,
+  CustomerLoyalty, FuelTypesManager, Communication: added `subscribe()` in
+  the existing load-on-mount useEffect, returning cleanup that unsubscribes.
+
+### PumpMappingV1 — was ZERO persistence (FIXED)
+- Before: extractedData, chatMessages, customRules, anchors were useState-only
+  — lost on EVERY refresh.
+- After: all four persist to cloud (keys `pump_mapping_*`) with real-time.
+
+### AdminPanel — localStorage to cloud + real-time
+- admin_modules, batch_updates, custom_apis migrated from localStorage-only
+  to cloud + real-time.
+
+### useCloudKV hook (new)
+- `src/react-app/hooks/useCloudKV.ts` — reusable real-time cloud sync hook.
+
+### Deployment
+- Vercel: fuel-app-mobile.vercel.app (prebuilt deploy, READY)
+- Cloudflare: fuel-app-mobile.pages.dev (preview 6b58195b)
+- PR #95: https://github.com/fuel-pro/FUEL_APP_MOBILE/pull/95
