@@ -647,3 +647,70 @@ _=priceCityName.
 **Deploy**: dpl_F4p4sS1qaZdye1jCHj9Zfccuf6q1, READY, aliased to
 fuel-app-mobile.vercel.app. Cloudflare mirror:
 https://bd4ff357.fuel-app-mobile.pages.dev.
+
+## Cross-device Founder Access — 2FA / forgot-password / unique ID (DEPLOYED 2026-08-10, commit 2edda45)
+Founder auth was previously localStorage-only: the 2FA secret lived in
+`fuelpro_founder_2fa` localStorage (per-browser) and "forgot password" was a
+fake 6-digit-code flow that always failed. Now all founder auth state is
+cloud-backed via the `profiles` table so it is consistent across every device.
+
+- **Migration 013** (`supabase/migrations/013_founder_2fa_profiles.sql`,
+  APPLIED LIVE) adds to `profiles`: `two_factor_secret text`,
+  `two_factor_enabled boolean`, `recovery_codes text`, `unique_id text`,
+  `last_password_change timestamptz`. Backfills `unique_id` as
+  `upper(substr(md5(random()::text),1,8)) || '-FPR'` for existing rows, with a
+  partial UNIQUE index on `unique_id`. Verified live: all 14 profiles have a
+  unique_id; founder.qa.fuelpro@gmail.com has `unique_id='FPRQA2026'`,
+  `role='founder'`.
+- `src/react-app/lib/founder-auth.ts`:
+  - `requestPasswordReset` — real Supabase email-link recovery
+    (`resetPasswordForEmail`, redirectTo `/#/reset-password`). The Founder
+    Access gate exposes this as "Forgot password? Reset via email".
+  - `changeFounderPassword` — `auth.updateUser({password})` (min 8 chars) +
+    records `last_password_change` on `profiles`.
+  - `loadFounder2FA` / `saveFounder2FA` — read/write
+    `two_factor_enabled` + `two_factor_secret` on `profiles` (cloud
+    source of truth). `SecuritySection` mounts a `useEffect` that loads the
+    cloud 2FA on login and overrides the localStorage copy; enabling 2FA pushes
+    the secret to the cloud so it survives a device switch.
+  - `getFounderUniqueId` — reads `profiles.unique_id`, falls back to the
+    Supabase auth uid prefix. `FounderAccess.tsx` displays it as
+    "ID: <unique_id>" next to the founder banner.
+- **Verified end-to-end on Vercel production** (fuel-app-mobile.vercel.app,
+  bundle chunk `founder-FznFW3ku.js`, HTTP 200): founder login with full
+  email succeeds; the Founder Console shows All Users(1)/All Stations(4)/
+  Security & 2FA; the login gate shows the "Forgot password? Reset via email"
+  link. Cloudflare mirror also live (fuel-app-mobile.pages.dev).
+- **Founder test user**: `founder.qa.fuelpro@gmail.com` /
+  `FuelPro@2026!`, role `founder`, unique_id `FPRQA2026`. Confirmed email
+  (`email_confirm:true` via admin API) so `signInWithPassword` succeeds.
+
+## FREE AUTO FUEL PRICE.txt spec — Smart-Cache (Groq AI + PostGIS) LIVE
+The full spec is implemented and running server-side (keys in Vercel env,
+never in the client bundle):
+- **DB**: `fuel_prices` table (location_name, country, lat/lon,
+  `location_geog geography(point,4326)`, `prices jsonb`, currency,
+  last_updated, query_count) + PostGIS `get_nearest_fuel_prices(lat,lon,radius)`
+  RPC + GiST spatial index + `update_location_geog()` trigger. Verified live:
+  5+ cached locations (Nairobi queried 11×, Nawoitorong 8×, Turkana 4×,
+  Mombasa 2×) — cache hits, not SerpApi quota spend.
+- **Engine** (`api/_lib/hybrid-fetcher.ts` + `api/lib/fuel-engine.ts`):
+  3-tier lookup — (1) exact cache (fresh < 15/14 days), (2) PostGIS
+  nearest town within 50 km (tagged "N km away"), (3) live SerpApi/Serper
+  web search → Groq `llama-3.1-8b-instant` (DeepSeek/OpenRouter fallback)
+  extracts {super_petrol,diesel,kerosene,currency} JSON → upsert to
+  `fuel_prices`. SerpApi free tier (100/mo) is only consumed for genuinely
+  new isolated locations.
+- **Endpoints**: `/api/fuel-prices` (EPRA Kenya mode + Smart-Cache geolocation
+  mode + legacy CollectAPI mode), `/api/fuel-local` (reverse-geocode →
+  cache → web+AI → PostGIS fallback).
+- **Cron**: `vercel.json` `crons` → `/api/cron/monthly-fuel-sync`
+  (schedule `0 0 1 * *`) refreshes the top-N most-queried cache rows,
+  guarded by `Bearer $CRON_SECRET`.
+
+## 2026-08-10 deploy state (commit 2edda45)
+Git HEAD = origin/main = 2edda45 ("feat: cross-device founder auth — cloud
+2FA, forgot password, unique ID"). Vercel production READY, aliased to
+fuel-app-mobile.vercel.app (bundle `index-CBkT6CGK.js` + lazy chunk
+`founder-FznFW3ku.js`). Cloudflare Pages mirror live
+(fuel-app-mobile.pages.dev, preview fce6fd74).
