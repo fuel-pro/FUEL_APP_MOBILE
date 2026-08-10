@@ -1,7 +1,8 @@
-node_modules/
 dist/
 dist-api/
 dist-exe/
+dev-dist/
+node_modules/
 .vercel/
 .env
 .env.local
@@ -36,4 +37,3 @@ service-account.json
 
 .vercel
 .env*
-!.env.example
