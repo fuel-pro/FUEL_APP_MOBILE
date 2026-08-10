@@ -4,7 +4,11 @@ import { useAuth } from "@/react-app/context/AuthContext";
 import { useLocation } from "@/react-app/context/LocationContext";
 import { useStations } from "@/react-app/context/StationContext";
 import { useFuelPrices } from "@/react-app/hooks/useFuelPrices";
-import { getClosestKenyaCityPrice, KENYA_BASE_PRICES, REGIONAL_PRICES } from "@/react-app/config/pricing";
+import {
+  getClosestKenyaCityPrice,
+  KENYA_BASE_PRICES,
+  REGIONAL_PRICES,
+} from "@/react-app/config/pricing";
 import {
   MapPin,
   Navigation,
@@ -82,12 +86,24 @@ const CACHE_TTL_MS = 3600_000; // 1 hour
 
 export default function FuelPriceLocator() {
   const { user } = useAuth();
-  const { preciseLocation, preciseLocationLoading, detectPreciseLocation, currentCountry } = useLocation();
+  const {
+    preciseLocation,
+    preciseLocationLoading,
+    detectPreciseLocation,
+    currentCountry,
+  } = useLocation();
   const { stations } = useStations();
-  const { prices: unifiedPrices, refreshPrices, source: unifiedSource, cityName } = useFuelPrices();
+  const {
+    prices: unifiedPrices,
+    refreshPrices,
+    source: unifiedSource,
+    cityName,
+  } = useFuelPrices();
 
   const [loading, setLoading] = useState(false);
-  const [nearbyResult, setNearbyResult] = useState<StationPriceInfo | null>(null);
+  const [nearbyResult, setNearbyResult] = useState<StationPriceInfo | null>(
+    null,
+  );
   const [errorMessage, setErrorMessage] = useState("");
   const [lastFetchAt, setLastFetchAt] = useState<string | null>(null);
   const echoSkipRef = useRef(false);
@@ -97,7 +113,10 @@ export default function FuelPriceLocator() {
     if (!user) return;
     let cancelled = false;
     (async () => {
-      const cached = await cloudStorageService.get<{ data: StationPriceInfo; ts: number } | null>(CLOUD_CACHE_KEY);
+      const cached = await cloudStorageService.get<{
+        data: StationPriceInfo;
+        ts: number;
+      } | null>(CLOUD_CACHE_KEY);
       if (!cancelled && cached?.data) {
         const age = Date.now() - (cached.ts || 0);
         if (age < CACHE_TTL_MS) {
@@ -108,20 +127,19 @@ export default function FuelPriceLocator() {
     })();
 
     // Subscribe to real-time cache updates from other devices
-    const unsub = cloudStorageService.subscribe<{ data: StationPriceInfo; ts: number } | null>(
-      CLOUD_CACHE_KEY,
-      undefined,
-      (val) => {
-        if (echoSkipRef.current) {
-          echoSkipRef.current = false;
-          return;
-        }
-        if (val?.data) {
-          setNearbyResult(val.data);
-          setLastFetchAt(new Date(val.ts).toISOString());
-        }
+    const unsub = cloudStorageService.subscribe<{
+      data: StationPriceInfo;
+      ts: number;
+    } | null>(CLOUD_CACHE_KEY, undefined, (val) => {
+      if (echoSkipRef.current) {
+        echoSkipRef.current = false;
+        return;
       }
-    );
+      if (val?.data) {
+        setNearbyResult(val.data);
+        setLastFetchAt(new Date(val.ts).toISOString());
+      }
+    });
 
     return () => {
       cancelled = true;
@@ -140,9 +158,11 @@ export default function FuelPriceLocator() {
     (data: StationPriceInfo) => {
       if (!user) return;
       echoSkipRef.current = true;
-      cloudStorageService.set(CLOUD_CACHE_KEY, { data, ts: Date.now() }).catch(() => {});
+      cloudStorageService
+        .set(CLOUD_CACHE_KEY, { data, ts: Date.now() })
+        .catch(() => {});
     },
-    [user]
+    [user],
   );
 
   /**
@@ -155,8 +175,8 @@ export default function FuelPriceLocator() {
     setErrorMessage("");
 
     // Use precise GPS if available, otherwise prompt for it
-    let lat = preciseLocation?.lat;
-    let lng = preciseLocation?.lng;
+    const lat = preciseLocation?.lat;
+    const lng = preciseLocation?.lng;
 
     if (!lat || !lng) {
       try {
@@ -172,10 +192,7 @@ export default function FuelPriceLocator() {
     // Use /api/fuel-local (the deterministic EPRA engine deployed on Vercel)
     // which returns hyper-local prices for the exact GPS location.
     const locName =
-      preciseLocation?.city ||
-      preciseLocation?.address ||
-      cityName ||
-      "";
+      preciseLocation?.city || preciseLocation?.address || cityName || "";
     if (lat && lng) {
       try {
         const apiBase = fuelApiBase();
@@ -215,11 +232,20 @@ export default function FuelPriceLocator() {
             };
 
             const result: StationPriceInfo = {
-              stationName: data.stationName || data.locationName || data.location || "Nearby Station",
-              gasoline: toNum(data.prices.petrol ?? data.prices.super_petrol ?? data.prices.gasoline),
+              stationName:
+                data.stationName ||
+                data.locationName ||
+                data.location ||
+                "Nearby Station",
+              gasoline: toNum(
+                data.prices.petrol ??
+                  data.prices.super_petrol ??
+                  data.prices.gasoline,
+              ),
               diesel: toNum(data.prices.diesel),
               premium: toNum(data.prices.premium),
-              kerosene: toNum(data.prices.kerosene) ?? data.kerosenePrice ?? null,
+              kerosene:
+                toNum(data.prices.kerosene) ?? data.kerosenePrice ?? null,
               currency: data.currency || "KES",
               currencySymbol: data.currencySymbol || "KSh",
               unit: data.unit || "litre",
@@ -317,19 +343,25 @@ export default function FuelPriceLocator() {
     label: string,
     val: number | null,
     icon: React.ReactNode,
-    colorClass: string
+    colorClass: string,
   ) => {
     const symbol = nearbyResult?.currencySymbol || "KSh";
     return (
       <div className="p-4 bg-slate-800/50 rounded-xl border border-slate-700/50 hover:border-slate-600 transition-colors">
         <div className="flex items-center gap-2 mb-1">
           <span className={colorClass}>{icon}</span>
-          <span className="text-xs text-slate-400 uppercase font-semibold">{label}</span>
+          <span className="text-xs text-slate-400 uppercase font-semibold">
+            {label}
+          </span>
         </div>
         {val !== null ? (
           <div>
             <div className="text-lg font-bold text-white">
-              {symbol} {val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              {symbol}{" "}
+              {val.toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}
             </div>
             <div className="text-xs text-slate-500">per litre</div>
           </div>
@@ -358,12 +390,16 @@ export default function FuelPriceLocator() {
       {/* Location status bar */}
       <div className="flex flex-wrap items-center gap-3 p-3 bg-slate-800/30 rounded-xl border border-slate-700/50">
         <div className="flex items-center gap-2 text-sm">
-          <MapPin className={`w-4 h-4 ${preciseLocation ? "text-emerald-400" : "text-slate-500"}`} />
+          <MapPin
+            className={`w-4 h-4 ${preciseLocation ? "text-emerald-400" : "text-slate-500"}`}
+          />
           {preciseLocationLoading ? (
             <span className="text-amber-400">Detecting location...</span>
           ) : preciseLocation ? (
             <span className="text-slate-300">
-              {preciseLocation.city || preciseLocation.address} ({preciseLocation.lat.toFixed(4)}, {preciseLocation.lng.toFixed(4)})
+              {preciseLocation.city || preciseLocation.address} (
+              {preciseLocation.lat.toFixed(4)}, {preciseLocation.lng.toFixed(4)}
+              )
             </span>
           ) : (
             <span className="text-slate-500">Location not detected</span>
@@ -423,7 +459,8 @@ export default function FuelPriceLocator() {
               <div className="mt-2 space-y-0.5">
                 <p className="text-xs text-slate-300 flex items-center gap-1">
                   <MapPin className="w-3 h-3 text-orange-400" />
-                  📍 {preciseLocation.lat.toFixed(4)}, {preciseLocation.lng.toFixed(4)}
+                  📍 {preciseLocation.lat.toFixed(4)},{" "}
+                  {preciseLocation.lng.toFixed(4)}
                 </p>
                 <p className="text-xs text-slate-300 flex items-center gap-1">
                   <MapPin className="w-3 h-3 text-orange-400" />
@@ -435,9 +472,24 @@ export default function FuelPriceLocator() {
 
           {/* Price grid — EPRA format: SUPER PETROL / DIESEL / KEROSENE */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {priceCard("Super Petrol", nearbyResult.gasoline, <Fuel className="w-4 h-4" />, "text-emerald-400")}
-            {priceCard("Diesel", nearbyResult.diesel, <Droplet className="w-4 h-4" />, "text-amber-400")}
-            {priceCard("Kerosene", nearbyResult.kerosene, <Gauge className="w-4 h-4" />, "text-blue-400")}
+            {priceCard(
+              "Super Petrol",
+              nearbyResult.gasoline,
+              <Fuel className="w-4 h-4" />,
+              "text-emerald-400",
+            )}
+            {priceCard(
+              "Diesel",
+              nearbyResult.diesel,
+              <Droplet className="w-4 h-4" />,
+              "text-amber-400",
+            )}
+            {priceCard(
+              "Kerosene",
+              nearbyResult.kerosene,
+              <Gauge className="w-4 h-4" />,
+              "text-blue-400",
+            )}
           </div>
 
           {/* EPRA cost breakdown */}
@@ -451,16 +503,28 @@ export default function FuelPriceLocator() {
               <div className="p-4 bg-slate-800/40 rounded-xl border border-slate-700/50">
                 <div className="grid grid-cols-3 gap-3 text-center">
                   <div>
-                    <div className="text-xs text-slate-500 uppercase font-semibold mb-1">Landed Cost</div>
-                    <div className="text-sm font-medium text-slate-200">{fmt(breakdown.landed)}</div>
+                    <div className="text-xs text-slate-500 uppercase font-semibold mb-1">
+                      Landed Cost
+                    </div>
+                    <div className="text-sm font-medium text-slate-200">
+                      {fmt(breakdown.landed)}
+                    </div>
                   </div>
                   <div>
-                    <div className="text-xs text-slate-500 uppercase font-semibold mb-1">Taxes</div>
-                    <div className="text-sm font-medium text-slate-200">{fmt(breakdown.taxes)}</div>
+                    <div className="text-xs text-slate-500 uppercase font-semibold mb-1">
+                      Taxes
+                    </div>
+                    <div className="text-sm font-medium text-slate-200">
+                      {fmt(breakdown.taxes)}
+                    </div>
                   </div>
                   <div>
-                    <div className="text-xs text-slate-500 uppercase font-semibold mb-1">Margins</div>
-                    <div className="text-sm font-medium text-slate-200">{fmt(breakdown.margins)}</div>
+                    <div className="text-xs text-slate-500 uppercase font-semibold mb-1">
+                      Margins
+                    </div>
+                    <div className="text-sm font-medium text-slate-200">
+                      {fmt(breakdown.margins)}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -491,17 +555,23 @@ export default function FuelPriceLocator() {
           </h3>
           <div className="space-y-2">
             {stations.slice(0, 5).map((station) => {
-              const stationPetrol = station.data?.pmsPrice || station.data?.petrolPrice;
-              const stationDiesel = station.data?.agoPrice || station.data?.dieselPrice;
+              const stationPetrol =
+                station.data?.pmsPrice || station.data?.petrolPrice;
+              const stationDiesel =
+                station.data?.agoPrice || station.data?.dieselPrice;
               return (
                 <div
                   key={station.id}
                   className="flex items-center justify-between p-3 bg-slate-800/30 rounded-lg border border-slate-700/30"
                 >
                   <div>
-                    <p className="text-sm font-medium text-slate-200">{station.name}</p>
+                    <p className="text-sm font-medium text-slate-200">
+                      {station.name}
+                    </p>
                     {station.location && (
-                      <p className="text-xs text-slate-500">{station.location}</p>
+                      <p className="text-xs text-slate-500">
+                        {station.location}
+                      </p>
                     )}
                   </div>
                   <div className="flex gap-4 text-xs">
@@ -509,7 +579,8 @@ export default function FuelPriceLocator() {
                       <div className="text-right">
                         <span className="block text-slate-500">Petrol</span>
                         <span className="font-medium text-emerald-400">
-                          {(unifiedPrices.currencySymbol || "KSh")} {stationPetrol.toLocaleString()}
+                          {unifiedPrices.currencySymbol || "KSh"}{" "}
+                          {stationPetrol.toLocaleString()}
                         </span>
                       </div>
                     )}
@@ -517,7 +588,8 @@ export default function FuelPriceLocator() {
                       <div className="text-right">
                         <span className="block text-slate-500">Diesel</span>
                         <span className="font-medium text-amber-400">
-                          {(unifiedPrices.currencySymbol || "KSh")} {stationDiesel.toLocaleString()}
+                          {unifiedPrices.currencySymbol || "KSh"}{" "}
+                          {stationDiesel.toLocaleString()}
                         </span>
                       </div>
                     )}
@@ -532,7 +604,8 @@ export default function FuelPriceLocator() {
       {/* Unified prices refresh */}
       <div className="pt-4 border-t border-slate-800 flex items-center justify-between">
         <div className="text-xs text-slate-500">
-          Unified prices from: <span className="text-slate-400">{unifiedSource}</span>
+          Unified prices from:{" "}
+          <span className="text-slate-400">{unifiedSource}</span>
           {cityName && <span className="text-slate-400"> ({cityName})</span>}
         </div>
         <button

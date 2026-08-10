@@ -425,11 +425,15 @@ export default function AdminPanel() {
   // Persist modules — localStorage (instant) + cloud (cross-device)
   useEffect(() => {
     saveAdminModules(modules);
-    cloudStorageService.set("admin_modules", modules, undefined).catch(() => {});
+    cloudStorageService
+      .set("admin_modules", modules, undefined)
+      .catch(() => {});
   }, [modules]);
   useEffect(() => {
     saveBatchUpdates(batchRecords);
-    cloudStorageService.set("batch_updates", batchRecords.slice(0, 200), undefined).catch(() => {});
+    cloudStorageService
+      .set("batch_updates", batchRecords.slice(0, 200), undefined)
+      .catch(() => {});
   }, [batchRecords]);
 
   // Load admin modules + batch updates + custom APIs from cloud on mount,
@@ -438,28 +442,50 @@ export default function AdminPanel() {
     if (!adminUser) return;
     (async () => {
       const [cloudModules, cloudBatch, cloudApis] = await Promise.all([
-        cloudStorageService.get<AdminFeatureModule[]>("admin_modules", undefined),
-        cloudStorageService.get<BatchUpdateRecord[]>("batch_updates", undefined),
+        cloudStorageService.get<AdminFeatureModule[]>(
+          "admin_modules",
+          undefined,
+        ),
+        cloudStorageService.get<BatchUpdateRecord[]>(
+          "batch_updates",
+          undefined,
+        ),
         cloudStorageService.get<ApiKeyEntry[]>("custom_apis", undefined),
       ]);
-      if (cloudModules && Array.isArray(cloudModules) && cloudModules.length > 0)
+      if (
+        cloudModules &&
+        Array.isArray(cloudModules) &&
+        cloudModules.length > 0
+      )
         setModules(cloudModules);
       if (cloudBatch && Array.isArray(cloudBatch)) setBatchRecords(cloudBatch);
       if (cloudApis && Array.isArray(cloudApis)) setCustomApis(cloudApis);
     })();
 
     const unsubs = [
-      cloudStorageService.subscribe<AdminFeatureModule[]>("admin_modules", undefined, (val) => {
-        if (val && Array.isArray(val) && val.length > 0) setModules(val);
-      }),
-      cloudStorageService.subscribe<BatchUpdateRecord[]>("batch_updates", undefined, (val) => {
-        if (val && Array.isArray(val)) setBatchRecords(val);
-      }),
-      cloudStorageService.subscribe<ApiKeyEntry[]>("custom_apis", undefined, (val) => {
-        if (val && Array.isArray(val)) setCustomApis(val);
-      }),
+      cloudStorageService.subscribe<AdminFeatureModule[]>(
+        "admin_modules",
+        undefined,
+        (val) => {
+          if (val && Array.isArray(val) && val.length > 0) setModules(val);
+        },
+      ),
+      cloudStorageService.subscribe<BatchUpdateRecord[]>(
+        "batch_updates",
+        undefined,
+        (val) => {
+          if (val && Array.isArray(val)) setBatchRecords(val);
+        },
+      ),
+      cloudStorageService.subscribe<ApiKeyEntry[]>(
+        "custom_apis",
+        undefined,
+        (val) => {
+          if (val && Array.isArray(val)) setCustomApis(val);
+        },
+      ),
     ];
-    return () => unsubs.forEach(u => u());
+    return () => unsubs.forEach((u) => u());
   }, [adminUser]);
 
   // Security lockout

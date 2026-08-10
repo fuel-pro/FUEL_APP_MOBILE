@@ -1008,8 +1008,8 @@ export default function FounderAccess() {
                           className="mt-0.5 text-green-400 flex-shrink-0"
                         />
                         <p className="text-xs text-green-300">
-                          Reset link sent to your email. Click the link to set
-                          a new password, then return here to sign in.
+                          Reset link sent to your email. Click the link to set a
+                          new password, then return here to sign in.
                         </p>
                       </div>
                     ) : (
@@ -1040,10 +1040,7 @@ export default function FounderAccess() {
                         >
                           {forgotSending ? (
                             <>
-                              <RefreshCw
-                                size={14}
-                                className="animate-spin"
-                              />{" "}
+                              <RefreshCw size={14} className="animate-spin" />{" "}
                               Sending…
                             </>
                           ) : (

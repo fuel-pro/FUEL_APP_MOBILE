@@ -161,14 +161,22 @@ export default function SupplierManagement() {
     })();
     // Real-time: when another device updates suppliers/orders, update instantly
     const unsubs = [
-      cloudStorageService.subscribe<Supplier[]>("suppliers_data", stationId, (val) => {
-        if (val && Array.isArray(val)) setSuppliers(val);
-      }),
-      cloudStorageService.subscribe<PurchaseOrder[]>("purchase_orders", stationId, (val) => {
-        if (val && Array.isArray(val)) setOrders(val);
-      }),
+      cloudStorageService.subscribe<Supplier[]>(
+        "suppliers_data",
+        stationId,
+        (val) => {
+          if (val && Array.isArray(val)) setSuppliers(val);
+        },
+      ),
+      cloudStorageService.subscribe<PurchaseOrder[]>(
+        "purchase_orders",
+        stationId,
+        (val) => {
+          if (val && Array.isArray(val)) setOrders(val);
+        },
+      ),
     ];
-    return () => unsubs.forEach(u => u());
+    return () => unsubs.forEach((u) => u());
   }, [user, stationId]);
 
   const showNotification = (

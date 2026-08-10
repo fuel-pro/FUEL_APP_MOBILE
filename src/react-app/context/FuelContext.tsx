@@ -14,10 +14,9 @@ import { KENYA_BASE_PRICES, DEFAULT_PRICES } from "@/react-app/config/pricing";
 // Cross-device cloud storage (Supabase app_kv-backed) — replaces /api/user-data
 import { cloudStorageService } from "@/react-app/lib/cloud-storage-service";
 
-
 // Use unified pricing defaults (Kenya EPRA prices as default)
 const DEFAULT_PMS_PRICE = KENYA_BASE_PRICES.petrol; // 220.30 KES
-const DEFAULTAGO_PRICE = KENYA_BASE_PRICES.diesel;   // 250.01 KES
+const DEFAULTAGO_PRICE = KENYA_BASE_PRICES.diesel; // 250.01 KES
 
 /**
  * Build the station-scoped compact-blob cloud key. Each station gets its own
@@ -26,7 +25,10 @@ const DEFAULTAGO_PRICE = KENYA_BASE_PRICES.diesel;   // 250.01 KES
  * segment) when there is no current station (Combined View, or pre-station
  * migration), preserving backward compatibility.
  */
-function compactCloudKey(userId: string | undefined, stationId: string | undefined): string {
+function compactCloudKey(
+  userId: string | undefined,
+  stationId: string | undefined,
+): string {
   const uid = userId ? `user_${userId}` : "guest";
   return stationId ? `${uid}_${stationId}_compact` : `${uid}_compact`;
 }
@@ -487,8 +489,8 @@ const initialState: FuelState = {
   pmsTankClosing: 0,
   agoTankOpening: 0,
   agoTankClosing: 0,
-  pmsPrice: DEFAULT_PMS_PRICE,  // 220.30 KES (Kenya EPRA)
-  agoPrice: DEFAULTAGO_PRICE,     // 250.01 KES (Kenya EPRA)
+  pmsPrice: DEFAULT_PMS_PRICE, // 220.30 KES (Kenya EPRA)
+  agoPrice: DEFAULTAGO_PRICE, // 250.01 KES (Kenya EPRA)
   petrolPrice: DEFAULT_PMS_PRICE,
   dieselPrice: DEFAULTAGO_PRICE,
   deliveredTo: "",
@@ -783,7 +785,8 @@ const initialState: FuelState = {
       id: "fueltracker",
       label: "Auto Fuel Price",
       originalLabel: "Auto Fuel Price",
-      description: "GPS-detected hyper-local fuel prices (AI-parsed, PostGIS cached)",
+      description:
+        "GPS-detected hyper-local fuel prices (AI-parsed, PostGIS cached)",
       order: 32,
       visible: true,
     },
@@ -795,7 +798,8 @@ const initialState: FuelState = {
       id: "products",
       label: "Products Catalog",
       originalLabel: "Products Catalog",
-      description: "Manage non-fuel products, prices & categories (POS catalog)",
+      description:
+        "Manage non-fuel products, prices & categories (POS catalog)",
       order: 33,
       visible: true,
     },
@@ -857,7 +861,10 @@ function fuelReducer(state: FuelState, action: FuelAction): FuelState {
     const incomingCompanyData = action.payload.companyData;
     if (incomingCompanyData?.logo) {
       // Logo is available - use it
-      console.log("Loading logo from storage:", incomingCompanyData.logo.substring(0, 50) + "...");
+      console.log(
+        "Loading logo from storage:",
+        incomingCompanyData.logo.substring(0, 50) + "...",
+      );
     }
   }
 
@@ -880,7 +887,10 @@ function fuelReducer(state: FuelState, action: FuelAction): FuelState {
     case "SET_INVOICE_ITEMS":
       return { ...state, invoiceItems: action.payload };
     case "SET_INVOICE_SETTINGS":
-      return { ...state, invoiceSettings: { ...state.invoiceSettings, ...action.payload } };
+      return {
+        ...state,
+        invoiceSettings: { ...state.invoiceSettings, ...action.payload },
+      };
     case "SET_INVOICE_COUNTER":
       return { ...state, invoiceCounter: action.payload };
     case "SET_CLIENTS":
@@ -964,14 +974,14 @@ function fuelReducer(state: FuelState, action: FuelAction): FuelState {
     case "UPDATE_STATION":
       return {
         ...state,
-        stations: state.stations.map(s =>
+        stations: state.stations.map((s) =>
           s.id === action.payload.id
             ? {
                 ...s,
                 name: action.payload.name,
                 location: action.payload.location || s.location,
               }
-            : s
+            : s,
         ),
       };
     case "DELETE_STATION": {
@@ -979,11 +989,11 @@ function fuelReducer(state: FuelState, action: FuelAction): FuelState {
       delete deletedStationData[action.payload];
       return {
         ...state,
-        stations: state.stations.filter(s => s.id !== action.payload),
+        stations: state.stations.filter((s) => s.id !== action.payload),
         stationData: deletedStationData,
         currentStationId:
           state.currentStationId === action.payload
-            ? state.stations.find(s => s.id !== action.payload)?.id || null
+            ? state.stations.find((s) => s.id !== action.payload)?.id || null
             : state.currentStationId,
       };
     }
@@ -1070,7 +1080,9 @@ export function FuelProvider({ children }: { children: ReactNode }) {
   // on every edit and overwrote fresh edits with stale localStorage data before the
   // 300ms save debounce could persist them.
   const stateRef = useRef(state);
-  useEffect(() => { stateRef.current = state; }, [state]);
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
 
   // Ref that always points to the current station id, so saveToCloud/loadFromCloud
   // (which are memoized on [user]) can scope the compact blob per-station without
@@ -1078,7 +1090,9 @@ export function FuelProvider({ children }: { children: ReactNode }) {
   // compact blob (companyData, salesHistory, debtHistory, etc.) so a user with
   // multiple stations has independent data per station. Combined View aggregates.
   const stationIdRef = useRef<string | undefined>(stationId);
-  useEffect(() => { stationIdRef.current = stationId; }, [stationId]);
+  useEffect(() => {
+    stationIdRef.current = stationId;
+  }, [stationId]);
 
   // CRITICAL: Guards the cross-device cloud-sync race. On login, the
   // aggressive auto-save effect (1500ms) can fire BEFORE loadFromCloud has
@@ -1088,7 +1102,9 @@ export function FuelProvider({ children }: { children: ReactNode }) {
   // blocks saveToCloud until the initial cloud load has completed. It is
   // reset to false whenever the user changes (so each login re-loads).
   const cloudLoadCompleteRef = useRef(false);
-  useEffect(() => { cloudLoadCompleteRef.current = false; }, [user]);
+  useEffect(() => {
+    cloudLoadCompleteRef.current = false;
+  }, [user]);
 
   // Real-time echo guard: set before saveToCloud writes so the real-time
   // subscription knows to skip the echo of our own write.
@@ -1113,20 +1129,16 @@ export function FuelProvider({ children }: { children: ReactNode }) {
       if (s.companyData) compactData.companyData = s.companyData;
       if (s.signatures?.manager || s.signatures?.director)
         compactData.signatures = s.signatures;
-      if (s.invoiceCounter > 1)
-        compactData.invoiceCounter = s.invoiceCounter;
-      if (Object.keys(s.clients).length > 0)
-        compactData.clients = s.clients;
-      if (Object.keys(s.invoices).length > 0)
-        compactData.invoices = s.invoices;
+      if (s.invoiceCounter > 1) compactData.invoiceCounter = s.invoiceCounter;
+      if (Object.keys(s.clients).length > 0) compactData.clients = s.clients;
+      if (Object.keys(s.invoices).length > 0) compactData.invoices = s.invoices;
       if (Object.keys(s.debtHistory).length > 0)
         compactData.debtHistory = s.debtHistory;
       if (Object.keys(s.salesHistory).length > 0)
         compactData.salesHistory = s.salesHistory;
       if (s.deliveryData?.rows?.length > 0)
         compactData.deliveryData = s.deliveryData;
-      if (s.invoiceItems?.length > 0)
-        compactData.invoiceItems = s.invoiceItems;
+      if (s.invoiceItems?.length > 0) compactData.invoiceItems = s.invoiceItems;
       // Always save invoiceSettings — the old "!== Qty (DAYS)" conditional caused
       // the label to be dropped from storage, then the load effect overwrote the
       // user's custom label with the default on every state change.
@@ -1138,14 +1150,10 @@ export function FuelProvider({ children }: { children: ReactNode }) {
       if (s.salesDate !== new Date().toISOString().split("T")[0])
         compactData.salesDate = s.salesDate;
       if (s.shift !== "Day") compactData.shift = s.shift;
-      if (s.pmsTankOpening !== 0)
-        compactData.pmsTankOpening = s.pmsTankOpening;
-      if (s.pmsTankClosing !== 0)
-        compactData.pmsTankClosing = s.pmsTankClosing;
-      if (s.agoTankOpening !== 0)
-        compactData.agoTankOpening = s.agoTankOpening;
-      if (s.agoTankClosing !== 0)
-        compactData.agoTankClosing = s.agoTankClosing;
+      if (s.pmsTankOpening !== 0) compactData.pmsTankOpening = s.pmsTankOpening;
+      if (s.pmsTankClosing !== 0) compactData.pmsTankClosing = s.pmsTankClosing;
+      if (s.agoTankOpening !== 0) compactData.agoTankOpening = s.agoTankOpening;
+      if (s.agoTankClosing !== 0) compactData.agoTankClosing = s.agoTankClosing;
       if (s.pmsPrice !== DEFAULT_PMS_PRICE) compactData.pmsPrice = s.pmsPrice;
       if (s.agoPrice !== DEFAULTAGO_PRICE) compactData.agoPrice = s.agoPrice;
       if (s.petrolPrice !== DEFAULT_PMS_PRICE)
@@ -1165,7 +1173,7 @@ export function FuelProvider({ children }: { children: ReactNode }) {
         compactData.tabVisibility = s.tabVisibility;
       if (
         s.tabConfigurations?.some(
-          t => t.label !== t.originalLabel || !t.visible
+          (t) => t.label !== t.originalLabel || !t.visible,
         )
       )
         compactData.tabConfigurations = s.tabConfigurations;
@@ -1176,8 +1184,7 @@ export function FuelProvider({ children }: { children: ReactNode }) {
         compactData.mpesaTransactions = s.mpesaTransactions;
       // Multi-station support - always save station data
       if (s.stations?.length > 0) compactData.stations = s.stations;
-      if (s.currentStationId)
-        compactData.currentStationId = s.currentStationId;
+      if (s.currentStationId) compactData.currentStationId = s.currentStationId;
       if (Object.keys(s.stationData || {}).length > 0)
         compactData.stationData = s.stationData;
       if (
@@ -1196,7 +1203,10 @@ export function FuelProvider({ children }: { children: ReactNode }) {
       // CRITICAL: Always save companyData to individual key for logo persistence
       // This ensures logo survives even if compact storage has issues
       if (s.companyData) {
-        localStorage.setItem(`${userKey}companyData`, JSON.stringify(s.companyData));
+        localStorage.setItem(
+          `${userKey}companyData`,
+          JSON.stringify(s.companyData),
+        );
       }
 
       // Clean up old individual keys EXCEPT companyData (keep for logo backup)
@@ -1220,7 +1230,9 @@ export function FuelProvider({ children }: { children: ReactNode }) {
     // overwrites the cloud blob with default/empty state, destroying all
     // data entered on another device.
     if (!cloudLoadCompleteRef.current) {
-      console.log("[FuelContext] Skipping cloud save — initial cloud load not yet complete");
+      console.log(
+        "[FuelContext] Skipping cloud save — initial cloud load not yet complete",
+      );
       return;
     }
 
@@ -1240,20 +1252,16 @@ export function FuelProvider({ children }: { children: ReactNode }) {
       if (s.companyData) compactData.companyData = s.companyData;
       if (s.signatures?.manager || s.signatures?.director)
         compactData.signatures = s.signatures;
-      if (s.invoiceCounter > 1)
-        compactData.invoiceCounter = s.invoiceCounter;
-      if (Object.keys(s.clients).length > 0)
-        compactData.clients = s.clients;
-      if (Object.keys(s.invoices).length > 0)
-        compactData.invoices = s.invoices;
+      if (s.invoiceCounter > 1) compactData.invoiceCounter = s.invoiceCounter;
+      if (Object.keys(s.clients).length > 0) compactData.clients = s.clients;
+      if (Object.keys(s.invoices).length > 0) compactData.invoices = s.invoices;
       if (Object.keys(s.debtHistory).length > 0)
         compactData.debtHistory = s.debtHistory;
       if (Object.keys(s.salesHistory).length > 0)
         compactData.salesHistory = s.salesHistory;
       if (s.deliveryData?.rows?.length > 0)
         compactData.deliveryData = s.deliveryData;
-      if (s.invoiceItems?.length > 0)
-        compactData.invoiceItems = s.invoiceItems;
+      if (s.invoiceItems?.length > 0) compactData.invoiceItems = s.invoiceItems;
       // Always save invoiceSettings (see saveToStorage comment).
       compactData.invoiceSettings = s.invoiceSettings;
       if (s.tillPayment !== 0) compactData.tillPayment = s.tillPayment;
@@ -1263,14 +1271,10 @@ export function FuelProvider({ children }: { children: ReactNode }) {
       if (s.salesDate !== new Date().toISOString().split("T")[0])
         compactData.salesDate = s.salesDate;
       if (s.shift !== "Day") compactData.shift = s.shift;
-      if (s.pmsTankOpening !== 0)
-        compactData.pmsTankOpening = s.pmsTankOpening;
-      if (s.pmsTankClosing !== 0)
-        compactData.pmsTankClosing = s.pmsTankClosing;
-      if (s.agoTankOpening !== 0)
-        compactData.agoTankOpening = s.agoTankOpening;
-      if (s.agoTankClosing !== 0)
-        compactData.agoTankClosing = s.agoTankClosing;
+      if (s.pmsTankOpening !== 0) compactData.pmsTankOpening = s.pmsTankOpening;
+      if (s.pmsTankClosing !== 0) compactData.pmsTankClosing = s.pmsTankClosing;
+      if (s.agoTankOpening !== 0) compactData.agoTankOpening = s.agoTankOpening;
+      if (s.agoTankClosing !== 0) compactData.agoTankClosing = s.agoTankClosing;
       if (s.pmsPrice !== DEFAULT_PMS_PRICE) compactData.pmsPrice = s.pmsPrice;
       if (s.agoPrice !== DEFAULTAGO_PRICE) compactData.agoPrice = s.agoPrice;
       if (s.petrolPrice !== DEFAULT_PMS_PRICE)
@@ -1290,7 +1294,7 @@ export function FuelProvider({ children }: { children: ReactNode }) {
         compactData.tabVisibility = s.tabVisibility;
       if (
         s.tabConfigurations?.some(
-          t => t.label !== t.originalLabel || !t.visible
+          (t) => t.label !== t.originalLabel || !t.visible,
         )
       )
         compactData.tabConfigurations = s.tabConfigurations;
@@ -1301,8 +1305,7 @@ export function FuelProvider({ children }: { children: ReactNode }) {
         compactData.mpesaTransactions = s.mpesaTransactions.slice(-100); // Keep only last 100 transactions
       // Multi-station support - always save station data
       if (s.stations?.length > 0) compactData.stations = s.stations;
-      if (s.currentStationId)
-        compactData.currentStationId = s.currentStationId;
+      if (s.currentStationId) compactData.currentStationId = s.currentStationId;
       if (Object.keys(s.stationData || {}).length > 0)
         compactData.stationData = s.stationData;
       if (
@@ -1323,7 +1326,11 @@ export function FuelProvider({ children }: { children: ReactNode }) {
       // Set the echo-skip flag so the real-time subscription doesn't
       // re-dispatch our own write as if it came from another device.
       skipRemoteUpdateRef.current = true;
-      await cloudStorageService.set(cloudKey, compactData, stationIdRef.current);
+      await cloudStorageService.set(
+        cloudKey,
+        compactData,
+        stationIdRef.current,
+      );
 
       setLastCloudSave(new Date());
 
@@ -1349,9 +1356,9 @@ export function FuelProvider({ children }: { children: ReactNode }) {
       // cloudStorageService.get so existing data migrates transparently on
       // first read. localStorage is only a read-through cache.
       const cloudKey = compactCloudKey(user.id, stationIdRef.current);
-      const compactData = (await cloudStorageService.get<Record<string, unknown>>(cloudKey, stationIdRef.current)) as
-        | Record<string, unknown>
-        | null;
+      const compactData = (await cloudStorageService.get<
+        Record<string, unknown>
+      >(cloudKey, stationIdRef.current)) as Record<string, unknown> | null;
 
       if (compactData && Object.keys(compactData).length > 0) {
         // Validate that the loaded data has meaningful content
@@ -1384,20 +1391,22 @@ export function FuelProvider({ children }: { children: ReactNode }) {
   const loadFromStorage = useCallback(() => {
     try {
       const userKey = compactCloudKey(user?.id, stationIdRef.current);
-      
+
       // Try loading from compact storage first
       const compactData = localStorage.getItem(userKey);
 
       if (compactData) {
         // Load from compact JSON blob
         const parsed = JSON.parse(compactData);
-        
+
         // CRITICAL: Always check individual companyData key for logo (more reliable)
-        const individualCompanyData = localStorage.getItem(`${userKey}companyData`);
+        const individualCompanyData = localStorage.getItem(
+          `${userKey}companyData`,
+        );
         if (individualCompanyData) {
           parsed.companyData = JSON.parse(individualCompanyData);
         }
-        
+
         const loadedData: Partial<FuelState> = {
           ...initialState, // Start with defaults
           ...parsed, // Overlay saved values
@@ -1411,79 +1420,97 @@ export function FuelProvider({ children }: { children: ReactNode }) {
           (localStorage.getItem(`${oldUserKey}theme`) as "light" | "dark") ||
           "dark";
         const savedThemeSettings = localStorage.getItem(
-          `${oldUserKey}themeSettings`
+          `${oldUserKey}themeSettings`,
         );
         const savedUserPreferences = localStorage.getItem(
-          `${oldUserKey}userPreferences`
+          `${oldUserKey}userPreferences`,
         );
         const savedCompany = localStorage.getItem(`${oldUserKey}companyData`);
         const savedSignatures = localStorage.getItem(`${oldUserKey}signatures`);
         const savedInvoiceCounter = localStorage.getItem(
-          `${oldUserKey}invoiceCounter`
+          `${oldUserKey}invoiceCounter`,
         );
         const savedClients = localStorage.getItem(`${oldUserKey}clients`);
         const savedInvoices = localStorage.getItem(`${oldUserKey}invoices`);
-        const savedDebtHistory = localStorage.getItem(`${oldUserKey}debtHistory`);
+        const savedDebtHistory = localStorage.getItem(
+          `${oldUserKey}debtHistory`,
+        );
         const savedSalesHistory = localStorage.getItem(
-          `${oldUserKey}salesHistory`
+          `${oldUserKey}salesHistory`,
         );
         const savedDelivery = localStorage.getItem(
-          `${oldUserKey}fuelDeliveryData`
+          `${oldUserKey}fuelDeliveryData`,
         );
         const savedInvoiceItems = localStorage.getItem(
-          `${oldUserKey}invoiceItems`
+          `${oldUserKey}invoiceItems`,
         );
         const savedInvoiceSettings = localStorage.getItem(
-          `${oldUserKey}invoiceSettings`
+          `${oldUserKey}invoiceSettings`,
         );
-        const savedTillPayment = localStorage.getItem(`${oldUserKey}tillPayment`);
-        const savedPmsPumps = localStorage.getItem(`${oldUserKey}fuelPumps_pms`);
-        const savedAgoPumps = localStorage.getItem(`${oldUserKey}fuelPumps_ago`);
+        const savedTillPayment = localStorage.getItem(
+          `${oldUserKey}tillPayment`,
+        );
+        const savedPmsPumps = localStorage.getItem(
+          `${oldUserKey}fuelPumps_pms`,
+        );
+        const savedAgoPumps = localStorage.getItem(
+          `${oldUserKey}fuelPumps_ago`,
+        );
         const savedExpenses = localStorage.getItem(`${oldUserKey}fuelExpenses`);
         const savedSalesDate = localStorage.getItem(`${oldUserKey}salesDate`);
         const savedShift = localStorage.getItem(`${oldUserKey}shift`);
         const savedPmsTankOpening = localStorage.getItem(
-          `${oldUserKey}pmsTankOpening`
+          `${oldUserKey}pmsTankOpening`,
         );
         const savedPmsTankClosing = localStorage.getItem(
-          `${oldUserKey}pmsTankClosing`
+          `${oldUserKey}pmsTankClosing`,
         );
         const savedAgoTankOpening = localStorage.getItem(
-          `${oldUserKey}agoTankOpening`
+          `${oldUserKey}agoTankOpening`,
         );
         const savedAgoTankClosing = localStorage.getItem(
-          `${oldUserKey}agoTankClosing`
+          `${oldUserKey}agoTankClosing`,
         );
         const savedPmsPrice = localStorage.getItem(`${oldUserKey}pmsPrice`);
         const savedAgoPrice = localStorage.getItem(`${oldUserKey}agoPrice`);
-        const savedPetrolPrice = localStorage.getItem(`${oldUserKey}petrolPrice`);
-        const savedDieselPrice = localStorage.getItem(`${oldUserKey}dieselPrice`);
-        const savedDeliveredTo = localStorage.getItem(`${oldUserKey}deliveredTo`);
+        const savedPetrolPrice = localStorage.getItem(
+          `${oldUserKey}petrolPrice`,
+        );
+        const savedDieselPrice = localStorage.getItem(
+          `${oldUserKey}dieselPrice`,
+        );
+        const savedDeliveredTo = localStorage.getItem(
+          `${oldUserKey}deliveredTo`,
+        );
         const savedTotalOrder = localStorage.getItem(`${oldUserKey}totalOrder`);
         const savedDeliveryYear = localStorage.getItem(
-          `${oldUserKey}deliveryYear`
+          `${oldUserKey}deliveryYear`,
         );
         const savedOffloadingRecords = localStorage.getItem(
-          `${oldUserKey}offloadingRecords`
+          `${oldUserKey}offloadingRecords`,
         );
         const savedTabVisibility = localStorage.getItem(
-          `${oldUserKey}tabVisibility`
+          `${oldUserKey}tabVisibility`,
         );
         const savedTabConfigurations = localStorage.getItem(
-          `${oldUserKey}tabConfigurations`
+          `${oldUserKey}tabConfigurations`,
         );
         const savedEmployees = localStorage.getItem(`${oldUserKey}employees`);
         const savedPayrollRecords = localStorage.getItem(
-          `${oldUserKey}payrollRecords`
+          `${oldUserKey}payrollRecords`,
         );
         const savedMpesaTransactions = localStorage.getItem(
-          `${oldUserKey}mpesaTransactions`
+          `${oldUserKey}mpesaTransactions`,
         );
         const savedReportSettings = localStorage.getItem(
-          `${oldUserKey}reportSettings`
+          `${oldUserKey}reportSettings`,
         );
-        const savedChatHistory = localStorage.getItem(`${oldUserKey}chatHistory`);
-        const savedDataBackups = localStorage.getItem(`${oldUserKey}dataBackups`);
+        const savedChatHistory = localStorage.getItem(
+          `${oldUserKey}chatHistory`,
+        );
+        const savedDataBackups = localStorage.getItem(
+          `${oldUserKey}dataBackups`,
+        );
 
         const loadedData: Partial<FuelState> = {
           theme: savedTheme,
@@ -1751,7 +1778,7 @@ export function FuelProvider({ children }: { children: ReactNode }) {
             dispatch({ type: "LOAD_FROM_STORAGE", payload: cd });
           }
         }
-      }
+      },
     );
 
     return () => unsub();
@@ -1763,7 +1790,7 @@ export function FuelProvider({ children }: { children: ReactNode }) {
       const isDark = state.theme === "dark";
       const html = document.documentElement;
       const body = document.body;
-      
+
       if (isDark) {
         html.classList.add("dark");
         html.classList.remove("light");

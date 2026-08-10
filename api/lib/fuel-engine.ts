@@ -153,7 +153,9 @@ async function searchWebPrices(
 ): Promise<string> {
   // Build a location descriptor that includes the broader region/state so the
   // AI can reason about area-level prices when the village is obscure.
-  const locationDesc = [locationName, region, country].filter(Boolean).join(", ");
+  const locationDesc = [locationName, region, country]
+    .filter(Boolean)
+    .join(", ");
 
   // ── Tier A: SerpApi (serpapi.com) — Google Search API ──
   // Preferred when configured; 100 free searches/month. Returns answer_box +
@@ -342,12 +344,21 @@ const KE_REMOTENESS: Array<{ keywords: string[]; factor: number }> = [
   { keywords: ["mandera", "eldas", "elwak"], factor: 1.0 },
   { keywords: ["wajir", "tarbaj", "sololo", "moyale"], factor: 0.85 },
   { keywords: ["marsabit", "turkana", "lodwar", "kakuma"], factor: 0.32 },
-  { keywords: ["garissa", "isiolo", "samburu", "west pokot", "baringo"], factor: 0.4 },
+  {
+    keywords: ["garissa", "isiolo", "samburu", "west pokot", "baringo"],
+    factor: 0.4,
+  },
   { keywords: ["turkana central", "lokichar"], factor: 0.35 },
   { keywords: ["mombasa", "kilifi", "malindi", "lamu"], factor: -0.16 },
-  { keywords: ["nairobi", "kiambu", "kikuyu", "ruaka", "karen", "westlands"], factor: 0.0 },
+  {
+    keywords: ["nairobi", "kiambu", "kikuyu", "ruaka", "karen", "westlands"],
+    factor: 0.0,
+  },
   { keywords: ["nakuru", "naivasha"], factor: 0.05 },
-  { keywords: ["kisumu", "kakamega", "kericho", "eldoret", "uire"], factor: 0.08 },
+  {
+    keywords: ["kisumu", "kakamega", "kericho", "eldoret", "uire"],
+    factor: 0.08,
+  },
   { keywords: ["nyeri", "embu", "meru", "nyahururu"], factor: 0.22 },
   { keywords: ["machakos", "athi river", "kitui"], factor: 0.02 },
   { keywords: ["thika", "murang", "kirinyaga"], factor: 0.1 },
@@ -379,7 +390,10 @@ function estimateKenyaPrices(
       break;
     }
   }
-  const lerp = (b: number | null | undefined, m: number | null | undefined): number | null => {
+  const lerp = (
+    b: number | null | undefined,
+    m: number | null | undefined,
+  ): number | null => {
     if (b == null || m == null) return null;
     return Math.round((b + factor * (m - b)) * 100) / 100;
   };
@@ -399,7 +413,12 @@ function extractPriceText(html: string): string {
   // Extract text from <p> and <li> elements.
   const blocks = cleaned.match(/<(?:p|li)[^>]*>([\s\S]*?)<\/(?:p|li)>/gi) || [];
   const texts = blocks
-    .map((b) => b.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim())
+    .map((b) =>
+      b
+        .replace(/<[^>]+>/g, " ")
+        .replace(/\s+/g, " ")
+        .trim(),
+    )
     .filter((t) => {
       const lower = t.toLowerCase();
       // Keep paragraphs that mention fuel products or prices (Ksh/shilling).
@@ -408,9 +427,7 @@ function extractPriceText(html: string): string {
           lower.includes("diesel") ||
           lower.includes("kerosene") ||
           lower.includes("fuel")) &&
-        (lower.includes("ksh") ||
-          lower.includes("sh") ||
-          /\d+\.\d{2}/.test(t))
+        (lower.includes("ksh") || lower.includes("sh") || /\d+\.\d{2}/.test(t))
       );
     });
   return texts.slice(0, 12).join("\n");
@@ -537,9 +554,10 @@ async function extractPricesWithAI(
 // Currency hint from country code (best-effort)
 // ---------------------------------------------------------------------------
 
-function currencyForCountry(
-  countryCode: string,
-): { code: string; symbol: string } {
+function currencyForCountry(countryCode: string): {
+  code: string;
+  symbol: string;
+} {
   const map: Record<string, { code: string; symbol: string }> = {
     KE: { code: "KES", symbol: "KSh" },
     UG: { code: "UGX", symbol: "USh" },
@@ -655,9 +673,7 @@ export async function getLocalFuelPrices(
       const est = estimateKenyaPrices(place.name, place.region);
       if (
         est &&
-        (est.super_petrol != null ||
-          est.diesel != null ||
-          est.kerosene != null)
+        (est.super_petrol != null || est.diesel != null || est.kerosene != null)
       ) {
         if (supabase) {
           const { data: saved, error: upErr } = await supabase

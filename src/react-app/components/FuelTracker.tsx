@@ -169,9 +169,9 @@ export default function FuelTracker() {
           Your GPS is reverse-geocoded to the nearest village/town. The server
           searches for official local fuel prices, an AI extracts the numbers,
           and the result is cached in a PostGIS spatial index. When a remote
-          village has no direct data, the nearest town's price (within 50 km)
-          is shown with an “Approximate” badge. Prices refresh automatically on
-          the 1st of every month.
+          village has no direct data, the nearest town's price (within 50 km) is
+          shown with an “Approximate” badge. Prices refresh automatically on the
+          1st of every month.
         </p>
       </div>
     </div>

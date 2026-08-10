@@ -127,7 +127,9 @@ export default function SecuritySection({ logAudit }: Props) {
     // Load 2FA from cloud (profiles table) — the cross-device source of truth.
     const loadCloud2FA = async () => {
       const client = getSupabaseClient();
-      const { data: sess } = await client.auth.getSession();
+      const {
+        data: { session: sess },
+      } = await client.auth.getSession();
       if (sess?.user) {
         const cloud2FA = await loadFounder2FA(sess.user.id);
         if (cloud2FA.enabled && cloud2FA.secret) {
@@ -211,7 +213,9 @@ export default function SecuritySection({ logAudit }: Props) {
     // already proves the caller is authenticated; Supabase requires the
     // session to be active. We additionally re-signIn to verify currentPw.)
     const client = getSupabaseClient();
-    const { data: sess } = await client.auth.getSession();
+    const {
+      data: { session: sess },
+    } = await client.auth.getSession();
     if (!sess?.user?.email) {
       setPwError("Not signed in — cannot change password");
       return;
@@ -236,7 +240,11 @@ export default function SecuritySection({ logAudit }: Props) {
       return;
     }
     setPwSuccess("Password changed successfully (synced to all devices)");
-    logAudit("Password Changed", "Founder password updated via Supabase", "success");
+    logAudit(
+      "Password Changed",
+      "Founder password updated via Supabase",
+      "success",
+    );
     setCurrentPw("");
     setNewPw("");
     setConfirmPw("");
@@ -275,7 +283,9 @@ export default function SecuritySection({ logAudit }: Props) {
 
       // Sync to cloud (profiles table) + legacy tRPC backend
       const client = getSupabaseClient();
-      const { data: sess } = await client.auth.getSession();
+      const {
+        data: { session: sess },
+      } = await client.auth.getSession();
       if (sess?.user) {
         await saveFounder2FA(sess.user.id, true, config.secret);
       }
@@ -284,7 +294,11 @@ export default function SecuritySection({ logAudit }: Props) {
         twoFactorSecret: config.secret,
       });
 
-      logAudit("2FA Enabled", "Two-factor authentication activated (cross-device)", "success");
+      logAudit(
+        "2FA Enabled",
+        "Two-factor authentication activated (cross-device)",
+        "success",
+      );
     } else {
       setFaError("Invalid code. Try again.");
       logAudit(
@@ -316,7 +330,9 @@ export default function SecuritySection({ logAudit }: Props) {
 
       // Sync to cloud (profiles table) + legacy tRPC backend
       const client = getSupabaseClient();
-      const { data: sess } = await client.auth.getSession();
+      const {
+        data: { session: sess },
+      } = await client.auth.getSession();
       if (sess?.user) {
         await saveFounder2FA(sess.user.id, false, null);
       }

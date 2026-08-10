@@ -165,11 +165,15 @@ export default function CustomerLoyalty() {
     })();
     // Real-time: when another device updates customers, update instantly
     const unsubs = [
-      cloudStorageService.subscribe<Customer[]>("loyalty_customers", stationId, (val) => {
-        if (val && Array.isArray(val)) setCustomers(val);
-      }),
+      cloudStorageService.subscribe<Customer[]>(
+        "loyalty_customers",
+        stationId,
+        (val) => {
+          if (val && Array.isArray(val)) setCustomers(val);
+        },
+      ),
     ];
-    return () => unsubs.forEach(u => u());
+    return () => unsubs.forEach((u) => u());
   }, [user, stationId]);
 
   const filtered = useMemo(() => {

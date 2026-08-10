@@ -23,7 +23,7 @@ if (!serviceRoleKey) {
   // missing-key case gracefully (e.g. fall back to another data source).
   // Consumers must check `supabaseAdmin` for null before use.
   console.warn(
-    "[supabase-admin] SUPABASE_SERVICE_ROLE_KEY is not set — admin client is unavailable."
+    "[supabase-admin] SUPABASE_SERVICE_ROLE_KEY is not set — admin client is unavailable.",
   );
 }
 

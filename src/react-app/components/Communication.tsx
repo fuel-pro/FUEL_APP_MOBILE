@@ -113,17 +113,29 @@ export default function Communication() {
 
     // Real-time: when another device updates contacts/messages/templates, update instantly
     const unsubs = [
-      cloudStorageService.subscribe<Contact[]>("comm_contacts", stationId, (val) => {
-        if (val && Array.isArray(val)) setContacts(val);
-      }),
-      cloudStorageService.subscribe<Message[]>("comm_messages", stationId, (val) => {
-        if (val && Array.isArray(val)) setMessages(val);
-      }),
-      cloudStorageService.subscribe<MessageTemplate[]>("comm_templates", stationId, (val) => {
-        if (val && Array.isArray(val)) setTemplates(val);
-      }),
+      cloudStorageService.subscribe<Contact[]>(
+        "comm_contacts",
+        stationId,
+        (val) => {
+          if (val && Array.isArray(val)) setContacts(val);
+        },
+      ),
+      cloudStorageService.subscribe<Message[]>(
+        "comm_messages",
+        stationId,
+        (val) => {
+          if (val && Array.isArray(val)) setMessages(val);
+        },
+      ),
+      cloudStorageService.subscribe<MessageTemplate[]>(
+        "comm_templates",
+        stationId,
+        (val) => {
+          if (val && Array.isArray(val)) setTemplates(val);
+        },
+      ),
     ];
-    return () => unsubs.forEach(u => u());
+    return () => unsubs.forEach((u) => u());
   }, [user, stationId]);
 
   // Auto-refresh messages every 30 seconds for live updates

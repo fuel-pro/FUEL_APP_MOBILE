@@ -100,13 +100,13 @@ const ExpenseTracker = lazy(
   () => import("@/react-app/components/ExpenseTracker"),
 );
 const PriceBoard = lazy(() => import("@/react-app/components/PriceBoard"));
-const FuelTracker = lazy(
-  () => import("@/react-app/components/FuelTracker"),
-);
+const FuelTracker = lazy(() => import("@/react-app/components/FuelTracker"));
 const PumpMappingV1 = lazy(
   () => import("@/react-app/components/PumpMappingV1"),
 );
-const FuelPriceLocator = lazy(() => import("@/react-app/components/FuelPriceLocator"));
+const FuelPriceLocator = lazy(
+  () => import("@/react-app/components/FuelPriceLocator"),
+);
 
 // ─── SalesZote-style POS business suite modules ───
 // These are ADDITIVE features layered onto the existing FuelPro tab system

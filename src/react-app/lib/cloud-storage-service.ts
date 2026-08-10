@@ -310,9 +310,11 @@ class CloudStorageService {
   subscribe<T = Json>(
     key: string,
     stationId: string | undefined,
-    callback: (value: T | null) => void
+    callback: (value: T | null) => void,
   ): () => void {
-    let channel: ReturnType<ReturnType<typeof getSupabaseClient>["channel"]> | null = null;
+    let channel: ReturnType<
+      ReturnType<typeof getSupabaseClient>["channel"]
+    > | null = null;
     let active = true;
 
     (async () => {
@@ -347,7 +349,7 @@ class CloudStorageService {
               clearCache(ck);
             }
             callback(newData);
-          }
+          },
         )
         .subscribe();
     })();
@@ -372,9 +374,11 @@ class CloudStorageService {
    */
   subscribeToStation<T = Json>(
     stationId: string | undefined,
-    callback: (rowId: string, value: T | null) => void
+    callback: (rowId: string, value: T | null) => void,
   ): () => void {
-    let channel: ReturnType<ReturnType<typeof getSupabaseClient>["channel"]> | null = null;
+    let channel: ReturnType<
+      ReturnType<typeof getSupabaseClient>["channel"]
+    > | null = null;
     let active = true;
 
     (async () => {
@@ -412,7 +416,7 @@ class CloudStorageService {
             if (value != null && id) {
               callback(id, value);
             }
-          }
+          },
         )
         .subscribe();
     })();

@@ -338,16 +338,13 @@ export async function getFuelPrices(
         lng: number;
       };
       if (Number.isFinite(lat) && Number.isFinite(lng) && lat !== 0) {
-        const res = await fetch(
-          `/api/fuel-local?lat=${lat}&lon=${lng}`,
-        );
+        const res = await fetch(`/api/fuel-local?lat=${lat}&lon=${lng}`);
         if (res.ok) {
           const local = await res.json();
           if (
             local.success &&
             local.prices &&
-            (local.prices.super_petrol != null ||
-              local.prices.diesel != null)
+            (local.prices.super_petrol != null || local.prices.diesel != null)
           ) {
             const countryCode = local.country_code || "KE";
             const cur = currencyMap[countryCode] || {
@@ -355,8 +352,7 @@ export async function getFuelPrices(
               symbol: "KSh",
             };
             const prices: FuelPrices = {
-              petrolPrice:
-                local.prices.super_petrol ?? KENYA_PETROL_PRICE,
+              petrolPrice: local.prices.super_petrol ?? KENYA_PETROL_PRICE,
               dieselPrice: local.prices.diesel ?? KENYA_DIESEL_PRICE,
               currency: cur.currency,
               currencySymbol: cur.symbol,

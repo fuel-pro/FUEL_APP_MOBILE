@@ -25,7 +25,7 @@ export async function GET(request: Request): Promise<Response> {
   if (!supabaseAdmin) {
     return new Response(
       JSON.stringify({ error: "Supabase admin client not configured" }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
+      { status: 500, headers: { "Content-Type": "application/json" } },
     );
   }
 
@@ -36,10 +36,10 @@ export async function GET(request: Request): Promise<Response> {
     .limit(20);
 
   if (error) {
-    return new Response(
-      JSON.stringify({ error: error.message }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
-    );
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 
   const results: Array<{ location: string; success: boolean; error?: string }> =
@@ -51,7 +51,7 @@ export async function GET(request: Request): Promise<Response> {
         loc.lat,
         loc.lon,
         loc.location_name,
-        loc.country
+        loc.country,
       );
       results.push({ location: loc.location_name, success: true });
     } catch (err) {
@@ -74,6 +74,6 @@ export async function GET(request: Request): Promise<Response> {
       results,
       timestamp: new Date().toISOString(),
     }),
-    { status: 200, headers: { "Content-Type": "application/json" } }
+    { status: 200, headers: { "Content-Type": "application/json" } },
   );
 }

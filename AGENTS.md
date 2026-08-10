@@ -422,12 +422,54 @@ which uses a separate quota — last Vercel prod deploy was from commit
 - QA user: qa.crossdevice.0809b@gmail.com (uid 98ecc424, profiles.username=
   qacrossdevice). Password reset to `QATest2026!CrossDev`. NOT a founder.
 
+## CI failure root-cause analysis (FIXED 2026-08-10, PR #99)
+
+All four CI jobs on `main` were failing. Each had a distinct root cause:
+
+1. **Type Check — `session.user` errors** (`founder-auth.ts`, `SecuritySection.tsx`):
+   the cross-device founder-auth commit (`2edda45`) used the wrong
+   destructuring: `const { data: session } = await client.auth.getSession()`
+   binds `session` to the `data` object (`{ session: Session } | { session: null }`),
+   which has NO `user` property. The correct form extracts the inner session:
+   `const { data: { session } } = await client.auth.getSession()`. After the
+   `if (!session)` / `if (session?.user)` guard, `session` narrows to `Session`
+   (which DOES have `user: User`), so `session.user.id` / `.email` type-check.
+   Fixed in `founder-auth.ts` (verifyFounderToken + updatePassword) and all
+   four occurrences in `SecuritySection.tsx`.
+
+2. **Lint / Prettier check** — the new commit shipped unformatted files.
+   Ran `prettier --write` across `src/**/*.{ts,tsx}`, `api/**/*.ts`, and
+   `*.{json,md}` so `npx prettier --check "src/**/*.{ts,tsx}" "*.{json,md}"`
+   passes. Also fixed `prefer-const` on `lat`/`lng` in `FuelPriceLocator.tsx`.
+
+3. **Unit Tests — `webidl.util.markAsUncloneable is not a function`**:
+   `jsdom@30.0.1` depends on `undici@^8.9.0`, and ALL undici 8.x releases
+   declare `engines.node >= 22.19.0` and require the `markAsUncloneable`
+   export from `node:worker_threads` (backported to Node 22.19+, absent in
+   Node 20). The CI workflow pinned `NODE_VERSION: '20'` → `npm ci` printed
+   `EBADENGINE` and vitest's forks worker crashed on the jsdom/undici
+   CacheStorage init. Fix: bump `NODE_VERSION` to `'22'` in BOTH
+   `.github/workflows/ci.yml` and `deploy.yml`. Node 22.19+ satisfies
+   undici 8.x AND exposes `markAsUncloneable`.
+
+4. **E2E Tests — `Executable doesn't exist at firefox-1538/firefox`**:
+   `playwright.config.ts` defines four projects (chromium, Mobile Chrome,
+   firefox, webkit) but the CI step only installed `chromium`:
+   `npx playwright install --with-deps chromium`. Fix: install all
+   configured browsers with `npx playwright install --with-deps` (no
+   browser arg = install browsers required by the projects).
+
+Verified locally (Node 22.23.2): `tsc -b` 0 errors, `eslint .` 0 errors,
+`prettier --check` all pass, `vitest run` 3/3 pass, `vite build` succeeds.
+
 ## Real-time cross-device sync (ADDED 2026-08-09, commit f712549, PR #95)
+
 **Supabase Realtime** (postgres_changes) is now the mechanism for INSTANT
 cross-device sync. Both `app_kv` and `stations` are in the
 `supabase_realtime` publication (migration 011 documents the live change).
 
 ### cloud-storage-service.ts — subscribe() / subscribeToStation()
+
 - `subscribe<T>(key, stationId, callback)` opens a Supabase real-time channel
   filtered to the computed `app_kv` row id. On INSERT/UPDATE/DELETE, it
   invalidates the in-memory cache and calls `callback(newValue)`. Returns an
@@ -437,6 +479,7 @@ cross-device sync. Both `app_kv` and `stations` are in the
 - Both auto-resolve `ownerId` via `currentUserId()` and clean up on unmount.
 
 ### FuelContext real-time
+
 - Subscribes to the compact blob (`compactCloudKey`). On a remote change,
   dispatches `LOAD_FROM_STORAGE` so the new data reflects INSTANTLY.
 - Echo guard: `skipRemoteUpdateRef` is set `true` in `saveToCloud` BEFORE the
@@ -444,33 +487,40 @@ cross-device sync. Both `app_kv` and `stations` are in the
   the flag, skips the re-dispatch, and resets it.
 
 ### StationContext real-time
+
 - Subscribes to the `stations` table. When ANY device creates/updates/deletes
   a station, `syncFromBackend()` re-runs and the new station appears in the
   UI without a page reload.
 
 ### Per-component real-time
+
 - ShiftManagement, CreditManagement, SupplierManagement, MaintenanceTracker,
   CustomerLoyalty, FuelTypesManager, Communication: added `subscribe()` in
   the existing load-on-mount useEffect, returning cleanup that unsubscribes.
 
 ### PumpMappingV1 — was ZERO persistence (FIXED)
+
 - Before: extractedData, chatMessages, customRules, anchors were useState-only
   — lost on EVERY refresh.
 - After: all four persist to cloud (keys `pump_mapping_*`) with real-time.
 
 ### AdminPanel — localStorage to cloud + real-time
+
 - admin_modules, batch_updates, custom_apis migrated from localStorage-only
   to cloud + real-time.
 
 ### useCloudKV hook (new)
+
 - `src/react-app/hooks/useCloudKV.ts` — reusable real-time cloud sync hook.
 
 ### Deployment
+
 - Vercel: fuel-app-mobile.vercel.app (prebuilt deploy, READY)
 - Cloudflare: fuel-app-mobile.pages.dev (preview 6b58195b)
 - PR #95: https://github.com/fuel-pro/FUEL_APP_MOBILE/pull/95
 
 ### Fuel Price Finder — GPS geolocation feature (ADDED 2026-08-09)
+
 - `src/react-app/components/FuelPriceLocator.tsx`: uses existing
   `LocationContext` for GPS detection, calls enhanced `/api/fuel-prices`
   endpoint with `?lat=&lng=` query params. Displays gasoline/diesel/premium/
@@ -490,17 +540,19 @@ cross-device sync. Both `app_kv` and `stations` are in the
 - Env vars needed (set in Vercel Project Settings → Environment Variables):
   - `OILPRICE_API_KEY` — for live Kenya EPRA prices (oilpriceapi.com)
   - `GLOBAL_FUEL_API_KEY` — for global geolocation station prices (CollectAPI)
-  Both are optional; the app gracefully degrades to static pricing without them.
+    Both are optional; the app gracefully degrades to static pricing without them.
 
 ## Auto Fuel Price engine (ADDED 2026-08-10, PR #98)
+
 Hyper-local GPS fuel price detection per the "AUTO FUEL PRICE" spec, adapted
 to this project's Vite SPA + Vercel serverless architecture.
+
 - **DB**: `supabase/migrations/012_fuel_prices_postgis.sql` (APPLIED LIVE via
   Management API). Enables PostGIS; creates `fuel_prices` table (location_name,
   country, lat/lon, geography POINT, prices JSONB, currency, source,
   last_updated, query_count) with unique index on (location_name, country),
   GIST spatial index, and query_count index. Two RPCs: `get_nearest_fuel(lat,
-  lon, radius_km)` (PostGIS ST_DWithin + planar haversine fallback) and
+lon, radius_km)` (PostGIS ST_DWithin + planar haversine fallback) and
   `bump_fuel_query_count()`. RLS: public read, service_role writes.
 - **Engine** (`api/lib/fuel-engine.ts`): 1) Nominatim reverse-geocode GPS →
   village/town. 2) Exact-match Supabase cache check (fresh < 14 days). 3) For
@@ -559,9 +611,11 @@ to this project's Vite SPA + Vercel serverless architecture.
   data immediately after a DB update.
 
 ## Smart-Cache fuel price architecture (ADDED 2026-08-10, commit c0f1c33)
+
 A second parallel implementation of the fuel-price engine, created in a
 separate session and merged to main alongside PR #98. Both implementations
 coexist on main:
+
 - **My implementation** (`api/_lib/hybrid-fetcher.ts` + `api/fuel-prices.ts` +
   `api/cron-monthly-sync.ts`): enhances the existing `/api/fuel-prices`
   endpoint with a smart-cache mode (lat+lng+name+country). Uses a Groq →
@@ -596,12 +650,14 @@ coexist on main:
   "AI-Estimated" when only AI knowledge is used.
 
 ## CORS fix + Lodwar bug — DEPLOYED LIVE 2026-08-10 (commit c85e35a)
+
 **Symptom**: app showed "Nairobi" prices for all locations (e.g. user in
 Lodwar got Nairobi prices). Root cause: Cloudflare Pages (the primary
 deploy) has NO /api/* endpoints — fetch to `/api/fuel-local` returns 404,
 falls back to static pricing table whose closest city was always Nairobi.
 
 **Fix (3-layer)**:
+
 1. `FuelPriceLocator.tsx` `fuelApiBase()` helper: detects origin. On
    Vercel → relative `/api/fuel-local` (same-origin, no CORS). On
    Cloudflare/other → absolute `https://fuel-app-mobile.vercel.app/api/...`.
@@ -614,17 +670,19 @@ falls back to static pricing table whose closest city was always Nairobi.
 
 **Verified end-to-end 2026-08-10**: production Vercel API
 `fuel-app-mobile.vercel.app/api/fuel-local` returns:
+
 - Lodwar (3.097, 35.6138) → Turkana, Super 220.64, Diesel 229.96, Kerosene
   198.48 (AI-Estimated) — higher than Nairobi, reflecting transport cost.
 - Nairobi (-1.2864, 36.8172) → Nairobi, Super 214.03, Diesel 222.86.
-CORS header `access-control-allow-origin: *` confirmed on GET (HTTP 200).
-CORS proxy path also returns correct Lodwar data. The "Nairobi for all
-locations" bug is FIXED.
-**Deploy**: dpl_HY7iVUcT7btjXk5H77gRSqpGb9oZ, READY, aliased to
-fuel-app-mobile.vercel.app. Cloudflare mirror:
-https://f40cad3d.fuel-app-mobile.pages.dev.
+  CORS header `access-control-allow-origin: *` confirmed on GET (HTTP 200).
+  CORS proxy path also returns correct Lodwar data. The "Nairobi for all
+  locations" bug is FIXED.
+  **Deploy**: dpl_HY7iVUcT7btjXk5H77gRSqpGb9oZ, READY, aliased to
+  fuel-app-mobile.vercel.app. Cloudflare mirror:
+  https://f40cad3d.fuel-app-mobile.pages.dev.
 
 ## Dashboard price card "Nairobi" label fix (DEPLOYED LIVE 2026-08-10, commit f49d376)
+
 **Symptom**: the Dashboard "Current Pump Prices" cards showed "Nairobi" as
 the location label next to Super Petrol and Diesel, even when GPS pricing was
 active and the badge correctly showed "📍 GPS: Lodwar (+5.50)". The price
@@ -649,6 +707,7 @@ fuel-app-mobile.vercel.app. Cloudflare mirror:
 https://bd4ff357.fuel-app-mobile.pages.dev.
 
 ## Cross-device Founder Access — 2FA / forgot-password / unique ID (DEPLOYED 2026-08-10, commit 2edda45)
+
 Founder auth was previously localStorage-only: the 2FA secret lived in
 `fuelpro_founder_2fa` localStorage (per-browser) and "forgot password" was a
 fake 6-digit-code flow that always failed. Now all founder auth state is
@@ -686,8 +745,10 @@ cloud-backed via the `profiles` table so it is consistent across every device.
   (`email_confirm:true` via admin API) so `signInWithPassword` succeeds.
 
 ## FREE AUTO FUEL PRICE.txt spec — Smart-Cache (Groq AI + PostGIS) LIVE
+
 The full spec is implemented and running server-side (keys in Vercel env,
 never in the client bundle):
+
 - **DB**: `fuel_prices` table (location_name, country, lat/lon,
   `location_geog geography(point,4326)`, `prices jsonb`, currency,
   last_updated, query_count) + PostGIS `get_nearest_fuel_prices(lat,lon,radius)`
@@ -709,6 +770,7 @@ never in the client bundle):
   guarded by `Bearer $CRON_SECRET`.
 
 ## 2026-08-10 deploy state (commit 2edda45)
+
 Git HEAD = origin/main = 2edda45 ("feat: cross-device founder auth — cloud
 2FA, forgot password, unique ID"). Vercel production READY, aliased to
 fuel-app-mobile.vercel.app (bundle `index-CBkT6CGK.js` + lazy chunk

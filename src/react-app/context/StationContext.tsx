@@ -1038,7 +1038,7 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
           // Re-sync stations from cloud. A short debounce prevents multiple
           // rapid events from triggering redundant fetches.
           syncFromBackend().catch(() => {});
-        }
+        },
       )
       .subscribe();
 
