@@ -17,6 +17,21 @@ import {
   Droplet,
 } from "lucide-react";
 
+// ── API base URL ──
+// Cloudflare Pages does NOT serve /api/* endpoints — only Vercel does.
+// When the frontend is hosted on Cloudflare (or any non-Vercel origin), we
+// must call the Vercel API directly with the absolute URL. On Vercel, we
+// use a relative path so it stays same-origin (no CORS issues).
+const VERCEL_API_ORIGIN = "https://fuel-app-mobile.vercel.app";
+function fuelApiBase(): string {
+  if (typeof window === "undefined") return VERCEL_API_ORIGIN;
+  const host = window.location.hostname;
+  // Same-origin on Vercel → relative path (avoids CORS + extra latency)
+  if (host.includes("vercel.app")) return "";
+  // Cloudflare Pages, local dev, or any other origin → absolute Vercel URL
+  return VERCEL_API_ORIGIN;
+}
+
 // ── Types ──
 
 interface NearbyPriceResult {
@@ -25,22 +40,25 @@ interface NearbyPriceResult {
   timestamp?: string;
   coordinates?: { latitude: string; longitude: string };
   locationName?: string;
+  location?: string;
   country?: string;
   stationName?: string;
   currency?: string;
   currencySymbol?: string;
   unit?: string;
   prices?: {
-    gasoline?: string;
-    petrol?: string;
-    diesel?: string;
-    premium?: string;
-    kerosene?: string;
+    gasoline?: string | number;
+    petrol?: string | number;
+    super_petrol?: string | number;
+    diesel?: string | number;
+    premium?: string | number;
+    kerosene?: string | number;
   };
   kerosenePrice?: number | null;
   source?: string;
   distance_km?: number;
   last_updated?: string;
+  is_approximate?: boolean;
   error?: string;
 }
 
@@ -150,47 +168,37 @@ export default function FuelPriceLocator() {
       // async, we'll use the unified prices as fallback in this cycle
     }
 
-    // Try the serverless API with coordinates
+    // Try the serverless API with coordinates.
+    // Use /api/fuel-local (the deterministic EPRA engine deployed on Vercel)
+    // which returns hyper-local prices for the exact GPS location.
+    const locName =
+      preciseLocation?.city ||
+      preciseLocation?.address ||
+      cityName ||
+      "";
     if (lat && lng) {
       try {
-        // Pass location name + country so the API uses the Smart-Cache
-        // hybrid fetcher (exact cache → PostGIS nearest 50km → live AI).
-        const locName =
-          preciseLocation?.city ||
-          preciseLocation?.address ||
-          cityName ||
-          "";
-        const locCountry = currentCountry?.name || "";
-        const params = new URLSearchParams({
-          lat: String(lat),
-          lng: String(lng),
-        });
-        if (locName) params.set("name", locName);
-        if (locCountry) params.set("country", locCountry);
-
-        const response = await fetch(`/api/fuel-prices?${params.toString()}`);
+        const apiBase = fuelApiBase();
+        const apiUrl = `${apiBase}/api/fuel-local?lat=${lat}&lon=${lng}&cb=${Date.now()}`;
+        const response = await fetch(apiUrl);
         if (response.ok) {
           const data: NearbyPriceResult = await response.json();
           if (data.success && data.prices) {
-            // Smart-cache mode uses petrol/diesel/kerosene keys; legacy
-            // geolocation mode uses gasoline/diesel/premium. Support both.
-            const petrolVal =
-              data.prices.petrol ?? data.prices.gasoline ?? "N/A";
-            const dieselVal = data.prices.diesel ?? "N/A";
-            const keroseneVal =
-              data.prices.kerosene ??
-              (data.kerosenePrice !== null && data.kerosenePrice !== undefined
-                ? String(data.kerosenePrice)
-                : "N/A");
+            // /api/fuel-local returns super_petrol/diesel/kerosene as numbers.
+            const toNum = (v: string | number | undefined): number | null => {
+              if (v === undefined || v === null) return null;
+              const n = typeof v === "number" ? v : parseFloat(v);
+              return isNaN(n) ? null : n;
+            };
 
             const result: StationPriceInfo = {
-              stationName: data.stationName || data.locationName || "Nearby Station",
-              gasoline: parseFloat(petrolVal) || null,
-              diesel: parseFloat(dieselVal) || null,
-              premium: parseFloat(data.prices.premium || "N/A") || null,
-              kerosene: parseFloat(keroseneVal) || null,
-              currency: data.currency || "USD",
-              currencySymbol: data.currencySymbol || "",
+              stationName: data.stationName || data.locationName || data.location || "Nearby Station",
+              gasoline: toNum(data.prices.petrol ?? data.prices.super_petrol ?? data.prices.gasoline),
+              diesel: toNum(data.prices.diesel),
+              premium: toNum(data.prices.premium),
+              kerosene: toNum(data.prices.kerosene) ?? data.kerosenePrice ?? null,
+              currency: data.currency || "KES",
+              currencySymbol: data.currencySymbol || "KSh",
               unit: data.unit || "litre",
               source: data.source || "Live API",
               location:
@@ -211,7 +219,8 @@ export default function FuelPriceLocator() {
     }
 
     // Fallback: use the unified pricing system (location-aware static prices)
-    // This integrates with the existing LocationContext + pricing.ts config
+    // This integrates with the existing LocationContext + pricing.ts config.
+    // Only reached when the Vercel API is unreachable (e.g. offline).
     const countryCode = currentCountry?.id || "KE";
     const currency = currentCountry?.currency?.code || "KES";
     const symbol = currentCountry?.currency?.symbol || "KSh";
@@ -219,8 +228,11 @@ export default function FuelPriceLocator() {
     let petrol = unifiedPrices.petrol;
     let diesel = unifiedPrices.diesel;
     let kerosene = unifiedPrices.kerosene;
-    let stationName = unifiedSource || "Regional Average";
-    let location = cityName || currentCountry?.name || countryCode;
+    // Use the GPS-detected town name (not the closest pricing-table city) so
+    // the UI shows the user's actual location, not "Nairobi" as a fallback.
+    const gpsTownName = locName || cityName || "Your Location";
+    let stationName = gpsTownName;
+    let location = gpsTownName;
 
     // If in Kenya with GPS, use city-specific prices with transport surcharge
     if (countryCode === "KE" && lat && lng) {
@@ -228,8 +240,8 @@ export default function FuelPriceLocator() {
       petrol = cityPrice.petrolPrice;
       diesel = cityPrice.dieselPrice;
       kerosene = cityPrice.kerosenePrice;
-      stationName = `EPRA - ${cityPrice.name} (${cityPrice.transportSurcharge >= 0 ? "+" : ""}${cityPrice.transportSurcharge.toFixed(2)} transport)`;
-      location = cityPrice.name;
+      stationName = gpsTownName;
+      location = gpsTownName;
     } else if (!REGIONAL_PRICES[countryCode] && countryCode !== "KE") {
       // Unknown country — use Kenya defaults as universal fallback
       petrol = KENYA_BASE_PRICES.petrol;
@@ -246,7 +258,7 @@ export default function FuelPriceLocator() {
       currency,
       currencySymbol: symbol,
       unit: "litre",
-      source: preciseLocation ? `${unifiedSource} (GPS)` : unifiedSource,
+      source: preciseLocation ? "EPRA Estimate (offline)" : unifiedSource,
       location,
     };
 

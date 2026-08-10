@@ -19,6 +19,15 @@
 
 import { getLocalFuelPrices } from "./lib/fuel-engine.js";
 
+// CORS headers — allow the Cloudflare Pages mirror (and any origin) to call
+// this endpoint cross-origin. Without these, the browser blocks the fetch.
+const CORS_HEADERS: Record<string, string> = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type",
+  "Access-Control-Max-Age": "86400",
+};
+
 export async function GET(request: Request): Promise<Response> {
   const url = new URL(request.url);
   const lat = parseFloat(url.searchParams.get("lat") || "");
@@ -32,7 +41,7 @@ export async function GET(request: Request): Promise<Response> {
       }),
       {
         status: 400,
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...CORS_HEADERS },
       },
     );
   }
@@ -46,6 +55,7 @@ export async function GET(request: Request): Promise<Response> {
         // Brief CDN cache (5 min) keyed by lat/lon — the engine itself has a
         // 14-day DB cache, this just absorbs burst traffic for the same spot.
         "Cache-Control": "public, max-age=300, s-maxage=300",
+        ...CORS_HEADERS,
       },
     });
   } catch (error) {
@@ -54,8 +64,13 @@ export async function GET(request: Request): Promise<Response> {
       JSON.stringify({ success: false, error: message, lat, lon }),
       {
         status: 500,
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...CORS_HEADERS },
       },
     );
   }
+}
+
+// Handle CORS preflight requests from cross-origin hosts (e.g. Cloudflare).
+export async function OPTIONS(): Promise<Response> {
+  return new Response(null, { status: 204, headers: CORS_HEADERS });
 }
