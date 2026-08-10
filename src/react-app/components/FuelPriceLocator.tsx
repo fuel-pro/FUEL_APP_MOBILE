@@ -253,7 +253,10 @@ export default function FuelPriceLocator() {
               location:
                 data.distance_km !== undefined
                   ? `${data.locationName || locName} (${data.distance_km.toFixed(1)} km away)`
-                  : `${lat.toFixed(4)}, ${lng.toFixed(4)}`,
+                  : data.locationName ||
+                    data.location ||
+                    locName ||
+                    `${lat.toFixed(4)}, ${lng.toFixed(4)}`,
             };
             setNearbyResult(result);
             setLastFetchAt(new Date().toISOString());
