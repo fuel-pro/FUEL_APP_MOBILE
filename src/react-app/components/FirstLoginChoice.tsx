@@ -103,14 +103,14 @@ export default function FirstLoginChoice({
         stations.push(newStation);
         localStorage.setItem(
           STORAGE_KEY,
-          JSON.stringify({ stations, version: "3.0" })
+          JSON.stringify({ stations, version: "3.0" }),
         );
       }
 
       // Now select it
       onSelectStation(binding.stationId);
       import("@/react-app/lib/app-reloader").then(({ broadcastReload }) =>
-        broadcastReload()
+        broadcastReload(),
       );
     } catch {
       setError("Failed to create station. Please refresh and try again.");
@@ -121,10 +121,10 @@ export default function FirstLoginChoice({
   const matchingStations =
     stationName.length >= 2
       ? existingStations.filter(
-          s =>
+          (s) =>
             s.name.toLowerCase().includes(stationName.toLowerCase()) ||
             s.id.toLowerCase().includes(stationName.toLowerCase()) ||
-            s.location.toLowerCase().includes(stationName.toLowerCase())
+            s.location.toLowerCase().includes(stationName.toLowerCase()),
         )
       : existingStations;
 
@@ -137,15 +137,15 @@ export default function FirstLoginChoice({
       return;
     }
     // Find first active binding where the station exists locally
-    const activeBinding = allBindings.find(b => {
+    const activeBinding = allBindings.find((b) => {
       if (!b.active) return false;
-      return existingStations.some(s => s.id === b.stationId);
+      return existingStations.some((s) => s.id === b.stationId);
     });
     if (activeBinding) {
       // Auto-switch to the bound station
       onSelectStation(activeBinding.stationId);
       import("@/react-app/lib/app-reloader").then(({ broadcastReload }) =>
-        broadcastReload()
+        broadcastReload(),
       );
       return; // Don't unmount, just reload
     }
@@ -170,12 +170,12 @@ export default function FirstLoginChoice({
       matchingStations.length === 1
         ? matchingStations[0]
         : existingStations.find(
-            s => s.name.toLowerCase() === stationName.toLowerCase()
+            (s) => s.name.toLowerCase() === stationName.toLowerCase(),
           );
 
     if (!matched) {
       setError(
-        `Station "${stationName}" not found. Check the name and try again.`
+        `Station "${stationName}" not found. Check the name and try again.`,
       );
       return;
     }
@@ -186,9 +186,9 @@ export default function FirstLoginChoice({
       setTimeout(
         () =>
           import("@/react-app/lib/app-reloader").then(({ broadcastReload }) =>
-            broadcastReload()
+            broadcastReload(),
           ),
-        800
+        800,
       );
     } else {
       setError("Incorrect password. Please check and try again.");
@@ -258,7 +258,7 @@ export default function FirstLoginChoice({
                 <input
                   type="text"
                   value={stationName}
-                  onChange={e => {
+                  onChange={(e) => {
                     setStationName(e.target.value);
                     setError("");
                   }}
@@ -269,7 +269,7 @@ export default function FirstLoginChoice({
                 {/* Matching stations dropdown */}
                 {matchingStations.length > 0 && (
                   <div className="mt-1 bg-slate-800 border border-slate-700 rounded-lg overflow-hidden">
-                    {matchingStations.slice(0, 5).map(s => (
+                    {matchingStations.slice(0, 5).map((s) => (
                       <button
                         key={s.id}
                         onClick={() => setStationName(s.name)}
@@ -297,11 +297,11 @@ export default function FirstLoginChoice({
                   <input
                     type={showPassword ? "text" : "password"}
                     value={password}
-                    onChange={e => {
+                    onChange={(e) => {
                       setPassword(e.target.value);
                       setError("");
                     }}
-                    onKeyDown={e => e.key === "Enter" && handleAccess()}
+                    onKeyDown={(e) => e.key === "Enter" && handleAccess()}
                     placeholder="Enter password..."
                     className="w-full px-4 py-3 pr-12 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
                   />
@@ -404,7 +404,7 @@ export default function FirstLoginChoice({
               Your Stations
             </h3>
             <div className="space-y-2">
-              {existingStations.map(s => (
+              {existingStations.map((s) => (
                 <button
                   key={s.id}
                   onClick={() => onSelectStation(s.id)}
@@ -442,10 +442,10 @@ export default function FirstLoginChoice({
             </h3>
             <div className="space-y-2">
               {bindings
-                .filter(b => b.active)
-                .map(b => {
+                .filter((b) => b.active)
+                .map((b) => {
                   const localStation = existingStations.find(
-                    s => s.id === b.stationId
+                    (s) => s.id === b.stationId,
                   );
                   return (
                     <button
@@ -454,7 +454,7 @@ export default function FirstLoginChoice({
                         if (localStation) {
                           onSelectStation(b.stationId);
                           import("@/react-app/lib/app-reloader").then(
-                            ({ broadcastReload }) => broadcastReload()
+                            ({ broadcastReload }) => broadcastReload(),
                           );
                         } else {
                           // Auto-create station from binding data then access it
@@ -489,7 +489,7 @@ export default function FirstLoginChoice({
                   );
                 })}
             </div>
-            {bindings.filter(b => b.active).length > 0 && (
+            {bindings.filter((b) => b.active).length > 0 && (
               <div className="my-4 flex items-center gap-3">
                 <div className="flex-1 h-px bg-white/10" />
                 <span className="text-xs text-gray-500">or</span>
@@ -572,7 +572,7 @@ export default function FirstLoginChoice({
               desc: "Password Protected",
               action: () => navigate("/founder"),
             },
-          ].map(f => (
+          ].map((f) => (
             <button
               key={f.label}
               onClick={f.action || undefined}

@@ -35,7 +35,7 @@ export default function DeliveryTracker() {
 
   const addDeliveryRow = () => {
     const newRow: any = {};
-    state.deliveryData.columns.forEach(col => {
+    state.deliveryData.columns.forEach((col) => {
       switch (col.key) {
         case "date":
           newRow.date = new Date().toISOString().split("T")[0];
@@ -75,12 +75,12 @@ export default function DeliveryTracker() {
 
   const addPaymentRow = () => {
     const amount = parseFloat(
-      prompt("Enter payment amount (Ksh):", "0") || "0"
+      prompt("Enter payment amount (Ksh):", "0") || "0",
     );
     const name = prompt("Payment from:", "") || "";
 
     const newRow: any = {};
-    state.deliveryData.columns.forEach(col => {
+    state.deliveryData.columns.forEach((col) => {
       switch (col.key) {
         case "date":
           newRow.date = new Date().toISOString().split("T")[0];
@@ -120,11 +120,11 @@ export default function DeliveryTracker() {
 
   const addCarriedOverDebt = () => {
     const amount = parseFloat(
-      prompt("Carried Over Debt Amount (Ksh):", "0") || "0"
+      prompt("Carried Over Debt Amount (Ksh):", "0") || "0",
     );
 
     const newRow: any = {};
-    state.deliveryData.columns.forEach(col => {
+    state.deliveryData.columns.forEach((col) => {
       switch (col.key) {
         case "date":
           newRow.date = "C/O";
@@ -224,21 +224,21 @@ export default function DeliveryTracker() {
     ];
     if (essentialColumns.includes(column.key)) {
       alert(
-        `Cannot delete the "${column.label}" column as it is essential for calculations.`
+        `Cannot delete the "${column.label}" column as it is essential for calculations.`,
       );
       return;
     }
 
     if (
       confirm(
-        `Delete the "${column.label}" column? This will remove all data in this column.`
+        `Delete the "${column.label}" column? This will remove all data in this column.`,
       )
     ) {
       const updatedColumns = [...state.deliveryData.columns];
       updatedColumns.splice(columnIndex, 1);
 
       // Remove the column data from all rows
-      const updatedRows = state.deliveryData.rows.map(row => {
+      const updatedRows = state.deliveryData.rows.map((row) => {
         const newRow = { ...row };
         delete newRow[column.key];
         return newRow;
@@ -407,16 +407,16 @@ export default function DeliveryTracker() {
   };
 
   const getDeliveryData = () => {
-    const headers = state.deliveryData.columns.map(col => col.label);
+    const headers = state.deliveryData.columns.map((col) => col.label);
     const rows = state.deliveryData.rows
-      .map(r =>
+      .map((r) =>
         state.deliveryData.columns
-          .map(col => {
+          .map((col) => {
             if (col.key === "amount") return `Ksh${formatNumber(r.amount)}`;
             if (col.key === "debt") return `Ksh${formatNumber(r.debt)}`;
             return r[col.key] || "";
           })
-          .join(" | ")
+          .join(" | "),
       )
       .join("\n");
 
@@ -446,7 +446,7 @@ export default function DeliveryTracker() {
             <input
               type="text"
               value={state.deliveredTo}
-              onChange={e =>
+              onChange={(e) =>
                 dispatch({
                   type: "SET_DELIVERY_INFO",
                   payload: { deliveredTo: e.target.value },
@@ -460,7 +460,7 @@ export default function DeliveryTracker() {
             <input
               type="text"
               value={state.totalOrder}
-              onChange={e =>
+              onChange={(e) =>
                 dispatch({
                   type: "SET_DELIVERY_INFO",
                   payload: { totalOrder: e.target.value },
@@ -474,7 +474,7 @@ export default function DeliveryTracker() {
             <input
               type="number"
               value={state.deliveryYear ?? ""}
-              onChange={e =>
+              onChange={(e) =>
                 dispatch({
                   type: "SET_DELIVERY_INFO",
                   payload: { deliveryYear: parseInt(e.target.value) },
@@ -487,7 +487,7 @@ export default function DeliveryTracker() {
             <input
               type="number"
               value={state.petrolPrice ?? ""}
-              onChange={e =>
+              onChange={(e) =>
                 dispatch({
                   type: "SET_PRICES",
                   payload: { petrolPrice: parseFloat(e.target.value) },
@@ -501,7 +501,7 @@ export default function DeliveryTracker() {
             <input
               type="number"
               value={state.dieselPrice ?? ""}
-              onChange={e =>
+              onChange={(e) =>
                 dispatch({
                   type: "SET_PRICES",
                   payload: { dieselPrice: parseFloat(e.target.value) },
@@ -574,13 +574,13 @@ export default function DeliveryTracker() {
             <tbody>
               {state.deliveryData.rows.map((row, index) => (
                 <tr key={index}>
-                  {state.deliveryData.columns.map(col => (
+                  {state.deliveryData.columns.map((col) => (
                     <td key={col.key}>
                       {col.key === "date" ? (
                         <input
                           type="date"
                           value={row.date || ""}
-                          onChange={e =>
+                          onChange={(e) =>
                             updateCell(index, col.key, e.target.value)
                           }
                           className="w-full bg-transparent border-none outline-none"
@@ -589,7 +589,7 @@ export default function DeliveryTracker() {
                         <input
                           type="text"
                           value={row.reg || ""}
-                          onChange={e =>
+                          onChange={(e) =>
                             updateCell(index, col.key, e.target.value)
                           }
                           className="w-full bg-transparent border-none outline-none"
@@ -601,7 +601,7 @@ export default function DeliveryTracker() {
                         ) : (
                           <select
                             value={row.fuel || "Petrol"}
-                            onChange={e =>
+                            onChange={(e) =>
                               updateCell(index, col.key, e.target.value)
                             }
                             className="w-full bg-transparent border-none outline-none"
@@ -614,7 +614,7 @@ export default function DeliveryTracker() {
                         <input
                           type="number"
                           value={row.litres || 0}
-                          onChange={e =>
+                          onChange={(e) =>
                             updateCell(index, col.key, e.target.value)
                           }
                           step="0.1"
@@ -624,7 +624,7 @@ export default function DeliveryTracker() {
                         <input
                           type="number"
                           value={row.amount || 0}
-                          onChange={e =>
+                          onChange={(e) =>
                             updateCell(index, col.key, e.target.value)
                           }
                           step="0.01"
@@ -634,7 +634,7 @@ export default function DeliveryTracker() {
                         <input
                           type="text"
                           value={row.name || ""}
-                          onChange={e =>
+                          onChange={(e) =>
                             updateCell(index, col.key, e.target.value)
                           }
                           className="w-full bg-transparent border-none outline-none"
@@ -645,7 +645,7 @@ export default function DeliveryTracker() {
                         <input
                           type="text"
                           value={row[col.key] || ""}
-                          onChange={e =>
+                          onChange={(e) =>
                             updateCell(index, col.key, e.target.value)
                           }
                           className="w-full bg-transparent border-none outline-none"
@@ -730,7 +730,7 @@ export default function DeliveryTracker() {
           </div>
         </div>
         <div className="history-panel">
-          {Object.keys(state.clients).map(key => (
+          {Object.keys(state.clients).map((key) => (
             <div key={key} className="history-item">
               <span>{key}</span>
               <div className="flex gap-2">

@@ -49,7 +49,7 @@ export async function inviteMember(
   stationId: string,
   email: string,
   role: string = "staff",
-  name?: string
+  name?: string,
 ): Promise<{ success: boolean; error?: string; member?: StationMember }> {
   const supabase = getSupabaseClient();
   const token = genToken();
@@ -81,7 +81,9 @@ export async function inviteMember(
   return { success: true, member, error: inviteUrl };
 }
 
-export async function getStationMembers(stationId: string): Promise<StationMember[]> {
+export async function getStationMembers(
+  stationId: string,
+): Promise<StationMember[]> {
   const supabase = getSupabaseClient();
   const { data, error } = await supabase
     .from("station_members")
@@ -99,10 +101,18 @@ export async function getStationMembers(stationId: string): Promise<StationMembe
   return members;
 }
 
-export async function acceptInvite(token: string): Promise<{ success: boolean; error?: string; stationId?: string }> {
+export async function acceptInvite(
+  token: string,
+): Promise<{ success: boolean; error?: string; stationId?: string }> {
   const supabase = getSupabaseClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { success: false, error: "You must be logged in to accept an invite" };
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user)
+    return {
+      success: false,
+      error: "You must be logged in to accept an invite",
+    };
 
   // Find the invite by token
   const { data: invite, error: findErr } = await supabase
@@ -129,7 +139,9 @@ export async function acceptInvite(token: string): Promise<{ success: boolean; e
   return { success: true, stationId: (invite as StationMember).station_id };
 }
 
-export async function revokeMember(memberId: string): Promise<{ success: boolean; error?: string }> {
+export async function revokeMember(
+  memberId: string,
+): Promise<{ success: boolean; error?: string }> {
   const supabase = getSupabaseClient();
   const { error } = await supabase
     .from("station_members")
@@ -147,7 +159,9 @@ export async function revokeMember(memberId: string): Promise<{ success: boolean
 
 export async function getSharedStations(): Promise<StationMember[]> {
   const supabase = getSupabaseClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   if (!user) return [];
 
   // Get memberships where this user is accepted
@@ -166,7 +180,10 @@ export async function getSharedStations(): Promise<StationMember[]> {
   return (data || []) as StationMember[];
 }
 
-export async function checkPendingInvite(): Promise<{ token: string; stationId: string } | null> {
+export async function checkPendingInvite(): Promise<{
+  token: string;
+  stationId: string;
+} | null> {
   const urlParams = new URLSearchParams(window.location.search);
   const token = urlParams.get("invite");
   if (!token) return null;

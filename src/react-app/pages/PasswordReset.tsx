@@ -20,7 +20,7 @@ export default function PasswordReset() {
   const navigate = useNavigate();
   const { requestPasswordReset, isPending, error, clearError } = useAuth();
   const [step, setStep] = useState<"email" | "sent" | "newpass" | "success">(
-    "email"
+    "email",
   );
   const [email, setEmail] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -58,11 +58,13 @@ export default function PasswordReset() {
     checkRecovery();
 
     // Also listen for the PASSWORD_RECOVERY event (fires on token exchange)
-    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "PASSWORD_RECOVERY" && session && mounted) {
-        setStep("newpass");
-      }
-    });
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        if (event === "PASSWORD_RECOVERY" && session && mounted) {
+          setStep("newpass");
+        }
+      },
+    );
 
     return () => {
       mounted = false;
@@ -98,14 +100,16 @@ export default function PasswordReset() {
     setResetPending(true);
     try {
       const supabase = getSupabaseClient();
-      const { error: updateErr } = await supabase.auth.updateUser({ password: newPassword });
+      const { error: updateErr } = await supabase.auth.updateUser({
+        password: newPassword,
+      });
       setResetPending(false);
       if (updateErr) {
         setLocalError(updateErr.message);
         return;
       }
       setSuccessMsg(
-        "Password reset successfully! You can now sign in with your new password."
+        "Password reset successfully! You can now sign in with your new password.",
       );
       setStep("success");
     } catch (err: any) {
@@ -180,12 +184,12 @@ export default function PasswordReset() {
                   <input
                     type="email"
                     value={email}
-                    onChange={e => {
+                    onChange={(e) => {
                       setEmail(e.target.value);
                       clearError();
                       setLocalError("");
                     }}
-                    onKeyDown={e => e.key === "Enter" && handleRequestCode()}
+                    onKeyDown={(e) => e.key === "Enter" && handleRequestCode()}
                     placeholder="you@example.com"
                     className="w-full pl-10 pr-4 py-3 bg-white/[0.05] border border-white/[0.1] rounded-xl text-white text-sm placeholder-gray-500 focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none transition-all"
                     autoFocus
@@ -218,9 +222,12 @@ export default function PasswordReset() {
                 <p className="text-sm text-white mb-2">
                   We sent a password reset link to:
                 </p>
-                <p className="text-sm font-medium text-amber-400 break-all">{email}</p>
+                <p className="text-sm font-medium text-amber-400 break-all">
+                  {email}
+                </p>
                 <p className="text-xs text-gray-400 mt-3">
-                  Click the link in your email to set a new password. The link expires in 1 hour.
+                  Click the link in your email to set a new password. The link
+                  expires in 1 hour.
                 </p>
               </div>
               <button
@@ -245,7 +252,9 @@ export default function PasswordReset() {
                 Use a different email
               </button>
               {successMsg && (
-                <p className="mt-3 text-xs text-emerald-400 text-center">{successMsg}</p>
+                <p className="mt-3 text-xs text-emerald-400 text-center">
+                  {successMsg}
+                </p>
               )}
             </>
           )}
@@ -266,12 +275,12 @@ export default function PasswordReset() {
                     <input
                       type={showPw ? "text" : "password"}
                       value={newPassword}
-                      onChange={e => {
+                      onChange={(e) => {
                         setNewPassword(e.target.value);
                         setLocalError("");
                         clearError();
                       }}
-                      onKeyDown={e =>
+                      onKeyDown={(e) =>
                         e.key === "Enter" && handleResetPassword()
                       }
                       placeholder="Min 8 characters"
@@ -297,12 +306,12 @@ export default function PasswordReset() {
                     <input
                       type={showConfirm ? "text" : "password"}
                       value={confirmPassword}
-                      onChange={e => {
+                      onChange={(e) => {
                         setConfirmPassword(e.target.value);
                         setLocalError("");
                         clearError();
                       }}
-                      onKeyDown={e =>
+                      onKeyDown={(e) =>
                         e.key === "Enter" && handleResetPassword()
                       }
                       placeholder="Repeat password"

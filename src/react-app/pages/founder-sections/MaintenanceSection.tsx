@@ -42,7 +42,7 @@ interface Props {
   logAudit: (
     e: string,
     d: string,
-    s: "success" | "warning" | "danger" | "info"
+    s: "success" | "warning" | "danger" | "info",
   ) => void;
 }
 
@@ -51,7 +51,7 @@ export default function MaintenanceSection({ logAudit }: Props) {
   const [saved, setSaved] = useState(false);
 
   const update = (k: keyof MaintConfig, v: string | boolean) => {
-    setCfg(p => ({ ...p, [k]: v }));
+    setCfg((p) => ({ ...p, [k]: v }));
     setSaved(false);
   };
 
@@ -62,7 +62,7 @@ export default function MaintenanceSection({ logAudit }: Props) {
     logAudit(
       cfg.enabled ? "Maintenance Enabled" : "Maintenance Config Saved",
       `Mode: ${cfg.enabled ? "ON" : "OFF"}`,
-      cfg.enabled ? "warning" : "info"
+      cfg.enabled ? "warning" : "info",
     );
   };
 
@@ -131,7 +131,7 @@ export default function MaintenanceSection({ logAudit }: Props) {
           </label>
           <textarea
             value={cfg.message}
-            onChange={e => update("message", e.target.value)}
+            onChange={(e) => update("message", e.target.value)}
             rows={3}
             className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.08] rounded-lg text-sm text-white placeholder-gray-600 focus:outline-none focus:border-orange-500/30 resize-none"
           />
@@ -142,7 +142,7 @@ export default function MaintenanceSection({ logAudit }: Props) {
           <input
             type="checkbox"
             checked={cfg.allowFounder}
-            onChange={e => update("allowFounder", e.target.checked)}
+            onChange={(e) => update("allowFounder", e.target.checked)}
             className="rounded accent-orange-500"
           />
           <span className="text-xs text-gray-400">
@@ -159,7 +159,7 @@ export default function MaintenanceSection({ logAudit }: Props) {
             <input
               type="datetime-local"
               value={cfg.scheduledStart}
-              onChange={e => update("scheduledStart", e.target.value)}
+              onChange={(e) => update("scheduledStart", e.target.value)}
               className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.08] rounded-lg text-sm text-white focus:outline-none focus:border-orange-500/30"
             />
           </div>
@@ -170,7 +170,7 @@ export default function MaintenanceSection({ logAudit }: Props) {
             <input
               type="datetime-local"
               value={cfg.scheduledEnd}
-              onChange={e => update("scheduledEnd", e.target.value)}
+              onChange={(e) => update("scheduledEnd", e.target.value)}
               className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.08] rounded-lg text-sm text-white focus:outline-none focus:border-orange-500/30"
             />
           </div>

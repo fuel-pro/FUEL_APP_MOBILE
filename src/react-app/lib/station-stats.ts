@@ -24,12 +24,17 @@ export function getCurrencySymbol(): string {
       if (saved) {
         const parsed = JSON.parse(saved);
         const cc = String(
-          parsed?.countryCode || parsed?.currentCountry || parsed?.country || ""
+          parsed?.countryCode ||
+            parsed?.currentCountry ||
+            parsed?.country ||
+            "",
         ).toUpperCase();
         if (cc && CURRENCY_BY_COUNTRY[cc]) return CURRENCY_BY_COUNTRY[cc];
       }
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   return "KSh"; // default market
 }
 
@@ -42,7 +47,8 @@ export function formatMoney(amount: number): string {
 }
 
 function toNumber(v: unknown): number {
-  const n = typeof v === "string" ? parseFloat(v) : typeof v === "number" ? v : NaN;
+  const n =
+    typeof v === "string" ? parseFloat(v) : typeof v === "number" ? v : NaN;
   return isFinite(n) ? n : 0;
 }
 
@@ -61,7 +67,9 @@ function extractSaleEntries(data: any): any[] {
       }
     }
     if (Array.isArray(data.sales)) out.push(...data.sales);
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   return out;
 }
 
@@ -157,7 +165,10 @@ export function relativeTime(iso: string | number | null | undefined): string {
 
 export function initialsOf(name: string): string {
   try {
-    const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
+    const parts = String(name || "")
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean);
     if (parts.length === 0) return "?";
     if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
     return (parts[0][0] + parts[1][0]).toUpperCase();

@@ -117,7 +117,7 @@ function AuthLayoutContent({
   const [isResizing, setIsResizing] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
   const activeMenuItem = menuItems.find(
-    item => item.path === location.pathname
+    (item) => item.path === location.pathname,
   );
   const isMobile = useIsMobile();
 
@@ -182,7 +182,7 @@ function AuthLayoutContent({
 
           <SidebarContent className="gap-0">
             <SidebarMenu className="px-2 py-1">
-              {menuItems.map(item => {
+              {menuItems.map((item) => {
                 const isActive = location.pathname === item.path;
                 return (
                   <SidebarMenuItem key={item.path}>

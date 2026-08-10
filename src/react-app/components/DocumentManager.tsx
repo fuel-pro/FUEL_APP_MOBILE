@@ -165,7 +165,7 @@ function getFileType(name: string): DocItem["type"] {
 function autoClassify(name: string): string {
   const lower = name.toLowerCase();
   for (const folder of DEFAULT_FOLDERS) {
-    if (folder.autoSort && folder.rules.some(rule => lower.includes(rule))) {
+    if (folder.autoSort && folder.rules.some((rule) => lower.includes(rule))) {
       return folder.id;
     }
   }
@@ -213,7 +213,7 @@ export default function DocumentManager() {
 
   const handleFileUpload = (files: FileList | null) => {
     if (!files) return;
-    Array.from(files).forEach(file => {
+    Array.from(files).forEach((file) => {
       const type = getFileType(file.name);
       const folderId = autoClassify(file.name);
       const newDoc: DocItem = {
@@ -232,13 +232,13 @@ export default function DocumentManager() {
 
   const handleDelete = (id: string) => {
     if (!confirm("Delete this document?")) return;
-    persistDocs(docs.filter(d => d.id !== id));
+    persistDocs(docs.filter((d) => d.id !== id));
     if (previewDoc?.id === id) setPreviewDoc(null);
   };
 
   const toggleStar = (id: string) => {
     persistDocs(
-      docs.map(d => (d.id === id ? { ...d, starred: !d.starred } : d))
+      docs.map((d) => (d.id === id ? { ...d, starred: !d.starred } : d)),
     );
   };
 
@@ -258,17 +258,18 @@ export default function DocumentManager() {
   };
 
   const filteredDocs = docs
-    .filter(d => {
+    .filter((d) => {
       if (activeFolder === "starred") return d.starred;
       if (activeFolder === "uploads")
         return (
-          d.folderId === "uploads" || !folders.find(f => f.id === d.folderId)
+          d.folderId === "uploads" || !folders.find((f) => f.id === d.folderId)
         );
       return d.folderId === activeFolder;
     })
     .filter(
-      d =>
-        !searchQuery || d.name.toLowerCase().includes(searchQuery.toLowerCase())
+      (d) =>
+        !searchQuery ||
+        d.name.toLowerCase().includes(searchQuery.toLowerCase()),
     )
     .sort((a, b) => {
       if (sortBy === "name") return a.name.localeCompare(b.name);
@@ -313,7 +314,7 @@ export default function DocumentManager() {
             ref={fileInputRef}
             type="file"
             multiple
-            onChange={e => {
+            onChange={(e) => {
               handleFileUpload(e.target.files);
               e.target.value = "";
             }}
@@ -321,17 +322,17 @@ export default function DocumentManager() {
           />
 
           <div className="space-y-1 mt-3">
-            {folders.map(folder => {
+            {folders.map((folder) => {
               const count =
                 folder.id === "starred"
-                  ? docs.filter(d => d.starred).length
+                  ? docs.filter((d) => d.starred).length
                   : folder.id === "uploads"
                     ? docs.filter(
-                        d =>
+                        (d) =>
                           d.folderId === "uploads" ||
-                          !folders.find(f => f.id === d.folderId)
+                          !folders.find((f) => f.id === d.folderId),
                       ).length
-                    : docs.filter(d => d.folderId === folder.id).length;
+                    : docs.filter((d) => d.folderId === folder.id).length;
               const isActive = activeFolder === folder.id;
               return (
                 <button
@@ -369,10 +370,10 @@ export default function DocumentManager() {
             <div className="flex gap-2 px-3">
               <input
                 value={newFolderName}
-                onChange={e => setNewFolderName(e.target.value)}
+                onChange={(e) => setNewFolderName(e.target.value)}
                 placeholder="Folder name"
                 className="flex-1 px-2 py-1 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded text-xs dark:text-white"
-                onKeyDown={e => e.key === "Enter" && createFolder()}
+                onKeyDown={(e) => e.key === "Enter" && createFolder()}
                 autoFocus
               />
               <button
@@ -402,14 +403,14 @@ export default function DocumentManager() {
               />
               <input
                 value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
+                onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search documents..."
                 className="w-full pl-9 pr-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:text-white"
               />
             </div>
             <select
               value={sortBy}
-              onChange={e => setSortBy(e.target.value as any)}
+              onChange={(e) => setSortBy(e.target.value as any)}
               className="px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs dark:text-white"
             >
               <option value="date">Date</option>
@@ -444,7 +445,7 @@ export default function DocumentManager() {
                   </p>
                 </div>
               )}
-              {filteredDocs.map(doc => {
+              {filteredDocs.map((doc) => {
                 const FileIcon = FILE_ICONS[doc.type] || FileText;
                 return (
                   <div
@@ -467,7 +468,7 @@ export default function DocumentManager() {
                     </div>
                     <div className="flex items-center gap-1">
                       <button
-                        onClick={e => {
+                        onClick={(e) => {
                           e.stopPropagation();
                           toggleStar(doc.id);
                         }}
@@ -483,7 +484,7 @@ export default function DocumentManager() {
                         />
                       </button>
                       <button
-                        onClick={e => {
+                        onClick={(e) => {
                           e.stopPropagation();
                           setPreviewDoc(doc);
                         }}
@@ -492,7 +493,7 @@ export default function DocumentManager() {
                         <Eye size={14} />
                       </button>
                       <button
-                        onClick={e => {
+                        onClick={(e) => {
                           e.stopPropagation();
                           handleDelete(doc.id);
                         }}
@@ -507,7 +508,7 @@ export default function DocumentManager() {
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {filteredDocs.map(doc => {
+              {filteredDocs.map((doc) => {
                 const FileIcon = FILE_ICONS[doc.type] || FileText;
                 return (
                   <div
@@ -541,7 +542,7 @@ export default function DocumentManager() {
         >
           <div
             className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[80vh] overflow-hidden"
-            onClick={e => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
               <div className="flex items-center gap-2 min-w-0">

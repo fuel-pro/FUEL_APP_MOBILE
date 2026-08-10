@@ -74,119 +74,119 @@ export const useFuelStore = create<FuelState>()(
       pendingMaintenance: [],
       recentActions: [],
 
-      addToCart: item => {
-        set(state => ({ cart: [...state.cart, item] }));
+      addToCart: (item) => {
+        set((state) => ({ cart: [...state.cart, item] }));
         getEventBus().emit(Events.SALE_RECORDED, {
           item,
           cartSize: get().cart.length + 1,
         });
       },
 
-      removeFromCart: index =>
-        set(state => ({ cart: state.cart.filter((_, i) => i !== index) })),
+      removeFromCart: (index) =>
+        set((state) => ({ cart: state.cart.filter((_, i) => i !== index) })),
 
       clearCart: () => set({ cart: [] }),
 
-      setSelectedStation: id => {
+      setSelectedStation: (id) => {
         set({ selectedStation: id });
         getEventBus().emit(Events.STATION_CHANGED, { stationId: id });
       },
 
-      setActiveShift: id => set({ activeShift: id }),
+      setActiveShift: (id) => set({ activeShift: id }),
 
-      setIsOnline: online => set({ isOnline: online }),
+      setIsOnline: (online) => set({ isOnline: online }),
 
-      addNotification: n => {
+      addNotification: (n) => {
         const notif: Notification = {
           ...n,
           read: false,
           id: `notif_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
           timestamp: new Date().toISOString(),
         };
-        set(state => ({
+        set((state) => ({
           notifications: [notif, ...state.notifications].slice(0, 100),
         }));
       },
 
-      markNotificationRead: id =>
-        set(state => ({
-          notifications: state.notifications.map(n =>
-            n.id === id ? { ...n, read: true } : n
+      markNotificationRead: (id) =>
+        set((state) => ({
+          notifications: state.notifications.map((n) =>
+            n.id === id ? { ...n, read: true } : n,
           ),
         })),
 
       clearNotifications: () => set({ notifications: [] }),
 
-      setPriceAlert: alert =>
-        set(state => ({
+      setPriceAlert: (alert) =>
+        set((state) => ({
           priceAlerts: [
-            ...state.priceAlerts.filter(a => a.fuelType !== alert.fuelType),
+            ...state.priceAlerts.filter((a) => a.fuelType !== alert.fuelType),
             alert,
           ],
         })),
 
-      removePriceAlert: fuelType =>
-        set(state => ({
-          priceAlerts: state.priceAlerts.filter(a => a.fuelType !== fuelType),
+      removePriceAlert: (fuelType) =>
+        set((state) => ({
+          priceAlerts: state.priceAlerts.filter((a) => a.fuelType !== fuelType),
         })),
 
-      addPendingMaintenance: id =>
-        set(state => ({
+      addPendingMaintenance: (id) =>
+        set((state) => ({
           pendingMaintenance: [...state.pendingMaintenance, id],
         })),
 
-      removePendingMaintenance: id =>
-        set(state => ({
-          pendingMaintenance: state.pendingMaintenance.filter(m => m !== id),
+      removePendingMaintenance: (id) =>
+        set((state) => ({
+          pendingMaintenance: state.pendingMaintenance.filter((m) => m !== id),
         })),
 
       logAction: (action, detail) => {
         const entry = { action, detail, timestamp: new Date().toISOString() };
-        set(state => ({
+        set((state) => ({
           recentActions: [entry, ...state.recentActions].slice(0, 50),
         }));
       },
     }),
     {
       name: "fuelpro_store_v2",
-      partialize: state => ({
+      partialize: (state) => ({
         selectedStation: state.selectedStation,
         priceAlerts: state.priceAlerts,
-        notifications: state.notifications.filter(n => !n.read).slice(0, 20),
+        notifications: state.notifications.filter((n) => !n.read).slice(0, 20),
       }),
       skipHydration: true, // Prevent SSR/hydration mismatches in StrictMode
-    }
-  )
+    },
+  ),
 );
 
 // ─── Hook to sync BroadcastChannel events into the store ───
 export function useFuelStoreSync() {
-  const addNotification = useFuelStore(s => s.addNotification);
-  const setIsOnline = useFuelStore(s => s.setIsOnline);
-  const logAction = useFuelStore(s => s.logAction);
+  const addNotification = useFuelStore((s) => s.addNotification);
+  const setIsOnline = useFuelStore((s) => s.setIsOnline);
+  const logAction = useFuelStore((s) => s.logAction);
 
   useEffect(() => {
     const bus = getEventBus();
 
     const unsubs = [
-      bus.on(Events.SALE_RECORDED, data => {
+      bus.on(Events.SALE_RECORDED, (data) => {
         addNotification({
           title: "Sale Recorded",
           message: `${data.item?.fuelType || "Fuel"} sale recorded`,
           severity: "success" as const,
         });
       }),
-      bus.on(Events.STATION_CHANGED, data => {
+      bus.on(Events.STATION_CHANGED, (data) => {
         logAction("station_changed", `Switched to station ${data.stationId}`);
       }),
-      bus.on(Events.LOCATION_UPDATED, data => {
+      bus.on(Events.LOCATION_UPDATED, (data) => {
         addNotification({
           title: "Location Updated",
           message: `Now operating in ${data.countryName} (${data.currency})`,
           severity: "info" as const,
         });
       }),
-      bus.on(Events.INVENTORY_CHANGED, data => {
+      bus.on(Events.INVENTORY_CHANGED, (data) => {
         if (data?.belowThreshold) {
           addNotification({
             title: "Low Inventory Alert",
@@ -195,7 +195,7 @@ export function useFuelStoreSync() {
           });
         }
       }),
-      bus.on(Events.MAINTENANCE_DUE, data => {
+      bus.on(Events.MAINTENANCE_DUE, (data) => {
         addNotification({
           title: "Maintenance Due",
           message: `${data.equipmentName} maintenance scheduled`,
@@ -211,7 +211,7 @@ export function useFuelStoreSync() {
     window.addEventListener("offline", handleOffline);
 
     return () => {
-      unsubs.forEach(u => u());
+      unsubs.forEach((u) => u());
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
     };

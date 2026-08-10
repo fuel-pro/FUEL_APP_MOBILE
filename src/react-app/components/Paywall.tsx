@@ -42,7 +42,7 @@ const TIER_ICONS: Record<string, typeof Gift> = {
 };
 
 function formatPhone(phone: string): string {
-  let cleaned = phone.replace(/[\s+\-]/g, "");
+  let cleaned = phone.replace(/[-\s+]/g, "");
   if (cleaned.startsWith("0")) cleaned = "254" + cleaned.slice(1);
   if (cleaned.startsWith("+")) cleaned = cleaned.slice(1);
   return cleaned;
@@ -93,7 +93,7 @@ export default function Paywall({ onClose }: PaywallProps) {
       // In production, this would call the actual M-PESA API
       // For now, simulate a successful payment
       const normalizedPhone = formatPhone(phone);
-      const tierData = TIERS.find(t => t.key === selectedTier);
+      const tierData = TIERS.find((t) => t.key === selectedTier);
       if (!tierData) return;
 
       const receipt = `MPESA${Date.now()}`;
@@ -105,14 +105,14 @@ export default function Paywall({ onClose }: PaywallProps) {
       logSubscriptionAction(
         "activated",
         selectedTier,
-        `M-PESA payment: ${receipt}`
+        `M-PESA payment: ${receipt}`,
       );
       setStep("success");
     }, 3000);
   }, [phone, agreed, selectedTier]);
 
-  const currentTierData = TIERS.find(t => t.key === sub.tier);
-  const selectedTierData = TIERS.find(t => t.key === selectedTier);
+  const currentTierData = TIERS.find((t) => t.key === sub.tier);
+  const selectedTierData = TIERS.find((t) => t.key === selectedTier);
 
   return (
     <div
@@ -131,7 +131,7 @@ export default function Paywall({ onClose }: PaywallProps) {
         padding: 16,
         fontFamily: "system-ui, sans-serif",
       }}
-      onClick={e => e.target === e.currentTarget && onClose()}
+      onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       <div
         ref={modalRef}
@@ -237,7 +237,7 @@ export default function Paywall({ onClose }: PaywallProps) {
                 gap: 12,
               }}
             >
-              {TIERS.map(tier => {
+              {TIERS.map((tier) => {
                 const Icon = TIER_ICONS[tier.key] || Gift;
                 const isCurrent = sub.tier === tier.key;
                 return (
@@ -256,11 +256,11 @@ export default function Paywall({ onClose }: PaywallProps) {
                       flexDirection: "column",
                       gap: 8,
                     }}
-                    onMouseEnter={e => {
+                    onMouseEnter={(e) => {
                       if (selectedTier !== tier.key)
                         e.currentTarget.style.borderColor = "#374151";
                     }}
-                    onMouseLeave={e => {
+                    onMouseLeave={(e) => {
                       if (selectedTier !== tier.key)
                         e.currentTarget.style.borderColor = "#1f2937";
                     }}
@@ -550,7 +550,7 @@ export default function Paywall({ onClose }: PaywallProps) {
               <input
                 type="tel"
                 value={phone}
-                onChange={e => {
+                onChange={(e) => {
                   setPhone(e.target.value);
                   setError("");
                 }}
@@ -593,7 +593,7 @@ export default function Paywall({ onClose }: PaywallProps) {
               <input
                 type="checkbox"
                 checked={agreed}
-                onChange={e => {
+                onChange={(e) => {
                   setAgreed(e.target.checked);
                   setError("");
                 }}

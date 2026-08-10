@@ -74,7 +74,7 @@ export default function LoyaltyCard({
   const drawSimpleQR = (
     ctx: CanvasRenderingContext2D,
     data: string,
-    size: number
+    size: number,
   ) => {
     // Clear canvas
     ctx.fillStyle = "#ffffff";
@@ -98,7 +98,7 @@ export default function LoyaltyCard({
         x + 2 * cellSize,
         y + 2 * cellSize,
         3 * cellSize,
-        3 * cellSize
+        3 * cellSize,
       );
     };
 
@@ -340,14 +340,14 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
       console.error("[QRScanner] Camera error:", e);
       setHasPermission(false);
       setError(
-        "Camera access denied. Please allow camera access to scan QR codes."
+        "Camera access denied. Please allow camera access to scan QR codes.",
       );
     }
   };
 
   const stopCamera = () => {
     if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current.getTracks().forEach((track) => track.stop());
     }
   };
 

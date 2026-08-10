@@ -81,7 +81,7 @@ export default function InviteAccept() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [step, setStep] = useState<"check" | "auth" | "username" | "done">(
-    "check"
+    "check",
   );
 
   // Auth form states
@@ -108,25 +108,25 @@ export default function InviteAccept() {
     // Validate the invite
     if (decoded.expiresAt && new Date(decoded.expiresAt) < new Date()) {
       setError(
-        `This invite expired on ${new Date(decoded.expiresAt).toLocaleDateString()}.`
+        `This invite expired on ${new Date(decoded.expiresAt).toLocaleDateString()}.`,
       );
       return;
     }
 
     // Check if already used (stored in localStorage by invite ID)
     const usedInvites = JSON.parse(
-      localStorage.getItem("fuelpro_used_invites") || "{}"
+      localStorage.getItem("fuelpro_used_invites") || "{}",
     );
     if (usedInvites[decoded.id]) {
       setError(
-        `This invite has already been used by ${usedInvites[decoded.id]}.`
+        `This invite has already been used by ${usedInvites[decoded.id]}.`,
       );
       return;
     }
 
     // Check max uses
     const useCount = parseInt(
-      localStorage.getItem(`fuelpro_invite_uses_${decoded.id}`) || "0"
+      localStorage.getItem(`fuelpro_invite_uses_${decoded.id}`) || "0",
     );
     if (useCount >= (decoded.maxUses || 1)) {
       setError("This invite has reached its maximum uses.");
@@ -195,19 +195,19 @@ export default function InviteAccept() {
     // Track usage in localStorage
     const useCount =
       parseInt(
-        localStorage.getItem(`fuelpro_invite_uses_${invite.id}`) || "0"
+        localStorage.getItem(`fuelpro_invite_uses_${invite.id}`) || "0",
       ) + 1;
     localStorage.setItem(`fuelpro_invite_uses_${invite.id}`, String(useCount));
 
     const usedInvites = JSON.parse(
-      localStorage.getItem("fuelpro_used_invites") || "{}"
+      localStorage.getItem("fuelpro_used_invites") || "{}",
     );
     usedInvites[invite.id] = username;
     localStorage.setItem("fuelpro_used_invites", JSON.stringify(usedInvites));
 
     // Add to team (store in localStorage for the station)
     const teamMembers = JSON.parse(
-      localStorage.getItem("fuelpro_v2_team") || "[]"
+      localStorage.getItem("fuelpro_v2_team") || "[]",
     );
     teamMembers.push({
       id: `mem_${Date.now()}`,
@@ -253,7 +253,7 @@ export default function InviteAccept() {
         });
         localStorage.setItem(
           STORAGE_KEY,
-          JSON.stringify({ stations, version: "3.0" })
+          JSON.stringify({ stations, version: "3.0" }),
         );
       }
     } catch {
@@ -266,7 +266,7 @@ export default function InviteAccept() {
       invite.stationName || "Fuel Station",
       invite.role,
       invite.createdBy,
-      invite.expiresAt
+      invite.expiresAt,
     );
 
     // Store current station context
@@ -275,11 +275,11 @@ export default function InviteAccept() {
       JSON.stringify({
         stationId: invite.stationId || "default",
         role: invite.role,
-      })
+      }),
     );
 
     setSuccess(
-      `Welcome ${username}! You are now ${invite.role} at ${invite.stationName || "the station"}.`
+      `Welcome ${username}! You are now ${invite.role} at ${invite.stationName || "the station"}.`,
     );
     setStep("done");
 
@@ -287,7 +287,7 @@ export default function InviteAccept() {
     setTimeout(() => {
       navigate("/");
       import("@/react-app/lib/app-reloader").then(({ broadcastReload }) =>
-        broadcastReload()
+        broadcastReload(),
       );
     }, 2500);
   };
@@ -409,7 +409,7 @@ export default function InviteAccept() {
                     <input
                       type="email"
                       value={email}
-                      onChange={e => setEmail(e.target.value)}
+                      onChange={(e) => setEmail(e.target.value)}
                       placeholder="you@company.com"
                       className="w-full pl-9 pr-4 py-2.5 bg-white/5 border border-white/20 rounded-xl text-white text-sm placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
                       autoFocus
@@ -428,7 +428,7 @@ export default function InviteAccept() {
                     <input
                       type={showPassword ? "text" : "password"}
                       value={password}
-                      onChange={e => setPassword(e.target.value)}
+                      onChange={(e) => setPassword(e.target.value)}
                       placeholder="Enter your password"
                       className="w-full pl-9 pr-10 py-2.5 bg-white/5 border border-white/20 rounded-xl text-white text-sm placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
                     />
@@ -473,7 +473,7 @@ export default function InviteAccept() {
                     <input
                       type="text"
                       value={regName}
-                      onChange={e => setRegName(e.target.value)}
+                      onChange={(e) => setRegName(e.target.value)}
                       placeholder="John Doe"
                       className="w-full pl-9 pr-4 py-2.5 bg-white/5 border border-white/20 rounded-xl text-white text-sm placeholder-gray-500 focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-all"
                       autoFocus
@@ -492,7 +492,7 @@ export default function InviteAccept() {
                     <input
                       type="email"
                       value={email}
-                      onChange={e => setEmail(e.target.value)}
+                      onChange={(e) => setEmail(e.target.value)}
                       placeholder="you@company.com"
                       className="w-full pl-9 pr-4 py-2.5 bg-white/5 border border-white/20 rounded-xl text-white text-sm placeholder-gray-500 focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-all"
                     />
@@ -510,7 +510,7 @@ export default function InviteAccept() {
                     <input
                       type={showPassword ? "text" : "password"}
                       value={password}
-                      onChange={e => setPassword(e.target.value)}
+                      onChange={(e) => setPassword(e.target.value)}
                       placeholder="Create a password"
                       className="w-full pl-9 pr-10 py-2.5 bg-white/5 border border-white/20 rounded-xl text-white text-sm placeholder-gray-500 focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-all"
                     />
@@ -585,11 +585,11 @@ export default function InviteAccept() {
               </label>
               <input
                 value={username}
-                onChange={e => {
+                onChange={(e) => {
                   setUsername(e.target.value);
                   setError("");
                 }}
-                onKeyDown={e => e.key === "Enter" && handleAccept()}
+                onKeyDown={(e) => e.key === "Enter" && handleAccept()}
                 placeholder="Enter a username..."
                 className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-500 focus:ring-2 focus:ring-green-500 outline-none"
                 autoFocus

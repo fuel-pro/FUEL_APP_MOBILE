@@ -55,7 +55,7 @@ export default function CreditManagement() {
   const [accounts, setAccounts] = useState<CreditAccount[]>(() => {
     try {
       return JSON.parse(
-        localStorage.getItem("fuelpro_credit_accounts") || "[]"
+        localStorage.getItem("fuelpro_credit_accounts") || "[]",
       );
     } catch {
       return defaultAccounts();
@@ -89,18 +89,25 @@ export default function CreditManagement() {
   const saveTx = (t: CreditTransaction[]) => {
     setTransactions(t);
     localStorage.setItem("fuelpro_credit_tx", JSON.stringify(t));
-    cloudStorageService.set("credit_transactions", t, stationId).catch(() => {});
+    cloudStorageService
+      .set("credit_transactions", t, stationId)
+      .catch(() => {});
   };
 
   // Load from cloud on mount (cross-device sync)
   useEffect(() => {
     if (!user) return;
     (async () => {
-      const cloudAccounts =
-        await cloudStorageService.get<CreditAccount[]>("credit_accounts", stationId);
-      if (cloudAccounts && Array.isArray(cloudAccounts)) setAccounts(cloudAccounts);
-      const cloudTx =
-        await cloudStorageService.get<CreditTransaction[]>("credit_transactions", stationId);
+      const cloudAccounts = await cloudStorageService.get<CreditAccount[]>(
+        "credit_accounts",
+        stationId,
+      );
+      if (cloudAccounts && Array.isArray(cloudAccounts))
+        setAccounts(cloudAccounts);
+      const cloudTx = await cloudStorageService.get<CreditTransaction[]>(
+        "credit_transactions",
+        stationId,
+      );
       if (cloudTx && Array.isArray(cloudTx)) setTransactions(cloudTx);
     })();
   }, [user, stationId]);
@@ -108,20 +115,20 @@ export default function CreditManagement() {
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
     return accounts.filter(
-      a =>
+      (a) =>
         a.customerName.toLowerCase().includes(q) ||
         a.phone.includes(q) ||
-        a.vehicleReg.toLowerCase().includes(q)
+        a.vehicleReg.toLowerCase().includes(q),
     );
   }, [accounts, search]);
 
   const totalCredit = accounts.reduce((s, a) => s + a.creditLimit, 0);
   const totalUsed = accounts.reduce((s, a) => s + a.balanceUsed, 0);
   const overdue = accounts.filter(
-    a =>
+    (a) =>
       a.balanceUsed > 0 &&
       new Date().getTime() - new Date(a.lastPayment).getTime() >
-        a.paymentTerms * 86400000
+        a.paymentTerms * 86400000,
   );
 
   const addAccount = () => {
@@ -161,7 +168,7 @@ export default function CreditManagement() {
     };
     saveTx([tx, ...transactions]);
     saveAcc(
-      accounts.map(a =>
+      accounts.map((a) =>
         a.id === accountId
           ? {
               ...a,
@@ -169,8 +176,8 @@ export default function CreditManagement() {
               totalPayments: a.totalPayments + payForm.amount,
               lastPayment: new Date().toISOString().split("T")[0],
             }
-          : a
-      )
+          : a,
+      ),
     );
     setShowPay(null);
     setPayForm({ amount: 0, description: "" });
@@ -188,15 +195,15 @@ export default function CreditManagement() {
     };
     saveTx([tx, ...transactions]);
     saveAcc(
-      accounts.map(a =>
+      accounts.map((a) =>
         a.id === accountId
           ? {
               ...a,
               balanceUsed: a.balanceUsed + amount,
               totalPurchases: a.totalPurchases + amount,
             }
-          : a
-      )
+          : a,
+      ),
     );
   };
 
@@ -256,7 +263,7 @@ export default function CreditManagement() {
           <input
             placeholder="Search credit accounts..."
             value={search}
-            onChange={e => setSearch(e.target.value)}
+            onChange={(e) => setSearch(e.target.value)}
             className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-white"
           />
         </div>
@@ -277,7 +284,7 @@ export default function CreditManagement() {
             <input
               placeholder="Customer Name *"
               value={newAcc.customerName}
-              onChange={e =>
+              onChange={(e) =>
                 setNewAcc({ ...newAcc, customerName: e.target.value })
               }
               className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
@@ -285,13 +292,13 @@ export default function CreditManagement() {
             <input
               placeholder="Phone"
               value={newAcc.phone}
-              onChange={e => setNewAcc({ ...newAcc, phone: e.target.value })}
+              onChange={(e) => setNewAcc({ ...newAcc, phone: e.target.value })}
               className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
             />
             <input
               placeholder="Vehicle Reg"
               value={newAcc.vehicleReg}
-              onChange={e =>
+              onChange={(e) =>
                 setNewAcc({ ...newAcc, vehicleReg: e.target.value })
               }
               className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
@@ -300,7 +307,7 @@ export default function CreditManagement() {
               type="number"
               placeholder="Credit Limit"
               value={newAcc.creditLimit}
-              onChange={e =>
+              onChange={(e) =>
                 setNewAcc({
                   ...newAcc,
                   creditLimit: parseFloat(e.target.value) || 0,
@@ -312,7 +319,7 @@ export default function CreditManagement() {
               type="number"
               placeholder="Payment Terms (days)"
               value={newAcc.paymentTerms}
-              onChange={e =>
+              onChange={(e) =>
                 setNewAcc({
                   ...newAcc,
                   paymentTerms: parseInt(e.target.value) || 30,
@@ -340,7 +347,7 @@ export default function CreditManagement() {
 
       {/* Accounts */}
       <div className="space-y-3">
-        {filtered.map(acc => {
+        {filtered.map((acc) => {
           const pct = (acc.balanceUsed / acc.creditLimit) * 100;
           const isOver = pct > 90;
           const isDue =
@@ -414,7 +421,7 @@ export default function CreditManagement() {
                     type="number"
                     placeholder="Amount"
                     value={payForm.amount || ""}
-                    onChange={e =>
+                    onChange={(e) =>
                       setPayForm({
                         ...payForm,
                         amount: parseFloat(e.target.value) || 0,
@@ -425,7 +432,7 @@ export default function CreditManagement() {
                   <input
                     placeholder="Description"
                     value={payForm.description}
-                    onChange={e =>
+                    onChange={(e) =>
                       setPayForm({ ...payForm, description: e.target.value })
                     }
                     className="flex-1 px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"

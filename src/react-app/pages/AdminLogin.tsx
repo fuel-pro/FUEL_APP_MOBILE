@@ -130,7 +130,7 @@ export default function AdminLogin() {
                 <input
                   type="email"
                   value={email}
-                  onChange={e => setEmail(e.target.value)}
+                  onChange={(e) => setEmail(e.target.value)}
                   placeholder="admin@fuelpro.app"
                   className="w-full pl-10 pr-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-700 focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all"
                   disabled={isSubmitting}
@@ -151,7 +151,7 @@ export default function AdminLogin() {
                 <input
                   type={showPassword ? "text" : "password"}
                   value={password}
-                  onChange={e => setPassword(e.target.value)}
+                  onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter your password"
                   className="w-full pl-10 pr-12 py-3 border border-gray-200 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-700 focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all"
                   disabled={isSubmitting}
@@ -175,7 +175,7 @@ export default function AdminLogin() {
                 <input
                   type="text"
                   value={mfaCode}
-                  onChange={e =>
+                  onChange={(e) =>
                     setMfaCode(e.target.value.replace(/\D/g, "").slice(0, 6))
                   }
                   placeholder="Enter 6-digit code"

@@ -52,27 +52,27 @@ type MenuItem = {
   badge?: string;
 };
 
-type ActiveView = 
-  | 'dashboard'
-  | 'pos'
-  | 'products'
-  | 'inventory'
-  | 'inventory-adjustments'
-  | 'inventory-transfers'
-  | 'inventory-counts'
-  | 'inventory-wastage'
-  | 'sales'
-  | 'sales-invoices'
-  | 'sales-terminal'
-  | 'purchases'
-  | 'purchases-orders'
-  | 'purchases-suppliers'
-  | 'customers'
-  | 'expenses'
-  | 'expenses-categories'
-  | 'reports'
-  | 'settings'
-  | 'settings-integrations';
+type ActiveView =
+  | "dashboard"
+  | "pos"
+  | "products"
+  | "inventory"
+  | "inventory-adjustments"
+  | "inventory-transfers"
+  | "inventory-counts"
+  | "inventory-wastage"
+  | "sales"
+  | "sales-invoices"
+  | "sales-terminal"
+  | "purchases"
+  | "purchases-orders"
+  | "purchases-suppliers"
+  | "customers"
+  | "expenses"
+  | "expenses-categories"
+  | "reports"
+  | "settings"
+  | "settings-integrations";
 
 const MENU_STRUCTURE: MenuSection[] = [
   {
@@ -88,9 +88,7 @@ const MENU_STRUCTURE: MenuSection[] = [
   {
     title: "Catalog",
     icon: Package,
-    items: [
-      { label: "Products", key: "products" },
-    ],
+    items: [{ label: "Products", key: "products" }],
   },
   {
     title: "Stock Management",
@@ -212,9 +210,12 @@ const PlaceholderModule = ({ title }: { title: string }) => (
 // Real component renderers
 const renderModule = (view: ActiveView) => {
   switch (view) {
-    case "dashboard": return <EnhancedDashboard />;
-    case "pos": return <AdvancedPOS />;
-    case "products": return <ProductsManagement />;
+    case "dashboard":
+      return <EnhancedDashboard />;
+    case "pos":
+      return <AdvancedPOS />;
+    case "products":
+      return <ProductsManagement />;
     case "inventory-adjustments":
     case "inventory-transfers":
     case "inventory-counts":
@@ -241,10 +242,26 @@ const renderModule = (view: ActiveView) => {
       return (
         <div className="p-6">
           <h1 className="text-2xl font-bold text-white mb-2">Integrations</h1>
-          <p className="text-gray-400 mb-6">Connect your business with payment processors.</p>
+          <p className="text-gray-400 mb-6">
+            Connect your business with payment processors.
+          </p>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <IntegrationCard icon={Fuel} name="M-PESA" type="Payment" description="Accept mobile money payments via Safaricom M-PESA." status="disconnected" onSetup={() => {}} />
-            <IntegrationCard icon={Fuel} name="Kopo Kopo" type="Payment" description="Accept payments via Kopo Kopo till." status="disconnected" onSetup={() => {}} />
+            <IntegrationCard
+              icon={Fuel}
+              name="M-PESA"
+              type="Payment"
+              description="Accept mobile money payments via Safaricom M-PESA."
+              status="disconnected"
+              onSetup={() => {}}
+            />
+            <IntegrationCard
+              icon={Fuel}
+              name="Kopo Kopo"
+              type="Payment"
+              description="Accept payments via Kopo Kopo till."
+              status="disconnected"
+              onSetup={() => {}}
+            />
           </div>
         </div>
       );
@@ -265,7 +282,7 @@ const IntegrationCard = ({
   name: string;
   type: string;
   description: string;
-  status: 'connected' | 'disconnected';
+  status: "connected" | "disconnected";
   onSetup: () => void;
 }) => (
   <div className="bg-white/5 border border-white/10 rounded-xl p-6">
@@ -302,7 +319,9 @@ const IntegrationCard = ({
 // Main Component
 export default function BusinessSuite() {
   const [activeView, setActiveView] = useState<ActiveView>("dashboard");
-  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>(() => {
+  const [expandedSections, setExpandedSections] = useState<
+    Record<string, boolean>
+  >(() => {
     const initial: Record<string, boolean> = {};
     MENU_STRUCTURE.forEach((section) => {
       initial[section.title] = true;
@@ -406,9 +425,7 @@ export default function BusinessSuite() {
       )}
 
       {/* Main content */}
-      <main className="flex-1 overflow-y-auto">
-        {renderContent()}
-      </main>
+      <main className="flex-1 overflow-y-auto">{renderContent()}</main>
     </div>
   );
 }

@@ -8,64 +8,64 @@ This document describes the open-source integrations added to the FuelPro applic
 
 ### 1. Analytics & Monitoring
 
-| Integration | Description | GitHub |
-|------------|-------------|--------|
-| **PostHog** | Product analytics with session recording | [posthog/posthog](https://github.com/posthog/posthog) |
-| **Umami** | Privacy-focused web analytics | [umami-software/umami](https://github.com/umami-software/umami) |
-| **GlitchTip** | Error tracking (Sentry alternative) | [glitchtip/glitchtip](https://github.com/glitchtip/glitchtip) |
+| Integration   | Description                              | GitHub                                                          |
+| ------------- | ---------------------------------------- | --------------------------------------------------------------- |
+| **PostHog**   | Product analytics with session recording | [posthog/posthog](https://github.com/posthog/posthog)           |
+| **Umami**     | Privacy-focused web analytics            | [umami-software/umami](https://github.com/umami-software/umami) |
+| **GlitchTip** | Error tracking (Sentry alternative)      | [glitchtip/glitchtip](https://github.com/glitchtip/glitchtip)   |
 
 ### 2. Customer Communication
 
-| Integration | Description | GitHub |
-|------------|-------------|--------|
+| Integration  | Description                    | GitHub                                                    |
+| ------------ | ------------------------------ | --------------------------------------------------------- |
 | **Chatwoot** | Live chat and customer support | [chatwoot/chatwoot](https://github.com/chatwoot/chatwoot) |
 
 ### 3. Payment Gateways
 
-| Integration | Description | Region |
-|------------|-------------|--------|
-| **M-PESA** | Mobile money payments | Kenya, East Africa |
-| **Flutterwave** | Pan-African payments | Africa |
-| **Stripe** | Global payments | Worldwide |
-| **Paystack** | Nigerian payments | Nigeria |
+| Integration     | Description           | Region             |
+| --------------- | --------------------- | ------------------ |
+| **M-PESA**      | Mobile money payments | Kenya, East Africa |
+| **Flutterwave** | Pan-African payments  | Africa             |
+| **Stripe**      | Global payments       | Worldwide          |
+| **Paystack**    | Nigerian payments     | Nigeria            |
 
 ### 4. AI & Machine Learning
 
-| Integration | Description | GitHub |
-|------------|-------------|--------|
-| **OpenAI** | GPT-4, GPT-3.5 | [openai/openai-node](https://github.com/openai/openai-node) |
-| **Anthropic Claude** | Claude AI | Official SDK |
-| **Google Gemini** | Gemini Pro | Official SDK |
-| **Ollama** | Local LLM | [ollama/ollama](https://github.com/ollama/ollama) |
+| Integration          | Description    | GitHub                                                      |
+| -------------------- | -------------- | ----------------------------------------------------------- |
+| **OpenAI**           | GPT-4, GPT-3.5 | [openai/openai-node](https://github.com/openai/openai-node) |
+| **Anthropic Claude** | Claude AI      | Official SDK                                                |
+| **Google Gemini**    | Gemini Pro     | Official SDK                                                |
+| **Ollama**           | Local LLM      | [ollama/ollama](https://github.com/ollama/ollama)           |
 
 ### 5. Notifications
 
-| Channel | Providers |
-|---------|-----------|
-| **Email** | SendGrid, Resend, Mailgun |
-| **SMS** | Twilio, Africa's Talking, Vonage |
-| **Push** | Firebase Cloud Messaging, OneSignal |
-| **WhatsApp** | Twilio WhatsApp |
+| Channel      | Providers                           |
+| ------------ | ----------------------------------- |
+| **Email**    | SendGrid, Resend, Mailgun           |
+| **SMS**      | Twilio, Africa's Talking, Vonage    |
+| **Push**     | Firebase Cloud Messaging, OneSignal |
+| **WhatsApp** | Twilio WhatsApp                     |
 
 ### 6. Data Export & Reporting
 
-| Format | Description |
-|--------|-------------|
+| Format           | Description                             |
+| ---------------- | --------------------------------------- |
 | **Excel (XLSX)** | Full spreadsheet export with formatting |
-| **CSV** | Simple tabular data export |
-| **PDF** | Professional report generation |
-| **JSON** | Structured data export |
-| **XML** | Structured data export |
-| **HTML** | Styled table export |
-| **Print** | Optimized print layout |
+| **CSV**          | Simple tabular data export              |
+| **PDF**          | Professional report generation          |
+| **JSON**         | Structured data export                  |
+| **XML**          | Structured data export                  |
+| **HTML**         | Styled table export                     |
+| **Print**        | Optimized print layout                  |
 
 ### 7. Offline & Sync
 
-| Feature | Description |
-|---------|-------------|
-| **IndexedDB** | Local data storage |
-| **Service Worker** | Offline support |
-| **Background Sync** | Automatic sync when online |
+| Feature                 | Description                   |
+| ----------------------- | ----------------------------- |
+| **IndexedDB**           | Local data storage            |
+| **Service Worker**      | Offline support               |
+| **Background Sync**     | Automatic sync when online    |
 | **Conflict Resolution** | Multiple strategies supported |
 
 ## Files Added
@@ -107,7 +107,7 @@ VITE_OPENAI_API_KEY=sk-your-key
 ### 2. Initialize Integrations
 
 ```typescript
-import { initializeAllIntegrations } from '@/react-app/lib';
+import { initializeAllIntegrations } from "@/react-app/lib";
 
 await initializeAllIntegrations();
 ```
@@ -115,80 +115,99 @@ await initializeAllIntegrations();
 ### 3. Use Analytics
 
 ```typescript
-import { useAnalytics, trackAction } from '@/react-app/lib';
+import { useAnalytics, trackAction } from "@/react-app/lib";
 
 // Track an event
-trackAction('sale', 'completed', 'Sale completed', 150.00);
+trackAction("sale", "completed", "Sale completed", 150.0);
 
 // Or use the hook
 const { capture } = useAnalytics();
-capture('button_clicked', { button_id: 'submit' });
+capture("button_clicked", { button_id: "submit" });
 ```
 
 ### 4. Process Payments
 
 ```typescript
-import { paymentManager } from '@/react-app/lib';
+import { paymentManager } from "@/react-app/lib";
 
-const result = await paymentManager.processPayment('mpesa', {
+const result = await paymentManager.processPayment("mpesa", {
   amount: 1000,
-  currency: 'KES',
-  customerPhone: '+254712345678',
-  reference: 'SALE-001',
+  currency: "KES",
+  customerPhone: "+254712345678",
+  reference: "SALE-001",
 });
 ```
 
 ### 5. Send Notifications
 
 ```typescript
-import { notificationManager } from '@/react-app/lib';
+import { notificationManager } from "@/react-app/lib";
 
 // Send SMS
-await notificationManager.send('sms', '+254712345678', 'Your fuel order is ready!');
+await notificationManager.send(
+  "sms",
+  "+254712345678",
+  "Your fuel order is ready!",
+);
 
 // Send Email
-await notificationManager.send('email', 'customer@example.com', 'Your receipt', {
-  subject: 'Receipt for Order #123',
-});
+await notificationManager.send(
+  "email",
+  "customer@example.com",
+  "Your receipt",
+  {
+    subject: "Receipt for Order #123",
+  },
+);
 ```
 
 ### 6. Export Data
 
 ```typescript
-import { exportService } from '@/react-app/lib';
+import { exportService } from "@/react-app/lib";
 
 const blob = await exportService.exportToExcel(salesData, {
-  filename: 'sales-report',
-  sheetName: 'Sales',
+  filename: "sales-report",
+  sheetName: "Sales",
 });
 
-exportService.downloadBlob(blob, 'sales-report.xlsx');
+exportService.downloadBlob(blob, "sales-report.xlsx");
 ```
 
 ### 7. Use Offline Storage
 
 ```typescript
-import { syncService } from '@/react-app/lib';
+import { syncService } from "@/react-app/lib";
 
 // Create with offline support
-const sale = await syncService.create('sales', {
-  fuel_type: 'diesel',
+const sale = await syncService.create("sales", {
+  fuel_type: "diesel",
   quantity: 50,
   amount: 7500,
 });
 
 // Works offline - syncs when online
-const allSales = await syncService.getAll('sales');
+const allSales = await syncService.getAll("sales");
 ```
 
 ### 8. AI Assistant
 
 ```typescript
-import { aiClient, FUELPRO_PROMPTS } from '@/react-app/lib';
+import { aiClient, FUELPRO_PROMPTS } from "@/react-app/lib";
 
-const response = await aiClient.chat('openai', [
-  { id: '1', role: 'system', content: FUELPRO_PROMPTS.salesReport, timestamp: Date.now() },
-  { id: '2', role: 'user', content: 'Generate a sales report for today', timestamp: Date.now() },
+const response = await aiClient.chat("openai", [
+  {
+    id: "1",
+    role: "system",
+    content: FUELPRO_PROMPTS.salesReport,
+    timestamp: Date.now(),
+  },
+  {
+    id: "2",
+    role: "user",
+    content: "Generate a sales report for today",
+    timestamp: Date.now(),
+  },
 ]);
 ```
 
@@ -235,7 +254,7 @@ VITE_GOOGLE_API_KEY=
 Check which features are available:
 
 ```typescript
-import { getFeatureFlags, getAvailablePaymentProviders } from '@/react-app/lib';
+import { getFeatureFlags, getAvailablePaymentProviders } from "@/react-app/lib";
 
 const flags = getFeatureFlags();
 // { analytics: true, chat: true, mpesa: true, ... }
@@ -272,6 +291,7 @@ All integrations respect user privacy:
 ## Support
 
 For issues or questions:
+
 - GitHub Issues: https://github.com/fuel-pro/FUEL_APP_MOBILE/issues
 - Documentation: https://fuelpro.com/docs
 

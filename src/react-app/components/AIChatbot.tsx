@@ -72,7 +72,7 @@ export default function AIChatbot() {
     "connected" | "error" | "checking"
   >("connected");
   const [lastFailedMessage, setLastFailedMessage] = useState<string | null>(
-    null
+    null,
   );
   const [retryCount, setRetryCount] = useState(0);
 
@@ -93,8 +93,8 @@ export default function AIChatbot() {
 
     // Available Tabs Configuration (for AI to know what features exist)
     context.availableTabs = state.tabConfigurations
-      .filter(t => t.visible)
-      .map(t => ({ id: t.id, name: t.label, description: t.description }));
+      .filter((t) => t.visible)
+      .map((t) => ({ id: t.id, name: t.label, description: t.description }));
 
     // Company Information (complete)
     context.company = {
@@ -142,23 +142,23 @@ export default function AIChatbot() {
     // TODAY'S SALES - Full pump details
     const pmsTotal = state.pmsPumps.reduce(
       (sum, p) => sum + (Number(p.salesKsh) || 0),
-      0
+      0,
     );
     const agoTotal = state.agoPumps.reduce(
       (sum, p) => sum + (Number(p.salesKsh) || 0),
-      0
+      0,
     );
     const pmsLitres = state.pmsPumps.reduce(
       (sum, p) => sum + (Number(p.salesL) || 0),
-      0
+      0,
     );
     const agoLitres = state.agoPumps.reduce(
       (sum, p) => sum + (Number(p.salesL) || 0),
-      0
+      0,
     );
     const totalExpenses = state.expenses.reduce(
       (sum, e) => sum + (Number(e.amount) || 0),
-      0
+      0,
     );
 
     context.todaySales = {
@@ -192,15 +192,15 @@ export default function AIChatbot() {
       const deliveries = state.deliveryData.rows;
       const totalSupplied = deliveries.reduce(
         (sum, d) => sum + (Number(d.amount) || 0),
-        0
+        0,
       );
       const totalDebt = deliveries.reduce(
         (sum, d) => sum + (Number(d.debt) || 0),
-        0
+        0,
       );
-      const uniqueCustomers = [...new Set(deliveries.map(d => d.name))].filter(
-        n => n
-      );
+      const uniqueCustomers = [
+        ...new Set(deliveries.map((d) => d.name)),
+      ].filter((n) => n);
 
       context.deliveryTracker = {
         totalRecords: deliveries.length,
@@ -225,10 +225,10 @@ export default function AIChatbot() {
           balance: data.balance || 0,
           deliveryCount: data.deliveries?.length || 0,
           recentDeliveries: data.deliveries?.slice(-3),
-        })
+        }),
       );
 
-      const clientsWithDebt = clientsList.filter(c => c.balance > 0);
+      const clientsWithDebt = clientsList.filter((c) => c.balance > 0);
 
       context.clients = {
         totalClients: clientsList.length,
@@ -246,7 +246,7 @@ export default function AIChatbot() {
       currentItems: state.invoiceItems,
       currentTotal: state.invoiceItems.reduce(
         (sum, item) => sum + (Number(item.total) || 0),
-        0
+        0,
       ),
       invoiceCounter: state.invoiceCounter,
       invoiceSettings: state.invoiceSettings,
@@ -266,15 +266,15 @@ export default function AIChatbot() {
     if (state.offloadingRecords.length > 0) {
       const totalOffloaded = state.offloadingRecords.reduce(
         (sum, r) => sum + (Number(r.quantity) || 0),
-        0
+        0,
       );
       const totalCost = state.offloadingRecords.reduce(
         (sum, r) => sum + (Number(r.totalAmount) || 0),
-        0
+        0,
       );
       const suppliers = [
-        ...new Set(state.offloadingRecords.map(r => r.supplier)),
-      ].filter(s => s);
+        ...new Set(state.offloadingRecords.map((r) => r.supplier)),
+      ].filter((s) => s);
 
       context.offloading = {
         totalRecords: state.offloadingRecords.length,
@@ -289,7 +289,7 @@ export default function AIChatbot() {
     if (state.mpesaTransactions.length > 0) {
       const totalMpesa = state.mpesaTransactions.reduce(
         (sum, t) => sum + (Number(t.amount) || 0),
-        0
+        0,
       );
       context.mpesaTransactions = {
         totalTransactions: state.mpesaTransactions.length,
@@ -302,16 +302,16 @@ export default function AIChatbot() {
     if (state.employees.length > 0) {
       const totalPayroll = state.employees.reduce(
         (sum, e) => sum + (Number(e.basicSalary) || 0),
-        0
+        0,
       );
-      const activeEmployees = state.employees.filter(e => e.isActive);
+      const activeEmployees = state.employees.filter((e) => e.isActive);
 
       context.payroll = {
         totalEmployees: state.employees.length,
         activeEmployees: activeEmployees.length,
         totalMonthlyPayroll: totalPayroll,
-        positions: [...new Set(state.employees.map(e => e.position))].filter(
-          r => r
+        positions: [...new Set(state.employees.map((e) => e.position))].filter(
+          (r) => r,
         ),
         employees: state.employees,
         payrollRecords: state.payrollRecords.slice(-20),
@@ -321,7 +321,7 @@ export default function AIChatbot() {
     // SALES HISTORY - Historical records
     if (Object.keys(state.salesHistory).length > 0) {
       const salesDates = Object.keys(state.salesHistory).sort();
-      const recentSales = salesDates.slice(-10).map(key => ({
+      const recentSales = salesDates.slice(-10).map((key) => ({
         key,
         ...state.salesHistory[key],
       }));
@@ -528,7 +528,7 @@ export default function AIChatbot() {
     };
 
     if (!isRetry) {
-      setMessages(prev => [...prev, userMessage]);
+      setMessages((prev) => [...prev, userMessage]);
     }
     setInputMessage("");
     setIsLoading(true);
@@ -539,7 +539,7 @@ export default function AIChatbot() {
       const businessContext = buildBusinessContext();
 
       // Simulate processing delay for realistic feel
-      await new Promise(r => setTimeout(r, 800 + Math.random() * 600));
+      await new Promise((r) => setTimeout(r, 800 + Math.random() * 600));
 
       // Generate local AI response
       const response = generateLocalResponse(message, businessContext);
@@ -557,7 +557,7 @@ export default function AIChatbot() {
         ],
       };
 
-      setMessages(prev => [...prev, assistantMessage]);
+      setMessages((prev) => [...prev, assistantMessage]);
       setConnectionStatus("connected");
       setLastFailedMessage(null);
       setRetryCount(0);
@@ -583,7 +583,7 @@ export default function AIChatbot() {
           "Business overview",
         ],
       };
-      setMessages(prev => [...prev, errorMessage]);
+      setMessages((prev) => [...prev, errorMessage]);
       setConnectionStatus("error");
       setLastFailedMessage(message);
     } finally {
@@ -593,9 +593,9 @@ export default function AIChatbot() {
 
   const retryLastMessage = () => {
     if (lastFailedMessage && retryCount < 3) {
-      setRetryCount(prev => prev + 1);
+      setRetryCount((prev) => prev + 1);
       // Remove the last error message before retrying
-      setMessages(prev => prev.filter((_, idx) => idx !== prev.length - 1));
+      setMessages((prev) => prev.filter((_, idx) => idx !== prev.length - 1));
       sendMessage(lastFailedMessage, true);
     }
   };
@@ -798,7 +798,7 @@ export default function AIChatbot() {
 
           {/* Messages */}
           <div className="flex-1 p-4 overflow-y-auto h-[calc(650px-190px)] space-y-4">
-            {messages.map(message => (
+            {messages.map((message) => (
               <div
                 key={message.id}
                 className={`flex gap-3 ${message.type === "user" ? "flex-row-reverse" : ""}`}
@@ -944,7 +944,7 @@ export default function AIChatbot() {
                 <input
                   type="text"
                   value={inputMessage}
-                  onChange={e => setInputMessage(e.target.value)}
+                  onChange={(e) => setInputMessage(e.target.value)}
                   placeholder="Ask about sales, debts, M-PESA, payroll..."
                   className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 text-sm"
                   disabled={isLoading}

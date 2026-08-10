@@ -34,10 +34,10 @@ export default function ReportsCenter() {
   const [activeReport, setActiveReport] = useState<ReportType>("overall");
   const [reportPeriod, setReportPeriod] = useState<ReportPeriod>("daily");
   const [startDate, setStartDate] = useState(
-    new Date().toISOString().split("T")[0]
+    new Date().toISOString().split("T")[0],
   );
   const [endDate, setEndDate] = useState(
-    new Date().toISOString().split("T")[0]
+    new Date().toISOString().split("T")[0],
   );
 
   // Helper function to filter data by date range
@@ -46,7 +46,7 @@ export default function ReportsCenter() {
     const end = new Date(endDate);
     end.setHours(23, 59, 59, 999); // Include full end date
 
-    return data.filter(item => {
+    return data.filter((item) => {
       const itemDate = new Date(item[dateField]);
       return itemDate >= start && itemDate <= end;
     });
@@ -56,7 +56,7 @@ export default function ReportsCenter() {
   const groupByPeriod = (data: any[], dateField: string = "date") => {
     const grouped: { [key: string]: any[] } = {};
 
-    data.forEach(item => {
+    data.forEach((item) => {
       const date = new Date(item[dateField]);
       let key = "";
 
@@ -64,10 +64,11 @@ export default function ReportsCenter() {
         case "daily":
           key = date.toISOString().split("T")[0];
           break;
-        case "weekly":
+        case "weekly": {
           const week = getWeekNumber(date);
           key = `${date.getFullYear()}-W${week}`;
           break;
+        }
         case "monthly":
           key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
           break;
@@ -110,11 +111,11 @@ export default function ReportsCenter() {
     const totalSalesRevenue = filteredSales.reduce((sum, sale) => {
       const pmsRevenue = (sale.pmsPumps || []).reduce(
         (pmsSum: number, pump: any) => pmsSum + (pump.salesKsh || 0),
-        0
+        0,
       );
       const agoRevenue = (sale.agoPumps || []).reduce(
         (agoSum: number, pump: any) => agoSum + (pump.salesKsh || 0),
-        0
+        0,
       );
       const posRevenue =
         (sale.posSales?.pmsAmount || 0) + (sale.posSales?.agoAmount || 0);
@@ -127,7 +128,7 @@ export default function ReportsCenter() {
     const offloadingRecords = filterByDateRange(state.offloadingRecords);
     const totalPurchases = offloadingRecords.reduce(
       (sum, offload) => sum + (offload.totalAmount || 0),
-      0
+      0,
     );
     const inputVAT = calculateVAT(totalPurchases);
 
@@ -244,7 +245,7 @@ export default function ReportsCenter() {
             netAmount: acc.netAmount + t.netAmount,
             quantity: acc.quantity + t.quantity,
           }),
-          { grossAmount: 0, vatAmount: 0, netAmount: 0, quantity: 0 }
+          { grossAmount: 0, vatAmount: 0, netAmount: 0, quantity: 0 },
         );
 
         return { date, transactions, totals };
@@ -260,23 +261,23 @@ export default function ReportsCenter() {
 
     const totalTransactions = dailySales.reduce(
       (sum, day) => sum + day.transactions.length,
-      0
+      0,
     );
     const totalGross = dailySales.reduce(
       (sum, day) => sum + day.totals.grossAmount,
-      0
+      0,
     );
     const totalVAT = dailySales.reduce(
       (sum, day) => sum + day.totals.vatAmount,
-      0
+      0,
     );
     const totalNet = dailySales.reduce(
       (sum, day) => sum + day.totals.netAmount,
-      0
+      0,
     );
     const totalLitres = dailySales.reduce(
       (sum, day) => sum + day.totals.quantity,
-      0
+      0,
     );
 
     return {
@@ -323,7 +324,7 @@ export default function ReportsCenter() {
             sum +
             (sale.expenses || []).reduce(
               (expSum: number, exp: any) => expSum + (exp.amount || 0),
-              0
+              0,
             )
           );
         }, 0);
@@ -344,7 +345,7 @@ export default function ReportsCenter() {
           breakdown: expenseBreakdown,
           transactionCount: sales.length,
         };
-      }
+      },
     );
 
     return expensesData.sort((a, b) => a.period.localeCompare(b.period));
@@ -361,11 +362,11 @@ export default function ReportsCenter() {
         const totalRevenue = sales.reduce((sum, sale) => {
           const pmsRevenue = (sale.pmsPumps || []).reduce(
             (pmsSum: number, pump: any) => pmsSum + (pump.salesKsh || 0),
-            0
+            0,
           );
           const agoRevenue = (sale.agoPumps || []).reduce(
             (agoSum: number, pump: any) => agoSum + (pump.salesKsh || 0),
-            0
+            0,
           );
           // Include POS sales
           const posRevenue =
@@ -378,14 +379,14 @@ export default function ReportsCenter() {
             sum +
             (sale.expenses || []).reduce(
               (expSum: number, exp: any) => expSum + (exp.amount || 0),
-              0
+              0,
             )
           );
         }, 0);
 
         const tillPayments = sales.reduce(
           (sum, sale) => sum + (sale.tillPayment || 0),
-          0
+          0,
         );
         const grossProfit = totalRevenue - totalExpenses;
         const netProfit = grossProfit;
@@ -401,7 +402,7 @@ export default function ReportsCenter() {
           netProfit,
           profitMargin,
         };
-      }
+      },
     );
 
     return profitLossData.sort((a, b) => a.period.localeCompare(b.period));
@@ -417,11 +418,11 @@ export default function ReportsCenter() {
     const totalSalesRevenue = filteredSales.reduce((sum, sale) => {
       const pmsRevenue = (sale.pmsPumps || []).reduce(
         (pmsSum: number, pump: any) => pmsSum + (pump.salesKsh || 0),
-        0
+        0,
       );
       const agoRevenue = (sale.agoPumps || []).reduce(
         (agoSum: number, pump: any) => agoSum + (pump.salesKsh || 0),
-        0
+        0,
       );
       // Include POS sales
       const posRevenue =
@@ -441,32 +442,32 @@ export default function ReportsCenter() {
         sum +
         (sale.expenses || []).reduce(
           (expSum: number, exp: any) => expSum + (exp.amount || 0),
-          0
+          0,
         )
       );
     }, 0);
 
     const totalDeliveryRevenue = deliveryRecords.reduce(
       (sum, delivery) => sum + (delivery.amount || 0),
-      0
+      0,
     );
     const totalOffloadingCosts = offloadingRecords.reduce(
       (sum, offload) => sum + (offload.totalAmount || 0),
-      0
+      0,
     );
     const totalTillPayments = filteredSales.reduce(
       (sum, sale) => sum + (sale.tillPayment || 0),
-      0
+      0,
     );
 
     const totalFuelSold = filteredSales.reduce((sum, sale) => {
       const pmsLitres = (sale.pmsPumps || []).reduce(
         (pmsSum: number, pump: any) => pmsSum + (pump.salesL || 0),
-        0
+        0,
       );
       const agoLitres = (sale.agoPumps || []).reduce(
         (agoSum: number, pump: any) => agoSum + (pump.salesL || 0),
-        0
+        0,
       );
       // Include POS fuel sales
       const posLitres =
@@ -476,7 +477,7 @@ export default function ReportsCenter() {
 
     const totalFuelPurchased = offloadingRecords.reduce(
       (sum, offload) => sum + (offload.quantity || 0),
-      0
+      0,
     );
 
     const grossRevenue = totalSalesRevenue + totalDeliveryRevenue;
@@ -600,7 +601,7 @@ export default function ReportsCenter() {
         `Generated: ${new Date().toLocaleString("en-KE")}`,
         pageWidth / 2,
         y,
-        { align: "center" }
+        { align: "center" },
       );
 
       return y + 10;
@@ -615,13 +616,13 @@ export default function ReportsCenter() {
         "This is a computer-generated document. KRA eTIMS Compliant.",
         pageWidth / 2,
         pageHeight - 15,
-        { align: "center" }
+        { align: "center" },
       );
       doc.text(
         `Report ID: ${Date.now()} | ${state.companyData.name}`,
         pageWidth / 2,
         pageHeight - 10,
-        { align: "center" }
+        { align: "center" },
       );
     };
 
@@ -678,7 +679,7 @@ export default function ReportsCenter() {
       doc.setFillColor(
         data.netProfit >= 0 ? 230 : 255,
         data.netProfit >= 0 ? 255 : 230,
-        data.netProfit >= 0 ? 230 : 230
+        data.netProfit >= 0 ? 230 : 230,
       );
       doc.roundedRect(15, y, pageWidth - 30, 25, 3, 3, "F");
 
@@ -687,7 +688,7 @@ export default function ReportsCenter() {
       doc.setTextColor(
         data.netProfit >= 0 ? 34 : 180,
         data.netProfit >= 0 ? 139 : 50,
-        data.netProfit >= 0 ? 34 : 50
+        data.netProfit >= 0 ? 34 : 50,
       );
       doc.text("NET PROFIT", 25, y + 10);
       doc.setFontSize(16);
@@ -699,7 +700,7 @@ export default function ReportsCenter() {
       doc.text(
         `${formatNumber(data.profitMargin, 1)}%`,
         pageWidth - 70,
-        y + 20
+        y + 20,
       );
     } else if (activeReport === "vat-return") {
       const data = calculateVATReturn();
@@ -745,7 +746,7 @@ export default function ReportsCenter() {
       doc.setFillColor(
         isRefund ? 230 : 255,
         isRefund ? 255 : 250,
-        isRefund ? 230 : 230
+        isRefund ? 230 : 230,
       );
       doc.roundedRect(15, y, pageWidth - 30, 20, 3, 3, "F");
 
@@ -755,18 +756,18 @@ export default function ReportsCenter() {
       doc.text(
         isRefund ? "VAT REFUNDABLE:" : "VAT PAYABLE TO KRA:",
         25,
-        y + 13
+        y + 13,
       );
       doc.setFontSize(14);
       doc.setTextColor(
         isRefund ? 34 : 180,
         isRefund ? 139 : 50,
-        isRefund ? 34 : 50
+        isRefund ? 34 : 50,
       );
       doc.text(
         `${currency} ${formatNumber(Math.abs(data.netVATPayable))}`,
         pageWidth - 50,
-        y + 13
+        y + 13,
       );
     } else if (activeReport === "daily-sales") {
       const dailyData = calculateDailySalesRegister();
@@ -797,7 +798,7 @@ export default function ReportsCenter() {
                 "Net",
               ],
             ],
-            body: day.transactions.map(t => [
+            body: day.transactions.map((t) => [
               t.receiptNo,
               t.description,
               formatNumber(t.quantity, 2),
@@ -928,7 +929,7 @@ export default function ReportsCenter() {
         const data = calculateExpensesReport();
         data.forEach((periodData, index) => {
           const breakdownRows = Object.entries(periodData.breakdown).map(
-            ([desc, amt]) => [desc, formatNumber(amt as number)]
+            ([desc, amt]) => [desc, formatNumber(amt as number)],
           );
           autoTable(doc, {
             startY: index === 0 ? y : (doc as any).lastAutoTable.finalY + 10,
@@ -967,7 +968,7 @@ export default function ReportsCenter() {
     const reportTitle = getReportTitle();
     const wb = XLSX.utils.book_new();
 
-    let ws_data: any[][] = [
+    const ws_data: any[][] = [
       [reportTitle],
       [state.companyData.name],
       [
@@ -1001,7 +1002,7 @@ export default function ReportsCenter() {
         ["Fuel Purchased (L)", data.totalFuelPurchased],
         ["Sales Records", data.transactionCounts.sales],
         ["Deliveries", data.transactionCounts.deliveries],
-        ["Offloading Records", data.transactionCounts.offloading]
+        ["Offloading Records", data.transactionCounts.offloading],
       );
     } else if (activeReport === "vat-return") {
       const data = calculateVATReturn();
@@ -1022,11 +1023,11 @@ export default function ReportsCenter() {
           data.inputVAT.vatAmount,
         ],
         [],
-        ["NET VAT PAYABLE", data.netVATPayable]
+        ["NET VAT PAYABLE", data.netVATPayable],
       );
     } else if (activeReport === "daily-sales") {
       const dailyData = calculateDailySalesRegister();
-      dailyData.forEach(day => {
+      dailyData.forEach((day) => {
         ws_data.push(
           [],
           [`DAILY SALES - ${day.date}`],
@@ -1038,9 +1039,9 @@ export default function ReportsCenter() {
             "Gross",
             "VAT",
             "Net",
-          ]
+          ],
         );
-        day.transactions.forEach(t => {
+        day.transactions.forEach((t) => {
           ws_data.push([
             t.receiptNo,
             t.description,
@@ -1077,12 +1078,12 @@ export default function ReportsCenter() {
         ["Gross Revenue", data.profitLoss.grossRevenue],
         ["Total Costs", data.profitLoss.totalCosts],
         ["Net Profit", data.profitLoss.netProfit],
-        ["Profit Margin", `${formatNumber(data.profitLoss.profitMargin, 1)}%`]
+        ["Profit Margin", `${formatNumber(data.profitLoss.profitMargin, 1)}%`],
       );
     } else if (activeReport === "profit-loss") {
       const data = calculateProfitLossReport();
       ws_data.push(["Period", "Revenue", "Expenses", "Net Profit", "Margin"]);
-      data.forEach(p => {
+      data.forEach((p) => {
         ws_data.push([
           p.period,
           p.totalRevenue,
@@ -1093,10 +1094,10 @@ export default function ReportsCenter() {
       });
     } else if (activeReport === "expenses") {
       const data = calculateExpensesReport();
-      data.forEach(p => {
+      data.forEach((p) => {
         ws_data.push([], [p.period], ["Category", "Amount"]);
         Object.entries(p.breakdown).forEach(([desc, amt]) =>
-          ws_data.push([desc, amt])
+          ws_data.push([desc, amt]),
         );
         ws_data.push(["TOTAL", p.totalExpenses]);
       });
@@ -1115,7 +1116,7 @@ export default function ReportsCenter() {
     XLSX.utils.book_append_sheet(wb, ws, "Report");
     XLSX.writeFile(
       wb,
-      `${reportTitle.replace(/ /g, "_")}_${startDate}_${endDate}.xlsx`
+      `${reportTitle.replace(/ /g, "_")}_${startDate}_${endDate}.xlsx`,
     );
   };
 
@@ -1180,7 +1181,7 @@ export default function ReportsCenter() {
     const blob = new Blob([txt], { type: "text/plain" });
     saveAs(
       blob,
-      `${reportTitle.replace(/ /g, "_")}_${startDate}_${endDate}.txt`
+      `${reportTitle.replace(/ /g, "_")}_${startDate}_${endDate}.txt`,
     );
   };
 
@@ -1263,7 +1264,7 @@ export default function ReportsCenter() {
                           {state.companyData.currency} {formatNumber(amount)}
                         </span>
                       </div>
-                    )
+                    ),
                   )}
                 </div>
               </div>
@@ -2001,10 +2002,10 @@ export default function ReportsCenter() {
             { id: "vat-return", label: "VAT Return", icon: Receipt },
             { id: "daily-sales", label: "Daily Sales", icon: FileText },
             { id: "kra-summary", label: "KRA Summary", icon: Building2 },
-          ].map(report => {
+          ].map((report) => {
             const Icon = report.icon;
             const isKRA = ["vat-return", "daily-sales", "kra-summary"].includes(
-              report.id
+              report.id,
             );
             return (
               <button
@@ -2039,7 +2040,7 @@ export default function ReportsCenter() {
             </label>
             <select
               value={reportPeriod}
-              onChange={e => setReportPeriod(e.target.value as ReportPeriod)}
+              onChange={(e) => setReportPeriod(e.target.value as ReportPeriod)}
             >
               <option value="daily">Daily</option>
               <option value="weekly">Weekly</option>
@@ -2056,7 +2057,7 @@ export default function ReportsCenter() {
             <input
               type="date"
               value={startDate}
-              onChange={e => setStartDate(e.target.value)}
+              onChange={(e) => setStartDate(e.target.value)}
             />
           </div>
 
@@ -2068,7 +2069,7 @@ export default function ReportsCenter() {
             <input
               type="date"
               value={endDate}
-              onChange={e => setEndDate(e.target.value)}
+              onChange={(e) => setEndDate(e.target.value)}
             />
           </div>
 

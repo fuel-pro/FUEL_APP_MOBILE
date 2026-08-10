@@ -116,17 +116,17 @@ async function detectCountryFromLocation(): Promise<{
   code: string;
   name: string;
 } | null> {
-  return new Promise(resolve => {
+  return new Promise((resolve) => {
     if (!navigator.geolocation) {
       resolve(null);
       return;
     }
     navigator.geolocation.getCurrentPosition(
-      async pos => {
+      async (pos) => {
         try {
           const res = await fetch(
             `https://nominatim.openstreetmap.org/reverse?lat=${pos.coords.latitude}&lon=${pos.coords.longitude}&format=json`,
-            { headers: { "Accept-Language": "en" } }
+            { headers: { "Accept-Language": "en" } },
           );
           const data = await res.json();
           const cc = data.address?.country_code?.toUpperCase();
@@ -146,7 +146,7 @@ async function detectCountryFromLocation(): Promise<{
         resolve(null);
       },
       () => resolve(null),
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
     );
   });
 }
@@ -155,7 +155,7 @@ interface Props {
   logAudit: (
     e: string,
     d: string,
-    s: "success" | "warning" | "danger" | "info"
+    s: "success" | "warning" | "danger" | "info",
   ) => void;
 }
 
@@ -199,7 +199,7 @@ export default function PaymentMethodsSection({ logAudit }: Props) {
   >({});
 
   const update = (patch: Partial<PaymentMethodsData>) => {
-    setData(prev => {
+    setData((prev) => {
       const n = { ...prev, ...patch };
       saveData(n);
       return n;
@@ -214,7 +214,7 @@ export default function PaymentMethodsSection({ logAudit }: Props) {
     logAudit(
       "Payment Methods Saved",
       `Saved payment config for ${selectedCountry}`,
-      "success"
+      "success",
     );
   };
 
@@ -223,7 +223,7 @@ export default function PaymentMethodsSection({ logAudit }: Props) {
     logAudit(
       "Location Detection",
       "Starting precise location detection for payment methods",
-      "info"
+      "info",
     );
     const result = await detectCountryFromLocation();
     if (result) {
@@ -235,13 +235,13 @@ export default function PaymentMethodsSection({ logAudit }: Props) {
       logAudit(
         "Location Detected",
         `Detected country: ${result.name} (${result.code})`,
-        "success"
+        "success",
       );
     } else {
       logAudit(
         "Location Detection Failed",
         "Could not detect location, using manual selection",
-        "warning"
+        "warning",
       );
     }
     setDetecting(false);
@@ -271,20 +271,20 @@ export default function PaymentMethodsSection({ logAudit }: Props) {
     logAudit(
       "Bank Account Added",
       `${acc.bankName} - ${acc.accountName}`,
-      "success"
+      "success",
     );
   };
 
   const removeBankAccount = (id: string) => {
-    const acc = data.bankAccounts.find(a => a.id === id);
-    update({ bankAccounts: data.bankAccounts.filter(a => a.id !== id) });
+    const acc = data.bankAccounts.find((a) => a.id === id);
+    update({ bankAccounts: data.bankAccounts.filter((a) => a.id !== id) });
     if (acc) logAudit("Bank Account Removed", `${acc.bankName}`, "warning");
   };
 
   const toggleBankAccount = (id: string) => {
     update({
-      bankAccounts: data.bankAccounts.map(a =>
-        a.id === id ? { ...a, isActive: !a.isActive } : a
+      bankAccounts: data.bankAccounts.map((a) =>
+        a.id === id ? { ...a, isActive: !a.isActive } : a,
       ),
     });
   };
@@ -312,15 +312,15 @@ export default function PaymentMethodsSection({ logAudit }: Props) {
   };
 
   const removeMobileMoney = (id: string) => {
-    const mm = data.mobileMoney.find(m => m.id === id);
-    update({ mobileMoney: data.mobileMoney.filter(m => m.id !== id) });
+    const mm = data.mobileMoney.find((m) => m.id === id);
+    update({ mobileMoney: data.mobileMoney.filter((m) => m.id !== id) });
     if (mm) logAudit("Mobile Money Removed", `${mm.provider}`, "warning");
   };
 
   const toggleMobileMoney = (id: string) => {
     update({
-      mobileMoney: data.mobileMoney.map(m =>
-        m.id === id ? { ...m, isActive: !m.isActive } : m
+      mobileMoney: data.mobileMoney.map((m) =>
+        m.id === id ? { ...m, isActive: !m.isActive } : m,
       ),
     });
   };
@@ -344,44 +344,44 @@ export default function PaymentMethodsSection({ logAudit }: Props) {
   };
 
   const removeAdditional = (id: string) => {
-    const am = data.additional.find(a => a.id === id);
-    update({ additional: data.additional.filter(a => a.id !== id) });
+    const am = data.additional.find((a) => a.id === id);
+    update({ additional: data.additional.filter((a) => a.id !== id) });
     if (am) logAudit("Payment Method Removed", `${am.name}`, "warning");
   };
 
   const toggleAdditional = (id: string) => {
     update({
-      additional: data.additional.map(a =>
-        a.id === id ? { ...a, isActive: !a.isActive } : a
+      additional: data.additional.map((a) =>
+        a.id === id ? { ...a, isActive: !a.isActive } : a,
       ),
     });
   };
 
   const addConfigEntry = () => {
     if (!addForm.configKey || !addForm.configValue) return;
-    setAddConfigEntries(prev => ({
+    setAddConfigEntries((prev) => ({
       ...prev,
       [addForm.configKey]: addForm.configValue,
     }));
-    setAddForm(prev => ({ ...prev, configKey: "", configValue: "" }));
+    setAddForm((prev) => ({ ...prev, configKey: "", configValue: "" }));
   };
 
   const countryConfig = COUNTRY_CONFIGS[selectedCountry];
   const countryBankAccounts = data.bankAccounts.filter(
-    a => a.countryCode === selectedCountry
+    (a) => a.countryCode === selectedCountry,
   );
   const countryMobileMoney = data.mobileMoney.filter(
-    m => m.countryCode === selectedCountry
+    (m) => m.countryCode === selectedCountry,
   );
   const countryAdditional = data.additional.filter(
-    a => a.countryCode === selectedCountry
+    (a) => a.countryCode === selectedCountry,
   );
   const allMethods = [
     ...countryBankAccounts,
     ...countryMobileMoney,
     ...countryAdditional,
   ];
-  const activeCount = allMethods.filter(m => m.isActive).length;
+  const activeCount = allMethods.filter((m) => m.isActive).length;
 
   const inputClass =
     "w-full px-3 py-2 bg-white/[0.03] border border-white/[0.08] rounded-lg text-sm text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/30";
@@ -485,7 +485,7 @@ export default function PaymentMethodsSection({ logAudit }: Props) {
           { id: "mobile" as const, label: "Mobile Money", icon: Smartphone },
           { id: "additional" as const, label: "Additional", icon: Wallet },
           { id: "settings" as const, label: "Settings", icon: Globe },
-        ].map(t => (
+        ].map((t) => (
           <button
             key={t.id}
             onClick={() => setActiveTab(t.id)}
@@ -511,7 +511,7 @@ export default function PaymentMethodsSection({ logAudit }: Props) {
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-3">
-              {allMethods.map(m => {
+              {allMethods.map((m) => {
                 const isBank = "bankName" in m;
                 const isMM = "provider" in m;
                 const isAdd = "name" in m && !isBank && !isMM;
@@ -632,13 +632,13 @@ export default function PaymentMethodsSection({ logAudit }: Props) {
                   </label>
                   <select
                     value={bankForm.bankName}
-                    onChange={e =>
-                      setBankForm(p => ({ ...p, bankName: e.target.value }))
+                    onChange={(e) =>
+                      setBankForm((p) => ({ ...p, bankName: e.target.value }))
                     }
                     className={inputClass}
                   >
                     <option value="">Select bank...</option>
-                    {countryConfig?.banks.map(b => (
+                    {countryConfig?.banks.map((b) => (
                       <option key={b} value={b}>
                         {b}
                       </option>
@@ -651,8 +651,8 @@ export default function PaymentMethodsSection({ logAudit }: Props) {
                   </label>
                   <input
                     value={bankForm.branch}
-                    onChange={e =>
-                      setBankForm(p => ({ ...p, branch: e.target.value }))
+                    onChange={(e) =>
+                      setBankForm((p) => ({ ...p, branch: e.target.value }))
                     }
                     placeholder="Main Branch"
                     className={inputClass}
@@ -664,8 +664,11 @@ export default function PaymentMethodsSection({ logAudit }: Props) {
                   </label>
                   <input
                     value={bankForm.accountName}
-                    onChange={e =>
-                      setBankForm(p => ({ ...p, accountName: e.target.value }))
+                    onChange={(e) =>
+                      setBankForm((p) => ({
+                        ...p,
+                        accountName: e.target.value,
+                      }))
                     }
                     placeholder="FuelPro Station Ltd"
                     className={inputClass}
@@ -677,8 +680,8 @@ export default function PaymentMethodsSection({ logAudit }: Props) {
                   </label>
                   <input
                     value={bankForm.accountNumber}
-                    onChange={e =>
-                      setBankForm(p => ({
+                    onChange={(e) =>
+                      setBankForm((p) => ({
                         ...p,
                         accountNumber: e.target.value,
                       }))
@@ -703,7 +706,7 @@ export default function PaymentMethodsSection({ logAudit }: Props) {
             </p>
           ) : (
             <div className="space-y-2">
-              {countryBankAccounts.map(acc => (
+              {countryBankAccounts.map((acc) => (
                 <div
                   key={acc.id}
                   className="bg-[#161618] border border-white/[0.06] rounded-xl p-4"
@@ -777,13 +780,13 @@ export default function PaymentMethodsSection({ logAudit }: Props) {
                   </label>
                   <select
                     value={mmForm.provider}
-                    onChange={e =>
-                      setMmForm(p => ({ ...p, provider: e.target.value }))
+                    onChange={(e) =>
+                      setMmForm((p) => ({ ...p, provider: e.target.value }))
                     }
                     className={inputClass}
                   >
                     <option value="">Select provider...</option>
-                    {countryConfig?.mobileMoney.map(p => (
+                    {countryConfig?.mobileMoney.map((p) => (
                       <option key={p} value={p}>
                         {p}
                       </option>
@@ -796,8 +799,11 @@ export default function PaymentMethodsSection({ logAudit }: Props) {
                   </label>
                   <input
                     value={mmForm.paybillNumber}
-                    onChange={e =>
-                      setMmForm(p => ({ ...p, paybillNumber: e.target.value }))
+                    onChange={(e) =>
+                      setMmForm((p) => ({
+                        ...p,
+                        paybillNumber: e.target.value,
+                      }))
                     }
                     placeholder="123456"
                     className={inputClass}
@@ -809,8 +815,8 @@ export default function PaymentMethodsSection({ logAudit }: Props) {
                   </label>
                   <input
                     value={mmForm.accountReference}
-                    onChange={e =>
-                      setMmForm(p => ({
+                    onChange={(e) =>
+                      setMmForm((p) => ({
                         ...p,
                         accountReference: e.target.value,
                       }))
@@ -825,8 +831,8 @@ export default function PaymentMethodsSection({ logAudit }: Props) {
                   </label>
                   <input
                     value={mmForm.shortCode}
-                    onChange={e =>
-                      setMmForm(p => ({ ...p, shortCode: e.target.value }))
+                    onChange={(e) =>
+                      setMmForm((p) => ({ ...p, shortCode: e.target.value }))
                     }
                     placeholder="247247"
                     className={inputClass}
@@ -839,8 +845,8 @@ export default function PaymentMethodsSection({ logAudit }: Props) {
                   <input
                     type="password"
                     value={mmForm.apiKey}
-                    onChange={e =>
-                      setMmForm(p => ({ ...p, apiKey: e.target.value }))
+                    onChange={(e) =>
+                      setMmForm((p) => ({ ...p, apiKey: e.target.value }))
                     }
                     placeholder="sk_live_..."
                     className={inputClass}
@@ -862,7 +868,7 @@ export default function PaymentMethodsSection({ logAudit }: Props) {
             </p>
           ) : (
             <div className="space-y-2">
-              {countryMobileMoney.map(mm => (
+              {countryMobileMoney.map((mm) => (
                 <div
                   key={mm.id}
                   className="bg-[#161618] border border-white/[0.06] rounded-xl p-4"
@@ -946,13 +952,13 @@ export default function PaymentMethodsSection({ logAudit }: Props) {
                 </label>
                 <select
                   value={addForm.name}
-                  onChange={e =>
-                    setAddForm(p => ({ ...p, name: e.target.value }))
+                  onChange={(e) =>
+                    setAddForm((p) => ({ ...p, name: e.target.value }))
                   }
                   className={inputClass}
                 >
                   <option value="">Select method...</option>
-                  {countryConfig?.additional.map(a => (
+                  {countryConfig?.additional.map((a) => (
                     <option key={a} value={a}>
                       {a}
                     </option>
@@ -962,16 +968,16 @@ export default function PaymentMethodsSection({ logAudit }: Props) {
               <div className="grid grid-cols-2 gap-2">
                 <input
                   value={addForm.configKey}
-                  onChange={e =>
-                    setAddForm(p => ({ ...p, configKey: e.target.value }))
+                  onChange={(e) =>
+                    setAddForm((p) => ({ ...p, configKey: e.target.value }))
                   }
                   placeholder="Config key"
                   className={inputClass}
                 />
                 <input
                   value={addForm.configValue}
-                  onChange={e =>
-                    setAddForm(p => ({ ...p, configValue: e.target.value }))
+                  onChange={(e) =>
+                    setAddForm((p) => ({ ...p, configValue: e.target.value }))
                   }
                   placeholder="Config value"
                   className={inputClass}
@@ -1011,7 +1017,7 @@ export default function PaymentMethodsSection({ logAudit }: Props) {
             </p>
           ) : (
             <div className="space-y-2">
-              {countryAdditional.map(am => (
+              {countryAdditional.map((am) => (
                 <div
                   key={am.id}
                   className="bg-[#161618] border border-white/[0.06] rounded-xl p-4"
@@ -1074,7 +1080,7 @@ export default function PaymentMethodsSection({ logAudit }: Props) {
                 <input
                   type="number"
                   value={data.globalTaxRate}
-                  onChange={e =>
+                  onChange={(e) =>
                     update({ globalTaxRate: Number(e.target.value) })
                   }
                   className={inputClass}
@@ -1086,7 +1092,7 @@ export default function PaymentMethodsSection({ logAudit }: Props) {
                 </label>
                 <input
                   value={data.receiptFooter}
-                  onChange={e => update({ receiptFooter: e.target.value })}
+                  onChange={(e) => update({ receiptFooter: e.target.value })}
                   className={inputClass}
                 />
               </div>
@@ -1104,7 +1110,7 @@ export default function PaymentMethodsSection({ logAudit }: Props) {
                   <Landmark size={12} /> Banks
                 </p>
                 <div className="space-y-1">
-                  {countryConfig?.banks.map(b => (
+                  {countryConfig?.banks.map((b) => (
                     <p key={b} className="text-[10px] text-gray-500">
                       {b}
                     </p>
@@ -1116,7 +1122,7 @@ export default function PaymentMethodsSection({ logAudit }: Props) {
                   <Smartphone size={12} /> Mobile Money
                 </p>
                 <div className="space-y-1">
-                  {countryConfig?.mobileMoney.map(m => (
+                  {countryConfig?.mobileMoney.map((m) => (
                     <p key={m} className="text-[10px] text-gray-500">
                       {m}
                     </p>
@@ -1128,7 +1134,7 @@ export default function PaymentMethodsSection({ logAudit }: Props) {
                   <Wallet size={12} /> Additional
                 </p>
                 <div className="space-y-1">
-                  {countryConfig?.additional.map(a => (
+                  {countryConfig?.additional.map((a) => (
                     <p key={a} className="text-[10px] text-gray-500">
                       {a}
                     </p>

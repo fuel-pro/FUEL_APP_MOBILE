@@ -143,7 +143,7 @@ export default function TeamManager() {
   };
 
   const currentBinding = bindings.find(
-    b => b.active && b.authId === user?.authId
+    (b) => b.active && b.authId === user?.authId,
   );
 
   const canCreateManager = isOwner && hasPermission("canInviteManager");
@@ -210,7 +210,7 @@ export default function TeamManager() {
   const handleShareWhatsApp = (inv: (typeof invites)[0]) => {
     const link = encodeURIComponent(getLink(inv));
     const text = encodeURIComponent(
-      `You're invited to join ${currentStation?.name || "Fuel Station"} as ${inv.role}! Click the link to accept:`
+      `You're invited to join ${currentStation?.name || "Fuel Station"} as ${inv.role}! Click the link to accept:`,
     );
     window.open(`https://wa.me/?text=${text}%20${link}`, "_blank");
   };
@@ -218,10 +218,10 @@ export default function TeamManager() {
   const handleShareEmail = (inv: (typeof invites)[0]) => {
     const link = getLink(inv);
     const subject = encodeURIComponent(
-      `Invitation to join ${currentStation?.name || "Fuel Station"}`
+      `Invitation to join ${currentStation?.name || "Fuel Station"}`,
     );
     const body = encodeURIComponent(
-      `Hello,\n\nYou've been invited to join ${currentStation?.name || "Fuel Station"} as a ${inv.role}.\n\nClick the link below to accept your invitation:\n\n${link}\n\nThis link works on any device.`
+      `Hello,\n\nYou've been invited to join ${currentStation?.name || "Fuel Station"} as a ${inv.role}.\n\nClick the link below to accept your invitation:\n\n${link}\n\nThis link works on any device.`,
     );
     window.open(`mailto:?subject=${subject}&body=${body}`, "_blank");
   };
@@ -232,11 +232,11 @@ export default function TeamManager() {
   if (canCreateAuditor) availableRoles.push("auditor");
 
   const activeInvites = invites.filter(
-    i => !i.usedBy && (!i.expiresAt || new Date(i.expiresAt) > new Date())
+    (i) => !i.usedBy && (!i.expiresAt || new Date(i.expiresAt) > new Date()),
   );
-  const usedInvites = invites.filter(i => i.usedBy);
+  const usedInvites = invites.filter((i) => i.usedBy);
   const expiredInvites = invites.filter(
-    i => i.expiresAt && new Date(i.expiresAt) < new Date() && !i.usedBy
+    (i) => i.expiresAt && new Date(i.expiresAt) < new Date() && !i.usedBy,
   );
 
   return (
@@ -292,7 +292,7 @@ export default function TeamManager() {
                     terminateRole(currentBinding.stationId);
                     setShowTerminateConfirm(false);
                     import("@/react-app/lib/app-reloader").then(
-                      ({ triggerSoftReload }) => triggerSoftReload(500)
+                      ({ triggerSoftReload }) => triggerSoftReload(500),
                     );
                   }}
                   className="px-3 py-1 text-[11px] bg-red-600 hover:bg-red-700 text-white rounded font-medium"
@@ -317,17 +317,17 @@ export default function TeamManager() {
         {[
           {
             label: "Team Members",
-            value: team.filter(m => m.active).length,
+            value: team.filter((m) => m.active).length,
             color: "text-purple-600",
           },
           {
             label: "Managers",
-            value: team.filter(m => m.role === "manager").length,
+            value: team.filter((m) => m.role === "manager").length,
             color: "text-blue-600",
           },
           {
             label: "Staff",
-            value: team.filter(m => m.role === "staff").length,
+            value: team.filter((m) => m.role === "staff").length,
             color: "text-green-600",
           },
           {
@@ -335,7 +335,7 @@ export default function TeamManager() {
             value: activeInvites.length,
             color: "text-amber-600",
           },
-        ].map(s => (
+        ].map((s) => (
           <div
             key={s.label}
             className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 text-center"
@@ -370,7 +370,7 @@ export default function TeamManager() {
                   Role
                 </label>
                 <div className="flex gap-2">
-                  {availableRoles.map(r => (
+                  {availableRoles.map((r) => (
                     <button
                       key={r}
                       onClick={() => setInviteRole(r)}
@@ -392,7 +392,7 @@ export default function TeamManager() {
                   <input
                     type="number"
                     value={expireDays}
-                    onChange={e => setExpireDays(e.target.value)}
+                    onChange={(e) => setExpireDays(e.target.value)}
                     placeholder="Never"
                     className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
                   />
@@ -404,7 +404,7 @@ export default function TeamManager() {
                   <input
                     type="number"
                     value={maxUses}
-                    onChange={e => setMaxUses(e.target.value)}
+                    onChange={(e) => setMaxUses(e.target.value)}
                     min="1"
                     className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
                   />
@@ -435,7 +435,7 @@ export default function TeamManager() {
           <h3 className="text-sm font-bold text-gray-900 dark:text-white">
             Active Invite Links
           </h3>
-          {activeInvites.map(inv => (
+          {activeInvites.map((inv) => (
             <div
               key={inv.id}
               className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4"
@@ -567,7 +567,7 @@ export default function TeamManager() {
 
               {/* Roles to manage */}
               {(["manager", "staff", "auditor"] as UserRole[]).map(
-                targetRole => (
+                (targetRole) => (
                   <div key={targetRole}>
                     <h4
                       className={`text-xs font-semibold mb-2 px-2 py-1 rounded inline-block ${ROLE_LABELS[targetRole].color.replace("text-", "text-opacity-100 ")}`}
@@ -575,7 +575,7 @@ export default function TeamManager() {
                       {ROLE_LABELS[targetRole].label} Access
                     </h4>
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
-                      {Object.keys(tabIdToLabel).map(tabId => {
+                      {Object.keys(tabIdToLabel).map((tabId) => {
                         const isAllowed =
                           roleTabGrants[targetRole]?.includes(tabId) ?? false;
                         const isDefault =
@@ -611,7 +611,7 @@ export default function TeamManager() {
                       })}
                     </div>
                   </div>
-                )
+                ),
               )}
 
               {/* Reset to defaults */}
@@ -644,7 +644,7 @@ export default function TeamManager() {
             No team members yet. Create an invite link above.
           </p>
         )}
-        {team.map(member => {
+        {team.map((member) => {
           const isExpanded = expandedMember === member.id;
           const RoleIcon = ROLE_ICONS[member.role];
           const isExpired =
@@ -709,13 +709,13 @@ export default function TeamManager() {
                         </label>
                         <div className="flex flex-wrap gap-1">
                           {["PMS-1", "PMS-2", "AGO-1", "AGO-2", "IK-1"].map(
-                            p => (
+                            (p) => (
                               <button
                                 key={p}
                                 onClick={() => {
                                   const next = member.assignedPumps.includes(p)
                                     ? member.assignedPumps.filter(
-                                        (x: string) => x !== p
+                                        (x: string) => x !== p,
                                       )
                                     : [...member.assignedPumps, p];
                                   assignPumps(member.id, next);
@@ -724,7 +724,7 @@ export default function TeamManager() {
                               >
                                 {p}
                               </button>
-                            )
+                            ),
                           )}
                         </div>
                       </div>
@@ -737,13 +737,13 @@ export default function TeamManager() {
                             "Morning (6AM-2PM)",
                             "Afternoon (2PM-10PM)",
                             "Night (10PM-6AM)",
-                          ].map(s => (
+                          ].map((s) => (
                             <button
                               key={s}
                               onClick={() => {
                                 const next = member.assignedShifts.includes(s)
                                   ? member.assignedShifts.filter(
-                                      (x: string) => x !== s
+                                      (x: string) => x !== s,
                                     )
                                   : [...member.assignedShifts, s];
                                 assignShifts(member.id, next);
@@ -764,7 +764,7 @@ export default function TeamManager() {
                         <input
                           type="number"
                           value={extendDays}
-                          onChange={e => setExtendDays(e.target.value)}
+                          onChange={(e) => setExtendDays(e.target.value)}
                           className="w-16 px-2 py-1 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded text-xs dark:text-white"
                           placeholder="Days"
                         />
@@ -803,7 +803,7 @@ export default function TeamManager() {
           <h3 className="text-sm font-bold text-gray-500 dark:text-gray-400">
             History
           </h3>
-          {usedInvites.map(inv => (
+          {usedInvites.map((inv) => (
             <div
               key={inv.id}
               className="flex items-center gap-2 p-3 bg-gray-50 dark:bg-gray-900 rounded-lg text-xs text-gray-500"
@@ -822,7 +822,7 @@ export default function TeamManager() {
               </span>
             </div>
           ))}
-          {expiredInvites.map(inv => (
+          {expiredInvites.map((inv) => (
             <div
               key={inv.id}
               className="flex items-center gap-2 p-3 bg-gray-50 dark:bg-gray-900 rounded-lg text-xs text-gray-500"

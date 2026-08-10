@@ -16,7 +16,8 @@ import { getSupabaseClient } from "@/supabase/client";
 const COLLECTION = "fuel_data";
 const CACHE_PREFIX = "fuelpro_cloud_";
 
-type Json = Record<string, unknown> | unknown[] | string | number | boolean | null;
+type Json =
+  Record<string, unknown> | unknown[] | string | number | boolean | null;
 
 function cacheKey(key: string): string {
   return `${CACHE_PREFIX}${key}`;
@@ -43,9 +44,7 @@ function cacheKey(key: string): string {
  *   - user-scoped:    `${key}__${ownerId}`   (legacy / combined-view)
  */
 function rowId(key: string, ownerId: string, stationId?: string): string {
-  return stationId
-    ? `${key}__${ownerId}__${stationId}`
-    : `${key}__${ownerId}`;
+  return stationId ? `${key}__${ownerId}__${stationId}` : `${key}__${ownerId}`;
 }
 
 /** The legacy user-scoped id (used for backward-compatible reads). */
@@ -188,7 +187,11 @@ class CloudStorageService {
    * row (if any) is left in place for combined-view reads; it is NOT deleted
    * so a user toggling Combined View still sees aggregated data.
    */
-  async set<T = Json>(key: string, value: T, stationId?: string): Promise<void> {
+  async set<T = Json>(
+    key: string,
+    value: T,
+    stationId?: string,
+  ): Promise<void> {
     const ck = stationId ? `${key}__${stationId}` : key;
     writeCache(ck, value);
     this.memoryCache.set(ck, { value, ts: Date.now() });
@@ -207,7 +210,7 @@ class CloudStorageService {
           data: value as unknown as Json,
           updated_at: new Date().toISOString(),
         },
-        { onConflict: "id" }
+        { onConflict: "id" },
       );
       if (error) throw error;
     } catch (err) {
@@ -238,7 +241,11 @@ class CloudStorageService {
       if (error) throw error;
       // Also clean up a legacy bare-key row if one exists for this owner.
       if (scopedId !== key) {
-        await client.from("app_kv").delete().eq("id", key).eq("owner_id", ownerId);
+        await client
+          .from("app_kv")
+          .delete()
+          .eq("id", key)
+          .eq("owner_id", ownerId);
       }
     } catch (err) {
       console.warn(`[CloudStorage] delete failed for "${key}":`, err);

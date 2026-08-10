@@ -260,14 +260,14 @@ const FK_LINKS = SCHEMA.flatMap((t) =>
       fromCol: c.name,
       toTable: c.fkTo!.split(".")[0],
       toCol: c.fkTo!.split(".")[1],
-    }))
+    })),
 );
 
 interface Props {
   logAudit: (
     e: string,
     d: string,
-    s: "success" | "warning" | "danger" | "info"
+    s: "success" | "warning" | "danger" | "info",
   ) => void;
 }
 
@@ -295,13 +295,13 @@ export default function SchemaVisualizerSection({ logAudit }: Props) {
           } catch {
             counts[t.name] = null;
           }
-        })
+        }),
       );
       setRowCounts(counts);
       logAudit(
         "Schema Loaded",
         `Loaded ${SCHEMA.length} live Supabase tables with row counts`,
-        "success"
+        "success",
       );
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Unknown error";
@@ -322,7 +322,7 @@ export default function SchemaVisualizerSection({ logAudit }: Props) {
     return SCHEMA.filter(
       (t) =>
         t.name.toLowerCase().includes(q) ||
-        t.columns.some((c) => c.name.toLowerCase().includes(q))
+        t.columns.some((c) => c.name.toLowerCase().includes(q)),
     );
   }, [search]);
 
@@ -350,7 +350,7 @@ export default function SchemaVisualizerSection({ logAudit }: Props) {
     : filtered.filter((t) => (rowCounts[t.name] ?? 0) > 0);
   const totalRows = SCHEMA.reduce((s, t) => s + (rowCounts[t.name] ?? 0), 0);
   const accessibleCount = Object.values(rowCounts).filter(
-    (v) => v !== null
+    (v) => v !== null,
   ).length;
 
   return (
@@ -362,8 +362,11 @@ export default function SchemaVisualizerSection({ logAudit }: Props) {
             <Database size={18} className="text-purple-400" /> Schema Visualizer
           </h2>
           <p className="text-xs text-gray-500 mt-0.5">
-            Live Supabase schema · {SCHEMA.length} tables · {FK_LINKS.length} FK links
-            {loading ? " · counting rows…" : ` · ${totalRows.toLocaleString()} rows (${accessibleCount}/${SCHEMA.length} accessible)`}
+            Live Supabase schema · {SCHEMA.length} tables · {FK_LINKS.length} FK
+            links
+            {loading
+              ? " · counting rows…"
+              : ` · ${totalRows.toLocaleString()} rows (${accessibleCount}/${SCHEMA.length} accessible)`}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -454,7 +457,7 @@ export default function SchemaVisualizerSection({ logAudit }: Props) {
               highlightTable === table.name ||
               (highlightTable && relatedTables.has(table.name));
             const relatedCount = FK_LINKS.filter(
-              (l) => l.fromTable === table.name || l.toTable === table.name
+              (l) => l.fromTable === table.name || l.toTable === table.name,
             ).length;
 
             return (
@@ -475,11 +478,20 @@ export default function SchemaVisualizerSection({ logAudit }: Props) {
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     {isExpanded ? (
-                      <ChevronDown size={12} className="text-gray-500 flex-shrink-0" />
+                      <ChevronDown
+                        size={12}
+                        className="text-gray-500 flex-shrink-0"
+                      />
                     ) : (
-                      <ChevronRight size={12} className="text-gray-500 flex-shrink-0" />
+                      <ChevronRight
+                        size={12}
+                        className="text-gray-500 flex-shrink-0"
+                      />
                     )}
-                    <Table2 size={12} className="text-purple-400 flex-shrink-0" />
+                    <Table2
+                      size={12}
+                      className="text-purple-400 flex-shrink-0"
+                    />
                     <span className="text-xs font-medium text-white font-mono truncate">
                       {table.name}
                     </span>
@@ -522,19 +534,26 @@ export default function SchemaVisualizerSection({ logAudit }: Props) {
                         highlightTable &&
                         FK_LINKS.some(
                           (l) =>
-                            l.from === `${table.name}.${col.name}` &&
-                            l.toTable === highlightTable
+                            `${l.fromTable}.${l.fromCol}` ===
+                              `${table.name}.${col.name}` &&
+                            l.toTable === highlightTable,
                         );
                       return (
                         <div
                           key={col.name}
                           className={`flex items-center px-3 py-1.5 text-[11px] border-b border-white/[0.02] last:border-0 ${
-                            isFKTarget ? "bg-amber-500/10" : "hover:bg-white/[0.02]"
+                            isFKTarget
+                              ? "bg-amber-500/10"
+                              : "hover:bg-white/[0.02]"
                           }`}
                         >
                           <div className="w-4 flex-shrink-0">
                             {col.isPK && (
-                              <Key size={9} className="text-amber-400" fill="currentColor" />
+                              <Key
+                                size={9}
+                                className="text-amber-400"
+                                fill="currentColor"
+                              />
                             )}
                             {col.fkTo && !col.isPK && (
                               <Link2 size={9} className="text-sky-400" />
@@ -551,7 +570,9 @@ export default function SchemaVisualizerSection({ logAudit }: Props) {
                           >
                             {col.name}
                           </span>
-                          <span className="text-[9px] text-gray-600 ml-2">{col.type}</span>
+                          <span className="text-[9px] text-gray-600 ml-2">
+                            {col.type}
+                          </span>
                           {col.fkTo && (
                             <span className="text-[9px] text-sky-500/60 ml-1.5 font-mono">
                               →{col.fkTo}

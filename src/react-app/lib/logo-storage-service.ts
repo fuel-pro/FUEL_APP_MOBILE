@@ -35,7 +35,7 @@ export interface LogoUploadResult {
  */
 export async function uploadStationLogo(
   file: File,
-  ownerId: string
+  ownerId: string,
 ): Promise<LogoUploadResult> {
   const client = getSupabaseClient();
 
@@ -56,9 +56,7 @@ export async function uploadStationLogo(
     throw new Error(`Logo upload failed: ${upErr.message}`);
   }
 
-  const { data: urlData } = client.storage
-    .from(BUCKET)
-    .getPublicUrl(path);
+  const { data: urlData } = client.storage.from(BUCKET).getPublicUrl(path);
 
   if (!urlData?.publicUrl) {
     throw new Error("Logo upload succeeded but no public URL was returned");

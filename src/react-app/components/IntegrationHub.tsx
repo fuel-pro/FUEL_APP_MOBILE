@@ -1295,11 +1295,12 @@ const COUNTRY_CONNECTORS: Record<string, CountryConnectorSet> = {
 // Dynamic connector generator for ALL countries
 function generateConnectorsForCountry(
   countryCode: string,
-  countryName: string
+  countryName: string,
 ) {
   const gateways = getCountryGateways(countryCode);
   const walletProviders = gateways.filter(
-    g => !g.includes("Card") && !g.includes("PayPal") && !g.includes("Stripe")
+    (g) =>
+      !g.includes("Card") && !g.includes("PayPal") && !g.includes("Stripe"),
   );
   const connectors: any[] = [];
 
@@ -1337,9 +1338,9 @@ function generateConnectorsForCountry(
 
   // Bank connectors (up to 3 based on country config)
   const bankNames = WORLD_PAYMENT_CONFIGS[countryCode]?.paymentMethods
-    .filter(m => m.type === "bank")
+    .filter((m) => m.type === "bank")
     .slice(0, 3)
-    .map(m => m.name) || [`${countryName} National Bank`];
+    .map((m) => m.name) || [`${countryName} National Bank`];
 
   bankNames.forEach((bankName, i) => {
     connectors.push({
@@ -1372,7 +1373,7 @@ function generateConnectorsForCountry(
   });
 
   // Card processors
-  if (gateways.some(g => g.includes("Stripe"))) {
+  if (gateways.some((g) => g.includes("Stripe"))) {
     connectors.push({
       id: `${countryCode.toLowerCase()}-stripe`,
       name: "Stripe",
@@ -1389,7 +1390,7 @@ function generateConnectorsForCountry(
     });
   }
 
-  if (gateways.some(g => g.includes("PayPal"))) {
+  if (gateways.some((g) => g.includes("PayPal"))) {
     connectors.push({
       id: `${countryCode.toLowerCase()}-paypal`,
       name: "PayPal",
@@ -1669,7 +1670,7 @@ function resolveCountryConnectorSet(): CountryConnectorSet {
   const config = WORLD_PAYMENT_CONFIGS[countryCode];
   return generateConnectorsForCountry(
     countryCode,
-    config?.countryName || countryCode
+    config?.countryName || countryCode,
   );
 }
 
@@ -1683,12 +1684,12 @@ export default function IntegrationHub() {
     "connectors" | "webhooks" | "apikeys" | "logs"
   >("connectors");
   const [expandedConnector, setExpandedConnector] = useState<string | null>(
-    null
+    null,
   );
   const [editingConfig, setEditingConfig] = useState<string | null>(null);
   const [tempConfig, setTempConfig] = useState<Record<string, string>>({});
   const [showPasswords, setShowPasswords] = useState<Record<string, boolean>>(
-    {}
+    {},
   );
   const [showAddWebhook, setShowAddWebhook] = useState(false);
   const [showAddApiKey, setShowAddApiKey] = useState(false);
@@ -1715,11 +1716,11 @@ export default function IntegrationHub() {
     } else {
       // Try to find the country in ALL_COUNTRIES and generate dynamic connectors
       const upperCode = countrySelector.toUpperCase();
-      const country = ALL_COUNTRIES.find(c => c.code === upperCode);
+      const country = ALL_COUNTRIES.find((c) => c.code === upperCode);
       if (country) {
         const dynamic = generateConnectorsForCountry(
           country.code,
-          country.name
+          country.name,
         );
         baseConnectors = dynamic.connectors;
       }
@@ -1770,33 +1771,33 @@ export default function IntegrationHub() {
   useEffect(() => {
     localStorage.setItem(
       `${STORAGE_KEY}_${countrySelector}`,
-      JSON.stringify(connectors)
+      JSON.stringify(connectors),
     );
   }, [connectors, countrySelector]);
   useEffect(() => {
     localStorage.setItem(
       `${WEBHOOKS_KEY}_${countrySelector}`,
-      JSON.stringify(webhooks)
+      JSON.stringify(webhooks),
     );
   }, [webhooks, countrySelector]);
   useEffect(() => {
     localStorage.setItem(
       `${APIKEYS_KEY}_${countrySelector}`,
-      JSON.stringify(apiKeys)
+      JSON.stringify(apiKeys),
     );
   }, [apiKeys, countrySelector]);
 
   const addLog = (msg: string) =>
-    setLogs(prev =>
-      [`[${new Date().toLocaleTimeString()}] ${msg}`, ...prev].slice(0, 200)
+    setLogs((prev) =>
+      [`[${new Date().toLocaleTimeString()}] ${msg}`, ...prev].slice(0, 200),
     );
 
   const updateConnectorStatus = (
     id: string,
-    status: IntegrationConnector["status"]
+    status: IntegrationConnector["status"],
   ) => {
-    setConnectors(prev =>
-      prev.map(c =>
+    setConnectors((prev) =>
+      prev.map((c) =>
         c.id === id
           ? {
               ...c,
@@ -1804,16 +1805,16 @@ export default function IntegrationHub() {
               lastSync:
                 status === "connected" ? new Date().toISOString() : c.lastSync,
             }
-          : c
-      )
+          : c,
+      ),
     );
   };
 
   const saveConnectorConfig = (id: string) => {
-    setConnectors(prev =>
-      prev.map(c =>
-        c.id === id ? { ...c, config: { ...c.config, ...tempConfig } } : c
-      )
+    setConnectors((prev) =>
+      prev.map((c) =>
+        c.id === id ? { ...c, config: { ...c.config, ...tempConfig } } : c,
+      ),
     );
     setEditingConfig(null);
     addLog(`Config saved`);
@@ -1824,11 +1825,11 @@ export default function IntegrationHub() {
     addLog(`Testing ${connector.name}...`);
     setTimeout(() => {
       const hasConfig = Object.values(connector.config).some(
-        v => v && v.length > 3
+        (v) => v && v.length > 3,
       );
       if (hasConfig) {
         setTestResult(
-          `Connection successful! ${connector.name} responded (240ms)`
+          `Connection successful! ${connector.name} responded (240ms)`,
         );
         addLog(`${connector.name} test passed`);
       } else {
@@ -1841,17 +1842,21 @@ export default function IntegrationHub() {
   const exportData = (format: "csv" | "json") => {
     const data = {
       country: countrySelector,
-      connectors: connectors.map(c => ({
+      connectors: connectors.map((c) => ({
         id: c.id,
         name: c.name,
         status: c.status,
       })),
-      webhooks: webhooks.map(w => ({
+      webhooks: webhooks.map((w) => ({
         id: w.id,
         name: w.name,
         active: w.active,
       })),
-      apiKeys: apiKeys.map(k => ({ id: k.id, name: k.name, scopes: k.scopes })),
+      apiKeys: apiKeys.map((k) => ({
+        id: k.id,
+        name: k.name,
+        scopes: k.scopes,
+      })),
       exportedAt: new Date().toISOString(),
     };
     const blob = new Blob(
@@ -1860,7 +1865,7 @@ export default function IntegrationHub() {
           ? JSON.stringify(data, null, 2)
           : Object.values(data).join("\n"),
       ],
-      { type: format === "json" ? "application/json" : "text/csv" }
+      { type: format === "json" ? "application/json" : "text/csv" },
     );
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -1875,14 +1880,14 @@ export default function IntegrationHub() {
     categoryFilter === "all"
       ? connectors
       : connectors.filter(
-          c => c.category.toLowerCase() === categoryFilter.toLowerCase()
+          (c) => c.category.toLowerCase() === categoryFilter.toLowerCase(),
         );
   const categories = [
     "all",
-    ...Array.from(new Set(connectors.map(c => c.category))),
+    ...Array.from(new Set(connectors.map((c) => c.category))),
   ];
   const connectedCount = connectors.filter(
-    c => c.status === "connected"
+    (c) => c.status === "connected",
   ).length;
 
   return (
@@ -1917,42 +1922,42 @@ export default function IntegrationHub() {
             value={(() => {
               // Convert countrySelector (lowercase key like 'kenya' or 'us') to uppercase code
               const entry = Object.entries(COUNTRY_CONNECTORS).find(
-                ([k]) => k === countrySelector
+                ([k]) => k === countrySelector,
               );
               if (entry) return entry[1].code;
               return countrySelector.toUpperCase();
             })()}
-            onChange={code => {
+            onChange={(code) => {
               const selected = code.toLowerCase();
               setCountrySelector(selected);
               // If the selected country is not in the 8 detailed countries, generate dynamic connectors
               if (!Object.keys(COUNTRY_CONNECTORS).includes(selected)) {
                 const country = ALL_COUNTRIES.find(
-                  c =>
+                  (c) =>
                     c.code.toLowerCase() === selected ||
-                    c.name.toLowerCase().replace(/\s+/g, "") === selected
+                    c.name.toLowerCase().replace(/\s+/g, "") === selected,
                 );
                 if (country) {
                   const dynamic = generateConnectorsForCountry(
                     country.code,
-                    country.name
+                    country.name,
                   );
                   setConnectors(
-                    dynamic.connectors.map(c => ({
+                    dynamic.connectors.map((c) => ({
                       ...c,
                       status: "disconnected",
                       fields: Object.entries(c.config).map(([key, value]) => ({
                         key,
                         label: key
                           .replace(/([A-Z])/g, " $1")
-                          .replace(/^./, s => s.toUpperCase()),
+                          .replace(/^./, (s) => s.toUpperCase()),
                         type: typeof value === "boolean" ? "toggle" : "text",
                         value,
                       })),
-                    }))
+                    })),
                   );
                   setWebhooks(
-                    dynamic.webhooks.map(w => ({
+                    dynamic.webhooks.map((w) => ({
                       id: `wh_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
                       ...w,
                       active: false,
@@ -1960,7 +1965,7 @@ export default function IntegrationHub() {
                         { key: "Content-Type", value: "application/json" },
                       ],
                       retryCount: 3,
-                    }))
+                    })),
                   );
                 }
               } else {
@@ -1969,21 +1974,21 @@ export default function IntegrationHub() {
                   selected as keyof typeof COUNTRY_CONNECTORS
                 ] as CountryConnectorSet;
                 setConnectors(
-                  cc.connectors.map(c => ({
+                  cc.connectors.map((c) => ({
                     ...c,
                     status: "disconnected",
                     fields: Object.entries(c.config).map(([key, value]) => ({
                       key,
                       label: key
                         .replace(/([A-Z])/g, " $1")
-                        .replace(/^./, s => s.toUpperCase()),
+                        .replace(/^./, (s) => s.toUpperCase()),
                       type: typeof value === "boolean" ? "toggle" : "text",
                       value,
                     })),
-                  }))
+                  })),
                 );
                 setWebhooks(
-                  cc.webhooks.map(w => ({
+                  cc.webhooks.map((w) => ({
                     id: `wh_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
                     ...w,
                     active: false,
@@ -1991,7 +1996,7 @@ export default function IntegrationHub() {
                       { key: "Content-Type", value: "application/json" },
                     ],
                     retryCount: 3,
-                  }))
+                  })),
                 );
               }
             }}
@@ -2034,7 +2039,7 @@ export default function IntegrationHub() {
           { id: "webhooks" as const, label: "Webhooks", icon: Globe },
           { id: "apikeys" as const, label: "API Keys", icon: Lock },
           { id: "logs" as const, label: "Logs", icon: FileText },
-        ].map(t => (
+        ].map((t) => (
           <button
             key={t.id}
             onClick={() => setActiveTab(t.id)}
@@ -2051,7 +2056,7 @@ export default function IntegrationHub() {
         <div className="space-y-4">
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex gap-1 bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
-              {categories.map(cat => (
+              {categories.map((cat) => (
                 <button
                   key={cat}
                   onClick={() => setCategoryFilter(cat)}
@@ -2096,7 +2101,7 @@ export default function IntegrationHub() {
           )}
 
           <div className="space-y-3">
-            {filteredConnectors.map(conn => {
+            {filteredConnectors.map((conn) => {
               const Icon = conn.icon || Plug;
               const isExpanded = expandedConnector === conn.id;
               const isEditing = editingConfig === conn.id;
@@ -2161,7 +2166,7 @@ export default function IntegrationHub() {
                           Features
                         </p>
                         <div className="flex flex-wrap gap-2">
-                          {conn.features.map(f => (
+                          {conn.features.map((f) => (
                             <span
                               key={f}
                               className="text-[11px] px-2.5 py-1 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300 rounded-full border border-indigo-100 dark:border-indigo-800"
@@ -2212,8 +2217,8 @@ export default function IntegrationHub() {
                                         ? tempConfig[key]
                                         : value
                                     }
-                                    onChange={e =>
-                                      setTempConfig(p => ({
+                                    onChange={(e) =>
+                                      setTempConfig((p) => ({
                                         ...p,
                                         [key]: e.target.value,
                                       }))
@@ -2226,7 +2231,7 @@ export default function IntegrationHub() {
                                     key.toLowerCase().includes("key")) && (
                                     <button
                                       onClick={() =>
-                                        setShowPasswords(p => ({
+                                        setShowPasswords((p) => ({
                                           ...p,
                                           [`${conn.id}-${key}`]:
                                             !p[`${conn.id}-${key}`],
@@ -2351,7 +2356,7 @@ export default function IntegrationHub() {
               </p>
               <div className="space-y-2">
                 {countryConfig.webhooks.map((preset, i) => {
-                  const existing = webhooks.find(w => w.name === preset.name);
+                  const existing = webhooks.find((w) => w.name === preset.name);
                   return (
                     <div
                       key={i}
@@ -2365,7 +2370,7 @@ export default function IntegrationHub() {
                           {preset.url}
                         </p>
                         <div className="flex flex-wrap gap-1 mt-1">
-                          {preset.events.map(e => (
+                          {preset.events.map((e) => (
                             <span
                               key={e}
                               className="text-[9px] px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-600 rounded-full"
@@ -2382,7 +2387,7 @@ export default function IntegrationHub() {
                       ) : (
                         <button
                           onClick={() => {
-                            setWebhooks(p => [
+                            setWebhooks((p) => [
                               ...p,
                               {
                                 id: `wh_${Date.now()}_${i}`,
@@ -2408,18 +2413,18 @@ export default function IntegrationHub() {
 
           {showAddWebhook && (
             <AddWebhookForm
-              onSave={wh => {
-                setWebhooks(p => [...p, wh]);
+              onSave={(wh) => {
+                setWebhooks((p) => [...p, wh]);
                 setShowAddWebhook(false);
                 addLog(`Webhook added: ${wh.name}`);
               }}
               onCancel={() => setShowAddWebhook(false)}
-              countryEvents={countryConfig.webhooks.flatMap(w => w.events)}
+              countryEvents={countryConfig.webhooks.flatMap((w) => w.events)}
             />
           )}
 
           <div className="space-y-3">
-            {webhooks.map(wh => (
+            {webhooks.map((wh) => (
               <div
                 key={wh.id}
                 className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4"
@@ -2441,13 +2446,13 @@ export default function IntegrationHub() {
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => {
-                        setWebhooks(p =>
-                          p.map(w =>
-                            w.id === wh.id ? { ...w, active: !w.active } : w
-                          )
+                        setWebhooks((p) =>
+                          p.map((w) =>
+                            w.id === wh.id ? { ...w, active: !w.active } : w,
+                          ),
                         );
                         addLog(
-                          `${wh.name} ${wh.active ? "paused" : "activated"}`
+                          `${wh.name} ${wh.active ? "paused" : "activated"}`,
                         );
                       }}
                       className={`p-2 rounded-lg ${wh.active ? "bg-amber-50 text-amber-700" : "bg-green-50 text-green-700"}`}
@@ -2456,7 +2461,7 @@ export default function IntegrationHub() {
                     </button>
                     <button
                       onClick={() => {
-                        setWebhooks(p => p.filter(w => w.id !== wh.id));
+                        setWebhooks((p) => p.filter((w) => w.id !== wh.id));
                         addLog(`Deleted: ${wh.name}`);
                       }}
                       className="p-2 rounded-lg bg-red-50 text-red-700"
@@ -2466,7 +2471,7 @@ export default function IntegrationHub() {
                   </div>
                 </div>
                 <div className="mt-2 flex flex-wrap gap-1">
-                  {wh.events.map(e => (
+                  {wh.events.map((e) => (
                     <span
                       key={e}
                       className="text-[10px] px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-full"
@@ -2507,7 +2512,7 @@ export default function IntegrationHub() {
               Available Scopes for {countryConfig.country}
             </p>
             <div className="flex flex-wrap gap-1">
-              {countryConfig.scopes.map(s => (
+              {countryConfig.scopes.map((s) => (
                 <span
                   key={s}
                   className="text-[10px] px-2 py-0.5 bg-white dark:bg-gray-800 rounded-full border border-purple-200 text-purple-600"
@@ -2520,8 +2525,8 @@ export default function IntegrationHub() {
 
           {showAddApiKey && (
             <AddApiKeyForm
-              onSave={k => {
-                setApiKeys(p => [...p, k]);
+              onSave={(k) => {
+                setApiKeys((p) => [...p, k]);
                 setShowAddApiKey(false);
                 addLog(`API Key created: ${k.name}`);
               }}
@@ -2531,7 +2536,7 @@ export default function IntegrationHub() {
           )}
 
           <div className="space-y-3">
-            {apiKeys.map(k => (
+            {apiKeys.map((k) => (
               <div
                 key={k.id}
                 className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4"
@@ -2555,7 +2560,7 @@ export default function IntegrationHub() {
                   </div>
                   <button
                     onClick={() => {
-                      setApiKeys(p => p.filter(a => a.id !== k.id));
+                      setApiKeys((p) => p.filter((a) => a.id !== k.id));
                       addLog(`Revoked: ${k.name}`);
                     }}
                     className="p-2 rounded-lg bg-red-50 text-red-700"
@@ -2564,7 +2569,7 @@ export default function IntegrationHub() {
                   </button>
                 </div>
                 <div className="mt-2 flex flex-wrap gap-1">
-                  {k.scopes.map(s => (
+                  {k.scopes.map((s) => (
                     <span
                       key={s}
                       className="text-[10px] px-2 py-0.5 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-300 rounded-full"
@@ -2597,7 +2602,7 @@ export default function IntegrationHub() {
                 "GET /api/v1/employees",
                 "GET /api/v1/reports/daily",
                 "WS /ws/realtime",
-              ].map(ep => (
+              ].map((ep) => (
                 <div
                   key={ep}
                   className="flex items-center gap-2 p-2 bg-white dark:bg-gray-800 rounded"
@@ -2698,7 +2703,7 @@ function AddWebhookForm({
         <label className="text-xs text-gray-600 dark:text-gray-400">Name</label>
         <input
           value={name}
-          onChange={e => setName(e.target.value)}
+          onChange={(e) => setName(e.target.value)}
           className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-xs dark:text-white"
           placeholder="e.g. KRA Invoice Sync"
         />
@@ -2707,7 +2712,7 @@ function AddWebhookForm({
         <label className="text-xs text-gray-600 dark:text-gray-400">URL</label>
         <input
           value={url}
-          onChange={e => setUrl(e.target.value)}
+          onChange={(e) => setUrl(e.target.value)}
           className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-xs dark:text-white"
           placeholder="https://your-system.com/webhook"
         />
@@ -2719,7 +2724,7 @@ function AddWebhookForm({
         <input
           type="password"
           value={secret}
-          onChange={e => setSecret(e.target.value)}
+          onChange={(e) => setSecret(e.target.value)}
           className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-xs dark:text-white"
           placeholder="HMAC signature validation"
         />
@@ -2729,12 +2734,12 @@ function AddWebhookForm({
           Events
         </label>
         <div className="flex flex-wrap gap-2">
-          {EVENT_TYPES.map(e => (
+          {EVENT_TYPES.map((e) => (
             <button
               key={e}
               onClick={() =>
-                setSelectedEvents(p =>
-                  p.includes(e) ? p.filter(x => x !== e) : [...p, e]
+                setSelectedEvents((p) =>
+                  p.includes(e) ? p.filter((x) => x !== e) : [...p, e],
                 )
               }
               className={`text-[11px] px-2.5 py-1 rounded-full border transition-all ${selectedEvents.includes(e) ? "bg-indigo-600 text-white border-indigo-600" : "bg-white dark:bg-gray-800 text-gray-600 border-gray-200"}`}
@@ -2810,7 +2815,7 @@ function AddApiKeyForm({
         </label>
         <input
           value={name}
-          onChange={e => setName(e.target.value)}
+          onChange={(e) => setName(e.target.value)}
           className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-xs dark:text-white"
           placeholder="e.g. POS System Integration"
         />
@@ -2820,12 +2825,12 @@ function AddApiKeyForm({
           Scopes
         </label>
         <div className="flex flex-wrap gap-2">
-          {SCOPES.map(s => (
+          {SCOPES.map((s) => (
             <button
               key={s}
               onClick={() =>
-                setSelectedScopes(p =>
-                  p.includes(s) ? p.filter(x => x !== s) : [...p, s]
+                setSelectedScopes((p) =>
+                  p.includes(s) ? p.filter((x) => x !== s) : [...p, s],
                 )
               }
               className={`text-[11px] px-2.5 py-1 rounded-full border transition-all ${selectedScopes.includes(s) ? "bg-purple-600 text-white border-purple-600" : "bg-white dark:bg-gray-800 text-gray-600 border-gray-200"}`}
@@ -2842,7 +2847,7 @@ function AddApiKeyForm({
             const key =
               "fp_" +
               Array.from(crypto.getRandomValues(new Uint8Array(32)))
-                .map(b => b.toString(16).padStart(2, "0"))
+                .map((b) => b.toString(16).padStart(2, "0"))
                 .join("");
             onSave({
               id: `key_${Date.now()}`,

@@ -10,12 +10,7 @@ import { useState, useEffect, useCallback } from "react";
 // ═══════════════════════════════════════════════════════════════════
 
 export type UserRole =
-  | "viewer"
-  | "editor"
-  | "manager"
-  | "admin"
-  | "founder"
-  | "super_admin";
+  "viewer" | "editor" | "manager" | "admin" | "founder" | "super_admin";
 
 export interface AdminUser {
   id: string;
@@ -276,7 +271,7 @@ export class TokenManager {
 
     // In production, use proper signing with secret key
     const signature = btoa(
-      `${encodedHeader}.${encodedPayload}.fuelpro_secret`
+      `${encodedHeader}.${encodedPayload}.fuelpro_secret`,
     ).replace(/=/g, "");
 
     return `${encodedHeader}.${encodedPayload}.${signature}`;
@@ -297,7 +292,7 @@ export class AdminAuthService {
   }
 
   async login(
-    credentials: LoginCredentials
+    credentials: LoginCredentials,
   ): Promise<{ user: AdminUser; token: string; refreshToken: string }> {
     const response = await fetch(`${this.baseUrl}/admin/auth/login`, {
       method: "POST",
@@ -400,23 +395,23 @@ export class PermissionChecker {
 
   static hasPermission(
     userPermissions: string[],
-    requiredPermission: string
+    requiredPermission: string,
   ): boolean {
     return userPermissions.includes(requiredPermission);
   }
 
   static hasAnyPermission(
     userPermissions: string[],
-    requiredPermissions: string[]
+    requiredPermissions: string[],
   ): boolean {
-    return requiredPermissions.some(p => userPermissions.includes(p));
+    return requiredPermissions.some((p) => userPermissions.includes(p));
   }
 
   static hasAllPermissions(
     userPermissions: string[],
-    requiredPermissions: string[]
+    requiredPermissions: string[],
   ): boolean {
-    return requiredPermissions.every(p => userPermissions.includes(p));
+    return requiredPermissions.every((p) => userPermissions.includes(p));
   }
 
   static canAccessStation(user: AdminUser, stationId: string): boolean {
@@ -563,7 +558,7 @@ export function useAdminAuth() {
             });
           } catch {
             tokenManager.clearTokens();
-            setState(prev => ({ ...prev, isLoading: false }));
+            setState((prev) => ({ ...prev, isLoading: false }));
           }
         } else {
           setState({
@@ -576,7 +571,7 @@ export function useAdminAuth() {
           });
         }
       } else {
-        setState(prev => ({ ...prev, isLoading: false }));
+        setState((prev) => ({ ...prev, isLoading: false }));
       }
     };
 
@@ -584,7 +579,7 @@ export function useAdminAuth() {
   }, []);
 
   const login = useCallback(async (credentials: LoginCredentials) => {
-    setState(prev => ({ ...prev, isLoading: true, error: null }));
+    setState((prev) => ({ ...prev, isLoading: true, error: null }));
 
     try {
       const result = await authService.login(credentials);
@@ -604,13 +599,13 @@ export function useAdminAuth() {
       return result;
     } catch (e) {
       const errorMessage = e instanceof Error ? e.message : "Login failed";
-      setState(prev => ({ ...prev, isLoading: false, error: errorMessage }));
+      setState((prev) => ({ ...prev, isLoading: false, error: errorMessage }));
       throw e;
     }
   }, []);
 
   const logout = useCallback(async () => {
-    setState(prev => ({ ...prev, isLoading: true }));
+    setState((prev) => ({ ...prev, isLoading: true }));
 
     try {
       await authService.logout();
@@ -632,10 +627,10 @@ export function useAdminAuth() {
       if (!state.user) return false;
       return PermissionChecker.hasPermission(
         state.user.permissions,
-        permission
+        permission,
       );
     },
-    [state.user]
+    [state.user],
   );
 
   const hasRole = useCallback(
@@ -643,7 +638,7 @@ export function useAdminAuth() {
       if (!state.user) return false;
       return PermissionChecker.hasRole(state.user.role, role);
     },
-    [state.user]
+    [state.user],
   );
 
   const canAccessStation = useCallback(
@@ -651,7 +646,7 @@ export function useAdminAuth() {
       if (!state.user) return false;
       return PermissionChecker.canAccessStation(state.user, stationId);
     },
-    [state.user]
+    [state.user],
   );
 
   return {
@@ -669,7 +664,7 @@ export function useAdminAuth() {
 export function withAdminAuth<P extends object>(
   WrappedComponent: React.ComponentType<P>,
   requiredPermission?: string,
-  requiredRole?: UserRole
+  requiredRole?: UserRole,
 ) {
   return function AdminProtectedComponent(props: P) {
     const { isAuthenticated, isLoading, user, hasPermission, hasRole } =

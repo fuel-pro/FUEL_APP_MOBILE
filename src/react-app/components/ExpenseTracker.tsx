@@ -108,20 +108,23 @@ export default function ExpenseTracker() {
   useEffect(() => {
     if (!user) return;
     (async () => {
-      const cloud = await cloudStorageService.get<Expense[]>(CLOUD_KEY, stationId);
+      const cloud = await cloudStorageService.get<Expense[]>(
+        CLOUD_KEY,
+        stationId,
+      );
       if (cloud && Array.isArray(cloud)) setExpenses(cloud);
     })();
   }, [user, stationId]);
 
   const showNotification = (
     message: string,
-    type: "success" | "warning" = "success"
+    type: "success" | "warning" = "success",
   ) => {
     setNotification({ message, type });
     setTimeout(() => setNotification(null), 3000);
   };
 
-  const filtered = expenses.filter(e => {
+  const filtered = expenses.filter((e) => {
     const matchesSearch =
       e.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
       e.reference.toLowerCase().includes(searchTerm.toLowerCase());
@@ -141,20 +144,20 @@ export default function ExpenseTracker() {
 
   const totalExpenses = filtered.reduce((s, e) => s + e.amount, 0);
   const approvedTotal = filtered
-    .filter(e => e.status === "approved")
+    .filter((e) => e.status === "approved")
     .reduce((s, e) => s + e.amount, 0);
   const pendingTotal = filtered
-    .filter(e => e.status === "pending")
+    .filter((e) => e.status === "pending")
     .reduce((s, e) => s + e.amount, 0);
 
-  const byCategory = EXPENSE_CATEGORIES.map(cat => ({
+  const byCategory = EXPENSE_CATEGORIES.map((cat) => ({
     ...cat,
     total: filtered
-      .filter(e => e.category === cat.value)
+      .filter((e) => e.category === cat.value)
       .reduce((s, e) => s + e.amount, 0),
-    count: filtered.filter(e => e.category === cat.value).length,
+    count: filtered.filter((e) => e.category === cat.value).length,
   }))
-    .filter(c => c.total > 0)
+    .filter((c) => c.total > 0)
     .sort((a, b) => b.total - a.total);
 
   const handleSave = () => {
@@ -163,14 +166,14 @@ export default function ExpenseTracker() {
       return;
     }
     if (editingId) {
-      setExpenses(prev =>
-        prev.map(e =>
-          e.id === editingId ? ({ ...e, ...formData } as Expense) : e
-        )
+      setExpenses((prev) =>
+        prev.map((e) =>
+          e.id === editingId ? ({ ...e, ...formData } as Expense) : e,
+        ),
       );
       showNotification("Expense updated");
     } else {
-      setExpenses(prev => [
+      setExpenses((prev) => [
         {
           ...(formData as Expense),
           id: `exp_${Date.now()}`,
@@ -187,14 +190,14 @@ export default function ExpenseTracker() {
 
   const handleDelete = (id: string) => {
     if (confirm("Delete this expense?")) {
-      setExpenses(prev => prev.filter(e => e.id !== id));
+      setExpenses((prev) => prev.filter((e) => e.id !== id));
       showNotification("Expense deleted");
     }
   };
 
   const updateStatus = (id: string, newStatus: Expense["status"]) => {
-    setExpenses(prev =>
-      prev.map(e => (e.id === id ? { ...e, status: newStatus } : e))
+    setExpenses((prev) =>
+      prev.map((e) => (e.id === id ? { ...e, status: newStatus } : e)),
     );
     showNotification(`Expense ${newStatus}`);
   };
@@ -299,18 +302,18 @@ export default function ExpenseTracker() {
               />
               <input
                 value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
+                onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="Search expenses..."
                 className="w-full pl-9 pr-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500/30"
               />
             </div>
             <select
               value={categoryFilter}
-              onChange={e => setCategoryFilter(e.target.value)}
+              onChange={(e) => setCategoryFilter(e.target.value)}
               className="px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-gray-300 focus:outline-none"
             >
               <option value="all">All Categories</option>
-              {EXPENSE_CATEGORIES.map(c => (
+              {EXPENSE_CATEGORIES.map((c) => (
                 <option key={c.value} value={c.value}>
                   {c.label}
                 </option>
@@ -318,7 +321,7 @@ export default function ExpenseTracker() {
             </select>
             <select
               value={statusFilter}
-              onChange={e => setStatusFilter(e.target.value)}
+              onChange={(e) => setStatusFilter(e.target.value)}
               className="px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-gray-300 focus:outline-none"
             >
               <option value="all">All Status</option>
@@ -377,9 +380,9 @@ export default function ExpenseTracker() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map(exp => {
+                  {filtered.map((exp) => {
                     const CatIcon =
-                      EXPENSE_CATEGORIES.find(c => c.value === exp.category)
+                      EXPENSE_CATEGORIES.find((c) => c.value === exp.category)
                         ?.icon || FileText;
                     return (
                       <tr
@@ -399,7 +402,7 @@ export default function ExpenseTracker() {
                             />
                             <span className="text-gray-700 dark:text-gray-300">
                               {EXPENSE_CATEGORIES.find(
-                                c => c.value === exp.category
+                                (c) => c.value === exp.category,
                               )?.label || exp.category}
                             </span>
                           </div>
@@ -469,7 +472,7 @@ export default function ExpenseTracker() {
               <PieChart size={14} className="text-amber-500" /> By Category
             </h3>
             <div className="space-y-3">
-              {byCategory.map(cat => {
+              {byCategory.map((cat) => {
                 const CatIcon = cat.icon;
                 const pct =
                   totalExpenses > 0 ? (cat.total / totalExpenses) * 100 : 0;
@@ -528,7 +531,7 @@ export default function ExpenseTracker() {
                   KES{" "}
                   {filtered.length > 0
                     ? Math.round(
-                        totalExpenses / filtered.length
+                        totalExpenses / filtered.length,
                       ).toLocaleString()
                     : "0"}
                 </p>
@@ -563,7 +566,7 @@ export default function ExpenseTracker() {
                     <input
                       type="date"
                       value={formData.date}
-                      onChange={e =>
+                      onChange={(e) =>
                         setFormData({ ...formData, date: e.target.value })
                       }
                       className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
@@ -576,7 +579,7 @@ export default function ExpenseTracker() {
                     <input
                       type="number"
                       value={formData.amount || ""}
-                      onChange={e =>
+                      onChange={(e) =>
                         setFormData({
                           ...formData,
                           amount: Number(e.target.value),
@@ -593,12 +596,12 @@ export default function ExpenseTracker() {
                     </label>
                     <select
                       value={formData.category}
-                      onChange={e =>
+                      onChange={(e) =>
                         setFormData({ ...formData, category: e.target.value })
                       }
                       className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
                     >
-                      {EXPENSE_CATEGORIES.map(c => (
+                      {EXPENSE_CATEGORIES.map((c) => (
                         <option key={c.value} value={c.value}>
                           {c.label}
                         </option>
@@ -611,7 +614,7 @@ export default function ExpenseTracker() {
                     </label>
                     <select
                       value={formData.paymentMethod}
-                      onChange={e =>
+                      onChange={(e) =>
                         setFormData({
                           ...formData,
                           paymentMethod: e.target.value,
@@ -619,7 +622,7 @@ export default function ExpenseTracker() {
                       }
                       className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
                     >
-                      {PAYMENT_METHODS.map(m => (
+                      {PAYMENT_METHODS.map((m) => (
                         <option key={m} value={m}>
                           {m}
                         </option>
@@ -633,7 +636,7 @@ export default function ExpenseTracker() {
                   </label>
                   <textarea
                     value={formData.description}
-                    onChange={e =>
+                    onChange={(e) =>
                       setFormData({ ...formData, description: e.target.value })
                     }
                     rows={2}
@@ -647,7 +650,7 @@ export default function ExpenseTracker() {
                     </label>
                     <input
                       value={formData.reference}
-                      onChange={e =>
+                      onChange={(e) =>
                         setFormData({ ...formData, reference: e.target.value })
                       }
                       className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
@@ -659,7 +662,7 @@ export default function ExpenseTracker() {
                     </label>
                     <input
                       value={formData.approvedBy}
-                      onChange={e =>
+                      onChange={(e) =>
                         setFormData({ ...formData, approvedBy: e.target.value })
                       }
                       className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"

@@ -19,7 +19,7 @@ export default function CloudSyncPanel() {
   const [enabled, setEnabled] = useState(FirebaseService.isEnabled());
   const [syncing, setSyncing] = useState(false);
   const [lastSync, setLastSync] = useState<string | null>(
-    localStorage.getItem("fuelpro_last_cloud_sync")
+    localStorage.getItem("fuelpro_last_cloud_sync"),
   );
   const [message, setMessage] = useState("");
   const [showSettings, setShowSettings] = useState(false);
@@ -70,12 +70,12 @@ export default function CloudSyncPanel() {
     const ok = await FirebaseService.restoreFromCloud(stationId);
     setSyncing(false);
     setMessage(
-      ok ? "Data restored from cloud! Refreshing..." : "No cloud data found."
+      ok ? "Data restored from cloud! Refreshing..." : "No cloud data found.",
     );
     if (ok) {
       setLastSync(new Date().toISOString());
       import("@/react-app/lib/app-reloader").then(({ triggerSoftReload }) =>
-        triggerSoftReload(1500)
+        triggerSoftReload(1500),
       );
     }
     setTimeout(() => setMessage(""), 4000);
@@ -172,7 +172,7 @@ export default function CloudSyncPanel() {
             <input
               type="password"
               value={encKey}
-              onChange={e => setEncKey(e.target.value)}
+              onChange={(e) => setEncKey(e.target.value)}
               placeholder="Enter custom encryption key..."
               className="flex-1 px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
             />

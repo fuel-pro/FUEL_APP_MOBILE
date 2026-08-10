@@ -3,21 +3,26 @@
 ## ⚡ DO THIS NOW
 
 ### 1️⃣ Create Supabase Project
+
 → https://supabase.com → New Project → "fuel-pro"
 
 ### 2️⃣ Get API Keys
+
 → Settings → API → Copy URL + anon key
 
 ### 3️⃣ Setup Database
+
 → SQL Editor → Paste SQL from docs/SUPABASE_SETUP_GUIDE.md → Run
 
 ### 4️⃣ Configure .env.local
+
 ```bash
 VITE_SUPABASE_URL=https://your-ref.supabase.co
 VITE_SUPABASE_ANON_KEY=your-anon-key
 ```
 
 ### 5️⃣ Test
+
 ```bash
 npm install && npm run dev
 ```
@@ -42,20 +47,20 @@ npm install && npm run dev
 ✅ Row Level Security  
 ✅ Real-time sync  
 ✅ Cloud backup  
-✅ Multi-device support  
+✅ Multi-device support
 
 ---
 
 ## 💰 COST
 
 Free: 500MB DB, 1GB storage  
-Pro: ~$25/month  
+Pro: ~$25/month
 
 ---
 
 ## ⏱️ TIME
 
-Total: ~25 minutes  
+Total: ~25 minutes
 
 ---
 

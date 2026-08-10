@@ -134,10 +134,10 @@ export default function ErrorPage({ code, title, message }: ErrorPageProps) {
               cursor: "pointer",
               transition: "all 0.2s",
             }}
-            onMouseOver={e =>
+            onMouseOver={(e) =>
               (e.currentTarget.style.transform = "translateY(-2px)")
             }
-            onMouseOut={e =>
+            onMouseOut={(e) =>
               (e.currentTarget.style.transform = "translateY(0)")
             }
           >

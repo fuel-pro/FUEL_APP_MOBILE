@@ -38,13 +38,15 @@ export function useDataIntegration(stationId: string) {
       try {
         const stored = localStorage.getItem(`${STORAGE_PREFIX}_tanks`);
         if (stored) currentTanks = JSON.parse(stored);
-      } catch { /* Use defaults */ }
+      } catch {
+        /* Use defaults */
+      }
       if (sale.fuelType === "PMS")
         currentTanks.pms = Math.max(0, currentTanks.pms - sale.quantity);
       else currentTanks.ago = Math.max(0, currentTanks.ago - sale.quantity);
       localStorage.setItem(
         `${STORAGE_PREFIX}_tanks`,
-        JSON.stringify(currentTanks)
+        JSON.stringify(currentTanks),
       );
 
       // 2. Award loyalty points if customer identified
@@ -56,11 +58,19 @@ export function useDataIntegration(stationId: string) {
       // 3. Update daily sales summary
       const today = new Date().toISOString().split("T")[0];
       const dailyKey = `${STORAGE_PREFIX}_daily_${today}`;
-      let daily = { pmsQty: 0, agoQty: 0, pmsRevenue: 0, agoRevenue: 0, transactions: 0 };
+      let daily = {
+        pmsQty: 0,
+        agoQty: 0,
+        pmsRevenue: 0,
+        agoRevenue: 0,
+        transactions: 0,
+      };
       try {
         const stored = localStorage.getItem(dailyKey);
         if (stored) daily = JSON.parse(stored);
-      } catch { /* Use defaults */ }
+      } catch {
+        /* Use defaults */
+      }
       if (sale.fuelType === "PMS") {
         daily.pmsQty += sale.quantity;
         daily.pmsRevenue += sale.amount;
@@ -75,13 +85,13 @@ export function useDataIntegration(stationId: string) {
       logAudit(
         "sale",
         `Sold ${sale.quantity}L of ${sale.fuelType} for Ksh ${sale.amount}`,
-        sale
+        sale,
       );
 
       // 5. Dispatch event for real-time updates
       window.dispatchEvent(new CustomEvent("fuelpro-sale", { detail: sale }));
     },
-    [STORAGE_PREFIX]
+    [STORAGE_PREFIX],
   );
 
   // Record fuel delivery - updates tank levels
@@ -91,24 +101,26 @@ export function useDataIntegration(stationId: string) {
       try {
         const stored = localStorage.getItem(`${STORAGE_PREFIX}_tanks`);
         if (stored) currentTanks = JSON.parse(stored);
-      } catch { /* Use defaults */ }
+      } catch {
+        /* Use defaults */
+      }
       if (delivery.fuelType === "PMS") currentTanks.pms += delivery.quantity;
       else currentTanks.ago += delivery.quantity;
       localStorage.setItem(
         `${STORAGE_PREFIX}_tanks`,
-        JSON.stringify(currentTanks)
+        JSON.stringify(currentTanks),
       );
 
       logAudit(
         "inventory",
         `Received ${delivery.quantity}L of ${delivery.fuelType} from ${delivery.supplier}`,
-        delivery
+        delivery,
       );
       window.dispatchEvent(
-        new CustomEvent("fuelpro-delivery", { detail: delivery })
+        new CustomEvent("fuelpro-delivery", { detail: delivery }),
       );
     },
-    [STORAGE_PREFIX]
+    [STORAGE_PREFIX],
   );
 
   // Award loyalty points
@@ -139,14 +151,14 @@ export function useDataIntegration(stationId: string) {
           window.dispatchEvent(
             new CustomEvent("fuelpro-loyalty-update", {
               detail: { phone, points },
-            })
+            }),
           );
         }
       } catch {
         /* ignore */
       }
     },
-    []
+    [],
   );
 
   // Update tank levels from dip measurement
@@ -158,18 +170,18 @@ export function useDataIntegration(stationId: string) {
           pms: update.pmsTankClosing,
           ago: update.agoTankClosing,
           timestamp: update.timestamp,
-        })
+        }),
       );
       logAudit(
         "inventory",
         `Tank levels updated: PMS=${update.pmsTankClosing}L, AGO=${update.agoTankClosing}L`,
-        update
+        update,
       );
       window.dispatchEvent(
-        new CustomEvent("fuelpro-tank-update", { detail: update })
+        new CustomEvent("fuelpro-tank-update", { detail: update }),
       );
     },
-    [STORAGE_PREFIX]
+    [STORAGE_PREFIX],
   );
 
   // Record credit sale
@@ -180,7 +192,9 @@ export function useDataIntegration(stationId: string) {
         try {
           const stored = localStorage.getItem("fuelpro_credit_accounts");
           if (stored) accounts = JSON.parse(stored);
-        } catch { /* Use empty array */ }
+        } catch {
+          /* Use empty array */
+        }
         const idx = accounts.findIndex((a: any) => a.id === accountId);
         if (idx >= 0) {
           accounts[idx].balanceUsed = (accounts[idx].balanceUsed || 0) + amount;
@@ -188,7 +202,7 @@ export function useDataIntegration(stationId: string) {
             (accounts[idx].totalPurchases || 0) + amount;
           localStorage.setItem(
             "fuelpro_credit_accounts",
-            JSON.stringify(accounts)
+            JSON.stringify(accounts),
           );
 
           // Also record transaction
@@ -196,7 +210,9 @@ export function useDataIntegration(stationId: string) {
           try {
             const storedTx = localStorage.getItem("fuelpro_credit_tx");
             if (storedTx) txs = JSON.parse(storedTx);
-          } catch { /* Use empty array */ }
+          } catch {
+            /* Use empty array */
+          }
           txs.unshift({
             id: `ctx_${Date.now()}`,
             accountId,
@@ -208,25 +224,25 @@ export function useDataIntegration(stationId: string) {
           });
           localStorage.setItem(
             "fuelpro_credit_tx",
-            JSON.stringify(txs.slice(0, 200))
+            JSON.stringify(txs.slice(0, 200)),
           );
 
           logAudit(
             "payment",
             `Credit sale: Ksh ${amount} to ${accounts[idx].customerName}`,
-            { accountId, amount }
+            { accountId, amount },
           );
           window.dispatchEvent(
             new CustomEvent("fuelpro-credit-update", {
               detail: { accountId, amount },
-            })
+            }),
           );
         }
       } catch {
         /* ignore */
       }
     },
-    []
+    [],
   );
 
   // Record shift activity
@@ -234,14 +250,16 @@ export function useDataIntegration(stationId: string) {
     (
       employeeId: string,
       action: "checkin" | "checkout",
-      pumpAssignment?: string
+      pumpAssignment?: string,
     ) => {
       try {
         let shifts: any[] = [];
         try {
           const stored = localStorage.getItem("fuelpro_shifts");
           if (stored) shifts = JSON.parse(stored);
-        } catch { /* Use empty array */ }
+        } catch {
+          /* Use empty array */
+        }
         const today = new Date().toISOString().split("T")[0];
 
         if (action === "checkin") {
@@ -249,7 +267,9 @@ export function useDataIntegration(stationId: string) {
           try {
             const storedEmp = localStorage.getItem("fuelpro_employees");
             if (storedEmp) employees = JSON.parse(storedEmp);
-          } catch { /* Use empty array */ }
+          } catch {
+            /* Use empty array */
+          }
           const emp = employees.find((e: any) => e.id === employeeId);
           shifts.unshift({
             id: `shift_${Date.now()}`,
@@ -267,7 +287,7 @@ export function useDataIntegration(stationId: string) {
           } as any);
         } else {
           const activeShift = shifts.find(
-            (s: any) => s.employeeId === employeeId && s.status === "active"
+            (s: any) => s.employeeId === employeeId && s.status === "active",
           );
           if (activeShift) {
             activeShift.status = "completed";
@@ -278,13 +298,13 @@ export function useDataIntegration(stationId: string) {
         window.dispatchEvent(
           new CustomEvent("fuelpro-shift-update", {
             detail: { employeeId, action },
-          })
+          }),
         );
       } catch {
         /* ignore */
       }
     },
-    []
+    [],
   );
 
   // Record inventory adjustment
@@ -295,7 +315,9 @@ export function useDataIntegration(stationId: string) {
         try {
           const stored = localStorage.getItem("fuelpro_inventory");
           if (stored) items = JSON.parse(stored);
-        } catch { /* Use empty array */ }
+        } catch {
+          /* Use empty array */
+        }
         const idx = items.findIndex((i: any) => i.id === itemId);
         if (idx >= 0) {
           if (type === "in") items[idx].quantity += quantity;
@@ -307,9 +329,13 @@ export function useDataIntegration(stationId: string) {
           // Log movement
           let movements: any[] = [];
           try {
-            const storedMov = localStorage.getItem("fuelpro_inventory_movements");
+            const storedMov = localStorage.getItem(
+              "fuelpro_inventory_movements",
+            );
             if (storedMov) movements = JSON.parse(storedMov);
-          } catch { /* Use empty array */ }
+          } catch {
+            /* Use empty array */
+          }
           movements.unshift({
             id: `mov_${Date.now()}`,
             itemId,
@@ -321,25 +347,25 @@ export function useDataIntegration(stationId: string) {
           });
           localStorage.setItem(
             "fuelpro_inventory_movements",
-            JSON.stringify(movements.slice(0, 200))
+            JSON.stringify(movements.slice(0, 200)),
           );
 
           logAudit(
             "inventory",
             `${type === "in" ? "Stock in" : "Stock out"}: ${quantity} x ${items[idx].name} (${reason})`,
-            { itemId, quantity, type }
+            { itemId, quantity, type },
           );
           window.dispatchEvent(
             new CustomEvent("fuelpro-inventory-update", {
               detail: { itemId, quantity, type },
-            })
+            }),
           );
         }
       } catch {
         /* ignore */
       }
     },
-    []
+    [],
   );
 
   // Get daily summary
@@ -350,7 +376,9 @@ export function useDataIntegration(stationId: string) {
       try {
         const stored = localStorage.getItem(`${STORAGE_PREFIX}_daily_${d}`);
         if (stored) daily = JSON.parse(stored);
-      } catch { /* Return defaults */ }
+      } catch {
+        /* Return defaults */
+      }
       if (!daily)
         return {
           pmsQty: 0,
@@ -361,7 +389,7 @@ export function useDataIntegration(stationId: string) {
         };
       return daily;
     },
-    [STORAGE_PREFIX]
+    [STORAGE_PREFIX],
   );
 
   // Get current tank levels
@@ -369,7 +397,9 @@ export function useDataIntegration(stationId: string) {
     try {
       const stored = localStorage.getItem(`${STORAGE_PREFIX}_tanks`);
       if (stored) return JSON.parse(stored);
-    } catch { /* Use defaults */ }
+    } catch {
+      /* Use defaults */
+    }
     return { pms: 0, ago: 0 };
   }, [STORAGE_PREFIX]);
 
@@ -397,7 +427,7 @@ function logAudit(category: string, details: string, data?: any) {
       ...(data && { newValue: data }),
     };
     window.dispatchEvent(
-      new CustomEvent("fuelpro-audit-log", { detail: entry })
+      new CustomEvent("fuelpro-audit-log", { detail: entry }),
     );
   } catch {
     /* ignore */

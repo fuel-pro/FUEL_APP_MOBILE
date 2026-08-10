@@ -2,13 +2,17 @@
  * FuelPriceService - Auto-detects fuel prices based on location
  * Uses a hidden mini-browser approach to fetch real-time fuel prices
  * Runs once per day to avoid excessive API calls
- * 
+ *
  * Now uses unified pricing from @/react-app/config/pricing
  */
 
 // Use relative import since the path alias might not work in all contexts
 import { detectCountryFromTimezone } from "../config/countries";
-import { KENYA_BASE_PRICES, REGIONAL_PRICES, DEFAULT_PRICES } from "../config/pricing";
+import {
+  KENYA_BASE_PRICES,
+  REGIONAL_PRICES,
+  DEFAULT_PRICES,
+} from "../config/pricing";
 import { getCountryFromLocation } from "../lib/world-country-utils";
 
 // Storage keys
@@ -107,7 +111,9 @@ const currencyMap: Record<string, { currency: string; symbol: string }> = {
 // parsed from it takes priority over timezone/IP detection so that a station
 // in Kenya always resolves to Kenyan prices even when the app is served from a
 // US CDN edge with a non-mapped browser timezone.
-async function detectUserLocation(locationHint?: string): Promise<LocationData> {
+async function detectUserLocation(
+  locationHint?: string,
+): Promise<LocationData> {
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
   // If a location hint was supplied, derive the country from it FIRST. This is
@@ -124,9 +130,9 @@ async function detectUserLocation(locationHint?: string): Promise<LocationData> 
       const city =
         locationHint
           .split(/[,;|]/)
-          .map(s => s.trim())
+          .map((s) => s.trim())
           .find(
-            s => s && !s.toLowerCase().includes(derived.name.toLowerCase())
+            (s) => s && !s.toLowerCase().includes(derived.name.toLowerCase()),
           ) || derived.name;
       const locationData: LocationData = {
         country: derived.name,
@@ -158,7 +164,9 @@ async function detectUserLocation(locationHint?: string): Promise<LocationData> 
       }
       // Mismatch: the cached value was likely a CDN-derived false positive.
       // Fall through to re-detect.
-      console.log("[FuelPrice] Discarding stale location cache (country mismatch with timezone)");
+      console.log(
+        "[FuelPrice] Discarding stale location cache (country mismatch with timezone)",
+      );
     }
   } catch {}
 
@@ -171,7 +179,9 @@ async function detectUserLocation(locationHint?: string): Promise<LocationData> 
   // and only adopt its country code if it agrees with the timezone country.
   // This keeps the CDN's IP from overriding the user's real locale.
   try {
-    const response = await fetch("https://ipwho.is/?fields=success,country,country_code,city,timezone");
+    const response = await fetch(
+      "https://ipwho.is/?fields=success,country,country_code,city,timezone",
+    );
     if (response.ok) {
       const data = await response.json();
       if (data.success !== false) {
@@ -190,7 +200,10 @@ async function detectUserLocation(locationHint?: string): Promise<LocationData> 
     console.log("[FuelPrice] IP geolocation failed, using timezone detection");
   }
 
-  const currencyInfo = currencyMap[countryCode] || { currency: "USD", symbol: "$" };
+  const currencyInfo = currencyMap[countryCode] || {
+    currency: "USD",
+    symbol: "$",
+  };
 
   const locationData: LocationData = {
     country,
@@ -244,7 +257,8 @@ async function scrapeFuelPrices(location: LocationData): Promise<FuelPrices> {
       location: `${location.city}, ${location.country}`,
       countryCode: "KE",
       fetchedAt: new Date().toISOString(),
-      source: "EPRA Regulated Prices (static baseline — set OILPRICE_API_KEY for live updates)",
+      source:
+        "EPRA Regulated Prices (static baseline — set OILPRICE_API_KEY for live updates)",
     };
   }
 
@@ -261,17 +275,30 @@ async function scrapeFuelPrices(location: LocationData): Promise<FuelPrices> {
 
   // Use unified regional prices
   const regional = REGIONAL_PRICES[location.countryCode];
-  const prices = regional || { petrol: DEFAULT_PRICES.petrol, diesel: DEFAULT_PRICES.diesel };
+  const prices = regional || {
+    petrol: DEFAULT_PRICES.petrol,
+    diesel: DEFAULT_PRICES.diesel,
+  };
   const currencySymbols: Record<string, string> = {
-    KE: "KSh", UG: "USh", TZ: "TSh", NG: "₦", ZA: "R", GH: "GH₵", RW: "RF", ET: "Br",
-    US: "$", GB: "£", EU: "€",
+    KE: "KSh",
+    UG: "USh",
+    TZ: "TSh",
+    NG: "₦",
+    ZA: "R",
+    GH: "GH₵",
+    RW: "RF",
+    ET: "Br",
+    US: "$",
+    GB: "£",
+    EU: "€",
   };
 
   return {
     petrolPrice: prices.petrol,
     dieselPrice: prices.diesel,
     currency: location.currency,
-    currencySymbol: currencySymbols[location.countryCode] || location.currencySymbol || "$",
+    currencySymbol:
+      currencySymbols[location.countryCode] || location.currencySymbol || "$",
     location: `${location.city}, ${location.country}`,
     countryCode: location.countryCode,
     fetchedAt: new Date().toISOString(),
@@ -280,7 +307,9 @@ async function scrapeFuelPrices(location: LocationData): Promise<FuelPrices> {
 }
 
 // Main function: Get fuel prices (uses cache if available)
-export async function getFuelPrices(locationHint?: string): Promise<FuelPrices> {
+export async function getFuelPrices(
+  locationHint?: string,
+): Promise<FuelPrices> {
   // When a location hint is provided, bypass the daily cache so the prices
   // always reflect the (possibly changed) station location rather than a
   // stale CDN-derived detection from earlier in the day.
@@ -302,21 +331,27 @@ export async function getFuelPrices(locationHint?: string): Promise<FuelPrices> 
 
     // Step 2: Scrape/fetch fuel prices
     const prices = await scrapeFuelPrices(location);
-    
+
     // Step 3: Cache the results
     savePricesToCache(prices);
-    
+
     console.log("[FuelPrice] New prices fetched:", prices);
     return prices;
   } catch (error) {
     console.error("[FuelPrice] Failed to fetch prices:", error);
-    
+
     // Return fallback prices based on timezone detection
     const countryCode = detectCountryFromTimezone();
     // Use unified pricing for fallback
     const regional = REGIONAL_PRICES[countryCode];
-    const petrolPrice = countryCode === "KE" ? KENYA_PETROL_PRICE : (regional?.petrol || DEFAULT_PRICES.petrol);
-    const dieselPrice = countryCode === "KE" ? KENYA_DIESEL_PRICE : (regional?.diesel || DEFAULT_PRICES.diesel);
+    const petrolPrice =
+      countryCode === "KE"
+        ? KENYA_PETROL_PRICE
+        : regional?.petrol || DEFAULT_PRICES.petrol;
+    const dieselPrice =
+      countryCode === "KE"
+        ? KENYA_DIESEL_PRICE
+        : regional?.diesel || DEFAULT_PRICES.diesel;
     const fallbackPrices: FuelPrices = {
       petrolPrice,
       dieselPrice,
@@ -327,7 +362,7 @@ export async function getFuelPrices(locationHint?: string): Promise<FuelPrices> 
       fetchedAt: new Date().toISOString(),
       source: "Fallback Prices",
     };
-    
+
     return fallbackPrices;
   }
 }
@@ -357,7 +392,11 @@ export function resetPriceCache(): void {
 }
 
 // Get prices with fallback for UI display
-export function getDisplayPrices(): { pmsPrice: number; agoPrice: number; currencySymbol: string } {
+export function getDisplayPrices(): {
+  pmsPrice: number;
+  agoPrice: number;
+  currencySymbol: string;
+} {
   const cached = getCachedPrices();
   if (cached) {
     return {
@@ -371,8 +410,14 @@ export function getDisplayPrices(): { pmsPrice: number; agoPrice: number; curren
   const countryCode = detectCountryFromTimezone();
   const regional = REGIONAL_PRICES[countryCode];
   return {
-    pmsPrice: countryCode === "KE" ? KENYA_PETROL_PRICE : (regional?.petrol || DEFAULT_PRICES.petrol),
-    agoPrice: countryCode === "KE" ? KENYA_DIESEL_PRICE : (regional?.diesel || DEFAULT_PRICES.diesel),
+    pmsPrice:
+      countryCode === "KE"
+        ? KENYA_PETROL_PRICE
+        : regional?.petrol || DEFAULT_PRICES.petrol,
+    agoPrice:
+      countryCode === "KE"
+        ? KENYA_DIESEL_PRICE
+        : regional?.diesel || DEFAULT_PRICES.diesel,
     currencySymbol: regional?.currencySymbol || DEFAULT_PRICES.currencySymbol,
   };
 }

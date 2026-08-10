@@ -15,14 +15,14 @@ export default function PerformanceMonitor() {
   const [pageWeight, setPageWeight] = useState(0);
 
   useEffect(() => {
-    initVitalsTracking(v => setVitals({ ...v }));
+    initVitalsTracking((v) => setVitals({ ...v }));
     setResourceCount(performance.getEntriesByType("resource").length);
 
     // Calculate total page weight
     const resources = performance.getEntriesByType("resource");
     const total = resources.reduce(
       (s, r) => s + (r as PerformanceResourceTiming).transferSize,
-      0
+      0,
     );
     setPageWeight(total);
   }, []);
@@ -35,7 +35,7 @@ export default function PerformanceMonitor() {
   }, []);
 
   const targets = checkPerformanceTargets(vitals);
-  const allPass = targets.every(t => t.pass);
+  const allPass = targets.every((t) => t.pass);
 
   return (
     <div className="fixed bottom-4 right-4 z-50">
@@ -57,7 +57,7 @@ export default function PerformanceMonitor() {
           </span>
         </div>
 
-        {targets.map(t => (
+        {targets.map((t) => (
           <div key={t.metric} className="flex items-center justify-between">
             <span className="text-[10px] text-gray-500">{t.metric}</span>
             <div className="flex items-center gap-1">
@@ -107,11 +107,11 @@ export function PerformanceBadge() {
   const [vitals, setVitals] = useState<WebVitals>({});
 
   useEffect(() => {
-    initVitalsTracking(v => setVitals({ ...v }));
+    initVitalsTracking((v) => setVitals({ ...v }));
   }, []);
 
   const targets = checkPerformanceTargets(vitals);
-  const allPass = targets.every(t => t.pass);
+  const allPass = targets.every((t) => t.pass);
   const lcp = vitals.lcp ? `${Math.round(vitals.lcp)}ms` : "--";
 
   return (

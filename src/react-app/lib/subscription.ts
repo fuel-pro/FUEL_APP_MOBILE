@@ -441,17 +441,17 @@ export function markTrialUsed() {
 export function checkTrialAbuse(email: string): boolean {
   try {
     const abuseData: string[] = JSON.parse(
-      localStorage.getItem(TRIAL_ABUSE_KEY) || "[]"
+      localStorage.getItem(TRIAL_ABUSE_KEY) || "[]",
     );
     const fp = generateFingerprint();
     const ipHash = hashString(
-      navigator.userAgent + screen.width + screen.height
+      navigator.userAgent + screen.width + screen.height,
     );
     const emailHash = hashString(email);
 
     // Check if email, fingerprint, or IP hash has been used for trial
     const flags = abuseData.filter(
-      h => h === emailHash || h === fp || h === ipHash
+      (h) => h === emailHash || h === fp || h === ipHash,
     );
     return flags.length >= 2; // If 2+ matches, likely abuse
   } catch {
@@ -462,16 +462,16 @@ export function checkTrialAbuse(email: string): boolean {
 export function recordTrialAbuse(email: string) {
   try {
     const abuseData: string[] = JSON.parse(
-      localStorage.getItem(TRIAL_ABUSE_KEY) || "[]"
+      localStorage.getItem(TRIAL_ABUSE_KEY) || "[]",
     );
     const fp = generateFingerprint();
     const ipHash = hashString(
-      navigator.userAgent + screen.width + screen.height
+      navigator.userAgent + screen.width + screen.height,
     );
     abuseData.push(hashString(email), fp, ipHash);
     localStorage.setItem(
       TRIAL_ABUSE_KEY,
-      JSON.stringify(abuseData.slice(-500))
+      JSON.stringify(abuseData.slice(-500)),
     );
   } catch {
     /* */
@@ -485,9 +485,9 @@ export function createSubscription(
   currency: string,
   amount: number,
   gateway: string,
-  couponCode?: string
+  couponCode?: string,
 ): Subscription {
-  const tier = DEFAULT_TIERS.find(t => t.id === tierId);
+  const tier = DEFAULT_TIERS.find((t) => t.id === tierId);
   const isLifetime = tierId === "lifetime";
   const sub: Subscription = {
     id: `sub_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
@@ -501,7 +501,7 @@ export function createSubscription(
     expiresAt: isLifetime
       ? null
       : new Date(
-          Date.now() + (tier?.durationDays || 30) * 86400000
+          Date.now() + (tier?.durationDays || 30) * 86400000,
         ).toISOString(),
     autoRenew: !isLifetime,
     couponUsed: couponCode,
@@ -580,7 +580,7 @@ export function recordPayment(
   gateway: string,
   amount: number,
   currency: string,
-  status: PaymentRecord["status"] = "success"
+  status: PaymentRecord["status"] = "success",
 ): PaymentRecord {
   const payments = loadPayments();
   const payment: PaymentRecord = {
@@ -603,7 +603,7 @@ export function recordPayment(
 export function applyCoupon(
   code: string,
   tierId: TierSlug,
-  regionCode: string
+  regionCode: string,
 ): {
   valid: boolean;
   discount: number;
@@ -613,7 +613,7 @@ export function applyCoupon(
 } {
   const coupons = loadCoupons();
   const coupon = coupons.find(
-    c => c.code.toUpperCase() === code.toUpperCase() && c.isActive
+    (c) => c.code.toUpperCase() === code.toUpperCase() && c.isActive,
   );
 
   if (!coupon)
@@ -667,10 +667,10 @@ export function applyCoupon(
   };
 }
 
-export function useCoupon(code: string) {
+export function recordCouponUse(code: string) {
   const coupons = loadCoupons();
   const idx = coupons.findIndex(
-    c => c.code.toUpperCase() === code.toUpperCase()
+    (c) => c.code.toUpperCase() === code.toUpperCase(),
   );
   if (idx >= 0) {
     coupons[idx].usedCount++;
@@ -681,16 +681,16 @@ export function useCoupon(code: string) {
 // ─── Geo Pricing ───
 export function resolvePrice(
   tierId: TierSlug,
-  countryCode: string
+  countryCode: string,
 ): RegionalPrice | null {
   const prices = loadRegionalPrices();
   // Try exact country match
   let match = prices.find(
-    p => p.tierId === tierId && p.regionCodes.includes(countryCode)
+    (p) => p.tierId === tierId && p.regionCodes.includes(countryCode),
   );
   if (!match) {
     // Fallback to USD
-    match = prices.find(p => p.tierId === tierId && p.currency === "USD");
+    match = prices.find((p) => p.tierId === tierId && p.currency === "USD");
   }
   return match || null;
 }
@@ -709,7 +709,7 @@ export function resolveCountry(): {
 }
 
 export function getAvailableGateways(currency: string): GatewayInfo[] {
-  return GATEWAYS.filter(g => g.currencies.includes(currency));
+  return GATEWAYS.filter((g) => g.currencies.includes(currency));
 }
 
 // ─── Analytics ───
@@ -720,7 +720,7 @@ export function getSubscriptionStats() {
   const coupons = loadCoupons();
 
   const totalRevenue = payments
-    .filter(p => p.status === "success")
+    .filter((p) => p.status === "success")
     .reduce((s, p) => s + p.amount, 0);
   const totalPayments = payments.length;
   const avgOrderValue = totalPayments > 0 ? totalRevenue / totalPayments : 0;
@@ -735,7 +735,7 @@ export function getSubscriptionStats() {
     totalRevenue,
     totalPayments,
     avgOrderValue,
-    activeCoupons: coupons.filter(c => c.isActive).length,
+    activeCoupons: coupons.filter((c) => c.isActive).length,
     totalCouponsUsed: coupons.reduce((s, c) => s + c.usedCount, 0),
   };
 }
@@ -756,7 +756,7 @@ function generateFingerprint(): string {
       screen.colorDepth +
       screen.width +
       screen.height +
-      canvasData.slice(-50)
+      canvasData.slice(-50),
   );
 }
 

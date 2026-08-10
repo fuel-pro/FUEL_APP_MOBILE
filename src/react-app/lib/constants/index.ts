@@ -1,6 +1,6 @@
 /**
  * CENTRALIZED CONSTANTS INDEX
- * 
+ *
  * Export all constants from a single location for easy imports.
  */
 

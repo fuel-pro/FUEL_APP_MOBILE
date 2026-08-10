@@ -105,7 +105,7 @@ export default function PointOfSale() {
     useState<LoyaltyCustomer | null>(null);
   const [showLoyaltyScanner, setShowLoyaltyScanner] = useState(false);
   const [loyaltyLookupMode, setLoyaltyLookupMode] = useState<"phone" | "card">(
-    "phone"
+    "phone",
   );
 
   // Loyalty lookup by phone or card number
@@ -134,7 +134,10 @@ export default function PointOfSale() {
   useEffect(() => {
     if (!user) return;
     (async () => {
-      const cloud = await cloudStorageService.get<POSTransaction[]>("pos_transactions", stationId);
+      const cloud = await cloudStorageService.get<POSTransaction[]>(
+        "pos_transactions",
+        stationId,
+      );
       if (cloud && Array.isArray(cloud)) setTransactions(cloud);
     })();
   }, [user, stationId]);
@@ -144,10 +147,10 @@ export default function PointOfSale() {
     if (!loyaltyCustomer || !loyaltyConfig?.isEnabled) return;
 
     // Calculate total liters from fuel items
-    const fuelItems = transaction.items.filter(item => item.litres);
+    const fuelItems = transaction.items.filter((item) => item.litres);
     const totalLiters = fuelItems.reduce(
       (sum, item) => sum + (item.litres || 0),
-      0
+      0,
     );
     const fuelType = fuelItems[0]?.fuelType || "PMS";
 
@@ -158,12 +161,12 @@ export default function PointOfSale() {
         transaction.total,
         totalLiters,
         fuelType,
-        transaction.cashier || "POS"
+        transaction.cashier || "POS",
       );
 
       // Refresh customer data
-      setLoyaltyCustomer(prev =>
-        prev ? findCustomerByPhone(prev.phone) || prev : null
+      setLoyaltyCustomer((prev) =>
+        prev ? findCustomerByPhone(prev.phone) || prev : null,
       );
     }
   };
@@ -220,7 +223,7 @@ export default function PointOfSale() {
 
   // Generate QR code for receipt verification
   const generateQRData = async (
-    transaction: Omit<POSTransaction, "qrCodeData">
+    transaction: Omit<POSTransaction, "qrCodeData">,
   ) => {
     const qrData = {
       pin: etrConfig.kraPin,
@@ -303,18 +306,18 @@ export default function PointOfSale() {
 
   const updateQuantity = (itemId: string, delta: number) => {
     setCart(
-      cart.map(item => {
+      cart.map((item) => {
         if (item.id === itemId) {
           const newQty = Math.max(1, item.quantity + delta);
           return { ...item, quantity: newQty, total: item.unitPrice * newQty };
         }
         return item;
-      })
+      }),
     );
   };
 
   const removeItem = (itemId: string) => {
-    setCart(cart.filter(item => item.id !== itemId));
+    setCart(cart.filter((item) => item.id !== itemId));
   };
 
   const clearCart = () => {
@@ -323,14 +326,14 @@ export default function PointOfSale() {
 
   // Calculate VAT by category
   const calculateVAT = () => {
-    let vatA = 0,
-      vatB = 0,
+    let vatA = 0;
+    const vatB = 0,
       vatE = 0;
     let taxableA = 0,
       taxableB = 0,
       exemptE = 0;
 
-    cart.forEach(item => {
+    cart.forEach((item) => {
       const itemTotal = item.total;
       if (item.vatCategory === "A") {
         // VAT inclusive calculation
@@ -357,7 +360,7 @@ export default function PointOfSale() {
   const initiateSTKPush = async () => {
     if (!customerPhone) {
       import("@/react-app/lib/toast").then(({ toastWarning }) =>
-        toastWarning("Please enter customer phone number for M-Pesa payment")
+        toastWarning("Please enter customer phone number for M-Pesa payment"),
       );
       return;
     }
@@ -416,19 +419,18 @@ export default function PointOfSale() {
     // Save transaction locally (serverless mode)
     try {
       const localTransactions = JSON.parse(
-        localStorage.getItem("fuelpro_pos_transactions") || "[]"
+        localStorage.getItem("fuelpro_pos_transactions") || "[]",
       );
       localTransactions.push({
         ...transaction,
         savedAt: new Date().toISOString(),
       });
       const trimmed = localTransactions.slice(-100);
-      localStorage.setItem(
-        "fuelpro_pos_transactions",
-        JSON.stringify(trimmed)
-      );
+      localStorage.setItem("fuelpro_pos_transactions", JSON.stringify(trimmed));
       // Cross-device sync
-      cloudStorageService.set("pos_transactions", trimmed, stationId).catch(() => {});
+      cloudStorageService
+        .set("pos_transactions", trimmed, stationId)
+        .catch(() => {});
     } catch (error) {
       console.error("Failed to save POS transaction locally:", error);
     }
@@ -463,7 +465,7 @@ export default function PointOfSale() {
   const syncFuelSalesToHistory = (
     items: CartItem[],
     timestamp: string,
-    payment: string
+    payment: string,
   ) => {
     const date = timestamp.split("T")[0];
     const shift = new Date(timestamp).getHours() < 14 ? "Day" : "Night";
@@ -475,7 +477,7 @@ export default function PointOfSale() {
     let agoLitres = 0,
       agoAmount = 0;
 
-    items.forEach(item => {
+    items.forEach((item) => {
       if (item.fuelType === "PMS") {
         pmsLitres += item.litres || item.quantity;
         pmsAmount += item.total;
@@ -534,15 +536,15 @@ export default function PointOfSale() {
   const addToDeliveryTracking = (
     items: CartItem[],
     customer: string,
-    timestamp: string
+    timestamp: string,
   ) => {
-    const fuelItems = items.filter(item => item.fuelType);
+    const fuelItems = items.filter((item) => item.fuelType);
     if (fuelItems.length === 0) return;
 
     const date = timestamp.split("T")[0];
     const totalLitres = fuelItems.reduce(
       (sum, item) => sum + (item.litres || item.quantity),
-      0
+      0,
     );
     const totalAmount = fuelItems.reduce((sum, item) => sum + item.total, 0);
     const fuelType = fuelItems[0].fuelType || "PMS";
@@ -561,7 +563,7 @@ export default function PointOfSale() {
     const totals = {
       totalSupplied: updatedRows.reduce(
         (sum, row) => sum + (row.amount || 0),
-        0
+        0,
       ),
       totalPayments: state.deliveryData.totals.totalPayments,
       balanceDue: updatedRows.reduce((sum, row) => sum + (row.debt || 0), 0),
@@ -650,7 +652,7 @@ export default function PointOfSale() {
         width: 120,
         margin: 1,
       })
-        .then(url => setQrCodeUrl(url))
+        .then((url) => setQrCodeUrl(url))
         .catch(console.error);
     }
   }, [currentTransaction]);
@@ -740,7 +742,7 @@ export default function PointOfSale() {
                 <input
                   type="number"
                   value={quickSaleLitres}
-                  onChange={e => setQuickSaleLitres(e.target.value)}
+                  onChange={(e) => setQuickSaleLitres(e.target.value)}
                   placeholder="Litres"
                   className="w-32 px-3 py-2 rounded-lg border dark:bg-gray-800 dark:border-gray-600"
                   step="0.1"
@@ -751,7 +753,7 @@ export default function PointOfSale() {
                     (parseFloat(quickSaleLitres) || 0) *
                       (quickSaleType === "petrol"
                         ? state.petrolPrice
-                        : state.dieselPrice)
+                        : state.dieselPrice),
                   )}
                 </span>
                 <button onClick={addFuelToCart} className="btn btn-primary">
@@ -768,14 +770,14 @@ export default function PointOfSale() {
               <input
                 type="text"
                 value={customItemName}
-                onChange={e => setCustomItemName(e.target.value)}
+                onChange={(e) => setCustomItemName(e.target.value)}
                 placeholder="Item name"
                 className="flex-1 min-w-[150px] px-3 py-2 rounded-lg border dark:bg-gray-800 dark:border-gray-600"
               />
               <input
                 type="number"
                 value={customItemPrice}
-                onChange={e => setCustomItemPrice(e.target.value)}
+                onChange={(e) => setCustomItemPrice(e.target.value)}
                 placeholder="Price (Ksh)"
                 className="w-32 px-3 py-2 rounded-lg border dark:bg-gray-800 dark:border-gray-600"
               />
@@ -806,7 +808,7 @@ export default function PointOfSale() {
               </div>
             ) : (
               <div className="space-y-3">
-                {cart.map(item => (
+                {cart.map((item) => (
                   <div
                     key={item.id}
                     className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg"
@@ -927,7 +929,7 @@ export default function PointOfSale() {
                   <input
                     type="text"
                     value={customerPhone}
-                    onChange={e => {
+                    onChange={(e) => {
                       setCustomerPhone(e.target.value);
                       if (e.target.value.length >= 7) {
                         lookupLoyaltyCustomer(e.target.value);
@@ -950,14 +952,14 @@ export default function PointOfSale() {
               <input
                 type="text"
                 value={customerName}
-                onChange={e => setCustomerName(e.target.value)}
+                onChange={(e) => setCustomerName(e.target.value)}
                 placeholder="Customer Name"
                 className="w-full px-3 py-2 text-sm rounded-lg border dark:bg-gray-800 dark:border-gray-600"
               />
               <input
                 type="text"
                 value={customerPin}
-                onChange={e => setCustomerPin(e.target.value.toUpperCase())}
+                onChange={(e) => setCustomerPin(e.target.value.toUpperCase())}
                 placeholder="Customer KRA PIN (for B2B)"
                 className="w-full px-3 py-2 text-sm rounded-lg border dark:bg-gray-800 dark:border-gray-600"
               />
@@ -1051,7 +1053,7 @@ export default function PointOfSale() {
                   <input
                     type="tel"
                     value={customerPhone}
-                    onChange={e => setCustomerPhone(e.target.value)}
+                    onChange={(e) => setCustomerPhone(e.target.value)}
                     placeholder="Phone (e.g. 0712345678)"
                     className="w-full px-3 py-2 rounded-lg border dark:bg-gray-800 dark:border-gray-600"
                   />
@@ -1098,7 +1100,7 @@ export default function PointOfSale() {
                   No transactions yet
                 </p>
               ) : (
-                transactions.slice(0, 5).map(txn => (
+                transactions.slice(0, 5).map((txn) => (
                   <div
                     key={txn.id}
                     className="p-2 bg-gray-50 dark:bg-gray-800 rounded cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
@@ -1165,7 +1167,7 @@ export default function PointOfSale() {
                   <input
                     type="text"
                     value={state.companyData.name}
-                    onChange={e => updateCompanyData("name", e.target.value)}
+                    onChange={(e) => updateCompanyData("name", e.target.value)}
                     className="w-full px-3 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600"
                   />
                 </div>
@@ -1176,7 +1178,7 @@ export default function PointOfSale() {
                   <input
                     type="text"
                     value={state.companyData.kraPin}
-                    onChange={e =>
+                    onChange={(e) =>
                       updateCompanyData("kraPin", e.target.value.toUpperCase())
                     }
                     placeholder="P000000000X"
@@ -1190,7 +1192,7 @@ export default function PointOfSale() {
                   <input
                     type="text"
                     value={state.companyData.vatRegNo}
-                    onChange={e =>
+                    onChange={(e) =>
                       updateCompanyData("vatRegNo", e.target.value)
                     }
                     className="w-full px-3 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600"
@@ -1203,7 +1205,7 @@ export default function PointOfSale() {
                   <input
                     type="text"
                     value={state.companyData.physicalAddress}
-                    onChange={e =>
+                    onChange={(e) =>
                       updateCompanyData("physicalAddress", e.target.value)
                     }
                     className="w-full px-3 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600"
@@ -1214,7 +1216,7 @@ export default function PointOfSale() {
                   <input
                     type="text"
                     value={state.companyData.town}
-                    onChange={e => updateCompanyData("town", e.target.value)}
+                    onChange={(e) => updateCompanyData("town", e.target.value)}
                     className="w-full px-3 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600"
                   />
                 </div>
@@ -1225,7 +1227,9 @@ export default function PointOfSale() {
                   <input
                     type="text"
                     value={state.companyData.county}
-                    onChange={e => updateCompanyData("county", e.target.value)}
+                    onChange={(e) =>
+                      updateCompanyData("county", e.target.value)
+                    }
                     className="w-full px-3 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600"
                   />
                 </div>
@@ -1236,7 +1240,7 @@ export default function PointOfSale() {
                   <input
                     type="text"
                     value={state.companyData.etrSerialNo}
-                    onChange={e =>
+                    onChange={(e) =>
                       updateCompanyData("etrSerialNo", e.target.value)
                     }
                     placeholder="ETR-00000000"
@@ -1250,7 +1254,7 @@ export default function PointOfSale() {
                   <input
                     type="text"
                     value={state.companyData.cuSerialNo}
-                    onChange={e =>
+                    onChange={(e) =>
                       updateCompanyData("cuSerialNo", e.target.value)
                     }
                     placeholder="CU-00000000"
@@ -1264,10 +1268,10 @@ export default function PointOfSale() {
                   <input
                     type="text"
                     value={state.companyData.etrInvoicePrefix}
-                    onChange={e =>
+                    onChange={(e) =>
                       updateCompanyData(
                         "etrInvoicePrefix",
-                        e.target.value.toUpperCase()
+                        e.target.value.toUpperCase(),
                       )
                     }
                     placeholder="INV"
@@ -1282,7 +1286,7 @@ export default function PointOfSale() {
                   <input
                     type="text"
                     value={state.companyData.contacts}
-                    onChange={e =>
+                    onChange={(e) =>
                       updateCompanyData("contacts", e.target.value)
                     }
                     className="w-full px-3 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600"
@@ -1442,7 +1446,7 @@ export default function PointOfSale() {
                   <span>
                     Taxable:{" "}
                     {formatNumber(
-                      currentTransaction.subtotal - currentTransaction.vatE
+                      currentTransaction.subtotal - currentTransaction.vatE,
                     )}{" "}
                     | VAT: {formatNumber(currentTransaction.vatA)}
                   </span>
@@ -1473,7 +1477,7 @@ export default function PointOfSale() {
                   <span>
                     Ksh{" "}
                     {formatNumber(
-                      currentTransaction.subtotal - currentTransaction.totalVat
+                      currentTransaction.subtotal - currentTransaction.totalVat,
                     )}
                   </span>
                 </div>

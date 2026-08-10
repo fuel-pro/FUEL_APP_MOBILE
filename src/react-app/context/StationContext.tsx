@@ -20,7 +20,7 @@ function getApiBase(): string {
 async function getApiBaseAsync(): Promise<string> {
   if (_apiBase) return _apiBase;
   if (!_apiPromise) {
-    _apiPromise = import("@/utils/apiConfig").then(m => m.getBackendUrl());
+    _apiPromise = import("@/utils/apiConfig").then((m) => m.getBackendUrl());
   }
   _apiBase = await _apiPromise;
   return _apiBase || "";
@@ -167,14 +167,14 @@ interface StationContextType {
   logoutAdmin: () => void;
   updateAdminPassword: (
     currentPassword: string,
-    newPassword: string
+    newPassword: string,
   ) => boolean;
   updateAdminSettings: (settings: Partial<AdminSettings>) => void;
   addUpdateRecord: (record: Omit<UpdateRecord, "id" | "timestamp">) => void;
   revertUpdate: (updateId: string) => void;
   updateTabConfig: (
     tabId: string,
-    config: Partial<AdminSettings["tabConfig"][string]>
+    config: Partial<AdminSettings["tabConfig"][string]>,
   ) => void;
   updateApiKey: (keyName: string, value: string) => void;
   // Access Log
@@ -284,7 +284,12 @@ const defaultAdminSettings: AdminSettings = {
       order: 15,
     },
     ai: { label: "AI Assistant", icon: "Brain", enabled: true, order: 16 },
-    pumpmapping: { label: "Pump Mapping v1", icon: "Fuel", enabled: true, order: 17 },
+    pumpmapping: {
+      label: "Pump Mapping v1",
+      icon: "Fuel",
+      enabled: true,
+      order: 17,
+    },
     admin: {
       label: "Founder Access",
       icon: "Shield",
@@ -339,7 +344,11 @@ const loadFromStorage = (): {
       try {
         const detected = getDetectedCurrency();
         const persisted = admin?.systemConfig?.currency;
-        if ((!persisted || persisted === "USD") && detected && detected !== "USD") {
+        if (
+          (!persisted || persisted === "USD") &&
+          detected &&
+          detected !== "USD"
+        ) {
           admin = {
             ...admin,
             systemConfig: { ...admin.systemConfig, currency: detected },
@@ -354,7 +363,7 @@ const loadFromStorage = (): {
       // cross-device sync silently fails. Generate once and persist so the
       // same code is reused on every subsequent push (avoids UNIQUE clashes).
       const stations = (parsed.stations || []).map((s: Station) =>
-        s.code ? s : { ...s, code: generateStationCode(s.name) }
+        s.code ? s : { ...s, code: generateStationCode(s.name) },
       );
 
       return { stations, admin, currentId };
@@ -374,22 +383,28 @@ const loadFromStorage = (): {
 // showing an empty setup screen.
 // ═══════════════════════════════════════════════════
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const isValidUuid = (id: string) => UUID_RE.test(id);
 
 // The `stations` table has a NOT NULL UNIQUE `code` column. Generate a short,
 // unique, URL-safe code from the station name so backend upserts succeed.
 function generateStationCode(name: string): string {
-  const slug = (name || "station")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 16) || "station";
+  const slug =
+    (name || "station")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 16) || "station";
   const suffix = Math.random().toString(36).slice(2, 7);
   return `${slug}-${suffix}`;
 }
 
-function stationRowToStation(row: any, dataBlob: any, cached?: Station): Station {
+function stationRowToStation(
+  row: any,
+  dataBlob: any,
+  cached?: Station,
+): Station {
   return {
     id: row.id,
     name: row.name || "",
@@ -399,7 +414,10 @@ function stationRowToStation(row: any, dataBlob: any, cached?: Station): Station
     email: row.email || "",
     kraPin: row.kra_pin || "",
     etrSerial: row.etr_serial || "",
-    taxRate: row.tax_rate !== null && row.tax_rate !== undefined ? Number(row.tax_rate) : 16,
+    taxRate:
+      row.tax_rate !== null && row.tax_rate !== undefined
+        ? Number(row.tax_rate)
+        : 16,
     theme: row.theme || "dark",
     logo: row.logo || "",
     description: row.description || "",
@@ -442,7 +460,11 @@ async function pushStationUpsert(station: Station, ownerId: string) {
       ...stationToRowFields(station),
     });
     if (upsertError) {
-      console.error("[StationContext] Supabase station upsert failed:", upsertError.message, upsertError.code);
+      console.error(
+        "[StationContext] Supabase station upsert failed:",
+        upsertError.message,
+        upsertError.code,
+      );
       return;
     }
     const { error: kvError } = await supabase.from("app_kv").upsert({
@@ -452,10 +474,16 @@ async function pushStationUpsert(station: Station, ownerId: string) {
       data: station.data ?? {},
     });
     if (kvError) {
-      console.error("[StationContext] Supabase station_data upsert failed:", kvError.message);
+      console.error(
+        "[StationContext] Supabase station_data upsert failed:",
+        kvError.message,
+      );
     }
   } catch (err) {
-    console.warn("[StationContext] Supabase push failed (will retry next sync):", err);
+    console.warn(
+      "[StationContext] Supabase push failed (will retry next sync):",
+      err,
+    );
   }
 }
 
@@ -476,7 +504,7 @@ async function pushStationDelete(id: string) {
  * mode continues to work exactly as before for guests).
  */
 async function syncStationsWithSupabase(
-  localStations: Station[]
+  localStations: Station[],
 ): Promise<Station[] | null> {
   let userId: string | null = null;
 
@@ -512,7 +540,10 @@ async function syncStationsWithSupabase(
         const identity = JSON.parse(identityRaw);
         if (identity?.id) {
           userId = identity.id;
-          console.log("[StationContext] Supabase auth.getUser() returned no session, falling back to fuelpro_auth_identity for user:", userId);
+          console.log(
+            "[StationContext] Supabase auth.getUser() returned no session, falling back to fuelpro_auth_identity for user:",
+            userId,
+          );
 
           // The Supabase JS client may not have recovered the session from
           // localStorage yet (detectSessionInUrl didn't fire, or
@@ -520,7 +551,9 @@ async function syncStationsWithSupabase(
           // .from() calls use the anon key → RLS blocks them → empty
           // results → user stranded on wizard. Inject the session explicitly
           // from the sb-auth-token localStorage key so RLS-scoped queries work.
-          const sbTokenRaw = localStorage.getItem("sb-ojjscjwatikixlpshmub-auth-token");
+          const sbTokenRaw = localStorage.getItem(
+            "sb-ojjscjwatikixlpshmub-auth-token",
+          );
           if (sbTokenRaw) {
             const sbToken = JSON.parse(sbTokenRaw);
             if (sbToken.access_token && sbToken.refresh_token) {
@@ -529,7 +562,9 @@ async function syncStationsWithSupabase(
                   access_token: sbToken.access_token,
                   refresh_token: sbToken.refresh_token,
                 });
-                console.log("[StationContext] Injected Supabase session from localStorage for RLS queries");
+                console.log(
+                  "[StationContext] Injected Supabase session from localStorage for RLS queries",
+                );
               } catch (e) {
                 console.warn("[StationContext] Failed to inject session:", e);
               }
@@ -548,36 +583,51 @@ async function syncStationsWithSupabase(
   // This bypasses the Supabase JS client's session management entirely and
   // is used when the client doesn't have a session (the .from() calls would
   // use the anon key and RLS would block them).
-  const directFetch = async (path: string, options: RequestInit = {}): Promise<any | null> => {
+  const directFetch = async (
+    path: string,
+    options: RequestInit = {},
+  ): Promise<any | null> => {
     const token = localStorage.getItem("fuelpro_token");
     if (!token) return null;
     const url = `${supabaseUrl}/rest/v1/${path}`;
     const headers: Record<string, string> = {
-      "apikey": supabaseAnonKey,
-      "Authorization": `Bearer ${token}`,
+      apikey: supabaseAnonKey,
+      Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
-      ...options.headers as Record<string, string>,
+      ...(options.headers as Record<string, string>),
     };
     const resp = await fetch(url, { ...options, headers });
     if (!resp.ok) {
-      console.warn(`[StationContext] directFetch ${path} failed:`, resp.status, await resp.text().catch(() => ""));
+      console.warn(
+        `[StationContext] directFetch ${path} failed:`,
+        resp.status,
+        await resp.text().catch(() => ""),
+      );
       return null;
     }
     return resp.json();
   };
 
   // Migrate any local-only stations (old non-UUID ids, never pushed) up first
-  const localOnly = localStations.filter(s => !isValidUuid(s.id));
+  const localOnly = localStations.filter((s) => !isValidUuid(s.id));
   const migrated: Station[] = [];
   for (const s of localOnly) {
     try {
       const { data: inserted, error } = await supabase
         .from("stations")
-        .insert({ owner_id: userId, code: s.code || generateStationCode(s.name), ...stationToRowFields(s) })
+        .insert({
+          owner_id: userId,
+          code: s.code || generateStationCode(s.name),
+          ...stationToRowFields(s),
+        })
         .select()
         .single();
       if (!error && inserted) {
-        const newStation = { ...s, id: inserted.id, code: inserted.code || s.code };
+        const newStation = {
+          ...s,
+          id: inserted.id,
+          code: inserted.code || s.code,
+        };
         await supabase.from("app_kv").upsert({
           id: `station_data_${inserted.id}`,
           collection: "station_data",
@@ -587,25 +637,31 @@ async function syncStationsWithSupabase(
         migrated.push(newStation);
       }
     } catch (err) {
-      console.warn("[StationContext] Failed to migrate local station to cloud:", err);
+      console.warn(
+        "[StationContext] Failed to migrate local station to cloud:",
+        err,
+      );
     }
   }
 
   // Fetch everything now owned by this user (RLS already scopes this to them)
-  let { data: rows, error } = await supabase
+  const { data, error } = await supabase
     .from("stations")
     .select("*")
     .order("created_at", { ascending: true });
+  let rows = data;
 
   // If the Supabase client returned empty (likely because it doesn't have
   // the auth session, so RLS blocked the query), retry with a direct
   // PostgREST fetch using the token from localStorage.
   if ((!rows || rows.length === 0) && !error) {
     const directRows = await directFetch(
-      "stations?order=created_at.asc&select=*"
+      "stations?order=created_at.asc&select=*",
     );
     if (directRows && directRows.length > 0) {
-      console.log(`[StationContext] Supabase client returned 0 stations, direct fetch found ${directRows.length}`);
+      console.log(
+        `[StationContext] Supabase client returned 0 stations, direct fetch found ${directRows.length}`,
+      );
       rows = directRows;
     }
   }
@@ -614,7 +670,7 @@ async function syncStationsWithSupabase(
     console.warn("[StationContext] Supabase station fetch failed:", error);
     // Still return migrated stations merged with untouched local ones so
     // we don't lose data if the fetch step alone failed transiently.
-    const validLocal = localStations.filter(s => isValidUuid(s.id));
+    const validLocal = localStations.filter((s) => isValidUuid(s.id));
     return [...validLocal, ...migrated];
   }
 
@@ -646,7 +702,7 @@ async function syncStationsWithSupabase(
     } else {
       // Direct fetch fallback (same RLS issue as the stations query above)
       const directKv = await directFetch(
-        `app_kv?id=eq.${compactKey}&owner_id=eq.${userId}&select=data`
+        `app_kv?id=eq.${compactKey}&owner_id=eq.${userId}&select=data`,
       );
       if (directKv && directKv.length > 0) {
         kvRowData = directKv[0].data;
@@ -660,7 +716,7 @@ async function syncStationsWithSupabase(
         : [];
       if (blobStations.length > 0) {
         console.log(
-          `[StationContext] Cross-device fallback: found ${blobStations.length} station(s) in app_kv blob, migrating to stations table`
+          `[StationContext] Cross-device fallback: found ${blobStations.length} station(s) in app_kv blob, migrating to stations table`,
         );
         for (const s of blobStations) {
           try {
@@ -674,7 +730,11 @@ async function syncStationsWithSupabase(
               .select()
               .single();
             if (!insertErr && inserted) {
-              const newStation = { ...s, id: inserted.id, code: inserted.code || s.code };
+              const newStation = {
+                ...s,
+                id: inserted.id,
+                code: inserted.code || s.code,
+              };
               if (s.data && Object.keys(s.data).length > 0) {
                 await supabase.from("app_kv").upsert({
                   id: `station_data_${inserted.id}`,
@@ -685,7 +745,10 @@ async function syncStationsWithSupabase(
               }
               migrated.push(newStation);
             } else if (insertErr) {
-              console.warn("[StationContext] Cross-device migration insert failed:", insertErr);
+              console.warn(
+                "[StationContext] Cross-device migration insert failed:",
+                insertErr,
+              );
             }
           } catch (err) {
             console.warn("[StationContext] Cross-device migration error:", err);
@@ -699,7 +762,7 @@ async function syncStationsWithSupabase(
         effectiveRows = refetched || [];
         if (effectiveRows.length === 0) {
           const directRefetched = await directFetch(
-            "stations?order=created_at.asc&select=*"
+            "stations?order=created_at.asc&select=*",
           );
           if (directRefetched) effectiveRows = directRefetched;
         }
@@ -708,9 +771,9 @@ async function syncStationsWithSupabase(
   }
 
   const rowIds: string[] = effectiveRows.map((r: any) => r.id);
-  let dataBlobs: Record<string, any> = {};
+  const dataBlobs: Record<string, any> = {};
   if (rowIds.length > 0) {
-    const kvIds = rowIds.map(id => `station_data_${id}`);
+    const kvIds = rowIds.map((id) => `station_data_${id}`);
     const { data: kvRows } = await supabase
       .from("app_kv")
       .select("id, data")
@@ -721,9 +784,9 @@ async function syncStationsWithSupabase(
     }
     // Direct fetch fallback for data blobs
     if (Object.keys(dataBlobs).length === 0) {
-      const idsParam = kvIds.map(id => `"${id}"`).join(",");
+      const idsParam = kvIds.map((id) => `"${id}"`).join(",");
       const directKvRows = await directFetch(
-        `app_kv?id=in.(${idsParam})&select=id,data`
+        `app_kv?id=in.(${idsParam})&select=id,data`,
       );
       if (directKvRows) {
         for (const row of directKvRows) {
@@ -734,9 +797,9 @@ async function syncStationsWithSupabase(
     }
   }
 
-  const cachedById = new Map(localStations.map(s => [s.id, s]));
+  const cachedById = new Map(localStations.map((s) => [s.id, s]));
   const merged = effectiveRows.map((row: any) =>
-    stationRowToStation(row, dataBlobs[row.id], cachedById.get(row.id))
+    stationRowToStation(row, dataBlobs[row.id], cachedById.get(row.id)),
   );
 
   // Preserve local stations that have valid UUIDs but aren't in the cloud yet.
@@ -773,8 +836,12 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
   // → React error #185 (Maximum update depth exceeded).
   const stationsRef = useRef(stations);
   const adminSettingsRef = useRef(adminSettings);
-  useEffect(() => { stationsRef.current = stations; }, [stations]);
-  useEffect(() => { adminSettingsRef.current = adminSettings; }, [adminSettings]);
+  useEffect(() => {
+    stationsRef.current = stations;
+  }, [stations]);
+  useEffect(() => {
+    adminSettingsRef.current = adminSettings;
+  }, [adminSettings]);
   const [isBackendSyncing, setIsBackendSyncing] = useState(false);
   const [lastBackendSync, setLastBackendSync] = useState<number | null>(() => {
     const saved = localStorage.getItem(BACKEND_SYNC_TIMESTAMP);
@@ -814,14 +881,14 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
       const a = newAdmin ?? adminSettingsRef.current;
       localStorage.setItem(
         STORAGE_KEY,
-        JSON.stringify({ stations: s, version: "3.0" })
+        JSON.stringify({ stations: s, version: "3.0" }),
       );
       localStorage.setItem(ADMIN_KEY, JSON.stringify(a));
     },
     // Stable identity — reads current state from refs to avoid stale closures.
     // Previously had [stations, adminSettings] which recreated persist on
     // every state change and cascaded into an infinite mount-effect loop.
-    []
+    [],
   );
 
   // Sync stations FROM Supabase (pulls this account's stations, and migrates
@@ -838,7 +905,9 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
       const fresh = loadFromStorage().stations;
       const merged = await syncStationsWithSupabase(fresh);
       if (merged === null) {
-        console.log("[StationContext] No Supabase session, staying in local-only mode");
+        console.log(
+          "[StationContext] No Supabase session, staying in local-only mode",
+        );
         return;
       }
 
@@ -849,7 +918,7 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
       // station with an empty/shorter list and strand the user on the "create
       // station" screen. Merge any local stations not represented in `merged`.
       const latest = loadFromStorage().stations;
-      const mergedIds = new Set(merged.map(s => s.id));
+      const mergedIds = new Set(merged.map((s) => s.id));
       for (const s of latest) {
         if (!mergedIds.has(s.id)) merged.push(s);
       }
@@ -859,13 +928,13 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
 
       // Keep current station pointing at the right record (it may have
       // gotten a new id if it was just migrated to the cloud)
-      setCurrentStation(prev => {
+      setCurrentStation((prev) => {
         if (!prev) return merged[0] ?? null;
-        const stillHere = merged.find(s => s.id === prev.id);
+        const stillHere = merged.find((s) => s.id === prev.id);
         if (stillHere) return stillHere;
         // Was migrated: match by name+createdAt as a best-effort fallback
         const rematched = merged.find(
-          s => s.name === prev.name && s.createdAt === prev.createdAt
+          (s) => s.name === prev.name && s.createdAt === prev.createdAt,
         );
         const next = rematched ?? merged[0] ?? null;
         if (next) localStorage.setItem(CURRENT_STATION_KEY, next.id);
@@ -878,13 +947,14 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
       setHasBackendData(merged.length > 0);
       localStorage.setItem(BACKEND_SYNC_KEY, "true");
 
-      console.log(`[StationContext] Synced ${merged.length} station(s) with Supabase`);
+      console.log(
+        `[StationContext] Synced ${merged.length} station(s) with Supabase`,
+      );
     } catch (error) {
       console.error("[StationContext] Supabase sync error:", error);
     } finally {
       setIsBackendSyncing(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [persist]);
 
   // Push any local-only stations up to Supabase (same underlying logic as
@@ -922,7 +992,7 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
 
     // Set current station
     if (currentId) {
-      const found = loadedStations.find(s => s.id === currentId);
+      const found = loadedStations.find((s) => s.id === currentId);
       if (found) setCurrentStation(found);
     } else if (loadedStations.length > 0) {
       setCurrentStation(loadedStations[0]);
@@ -1000,7 +1070,11 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
       const newStation: Station = {
         id,
         name: stationData.name || `Station ${stations.length + 1}`,
-        code: stationData.code || generateStationCode(stationData.name || `Station ${stations.length + 1}`),
+        code:
+          stationData.code ||
+          generateStationCode(
+            stationData.name || `Station ${stations.length + 1}`,
+          ),
         location: stationData.location || "",
         phone: stationData.phone || "",
         email: stationData.email || "",
@@ -1027,13 +1101,14 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
         ],
         sharedUsers: [],
       };
-      setStations(prev => [...prev, newStation]);
+      setStations((prev) => [...prev, newStation]);
       setCurrentStation(newStation);
       localStorage.setItem(CURRENT_STATION_KEY, id);
       // Also save directly to ensure persistence even if useEffect hasn't fired
       try {
         const existing = JSON.parse(
-          localStorage.getItem(STORAGE_KEY) || '{"stations":[],"version":"3.0"}'
+          localStorage.getItem(STORAGE_KEY) ||
+            '{"stations":[],"version":"3.0"}',
         );
         existing.stations = [...(existing.stations || []), newStation];
         localStorage.setItem(STORAGE_KEY, JSON.stringify(existing));
@@ -1047,40 +1122,44 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
       });
       return newStation;
     },
-    [stations, adminSettings.secretKey]
+    [stations, adminSettings.secretKey],
   );
 
   const updateStation = useCallback(
     (id: string, data: Partial<Station>) => {
-      setStations(prev =>
-        prev.map(s =>
+      setStations((prev) =>
+        prev.map((s) =>
           s.id === id
             ? { ...s, ...data, updatedAt: new Date().toISOString() }
-            : s
-        )
+            : s,
+        ),
       );
       if (currentStation?.id === id) {
-        setCurrentStation(prev =>
+        setCurrentStation((prev) =>
           prev
             ? { ...prev, ...data, updatedAt: new Date().toISOString() }
-            : null
+            : null,
         );
       }
       if (isValidUuid(id)) {
         supabase.auth.getUser().then(({ data: userData }) => {
           if (!userData?.user) return;
-          const merged = { ...(stations.find(s => s.id === id) ?? {}), ...data, id } as Station;
+          const merged = {
+            ...(stations.find((s) => s.id === id) ?? {}),
+            ...data,
+            id,
+          } as Station;
           pushStationUpsert(merged, userData.user.id);
         });
       }
     },
-    [currentStation, stations]
+    [currentStation, stations],
   );
 
   const deleteStation = useCallback(
     (id: string) => {
-      setStations(prev => {
-        const remaining = prev.filter(s => s.id !== id);
+      setStations((prev) => {
+        const remaining = prev.filter((s) => s.id !== id);
         // Persist the (possibly empty) result directly. The persist useEffect
         // guard skips writing empty arrays over non-empty storage, so an
         // explicit clear on last-station-delete must go through persist() to
@@ -1097,18 +1176,18 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
         pushStationDelete(id);
       }
     },
-    [currentStation, persist]
+    [currentStation, persist],
   );
 
   const switchStation = useCallback(
     (id: string) => {
-      const found = stations.find(s => s.id === id);
+      const found = stations.find((s) => s.id === id);
       if (found) {
         setCurrentStation(found);
         localStorage.setItem(CURRENT_STATION_KEY, id);
       }
     },
-    [stations]
+    [stations],
   );
 
   const combineStations = useCallback(() => {
@@ -1140,14 +1219,14 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
       totalRevenue: 0,
       totalFuelSold: 0,
       totalDebt: 0,
-      stations: stations.map(s => ({
+      stations: stations.map((s) => ({
         id: s.id,
         name: s.name,
         location: s.location,
       })),
     };
 
-    stations.forEach(s => {
+    stations.forEach((s) => {
       const d = s.data || {};
       // Merge sales history
       if (d.salesHistory)
@@ -1180,8 +1259,8 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
   // Station Access
   const shareStation = useCallback(
     (stationId: string, email: string, password: string) => {
-      setStations(prev =>
-        prev.map(s => {
+      setStations((prev) =>
+        prev.map((s) => {
           if (s.id !== stationId) return s;
           const accessKey = Math.random().toString(36).substr(2, 16);
           return {
@@ -1207,30 +1286,30 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
               },
             ],
           };
-        })
+        }),
       );
     },
-    [adminSettings.secretKey]
+    [adminSettings.secretKey],
   );
 
   const revokeAccess = useCallback((stationId: string, email: string) => {
-    setStations(prev =>
-      prev.map(s => {
+    setStations((prev) =>
+      prev.map((s) => {
         if (s.id !== stationId) return s;
         return {
           ...s,
-          sharedUsers: s.sharedUsers.filter(u => u.email !== email),
-          access: s.access.filter(a => a.username !== email),
+          sharedUsers: s.sharedUsers.filter((u) => u.email !== email),
+          access: s.access.filter((a) => a.username !== email),
         };
-      })
+      }),
     );
   }, []);
 
   const verifyStationAccess = useCallback(
     (stationId: string, password: string): boolean => {
-      const station = stations.find(s => s.id === stationId);
+      const station = stations.find((s) => s.id === stationId);
       if (!station) return false;
-      return station.access.some(a => {
+      return station.access.some((a) => {
         try {
           return decrypt(a.passwordHash, adminSettings.secretKey) === password;
         } catch {
@@ -1238,13 +1317,13 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
         }
       });
     },
-    [stations, adminSettings.secretKey]
+    [stations, adminSettings.secretKey],
   );
 
   const changeStationPassword = useCallback(
     (stationId: string, newPassword: string) => {
-      setStations(prev =>
-        prev.map(s => {
+      setStations((prev) =>
+        prev.map((s) => {
           if (s.id !== stationId) return s;
           return {
             ...s,
@@ -1254,13 +1333,13 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
                     ...a,
                     passwordHash: encrypt(newPassword, adminSettings.secretKey),
                   }
-                : a
+                : a,
             ),
           };
-        })
+        }),
       );
     },
-    [adminSettings.secretKey]
+    [adminSettings.secretKey],
   );
 
   // Admin
@@ -1280,7 +1359,7 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
       }
       return isValid;
     },
-    [adminSettings]
+    [adminSettings],
   );
 
   const logoutAdmin = useCallback(() => {
@@ -1301,14 +1380,14 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem(ADMIN_KEY, JSON.stringify(updated));
       return true;
     },
-    [adminSettings]
+    [adminSettings],
   );
 
   const updateAdminSettings = useCallback(
     (settings: Partial<AdminSettings>) => {
-      setAdminSettings(prev => ({ ...prev, ...settings }));
+      setAdminSettings((prev) => ({ ...prev, ...settings }));
     },
-    []
+    [],
   );
 
   const addUpdateRecord = useCallback(
@@ -1318,28 +1397,28 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
         id: `upd_${Date.now()}`,
         timestamp: new Date().toISOString(),
       };
-      setAdminSettings(prev => ({
+      setAdminSettings((prev) => ({
         ...prev,
         updateHistory: [newRecord, ...prev.updateHistory].slice(0, 100),
       }));
     },
-    []
+    [],
   );
 
   const revertUpdate = useCallback((updateId: string) => {
-    setAdminSettings(prev => ({
+    setAdminSettings((prev) => ({
       ...prev,
-      updateHistory: prev.updateHistory.map(u =>
+      updateHistory: prev.updateHistory.map((u) =>
         u.id === updateId
           ? { ...u, reverted: true, revertedAt: new Date().toISOString() }
-          : u
+          : u,
       ),
     }));
   }, []);
 
   const updateTabConfig = useCallback(
     (tabId: string, config: Partial<AdminSettings["tabConfig"][string]>) => {
-      setAdminSettings(prev => ({
+      setAdminSettings((prev) => ({
         ...prev,
         tabConfig: {
           ...prev.tabConfig,
@@ -1347,11 +1426,11 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
         },
       }));
     },
-    []
+    [],
   );
 
   const updateApiKey = useCallback((keyName: string, value: string) => {
-    setAdminSettings(prev => ({
+    setAdminSettings((prev) => ({
       ...prev,
       apiKeys: { ...prev.apiKeys, [keyName]: value },
     }));
@@ -1370,10 +1449,10 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
       const existing = JSON.parse(localStorage.getItem(ACCESS_LOG_KEY) || "[]");
       localStorage.setItem(
         ACCESS_LOG_KEY,
-        JSON.stringify([log, ...existing].slice(0, 500))
+        JSON.stringify([log, ...existing].slice(0, 500)),
       );
     },
-    [currentStation]
+    [currentStation],
   );
 
   const getAccessLogs = useCallback((stationId?: string): AccessLog[] => {
@@ -1386,19 +1465,19 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
   // Station Data
   const getStationData = useCallback(
     (stationId: string): any => {
-      const station = stations.find(s => s.id === stationId);
+      const station = stations.find((s) => s.id === stationId);
       return station?.data || {};
     },
-    [stations]
+    [stations],
   );
 
   const saveStationData = useCallback((stationId: string, data: any) => {
-    setStations(prev =>
-      prev.map(s =>
+    setStations((prev) =>
+      prev.map((s) =>
         s.id === stationId
           ? { ...s, data, updatedAt: new Date().toISOString() }
-          : s
-      )
+          : s,
+      ),
     );
   }, []);
 
@@ -1424,17 +1503,17 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
         console.error("Import failed:", e);
       }
     },
-    [persist]
+    [persist],
   );
 
   // Encryption utils
   const encryptSensitive = useCallback(
     (text: string) => encrypt(text, adminSettings.secretKey),
-    [adminSettings.secretKey]
+    [adminSettings.secretKey],
   );
   const decryptSensitive = useCallback(
     (encoded: string) => decrypt(encoded, adminSettings.secretKey),
-    [adminSettings.secretKey]
+    [adminSettings.secretKey],
   );
 
   return (

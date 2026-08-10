@@ -221,7 +221,7 @@ class CloudSyncEngine {
   }
 
   private notifyListeners(key: string, data: any) {
-    this.listeners.get(key)?.forEach(cb => {
+    this.listeners.get(key)?.forEach((cb) => {
       try {
         cb(data);
       } catch (e) {
@@ -271,7 +271,7 @@ function initDB(): Promise<IDBDatabase> {
       db = request.result;
       resolve(db);
     };
-    request.onupgradeneeded = event => {
+    request.onupgradeneeded = (event) => {
       const database = (event.target as IDBOpenDBRequest).result;
       if (!database.objectStoreNames.contains(STORE_NAME)) {
         database.createObjectStore(STORE_NAME, { keyPath: "key" });
@@ -387,7 +387,7 @@ export interface BackupRecord {
 async function createBackup(
   stationId: string,
   data: any,
-  name?: string
+  name?: string,
 ): Promise<BackupRecord> {
   const database = await initDB();
   const compressed = JSON.stringify(data);
@@ -421,11 +421,11 @@ async function getBackups(stationId: string): Promise<BackupRecord[]> {
       const all = request.result as BackupRecord[];
       resolve(
         all
-          .filter(b => b.stationId === stationId)
+          .filter((b) => b.stationId === stationId)
           .sort(
             (a, b) =>
-              new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-          )
+              new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+          ),
       );
     };
     request.onerror = () => reject(request.error);
@@ -460,7 +460,7 @@ let backupInterval: ReturnType<typeof setInterval> | null = null;
 export function startAutoBackup(
   stationId: string,
   getData: () => any,
-  intervalMs = 1000 * 60 * 30
+  intervalMs = 1000 * 60 * 30,
 ): void {
   stopAutoBackup();
   backupInterval = setInterval(async () => {
@@ -469,7 +469,7 @@ export function startAutoBackup(
       await createBackup(
         stationId,
         data,
-        `Auto ${new Date().toLocaleTimeString()}`
+        `Auto ${new Date().toLocaleTimeString()}`,
       );
       // Keep only last 50 backups
       const backups = await getBackups(stationId);
@@ -606,13 +606,7 @@ export interface AuditEntry {
   timestamp: string;
   action: string;
   category:
-    | "data"
-    | "sale"
-    | "payment"
-    | "inventory"
-    | "auth"
-    | "config"
-    | "sync";
+    "data" | "sale" | "payment" | "inventory" | "auth" | "config" | "sync";
   user?: string;
   details: string;
   oldValue?: any;
@@ -620,7 +614,7 @@ export interface AuditEntry {
 }
 
 export async function logAudit(
-  entry: Omit<AuditEntry, "id" | "timestamp">
+  entry: Omit<AuditEntry, "id" | "timestamp">,
 ): Promise<void> {
   const database = await initDB();
   const fullEntry = { ...entry, timestamp: new Date().toISOString() };
@@ -635,7 +629,7 @@ export async function logAudit(
 
 export async function getAuditLog(
   stationId: string,
-  limit = 100
+  limit = 100,
 ): Promise<AuditEntry[]> {
   const database = await initDB();
   return new Promise((resolve, reject) => {
@@ -646,7 +640,7 @@ export async function getAuditLog(
     request.onsuccess = () => {
       const entries = (request.result as AuditEntry[]).sort(
         (a, b) =>
-          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
       );
       resolve(entries);
     };
@@ -657,10 +651,10 @@ export async function getAuditLog(
 export async function getAuditLogByCategory(
   stationId: string,
   category: string,
-  limit = 50
+  limit = 50,
 ): Promise<AuditEntry[]> {
   const all = await getAuditLog(stationId, limit * 2);
-  return all.filter(e => e.category === category).slice(0, limit);
+  return all.filter((e) => e.category === category).slice(0, limit);
 }
 
 export async function clearOldAudit(daysToKeep = 90): Promise<void> {

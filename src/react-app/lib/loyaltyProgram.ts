@@ -221,7 +221,7 @@ export const TIER_COLORS: Record<
 
 export function getTierFromPoints(
   points: number,
-  thresholds = DEFAULT_TIER_THRESHOLDS
+  thresholds = DEFAULT_TIER_THRESHOLDS,
 ): CustomerTier {
   if (points >= thresholds.Platinum) return "Platinum";
   if (points >= thresholds.Gold) return "Gold";
@@ -232,7 +232,7 @@ export function getTierFromPoints(
 export function getTierProgress(
   points: number,
   tier: CustomerTier,
-  thresholds = DEFAULT_TIER_THRESHOLDS
+  thresholds = DEFAULT_TIER_THRESHOLDS,
 ): number {
   const tiers: CustomerTier[] = ["Bronze", "Silver", "Gold", "Platinum"];
   const currentIndex = tiers.indexOf(tier);
@@ -250,7 +250,7 @@ export function getTierProgress(
 
 export function getTierMultiplier(
   tier: CustomerTier,
-  config?: StationLoyaltyConfig
+  config?: StationLoyaltyConfig,
 ): number {
   return config?.pointsMultiplier?.[tier] || 1;
 }
@@ -262,7 +262,7 @@ export function getTierMultiplier(
 export function generateCardNumber(
   stationId: string,
   stationIndex: number,
-  customerIndex: number
+  customerIndex: number,
 ): string {
   const prefix = `FP${stationIndex.toString().padStart(2, "0")}`;
   const number = customerIndex.toString().padStart(6, "0");
@@ -294,7 +294,7 @@ export function calculatePointsEarned(
   liters: number,
   pricePerLiter: number,
   config: StationLoyaltyConfig,
-  customerTier: CustomerTier
+  customerTier: CustomerTier,
 ): number {
   if (liters < config.minimumLiters) return 0;
 
@@ -307,7 +307,7 @@ export function calculatePointsEarned(
 export function calculateDiscount(
   pointsToRedeem: number,
   reward: StationReward,
-  purchaseAmount: number
+  purchaseAmount: number,
 ): number {
   if (reward.valueType === "percentage") {
     let discount = (pointsToRedeem / reward.pointsCost) * reward.value;

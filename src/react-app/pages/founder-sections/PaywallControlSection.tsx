@@ -113,7 +113,7 @@ interface Props {
   logAudit: (
     e: string,
     d: string,
-    s: "success" | "warning" | "danger" | "info"
+    s: "success" | "warning" | "danger" | "info",
   ) => void;
 }
 
@@ -133,14 +133,14 @@ export default function PaywallControlSection({ logAudit }: Props) {
 
   useEffect(() => {
     const ep: Record<string, number> = {};
-    regionalPrices.forEach(p => {
+    regionalPrices.forEach((p) => {
       ep[`${p.tierId}_${p.currency}`] = p.price;
     });
     setEditPrices(ep);
   }, [regionalPrices]);
 
   const updateContent = (k: keyof PaywallContent, v: any) => {
-    setContent(p => {
+    setContent((p) => {
       const n = { ...p, [k]: v };
       saveContent(n);
       return n;
@@ -149,7 +149,7 @@ export default function PaywallControlSection({ logAudit }: Props) {
   };
 
   const toggleContent = (k: keyof PaywallContent) => {
-    setContent(p => {
+    setContent((p) => {
       const n = { ...p, [k]: !p[k] };
       saveContent(n);
       return n;
@@ -161,7 +161,7 @@ export default function PaywallControlSection({ logAudit }: Props) {
     saveContent(content);
     saveTiers(tiers);
     saveCoupons(coupons);
-    const updated = regionalPrices.map(p => {
+    const updated = regionalPrices.map((p) => {
       const key = `${p.tierId}_${p.currency}`;
       if (editPrices[key] !== undefined)
         return { ...p, price: editPrices[key] };
@@ -173,7 +173,7 @@ export default function PaywallControlSection({ logAudit }: Props) {
     logAudit(
       "Paywall Updated",
       "Paywall content, pricing, and coupons saved",
-      "success"
+      "success",
     );
   };
 
@@ -186,13 +186,13 @@ export default function PaywallControlSection({ logAudit }: Props) {
   const removeFeature = (i: number) => {
     updateContent(
       "features",
-      content.features.filter((_, idx) => idx !== i)
+      content.features.filter((_, idx) => idx !== i),
     );
   };
 
   const toggleTier = (id: TierSlug) => {
-    setTiers(prev =>
-      prev.map(t => (t.id === id ? { ...t, isActive: !t.isActive } : t))
+    setTiers((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, isActive: !t.isActive } : t)),
     );
     setSaved(false);
   };
@@ -218,20 +218,20 @@ export default function PaywallControlSection({ logAudit }: Props) {
   };
 
   const deleteCoupon = (id: string) => {
-    setCoupons(prev => prev.filter(c => c.id !== id));
+    setCoupons((prev) => prev.filter((c) => c.id !== id));
     setSaved(false);
   };
 
   const toggleCoupon = (id: string) => {
-    setCoupons(prev =>
-      prev.map(c => (c.id === id ? { ...c, isActive: !c.isActive } : c))
+    setCoupons((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, isActive: !c.isActive } : c)),
     );
     setSaved(false);
   };
 
-  const countryInfo = COUNTRIES.find(c => c.code === selectedCountry);
-  const currencyPrices = regionalPrices.filter(p =>
-    p.regionCodes.includes(selectedCountry)
+  const countryInfo = COUNTRIES.find((c) => c.code === selectedCountry);
+  const currencyPrices = regionalPrices.filter((p) =>
+    p.regionCodes.includes(selectedCountry),
   );
 
   const inputClass =
@@ -297,7 +297,7 @@ export default function PaywallControlSection({ logAudit }: Props) {
           { id: "pricing" as const, label: "Pricing", icon: DollarSign },
           { id: "coupons" as const, label: "Coupons", icon: Tag },
           { id: "preview" as const, label: "Preview", icon: Eye },
-        ].map(t => (
+        ].map((t) => (
           <button
             key={t.id}
             onClick={() => setActiveTab(t.id)}
@@ -317,7 +317,7 @@ export default function PaywallControlSection({ logAudit }: Props) {
               <label className="text-xs text-gray-400 mb-1 block">Title</label>
               <input
                 value={content.title}
-                onChange={e => updateContent("title", e.target.value)}
+                onChange={(e) => updateContent("title", e.target.value)}
                 className={inputClass}
               />
             </div>
@@ -327,7 +327,7 @@ export default function PaywallControlSection({ logAudit }: Props) {
               </label>
               <input
                 value={content.subtitle}
-                onChange={e => updateContent("subtitle", e.target.value)}
+                onChange={(e) => updateContent("subtitle", e.target.value)}
                 className={inputClass}
               />
             </div>
@@ -339,12 +339,12 @@ export default function PaywallControlSection({ logAudit }: Props) {
                 <input
                   type="color"
                   value={content.accentColor}
-                  onChange={e => updateContent("accentColor", e.target.value)}
+                  onChange={(e) => updateContent("accentColor", e.target.value)}
                   className="w-10 h-10 rounded-lg bg-transparent"
                 />
                 <input
                   value={content.accentColor}
-                  onChange={e => updateContent("accentColor", e.target.value)}
+                  onChange={(e) => updateContent("accentColor", e.target.value)}
                   className={`${inputClass} flex-1 font-mono`}
                 />
               </div>
@@ -361,7 +361,7 @@ export default function PaywallControlSection({ logAudit }: Props) {
               </label>
               <input
                 value={content.trialHeadline}
-                onChange={e => updateContent("trialHeadline", e.target.value)}
+                onChange={(e) => updateContent("trialHeadline", e.target.value)}
                 className={inputClass}
               />
             </div>
@@ -371,7 +371,7 @@ export default function PaywallControlSection({ logAudit }: Props) {
               </label>
               <input
                 value={content.trialDescription}
-                onChange={e =>
+                onChange={(e) =>
                   updateContent("trialDescription", e.target.value)
                 }
                 className={inputClass}
@@ -384,7 +384,7 @@ export default function PaywallControlSection({ logAudit }: Props) {
               <input
                 type="number"
                 value={content.trialDuration}
-                onChange={e =>
+                onChange={(e) =>
                   updateContent("trialDuration", Number(e.target.value))
                 }
                 className={inputClass}
@@ -402,7 +402,7 @@ export default function PaywallControlSection({ logAudit }: Props) {
               </label>
               <input
                 value={content.ctaText}
-                onChange={e => updateContent("ctaText", e.target.value)}
+                onChange={(e) => updateContent("ctaText", e.target.value)}
                 className={inputClass}
               />
             </div>
@@ -412,7 +412,7 @@ export default function PaywallControlSection({ logAudit }: Props) {
               </label>
               <input
                 value={content.skipTrialText}
-                onChange={e => updateContent("skipTrialText", e.target.value)}
+                onChange={(e) => updateContent("skipTrialText", e.target.value)}
                 className={inputClass}
               />
             </div>
@@ -422,7 +422,7 @@ export default function PaywallControlSection({ logAudit }: Props) {
               </label>
               <input
                 value={content.footerNote}
-                onChange={e => updateContent("footerNote", e.target.value)}
+                onChange={(e) => updateContent("footerNote", e.target.value)}
                 className={inputClass}
               />
             </div>
@@ -453,8 +453,8 @@ export default function PaywallControlSection({ logAudit }: Props) {
             <div className="flex gap-2">
               <input
                 value={newFeature}
-                onChange={e => setNewFeature(e.target.value)}
-                onKeyDown={e => e.key === "Enter" && addFeature()}
+                onChange={(e) => setNewFeature(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && addFeature()}
                 placeholder="Add feature..."
                 className={`${inputClass} flex-1`}
               />
@@ -490,7 +490,7 @@ export default function PaywallControlSection({ logAudit }: Props) {
                 label: "Trust Badges",
                 desc: "Show security/shield badges",
               },
-            ].map(t => (
+            ].map((t) => (
               <div key={t.key} className="flex items-center justify-between">
                 <div>
                   <p className="text-xs text-white">{t.label}</p>
@@ -529,11 +529,11 @@ export default function PaywallControlSection({ logAudit }: Props) {
           </div>
 
           <div className="space-y-2">
-            {tiers.map(tier => {
-              const rp = currencyPrices.find(p => p.tierId === tier.id);
+            {tiers.map((tier) => {
+              const rp = currencyPrices.find((p) => p.tierId === tier.id);
               const key = `${tier.id}_${countryInfo?.currency}`;
               const gatewayNames = rp?.paymentGateways
-                .map(g => GATEWAYS.find(x => x.id === g)?.name || g)
+                .map((g) => GATEWAYS.find((x) => x.id === g)?.name || g)
                 .join(", ");
               return (
                 <div
@@ -581,8 +581,8 @@ export default function PaywallControlSection({ logAudit }: Props) {
                         <input
                           type="number"
                           value={editPrices[key] || rp?.price || 0}
-                          onChange={e =>
-                            setEditPrices(p => ({
+                          onChange={(e) =>
+                            setEditPrices((p) => ({
                               ...p,
                               [key]: Number(e.target.value),
                             }))
@@ -622,7 +622,7 @@ export default function PaywallControlSection({ logAudit }: Props) {
             </button>
           </div>
           <div className="space-y-2">
-            {coupons.map(c => (
+            {coupons.map((c) => (
               <div
                 key={c.id}
                 className="bg-[#161618] border border-white/[0.06] rounded-xl p-4"
@@ -632,13 +632,13 @@ export default function PaywallControlSection({ logAudit }: Props) {
                     <label className="text-[10px] text-gray-500">Code</label>
                     <input
                       value={c.code}
-                      onChange={e =>
-                        setCoupons(prev =>
-                          prev.map(x =>
+                      onChange={(e) =>
+                        setCoupons((prev) =>
+                          prev.map((x) =>
                             x.id === c.id
                               ? { ...x, code: e.target.value.toUpperCase() }
-                              : x
-                          )
+                              : x,
+                          ),
                         )
                       }
                       className={`${inputClass} font-mono text-xs`}
@@ -648,18 +648,17 @@ export default function PaywallControlSection({ logAudit }: Props) {
                     <label className="text-[10px] text-gray-500">Type</label>
                     <select
                       value={c.type}
-                      onChange={e =>
-                        setCoupons(prev =>
-                          prev.map(x =>
+                      onChange={(e) =>
+                        setCoupons((prev) =>
+                          prev.map((x) =>
                             x.id === c.id
                               ? {
                                   ...x,
                                   type: e.target.value as
-                                    | "percentage"
-                                    | "fixed",
+                                    "percentage" | "fixed",
                                 }
-                              : x
-                          )
+                              : x,
+                          ),
                         )
                       }
                       className={inputClass}
@@ -673,13 +672,13 @@ export default function PaywallControlSection({ logAudit }: Props) {
                     <input
                       type="number"
                       value={c.value}
-                      onChange={e =>
-                        setCoupons(prev =>
-                          prev.map(x =>
+                      onChange={(e) =>
+                        setCoupons((prev) =>
+                          prev.map((x) =>
                             x.id === c.id
                               ? { ...x, value: Number(e.target.value) }
-                              : x
-                          )
+                              : x,
+                          ),
                         )
                       }
                       className={inputClass}
@@ -692,13 +691,13 @@ export default function PaywallControlSection({ logAudit }: Props) {
                     <input
                       type="number"
                       value={c.maxUses}
-                      onChange={e =>
-                        setCoupons(prev =>
-                          prev.map(x =>
+                      onChange={(e) =>
+                        setCoupons((prev) =>
+                          prev.map((x) =>
                             x.id === c.id
                               ? { ...x, maxUses: Number(e.target.value) }
-                              : x
-                          )
+                              : x,
+                          ),
                         )
                       }
                       className={inputClass}
@@ -817,9 +816,9 @@ export default function PaywallControlSection({ logAudit }: Props) {
             </div>
             <div className="flex gap-3 justify-center flex-wrap">
               {tiers
-                .filter(t => t.isActive)
-                .map(tier => {
-                  const rp = currencyPrices.find(p => p.tierId === tier.id);
+                .filter((t) => t.isActive)
+                .map((tier) => {
+                  const rp = currencyPrices.find((p) => p.tierId === tier.id);
                   return (
                     <div
                       key={tier.id}

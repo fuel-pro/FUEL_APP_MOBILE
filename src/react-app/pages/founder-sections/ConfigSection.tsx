@@ -31,7 +31,7 @@ function resolveDetectedConfig(): Partial<ConfigData> {
       const p = JSON.parse(saved);
       const cc = (p.currentCountry || p.country || "").toUpperCase();
       if (cc) {
-        const c = ALL_COUNTRIES.find(x => x.code === cc);
+        const c = ALL_COUNTRIES.find((x) => x.code === cc);
         if (c)
           return {
             currency: c.currency,
@@ -119,14 +119,14 @@ function TimezoneSelector({
   const filtered = useMemo(() => {
     if (!search.trim()) return allZones;
     const q = search.toLowerCase();
-    return allZones.filter(tz => tz.toLowerCase().includes(q));
+    return allZones.filter((tz) => tz.toLowerCase().includes(q));
   }, [search, allZones]);
 
   return (
     <div className="relative">
       <button
         type="button"
-        onClick={() => setIsOpen(p => !p)}
+        onClick={() => setIsOpen((p) => !p)}
         className="w-full flex items-center justify-between gap-2 px-3 py-2 bg-white/[0.03] border border-white/[0.08] rounded-lg text-sm text-white hover:bg-white/[0.06] focus:outline-none focus:border-amber-500/30 transition-colors"
       >
         <span className="truncate">{value}</span>
@@ -141,12 +141,12 @@ function TimezoneSelector({
             <input
               type="text"
               value={search}
-              onChange={e => setSearch(e.target.value)}
+              onChange={(e) => setSearch(e.target.value)}
               placeholder="Search timezones..."
               className="w-full bg-transparent text-sm text-white placeholder-gray-600 focus:outline-none"
             />
           </div>
-          {filtered.map(tz => (
+          {filtered.map((tz) => (
             <button
               key={tz}
               type="button"
@@ -170,7 +170,7 @@ interface ConfigSectionProps {
   logAudit: (
     event: string,
     detail: string,
-    severity: "success" | "warning" | "danger" | "info"
+    severity: "success" | "warning" | "danger" | "info",
   ) => void;
 }
 
@@ -203,7 +203,7 @@ export default function ConfigSection({ logAudit }: ConfigSectionProps) {
   };
 
   const update = (key: keyof ConfigData, value: string) => {
-    setConfig(prev => ({ ...prev, [key]: value }));
+    setConfig((prev) => ({ ...prev, [key]: value }));
     setSaved(false);
   };
 
@@ -251,7 +251,7 @@ export default function ConfigSection({ logAudit }: ConfigSectionProps) {
             <label className={labelClass}>Site Name</label>
             <input
               value={config.siteName}
-              onChange={e => update("siteName", e.target.value)}
+              onChange={(e) => update("siteName", e.target.value)}
               className={inputClass}
             />
           </div>
@@ -259,12 +259,12 @@ export default function ConfigSection({ logAudit }: ConfigSectionProps) {
             <SearchableCountryDropdown
               value={(() => {
                 const c = ALL_COUNTRIES.find(
-                  x => x.currency === config.currency
+                  (x) => x.currency === config.currency,
                 );
                 return c?.code || "US";
               })()}
-              onChange={code => {
-                const c = ALL_COUNTRIES.find(x => x.code === code);
+              onChange={(code) => {
+                const c = ALL_COUNTRIES.find((x) => x.code === code);
                 if (c) update("currency", c.currency);
               }}
               label="Currency Region"
@@ -275,7 +275,7 @@ export default function ConfigSection({ logAudit }: ConfigSectionProps) {
             <label className={labelClass}>Language</label>
             <select
               value={config.language}
-              onChange={e => update("language", e.target.value)}
+              onChange={(e) => update("language", e.target.value)}
               className={inputClass}
             >
               <option value="en">English</option>
@@ -292,14 +292,14 @@ export default function ConfigSection({ logAudit }: ConfigSectionProps) {
             <label className={labelClass}>Timezone</label>
             <TimezoneSelector
               value={config.timezone}
-              onChange={v => update("timezone", v)}
+              onChange={(v) => update("timezone", v)}
             />
           </div>
           <div>
             <label className={labelClass}>Date Format</label>
             <select
               value={config.dateFormat}
-              onChange={e => update("dateFormat", e.target.value)}
+              onChange={(e) => update("dateFormat", e.target.value)}
               className={inputClass}
             >
               <option value="DD/MM/YYYY">DD/MM/YYYY</option>
@@ -317,7 +317,7 @@ export default function ConfigSection({ logAudit }: ConfigSectionProps) {
             <input
               type="number"
               value={config.maxStations}
-              onChange={e => update("maxStations", e.target.value)}
+              onChange={(e) => update("maxStations", e.target.value)}
               className={inputClass}
             />
           </div>
@@ -326,7 +326,7 @@ export default function ConfigSection({ logAudit }: ConfigSectionProps) {
             <input
               type="number"
               value={config.sessionTimeout}
-              onChange={e => update("sessionTimeout", e.target.value)}
+              onChange={(e) => update("sessionTimeout", e.target.value)}
               className={inputClass}
             />
           </div>
@@ -335,7 +335,7 @@ export default function ConfigSection({ logAudit }: ConfigSectionProps) {
             <input
               type="number"
               value={config.itemsPerPage}
-              onChange={e => update("itemsPerPage", e.target.value)}
+              onChange={(e) => update("itemsPerPage", e.target.value)}
               className={inputClass}
             />
           </div>

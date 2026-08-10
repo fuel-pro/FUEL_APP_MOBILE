@@ -82,7 +82,8 @@ function loadHistory(): PriceHistory[] {
 
 export default function PriceBoard() {
   const location = useLocation();
-  const { fuelPrice, isSyncing, syncNow, refreshPrices, arePricesStale } = useAutoSync(location.currentCountry.id);
+  const { fuelPrice, isSyncing, syncNow, refreshPrices, arePricesStale } =
+    useAutoSync(location.currentCountry.id);
   const { user } = useAuth();
   const { currentStation } = useStations();
   const stationId = currentStation?.id;
@@ -111,24 +112,27 @@ export default function PriceBoard() {
   // Update prices when fuelPrice syncs (daily EPRA prices)
   useEffect(() => {
     if (!fuelPrice) return;
-    
+
     // Check if we should auto-update from synced prices
-    const autoUpdateEnabled = localStorage.getItem("fuelpro_price_auto_update") !== "disabled";
+    const autoUpdateEnabled =
+      localStorage.getItem("fuelpro_price_auto_update") !== "disabled";
     if (!autoUpdateEnabled) return;
-    
+
     // Get current local prices
     const currentPrices = loadPrices();
     const today = new Date().toISOString().slice(0, 10);
-    
+
     // Only auto-update if fuel price effective date is today or more recent
     if (fuelPrice.effectiveDate >= today) {
       // Check if prices need updating
       let needsUpdate = false;
       const newPrices = [...currentPrices];
-      
+
       // Map EPRA prices to our entries
       if (fuelPrice.petrolPrice > 0) {
-        const petrolEntry = newPrices.find(p => p.fuelType === "Petrol" && p.isActive);
+        const petrolEntry = newPrices.find(
+          (p) => p.fuelType === "Petrol" && p.isActive,
+        );
         if (petrolEntry && petrolEntry.price !== fuelPrice.petrolPrice) {
           // Log history before updating
           const historyEntry: PriceHistory = {
@@ -140,8 +144,8 @@ export default function PriceBoard() {
             reason: `Auto-updated from EPRA Kenya - ${fuelPrice.sourceName}`,
             changedAt: new Date().toISOString(),
           };
-          setHistory(prev => [...prev, historyEntry]);
-          
+          setHistory((prev) => [...prev, historyEntry]);
+
           petrolEntry.previousPrice = petrolEntry.price;
           petrolEntry.price = fuelPrice.petrolPrice;
           petrolEntry.effectiveDate = fuelPrice.effectiveDate;
@@ -150,9 +154,11 @@ export default function PriceBoard() {
           needsUpdate = true;
         }
       }
-      
+
       if (fuelPrice.dieselPrice > 0) {
-        const dieselEntry = newPrices.find(p => p.fuelType === "Diesel" && p.isActive);
+        const dieselEntry = newPrices.find(
+          (p) => p.fuelType === "Diesel" && p.isActive,
+        );
         if (dieselEntry && dieselEntry.price !== fuelPrice.dieselPrice) {
           // Log history
           const historyEntry: PriceHistory = {
@@ -164,8 +170,8 @@ export default function PriceBoard() {
             reason: `Auto-updated from EPRA Kenya - ${fuelPrice.sourceName}`,
             changedAt: new Date().toISOString(),
           };
-          setHistory(prev => [...prev, historyEntry]);
-          
+          setHistory((prev) => [...prev, historyEntry]);
+
           dieselEntry.previousPrice = dieselEntry.price;
           dieselEntry.price = fuelPrice.dieselPrice;
           dieselEntry.effectiveDate = fuelPrice.effectiveDate;
@@ -174,9 +180,11 @@ export default function PriceBoard() {
           needsUpdate = true;
         }
       }
-      
+
       if (fuelPrice.kerosenePrice && fuelPrice.kerosenePrice > 0) {
-        const keroseneEntry = newPrices.find(p => p.fuelType === "Kerosene" && p.isActive);
+        const keroseneEntry = newPrices.find(
+          (p) => p.fuelType === "Kerosene" && p.isActive,
+        );
         if (keroseneEntry && keroseneEntry.price !== fuelPrice.kerosenePrice) {
           // Log history
           const historyEntry: PriceHistory = {
@@ -188,8 +196,8 @@ export default function PriceBoard() {
             reason: `Auto-updated from EPRA Kenya - ${fuelPrice.sourceName}`,
             changedAt: new Date().toISOString(),
           };
-          setHistory(prev => [...prev, historyEntry]);
-          
+          setHistory((prev) => [...prev, historyEntry]);
+
           keroseneEntry.previousPrice = keroseneEntry.price;
           keroseneEntry.price = fuelPrice.kerosenePrice!;
           keroseneEntry.effectiveDate = fuelPrice.effectiveDate;
@@ -198,7 +206,7 @@ export default function PriceBoard() {
           needsUpdate = true;
         }
       }
-      
+
       if (needsUpdate) {
         setPrices(newPrices);
         setShowAutoUpdateNotice(true);
@@ -213,23 +221,31 @@ export default function PriceBoard() {
   }, [prices, stationId]);
   useEffect(() => {
     localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
-    cloudStorageService.set(CLOUD_HISTORY_KEY, history, stationId).catch(() => {});
+    cloudStorageService
+      .set(CLOUD_HISTORY_KEY, history, stationId)
+      .catch(() => {});
   }, [history, stationId]);
 
   // Load from cloud on mount (cross-device sync)
   useEffect(() => {
     if (!user) return;
     (async () => {
-      const cloudPrices = await cloudStorageService.get<PriceEntry[]>(CLOUD_KEY, stationId);
+      const cloudPrices = await cloudStorageService.get<PriceEntry[]>(
+        CLOUD_KEY,
+        stationId,
+      );
       if (cloudPrices && Array.isArray(cloudPrices)) setPrices(cloudPrices);
-      const cloudHistory = await cloudStorageService.get<PriceHistory[]>(CLOUD_HISTORY_KEY, stationId);
+      const cloudHistory = await cloudStorageService.get<PriceHistory[]>(
+        CLOUD_HISTORY_KEY,
+        stationId,
+      );
       if (cloudHistory && Array.isArray(cloudHistory)) setHistory(cloudHistory);
     })();
   }, [user, stationId]);
 
   const showNotification = (
     message: string,
-    type: "success" | "warning" = "success"
+    type: "success" | "warning" = "success",
   ) => {
     setNotification({ message, type });
     setTimeout(() => setNotification(null), 3000);
@@ -241,9 +257,9 @@ export default function PriceBoard() {
       return;
     }
     if (editingId) {
-      const old = prices.find(p => p.id === editingId);
-      setPrices(prev =>
-        prev.map(p =>
+      const old = prices.find((p) => p.id === editingId);
+      setPrices((prev) =>
+        prev.map((p) =>
           p.id === editingId
             ? {
                 ...p,
@@ -252,8 +268,8 @@ export default function PriceBoard() {
                 updatedAt: new Date().toISOString(),
                 updatedBy: "Manager",
               }
-            : p
-        )
+            : p,
+        ),
       );
       // Log history
       if (old && old.price !== formData.price) {
@@ -266,7 +282,7 @@ export default function PriceBoard() {
           reason: changeReason || "Price update",
           changedAt: new Date().toISOString(),
         };
-        setHistory(prev => [newHistory, ...prev]);
+        setHistory((prev) => [newHistory, ...prev]);
       }
       showNotification("Price updated");
     } else {
@@ -277,7 +293,7 @@ export default function PriceBoard() {
         updatedBy: "Manager",
         updatedAt: new Date().toISOString(),
       };
-      setPrices(prev => [...prev, newEntry]);
+      setPrices((prev) => [...prev, newEntry]);
       showNotification("Price entry added");
     }
     setShowForm(false);
@@ -287,19 +303,19 @@ export default function PriceBoard() {
 
   const handleDelete = (id: string) => {
     if (confirm("Delete this price entry?")) {
-      setPrices(prev => prev.filter(p => p.id !== id));
+      setPrices((prev) => prev.filter((p) => p.id !== id));
       showNotification("Price entry deleted");
     }
   };
 
   const toggleActive = (id: string) => {
-    setPrices(prev =>
-      prev.map(p => (p.id === id ? { ...p, isActive: !p.isActive } : p))
+    setPrices((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, isActive: !p.isActive } : p)),
     );
   };
 
   const sortedPrices = [...prices].sort(
-    (a, b) => a.displayOrder - b.displayOrder
+    (a, b) => a.displayOrder - b.displayOrder,
   );
 
   const priceChange = (current: number, previous: number) => {
@@ -328,11 +344,15 @@ export default function PriceBoard() {
         <div>
           <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
             <Monitor size={22} className="text-amber-500" /> Price Board
-            {isSyncing && <RefreshCw size={16} className="text-blue-500 animate-spin" />}
+            {isSyncing && (
+              <RefreshCw size={16} className="text-blue-500 animate-spin" />
+            )}
           </h2>
           <p className="text-sm text-gray-500 mt-1">
             {fuelPrice ? (
-              <>EPRA prices as of {fuelPrice.effectiveDate} • Auto-updates daily</>
+              <>
+                EPRA prices as of {fuelPrice.effectiveDate} • Auto-updates daily
+              </>
             ) : (
               <>Manage fuel prices displayed to customers</>
             )}
@@ -341,15 +361,20 @@ export default function PriceBoard() {
         <div className="flex gap-2 items-center">
           {/* Auto-update status indicator */}
           <div className="flex items-center gap-1.5 mr-2">
-            <div className={`w-2 h-2 rounded-full ${arePricesStale ? 'bg-amber-500' : 'bg-green-500'}`}></div>
-            <span className="text-xs text-gray-500">{arePricesStale ? 'Prices need update' : 'Prices current'}</span>
+            <div
+              className={`w-2 h-2 rounded-full ${arePricesStale ? "bg-amber-500" : "bg-green-500"}`}
+            ></div>
+            <span className="text-xs text-gray-500">
+              {arePricesStale ? "Prices need update" : "Prices current"}
+            </span>
           </div>
           <button
             onClick={() => refreshPrices()}
             disabled={isSyncing}
             className="px-3 py-2 bg-blue-100 dark:bg-blue-900/30 hover:bg-blue-200 dark:hover:bg-blue-900/50 text-blue-600 dark:text-blue-400 rounded-xl text-sm font-medium flex items-center gap-1.5 transition-all disabled:opacity-50"
           >
-            <RefreshCw size={14} className={isSyncing ? 'animate-spin' : ''} /> Refresh Prices
+            <RefreshCw size={14} className={isSyncing ? "animate-spin" : ""} />{" "}
+            Refresh Prices
           </button>
           <button
             onClick={() => setShowHistory(true)}
@@ -391,14 +416,18 @@ export default function PriceBoard() {
           </button>
         </div>
       </div>
-      
+
       {/* Auto-update notification */}
       {showAutoUpdateNotice && (
         <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-3 flex items-center gap-3">
           <CheckCircle2 size={20} className="text-green-500" />
           <div>
-            <p className="text-sm font-medium text-green-400">Prices Auto-Updated from EPRA</p>
-            <p className="text-xs text-green-400/70">Fuel prices have been synced with the latest government rates</p>
+            <p className="text-sm font-medium text-green-400">
+              Prices Auto-Updated from EPRA
+            </p>
+            <p className="text-xs text-green-400/70">
+              Fuel prices have been synced with the latest government rates
+            </p>
           </div>
         </div>
       )}
@@ -419,8 +448,8 @@ export default function PriceBoard() {
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {sortedPrices
-              .filter(p => p.isActive)
-              .map(price => {
+              .filter((p) => p.isActive)
+              .map((price) => {
                 const change = priceChange(price.price, price.previousPrice);
                 return (
                   <div
@@ -489,7 +518,7 @@ export default function PriceBoard() {
               </tr>
             </thead>
             <tbody>
-              {sortedPrices.map(price => {
+              {sortedPrices.map((price) => {
                 const change = priceChange(price.price, price.previousPrice);
                 return (
                   <tr
@@ -589,12 +618,12 @@ export default function PriceBoard() {
                     </label>
                     <select
                       value={formData.fuelType}
-                      onChange={e =>
+                      onChange={(e) =>
                         setFormData({ ...formData, fuelType: e.target.value })
                       }
                       className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
                     >
-                      {Object.keys(FUEL_GRADES).map(t => (
+                      {Object.keys(FUEL_GRADES).map((t) => (
                         <option key={t} value={t}>
                           {t}
                         </option>
@@ -607,7 +636,7 @@ export default function PriceBoard() {
                     </label>
                     <select
                       value={formData.grade}
-                      onChange={e =>
+                      onChange={(e) =>
                         setFormData({ ...formData, grade: e.target.value })
                       }
                       className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
@@ -616,7 +645,7 @@ export default function PriceBoard() {
                         FUEL_GRADES[
                           formData.fuelType as keyof typeof FUEL_GRADES
                         ] || []
-                      ).map(g => (
+                      ).map((g) => (
                         <option key={g} value={g}>
                           {g}
                         </option>
@@ -633,7 +662,7 @@ export default function PriceBoard() {
                       type="number"
                       step="0.01"
                       value={formData.price || ""}
-                      onChange={e =>
+                      onChange={(e) =>
                         setFormData({
                           ...formData,
                           price: Number(e.target.value),
@@ -648,7 +677,7 @@ export default function PriceBoard() {
                     </label>
                     <select
                       value={formData.currency}
-                      onChange={e =>
+                      onChange={(e) =>
                         setFormData({ ...formData, currency: e.target.value })
                       }
                       className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
@@ -671,7 +700,7 @@ export default function PriceBoard() {
                         "JPY",
                         "AUD",
                         "CAD",
-                      ].map(c => (
+                      ].map((c) => (
                         <option key={c} value={c}>
                           {c}
                         </option>
@@ -686,7 +715,7 @@ export default function PriceBoard() {
                     </label>
                     <input
                       value={changeReason}
-                      onChange={e => setChangeReason(e.target.value)}
+                      onChange={(e) => setChangeReason(e.target.value)}
                       placeholder="e.g. Monthly price review"
                       className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
                     />
@@ -699,7 +728,7 @@ export default function PriceBoard() {
                   <input
                     type="date"
                     value={formData.effectiveDate}
-                    onChange={e =>
+                    onChange={(e) =>
                       setFormData({
                         ...formData,
                         effectiveDate: e.target.value,
@@ -715,7 +744,7 @@ export default function PriceBoard() {
                   <input
                     type="number"
                     value={formData.displayOrder}
-                    onChange={e =>
+                    onChange={(e) =>
                       setFormData({
                         ...formData,
                         displayOrder: Number(e.target.value),
@@ -753,8 +782,8 @@ export default function PriceBoard() {
                 </button>
               </div>
               <div className="space-y-2">
-                {history.map(h => {
-                  const entry = prices.find(p => p.id === h.priceEntryId);
+                {history.map((h) => {
+                  const entry = prices.find((p) => p.id === h.priceEntryId);
                   const diff = h.newPrice - h.oldPrice;
                   return (
                     <div

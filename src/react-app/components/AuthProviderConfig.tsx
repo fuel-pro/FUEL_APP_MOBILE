@@ -77,7 +77,7 @@ export default function AuthProviderConfig() {
   const [error, setError] = useState("");
 
   const toggleSecret = (key: string) =>
-    setShowSecrets(prev => ({ ...prev, [key]: !prev[key] }));
+    setShowSecrets((prev) => ({ ...prev, [key]: !prev[key] }));
 
   const save = () => {
     setSaving(true);
@@ -117,7 +117,7 @@ export default function AuthProviderConfig() {
   };
 
   const updateNested = (path: string, value: any) => {
-    setConfig(prev => {
+    setConfig((prev) => {
       const parts = path.split(".");
       const newConfig = JSON.parse(JSON.stringify(prev));
       let current = newConfig;
@@ -175,7 +175,7 @@ export default function AuthProviderConfig() {
             <input
               type="checkbox"
               checked={config.emailPassword.enabled}
-              onChange={e =>
+              onChange={(e) =>
                 updateNested("emailPassword.enabled", e.target.checked)
               }
               className="sr-only peer"
@@ -189,10 +189,10 @@ export default function AuthProviderConfig() {
               <input
                 type="checkbox"
                 checked={config.emailPassword.requireVerification}
-                onChange={e =>
+                onChange={(e) =>
                   updateNested(
                     "emailPassword.requireVerification",
-                    e.target.checked
+                    e.target.checked,
                   )
                 }
                 className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
@@ -210,10 +210,10 @@ export default function AuthProviderConfig() {
                 min="6"
                 max="32"
                 value={config.emailPassword.minPasswordLength}
-                onChange={e =>
+                onChange={(e) =>
                   updateNested(
                     "emailPassword.minPasswordLength",
-                    parseInt(e.target.value)
+                    parseInt(e.target.value),
                   )
                 }
                 className="w-32 px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-white"
@@ -241,7 +241,7 @@ export default function AuthProviderConfig() {
             <input
               type="checkbox"
               checked={config.google.enabled}
-              onChange={e => updateNested("google.enabled", e.target.checked)}
+              onChange={(e) => updateNested("google.enabled", e.target.checked)}
               className="sr-only peer"
             />
             <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
@@ -256,7 +256,9 @@ export default function AuthProviderConfig() {
               <input
                 type="text"
                 value={config.google.clientId}
-                onChange={e => updateNested("google.clientId", e.target.value)}
+                onChange={(e) =>
+                  updateNested("google.clientId", e.target.value)
+                }
                 placeholder=".apps.googleusercontent.com"
                 className="w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-white placeholder-gray-400"
               />
@@ -269,7 +271,7 @@ export default function AuthProviderConfig() {
                 <input
                   type={showSecrets["google"] ? "text" : "password"}
                   value={config.google.clientSecret}
-                  onChange={e =>
+                  onChange={(e) =>
                     updateNested("google.clientSecret", e.target.value)
                   }
                   placeholder="GOCSPX-..."
@@ -309,7 +311,7 @@ export default function AuthProviderConfig() {
             <input
               type="checkbox"
               checked={config.phone.enabled}
-              onChange={e => updateNested("phone.enabled", e.target.checked)}
+              onChange={(e) => updateNested("phone.enabled", e.target.checked)}
               className="sr-only peer"
             />
             <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
@@ -323,7 +325,7 @@ export default function AuthProviderConfig() {
               </label>
               <select
                 value={config.phone.provider}
-                onChange={e => updateNested("phone.provider", e.target.value)}
+                onChange={(e) => updateNested("phone.provider", e.target.value)}
                 className="w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-white"
               >
                 <option value="none">Disabled</option>
@@ -356,7 +358,7 @@ export default function AuthProviderConfig() {
               min="5"
               max="1440"
               value={config.session.timeoutMinutes}
-              onChange={e =>
+              onChange={(e) =>
                 updateNested("session.timeoutMinutes", parseInt(e.target.value))
               }
               className="w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-white"
@@ -371,10 +373,10 @@ export default function AuthProviderConfig() {
               min="3"
               max="10"
               value={config.session.maxLoginAttempts}
-              onChange={e =>
+              onChange={(e) =>
                 updateNested(
                   "session.maxLoginAttempts",
-                  parseInt(e.target.value)
+                  parseInt(e.target.value),
                 )
               }
               className="w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-white"
@@ -389,10 +391,10 @@ export default function AuthProviderConfig() {
               min="5"
               max="120"
               value={config.security.lockoutDuration}
-              onChange={e =>
+              onChange={(e) =>
                 updateNested(
                   "security.lockoutDuration",
-                  parseInt(e.target.value)
+                  parseInt(e.target.value),
                 )
               }
               className="w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-white"
@@ -404,7 +406,7 @@ export default function AuthProviderConfig() {
             <input
               type="checkbox"
               checked={config.session.rememberMe}
-              onChange={e =>
+              onChange={(e) =>
                 updateNested("session.rememberMe", e.target.checked)
               }
               className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
@@ -432,7 +434,7 @@ export default function AuthProviderConfig() {
             <input
               type="checkbox"
               checked={config.security.twoFactorEnabled}
-              onChange={e =>
+              onChange={(e) =>
                 updateNested("security.twoFactorEnabled", e.target.checked)
               }
               className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
@@ -458,10 +460,10 @@ export default function AuthProviderConfig() {
               min="0"
               max="10"
               value={config.security.passwordHistory}
-              onChange={e =>
+              onChange={(e) =>
                 updateNested(
                   "security.passwordHistory",
-                  parseInt(e.target.value)
+                  parseInt(e.target.value),
                 )
               }
               className="w-32 px-3 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-white"

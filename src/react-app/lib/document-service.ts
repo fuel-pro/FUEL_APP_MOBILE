@@ -56,8 +56,10 @@ function categorizeFile(name: string, mimeType: string): string {
   if (mimeType.startsWith("video/")) return "video";
   if (mimeType.startsWith("audio/")) return "audio";
   if (mimeType === "application/pdf" || ext === "pdf") return "pdf";
-  if (["xls", "xlsx", "csv"].includes(ext) || mimeType.includes("spreadsheet")) return "spreadsheet";
-  if (["doc", "docx"].includes(ext) || mimeType.includes("word")) return "document";
+  if (["xls", "xlsx", "csv"].includes(ext) || mimeType.includes("spreadsheet"))
+    return "spreadsheet";
+  if (["doc", "docx"].includes(ext) || mimeType.includes("word"))
+    return "document";
   if (["zip", "rar", "7z", "tar", "gz"].includes(ext)) return "archive";
   return "general";
 }
@@ -65,11 +67,14 @@ function categorizeFile(name: string, mimeType: string): string {
 export async function uploadDocument(
   file: File,
   stationId?: string,
-  description?: string
+  description?: string,
 ): Promise<{ success: boolean; error?: string; document?: UserDocument }> {
   const supabase = getSupabaseClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { success: false, error: "You must be logged in to upload files" };
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user)
+    return { success: false, error: "You must be logged in to upload files" };
 
   // Build a unique storage path: documents/<uid>/<timestamp>-<filename>
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
@@ -120,12 +125,19 @@ export async function uploadDocument(
   return { success: true, document: doc };
 }
 
-export async function getDocuments(stationId?: string): Promise<UserDocument[]> {
+export async function getDocuments(
+  stationId?: string,
+): Promise<UserDocument[]> {
   const supabase = getSupabaseClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   if (!user) return readCache();
 
-  let query = supabase.from("user_documents").select("*").eq("owner_id", user.id);
+  let query = supabase
+    .from("user_documents")
+    .select("*")
+    .eq("owner_id", user.id);
   if (stationId) {
     query = query.eq("station_id", stationId);
   }
@@ -141,7 +153,9 @@ export async function getDocuments(stationId?: string): Promise<UserDocument[]> 
   return docs;
 }
 
-export async function getDocumentUrl(doc: UserDocument): Promise<string | null> {
+export async function getDocumentUrl(
+  doc: UserDocument,
+): Promise<string | null> {
   const supabase = getSupabaseClient();
   // The fuelpro-files bucket is public, so a public URL works for reads from
   // any device without a signed token. This is simpler and avoids the
@@ -161,7 +175,9 @@ export async function getDocumentUrl(doc: UserDocument): Promise<string | null> 
   return signed?.signedUrl || null;
 }
 
-export async function deleteDocument(docId: string): Promise<{ success: boolean; error?: string }> {
+export async function deleteDocument(
+  docId: string,
+): Promise<{ success: boolean; error?: string }> {
   const supabase = getSupabaseClient();
 
   // Get the doc first to know the file path

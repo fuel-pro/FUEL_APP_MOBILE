@@ -37,8 +37,13 @@ async function initFirebase(): Promise<boolean> {
 // PROVIDER 2: Supabase
 // ═══════════════════════════════════════════════════
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://ojjscjwatikixlpshmub.supabase.co";
-const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.VITE_SUPABASE_KEY || "sb_publishable_-uUkeBG1KzESv3O4v90rcw_jY9NxTc4";
+const SUPABASE_URL =
+  import.meta.env.VITE_SUPABASE_URL ||
+  "https://ojjscjwatikixlpshmub.supabase.co";
+const SUPABASE_KEY =
+  import.meta.env.VITE_SUPABASE_ANON_KEY ||
+  import.meta.env.VITE_SUPABASE_KEY ||
+  "sb_publishable_-uUkeBG1KzESv3O4v90rcw_jY9NxTc4";
 
 let supabaseClient: any = null;
 
@@ -98,7 +103,7 @@ function setActiveProvider(provider: string): void {
 export async function cloudSave(
   collection: string,
   id: string,
-  data: any
+  data: any,
 ): Promise<boolean> {
   const record: SyncRecord = {
     id,
@@ -164,7 +169,7 @@ export async function cloudLoad(collection: string, id?: string): Promise<any> {
         ? `stations/${getStationId()}/${collection}/${id}`
         : `stations/${getStationId()}/${collection}`;
       const snapshot = await firebaseDB.get(
-        firebaseDB.ref(firebaseDB.db, path)
+        firebaseDB.ref(firebaseDB.db, path),
       );
       if (snapshot.exists()) return id ? snapshot.val()?.data : snapshot.val();
     } catch {
@@ -227,7 +232,7 @@ export async function syncAll(): Promise<{
 
       // Pull from cloud
       const snapshot = await firebaseDB.get(
-        firebaseDB.ref(firebaseDB.db, `stations/${getStationId()}`)
+        firebaseDB.ref(firebaseDB.db, `stations/${getStationId()}`),
       );
       if (snapshot.exists()) {
         const cloudData = snapshot.val();
@@ -325,12 +330,12 @@ function getStationId(): string {
 
 function mergeCloudData(
   local: Record<string, any>,
-  cloud: Record<string, any>
+  cloud: Record<string, any>,
 ): void {
   for (const [collection, items] of Object.entries(cloud)) {
     if (!local[collection]) local[collection] = {};
     for (const [id, record] of Object.entries(
-      items as Record<string, SyncRecord>
+      items as Record<string, SyncRecord>,
     )) {
       const localRecord = local[collection][id] as SyncRecord | undefined;
       if (

@@ -32,7 +32,7 @@ export interface StationSnapshot {
 }
 
 export async function pullStationSnapshot(
-  ownerId: string
+  ownerId: string,
 ): Promise<StationSnapshot | null> {
   try {
     const { data, error } = await supabase
@@ -52,7 +52,7 @@ export async function pullStationSnapshot(
 
 export async function pushStationSnapshot(
   ownerId: string,
-  snapshot: Omit<StationSnapshot, "updatedAt">
+  snapshot: Omit<StationSnapshot, "updatedAt">,
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const { error } = await supabase.from("app_kv").upsert({
@@ -66,7 +66,10 @@ export async function pushStationSnapshot(
   } catch (err: any) {
     // Offline or RLS/table not migrated yet — local data is unaffected,
     // the next successful push will catch up.
-    console.warn("[stationCloudSync] push failed, will retry on next change:", err?.message);
+    console.warn(
+      "[stationCloudSync] push failed, will retry on next change:",
+      err?.message,
+    );
     return { success: false, error: err?.message };
   }
 }

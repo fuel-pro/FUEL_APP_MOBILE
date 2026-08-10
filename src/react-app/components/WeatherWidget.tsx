@@ -100,7 +100,7 @@ export default function WeatherWidget() {
         setLoading(false);
       }
     },
-    []
+    [],
   );
 
   // Use precise location when available
@@ -109,7 +109,7 @@ export default function WeatherWidget() {
       fetchWeather(
         preciseLocation.lat,
         preciseLocation.lng,
-        preciseLocation.address
+        preciseLocation.address,
       );
     } else if (!preciseLocationLoading) {
       // Fallback to station location or default
@@ -224,7 +224,7 @@ export default function WeatherWidget() {
                 value: `${weather.visibility.toFixed(1)} km`,
                 color: "text-purple-500",
               },
-            ].map(m => (
+            ].map((m) => (
               <div
                 key={m.label}
                 className="bg-white/50 dark:bg-white/5 rounded-lg p-2.5 text-center"

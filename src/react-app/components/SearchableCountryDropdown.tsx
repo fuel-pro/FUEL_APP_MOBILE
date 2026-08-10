@@ -40,8 +40,8 @@ export default function SearchableCountryDropdown({
   const countries = useMemo(() => {
     let list = ALL_COUNTRIES;
     if (filterCountries?.length) {
-      const upper = filterCountries.map(c => c.toUpperCase());
-      list = list.filter(c => upper.includes(c.code));
+      const upper = filterCountries.map((c) => c.toUpperCase());
+      list = list.filter((c) => upper.includes(c.code));
     }
     return list;
   }, [filterCountries]);
@@ -50,16 +50,16 @@ export default function SearchableCountryDropdown({
     const q = search.trim().toLowerCase();
     if (!q) return countries;
     return countries.filter(
-      c =>
+      (c) =>
         c.name.toLowerCase().includes(q) ||
         c.code.toLowerCase().includes(q) ||
-        c.currency.toLowerCase().includes(q)
+        c.currency.toLowerCase().includes(q),
     );
   }, [search, countries]);
 
   const selected = useMemo(
-    () => countries.find(c => c.code === value) || null,
-    [value, countries]
+    () => countries.find((c) => c.code === value) || null,
+    [value, countries],
   );
 
   // Auto-detect from browser timezone / localStorage
@@ -118,11 +118,11 @@ export default function SearchableCountryDropdown({
       switch (e.key) {
         case "ArrowDown":
           e.preventDefault();
-          setHighlightedIndex(i => Math.min(i + 1, filtered.length - 1));
+          setHighlightedIndex((i) => Math.min(i + 1, filtered.length - 1));
           break;
         case "ArrowUp":
           e.preventDefault();
-          setHighlightedIndex(i => Math.max(i - 1, 0));
+          setHighlightedIndex((i) => Math.max(i - 1, 0));
           break;
         case "Enter":
           e.preventDefault();
@@ -138,7 +138,7 @@ export default function SearchableCountryDropdown({
           break;
       }
     },
-    [isOpen, filtered, highlightedIndex, onChange]
+    [isOpen, filtered, highlightedIndex, onChange],
   );
 
   return (
@@ -157,7 +157,7 @@ export default function SearchableCountryDropdown({
       <button
         type="button"
         id={id}
-        onClick={() => setIsOpen(p => !p)}
+        onClick={() => setIsOpen((p) => !p)}
         className="w-full flex items-center justify-between gap-2 px-3 py-2 bg-white/[0.03] border border-white/[0.08] rounded-lg text-sm text-white hover:bg-white/[0.06] focus:outline-none focus:border-amber-500/30 transition-colors"
       >
         <div className="flex items-center gap-2 min-w-0">
@@ -184,7 +184,7 @@ export default function SearchableCountryDropdown({
               ref={searchRef}
               type="text"
               value={search}
-              onChange={e => {
+              onChange={(e) => {
                 setSearch(e.target.value);
                 setHighlightedIndex(0);
               }}

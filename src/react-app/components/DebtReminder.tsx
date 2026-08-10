@@ -179,7 +179,7 @@ export default function DebtReminder() {
             <input
               type="text"
               value={debtCustomerName}
-              onChange={e => setDebtCustomerName(e.target.value)}
+              onChange={(e) => setDebtCustomerName(e.target.value)}
               placeholder="Customer name"
             />
           </div>
@@ -188,7 +188,7 @@ export default function DebtReminder() {
             <input
               type="text"
               value={debtAmount}
-              onChange={e => handleAmountChange(e.target.value)}
+              onChange={(e) => handleAmountChange(e.target.value)}
               placeholder="0"
             />
           </div>
@@ -197,7 +197,7 @@ export default function DebtReminder() {
             <input
               type="text"
               value={buyGoodsNo}
-              onChange={e => setBuyGoodsNo(e.target.value)}
+              onChange={(e) => setBuyGoodsNo(e.target.value)}
               placeholder="e.g. 123456"
             />
           </div>
@@ -206,7 +206,7 @@ export default function DebtReminder() {
             <input
               type="text"
               value={bankName}
-              onChange={e => setBankName(e.target.value)}
+              onChange={(e) => setBankName(e.target.value)}
               placeholder="e.g. Equity Bank"
             />
           </div>
@@ -215,7 +215,7 @@ export default function DebtReminder() {
             <input
               type="text"
               value={accountName}
-              onChange={e => setAccountName(e.target.value)}
+              onChange={(e) => setAccountName(e.target.value)}
               placeholder="Account holder name"
             />
           </div>
@@ -224,7 +224,7 @@ export default function DebtReminder() {
             <input
               type="text"
               value={accountNo}
-              onChange={e => setAccountNo(e.target.value)}
+              onChange={(e) => setAccountNo(e.target.value)}
               placeholder="Account number"
             />
           </div>
@@ -233,7 +233,7 @@ export default function DebtReminder() {
             <input
               type="text"
               value={whatsappNo}
-              onChange={e => setWhatsappNo(e.target.value)}
+              onChange={(e) => setWhatsappNo(e.target.value)}
               placeholder="+254..."
             />
           </div>
@@ -242,7 +242,7 @@ export default function DebtReminder() {
             <input
               type="text"
               value={managerName}
-              onChange={e => setManagerName(e.target.value)}
+              onChange={(e) => setManagerName(e.target.value)}
               placeholder="Manager name"
             />
           </div>
@@ -250,7 +250,7 @@ export default function DebtReminder() {
             <label>Contact Method</label>
             <select
               value={contactMethod}
-              onChange={e => setContactMethod(e.target.value)}
+              onChange={(e) => setContactMethod(e.target.value)}
             >
               <option value="WhatsApp">WhatsApp</option>
               <option value="Email">Email</option>
@@ -269,9 +269,9 @@ export default function DebtReminder() {
             .sort(
               (a, b) =>
                 new Date(b.split("_")[0]).getTime() -
-                new Date(a.split("_")[0]).getTime()
+                new Date(a.split("_")[0]).getTime(),
             )
-            .map(key => {
+            .map((key) => {
               const item = state.debtHistory[key];
               return (
                 <div key={key} className="history-item">

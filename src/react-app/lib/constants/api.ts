@@ -1,6 +1,6 @@
 /**
  * CENTRALIZED API ENDPOINTS
- * 
+ *
  * Single source of truth for all API endpoints.
  * Use these constants instead of hardcoding URL strings.
  */
@@ -30,12 +30,12 @@ export const ADMIN_ENDPOINTS = {
   AUTH_LOGIN: `${API_BASE}/admin/auth/login`,
   AUTH_LOGOUT: `${API_BASE}/admin/auth/logout`,
   CHANGE_PASSWORD: `${API_BASE}/admin/auth/change-password`,
-  
+
   DASHBOARD: `${API_BASE}/admin/dashboard`,
   STATS: `${API_BASE}/admin/stats`,
   USERS: `${API_BASE}/admin/users`,
   STATIONS: `${API_BASE}/admin/stations`,
-  
+
   SUBSCRIPTIONS: `${API_BASE}/admin/subscriptions`,
   FEATURES: `${API_BASE}/admin/features`,
   SETTINGS: `${API_BASE}/admin/settings`,
@@ -72,21 +72,21 @@ export const DATA_ENDPOINTS = {
   // Cloud data
   CLOUD_DATA: `${API_BASE}/data`,
   USER_DATA: `${API_BASE}/user-data`,
-  
+
   // Sales
   SALES: `${API_BASE}/sales`,
   SALES_CREATE: `${API_BASE}/sales/create`,
   SALES_UPDATE: `${API_BASE}/sales/update`,
   SALES_DELETE: `${API_BASE}/sales/delete`,
-  
+
   // Inventory
   INVENTORY: `${API_BASE}/inventory`,
   INVENTORY_UPDATE: `${API_BASE}/inventory/update`,
-  
+
   // Prices
   PRICES: `${API_BASE}/prices`,
   PRICES_UPDATE: `${API_BASE}/prices/update`,
-  
+
   // Reports
   REPORTS: `${API_BASE}/reports`,
   REPORTS_GENERATE: `${API_BASE}/reports/generate`,
@@ -130,29 +130,29 @@ export interface ApiRequestOptions {
 export async function apiRequest<T = unknown>(
   endpoint: string,
   options: ApiRequestOptions = {},
-  authToken?: string
+  authToken?: string,
 ): Promise<T> {
   const { method = "GET", headers = {}, body } = options;
-  
+
   const requestHeaders: Record<string, string> = {
     "Content-Type": "application/json",
     ...headers,
   };
-  
+
   if (authToken) {
     requestHeaders["Authorization"] = `Bearer ${authToken}`;
   }
-  
+
   const response = await fetch(endpoint, {
     method,
     headers: requestHeaders,
     body: body ? JSON.stringify(body) : undefined,
   });
-  
+
   if (!response.ok) {
     throw new Error(`API Error: ${response.status} ${response.statusText}`);
   }
-  
+
   return response.json();
 }
 

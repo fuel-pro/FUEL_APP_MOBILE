@@ -57,11 +57,18 @@ const INITIAL_PRODUCT = {
 };
 
 // Module-scoped subcomponents (UPDATE-4 rule)
-const TableHeader = ({ columns }: { columns: { label: string; className?: string }[] }) => (
+const TableHeader = ({
+  columns,
+}: {
+  columns: { label: string; className?: string }[];
+}) => (
   <thead>
     <tr className="border-b border-white/10">
       {columns.map((col) => (
-        <th key={col.label} className={`text-left text-xs font-semibold text-gray-400 px-4 py-3 ${col.className || ""}`}>
+        <th
+          key={col.label}
+          className={`text-left text-xs font-semibold text-gray-400 px-4 py-3 ${col.className || ""}`}
+        >
           {col.label}
         </th>
       ))}
@@ -94,11 +101,13 @@ const ProductRow = ({
       <span className="text-gray-300 text-sm">{product.category || "-"}</span>
     </td>
     <td className="px-4 py-4">
-      <span className={`text-sm font-medium ${
-        (product.stock_quantity || 0) <= (product.reorder_level || 10)
-          ? "text-red-400"
-          : "text-emerald-400"
-      }`}>
+      <span
+        className={`text-sm font-medium ${
+          (product.stock_quantity || 0) <= (product.reorder_level || 10)
+            ? "text-red-400"
+            : "text-emerald-400"
+        }`}
+      >
         {product.stock_quantity ?? 0}
       </span>
     </td>
@@ -106,14 +115,18 @@ const ProductRow = ({
       <span className="text-white">{formatMoney(product.cost_price || 0)}</span>
     </td>
     <td className="px-4 py-4">
-      <span className="text-amber-400 font-medium">{formatMoney(product.selling_price || 0)}</span>
+      <span className="text-amber-400 font-medium">
+        {formatMoney(product.selling_price || 0)}
+      </span>
     </td>
     <td className="px-4 py-4">
-      <span className={`text-xs px-2 py-1 rounded-full ${
-        product.is_active
-          ? "bg-emerald-500/20 text-emerald-400"
-          : "bg-gray-500/20 text-gray-400"
-      }`}>
+      <span
+        className={`text-xs px-2 py-1 rounded-full ${
+          product.is_active
+            ? "bg-emerald-500/20 text-emerald-400"
+            : "bg-gray-500/20 text-gray-400"
+        }`}
+      >
         {product.is_active ? "Active" : "Inactive"}
       </span>
     </td>
@@ -191,38 +204,52 @@ const ProductModal = ({
               <input
                 type="text"
                 value={formData.sku}
-                onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, sku: e.target.value })
+                }
                 className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white"
                 required
               />
             </div>
             <div>
-              <label className="text-gray-400 text-xs mb-2 block">Barcode</label>
+              <label className="text-gray-400 text-xs mb-2 block">
+                Barcode
+              </label>
               <input
                 type="text"
                 value={formData.barcode || ""}
-                onChange={(e) => setFormData({ ...formData, barcode: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, barcode: e.target.value })
+                }
                 className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white"
               />
             </div>
           </div>
 
           <div>
-            <label className="text-gray-400 text-xs mb-2 block">Product Name *</label>
+            <label className="text-gray-400 text-xs mb-2 block">
+              Product Name *
+            </label>
             <input
               type="text"
               value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, name: e.target.value })
+              }
               className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white"
               required
             />
           </div>
 
           <div>
-            <label className="text-gray-400 text-xs mb-2 block">Description</label>
+            <label className="text-gray-400 text-xs mb-2 block">
+              Description
+            </label>
             <textarea
               value={formData.description || ""}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, description: e.target.value })
+              }
               className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white resize-none"
               rows={3}
             />
@@ -231,13 +258,17 @@ const ProductModal = ({
           {/* Category & Unit */}
           <div className="grid grid-cols-2 gap-4">
             <div className="relative">
-              <label className="text-gray-400 text-xs mb-2 block">Category *</label>
+              <label className="text-gray-400 text-xs mb-2 block">
+                Category *
+              </label>
               <button
                 type="button"
                 onClick={() => setShowCategoryDropdown(!showCategoryDropdown)}
                 className="w-full flex items-center justify-between px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-left"
               >
-                <span className="text-white">{formData.category || "Select Category"}</span>
+                <span className="text-white">
+                  {formData.category || "Select Category"}
+                </span>
                 <ChevronDown size={16} className="text-gray-400" />
               </button>
               {showCategoryDropdown && (
@@ -250,7 +281,10 @@ const ProductModal = ({
                         onChange={(e) => setNewCategory(e.target.value)}
                         placeholder="New category"
                         className="flex-1 px-3 py-2 bg-white/10 border border-white/10 rounded-lg text-white text-sm"
-                        onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addCategory())}
+                        onKeyDown={(e) =>
+                          e.key === "Enter" &&
+                          (e.preventDefault(), addCategory())
+                        }
                       />
                       <button
                         type="button"
@@ -283,7 +317,9 @@ const ProductModal = ({
               <label className="text-gray-400 text-xs mb-2 block">Unit</label>
               <select
                 value={formData.unit}
-                onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, unit: e.target.value })
+                }
                 className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white"
               >
                 <option value="pcs">Pieces</option>
@@ -297,11 +333,18 @@ const ProductModal = ({
           {/* Pricing */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="text-gray-400 text-xs mb-2 block">Cost Price *</label>
+              <label className="text-gray-400 text-xs mb-2 block">
+                Cost Price *
+              </label>
               <input
                 type="number"
                 value={formData.cost_price}
-                onChange={(e) => setFormData({ ...formData, cost_price: parseFloat(e.target.value) || 0 })}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    cost_price: parseFloat(e.target.value) || 0,
+                  })
+                }
                 className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white"
                 min="0"
                 step="0.01"
@@ -309,11 +352,18 @@ const ProductModal = ({
               />
             </div>
             <div>
-              <label className="text-gray-400 text-xs mb-2 block">Selling Price *</label>
+              <label className="text-gray-400 text-xs mb-2 block">
+                Selling Price *
+              </label>
               <input
                 type="number"
                 value={formData.selling_price}
-                onChange={(e) => setFormData({ ...formData, selling_price: parseFloat(e.target.value) || 0 })}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    selling_price: parseFloat(e.target.value) || 0,
+                  })
+                }
                 className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white"
                 min="0"
                 step="0.01"
@@ -325,22 +375,36 @@ const ProductModal = ({
           {/* Stock & Tax */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="text-gray-400 text-xs mb-2 block">Initial Stock</label>
+              <label className="text-gray-400 text-xs mb-2 block">
+                Initial Stock
+              </label>
               <input
                 type="number"
                 value={formData.stock_quantity}
-                onChange={(e) => setFormData({ ...formData, stock_quantity: parseFloat(e.target.value) || 0 })}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    stock_quantity: parseFloat(e.target.value) || 0,
+                  })
+                }
                 className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white"
                 min="0"
                 step="0.01"
               />
             </div>
             <div>
-              <label className="text-gray-400 text-xs mb-2 block">Reorder Level</label>
+              <label className="text-gray-400 text-xs mb-2 block">
+                Reorder Level
+              </label>
               <input
                 type="number"
                 value={formData.reorder_level}
-                onChange={(e) => setFormData({ ...formData, reorder_level: parseFloat(e.target.value) || 0 })}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    reorder_level: parseFloat(e.target.value) || 0,
+                  })
+                }
                 className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white"
                 min="0"
                 step="0.01"
@@ -350,11 +414,18 @@ const ProductModal = ({
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="text-gray-400 text-xs mb-2 block">Tax Rate (%)</label>
+              <label className="text-gray-400 text-xs mb-2 block">
+                Tax Rate (%)
+              </label>
               <input
                 type="number"
                 value={formData.tax_rate}
-                onChange={(e) => setFormData({ ...formData, tax_rate: parseFloat(e.target.value) || 0 })}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    tax_rate: parseFloat(e.target.value) || 0,
+                  })
+                }
                 className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white"
                 min="0"
                 max="100"
@@ -362,12 +433,16 @@ const ProductModal = ({
               />
             </div>
             <div className="flex flex-col gap-2">
-              <label className="text-gray-400 text-xs mb-2 block">Options</label>
+              <label className="text-gray-400 text-xs mb-2 block">
+                Options
+              </label>
               <label className="flex items-center gap-3 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={formData.is_taxable}
-                  onChange={(e) => setFormData({ ...formData, is_taxable: e.target.checked })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, is_taxable: e.target.checked })
+                  }
                   className="w-5 h-5 bg-white/10 border border-white/20 rounded"
                 />
                 <span className="text-gray-300 text-sm">Taxable</span>
@@ -376,7 +451,9 @@ const ProductModal = ({
                 <input
                   type="checkbox"
                   checked={formData.is_active}
-                  onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, is_active: e.target.checked })
+                  }
                   className="w-5 h-5 bg-white/10 border border-white/20 rounded"
                 />
                 <span className="text-gray-300 text-sm">Active</span>
@@ -434,9 +511,13 @@ const DeleteConfirmModal = ({
         <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
           <AlertCircle className="w-8 h-8 text-red-400" />
         </div>
-        <h3 className="text-xl font-semibold text-white mb-2">Delete Product</h3>
+        <h3 className="text-xl font-semibold text-white mb-2">
+          Delete Product
+        </h3>
         <p className="text-gray-400 mb-6">
-          Are you sure you want to delete <span className="text-white font-medium">{product.name}</span>? This action cannot be undone.
+          Are you sure you want to delete{" "}
+          <span className="text-white font-medium">{product.name}</span>? This
+          action cannot be undone.
         </p>
         <div className="flex gap-3">
           <button
@@ -517,10 +598,12 @@ export default function ProductsManagement() {
         product.sku?.toLowerCase().includes(search.toLowerCase()) ||
         product.barcode?.includes(search);
 
-      const matchesCategory = !categoryFilter || product.category === categoryFilter;
+      const matchesCategory =
+        !categoryFilter || product.category === categoryFilter;
 
       const matchesLowStock =
-        !showLowStock || (product.stock_quantity || 0) <= (product.reorder_level || 10);
+        !showLowStock ||
+        (product.stock_quantity || 0) <= (product.reorder_level || 10);
 
       return matchesSearch && matchesCategory && matchesLowStock;
     });
@@ -576,7 +659,10 @@ export default function ProductsManagement() {
 
     setSaving(true);
     try {
-      const { error } = await supabase.from("products").delete().eq("id", deleteProduct.id);
+      const { error } = await supabase
+        .from("products")
+        .delete()
+        .eq("id", deleteProduct.id);
 
       if (error) throw error;
 
@@ -614,7 +700,8 @@ export default function ProductsManagement() {
         <div>
           <h1 className="text-2xl font-bold text-white">Products</h1>
           <p className="text-gray-400 text-sm mt-1">
-            {filteredProducts.length} product{filteredProducts.length !== 1 ? "s" : ""}
+            {filteredProducts.length} product
+            {filteredProducts.length !== 1 ? "s" : ""}
           </p>
         </div>
         <button
@@ -632,7 +719,10 @@ export default function ProductsManagement() {
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-4 mb-6">
         <div className="relative flex-1">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+          <Search
+            className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
+            size={18}
+          />
           <input
             type="text"
             placeholder="Search products..."

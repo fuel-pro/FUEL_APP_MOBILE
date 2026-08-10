@@ -1,6 +1,6 @@
 /**
  * Clerk API Utilities
- * 
+ *
  * Helper functions for working with Clerk authentication:
  * - Getting auth tokens for API calls
  * - Verifying Clerk tokens on backend
@@ -12,7 +12,7 @@ const getClerkPublishableKey = () => import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 const getClerkBackendUrl = () => {
   const key = getClerkPublishableKey();
   if (!key) return null;
-  
+
   // Extract domain from publishable key
   // Format: pk_live_xxx.api.clerk.com
   const match = key.match(/api\.clerk\.(\S+)/);
@@ -25,7 +25,7 @@ const getClerkBackendUrl = () => {
 const getClerkDomain = () => {
   const key = getClerkPublishableKey();
   if (!key) return null;
-  
+
   // Extract domain from publishable key
   const match = key.match(/clerk\.(\S+)\./);
   if (match) {
@@ -48,9 +48,9 @@ export interface ClerkUserInfo {
  */
 export async function getClerkToken(): Promise<string | null> {
   if (!getClerkPublishableKey()) return null;
-  
+
   try {
-    // @ts-ignore - Clerk exposes this in development
+    // @ts-expect-error - Clerk global is injected at runtime
     const token = await window.Clerk.session?.getToken();
     return token || null;
   } catch {
@@ -65,7 +65,7 @@ export async function getAuthHeaders(): Promise<Record<string, string>> {
   const token = await getClerkToken();
   if (token) {
     return {
-      "Authorization": `Bearer ${token}`,
+      Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     };
   }
@@ -79,9 +79,9 @@ export async function getAuthHeaders(): Promise<Record<string, string>> {
  */
 export function isClerkAuthenticated(): boolean {
   if (!getClerkPublishableKey()) return false;
-  
+
   try {
-    // @ts-ignore - Clerk exposes session
+    // @ts-expect-error - Clerk global is injected at runtime
     return !!window.Clerk?.session;
   } catch {
     return false;
@@ -93,9 +93,9 @@ export function isClerkAuthenticated(): boolean {
  */
 export function getClerkUserId(): string | null {
   if (!getClerkPublishableKey()) return null;
-  
+
   try {
-    // @ts-ignore - Clerk exposes user
+    // @ts-expect-error - Clerk global is injected at runtime
     return window.Clerk?.user?.id || null;
   } catch {
     return null;
@@ -119,10 +119,10 @@ export const isClerkConfigured = () => !!getClerkPublishableKey();
  */
 export async function clerkFetch<T = any>(
   url: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
 ): Promise<T> {
   const headers = await getAuthHeaders();
-  
+
   const response = await fetch(url, {
     ...options,
     headers: {
@@ -131,11 +131,11 @@ export async function clerkFetch<T = any>(
     },
     credentials: "include",
   });
-  
+
   if (!response.ok) {
     throw new Error(`HTTP error! status: ${response.status}`);
   }
-  
+
   return response.json();
 }
 
@@ -147,19 +147,19 @@ export const clerkAPI = {
   async getUser(): Promise<ClerkUserInfo | null> {
     const userId = getClerkUserId();
     if (!userId) return null;
-    
+
     try {
       return await clerkFetch(`${getClerkBackendUrl()}/v1/users/${userId}`);
     } catch {
       return null;
     }
   },
-  
+
   // Get session info
   async getSession() {
     const token = await getClerkToken();
     if (!token) return null;
-    
+
     try {
       return await clerkFetch(`${getClerkBackendUrl()}/v1/sessions`);
     } catch {
