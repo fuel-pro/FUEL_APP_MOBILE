@@ -594,3 +594,32 @@ coexist on main:
   (returns Google answer_box + organic snippets with official EPRA data).
   Source labelled "AI-Verified" when SerpApi OR Serper returns real snippets;
   "AI-Estimated" when only AI knowledge is used.
+
+## CORS fix + Lodwar bug — DEPLOYED LIVE 2026-08-10 (commit c85e35a)
+**Symptom**: app showed "Nairobi" prices for all locations (e.g. user in
+Lodwar got Nairobi prices). Root cause: Cloudflare Pages (the primary
+deploy) has NO /api/* endpoints — fetch to `/api/fuel-local` returns 404,
+falls back to static pricing table whose closest city was always Nairobi.
+
+**Fix (3-layer)**:
+1. `FuelPriceLocator.tsx` `fuelApiBase()` helper: detects origin. On
+   Vercel → relative `/api/fuel-local` (same-origin, no CORS). On
+   Cloudflare/other → absolute `https://fuel-app-mobile.vercel.app/api/...`.
+2. `api/fuel-local.ts`: added `Access-Control-Allow-Origin: *` + OPTIONS
+   preflight handler. `vercel.json`: global CORS headers array.
+3. CORS proxy fallback: if the deployed Vercel API lacks CORS headers
+   (transient state during deploys), the frontend retries via
+   `https://api.allorigins.win/raw?url=<encoded>` — verified working
+   (corsproxy.io returned empty responses; allorigins works reliably).
+
+**Verified end-to-end 2026-08-10**: production Vercel API
+`fuel-app-mobile.vercel.app/api/fuel-local` returns:
+- Lodwar (3.097, 35.6138) → Turkana, Super 220.64, Diesel 229.96, Kerosene
+  198.48 (AI-Estimated) — higher than Nairobi, reflecting transport cost.
+- Nairobi (-1.2864, 36.8172) → Nairobi, Super 214.03, Diesel 222.86.
+CORS header `access-control-allow-origin: *` confirmed on GET (HTTP 200).
+CORS proxy path also returns correct Lodwar data. The "Nairobi for all
+locations" bug is FIXED.
+**Deploy**: dpl_HY7iVUcT7btjXk5H77gRSqpGb9oZ, READY, aliased to
+fuel-app-mobile.vercel.app. Cloudflare mirror:
+https://f40cad3d.fuel-app-mobile.pages.dev.
