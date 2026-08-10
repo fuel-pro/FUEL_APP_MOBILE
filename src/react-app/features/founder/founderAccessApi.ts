@@ -1,6 +1,6 @@
 /**
  * FounderAccessApi - Real Supabase-backed data access layer for Founder Panel
- * 
+ *
  * Replaces the stubbed tRPC layer with real Supabase calls.
  * All operations go through Supabase with Row Level Security.
  */
@@ -59,7 +59,9 @@ export interface AuditFilters {
   entityType?: string;
 }
 
-export async function fetchFounderAuditLog(filters: AuditFilters = {}): Promise<AuditEntry[]> {
+export async function fetchFounderAuditLog(
+  filters: AuditFilters = {},
+): Promise<AuditEntry[]> {
   const { limit = 100, offset = 0, action, entityType } = filters;
 
   let query = supabase
@@ -97,7 +99,7 @@ export async function writeFounderAudit(
   detail: string,
   severity: AuditSeverity = "info",
   entityType: string = "system",
-  entityId: string | null = null
+  entityId: string | null = null,
 ): Promise<string | null> {
   const { data, error } = await supabase.rpc("write_founder_audit", {
     p_action: event,
@@ -125,16 +127,25 @@ export async function fetchAuditSummary(): Promise<{
 
   if (error) {
     console.error("Error fetching audit summary:", error);
-    return { total: 0, bySeverity: { info: 0, success: 0, warning: 0, danger: 0 }, recentActivity: [] };
+    return {
+      total: 0,
+      bySeverity: { info: 0, success: 0, warning: 0, danger: 0 },
+      recentActivity: [],
+    };
   }
 
-  const bySeverity: Record<AuditSeverity, number> = { info: 0, success: 0, warning: 0, danger: 0 };
+  const bySeverity: Record<AuditSeverity, number> = {
+    info: 0,
+    success: 0,
+    warning: 0,
+    danger: 0,
+  };
   const activityMap = new Map<string, number>();
 
   for (const entry of data || []) {
     const severity = (entry.metadata?.severity as AuditSeverity) || "info";
     bySeverity[severity]++;
-    
+
     const date = new Date(entry.created_at).toISOString().split("T")[0];
     activityMap.set(date, (activityMap.get(date) || 0) + 1);
   }
@@ -175,7 +186,7 @@ export async function fetchFounderSession(): Promise<FounderSessionData | null> 
 }
 
 export async function updateFounderSession(
-  data: Partial<FounderSessionData>
+  data: Partial<FounderSessionData>,
 ): Promise<FounderSessionData | null> {
   const { data: result, error } = await supabase.rpc("update_founder_session", {
     p_two_factor_enabled: data.twoFactorEnabled,
@@ -227,9 +238,7 @@ export async function fetchFounderUsers(): Promise<CloudUser[]> {
 
   // Combine the data
   const users: CloudUser[] = [];
-  const authMap = new Map(
-    (authUsers || []).map((u: any) => [u.id, u])
-  );
+  const authMap = new Map((authUsers || []).map((u: any) => [u.id, u]));
 
   for (const profile of profiles || []) {
     const authUser = authMap.get(profile.id);
@@ -248,7 +257,10 @@ export async function fetchFounderUsers(): Promise<CloudUser[]> {
     for (const authUser of authUsers) {
       users.push({
         id: authUser.id,
-        name: authUser.raw_user_meta_data?.name || authUser.email?.split("@")[0] || "Unknown",
+        name:
+          authUser.raw_user_meta_data?.name ||
+          authUser.email?.split("@")[0] ||
+          "Unknown",
         email: authUser.email || "",
         role: "user",
         createdAt: authUser.created_at,
@@ -262,7 +274,7 @@ export async function fetchFounderUsers(): Promise<CloudUser[]> {
 
 export async function updateFounderUserRole(
   userId: string,
-  role: string
+  role: string,
 ): Promise<boolean> {
   const { error } = await supabase
     .from("profiles")
@@ -285,10 +297,12 @@ export async function fetchFounderStations(): Promise<CloudStation[]> {
   // Fetch all stations (founder can see all)
   const { data: stations, error } = await supabase
     .from("stations")
-    .select(`
+    .select(
+      `
       *,
       owner:profiles!stations_owner_id_fkey(id, name, email)
-    `)
+    `,
+    )
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -307,7 +321,7 @@ export async function fetchFounderStations(): Promise<CloudStation[]> {
   for (const member of members || []) {
     memberCountMap.set(
       member.station_id,
-      (memberCountMap.get(member.station_id) || 0) + 1
+      (memberCountMap.get(member.station_id) || 0) + 1,
     );
   }
 
@@ -321,7 +335,7 @@ export async function fetchFounderStations(): Promise<CloudStation[]> {
   for (const sale of sales || []) {
     revenueMap.set(
       sale.station_id,
-      (revenueMap.get(sale.station_id) || 0) + (sale.total_amount || 0)
+      (revenueMap.get(sale.station_id) || 0) + (sale.total_amount || 0),
     );
   }
 
@@ -366,7 +380,8 @@ export async function fetchFounderSalesAnalytics(): Promise<{
   }
 
   const totalSales = sales?.length || 0;
-  const totalRevenue = sales?.reduce((sum, s) => sum + (s.total_amount || 0), 0) || 0;
+  const totalRevenue =
+    sales?.reduce((sum, s) => sum + (s.total_amount || 0), 0) || 0;
   const averageTransaction = totalSales > 0 ? totalRevenue / totalSales : 0;
 
   // Group by day
@@ -394,10 +409,12 @@ export async function fetchFounderSalesAnalytics(): Promise<{
       revenue: existing.revenue + (sale.total_amount || 0),
     });
   }
-  const salesByFuelType = Array.from(byFuelMap.entries()).map(([fuelType, data]) => ({
-    fuelType,
-    ...data,
-  }));
+  const salesByFuelType = Array.from(byFuelMap.entries()).map(
+    ([fuelType, data]) => ({
+      fuelType,
+      ...data,
+    }),
+  );
 
   return {
     totalSales,

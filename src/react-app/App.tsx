@@ -10,7 +10,14 @@ import { PlatformDataProvider } from "@/react-app/context/PlatformDataContext";
 import HomePage from "@/react-app/pages/Home";
 import AuthLogin from "@/react-app/components/AuthLogin";
 import PasswordReset from "@/react-app/pages/PasswordReset";
-import { Suspense, useMemo, useState, useEffect, Component, ReactNode } from "react";
+import {
+  Suspense,
+  useMemo,
+  useState,
+  useEffect,
+  Component,
+  ReactNode,
+} from "react";
 import InviteAccept from "@/react-app/pages/InviteAccept";
 import FounderAccess from "@/react-app/pages/FounderAccess";
 import OfflineIndicator from "@/react-app/components/OfflineIndicator";
@@ -18,7 +25,9 @@ import { TRPCProvider } from "@/providers/trpc";
 import { AlertTriangle, RefreshCw } from "lucide-react";
 
 // Supabase Configuration - Primary Auth & Database
-const supabaseConfigured = !!import.meta.env.VITE_SUPABASE_URL && !!import.meta.env.VITE_SUPABASE_ANON_KEY;
+const supabaseConfigured =
+  !!import.meta.env.VITE_SUPABASE_URL &&
+  !!import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 // Simple fallback for lazy-loaded routes
 function RouteFallback() {
@@ -65,13 +74,19 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
           stack: error?.stack ?? null,
           componentStack: errorInfo?.componentStack ?? null,
           at: new Date().toISOString(),
-        })
+        }),
       );
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 
   handleReload = () => {
-    try { localStorage.removeItem("fuelpro_last_error"); } catch { /* ignore */ }
+    try {
+      localStorage.removeItem("fuelpro_last_error");
+    } catch {
+      /* ignore */
+    }
     this.setState({ hasError: false, error: null });
     window.location.reload();
   };
@@ -85,14 +100,20 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
             <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
               <AlertTriangle className="w-8 h-8 text-red-400" />
             </div>
-            <h2 className="text-xl font-semibold text-white mb-2">Something went wrong</h2>
+            <h2 className="text-xl font-semibold text-white mb-2">
+              Something went wrong
+            </h2>
             <p className="text-gray-400 text-sm mb-2">
               {this.state.error?.message || "An unexpected error occurred"}
             </p>
             {this.state.error?.stack && (
               <details className="text-left text-xs text-gray-500 bg-black/30 rounded-lg p-3 mb-4 overflow-auto max-h-40">
-                <summary className="cursor-pointer select-none">Technical details</summary>
-                <pre className="whitespace-pre-wrap mt-2">{this.state.error.stack}</pre>
+                <summary className="cursor-pointer select-none">
+                  Technical details
+                </summary>
+                <pre className="whitespace-pre-wrap mt-2">
+                  {this.state.error.stack}
+                </pre>
               </details>
             )}
             <button
@@ -159,9 +180,12 @@ function MainAppLoader() {
           <div className="w-16 h-16 bg-amber-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
             <AlertTriangle className="w-8 h-8 text-amber-400" />
           </div>
-          <h2 className="text-xl font-semibold text-white mb-2">Connection Timeout</h2>
+          <h2 className="text-xl font-semibold text-white mb-2">
+            Connection Timeout
+          </h2>
           <p className="text-gray-400 text-sm mb-4">
-            The server is taking too long to respond. Please check your connection and try again.
+            The server is taking too long to respond. Please check your
+            connection and try again.
           </p>
           <button
             onClick={() => {
@@ -232,10 +256,7 @@ export default function App() {
                       <Route path="/dashboard" element={<MainAppLoader />} />
 
                       {/* Founder Access - public, no auth required */}
-                      <Route
-                        path="/founder"
-                        element={<FounderAccess />}
-                      />
+                      <Route path="/founder" element={<FounderAccess />} />
                       <Route
                         path="/founder-v1"
                         element={<Navigate to="/founder" replace />}
@@ -246,10 +267,16 @@ export default function App() {
                       />
 
                       {/* Password Reset - public */}
-                      <Route path="/reset-password" element={<PasswordReset />} />
+                      <Route
+                        path="/reset-password"
+                        element={<PasswordReset />}
+                      />
 
                       {/* Invite acceptance - public */}
-                      <Route path="/join/:inviteId" element={<InviteAccept />} />
+                      <Route
+                        path="/join/:inviteId"
+                        element={<InviteAccept />}
+                      />
 
                       {/* Main app - requires auth, shows loader while checking */}
                       <Route path="/" element={<MainAppLoader />} />

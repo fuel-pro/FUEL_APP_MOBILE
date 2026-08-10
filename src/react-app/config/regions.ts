@@ -1540,7 +1540,7 @@ export const REGIONAL_CONFIGS: Record<string, RegionalConfig> = {
 function generateDefaultConfig(
   countryCode: string,
   countryName: string,
-  currency: string
+  currency: string,
 ): RegionalConfig {
   const code = countryCode.toUpperCase();
   const taxRate = TAX_RATES[code] || 0;
@@ -1682,19 +1682,19 @@ export function getRegionalConfig(countryKeyOrCode: string): RegionalConfig {
     return generateDefaultConfig(
       upper,
       worldConfig.countryName,
-      worldConfig.defaultCurrency
+      worldConfig.defaultCurrency,
     );
   }
 
   // Check if countryKeyOrCode is a country name
   const byName = Object.values(WORLD_PAYMENT_CONFIGS).find(
-    c => c.countryName.toLowerCase() === countryKeyOrCode.toLowerCase()
+    (c) => c.countryName.toLowerCase() === countryKeyOrCode.toLowerCase(),
   );
   if (byName) {
     return generateDefaultConfig(
       byName.countryCode,
       byName.countryName,
-      byName.defaultCurrency
+      byName.defaultCurrency,
     );
   }
 
@@ -1719,7 +1719,7 @@ export function getAllCountries(): {
 
 // ─── Get country by code ───
 export function getCountryByCode(
-  code: string
+  code: string,
 ): { key: string; name: string; code: string; currency: string } | undefined {
   const config = WORLD_PAYMENT_CONFIGS[code.toUpperCase()];
   if (!config) return undefined;

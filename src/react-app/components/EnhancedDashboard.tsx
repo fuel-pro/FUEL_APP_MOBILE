@@ -60,7 +60,9 @@ const KPICard = ({
 }) => (
   <div className="bg-white/5 border border-white/10 rounded-xl p-6">
     <div className="flex items-start justify-between mb-4">
-      <div className={`w-12 h-12 ${color} rounded-xl flex items-center justify-center`}>
+      <div
+        className={`w-12 h-12 ${color} rounded-xl flex items-center justify-center`}
+      >
         <Icon className="w-6 h-6 text-white" />
       </div>
       <div
@@ -68,8 +70,8 @@ const KPICard = ({
           trend === "up"
             ? "text-emerald-400"
             : trend === "down"
-            ? "text-red-400"
-            : "text-gray-400"
+              ? "text-red-400"
+              : "text-gray-400"
         }`}
       >
         {trend === "up" ? (
@@ -107,12 +109,20 @@ const SalesChart = ({ data }: { data: { label: string; value: number }[] }) => (
   </div>
 );
 
-const TopProducts = ({ products }: { products: { name: string; quantity: number; revenue: number }[] }) => (
+const TopProducts = ({
+  products,
+}: {
+  products: { name: string; quantity: number; revenue: number }[];
+}) => (
   <div className="bg-white/5 border border-white/10 rounded-xl p-6">
-    <h3 className="text-lg font-semibold text-white mb-4">Top Selling Products</h3>
+    <h3 className="text-lg font-semibold text-white mb-4">
+      Top Selling Products
+    </h3>
     <div className="space-y-4">
       {products.length === 0 ? (
-        <p className="text-gray-400 text-sm text-center py-4">No sales data yet</p>
+        <p className="text-gray-400 text-sm text-center py-4">
+          No sales data yet
+        </p>
       ) : (
         products.map((product, index) => (
           <div key={index} className="flex items-center justify-between">
@@ -135,12 +145,23 @@ const TopProducts = ({ products }: { products: { name: string; quantity: number;
   </div>
 );
 
-const RecentActivity = ({ activities }: { activities: { type: string; description: string; time: string; amount?: number }[] }) => (
+const RecentActivity = ({
+  activities,
+}: {
+  activities: {
+    type: string;
+    description: string;
+    time: string;
+    amount?: number;
+  }[];
+}) => (
   <div className="bg-white/5 border border-white/10 rounded-xl p-6">
     <h3 className="text-lg font-semibold text-white mb-4">Recent Activity</h3>
     <div className="space-y-4">
       {activities.length === 0 ? (
-        <p className="text-gray-400 text-sm text-center py-4">No recent activity</p>
+        <p className="text-gray-400 text-sm text-center py-4">
+          No recent activity
+        </p>
       ) : (
         activities.map((activity, index) => (
           <div key={index} className="flex items-start gap-3">
@@ -161,7 +182,11 @@ const RecentActivity = ({ activities }: { activities: { type: string; descriptio
   </div>
 );
 
-const PaymentBreakdown = ({ breakdown }: { breakdown: Record<string, number> }) => {
+const PaymentBreakdown = ({
+  breakdown,
+}: {
+  breakdown: Record<string, number>;
+}) => {
   const total = Object.values(breakdown).reduce((sum, val) => sum + val, 0);
   const methods = [
     { key: "cash", label: "Cash", color: "bg-emerald-500" },
@@ -181,7 +206,9 @@ const PaymentBreakdown = ({ breakdown }: { breakdown: Record<string, number> }) 
             <div key={key}>
               <div className="flex justify-between text-sm mb-1">
                 <span className="text-gray-300">{label}</span>
-                <span className="text-white font-medium">{formatMoney(value)}</span>
+                <span className="text-white font-medium">
+                  {formatMoney(value)}
+                </span>
               </div>
               <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
                 <div
@@ -214,13 +241,18 @@ export default function EnhancedDashboard() {
     salesTrend: [] as { label: string; value: number }[],
     topProducts: [] as { name: string; quantity: number; revenue: number }[],
     paymentBreakdown: {} as Record<string, number>,
-    recentActivity: [] as { type: string; description: string; time: string; amount?: number }[],
+    recentActivity: [] as {
+      type: string;
+      description: string;
+      time: string;
+      amount?: number;
+    }[],
   });
 
   const getDateRange = useCallback(() => {
     const now = new Date();
     let startDate: Date;
-    let endDate = now.toISOString();
+    const endDate = now.toISOString();
 
     switch (dateRange) {
       case "today":
@@ -263,7 +295,7 @@ export default function EnhancedDashboard() {
       const trendEnd = new Date();
       const trendStart = new Date();
       trendStart.setDate(trendStart.getDate() - 6);
-      
+
       const { data: dailySales } = await supabase
         .from("sales_enhanced")
         .select("sale_date, total_amount")
@@ -310,8 +342,13 @@ export default function EnhancedDashboard() {
         .lte("sale_date", prevEnd.toISOString().split("T")[0]);
 
       const currentTotal = salesData.totalRevenue || 0;
-      const prevTotal = prevSales?.reduce((sum: number, s: any) => sum + (s.total_amount || 0), 0) || 0;
-      const salesChange = prevTotal > 0 ? ((currentTotal - prevTotal) / prevTotal) * 100 : 0;
+      const prevTotal =
+        prevSales?.reduce(
+          (sum: number, s: any) => sum + (s.total_amount || 0),
+          0,
+        ) || 0;
+      const salesChange =
+        prevTotal > 0 ? ((currentTotal - prevTotal) / prevTotal) * 100 : 0;
 
       const { data: prevExpenses } = await supabase
         .from("expenses")
@@ -321,8 +358,15 @@ export default function EnhancedDashboard() {
         .lte("expense_date", prevEnd.toISOString().split("T")[0]);
 
       const currentExpenses = expensesData.totalExpenses || 0;
-      const prevExpensesTotal = prevExpenses?.reduce((sum: number, e: any) => sum + (e.amount || 0), 0) || 0;
-      const expensesChange = prevExpensesTotal > 0 ? ((currentExpenses - prevExpensesTotal) / prevExpensesTotal) * 100 : 0;
+      const prevExpensesTotal =
+        prevExpenses?.reduce(
+          (sum: number, e: any) => sum + (e.amount || 0),
+          0,
+        ) || 0;
+      const expensesChange =
+        prevExpensesTotal > 0
+          ? ((currentExpenses - prevExpensesTotal) / prevExpensesTotal) * 100
+          : 0;
 
       // Fetch top products from POS sales
       const { data: productSales } = await supabase
@@ -332,7 +376,10 @@ export default function EnhancedDashboard() {
         .gte("created_at", startDate)
         .lte("created_at", endDate);
 
-      const productTotals: Record<string, { name: string; quantity: number; revenue: number }> = {};
+      const productTotals: Record<
+        string,
+        { name: string; quantity: number; revenue: number }
+      > = {};
       if (productSales) {
         productSales.forEach((item: any) => {
           const key = item.product_id;
@@ -344,7 +391,8 @@ export default function EnhancedDashboard() {
             };
           }
           productTotals[key].quantity += item.quantity || 0;
-          productTotals[key].revenue += (item.quantity || 0) * (item.unit_price || 0);
+          productTotals[key].revenue +=
+            (item.quantity || 0) * (item.unit_price || 0);
         });
       }
       const topProducts = Object.values(productTotals)
@@ -379,7 +427,7 @@ export default function EnhancedDashboard() {
     } catch (error) {
       console.error("Failed to load dashboard data:", error);
       // Set fallback data on error
-      setDashboardData(prev => ({
+      setDashboardData((prev) => ({
         ...prev,
         salesTrend: Array(7).fill({ label: "", value: 0 }),
         salesChange: 0,
@@ -419,7 +467,8 @@ export default function EnhancedDashboard() {
         change: dashboardData.netProfit >= 0 ? 8.2 : -8.2,
         icon: TrendingUp,
         color: "bg-amber-500",
-        trend: dashboardData.netProfit >= 0 ? ("up" as const) : ("down" as const),
+        trend:
+          dashboardData.netProfit >= 0 ? ("up" as const) : ("down" as const),
       },
       {
         title: "Inventory Value",
@@ -430,7 +479,7 @@ export default function EnhancedDashboard() {
         trend: "neutral" as const,
       },
     ],
-    [dashboardData]
+    [dashboardData],
   );
 
   if (loading) {

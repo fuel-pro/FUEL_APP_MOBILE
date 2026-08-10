@@ -46,11 +46,26 @@ export default function CustomerLoyaltyPortal({
 }: CustomerLoyaltyPortalProps) {
   const { getCustomer, transactions, rewards, config } = useLoyalty(stationId);
   const [activeTab, setActiveTab] = useState<"card" | "rewards" | "history">(
-    "card"
+    "card",
   );
   const [showCard, setShowCard] = useState(true);
 
   const customer = getCustomer(customerId);
+
+  // Filter rewards customer can redeem (hook must run before any early return)
+  const availableRewards = useMemo(
+    () =>
+      customer
+        ? rewards.filter((r) => {
+            if (r.minPointsRequired && customer.points < r.minPointsRequired)
+              return false;
+            if (r.remainingQuantity !== undefined && r.remainingQuantity <= 0)
+              return false;
+            return true;
+          })
+        : [],
+    [rewards, customer],
+  );
 
   if (!customer) {
     return (
@@ -85,21 +100,8 @@ export default function CustomerLoyaltyPortal({
   const pointsToNextTier =
     nextTier && config ? config.tierThresholds[nextTier] - customer.points : 0;
 
-  // Filter rewards customer can redeem
-  const availableRewards = useMemo(
-    () =>
-      rewards.filter(r => {
-        if (r.minPointsRequired && customer.points < r.minPointsRequired)
-          return false;
-        if (r.remainingQuantity !== undefined && r.remainingQuantity <= 0)
-          return false;
-        return true;
-      }),
-    [rewards, customer.points]
-  );
-
   const customerTransactions = transactions
-    .filter(t => t.customerId === customerId)
+    .filter((t) => t.customerId === customerId)
     .slice(0, 20);
 
   return (
@@ -205,7 +207,7 @@ export default function CustomerLoyaltyPortal({
             { id: "card", label: "My Card", icon: Star },
             { id: "rewards", label: "Rewards", icon: Gift },
             { id: "history", label: "History", icon: History },
-          ].map(tab => (
+          ].map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as any)}
@@ -306,7 +308,7 @@ export default function CustomerLoyaltyPortal({
               {availableRewards.length} rewards available
             </p>
 
-            {availableRewards.map(reward => {
+            {availableRewards.map((reward) => {
               const canRedeem = customer.points >= reward.pointsCost;
               const discount =
                 reward.valueType === "percentage"
@@ -385,7 +387,7 @@ export default function CustomerLoyaltyPortal({
 
         {activeTab === "history" && (
           <div className="space-y-3">
-            {customerTransactions.map(tx => (
+            {customerTransactions.map((tx) => (
               <div
                 key={tx.id}
                 className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm"

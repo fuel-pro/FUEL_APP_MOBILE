@@ -9,7 +9,7 @@ import { getVATRate } from "@/react-app/config/pricing";
 export function formatCurrency(
   amount: number,
   currency: string,
-  locale?: string
+  locale?: string,
 ): string {
   const resolvedLocale = resolveLocale(currency, locale);
   try {
@@ -60,7 +60,7 @@ export function formatCompactNumber(num: number, locale?: string): string {
 export function formatLocalDate(
   date: Date | string,
   timezone?: string,
-  locale?: string
+  locale?: string,
 ): string {
   const d = typeof date === "string" ? new Date(date) : date;
   const tz = timezone || getCurrentTimezone();
@@ -79,7 +79,7 @@ export function formatLocalDate(
 export function formatLocalDateTime(
   date: Date | string,
   timezone?: string,
-  locale?: string
+  locale?: string,
 ): string {
   const d = typeof date === "string" ? new Date(date) : date;
   const tz = timezone || getCurrentTimezone();
@@ -99,7 +99,7 @@ export function formatLocalDateTime(
 export function formatLocalTime(
   date: Date | string,
   timezone?: string,
-  locale?: string
+  locale?: string,
 ): string {
   const d = typeof date === "string" ? new Date(date) : date;
   const tz = timezone || getCurrentTimezone();
@@ -117,7 +117,7 @@ export function formatLocalTime(
 // ─── Relative time (e.g. "2 hours ago") ───
 export function formatRelativeTime(
   date: Date | string,
-  locale?: string
+  locale?: string,
 ): string {
   const d = typeof date === "string" ? new Date(date) : date;
   const l = locale || getCurrentLocale();
@@ -167,7 +167,7 @@ export function getTaxRate(country: string): number {
 // ─── Calculate price with tax ───
 export function calculateWithTax(
   amount: number,
-  country: string
+  country: string,
 ): { subtotal: number; tax: number; total: number } {
   const rate = getTaxRate(country);
   const tax = amount * rate;

@@ -51,7 +51,7 @@ interface Props {
   logAudit: (
     e: string,
     d: string,
-    s: "success" | "warning" | "danger" | "info"
+    s: "success" | "warning" | "danger" | "info",
   ) => void;
 }
 
@@ -60,7 +60,7 @@ export default function NotificationsSection({ logAudit }: Props) {
   const [saved, setSaved] = useState(false);
 
   const toggle = (key: keyof NotifConfig) => {
-    setCfg(prev => ({ ...prev, [key]: !prev[key] }));
+    setCfg((prev) => ({ ...prev, [key]: !prev[key] }));
     setSaved(false);
   };
 
@@ -71,7 +71,7 @@ export default function NotificationsSection({ logAudit }: Props) {
     logAudit(
       "Notification Config Saved",
       "Notification preferences updated",
-      "success"
+      "success",
     );
   };
 
@@ -181,7 +181,7 @@ export default function NotificationsSection({ logAudit }: Props) {
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        {items.map(it => (
+        {items.map((it) => (
           <div
             key={it.key}
             className="bg-[#161618] border border-white/[0.06] rounded-xl p-4 flex items-center justify-between"

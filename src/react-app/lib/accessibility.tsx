@@ -20,11 +20,11 @@ export function SkipToContent() {
         textDecoration: "none",
         fontWeight: "bold",
       }}
-      onFocus={e => {
+      onFocus={(e) => {
         e.currentTarget.style.left = "0";
         e.currentTarget.style.top = "0";
       }}
-      onBlur={e => {
+      onBlur={(e) => {
         e.currentTarget.style.left = "-9999px";
       }}
     >
@@ -42,7 +42,7 @@ export function useFocusTrap(isActive: boolean) {
 
     const container = containerRef.current;
     const focusableElements = container.querySelectorAll<HTMLElement>(
-      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
     );
     const firstElement = focusableElements[0];
     const lastElement = focusableElements[focusableElements.length - 1];
@@ -78,7 +78,7 @@ export function useAnnounce() {
 
   const announce = (
     message: string,
-    priority: "polite" | "assertive" = "polite"
+    priority: "polite" | "assertive" = "polite",
   ) => {
     if (!announceRef.current) return;
 
@@ -121,7 +121,7 @@ export function AnnouncerRegion() {
 // Keyboard navigation helper
 export function useKeyboardNavigation(
   items: number,
-  onSelect: (index: number) => void
+  onSelect: (index: number) => void,
 ) {
   const [focusedIndex, setFocusedIndex] = useState(0);
 
@@ -130,12 +130,12 @@ export function useKeyboardNavigation(
       case "ArrowDown":
       case "ArrowRight":
         e.preventDefault();
-        setFocusedIndex(prev => (prev + 1) % items);
+        setFocusedIndex((prev) => (prev + 1) % items);
         break;
       case "ArrowUp":
       case "ArrowLeft":
         e.preventDefault();
-        setFocusedIndex(prev => (prev - 1 + items) % items);
+        setFocusedIndex((prev) => (prev - 1 + items) % items);
         break;
       case "Enter":
       case " ":
@@ -162,7 +162,7 @@ export function getContrastRatio(color1: string, color2: string): number {
     const rgb = hexToRgb(hex);
     if (!rgb) return 0;
 
-    const [r, g, b] = [rgb.r, rgb.g, rgb.b].map(c => {
+    const [r, g, b] = [rgb.r, rgb.g, rgb.b].map((c) => {
       c = c / 255;
       return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
     });

@@ -27,7 +27,7 @@ const formatNumber = (num: number): string => {
 export default function FuelOffloading() {
   const { state, dispatch } = useFuel();
   const [selectedRecord, setSelectedRecord] = useState<OffloadingRecord | null>(
-    null
+    null,
   );
   const [showForm, setShowForm] = useState(false);
 
@@ -98,8 +98,8 @@ export default function FuelOffloading() {
     let updatedRecords;
     if (selectedRecord) {
       // Update existing record
-      updatedRecords = state.offloadingRecords.map(r =>
-        r.id === selectedRecord.id ? record : r
+      updatedRecords = state.offloadingRecords.map((r) =>
+        r.id === selectedRecord.id ? record : r,
       );
     } else {
       // Add new record
@@ -111,7 +111,7 @@ export default function FuelOffloading() {
     alert(
       selectedRecord
         ? "Record updated successfully!"
-        : "Record added successfully!"
+        : "Record added successfully!",
     );
   };
 
@@ -123,7 +123,7 @@ export default function FuelOffloading() {
 
   const deleteRecord = (id: string) => {
     if (confirm("Are you sure you want to delete this record?")) {
-      const updatedRecords = state.offloadingRecords.filter(r => r.id !== id);
+      const updatedRecords = state.offloadingRecords.filter((r) => r.id !== id);
       dispatch({ type: "SET_OFFLOADING_RECORDS", payload: updatedRecords });
     }
   };
@@ -150,23 +150,23 @@ export default function FuelOffloading() {
   const totals = {
     totalQuantity: state.offloadingRecords.reduce(
       (sum, record) => sum + record.quantity,
-      0
+      0,
     ),
     totalAmount: state.offloadingRecords.reduce(
       (sum, record) => sum + record.totalAmount,
-      0
+      0,
     ),
     pmsQuantity: state.offloadingRecords
-      .filter(r => r.fuelType === "PMS")
+      .filter((r) => r.fuelType === "PMS")
       .reduce((sum, record) => sum + record.quantity, 0),
     agoQuantity: state.offloadingRecords
-      .filter(r => r.fuelType === "AGO")
+      .filter((r) => r.fuelType === "AGO")
       .reduce((sum, record) => sum + record.quantity, 0),
     pmsAmount: state.offloadingRecords
-      .filter(r => r.fuelType === "PMS")
+      .filter((r) => r.fuelType === "PMS")
       .reduce((sum, record) => sum + record.totalAmount, 0),
     agoAmount: state.offloadingRecords
-      .filter(r => r.fuelType === "AGO")
+      .filter((r) => r.fuelType === "AGO")
       .reduce((sum, record) => sum + record.totalAmount, 0),
   };
 
@@ -204,7 +204,7 @@ export default function FuelOffloading() {
       "Total Amount",
       "Supplier",
     ];
-    const data = state.offloadingRecords.map(record => [
+    const data = state.offloadingRecords.map((record) => [
       record.date,
       record.time,
       record.truckReg,
@@ -231,22 +231,22 @@ export default function FuelOffloading() {
     doc.text(
       `Total Quantity: ${formatNumber(totals.totalQuantity)} L`,
       14,
-      finalY
+      finalY,
     );
     doc.text(
       `Total Amount: ${state.companyData.currency} ${formatNumber(totals.totalAmount)}`,
       14,
-      finalY + 8
+      finalY + 8,
     );
     doc.text(
       `PMS: ${formatNumber(totals.pmsQuantity)} L (${state.companyData.currency} ${formatNumber(totals.pmsAmount)})`,
       14,
-      finalY + 16
+      finalY + 16,
     );
     doc.text(
       `AGO: ${formatNumber(totals.agoQuantity)} L (${state.companyData.currency} ${formatNumber(totals.agoAmount)})`,
       14,
-      finalY + 24
+      finalY + 24,
     );
 
     doc.save("Fuel_Offloading_Report.pdf");
@@ -271,7 +271,7 @@ export default function FuelOffloading() {
         "Invoice No",
         "Remarks",
       ],
-      ...state.offloadingRecords.map(record => [
+      ...state.offloadingRecords.map((record) => [
         record.date,
         record.time,
         record.truckReg,
@@ -306,7 +306,7 @@ export default function FuelOffloading() {
   const exportToTXT = () => {
     let txt = `=== ${state.companyData.name} ===\nFuel Offloading Report\n\n`;
 
-    state.offloadingRecords.forEach(record => {
+    state.offloadingRecords.forEach((record) => {
       txt += `Date: ${record.date} ${record.time}\n`;
       txt += `Truck: ${record.truckReg} | Driver: ${record.driverName}\n`;
       txt += `Fuel: ${record.fuelType} | Quantity: ${formatNumber(record.quantity)} L\n`;
@@ -455,9 +455,9 @@ export default function FuelOffloading() {
                   .sort(
                     (a, b) =>
                       new Date(b.date + " " + b.time).getTime() -
-                      new Date(a.date + " " + a.time).getTime()
+                      new Date(a.date + " " + a.time).getTime(),
                   )
-                  .map(record => (
+                  .map((record) => (
                     <tr key={record.id}>
                       <td>
                         <div className="flex items-center gap-1">
@@ -544,7 +544,7 @@ export default function FuelOffloading() {
                 <input
                   type="date"
                   value={formData.date}
-                  onChange={e => handleInputChange("date", e.target.value)}
+                  onChange={(e) => handleInputChange("date", e.target.value)}
                   required
                 />
               </div>
@@ -554,7 +554,7 @@ export default function FuelOffloading() {
                 <input
                   type="time"
                   value={formData.time}
-                  onChange={e => handleInputChange("time", e.target.value)}
+                  onChange={(e) => handleInputChange("time", e.target.value)}
                   required
                 />
               </div>
@@ -564,7 +564,7 @@ export default function FuelOffloading() {
                 <input
                   type="text"
                   value={formData.truckReg}
-                  onChange={e =>
+                  onChange={(e) =>
                     handleInputChange("truckReg", e.target.value.toUpperCase())
                   }
                   placeholder="e.g. KCA 123A"
@@ -577,7 +577,7 @@ export default function FuelOffloading() {
                 <input
                   type="text"
                   value={formData.driverName}
-                  onChange={e =>
+                  onChange={(e) =>
                     handleInputChange("driverName", e.target.value)
                   }
                   placeholder="Driver full name"
@@ -589,7 +589,9 @@ export default function FuelOffloading() {
                 <label>Fuel Type *</label>
                 <select
                   value={formData.fuelType}
-                  onChange={e => handleInputChange("fuelType", e.target.value)}
+                  onChange={(e) =>
+                    handleInputChange("fuelType", e.target.value)
+                  }
                   required
                 >
                   <option value="PMS">PMS (Petrol)</option>
@@ -602,10 +604,10 @@ export default function FuelOffloading() {
                 <input
                   type="number"
                   value={formData.quantity ?? ""}
-                  onChange={e =>
+                  onChange={(e) =>
                     handleInputChange(
                       "quantity",
-                      parseFloat(e.target.value) || 0
+                      parseFloat(e.target.value) || 0,
                     )
                   }
                   step="0.1"
@@ -619,7 +621,7 @@ export default function FuelOffloading() {
                 <input
                   type="number"
                   value={formData.rate ?? ""}
-                  onChange={e =>
+                  onChange={(e) =>
                     handleInputChange("rate", parseFloat(e.target.value) || 0)
                   }
                   step="0.01"
@@ -643,7 +645,9 @@ export default function FuelOffloading() {
                 <input
                   type="text"
                   value={formData.supplier}
-                  onChange={e => handleInputChange("supplier", e.target.value)}
+                  onChange={(e) =>
+                    handleInputChange("supplier", e.target.value)
+                  }
                   placeholder="Supplier company name"
                   required
                 />
@@ -654,7 +658,9 @@ export default function FuelOffloading() {
                 <input
                   type="text"
                   value={formData.invoiceNo}
-                  onChange={e => handleInputChange("invoiceNo", e.target.value)}
+                  onChange={(e) =>
+                    handleInputChange("invoiceNo", e.target.value)
+                  }
                   placeholder="Invoice/Receipt number"
                 />
               </div>
@@ -663,7 +669,7 @@ export default function FuelOffloading() {
                 <label>Remarks</label>
                 <textarea
                   value={formData.remarks}
-                  onChange={e => handleInputChange("remarks", e.target.value)}
+                  onChange={(e) => handleInputChange("remarks", e.target.value)}
                   placeholder="Additional notes or remarks"
                   rows={3}
                 />

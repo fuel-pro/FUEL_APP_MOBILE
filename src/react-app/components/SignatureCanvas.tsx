@@ -25,7 +25,8 @@ export default function SignatureCanvas({
   }, []);
 
   const startDrawing = (
-    e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>
+    e:
+      React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>,
   ) => {
     setIsDrawing(true);
     const canvas = canvasRef.current;
@@ -45,7 +46,8 @@ export default function SignatureCanvas({
   };
 
   const draw = (
-    e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>
+    e:
+      React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>,
   ) => {
     if (!isDrawing) return;
 

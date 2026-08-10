@@ -478,7 +478,7 @@ export async function POST(request: Request): Promise<Response> {
       return new Response(JSON.stringify({
         success: true,
         method,
-        recipient: method !== 'copy' && method !== 'print' ? recipient : undefined,
+        recipient,
         shareResults,
       }), {
         status: 200,

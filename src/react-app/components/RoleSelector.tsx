@@ -50,7 +50,7 @@ const ROLES: {
 export default function RoleSelector() {
   const { role, isOwner } = usePermissions();
 
-  const current = ROLES.find(r => r.id === role) || ROLES[0];
+  const current = ROLES.find((r) => r.id === role) || ROLES[0];
   const Icon = current.icon;
 
   // ── OWNER ROLE DISPLAY (locked, no switching) ──

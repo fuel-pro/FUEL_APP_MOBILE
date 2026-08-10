@@ -1,6 +1,6 @@
 /**
  * Vitest Test Setup
- * 
+ *
  * This file is run before each test file.
  */
 
@@ -25,7 +25,7 @@ const localStorageMock = (() => {
   };
 })();
 
-Object.defineProperty(global, 'localStorage', { value: localStorageMock });
+Object.defineProperty(global, "localStorage", { value: localStorageMock });
 
 // Mock fetch
 global.fetch = vi.fn();
@@ -34,34 +34,34 @@ global.fetch = vi.fn();
 class MockBroadcastChannel {
   messages: any[] = [];
   onmessage: ((event: any) => void) | null = null;
-  
+
   constructor(public name: string) {}
-  
+
   postMessage(message: any) {
     this.messages.push(message);
   }
-  
+
   addEventListener(event: string, handler: (e: any) => void) {
-    if (event === 'message') {
+    if (event === "message") {
       this.onmessage = handler;
     }
   }
-  
+
   removeEventListener(event: string, handler: (e: any) => void) {
-    if (event === 'message') {
+    if (event === "message") {
       this.onmessage = null;
     }
   }
-  
+
   close() {}
 }
 
 (global as any).BroadcastChannel = MockBroadcastChannel;
 
 // Mock window.matchMedia
-Object.defineProperty(window, 'matchMedia', {
+Object.defineProperty(window, "matchMedia", {
   writable: true,
-  value: vi.fn().mockImplementation(query => ({
+  value: vi.fn().mockImplementation((query) => ({
     matches: false,
     media: query,
     onchange: null,
@@ -81,11 +81,11 @@ class MockIntersectionObserver implements IntersectionObserver {
 
   constructor(
     private callback: IntersectionObserverCallback,
-    private options?: IntersectionObserverInit
+    private options?: IntersectionObserverInit,
   ) {
     this.thresholds = options?.threshold ? [options.threshold].flat() : [];
     this.root = options?.root || null;
-    this.rootMargin = options?.rootMargin || '';
+    this.rootMargin = options?.rootMargin || "";
   }
 
   observe(): void {}
@@ -99,14 +99,16 @@ class MockIntersectionObserver implements IntersectionObserver {
 (global as any).IntersectionObserver = MockIntersectionObserver;
 
 // Supabase mock
-vi.mock('@/supabase/client', () => ({
+vi.mock("@/supabase/client", () => ({
   getSupabaseClient: vi.fn(() => ({
     auth: {
       signInWithPassword: vi.fn(),
       signUp: vi.fn(),
       signOut: vi.fn(),
       getSession: vi.fn(() => ({ data: { session: null } })),
-      onAuthStateChange: vi.fn(() => ({ data: { subscription: { unsubscribe: vi.fn() } } })),
+      onAuthStateChange: vi.fn(() => ({
+        data: { subscription: { unsubscribe: vi.fn() } },
+      })),
     },
     from: vi.fn(() => ({
       select: vi.fn(() => ({

@@ -18,7 +18,7 @@ let toasts: ToastMessage[] = [];
 let listeners: ((toasts: ToastMessage[]) => void)[] = [];
 
 function notifyListeners() {
-  listeners.forEach(l => l([...toasts]));
+  listeners.forEach((l) => l([...toasts]));
 }
 
 function getContainer(): HTMLDivElement {
@@ -68,7 +68,7 @@ document.head.appendChild(style);
 export function toast(
   message: string,
   type: ToastType = "info",
-  duration = 3000
+  duration = 3000,
 ): void {
   const container = getContainer();
   const id = `${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
@@ -90,7 +90,7 @@ export function toast(
     el.style.animation = "toastSlideOut 0.3s ease forwards";
     setTimeout(() => {
       el.remove();
-      toasts = toasts.filter(x => x.id !== id);
+      toasts = toasts.filter((x) => x.id !== id);
       notifyListeners();
     }, 300);
   }, duration);
@@ -107,10 +107,10 @@ export const toastInfo = (msg: string, dur?: number) => toast(msg, "info", dur);
 
 /** Subscribe to toast changes (for React components) */
 export function subscribeToToasts(
-  cb: (toasts: ToastMessage[]) => void
+  cb: (toasts: ToastMessage[]) => void,
 ): () => void {
   listeners.push(cb);
   return () => {
-    listeners = listeners.filter(l => l !== cb);
+    listeners = listeners.filter((l) => l !== cb);
   };
 }

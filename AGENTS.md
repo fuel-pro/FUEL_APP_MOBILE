@@ -1,11 +1,13 @@
 # FuelPro Mobile — Repository Knowledge
 
 ## Project Overview
+
 React + Vite + TypeScript SPA for fuel station management. Deployed at
 `fuel-app-mobile.vercel.app`. Backend is Supabase (project ref:
 `ojjscjwatikixlpshmub`). Auth via Supabase email/password.
 
 ## Key Architecture
+
 - `src/react-app/context/StationContext.tsx` — station CRUD, localStorage
   persistence (`fuelpro_stations_v3`), Supabase cross-device sync.
 - `src/react-app/context/FuelContext.tsx` — tab configuration registry.
@@ -59,7 +61,7 @@ React + Vite + TypeScript SPA for fuel station management. Deployed at
   legacy Documents tab, NOT rendered but kept for reference) was also migrated
   from base64-in-JSON to Storage uploads via `uploadFileToStorage()`.
 - **Schema Visualizer** (`src/react-app/pages/founder-sections/
-  SchemaVisualizerSection.tsx`): uses an EMBEDDED authoritative schema map
+SchemaVisualizerSection.tsx`): uses an EMBEDDED authoritative schema map
   (SCHEMA constant — 13 live tables with all columns, types, PK/FK annotations,
   derived from the actual live DB and kept in sync with `supabase/migrations/`).
   PostgREST's OpenAPI root (`GET /rest/v1/`) is now restricted to the
@@ -82,6 +84,7 @@ React + Vite + TypeScript SPA for fuel station management. Deployed at
   (`email_confirm:true` via admin API) before `signInWithPassword` succeeds.
 
 ## Critical Patterns / Gotchas
+
 - **Persist-effect race**: `StationProvider` has a persist `useEffect` that
   runs on the first render when `stations` is still the initial `[]`. Without
   the `didHydrateRef` guard it overwrites a non-empty `fuelpro_stations_v3`
@@ -120,7 +123,7 @@ React + Vite + TypeScript SPA for fuel station management. Deployed at
   the live migration added a `code TEXT NOT NULL UNIQUE` column to `stations`,
   but the app's `stationToRowFields`/`pushStationUpsert`/migration-insert NEVER
   sent `code`. Every upsert failed with `23502 null value in column "code"
-  violates not-null constraint` and the error was swallowed by the
+violates not-null constraint` and the error was swallowed by the
   fire-and-forget `catch`. Result: stations persisted only to localStorage +
   the FuelContext `app_kv` blob, NEVER to the `stations` table → other devices
   never restored them → users got stranded on the "create station" screen.
@@ -138,24 +141,25 @@ React + Vite + TypeScript SPA for fuel station management. Deployed at
 - **Math.random** usages are all legitimate ID/hash generation, not fake data.
 
 ## Deployment
+
 - Vercel project: `prj_hjVrMLO7CxLTI77kthGE020eI3oj` (team:
   `leons-projects-78a92c96`).
 - **Prebuilt deploy method (works, bypasses rate limit + bad buildCommand)**:
   The project's configured `buildCommand` is `cd app && npm install --legacy-peer-deps
-  && npm run build:static`, pointing at an `app/` subdir that does NOT exist in the
+&& npm run build:static`, pointing at an `app/` subdir that does NOT exist in the
   repo root. So a plain `vercel deploy dist --prod` FAILS with "npm install exit 254"
   (no package.json in dist). The ONLY reliable deploy path is the Build Output API:
-    1. `VERCEL_ORG_ID=team_HvnupSUe9C1kfvUEQ5LFXOju VERCEL_PROJECT_ID=prj_... npx
-       vercel build --prod --token=$VERCEL --scope=leons-projects-78a92c96 --yes`
-       → produces `.vercel/output/` (builds.json + config.json + static/ + functions/).
-    2. `npx vercel deploy --prebuilt --prod --scope=... --token=$VERCEL --yes`
-       → uploads prebuilt artifacts; Vercel skips its build; aliases to
-       fuel-app-mobile.vercel.app. Deploy shows `prebuilt: true, type: LAMBDAS`.
-  The `.vercel/` dir is gitignored. The REST API alone (POST /v13/deployments with
-  uploaded file shas) does NOT work because Vercel still runs the configured
-  buildCommand regardless of `prebuilt=1` / `projectSettings.buildCommand=null`.
+  1. `VERCEL_ORG_ID=team_HvnupSUe9C1kfvUEQ5LFXOju VERCEL_PROJECT_ID=prj_... npx
+vercel build --prod --token=$VERCEL --scope=leons-projects-78a92c96 --yes`
+     → produces `.vercel/output/` (builds.json + config.json + static/ + functions/).
+  2. `npx vercel deploy --prebuilt --prod --scope=... --token=$VERCEL --yes`
+     → uploads prebuilt artifacts; Vercel skips its build; aliases to
+     fuel-app-mobile.vercel.app. Deploy shows `prebuilt: true, type: LAMBDAS`.
+     The `.vercel/` dir is gitignored. The REST API alone (POST /v13/deployments with
+     uploaded file shas) does NOT work because Vercel still runs the configured
+     buildCommand regardless of `prebuilt=1` / `projectSettings.buildCommand=null`.
 - **Cloudflare Pages** is the unlimited mirror: `CLOUDFLARE_API_TOKEN=$CLOUDFLARE
-  npx wrangler pages deploy dist --project-name=fuel-app-mobile --branch=main`.
+npx wrangler pages deploy dist --project-name=fuel-app-mobile --branch=main`.
 - Vercel `api-deployments-free-per-day` limit (100/day) can be exhausted. Resets ~24h.
   Read-only GET deployments use a separate 1000/min bucket and still work when the
   deploy bucket is exhausted.
@@ -217,12 +221,14 @@ React + Vite + TypeScript SPA for fuel station management. Deployed at
   updated: https://1c5565eb.fuel-app-mobile.pages.dev.
 
 ## FuelContext save/load race (FIXED 2026-08-09, commit b3d489e4)
+
 The load-from-storage `useEffect` had `saveToStorage` in its deps. Because
 `saveToStorage` was recreated on every state change (deps `[state, user]`),
 the load effect re-fired on every keystroke and overwrote edits with stale
 localStorage data (300ms save debounce vs 100ms load timer). This was the root
 cause of the "Qty (DAYS) field can't be edited/cleared" bug and affected ANY
 field with a default value (currency, invoice label, etc.). Fix applied:
+
 - `stateRef` (useRef) always points to current state; `saveToStorage`/
   `saveToCloud` read from `stateRef.current`, deps changed to `[user]`.
 - `saveToStorage` removed from load effect deps (now `[user, loadFromCloud]`).
@@ -230,22 +236,25 @@ field with a default value (currency, invoice label, etc.). Fix applied:
   instead of replacing wholesale.
 - Compact data save always includes `invoiceSettings` (removed conditional
   `!== "Qty (DAYS)"` check).
-Verified end-to-end: Phase 1 user edited label "Qty (DAYS)"→"Litres", saved;
-Supabase `app_kv` row contains `invoiceSettings.quantityLabel="Litres"`.
-Phase 2: cleared localStorage, reloaded — Invoice tab loaded "Litres" + the
-saved item (total Ksh 10,702) from cloud. Cross-device sync confirmed working.
+  Verified end-to-end: Phase 1 user edited label "Qty (DAYS)"→"Litres", saved;
+  Supabase `app_kv` row contains `invoiceSettings.quantityLabel="Litres"`.
+  Phase 2: cleared localStorage, reloaded — Invoice tab loaded "Litres" + the
+  saved item (total Ksh 10,702) from cloud. Cross-device sync confirmed working.
 
 ## Build / Test
+
 - `npx tsc --noEmit` — typecheck (must pass before commit).
 - `npm run build` — Vite production build.
 - No test suite configured.
 
 ## Credentials
+
 - Supabase service_role key and access token are in `/workspace/API KEYS.txt`
   (project `ojjscjwatikixlpshmub`). NEVER commit these.
 - Vercel token in `$VERCEL`. GitHub token in `$GITHUB_TOKEN`.
 
 ## CRITICAL — Cross-device cloud data overwrite race (FIXED 2026-08-09, commit 00522ac)
+
 **Symptom**: When a user logs in on a NEW device/browser (empty local cache),
 ALL their cloud data (app_kv blob) was silently WIPED within ~2 seconds of
 login. Company info, invoices, sales history, debt, offloading, pumps,
@@ -256,6 +265,7 @@ in the entire testing campaign — it destroys user data on every
 cross-device login.
 
 **Root cause**: Three effects run on login:
+
 1. Load effect (100ms timer, deps `[user, loadFromCloud, ...]`): calls
    `loadFromStorage()` (instant, from localStorage cache — empty on new
    device) then `await loadFromCloud()` (async Supabase fetch, ~200-500ms).
@@ -270,6 +280,7 @@ app_kv, OVERWRITING all the user's real data BEFORE `loadFromCloud` even
 returns. The `finally` block then sets the ref, but the damage is done.
 
 **Fix** (`FuelContext.tsx`): `cloudLoadCompleteRef = useRef(false)`.
+
 - Reset to `false` on every `user` change (`useEffect(() => { ref.current = false }, [user])`).
 - `saveToCloud` early-returns if `!cloudLoadCompleteRef.current` (with a
   console.log so it's debuggable).
@@ -294,6 +305,7 @@ and the user got stranded on the setup wizard on every other device. This
 was the secondary root cause of the Phase 2 cross-device failure.
 
 ## Deployment — Cloudflare Pages (primary, Vercel rate-limited)
+
 Vercel's free tier limit (100 deploys/day) was exhausted. Cloudflare Pages
 is the unlimited mirror and is now the primary deploy target:
 `CLOUDFLARE_API_TOKEN=$CLOUDFLARE npx wrangler pages deploy dist
@@ -311,18 +323,23 @@ URL (e.g. `https://<hash>.fuel-app-mobile.pages.dev/`) instead of the
 production alias — the preview URL has no registered SW.
 
 ## Supabase Management API — DB access (FIXED 2026-08-09)
+
 The Supabase Management API (`https://api.supabase.com/v1/projects/{ref}/database/query`) is the way to apply migrations/DDL to the live DB. Direct DB connection (`db.{ref}.supabase.co:5432`) does NOT resolve (IPv6-only / no DNS) and the pooler rejects the tenant (`ENOTFOUND tenant/user postgres.{ref} not found`). The Management API requires a Supabase Personal Access Token (PAT, `sbp_` prefix — found in API KEYS.txt: `sbp_<PAT_FROM_API_KEYS_TXT>`), NOT the service_role JWT (returns 401). CRITICAL: `api.supabase.com` is behind Cloudflare which returns `error code: 1010` for requests WITHOUT a `User-Agent` header. Fix: always include `User-Agent: Mozilla/5.0 ...` — this bypasses the 1010 block. Apply migrations with `POST /v1/projects/{ref}/database/query` body `{"query": "<sql>"}`. SELECT returns rows as JSON array; DDL returns `[]`.
 
 ## Migration 008 — profile sharing + documents (APPLIED LIVE 2026-08-09)
+
 `supabase/migrations/008_profile_sharing_documents.sql` applied live via Management API. Adds: `profiles.phone`, `profiles.username` (UNIQUE), `profiles.avatar_url`; `station_members` table (DB-backed cross-device station sharing, RLS: owner_id = auth.uid()); `user_documents` table (cross-device file metadata, RLS: owner_id = auth.uid()). Existing storage RLS for `fuelpro-files` checks `(storage.foldername(name))[2] = auth.uid()` — works for BOTH `logos/<uid>/...` and `documents/<uid>/...` paths.
 
 ## AuthContext — profile management (ADDED 2026-08-09)
+
 `AuthContext.tsx` exposes `updateProfile`, `updateEmail`, `updatePassword`. `updateProfile` updates BOTH `supabase.auth.updateUser({data})` AND the `profiles` table; handles unique username violation (23505). `updateEmail` calls `supabase.auth.updateUser({email})` + updates `profiles.email`. `updatePassword` calls `supabase.auth.updateUser({password})` (min 8 chars, works when logged in).
 
 ## PasswordReset — Supabase email-link flow (FIXED 2026-08-09)
+
 Old page had fake 6-digit code flow (`verifyResetCode` always false, `resetPassword` stub). Now uses Supabase's real email-link recovery: email -> `resetPasswordForEmail` sends link -> user clicks -> redirects to `/reset-password` with recovery token -> page detects `type=recovery`/`access_token` in URL OR `PASSWORD_RECOVERY` event -> skips to newpass -> `supabase.auth.updateUser({password})`.
 
 ## Cross-user app_kv data overwrite (FIXED 2026-08-09, commit bb4f69e, PR #94)
+
 **Symptom**: Per-component cloud keys (expenses_data, priceboard_data,
 suppliers_data, shift_data, payroll_employees, maintenance_records,
 comm_contacts, credit_accounts, loyalty_customers, fuel_types_config,
@@ -341,20 +358,23 @@ a17b4a8a's data.
 row id by `owner_id` → `id = `${key}__${ownerId}`` in `set`/`get`/`delete`/
 `getAll`. Each user gets an isolated row for the same logical key; RLS
 enforces per-user isolation.
+
 - `get`: reads the scoped id first, falls back to the legacy bare-key row
   (owned by this user) ONCE so existing data is migrated on first read; the
   next `set` repersists it under the scoped id.
 - `set`: upserts under the scoped id.
 - `delete`: removes the scoped row + any legacy bare-key row for this owner.
 - `getAll`: strips the `__ownerId` suffix to return logical keys to callers.
-FuelContext's `user_<id>_compact` key is already user-scoped (the legacy
-fallback preserves its existing data). Verified in bundle: the
-``${key}__${ownerId}`` rowId pattern is present in the built JS.
+  FuelContext's `user_<id>_compact` key is already user-scoped (the legacy
+  fallback preserves its existing data). Verified in bundle: the
+  `${key}__${ownerId}` rowId pattern is present in the built JS.
 
 ## Cross-device file storage + station sharing (ADDED 2026-08-09)
+
 `src/react-app/lib/document-service.ts` uploads to Supabase Storage (`fuelpro-files`, path `documents/<uid>/<timestamp>-<name>`), metadata in `user_documents`. `src/react-app/lib/station-share-service.ts` is DB-backed sharing via `station_members` (invite link = `/?invite=<token>`). `src/react-app/components/UserProfileSettings.tsx` is the full UI (profile, email, password, sharing, files), embedded in SettingsPanel as a "User Profile" tab.
 
 ## Cross-user overwrite fix — VERIFIED LIVE 2026-08-09 (deploy b2b98cd2)
+
 PR #94 (commit bb4f69e) deployed to Cloudflare Pages
 (https://fuel-app-mobile.pages.dev + preview
 https://b2b98cd2.fuel-app-mobile.pages.dev). Vercel production deploy
@@ -364,6 +384,7 @@ will pick up the merged main on next deploy window (or via Git integration
 which uses a separate quota — last Vercel prod deploy was from commit
 "Update package-lock.json", NOT the latest main).
 **End-to-end verification (fresh-device login on b2b98cd2 preview)**:
+
 - Logged in as QA user 98ecc424 (qa.crossdevice.0809b@gmail.com) on a
   FRESH deployment URL (no localStorage, no service worker cache).
 - App loaded station + FuelContext data from cloud → station
@@ -395,6 +416,7 @@ which uses a separate quota — last Vercel prod deploy was from commit
   backfill or was never pushed).
 
 ## Founder test credentials (2026-08-09)
+
 - Founder user: fueltest_1786274010@testmail.com (uid 6220a16c, role=founder).
   Password reset to `FounderTest2026!` via admin API (email_confirm=true).
 - QA user: qa.crossdevice.0809b@gmail.com (uid 98ecc424, profiles.username=

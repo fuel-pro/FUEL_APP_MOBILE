@@ -69,7 +69,7 @@ interface Props {
   logAudit: (
     event: string,
     detail: string,
-    severity: "success" | "warning" | "danger" | "info"
+    severity: "success" | "warning" | "danger" | "info",
   ) => void;
 }
 
@@ -81,7 +81,7 @@ export default function SecuritySection({ logAudit }: Props) {
     {
       staleTime: 1000 * 60 * 5,
       retry: 1,
-    }
+    },
   );
   const upsertSession = trpc.audit.upsertFounderSession.useMutation({
     onSuccess: () => utils.audit.getFounderSession.invalidate(),
@@ -98,7 +98,7 @@ export default function SecuritySection({ logAudit }: Props) {
   /* ─── 2FA ─── */
   const [faConfig, setFaConfig] = useState(load2FAConfig);
   const [faStep, setFaStep] = useState<"list" | "setup" | "verify" | "disable">(
-    "list"
+    "list",
   );
   const [faCode, setFaCode] = useState("");
   const [faError, setFaError] = useState("");
@@ -178,7 +178,7 @@ export default function SecuritySection({ logAudit }: Props) {
       logAudit(
         "Password Change Failed",
         "Incorrect current password",
-        "danger"
+        "danger",
       );
       return;
     }
@@ -193,7 +193,7 @@ export default function SecuritySection({ logAudit }: Props) {
     const newHash = btoa(newPw);
     localStorage.setItem(
       FOUNDER_PASSWORD_KEY,
-      JSON.stringify({ ...stored, password: newHash })
+      JSON.stringify({ ...stored, password: newHash }),
     );
 
     // Sync to backend
@@ -246,7 +246,7 @@ export default function SecuritySection({ logAudit }: Props) {
       logAudit(
         "2FA Verification Failed",
         "Invalid TOTP code entered",
-        "warning"
+        "warning",
       );
     }
   };
@@ -290,7 +290,7 @@ export default function SecuritySection({ logAudit }: Props) {
       setEmailSent(false);
       const updated = { ...contact, email: newEmail, emailVerified: true };
       setContact(updated);
-      setContact(prev => ({ ...prev, email: newEmail, emailVerified: true }));
+      setContact((prev) => ({ ...prev, email: newEmail, emailVerified: true }));
       localStorage.setItem(FOUNDER_CONTACT_KEY, JSON.stringify(updated));
 
       // Sync to backend
@@ -313,7 +313,7 @@ export default function SecuritySection({ logAudit }: Props) {
       setPhoneSent(false);
       const updated = { ...contact, phone: newPhone, phoneVerified: true };
       setContact(updated);
-      setContact(prev => ({ ...prev, phone: newPhone, phoneVerified: true }));
+      setContact((prev) => ({ ...prev, phone: newPhone, phoneVerified: true }));
       localStorage.setItem(FOUNDER_CONTACT_KEY, JSON.stringify(updated));
 
       // Sync to backend
@@ -327,7 +327,7 @@ export default function SecuritySection({ logAudit }: Props) {
 
   const handleTerminateSession = (id: string) => {
     if (id === "current") return;
-    setSessions(prev => prev.filter(s => s.id !== id));
+    setSessions((prev) => prev.filter((s) => s.id !== id));
     logAudit("Session Terminated", `Session ${id} terminated`, "warning");
   };
 
@@ -382,7 +382,7 @@ export default function SecuritySection({ logAudit }: Props) {
             <div className="flex gap-2">
               <input
                 value={newEmail}
-                onChange={e => setNewEmail(e.target.value)}
+                onChange={(e) => setNewEmail(e.target.value)}
                 placeholder="recovery@email.com"
                 className="flex-1 px-3 py-2 bg-white/[0.03] border border-white/[0.08] rounded-lg text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500/30"
               />
@@ -409,7 +409,7 @@ export default function SecuritySection({ logAudit }: Props) {
             <div className="flex gap-2">
               <input
                 value={newPhone}
-                onChange={e => setNewPhone(e.target.value)}
+                onChange={(e) => setNewPhone(e.target.value)}
                 placeholder="+254700000000"
                 className="flex-1 px-3 py-2 bg-white/[0.03] border border-white/[0.08] rounded-lg text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500/30"
               />
@@ -457,7 +457,7 @@ export default function SecuritySection({ logAudit }: Props) {
             <input
               type="password"
               value={currentPw}
-              onChange={e => setCurrentPw(e.target.value)}
+              onChange={(e) => setCurrentPw(e.target.value)}
               placeholder="Enter current password"
               className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.08] rounded-lg text-sm text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/30"
             />
@@ -470,7 +470,7 @@ export default function SecuritySection({ logAudit }: Props) {
               <input
                 type={showNewPw ? "text" : "password"}
                 value={newPw}
-                onChange={e => setNewPw(e.target.value)}
+                onChange={(e) => setNewPw(e.target.value)}
                 placeholder="Min 8 chars, uppercase, number, symbol"
                 className="w-full px-3 py-2 pr-10 bg-white/[0.03] border border-white/[0.08] rounded-lg text-sm text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/30"
               />
@@ -506,7 +506,7 @@ export default function SecuritySection({ logAudit }: Props) {
             <input
               type="password"
               value={confirmPw}
-              onChange={e => setConfirmPw(e.target.value)}
+              onChange={(e) => setConfirmPw(e.target.value)}
               placeholder="Repeat new password"
               className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.08] rounded-lg text-sm text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/30"
             />
@@ -623,7 +623,7 @@ export default function SecuritySection({ logAudit }: Props) {
                   </label>
                   <input
                     value={faCode}
-                    onChange={e =>
+                    onChange={(e) =>
                       setFaCode(e.target.value.replace(/\D/g, "").slice(0, 6))
                     }
                     placeholder="000000"
@@ -658,7 +658,7 @@ export default function SecuritySection({ logAudit }: Props) {
             </p>
             <input
               value={faCode}
-              onChange={e =>
+              onChange={(e) =>
                 setFaCode(e.target.value.replace(/\D/g, "").slice(0, 6))
               }
               placeholder="6-digit code"
@@ -689,7 +689,7 @@ export default function SecuritySection({ logAudit }: Props) {
           <User size={14} className="text-purple-400" /> Active Sessions
         </h3>
         <div className="space-y-2">
-          {sessions.map(s => (
+          {sessions.map((s) => (
             <div
               key={s.id}
               className="flex items-center justify-between p-3 bg-white/[0.02] rounded-lg"

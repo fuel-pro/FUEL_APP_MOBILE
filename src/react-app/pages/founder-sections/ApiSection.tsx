@@ -150,7 +150,7 @@ interface Props {
   logAudit: (
     e: string,
     d: string,
-    s: "success" | "warning" | "danger" | "info"
+    s: "success" | "warning" | "danger" | "info",
   ) => void;
 }
 
@@ -162,9 +162,11 @@ export default function ApiSection({ logAudit }: Props) {
   const [webhooks, setWebhooks] = useState<Webhook[]>(loadWebhooks);
   const [apiKeys, setApiKeys] = useState<ApiKey[]>(loadApiKeys);
   const [apiLogs, setApiLogs] = useState<ApiLog[]>(loadApiLogs);
-  const [selectedRegion, setSelectedRegion] = useState<RegionCode | "ALL">(() => {
-    return (localStorage.getItem(SELECTED_REGION_KEY) as RegionCode) || "ALL";
-  });
+  const [selectedRegion, setSelectedRegion] = useState<RegionCode | "ALL">(
+    () => {
+      return (localStorage.getItem(SELECTED_REGION_KEY) as RegionCode) || "ALL";
+    },
+  );
   const [newHookUrl, setNewHookUrl] = useState("");
   const [newHookEvents, setNewHookEvents] = useState<string[]>(["sales"]);
   const [newKeyName, setNewKeyName] = useState("");
@@ -172,7 +174,9 @@ export default function ApiSection({ logAudit }: Props) {
   const [newKeyScopes, setNewKeyScopes] = useState<string[]>(["read"]);
   const [copiedKey, setCopiedKey] = useState("");
   const [showLogs, setShowLogs] = useState(false);
-  const [logsFilter, setLogsFilter] = useState<"ALL" | "success" | "error">("ALL");
+  const [logsFilter, setLogsFilter] = useState<"ALL" | "success" | "error">(
+    "ALL",
+  );
 
   // Save functions
   const saveWebhooks = (w: Webhook[]) => {
@@ -203,19 +207,19 @@ export default function ApiSection({ logAudit }: Props) {
 
   // Filter webhooks and keys by selected region
   const filteredWebhooks = webhooks.filter(
-    w => selectedRegion === "ALL" || w.regions.includes(selectedRegion)
+    (w) => selectedRegion === "ALL" || w.regions.includes(selectedRegion),
   );
 
   const filteredKeys = apiKeys.filter(
-    k => selectedRegion === "ALL" || k.regions.includes(selectedRegion)
+    (k) => selectedRegion === "ALL" || k.regions.includes(selectedRegion),
   );
 
   const filteredLogs = apiLogs.filter(
-    l =>
+    (l) =>
       (selectedRegion === "ALL" || l.region === selectedRegion) &&
       (logsFilter === "ALL" ||
         (logsFilter === "success" && l.status < 400) ||
-        (logsFilter === "error" && l.status >= 400))
+        (logsFilter === "error" && l.status >= 400)),
   );
 
   // Webhook functions
@@ -228,7 +232,10 @@ export default function ApiSection({ logAudit }: Props) {
       active: true,
       createdAt: new Date().toISOString(),
       lastTriggered: null,
-      regions: selectedRegion === "ALL" ? Object.keys(REGIONAL_COMPLIANCE) as RegionCode[] : [selectedRegion],
+      regions:
+        selectedRegion === "ALL"
+          ? (Object.keys(REGIONAL_COMPLIANCE) as RegionCode[])
+          : [selectedRegion],
     };
     saveWebhooks([...webhooks, hook]);
     setNewHookUrl("");
@@ -236,7 +243,7 @@ export default function ApiSection({ logAudit }: Props) {
     logAudit(
       "Webhook Created",
       `Webhook added for ${hook.events.join(", ")} in ${hook.regions.length} region(s)`,
-      "success"
+      "success",
     );
   };
 
@@ -245,7 +252,7 @@ export default function ApiSection({ logAudit }: Props) {
     const hook: Webhook = {
       id: `wh_comp_${region}_${Date.now()}`,
       url: `${config.endpoint}/webhook`,
-      events: config.events,
+      events: [...config.events],
       active: true,
       createdAt: new Date().toISOString(),
       lastTriggered: null,
@@ -257,19 +264,19 @@ export default function ApiSection({ logAudit }: Props) {
     logAudit(
       "Compliance Webhook Created",
       `${config.authority} webhook configured for ${config.name}`,
-      "success"
+      "success",
     );
   };
 
   const toggleWebhook = (id: string) => {
     saveWebhooks(
-      webhooks.map(w => (w.id === id ? { ...w, active: !w.active } : w))
+      webhooks.map((w) => (w.id === id ? { ...w, active: !w.active } : w)),
     );
   };
 
   const deleteWebhook = (id: string) => {
     if (!confirm("Delete this webhook?")) return;
-    saveWebhooks(webhooks.filter(w => w.id !== id));
+    saveWebhooks(webhooks.filter((w) => w.id !== id));
     logAudit("Webhook Deleted", `Webhook ${id} removed`, "warning");
   };
 
@@ -298,13 +305,13 @@ export default function ApiSection({ logAudit }: Props) {
     logAudit(
       "API Key Created",
       `Key "${key.name}" generated for ${key.regions.join(", ")} regions`,
-      "success"
+      "success",
     );
   };
 
   const deleteApiKey = (id: string) => {
     if (!confirm("Revoke this API key?")) return;
-    saveApiKeys(apiKeys.filter(k => k.id !== id));
+    saveApiKeys(apiKeys.filter((k) => k.id !== id));
     logAudit("API Key Revoked", `Key ${id} revoked`, "warning");
   };
 
@@ -315,18 +322,16 @@ export default function ApiSection({ logAudit }: Props) {
   };
 
   const toggleRegion = (region: RegionCode) => {
-    setNewKeyRegions(prev =>
+    setNewKeyRegions((prev) =>
       prev.includes(region)
-        ? prev.filter(r => r !== region)
-        : [...prev, region]
+        ? prev.filter((r) => r !== region)
+        : [...prev, region],
     );
   };
 
   const toggleScope = (scope: string) => {
-    setNewKeyScopes(prev =>
-      prev.includes(scope)
-        ? prev.filter(s => s !== scope)
-        : [...prev, scope]
+    setNewKeyScopes((prev) =>
+      prev.includes(scope) ? prev.filter((s) => s !== scope) : [...prev, scope],
     );
   };
 
@@ -348,7 +353,8 @@ export default function ApiSection({ logAudit }: Props) {
   const scopeOptions = ["read", "write", "admin", "compliance"];
 
   // Get region flag
-  const getRegionFlag = (code: RegionCode) => REGIONAL_COMPLIANCE[code]?.flag || "🌍";
+  const getRegionFlag = (code: RegionCode) =>
+    REGIONAL_COMPLIANCE[code]?.flag || "🌍";
 
   return (
     <div className="space-y-6">
@@ -410,7 +416,7 @@ export default function ApiSection({ logAudit }: Props) {
         <div className="space-y-3 mb-4 p-3 bg-white/[0.02] rounded-lg">
           <input
             value={newKeyName}
-            onChange={e => setNewKeyName(e.target.value)}
+            onChange={(e) => setNewKeyName(e.target.value)}
             placeholder="Key name (e.g., Production KE, Staging UG)"
             className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.08] rounded-lg text-sm text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/30"
           />
@@ -439,9 +445,11 @@ export default function ApiSection({ logAudit }: Props) {
 
           {/* Scope Selection */}
           <div>
-            <label className="text-[10px] text-gray-500 mb-1 block">Scopes</label>
+            <label className="text-[10px] text-gray-500 mb-1 block">
+              Scopes
+            </label>
             <div className="flex flex-wrap gap-1">
-              {scopeOptions.map(scope => (
+              {scopeOptions.map((scope) => (
                 <button
                   key={scope}
                   onClick={() => toggleScope(scope)}
@@ -467,7 +475,7 @@ export default function ApiSection({ logAudit }: Props) {
 
         {/* Keys List */}
         <div className="space-y-2 max-h-64 overflow-y-auto">
-          {filteredKeys.map(k => (
+          {filteredKeys.map((k) => (
             <div
               key={k.id}
               className="flex items-center justify-between p-3 bg-white/[0.02] rounded-lg"
@@ -495,7 +503,7 @@ export default function ApiSection({ logAudit }: Props) {
                   </button>
                 </div>
                 <div className="flex gap-1 mt-1">
-                  {k.regions.map(r => (
+                  {k.regions.map((r) => (
                     <span
                       key={r}
                       className="text-[9px] px-1 py-0.5 bg-white/5 rounded text-gray-500"
@@ -515,7 +523,8 @@ export default function ApiSection({ logAudit }: Props) {
           ))}
           {filteredKeys.length === 0 && (
             <p className="text-xs text-gray-600 text-center py-4">
-              No API keys for {selectedRegion === "ALL" ? "any region" : selectedRegion}
+              No API keys for{" "}
+              {selectedRegion === "ALL" ? "any region" : selectedRegion}
             </p>
           )}
         </div>
@@ -543,8 +552,8 @@ export default function ApiSection({ logAudit }: Props) {
               </span>
             </div>
             <p className="text-[10px] text-gray-400 mb-2">
-              Configure {REGIONAL_COMPLIANCE[selectedRegion]?.authority} compliance webhook for{' '}
-              {REGIONAL_COMPLIANCE[selectedRegion]?.name}
+              Configure {REGIONAL_COMPLIANCE[selectedRegion]?.authority}{" "}
+              compliance webhook for {REGIONAL_COMPLIANCE[selectedRegion]?.name}
             </p>
             <button
               onClick={() => addComplianceWebhook(selectedRegion)}
@@ -559,17 +568,19 @@ export default function ApiSection({ logAudit }: Props) {
         <div className="space-y-3 mb-4">
           <input
             value={newHookUrl}
-            onChange={e => setNewHookUrl(e.target.value)}
+            onChange={(e) => setNewHookUrl(e.target.value)}
             placeholder="https://your-app.com/webhook"
             className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.08] rounded-lg text-sm text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/30"
           />
           <div className="flex flex-wrap gap-2">
-            {eventOptions.map(e => (
+            {eventOptions.map((e) => (
               <button
                 key={e}
                 onClick={() =>
-                  setNewHookEvents(prev =>
-                    prev.includes(e) ? prev.filter(x => x !== e) : [...prev, e]
+                  setNewHookEvents((prev) =>
+                    prev.includes(e)
+                      ? prev.filter((x) => x !== e)
+                      : [...prev, e],
                   )
                 }
                 className={`text-[10px] px-2 py-1 rounded border transition-colors ${
@@ -592,7 +603,7 @@ export default function ApiSection({ logAudit }: Props) {
 
         {/* Webhooks List */}
         <div className="space-y-2 max-h-64 overflow-y-auto">
-          {filteredWebhooks.map(w => (
+          {filteredWebhooks.map((w) => (
             <div
               key={w.id}
               className="flex items-center justify-between p-3 bg-white/[0.02] rounded-lg"
@@ -615,7 +626,7 @@ export default function ApiSection({ logAudit }: Props) {
                   )}
                 </div>
                 <div className="flex gap-1 mt-1">
-                  {w.events.map(e => (
+                  {w.events.map((e) => (
                     <span
                       key={e}
                       className="text-[9px] px-1.5 py-0.5 bg-white/5 rounded text-gray-500"
@@ -625,7 +636,7 @@ export default function ApiSection({ logAudit }: Props) {
                   ))}
                 </div>
                 <div className="flex gap-1 mt-1">
-                  {w.regions.map(r => (
+                  {w.regions.map((r) => (
                     <span
                       key={r}
                       className="text-[9px] px-1 py-0.5 bg-white/5 rounded text-gray-500"
@@ -659,7 +670,8 @@ export default function ApiSection({ logAudit }: Props) {
           ))}
           {filteredWebhooks.length === 0 && (
             <p className="text-xs text-gray-600 text-center py-4">
-              No webhooks for {selectedRegion === "ALL" ? "any region" : selectedRegion}
+              No webhooks for{" "}
+              {selectedRegion === "ALL" ? "any region" : selectedRegion}
             </p>
           )}
         </div>
@@ -680,7 +692,7 @@ export default function ApiSection({ logAudit }: Props) {
           </button>
           {showLogs && (
             <div className="flex gap-1">
-              {(["ALL", "success", "error"] as const).map(f => (
+              {(["ALL", "success", "error"] as const).map((f) => (
                 <button
                   key={f}
                   onClick={() => setLogsFilter(f)}
@@ -699,30 +711,35 @@ export default function ApiSection({ logAudit }: Props) {
 
         {showLogs && (
           <div className="space-y-1 max-h-64 overflow-y-auto">
-            {filteredLogs.slice(-50).reverse().map(log => (
-              <div
-                key={log.id}
-                className="flex items-center justify-between text-[10px] p-2 bg-white/[0.02] rounded"
-              >
-                <div className="flex items-center gap-2">
-                  <span
-                    className={`px-1 rounded ${
-                      log.status < 400 ? "bg-green-500/20 text-green-400" : "bg-red-500/20 text-red-400"
-                    }`}
-                  >
-                    {log.method} {log.status}
-                  </span>
-                  <span className="text-gray-400 font-mono truncate max-w-[200px]">
-                    {log.endpoint}
-                  </span>
+            {filteredLogs
+              .slice(-50)
+              .reverse()
+              .map((log) => (
+                <div
+                  key={log.id}
+                  className="flex items-center justify-between text-[10px] p-2 bg-white/[0.02] rounded"
+                >
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`px-1 rounded ${
+                        log.status < 400
+                          ? "bg-green-500/20 text-green-400"
+                          : "bg-red-500/20 text-red-400"
+                      }`}
+                    >
+                      {log.method} {log.status}
+                    </span>
+                    <span className="text-gray-400 font-mono truncate max-w-[200px]">
+                      {log.endpoint}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 text-gray-500">
+                    <span>{getRegionFlag(log.region)}</span>
+                    <span>{log.responseTime}ms</span>
+                    <span>{new Date(log.timestamp).toLocaleTimeString()}</span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2 text-gray-500">
-                  <span>{getRegionFlag(log.region)}</span>
-                  <span>{log.responseTime}ms</span>
-                  <span>{new Date(log.timestamp).toLocaleTimeString()}</span>
-                </div>
-              </div>
-            ))}
+              ))}
             {filteredLogs.length === 0 && (
               <p className="text-xs text-gray-600 text-center py-4">
                 No API logs yet

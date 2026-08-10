@@ -41,27 +41,31 @@ interface BackupSectionProps {
   logAudit: (
     event: string,
     detail: string,
-    severity: "success" | "warning" | "danger" | "info"
+    severity: "success" | "warning" | "danger" | "info",
   ) => void;
 }
 
 export default function BackupSection({ logAudit }: BackupSectionProps) {
   const [backingUp, setBackingUp] = useState(false);
   const [restoring, setRestoring] = useState(false);
-  const [selectedRegion, setSelectedRegion] = useState<RegionCode | "ALL">("ALL");
+  const [selectedRegion, setSelectedRegion] = useState<RegionCode | "ALL">(
+    "ALL",
+  );
   const [lastBackup, setLastBackup] = useState<string | null>(() =>
-    localStorage.getItem("fuelpro_last_backup")
+    localStorage.getItem("fuelpro_last_backup"),
   );
   const [backupSize, setBackupSize] = useState("0 KB");
   const [includeFiles, setIncludeFiles] = useState(true);
-  const [regionalBackups, setRegionalBackups] = useState<BackupMetadata[]>(() => {
-    try {
-      const stored = localStorage.getItem("fuelpro_regional_backups");
-      return stored ? JSON.parse(stored) : [];
-    } catch {
-      return [];
-    }
-  });
+  const [regionalBackups, setRegionalBackups] = useState<BackupMetadata[]>(
+    () => {
+      try {
+        const stored = localStorage.getItem("fuelpro_regional_backups");
+        return stored ? JSON.parse(stored) : [];
+      } catch {
+        return [];
+      }
+    },
+  );
 
   // Get keys for a specific region
   const getRegionalKeys = (region: RegionCode) => {
@@ -69,7 +73,10 @@ export default function BackupSection({ logAudit }: BackupSectionProps) {
     const keys: string[] = [];
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
-      if (key && (key.startsWith(prefix) || key.includes(`_${region.toLowerCase()}_`))) {
+      if (
+        key &&
+        (key.startsWith(prefix) || key.includes(`_${region.toLowerCase()}_`))
+      ) {
         keys.push(key);
       }
     }
@@ -80,7 +87,7 @@ export default function BackupSection({ logAudit }: BackupSectionProps) {
   const getRegionalStorageSize = (region: RegionCode) => {
     const keys = getRegionalKeys(region);
     let totalSize = 0;
-    keys.forEach(key => {
+    keys.forEach((key) => {
       const value = localStorage.getItem(key) || "";
       totalSize += key.length + value.length;
     });
@@ -105,22 +112,25 @@ export default function BackupSection({ logAudit }: BackupSectionProps) {
     if (!confirm(`Clear all data for ${regionName}? This cannot be undone.`)) {
       return;
     }
-    
+
     const prefix = `fuelpro_${region.toLowerCase()}_`;
     let clearedCount = 0;
-    
+
     for (let i = localStorage.length - 1; i >= 0; i--) {
       const key = localStorage.key(i);
-      if (key && (key.startsWith(prefix) || key.includes(`_${region.toLowerCase()}_`))) {
+      if (
+        key &&
+        (key.startsWith(prefix) || key.includes(`_${region.toLowerCase()}_`))
+      ) {
         localStorage.removeItem(key);
         clearedCount++;
       }
     }
-    
+
     logAudit(
       "Region Data Cleared",
       `Cleared ${clearedCount} keys for ${regionName}`,
-      "warning"
+      "warning",
     );
   };
 
@@ -150,7 +160,7 @@ export default function BackupSection({ logAudit }: BackupSectionProps) {
       logAudit(
         "Backup Completed",
         `Backup exported: ${(blob.size / 1024).toFixed(1)} KB`,
-        "success"
+        "success",
       );
     }, 1200);
   };
@@ -166,7 +176,7 @@ export default function BackupSection({ logAudit }: BackupSectionProps) {
         const data = JSON.parse(reader.result as string);
         if (
           !confirm(
-            `Restore ${Object.keys(data).length} keys? This will overwrite current data.`
+            `Restore ${Object.keys(data).length} keys? This will overwrite current data.`,
           )
         ) {
           setRestoring(false);
@@ -178,10 +188,10 @@ export default function BackupSection({ logAudit }: BackupSectionProps) {
         logAudit(
           "Restore Completed",
           `Restored ${Object.keys(data).length} keys`,
-          "success"
+          "success",
         );
         import("@/react-app/lib/app-reloader").then(({ triggerSoftReload }) =>
-          triggerSoftReload(500)
+          triggerSoftReload(500),
         );
       } catch {
         logAudit("Restore Failed", "Invalid backup file", "danger");
@@ -238,14 +248,15 @@ export default function BackupSection({ logAudit }: BackupSectionProps) {
       {/* Regional Storage Buckets */}
       <div className="bg-[#161618] border border-white/[0.06] rounded-xl p-5">
         <h3 className="text-sm font-medium text-white mb-3 flex items-center gap-2">
-          <Archive size={14} className="text-purple-400" /> Regional Storage Buckets
+          <Archive size={14} className="text-purple-400" /> Regional Storage
+          Buckets
         </h3>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           {Object.entries(REGIONAL_STORAGE).map(([code, config]) => {
             const size = getRegionalStorageSize(code as RegionCode);
             const keys = getRegionalKeys(code as RegionCode);
             const hasData = keys.length > 0;
-            
+
             return (
               <div
                 key={code}
@@ -299,12 +310,17 @@ export default function BackupSection({ logAudit }: BackupSectionProps) {
             Export Backup
             {selectedRegion !== "ALL" && (
               <span className="ml-2 text-[10px] text-blue-400">
-                ({REGIONAL_STORAGE[selectedRegion].flag} {REGIONAL_STORAGE[selectedRegion].name})
+                ({REGIONAL_STORAGE[selectedRegion].flag}{" "}
+                {REGIONAL_STORAGE[selectedRegion].name})
               </span>
             )}
           </h3>
           <p className="text-xs text-gray-500 mb-4">
-            Download {selectedRegion === "ALL" ? "all" : REGIONAL_STORAGE[selectedRegion].name} localStorage data as JSON
+            Download{" "}
+            {selectedRegion === "ALL"
+              ? "all"
+              : REGIONAL_STORAGE[selectedRegion].name}{" "}
+            localStorage data as JSON
           </p>
           {lastBackup && (
             <div className="flex items-center gap-2 mb-3 text-[10px] text-gray-500">
@@ -369,11 +385,11 @@ export default function BackupSection({ logAudit }: BackupSectionProps) {
         </h3>
         <div className="space-y-2 max-h-48 overflow-y-auto">
           {Array.from({ length: localStorage.length }, (_, i) =>
-            localStorage.key(i)
+            localStorage.key(i),
           )
             .filter(Boolean)
             .sort()
-            .map(key => {
+            .map((key) => {
               const val = localStorage.getItem(key!) || "";
               return (
                 <div

@@ -44,7 +44,7 @@ function getApiBase(): string {
 async function getApiBaseAsync(): Promise<string> {
   if (_apiBase) return _apiBase;
   if (!_apiPromise) {
-    _apiPromise = import("@/utils/apiConfig").then(m => m.getBackendUrl());
+    _apiPromise = import("@/utils/apiConfig").then((m) => m.getBackendUrl());
   }
   _apiBase = await _apiPromise;
   return _apiBase || "";
@@ -76,17 +76,27 @@ ChartJS.register(
   Title,
   Tooltip,
   Legend,
-  Filler
+  Filler,
 );
 
 export default function Dashboard() {
   const { state } = useFuel();
   const location = useLocation();
   const { currentStation } = useStations();
-  const { fuelPrice, taxRates, exchangeRates, isSyncing, lastSync, syncNow, locationPrice, currentLocation, refreshLocation, refreshPrices } =
-    useAutoSync(location.currentCountry.id);
+  const {
+    fuelPrice,
+    taxRates,
+    exchangeRates,
+    isSyncing,
+    lastSync,
+    syncNow,
+    locationPrice,
+    currentLocation,
+    refreshLocation,
+    refreshPrices,
+  } = useAutoSync(location.currentCountry.id);
   const [currentTime, setCurrentTime] = useState(new Date());
-  
+
   // Backend data state
   const [backendStats, setBackendStats] = useState<{
     totalRevenue: number;
@@ -102,19 +112,21 @@ export default function Dashboard() {
   const stationCity = currentStation?.location || "Nairobi";
   const regionalPrice = getPriceForCity(fuelPrice, stationCity);
   // Prefer location-based price from GPS, then fall back to regional, then national, then default
-  const displayPmsPrice = locationPrice?.petrolPrice 
-    ?? (regionalPrice.isRegional ? regionalPrice.petrol : null)
-    ?? fuelPrice?.petrolPrice 
-    ?? state.pmsPrice;
-  const displayAgoPrice = locationPrice?.dieselPrice
-    ?? (regionalPrice.isRegional ? regionalPrice.diesel : null)
-    ?? fuelPrice?.dieselPrice
-    ?? state.agoPrice;
-  const displayKerosenePrice = locationPrice?.kerosenePrice 
-    ?? fuelPrice?.kerosenePrice 
-    ?? 0; // Kerosene price not in base state
+  const displayPmsPrice =
+    locationPrice?.petrolPrice ??
+    (regionalPrice.isRegional ? regionalPrice.petrol : null) ??
+    fuelPrice?.petrolPrice ??
+    state.pmsPrice;
+  const displayAgoPrice =
+    locationPrice?.dieselPrice ??
+    (regionalPrice.isRegional ? regionalPrice.diesel : null) ??
+    fuelPrice?.dieselPrice ??
+    state.agoPrice;
+  const displayKerosenePrice =
+    locationPrice?.kerosenePrice ?? fuelPrice?.kerosenePrice ?? 0; // Kerosene price not in base state
   // Show the detected city for location-based pricing
-  const priceCityName = locationPrice?.cityName || regionalPrice.cityName || "Nairobi";
+  const priceCityName =
+    locationPrice?.cityName || regionalPrice.cityName || "Nairobi";
   const isLocationBased = !!locationPrice;
   const currencySymbol = location.currencySymbol;
   const [animatedValues, setAnimatedValues] = useState({
@@ -136,14 +148,16 @@ export default function Dashboard() {
           token = session.token;
         }
       }
-    } catch { /* no session */ }
-    
+    } catch {
+      /* no session */
+    }
+
     if (!token) return;
-    
+
     setBackendLoading(true);
     try {
       const res = await fetch(`${getApiBase()}/api/dashboard/stats`, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
         const data = await res.json();
@@ -153,7 +167,7 @@ export default function Dashboard() {
         }
       }
     } catch (e) {
-      console.warn('Failed to fetch backend stats:', e);
+      console.warn("Failed to fetch backend stats:", e);
     } finally {
       setBackendLoading(false);
     }
@@ -180,7 +194,7 @@ export default function Dashboard() {
       fuelSold: 0,
       debt: 0,
     };
-    
+
     if (hasBackendData && backendStats) {
       targets = {
         revenue: backendStats.totalRevenue,
@@ -204,7 +218,7 @@ export default function Dashboard() {
         debt: 0,
       };
     }
-    
+
     const duration = 1000;
     const steps = 30;
     const interval = duration / steps;
@@ -244,24 +258,24 @@ export default function Dashboard() {
     history.forEach((entry: any) => {
       const pmsTotal = (entry.pmsPumps || []).reduce(
         (s: number, p: any) => s + (p.salesKsh || 0),
-        0
+        0,
       );
       const agoTotal = (entry.agoPumps || []).reduce(
         (s: number, p: any) => s + (p.salesKsh || 0),
-        0
+        0,
       );
       revenue += pmsTotal + agoTotal;
       fuel += (entry.pmsPumps || []).reduce(
         (s: number, p: any) => s + (p.salesL || 0),
-        0
+        0,
       );
       fuel += (entry.agoPumps || []).reduce(
         (s: number, p: any) => s + (p.salesL || 0),
-        0
+        0,
       );
       expenses += (entry.expenses || []).reduce(
         (s: number, e: any) => s + (e.amount || 0),
-        0
+        0,
       );
     });
 
@@ -271,18 +285,18 @@ export default function Dashboard() {
     // Get today's sales
     const today = new Date().toISOString().split("T")[0];
     const todayEntry: any = Object.entries(state.salesHistory).find(([k]) =>
-      k.startsWith(today)
+      k.startsWith(today),
     );
     const tSales = todayEntry
       ? (() => {
           const e = todayEntry[1] as any;
           const pms = (e.pmsPumps || []).reduce(
             (s: number, p: any) => s + (p.salesKsh || 0),
-            0
+            0,
           );
           const ago = (e.agoPumps || []).reduce(
             (s: number, p: any) => s + (p.salesKsh || 0),
-            0
+            0,
           );
           return pms + ago;
         })()
@@ -317,14 +331,14 @@ export default function Dashboard() {
           if (key.startsWith(dateStr)) {
             pms += (entry.pmsPumps || []).reduce(
               (s: number, p: any) => s + (p.salesKsh || 0),
-              0
+              0,
             );
             ago += (entry.agoPumps || []).reduce(
               (s: number, p: any) => s + (p.salesKsh || 0),
-              0
+              0,
             );
           }
-        }
+        },
       );
       pmsData.push(pms);
       agoData.push(ago);
@@ -365,11 +379,11 @@ export default function Dashboard() {
     history.forEach((entry: any) => {
       pms += (entry.pmsPumps || []).reduce(
         (s: number, p: any) => s + (p.salesL || 0),
-        0
+        0,
       );
       ago += (entry.agoPumps || []).reduce(
         (s: number, p: any) => s + (p.salesL || 0),
-        0
+        0,
       );
     });
     if (pms === 0 && ago === 0) {
@@ -399,7 +413,7 @@ export default function Dashboard() {
       });
     });
     const labels = Object.keys(expenseMap).slice(0, 6);
-    const data = labels.map(l => expenseMap[l]);
+    const data = labels.map((l) => expenseMap[l]);
     if (labels.length === 0) {
       labels.push("No Data");
       data.push(0);
@@ -732,17 +746,18 @@ export default function Dashboard() {
           <div className="mb-2 flex items-center gap-2">
             {currentLocation && (
               <span className="text-[10px] text-blue-600 dark:text-blue-400">
-                📍 {currentLocation.latitude.toFixed(4)}, {currentLocation.longitude.toFixed(4)}
+                📍 {currentLocation.latitude.toFixed(4)},{" "}
+                {currentLocation.longitude.toFixed(4)}
               </span>
             )}
             <span
               className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${isLocationBased ? "bg-green-100 dark:bg-green-800 text-green-700 dark:text-green-300" : "bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400"}`}
             >
               {isLocationBased
-                ? `📍 GPS: ${priceCityName} (${locationPrice.transportSurcharge >= 0 ? '+' : ''}${locationPrice.transportSurcharge.toFixed(2)})`
+                ? `📍 GPS: ${priceCityName} (${locationPrice.transportSurcharge >= 0 ? "+" : ""}${locationPrice.transportSurcharge.toFixed(2)})`
                 : regionalPrice.isRegional
-                ? `EPRA ${regionalPrice.cityName} Price`
-                : `${stationCity} - National Average`}
+                  ? `EPRA ${regionalPrice.cityName} Price`
+                  : `${stationCity} - National Average`}
             </span>
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -1007,7 +1022,7 @@ export default function Dashboard() {
             Quick Actions
           </h3>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {quickActions.map(action => (
+            {quickActions.map((action) => (
               <button
                 key={action.label}
                 onClick={() => switchToTab(action.tab)}

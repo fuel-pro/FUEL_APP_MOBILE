@@ -26,81 +26,83 @@ import FirstLoginChoice from "@/react-app/components/FirstLoginChoice";
 // All tab content lazy-loaded to reduce main bundle
 const Dashboard = lazy(() => import("@/react-app/components/Dashboard"));
 const DeliveryTracker = lazy(
-  () => import("@/react-app/components/DeliveryTracker")
+  () => import("@/react-app/components/DeliveryTracker"),
 );
 const FuelOffloading = lazy(
-  () => import("@/react-app/components/FuelOffloading")
+  () => import("@/react-app/components/FuelOffloading"),
 );
 const Invoice = lazy(() => import("@/react-app/components/Invoice"));
 const DebtReminder = lazy(() => import("@/react-app/components/DebtReminder"));
 const SalesTracking = lazy(
-  () => import("@/react-app/components/SalesTracking")
+  () => import("@/react-app/components/SalesTracking"),
 );
 const ReportsCenter = lazy(
-  () => import("@/react-app/components/ReportsCenter")
+  () => import("@/react-app/components/ReportsCenter"),
 );
 const MPESAAnalyzer = lazy(
-  () => import("@/react-app/components/MPESAAnalyzer")
+  () => import("@/react-app/components/MPESAAnalyzer"),
 );
 const PayrollSystem = lazy(
-  () => import("@/react-app/components/PayrollSystem")
+  () => import("@/react-app/components/PayrollSystem"),
 );
 const DataManager = lazy(() => import("@/react-app/components/DataManager"));
 const News = lazy(() => import("@/react-app/components/News"));
 const LiveTransaction = lazy(
-  () => import("@/react-app/components/LiveTransaction")
+  () => import("@/react-app/components/LiveTransaction"),
 );
 const FuelSalesReport = lazy(
-  () => import("@/react-app/components/FuelSalesReport")
+  () => import("@/react-app/components/FuelSalesReport"),
 );
 const Communication = lazy(
-  () => import("@/react-app/components/Communication")
+  () => import("@/react-app/components/Communication"),
 );
 const PointOfSale = lazy(() => import("@/react-app/components/PointOfSale"));
 const InventoryManagement = lazy(
-  () => import("@/react-app/components/InventoryManagement")
+  () => import("@/react-app/components/InventoryManagement"),
 );
 const CustomerLoyalty = lazy(
-  () => import("@/react-app/components/CustomerLoyalty")
+  () => import("@/react-app/components/CustomerLoyalty"),
 );
 const AuditTrail = lazy(() => import("@/react-app/components/AuditTrail"));
 const ShiftManagement = lazy(
-  () => import("@/react-app/components/ShiftManagement")
+  () => import("@/react-app/components/ShiftManagement"),
 );
 const FuelQualityTesting = lazy(
-  () => import("@/react-app/components/FuelQualityTesting")
+  () => import("@/react-app/components/FuelQualityTesting"),
 );
 const CreditManagement = lazy(
-  () => import("@/react-app/components/CreditManagement")
+  () => import("@/react-app/components/CreditManagement"),
 );
 const AdvancedAnalytics = lazy(
-  () => import("@/react-app/components/AdvancedAnalytics")
+  () => import("@/react-app/components/AdvancedAnalytics"),
 );
 const IntegrationHub = lazy(
-  () => import("@/react-app/components/IntegrationHub")
+  () => import("@/react-app/components/IntegrationHub"),
 );
 const Compliance = lazy(() => import("@/react-app/components/Compliance"));
 const DocumentConverter = lazy(
-  () => import("@/react-app/components/DocumentConverter")
+  () => import("@/react-app/components/DocumentConverter"),
 );
 const FuelTypesManager = lazy(
-  () => import("@/react-app/components/FuelTypesManager")
+  () => import("@/react-app/components/FuelTypesManager"),
 );
 const TeamManager = lazy(() => import("@/react-app/components/TeamManager"));
 const DocumentCenter = lazy(
-  () => import("@/react-app/components/DocumentCenter")
+  () => import("@/react-app/components/DocumentCenter"),
 );
 const SupplierManagement = lazy(
-  () => import("@/react-app/components/SupplierManagement")
+  () => import("@/react-app/components/SupplierManagement"),
 );
 const MaintenanceTracker = lazy(
-  () => import("@/react-app/components/MaintenanceTracker")
+  () => import("@/react-app/components/MaintenanceTracker"),
 );
 const ExpenseTracker = lazy(
-  () => import("@/react-app/components/ExpenseTracker")
+  () => import("@/react-app/components/ExpenseTracker"),
 );
 const PriceBoard = lazy(() => import("@/react-app/components/PriceBoard"));
-const PumpMappingV1 = lazy(() => import("@/react-app/components/PumpMappingV1"));
+const PumpMappingV1 = lazy(
+  () => import("@/react-app/components/PumpMappingV1"),
+);
 
 // ─── SalesZote-style POS business suite modules ───
 // These are ADDITIVE features layered onto the existing FuelPro tab system
@@ -109,19 +111,19 @@ const PumpMappingV1 = lazy(() => import("@/react-app/components/PumpMappingV1"))
 // wired in here; modules that duplicate an existing FuelPro tab reuse the
 // FuelPro component instead.
 const EnhancedDashboard = lazy(
-  () => import("@/react-app/components/EnhancedDashboard")
+  () => import("@/react-app/components/EnhancedDashboard"),
 );
 const ProductsManagement = lazy(
-  () => import("@/react-app/components/ProductsManagement")
+  () => import("@/react-app/components/ProductsManagement"),
 );
 const SalesInvoices = lazy(
-  () => import("@/react-app/components/SalesInvoices")
+  () => import("@/react-app/components/SalesInvoices"),
 );
 const PurchasesSuppliers = lazy(
-  () => import("@/react-app/components/PurchasesSuppliers")
+  () => import("@/react-app/components/PurchasesSuppliers"),
 );
 const TerminalSessions = lazy(
-  () => import("@/react-app/components/TerminalSessions")
+  () => import("@/react-app/components/TerminalSessions"),
 );
 
 // ─── Cross-Tab Data Sync ───
@@ -138,7 +140,7 @@ function useCrossTabSync() {
       // Fallback: use localStorage events
       localStorage.setItem(
         "fuelpro_sync_event",
-        JSON.stringify({ event, data, timestamp: Date.now() })
+        JSON.stringify({ event, data, timestamp: Date.now() }),
       );
     }
   }, []);
@@ -148,7 +150,7 @@ function useCrossTabSync() {
       let bc: BroadcastChannel | null = null;
       try {
         bc = new BroadcastChannel(SYNC_CHANNEL);
-        bc.onmessage = e => {
+        bc.onmessage = (e) => {
           if (e.data.event === event) handler(e.data.data);
         };
       } catch {
@@ -172,7 +174,7 @@ function useCrossTabSync() {
         window.removeEventListener("storage", storageHandler);
       };
     },
-    []
+    [],
   );
 
   return { broadcast, subscribe };
@@ -249,10 +251,10 @@ function HomeContent() {
   useEffect(() => {
     const unsub1 = subscribe("sale_made", () => setLastSaleTime(Date.now()));
     const unsub2 = subscribe("inventory_update", () =>
-      setLastSaleTime(Date.now())
+      setLastSaleTime(Date.now()),
     );
     const unsub3 = subscribe("tab_change", (tabId: string) =>
-      setActiveTab(tabId)
+      setActiveTab(tabId),
     );
     return () => {
       unsub1();
@@ -290,7 +292,7 @@ function HomeContent() {
     const requiredFeature = tabFeatureMap[activeTab];
     if (requiredFeature && !featureFlags[requiredFeature]) {
       const fallbackTabs = ["dashboard", "pos", "sales", "inventory"];
-      const fallback = fallbackTabs.find(t => canAccessTab(t));
+      const fallback = fallbackTabs.find((t) => canAccessTab(t));
       if (fallback && fallback !== activeTab) setActiveTab(fallback);
     }
   }, [activeTab, canAccessTab, featureFlags]);
@@ -450,7 +452,7 @@ function HomeContent() {
   //    setup is part of the "account sign up" flow, not a separate choice.
   //  - Invited team member (has active bindings): show FirstLoginChoice so they
   //    can access the shared station they were invited to.
-  const hasActiveBindings = bindings.some(b => b.active);
+  const hasActiveBindings = bindings.some((b) => b.active);
   if (stations.length === 0 || !currentStation) {
     if (showSetupWizard || !hasActiveBindings) {
       return (
@@ -484,18 +486,18 @@ function HomeContent() {
           if (verifyStationAccess(stationId, password)) {
             switchStation(stationId);
             const accesses = JSON.parse(
-              localStorage.getItem("fuelpro_shared_access") || "[]"
+              localStorage.getItem("fuelpro_shared_access") || "[]",
             );
             accesses.push({ stationId, date: new Date().toISOString() });
             localStorage.setItem(
               "fuelpro_shared_access",
-              JSON.stringify(accesses)
+              JSON.stringify(accesses),
             );
             return true;
           }
           return false;
         }}
-        onSelectStation={stationId => {
+        onSelectStation={(stationId) => {
           switchStation(stationId);
           return true;
         }}
@@ -562,7 +564,7 @@ function HomeContent() {
         <div className="hidden md:block">
           <TabNavigation
             activeTab={activeTab}
-            onTabChange={tab => {
+            onTabChange={(tab) => {
               setActiveTab(tab);
               broadcast("tab_change", tab);
             }}
@@ -600,7 +602,7 @@ function HomeContent() {
       {/* Mobile Bottom Navigation - NO duplicate AI here */}
       <MobileBottomNav
         activeTab={activeTab}
-        onTabChange={tab => {
+        onTabChange={(tab) => {
           setActiveTab(tab);
           broadcast("tab_change", tab);
         }}

@@ -52,7 +52,7 @@ export function exportDeliveryPDF(state: any) {
       if (col.key === "amount") return "Ksh " + formatNumber(r.amount);
       if (col.key === "debt") return "Ksh " + formatNumber(r.debt);
       return r[col.key] || "";
-    })
+    }),
   );
 
   autoTable(doc, {
@@ -69,17 +69,17 @@ export function exportDeliveryPDF(state: any) {
   doc.text(
     `Total Supplied: ${formatNumber(state.deliveryData.totals.totalSupplied)} L`,
     14,
-    finalY
+    finalY,
   );
   doc.text(
     `Total Payments: ${state.companyData.currency} ${formatNumber(state.deliveryData.totals.totalPayments)}`,
     70,
-    finalY
+    finalY,
   );
   doc.text(
     `Balance Due: ${state.companyData.currency} ${formatNumber(state.deliveryData.totals.balanceDue, 2)}`,
     130,
-    finalY
+    finalY,
   );
   y = finalY + 10;
 
@@ -116,7 +116,7 @@ export function exportDeliveryExcel(state: any) {
         if (col.key === "debt")
           return state.companyData.currency + " " + formatNumber(r.debt);
         return r[col.key] || "";
-      })
+      }),
     ),
     [],
     [
@@ -157,7 +157,7 @@ export function exportDeliveryTXT(state: any) {
             return `${col.label}: ${state.companyData.currency}${formatNumber(r.debt)}`;
           return `${col.label}: ${r[col.key] || ""}`;
         })
-        .join(" | ")
+        .join(" | "),
     )
     .join("\n");
 
@@ -392,31 +392,31 @@ export function exportSalesPDF(state: any) {
     doc.text(
       `Total Petrol Sales: Ksh ${formatNumber(state.summary.totalPmsSalesKsh, 2)}`,
       15,
-      y
+      y,
     );
     y += 8;
     doc.text(
       `Total Diesel Sales: Ksh ${formatNumber(state.summary.totalAgoSalesKsh, 2)}`,
       15,
-      y
+      y,
     );
     y += 8;
     doc.text(
       `Total Revenue: Ksh ${formatNumber(state.summary.totalRevenue, 2)}`,
       15,
-      y
+      y,
     );
     y += 8;
     doc.text(
       `Cash In Hand: Ksh ${formatNumber(state.summary.cashInHand, 2)}`,
       15,
-      y
+      y,
     );
     y += 8;
     doc.text(
       `Net Income: Ksh ${formatNumber(state.summary.netIncome, 2)}`,
       15,
-      y
+      y,
     );
   }
 
@@ -509,7 +509,7 @@ export function exportSalesTXT(state: any) {
     txt += state.pmsPumps
       .map(
         (p: any) =>
-          `${p.id}: Sales: ${formatNumber(p.salesL)} L, ${formatNumber(p.salesKsh)} Ksh`
+          `${p.id}: Sales: ${formatNumber(p.salesL)} L, ${formatNumber(p.salesKsh)} Ksh`,
       )
       .join("\n");
     txt += "\n\n";
@@ -520,7 +520,7 @@ export function exportSalesTXT(state: any) {
     txt += state.agoPumps
       .map(
         (p: any) =>
-          `${p.id}: Sales: ${formatNumber(p.salesL)} L, ${formatNumber(p.salesKsh)} Ksh`
+          `${p.id}: Sales: ${formatNumber(p.salesL)} L, ${formatNumber(p.salesKsh)} Ksh`,
       )
       .join("\n");
     txt += "\n\n";
@@ -565,7 +565,7 @@ export function exportInvoicePDF(invoiceData: any) {
       img.crossOrigin = "anonymous";
 
       // Convert logo to base64 if it's a URL, or use directly if already base64
-      let logoSrc = invoiceData.companyData.logo;
+      const logoSrc = invoiceData.companyData.logo;
 
       // Add image synchronously if it's already a data URL
       if (logoSrc.startsWith("data:")) {
@@ -574,7 +574,7 @@ export function exportInvoicePDF(invoiceData: any) {
       } else {
         // For external URLs, we'll skip for now to avoid CORS issues
         console.warn(
-          "External logo URLs not supported in PDF export. Please upload logo as file."
+          "External logo URLs not supported in PDF export. Please upload logo as file.",
         );
       }
     } catch (error) {
@@ -694,7 +694,7 @@ export function exportInvoicePDF(invoiceData: any) {
   doc.text(
     ` Total Due: Ksh${formatNumber(invoiceData.totalDue || 0, 0)}`,
     120,
-    y
+    y,
   );
   y += 20;
 

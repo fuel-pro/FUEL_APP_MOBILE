@@ -2,10 +2,13 @@
  * Currency detection utility - resolves station currency from station context,
  * localStorage country detection, or timezone-based fallback.
  * Returns the correct currency code (KES, UGX, TZS, USD, etc.)
- * 
+ *
  * Uses unified currency symbols from config/pricing.ts for consistency.
  */
-import { getCountryByCode, getCountryFromLocation } from "./world-country-utils";
+import {
+  getCountryByCode,
+  getCountryFromLocation,
+} from "./world-country-utils";
 import { REGIONAL_PRICES } from "@/react-app/config/pricing";
 
 // Build currency symbols from unified pricing config
@@ -130,10 +133,10 @@ export function getCurrencySymbol(currency?: string): string {
   const c = currency || getDetectedCurrency();
   // First try unified symbols from pricing config
   if (UNIFIED_SYMBOLS[c]) return UNIFIED_SYMBOLS[c];
-  
+
   // Fallback to standard symbols
   const SYMBOLS: Record<string, string> = {
-    KES: "KSh",  // Unified format
+    KES: "KSh", // Unified format
     UGX: "USh",
     TZS: "TSh",
     NGN: "\u20A6",

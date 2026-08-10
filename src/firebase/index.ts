@@ -1,6 +1,6 @@
 /**
  * Firebase Integration Module
- * 
+ *
  * Export all Firebase-related functionality for easy importing:
  * - Client SDK for browser-side operations
  * - Admin SDK for server-side operations
@@ -20,7 +20,7 @@ export {
   db,
   rtdb,
   storage,
-} from './client';
+} from "./client";
 
 // Re-export admin-side Firebase (only import in server context!)
 export {
@@ -33,20 +33,17 @@ export {
   verifySessionCookie,
   createCustomToken,
   createSessionCookie,
-} from './admin';
+} from "./admin";
 
 // Firebase types
-export type { FirebaseApp } from 'firebase/app';
-export type { Auth } from 'firebase/auth';
-export type { Firestore } from 'firebase/firestore';
-export type { Database } from 'firebase/database';
-export type { FirebaseStorage } from 'firebase/storage';
+export type { FirebaseApp } from "firebase/app";
+export type { Auth } from "firebase/auth";
+export type { Firestore } from "firebase/firestore";
+export type { Database } from "firebase/database";
+export type { FirebaseStorage } from "firebase/storage";
 
 // Re-export Firebase SDK classes for convenience
-export {
-  initializeApp,
-  getApps,
-} from 'firebase/app';
+export { initializeApp, getApps } from "firebase/app";
 
 export {
   onAuthStateChanged,
@@ -59,7 +56,7 @@ export {
   updateProfile,
   getIdToken,
   getIdTokenResult,
-} from 'firebase/auth';
+} from "firebase/auth";
 
 export {
   collection,
@@ -77,7 +74,7 @@ export {
   onSnapshot,
   serverTimestamp,
   Timestamp,
-} from 'firebase/firestore';
+} from "firebase/firestore";
 
 export {
   ref,
@@ -90,7 +87,7 @@ export {
   child,
   orderByChild,
   equalTo,
-} from 'firebase/database';
+} from "firebase/database";
 
 export {
   ref as storageRef,
@@ -98,4 +95,4 @@ export {
   uploadBytesResumable,
   getDownloadURL,
   deleteObject,
-} from 'firebase/storage';
+} from "firebase/storage";

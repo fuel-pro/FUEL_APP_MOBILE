@@ -39,12 +39,14 @@ npm install @supabase/supabase-js
 #### Replace Firebase imports with Supabase:
 
 **Before (Firebase):**
+
 ```typescript
 import { getFirebaseAuth } from "@/firebase/client";
 import { FirebaseService } from "@/react-app/services/FirebaseService";
 ```
 
 **After (Supabase):**
+
 ```typescript
 import { supabase } from "@/supabase/client";
 import { SupabaseService } from "@/supabase/SupabaseService";
@@ -53,12 +55,14 @@ import { SupabaseService } from "@/supabase/SupabaseService";
 #### Update Authentication:
 
 **Before (Firebase):**
+
 ```typescript
 const auth = getFirebaseAuth();
 await signInWithEmailAndPassword(auth, email, password);
 ```
 
 **After (Supabase):**
+
 ```typescript
 const { user, error } = await supabase.auth.signInWithPassword({
   email,
@@ -69,16 +73,16 @@ const { user, error } = await supabase.auth.signInWithPassword({
 #### Update Data Operations:
 
 **Before (Firebase):**
+
 ```typescript
 const db = getFirestore();
 await setDoc(doc(db, "stations", stationId), data);
 ```
 
 **After (Supabase):**
+
 ```typescript
-const { data, error } = await supabase
-  .from('stations')
-  .upsert(data);
+const { data, error } = await supabase.from("stations").upsert(data);
 ```
 
 ### Step 4: Create Supabase Tables
@@ -96,6 +100,7 @@ See `docs/APPLY_RLS_POLICIES.md` for instructions.
 ### Step 6: Test
 
 Test all functionality:
+
 - User registration and login
 - Station creation
 - Fuel sales
@@ -105,6 +110,7 @@ Test all functionality:
 ## Files to Update
 
 ### Replace:
+
 - `src/firebase/client.ts` → `src/supabase/client.ts` (created)
 - `src/firebase/SupabaseService.ts` → `src/supabase/SupabaseService.ts` (created)
 - Update `src/react-app/context/AuthContext.tsx`
@@ -131,21 +137,25 @@ VITE_SUPABASE_ANON_KEY=your-anon-key-here
 ## Troubleshooting
 
 ### "Supabase not configured"
+
 - Check VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are set
 - Verify environment variables are loaded
 
 ### "Permission denied"
+
 - Check RLS policies are applied
 - Verify user is authenticated
 - Check Supabase auth settings
 
 ### Auth errors
+
 - Verify email confirmation settings in Supabase
 - Check authentication methods enabled
 
 ## Support
 
 For more help, see Supabase documentation:
+
 - https://supabase.com/docs
 - https://supabase.com/docs/guides/auth
 - https://supabase.com/docs/guides/database

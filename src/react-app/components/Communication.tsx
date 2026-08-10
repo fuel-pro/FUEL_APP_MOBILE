@@ -139,7 +139,10 @@ export default function Communication() {
 
   const loadContacts = async () => {
     try {
-      const data = await cloudStorageService.get<Contact[]>("comm_contacts", stationId);
+      const data = await cloudStorageService.get<Contact[]>(
+        "comm_contacts",
+        stationId,
+      );
       setContacts(data || []);
     } catch (error) {
       console.error("Error loading contacts:", error);
@@ -148,7 +151,10 @@ export default function Communication() {
 
   const loadMessages = async () => {
     try {
-      const data = await cloudStorageService.get<Message[]>("comm_messages", stationId);
+      const data = await cloudStorageService.get<Message[]>(
+        "comm_messages",
+        stationId,
+      );
       setMessages(data || []);
     } catch (error) {
       console.error("Error loading messages:", error);
@@ -157,7 +163,10 @@ export default function Communication() {
 
   const loadTemplates = async () => {
     try {
-      const data = await cloudStorageService.get<MessageTemplate[]>("comm_templates", stationId);
+      const data = await cloudStorageService.get<MessageTemplate[]>(
+        "comm_templates",
+        stationId,
+      );
       setTemplates(data || []);
     } catch (error) {
       console.error("Error loading templates:", error);
@@ -166,11 +175,18 @@ export default function Communication() {
 
   const saveContact = async () => {
     try {
-      const existing = (await cloudStorageService.get<Contact[]>("comm_contacts", stationId)) || [];
+      const existing =
+        (await cloudStorageService.get<Contact[]>(
+          "comm_contacts",
+          stationId,
+        )) || [];
       const tags = contactForm.tags
-        ? (typeof contactForm.tags === "string"
-            ? contactForm.tags.split(",").map(t => t.trim()).filter(t => t)
-            : contactForm.tags)
+        ? typeof contactForm.tags === "string"
+          ? contactForm.tags
+              .split(",")
+              .map((t) => t.trim())
+              .filter((t) => t)
+          : contactForm.tags
         : [];
 
       const newContact: Contact = {
@@ -188,7 +204,9 @@ export default function Communication() {
 
       let updated: Contact[];
       if (selectedContact) {
-        updated = existing.map(c => c.id === selectedContact.id ? { ...c, ...newContact } : c);
+        updated = existing.map((c) =>
+          c.id === selectedContact.id ? { ...c, ...newContact } : c,
+        );
       } else {
         updated = [...existing, newContact];
       }
@@ -207,8 +225,12 @@ export default function Communication() {
     if (!confirm("Delete this contact?")) return;
 
     try {
-      const existing = (await cloudStorageService.get<Contact[]>("comm_contacts", stationId)) || [];
-      const updated = existing.filter(c => c.id !== id);
+      const existing =
+        (await cloudStorageService.get<Contact[]>(
+          "comm_contacts",
+          stationId,
+        )) || [];
+      const updated = existing.filter((c) => c.id !== id);
       await cloudStorageService.set("comm_contacts", updated, stationId);
       setContacts(updated);
     } catch (error) {
@@ -219,15 +241,22 @@ export default function Communication() {
 
   const sendMessage = async () => {
     try {
-      const existing = (await cloudStorageService.get<Message[]>("comm_messages", stationId)) || [];
+      const existing =
+        (await cloudStorageService.get<Message[]>(
+          "comm_messages",
+          stationId,
+        )) || [];
       const newMessage: Message = {
         id: `msg_${Date.now()}`,
-        contactId: (selectedContacts[0] || messageForm.recipients?.[0] || "") as string,
+        contactId: (selectedContacts[0] ||
+          messageForm.recipients?.[0] ||
+          "") as string,
         type: messageForm.type || "sms",
         content: messageForm.content || "",
         subject: messageForm.subject || "",
         status: "sent",
         timestamp: new Date().toISOString(),
+        sentBy: "user",
       };
       const updated = [newMessage, ...existing];
       await cloudStorageService.set("comm_messages", updated, stationId);
@@ -236,19 +265,23 @@ export default function Communication() {
       setSelectedContacts([]);
       resetMessageForm();
       import("@/react-app/lib/toast").then(({ toastSuccess }) =>
-        toastSuccess("Message sent successfully!")
+        toastSuccess("Message sent successfully!"),
       );
     } catch (error) {
       console.error("Error sending message:", error);
       import("@/react-app/lib/toast").then(({ toastError }) =>
-        toastError("Error sending message: " + (error as Error).message)
+        toastError("Error sending message: " + (error as Error).message),
       );
     }
   };
 
   const saveTemplate = async () => {
     try {
-      const existing = (await cloudStorageService.get<MessageTemplate[]>("comm_templates", stationId)) || [];
+      const existing =
+        (await cloudStorageService.get<MessageTemplate[]>(
+          "comm_templates",
+          stationId,
+        )) || [];
       const newTemplate: MessageTemplate = {
         id: `tpl_${Date.now()}`,
         name: templateForm.name || "",
@@ -272,8 +305,12 @@ export default function Communication() {
     if (!confirm("Delete this template?")) return;
 
     try {
-      const existing = (await cloudStorageService.get<MessageTemplate[]>("comm_templates", stationId)) || [];
-      const updated = existing.filter(t => t.id !== id);
+      const existing =
+        (await cloudStorageService.get<MessageTemplate[]>(
+          "comm_templates",
+          stationId,
+        )) || [];
+      const updated = existing.filter((t) => t.id !== id);
       await cloudStorageService.set("comm_templates", updated, stationId);
       setTemplates(updated);
     } catch (error) {
@@ -284,9 +321,13 @@ export default function Communication() {
 
   const toggleStarContact = async (contact: Contact) => {
     try {
-      const existing = (await cloudStorageService.get<Contact[]>("comm_contacts", stationId)) || [];
-      const updated = existing.map(c =>
-        c.id === contact.id ? { ...c, starred: !c.starred } : c
+      const existing =
+        (await cloudStorageService.get<Contact[]>(
+          "comm_contacts",
+          stationId,
+        )) || [];
+      const updated = existing.map((c) =>
+        c.id === contact.id ? { ...c, starred: !c.starred } : c,
       );
       await cloudStorageService.set("comm_contacts", updated, stationId);
       setContacts(updated);
@@ -296,7 +337,7 @@ export default function Communication() {
     }
   };
 
-  const useTemplate = (template: MessageTemplate) => {
+  const applyTemplate = (template: MessageTemplate) => {
     setMessageForm({
       type: template.type,
       subject: template.subject || "",
@@ -355,13 +396,13 @@ export default function Communication() {
   const openNewMessage = (contactIds?: string[]) => {
     if (contactIds && contactIds.length > 0) {
       setSelectedContacts(contactIds);
-      setMessageForm(prev => ({ ...prev, recipients: contactIds }));
+      setMessageForm((prev) => ({ ...prev, recipients: contactIds }));
     }
     setShowMessageModal(true);
   };
 
   // Filter contacts
-  const filteredContacts = contacts.filter(contact => {
+  const filteredContacts = contacts.filter((contact) => {
     const matchesSearch =
       contact.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       contact.phone.includes(searchTerm) ||
@@ -377,7 +418,7 @@ export default function Communication() {
   });
 
   // Get all unique tags
-  const allTags = Array.from(new Set(contacts.flatMap(c => c.tags)));
+  const allTags = Array.from(new Set(contacts.flatMap((c) => c.tags)));
 
   // Get status icon
   const getStatusIcon = (status: string) => {
@@ -409,7 +450,7 @@ export default function Communication() {
               type="text"
               placeholder="Search contacts..."
               value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
+              onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700"
             />
           </div>
@@ -418,12 +459,12 @@ export default function Communication() {
         <div className="flex gap-2 w-full md:w-auto">
           <select
             value={filterTag}
-            onChange={e => setFilterTag(e.target.value)}
+            onChange={(e) => setFilterTag(e.target.value)}
             className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700"
           >
             <option value="all">All Tags</option>
             <option value="starred">Starred</option>
-            {allTags.map(tag => (
+            {allTags.map((tag) => (
               <option key={tag} value={tag}>
                 {tag}
               </option>
@@ -471,7 +512,7 @@ export default function Communication() {
 
       {/* Contacts grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filteredContacts.map(contact => (
+        {filteredContacts.map((contact) => (
           <div
             key={contact.id}
             className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-shadow"
@@ -481,12 +522,12 @@ export default function Communication() {
                 <input
                   type="checkbox"
                   checked={selectedContacts.includes(contact.id)}
-                  onChange={e => {
+                  onChange={(e) => {
                     if (e.target.checked) {
                       setSelectedContacts([...selectedContacts, contact.id]);
                     } else {
                       setSelectedContacts(
-                        selectedContacts.filter(id => id !== contact.id)
+                        selectedContacts.filter((id) => id !== contact.id),
                       );
                     }
                   }}
@@ -538,7 +579,7 @@ export default function Communication() {
 
             {contact.tags.length > 0 && (
               <div className="flex flex-wrap gap-1 mb-3">
-                {contact.tags.map(tag => (
+                {contact.tags.map((tag) => (
                   <span
                     key={tag}
                     className="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded text-xs"
@@ -608,8 +649,8 @@ export default function Communication() {
       </div>
 
       <div className="space-y-2">
-        {messages.map(message => {
-          const contact = contacts.find(c => c.id === message.contactId);
+        {messages.map((message) => {
+          const contact = contacts.find((c) => c.id === message.contactId);
           return (
             <div
               key={message.id}
@@ -683,7 +724,7 @@ export default function Communication() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {templates.map(template => (
+        {templates.map((template) => (
           <div
             key={template.id}
             className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow border border-gray-200 dark:border-gray-700"
@@ -716,7 +757,7 @@ export default function Communication() {
             </p>
 
             <button
-              onClick={() => useTemplate(template)}
+              onClick={() => applyTemplate(template)}
               className="w-full btn btn-primary py-2 flex items-center justify-center gap-2"
             >
               <Send size={16} />
@@ -793,7 +834,7 @@ export default function Communication() {
                 <input
                   type="text"
                   value={contactForm.name}
-                  onChange={e =>
+                  onChange={(e) =>
                     setContactForm({ ...contactForm, name: e.target.value })
                   }
                   required
@@ -805,7 +846,7 @@ export default function Communication() {
                 <input
                   type="tel"
                   value={contactForm.phone}
-                  onChange={e =>
+                  onChange={(e) =>
                     setContactForm({ ...contactForm, phone: e.target.value })
                   }
                   required
@@ -817,7 +858,7 @@ export default function Communication() {
                 <input
                   type="email"
                   value={contactForm.email}
-                  onChange={e =>
+                  onChange={(e) =>
                     setContactForm({ ...contactForm, email: e.target.value })
                   }
                 />
@@ -828,7 +869,7 @@ export default function Communication() {
                 <input
                   type="text"
                   value={contactForm.company}
-                  onChange={e =>
+                  onChange={(e) =>
                     setContactForm({ ...contactForm, company: e.target.value })
                   }
                 />
@@ -839,7 +880,7 @@ export default function Communication() {
                 <input
                   type="text"
                   value={contactForm.tags}
-                  onChange={e =>
+                  onChange={(e) =>
                     setContactForm({ ...contactForm, tags: e.target.value })
                   }
                   placeholder="customer, vip, dealer"
@@ -851,7 +892,7 @@ export default function Communication() {
                 <input
                   type="number"
                   value={contactForm.balance}
-                  onChange={e =>
+                  onChange={(e) =>
                     setContactForm({
                       ...contactForm,
                       balance: parseFloat(e.target.value) || 0,
@@ -865,7 +906,7 @@ export default function Communication() {
               <label>Notes</label>
               <textarea
                 value={contactForm.notes}
-                onChange={e =>
+                onChange={(e) =>
                   setContactForm({ ...contactForm, notes: e.target.value })
                 }
                 rows={3}
@@ -901,7 +942,7 @@ export default function Communication() {
                 <label>Message Type</label>
                 <select
                   value={messageForm.type}
-                  onChange={e =>
+                  onChange={(e) =>
                     setMessageForm({
                       ...messageForm,
                       type: e.target.value as "sms" | "email",
@@ -919,7 +960,7 @@ export default function Communication() {
                   <input
                     type="text"
                     value={messageForm.subject}
-                    onChange={e =>
+                    onChange={(e) =>
                       setMessageForm({
                         ...messageForm,
                         subject: e.target.value,
@@ -933,7 +974,7 @@ export default function Communication() {
                 <label>Message Content</label>
                 <textarea
                   value={messageForm.content}
-                  onChange={e =>
+                  onChange={(e) =>
                     setMessageForm({ ...messageForm, content: e.target.value })
                   }
                   rows={6}
@@ -991,7 +1032,7 @@ export default function Communication() {
                 <input
                   type="text"
                   value={templateForm.name}
-                  onChange={e =>
+                  onChange={(e) =>
                     setTemplateForm({ ...templateForm, name: e.target.value })
                   }
                   placeholder="e.g., Payment Reminder"
@@ -1003,7 +1044,7 @@ export default function Communication() {
                   <label>Type</label>
                   <select
                     value={templateForm.type}
-                    onChange={e =>
+                    onChange={(e) =>
                       setTemplateForm({
                         ...templateForm,
                         type: e.target.value as "sms" | "email",
@@ -1019,7 +1060,7 @@ export default function Communication() {
                   <label>Category</label>
                   <select
                     value={templateForm.category}
-                    onChange={e =>
+                    onChange={(e) =>
                       setTemplateForm({
                         ...templateForm,
                         category: e.target.value,
@@ -1040,7 +1081,7 @@ export default function Communication() {
                   <input
                     type="text"
                     value={templateForm.subject}
-                    onChange={e =>
+                    onChange={(e) =>
                       setTemplateForm({
                         ...templateForm,
                         subject: e.target.value,
@@ -1054,7 +1095,7 @@ export default function Communication() {
                 <label>Template Content</label>
                 <textarea
                   value={templateForm.content}
-                  onChange={e =>
+                  onChange={(e) =>
                     setTemplateForm({
                       ...templateForm,
                       content: e.target.value,

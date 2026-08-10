@@ -80,7 +80,10 @@ export default function MPesaConfig() {
   useEffect(() => {
     if (!user) return;
     (async () => {
-      const cloud = await cloudStorageService.get<MpesaConfig>(CLOUD_KEY, stationId);
+      const cloud = await cloudStorageService.get<MpesaConfig>(
+        CLOUD_KEY,
+        stationId,
+      );
       if (cloud) setConfig(cloud);
     })();
   }, [user, stationId]);
@@ -104,13 +107,13 @@ export default function MPesaConfig() {
     setError("");
     try {
       const auth = btoa(
-        `${config.consumerKey || "test"}:${config.consumerSecret || "test"}`
+        `${config.consumerKey || "test"}:${config.consumerSecret || "test"}`,
       );
       const response = await fetch(
         "https://api.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials",
         {
           headers: { Authorization: `Basic ${auth}` },
-        }
+        },
       );
       if (response.ok) alert("Connection successful!");
       else throw new Error("Invalid credentials");
@@ -186,7 +189,7 @@ export default function MPesaConfig() {
             <input
               type="text"
               value={config.consumerKey}
-              onChange={e =>
+              onChange={(e) =>
                 setConfig({ ...config, consumerKey: e.target.value })
               }
               placeholder="Enter M-PESA Consumer Key"
@@ -201,7 +204,7 @@ export default function MPesaConfig() {
               <input
                 type={showSecret ? "text" : "password"}
                 value={config.consumerSecret}
-                onChange={e =>
+                onChange={(e) =>
                   setConfig({ ...config, consumerSecret: e.target.value })
                 }
                 placeholder="Enter M-PESA Consumer Secret"
@@ -235,7 +238,7 @@ export default function MPesaConfig() {
             <input
               type="text"
               value={config.shortcode}
-              onChange={e =>
+              onChange={(e) =>
                 setConfig({ ...config, shortcode: e.target.value })
               }
               placeholder="e.g., 174379"
@@ -249,7 +252,9 @@ export default function MPesaConfig() {
             <input
               type="text"
               value={config.passkey}
-              onChange={e => setConfig({ ...config, passkey: e.target.value })}
+              onChange={(e) =>
+                setConfig({ ...config, passkey: e.target.value })
+              }
               placeholder="Enter Passkey"
               className="w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-green-500 focus:border-transparent font-mono text-xs"
             />
@@ -264,7 +269,7 @@ export default function MPesaConfig() {
             <input
               type="text"
               value={config.initiatorName}
-              onChange={e =>
+              onChange={(e) =>
                 setConfig({ ...config, initiatorName: e.target.value })
               }
               placeholder="M-PESA Initiator Username"
@@ -279,7 +284,7 @@ export default function MPesaConfig() {
               <input
                 type={showCredential ? "text" : "password"}
                 value={config.securityCredential}
-                onChange={e =>
+                onChange={(e) =>
                   setConfig({ ...config, securityCredential: e.target.value })
                 }
                 placeholder="Encrypted M-PESA Security Credential"
@@ -311,7 +316,7 @@ export default function MPesaConfig() {
           <input
             type="url"
             value={config.callbackUrl}
-            onChange={e =>
+            onChange={(e) =>
               setConfig({ ...config, callbackUrl: e.target.value })
             }
             placeholder="https://yourapp.com/api/mpesa/callback"

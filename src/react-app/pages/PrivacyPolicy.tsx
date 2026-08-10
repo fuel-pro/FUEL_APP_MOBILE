@@ -71,7 +71,7 @@ export default function PrivacyPolicy() {
               "Your Rights",
               "Cookies",
               "Contact",
-            ].map(item => (
+            ].map((item) => (
               <a
                 key={item}
                 href={`#${item.toLowerCase().replace(/\s+/g, "-")}`}
@@ -311,7 +311,7 @@ export default function PrivacyPolicy() {
                   title: "Opt-out",
                   desc: "Unsubscribe from marketing communications",
                 },
-              ].map(right => (
+              ].map((right) => (
                 <div
                   key={right.title}
                   style={{

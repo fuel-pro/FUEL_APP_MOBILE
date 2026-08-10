@@ -62,7 +62,7 @@ export default function LiveTransaction() {
   // State management
   const [paymentSources, setPaymentSources] = useState<PaymentSource[]>([]);
   const [liveTransactions, setLiveTransactions] = useState<LiveTransaction[]>(
-    []
+    [],
   );
   const [filteredTransactions, setFilteredTransactions] = useState<
     LiveTransaction[]
@@ -80,7 +80,7 @@ export default function LiveTransaction() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showSTKPush, setShowSTKPush] = useState(false);
   const [selectedSource, setSelectedSource] = useState<PaymentSource | null>(
-    null
+    null,
   );
 
   // Form states
@@ -130,7 +130,7 @@ export default function LiveTransaction() {
       const start = new Date(startTime);
       const end = new Date(endTime);
 
-      const filtered = liveTransactions.filter(tx => {
+      const filtered = liveTransactions.filter((tx) => {
         const txTime = new Date(tx.transaction_time);
         return txTime >= start && txTime <= end;
       });
@@ -144,8 +144,10 @@ export default function LiveTransaction() {
   const loadPaymentSources = async () => {
     try {
       const sources =
-        (await cloudStorageService.get<PaymentSource[]>("payment_sources", stationId)) ||
-        [];
+        (await cloudStorageService.get<PaymentSource[]>(
+          "payment_sources",
+          stationId,
+        )) || [];
       setPaymentSources(sources);
     } catch (error) {
       console.error("Error loading payment sources:", error);
@@ -157,8 +159,10 @@ export default function LiveTransaction() {
     try {
       setIsRefreshing(true);
       const transactions =
-        (await cloudStorageService.get<LiveTransaction[]>("live_transactions", stationId)) ||
-        [];
+        (await cloudStorageService.get<LiveTransaction[]>(
+          "live_transactions",
+          stationId,
+        )) || [];
       setLiveTransactions(transactions);
     } catch (error) {
       console.error("Error loading live transactions:", error);
@@ -179,8 +183,10 @@ export default function LiveTransaction() {
       setError("");
 
       const existing =
-        (await cloudStorageService.get<PaymentSource[]>("payment_sources", stationId)) ||
-        [];
+        (await cloudStorageService.get<PaymentSource[]>(
+          "payment_sources",
+          stationId,
+        )) || [];
       const newSourceRecord: PaymentSource = {
         id: Date.now(),
         source_type: newSource.source_type,
@@ -192,7 +198,11 @@ export default function LiveTransaction() {
         updated_at: new Date().toISOString(),
       };
       const updated = [...existing, newSourceRecord];
-      await cloudStorageService.set<PaymentSource[]>("payment_sources", updated, stationId);
+      await cloudStorageService.set<PaymentSource[]>(
+        "payment_sources",
+        updated,
+        stationId,
+      );
 
       setSuccess("Payment source added successfully");
       setShowAddSource(false);
@@ -222,9 +232,11 @@ export default function LiveTransaction() {
       setError("");
 
       const existing =
-        (await cloudStorageService.get<PaymentSource[]>("payment_sources", stationId)) ||
-        [];
-      const updated = existing.map(source =>
+        (await cloudStorageService.get<PaymentSource[]>(
+          "payment_sources",
+          stationId,
+        )) || [];
+      const updated = existing.map((source) =>
         source.id === selectedSource.id
           ? {
               ...source,
@@ -234,9 +246,13 @@ export default function LiveTransaction() {
               account_info: newSource.account_info,
               updated_at: new Date().toISOString(),
             }
-          : source
+          : source,
       );
-      await cloudStorageService.set<PaymentSource[]>("payment_sources", updated, stationId);
+      await cloudStorageService.set<PaymentSource[]>(
+        "payment_sources",
+        updated,
+        stationId,
+      );
 
       setSuccess("Payment source updated successfully");
       setShowEditSource(false);
@@ -260,12 +276,18 @@ export default function LiveTransaction() {
       setError("");
 
       const existing =
-        (await cloudStorageService.get<PaymentSource[]>("payment_sources", stationId)) ||
-        [];
+        (await cloudStorageService.get<PaymentSource[]>(
+          "payment_sources",
+          stationId,
+        )) || [];
       const updated = existing.filter(
-        source => source.id !== selectedSource.id
+        (source) => source.id !== selectedSource.id,
       );
-      await cloudStorageService.set<PaymentSource[]>("payment_sources", updated, stationId);
+      await cloudStorageService.set<PaymentSource[]>(
+        "payment_sources",
+        updated,
+        stationId,
+      );
 
       setSuccess("Payment source deleted successfully");
       setShowDeleteConfirm(false);
@@ -433,7 +455,7 @@ export default function LiveTransaction() {
         setTimeout(pollStatus, 6000);
       } else {
         setError(
-          "Transaction status check timed out. Please refresh to see latest status."
+          "Transaction status check timed out. Please refresh to see latest status.",
         );
       }
 
@@ -526,7 +548,7 @@ export default function LiveTransaction() {
               </p>
             </div>
           ) : (
-            paymentSources.map(source => (
+            paymentSources.map((source) => (
               <div
                 key={source.id}
                 className="bg-gray-700 p-3 rounded border-l-4 border-green-500 relative group"
@@ -590,7 +612,7 @@ export default function LiveTransaction() {
             <input
               type="datetime-local"
               value={startTime}
-              onChange={e => setStartTime(e.target.value)}
+              onChange={(e) => setStartTime(e.target.value)}
               className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white"
             />
           </div>
@@ -599,7 +621,7 @@ export default function LiveTransaction() {
             <input
               type="datetime-local"
               value={endTime}
-              onChange={e => setEndTime(e.target.value)}
+              onChange={(e) => setEndTime(e.target.value)}
               className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white"
             />
           </div>
@@ -626,7 +648,7 @@ export default function LiveTransaction() {
               transaction(s) totaling{" "}
               <span className="text-green-400">
                 {formatCurrency(
-                  filteredTransactions.reduce((sum, tx) => sum + tx.amount, 0)
+                  filteredTransactions.reduce((sum, tx) => sum + tx.amount, 0),
                 )}
               </span>
             </div>
@@ -688,7 +710,7 @@ export default function LiveTransaction() {
               </div>
             </div>
           ) : (
-            filteredTransactions.map(tx => (
+            filteredTransactions.map((tx) => (
               <div
                 key={tx.id}
                 className={`p-3 rounded border-l-4 transition-all duration-300 ${
@@ -787,7 +809,7 @@ export default function LiveTransaction() {
                   <input
                     type="tel"
                     value={stkPushData.phone_number}
-                    onChange={e =>
+                    onChange={(e) =>
                       setStkPushData({
                         ...stkPushData,
                         phone_number: formatPhoneNumber(e.target.value),
@@ -805,7 +827,7 @@ export default function LiveTransaction() {
                   <input
                     type="number"
                     value={stkPushData.amount || ""}
-                    onChange={e =>
+                    onChange={(e) =>
                       setStkPushData({
                         ...stkPushData,
                         amount: parseFloat(e.target.value) || 0,
@@ -823,7 +845,7 @@ export default function LiveTransaction() {
                   <input
                     type="text"
                     value={stkPushData.account_reference}
-                    onChange={e =>
+                    onChange={(e) =>
                       setStkPushData({
                         ...stkPushData,
                         account_reference: e.target.value,
@@ -841,7 +863,7 @@ export default function LiveTransaction() {
                   <input
                     type="text"
                     value={stkPushData.transaction_desc}
-                    onChange={e =>
+                    onChange={(e) =>
                       setStkPushData({
                         ...stkPushData,
                         transaction_desc: e.target.value,
@@ -919,7 +941,7 @@ export default function LiveTransaction() {
                 </label>
                 <select
                   value={newSource.source_type}
-                  onChange={e =>
+                  onChange={(e) =>
                     setNewSource({ ...newSource, source_type: e.target.value })
                   }
                   className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white"
@@ -941,7 +963,7 @@ export default function LiveTransaction() {
                 <input
                   type="text"
                   value={newSource.identifier}
-                  onChange={e =>
+                  onChange={(e) =>
                     setNewSource({ ...newSource, identifier: e.target.value })
                   }
                   className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white"
@@ -959,7 +981,7 @@ export default function LiveTransaction() {
                 <input
                   type="text"
                   value={newSource.source_name}
-                  onChange={e =>
+                  onChange={(e) =>
                     setNewSource({ ...newSource, source_name: e.target.value })
                   }
                   className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white"
@@ -974,7 +996,7 @@ export default function LiveTransaction() {
                 <input
                   type="text"
                   value={newSource.account_info}
-                  onChange={e =>
+                  onChange={(e) =>
                     setNewSource({ ...newSource, account_info: e.target.value })
                   }
                   className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white"
@@ -1024,7 +1046,7 @@ export default function LiveTransaction() {
                 </label>
                 <select
                   value={newSource.source_type}
-                  onChange={e =>
+                  onChange={(e) =>
                     setNewSource({ ...newSource, source_type: e.target.value })
                   }
                   className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white"
@@ -1046,7 +1068,7 @@ export default function LiveTransaction() {
                 <input
                   type="text"
                   value={newSource.identifier}
-                  onChange={e =>
+                  onChange={(e) =>
                     setNewSource({ ...newSource, identifier: e.target.value })
                   }
                   className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white"
@@ -1059,7 +1081,7 @@ export default function LiveTransaction() {
                 <input
                   type="text"
                   value={newSource.source_name}
-                  onChange={e =>
+                  onChange={(e) =>
                     setNewSource({ ...newSource, source_name: e.target.value })
                   }
                   className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white"
@@ -1073,7 +1095,7 @@ export default function LiveTransaction() {
                 <input
                   type="text"
                   value={newSource.account_info}
-                  onChange={e =>
+                  onChange={(e) =>
                     setNewSource({ ...newSource, account_info: e.target.value })
                   }
                   className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white"

@@ -3,26 +3,26 @@
  * Handles localStorage persistence, cross-tab sync, and offline support
  */
 
-import { broadcastChannel, isBrowser } from './utils';
+import { broadcastChannel, isBrowser } from "./utils";
 
 // Storage keys
 export const STORAGE_KEYS = {
-  AUTH_TOKEN: 'fuelpro_auth_token',
-  REFRESH_TOKEN: 'fuelpro_refresh_token',
-  USER_DATA: 'fuelpro_user_data',
-  SESSION_ID: 'fuelpro_session_id',
-  LAST_SYNC: 'fuelpro_last_sync',
-  APP_STATE: 'fuelpro_app_state',
-  PENDING_ACTIONS: 'fuelpro_pending_actions',
-  DEVICE_ID: 'fuelpro_device_id',
-  USER_DEVICES: 'fuelpro_user_devices',
+  AUTH_TOKEN: "fuelpro_auth_token",
+  REFRESH_TOKEN: "fuelpro_refresh_token",
+  USER_DATA: "fuelpro_user_data",
+  SESSION_ID: "fuelpro_session_id",
+  LAST_SYNC: "fuelpro_last_sync",
+  APP_STATE: "fuelpro_app_state",
+  PENDING_ACTIONS: "fuelpro_pending_actions",
+  DEVICE_ID: "fuelpro_device_id",
+  USER_DEVICES: "fuelpro_user_devices",
 } as const;
 
 // Generate unique device ID
 function generateDeviceId(): string {
   const stored = localStorage.getItem(STORAGE_KEYS.DEVICE_ID);
   if (stored) return stored;
-  
+
   const deviceId = `device_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   localStorage.setItem(STORAGE_KEYS.DEVICE_ID, deviceId);
   return deviceId;
@@ -35,21 +35,17 @@ function getSyncChannel(): BroadcastChannel | null {
   if (!isBrowser) return null;
   if (!syncChannel) {
     try {
-      syncChannel = new BroadcastChannel('fuelpro_sync');
+      syncChannel = new BroadcastChannel("fuelpro_sync");
     } catch (e) {
-      console.warn('BroadcastChannel not supported:', e);
+      console.warn("BroadcastChannel not supported:", e);
     }
   }
   return syncChannel;
 }
 
 // Sync message types
-type SyncMessageType = 
-  | 'AUTH_UPDATE'
-  | 'STATE_UPDATE' 
-  | 'LOGOUT'
-  | 'FORCE_REFRESH'
-  | 'DATA_CHANGED';
+type SyncMessageType =
+  "AUTH_UPDATE" | "STATE_UPDATE" | "LOGOUT" | "FORCE_REFRESH" | "DATA_CHANGED";
 
 interface SyncMessage {
   type: SyncMessageType;
@@ -75,15 +71,20 @@ class SyncService {
     if (channel) {
       channel.onmessage = (event: MessageEvent<SyncMessage>) => {
         if (event.data.sourceDevice === this.deviceId) return; // Ignore own messages
-        
+
         this.handleSyncMessage(event.data);
       };
     }
 
     // Also listen for storage events (fallback)
     if (isBrowser) {
-      window.addEventListener('storage', (event: StorageEvent) => {
-        if (event.key && Object.values(STORAGE_KEYS).includes(event.key as typeof STORAGE_KEYS[keyof typeof STORAGE_KEYS])) {
+      window.addEventListener("storage", (event: StorageEvent) => {
+        if (
+          event.key &&
+          Object.values(STORAGE_KEYS).includes(
+            event.key as (typeof STORAGE_KEYS)[keyof typeof STORAGE_KEYS],
+          )
+        ) {
           this.notifyListeners(event.key, event.newValue);
         }
       });
@@ -92,21 +93,24 @@ class SyncService {
 
   // Handle incoming sync messages
   private handleSyncMessage(message: SyncMessage) {
-    console.log('[SyncService] Received:', message.type);
-    
+    console.log("[SyncService] Received:", message.type);
+
     switch (message.type) {
-      case 'AUTH_UPDATE':
+      case "AUTH_UPDATE":
         this.notifyListeners(STORAGE_KEYS.USER_DATA, message.payload);
         break;
-      case 'LOGOUT':
+      case "LOGOUT":
         this.clearLocalData();
-        window.location.href = '/login';
+        window.location.href = "/login";
         break;
-      case 'FORCE_REFRESH':
-        window.dispatchEvent(new CustomEvent('force-auth-refresh'));
+      case "FORCE_REFRESH":
+        window.dispatchEvent(new CustomEvent("force-auth-refresh"));
         break;
-      case 'DATA_CHANGED':
-        this.notifyListeners(message.payload as string, localStorage.getItem(message.payload as string));
+      case "DATA_CHANGED":
+        this.notifyListeners(
+          message.payload as string,
+          localStorage.getItem(message.payload as string),
+        );
         break;
     }
   }
@@ -114,8 +118,8 @@ class SyncService {
   // Setup visibility change handler
   private setupVisibilityHandler() {
     if (isBrowser) {
-      document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible') {
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") {
           this.syncFromStorage();
         }
       });
@@ -126,11 +130,11 @@ class SyncService {
   private syncFromStorage() {
     const userData = this.getItem(STORAGE_KEYS.USER_DATA);
     const authToken = this.getItem(STORAGE_KEYS.AUTH_TOKEN);
-    
+
     if (userData) {
       this.notifyListeners(STORAGE_KEYS.USER_DATA, userData);
     }
-    
+
     if (!authToken) {
       this.clearLocalData();
     }
@@ -140,7 +144,7 @@ class SyncService {
   private notifyListeners(key: string, value: unknown) {
     const keyListeners = this.listeners.get(key);
     if (keyListeners) {
-      keyListeners.forEach(listener => listener(value));
+      keyListeners.forEach((listener) => listener(value));
     }
   }
 
@@ -170,14 +174,14 @@ class SyncService {
   // Set item with sync
   setItem<T>(key: string, value: T): void {
     if (!isBrowser) return;
-    
+
     try {
       const serialized = JSON.stringify(value);
       localStorage.setItem(key, serialized);
       localStorage.setItem(STORAGE_KEYS.LAST_SYNC, String(Date.now()));
-      
+
       // Broadcast change
-      this.debouncedBroadcast('DATA_CHANGED', key);
+      this.debouncedBroadcast("DATA_CHANGED", key);
     } catch (error) {
       console.error(`[SyncService] Error setting ${key}:`, error);
     }
@@ -186,7 +190,7 @@ class SyncService {
   // Get item with validation
   getItem<T>(key: string): T | null {
     if (!isBrowser) return null;
-    
+
     try {
       const item = localStorage.getItem(key);
       if (item === null) return null;
@@ -201,7 +205,7 @@ class SyncService {
   removeItem(key: string): void {
     if (!isBrowser) return;
     localStorage.removeItem(key);
-    this.debouncedBroadcast('DATA_CHANGED', key);
+    this.debouncedBroadcast("DATA_CHANGED", key);
   }
 
   // Subscribe to changes
@@ -233,9 +237,9 @@ class SyncService {
       lastActive: Date.now(),
     });
     this.setItem(STORAGE_KEYS.SESSION_ID, this.generateSessionId());
-    
+
     // Broadcast auth update
-    this.broadcast('AUTH_UPDATE', authData.user);
+    this.broadcast("AUTH_UPDATE", authData.user);
   }
 
   // Get stored auth data
@@ -262,12 +266,13 @@ class SyncService {
 
   // Track device for user
   trackDevice(userId: string): void {
-    const devices = this.getItem<Array<{ id: string; lastActive: number; current: boolean }>>(
-      STORAGE_KEYS.USER_DEVICES
-    ) || [];
-    
-    const existingIndex = devices.findIndex(d => d.id === this.deviceId);
-    
+    const devices =
+      this.getItem<Array<{ id: string; lastActive: number; current: boolean }>>(
+        STORAGE_KEYS.USER_DEVICES,
+      ) || [];
+
+    const existingIndex = devices.findIndex((d) => d.id === this.deviceId);
+
     if (existingIndex >= 0) {
       devices[existingIndex].lastActive = Date.now();
       devices[existingIndex].current = true;
@@ -278,29 +283,33 @@ class SyncService {
         current: true,
       });
     }
-    
+
     // Mark other devices as not current
-    devices.forEach(d => {
+    devices.forEach((d) => {
       if (d.id !== this.deviceId) d.current = false;
     });
-    
+
     this.setItem(STORAGE_KEYS.USER_DEVICES, devices);
   }
 
   // Get all tracked devices
-  getTrackedDevices(): Array<{ id: string; lastActive: number; current: boolean }> {
+  getTrackedDevices(): Array<{
+    id: string;
+    lastActive: number;
+    current: boolean;
+  }> {
     return this.getItem(STORAGE_KEYS.USER_DEVICES) || [];
   }
 
   // Clear local data on logout
   clearLocalData(): void {
     if (!isBrowser) return;
-    
-    Object.values(STORAGE_KEYS).forEach(key => {
+
+    Object.values(STORAGE_KEYS).forEach((key) => {
       localStorage.removeItem(key);
     });
-    
-    this.broadcast('LOGOUT');
+
+    this.broadcast("LOGOUT");
   }
 
   // Save app state

@@ -5,7 +5,7 @@ import {
   FileText,
   Image,
   FileSpreadsheet,
-  File,
+  File as FileIcon,
   Download,
   Share2,
   Trash2,
@@ -67,14 +67,70 @@ const FOLDERS_KEY = "documents_folders";
 // Default smart folders used until the cloud store provides an organizing
 // pass. Mirrors the folder shape the backend previously returned.
 const DEFAULT_FOLDERS: DocumentFolder[] = [
-  { id: 1, name: "Clients", icon: "👥", color: "blue", document_count: 0, parent_id: null },
-  { id: 2, name: "Invoices", icon: "🧾", color: "amber", document_count: 0, parent_id: null },
-  { id: 3, name: "Fuel Records", icon: "⛽", color: "green", document_count: 0, parent_id: null },
-  { id: 4, name: "Sales", icon: "📊", color: "purple", document_count: 0, parent_id: null },
-  { id: 5, name: "M-PESA", icon: "📱", color: "emerald", document_count: 0, parent_id: null },
-  { id: 6, name: "Payroll", icon: "💼", color: "indigo", document_count: 0, parent_id: null },
-  { id: 7, name: "Reports", icon: "📄", color: "cyan", document_count: 0, parent_id: null },
-  { id: 8, name: "Other", icon: "📁", color: "gray", document_count: 0, parent_id: null },
+  {
+    id: 1,
+    name: "Clients",
+    icon: "👥",
+    color: "blue",
+    document_count: 0,
+    parent_id: null,
+  },
+  {
+    id: 2,
+    name: "Invoices",
+    icon: "🧾",
+    color: "amber",
+    document_count: 0,
+    parent_id: null,
+  },
+  {
+    id: 3,
+    name: "Fuel Records",
+    icon: "⛽",
+    color: "green",
+    document_count: 0,
+    parent_id: null,
+  },
+  {
+    id: 4,
+    name: "Sales",
+    icon: "📊",
+    color: "purple",
+    document_count: 0,
+    parent_id: null,
+  },
+  {
+    id: 5,
+    name: "M-PESA",
+    icon: "📱",
+    color: "emerald",
+    document_count: 0,
+    parent_id: null,
+  },
+  {
+    id: 6,
+    name: "Payroll",
+    icon: "💼",
+    color: "indigo",
+    document_count: 0,
+    parent_id: null,
+  },
+  {
+    id: 7,
+    name: "Reports",
+    icon: "📄",
+    color: "cyan",
+    document_count: 0,
+    parent_id: null,
+  },
+  {
+    id: 8,
+    name: "Other",
+    icon: "📁",
+    color: "gray",
+    document_count: 0,
+    parent_id: null,
+  },
 ];
 
 /** Next unique document id based on the current set. */
@@ -100,7 +156,9 @@ const persistDocuments = async (docs: Document[]): Promise<void> => {
     await cloudStorageService.set<Document[]>(DOCUMENTS_KEY, docs);
   } catch (err) {
     console.error("[Documents] failed to persist documents:", err);
-    alert("Failed to save documents to cloud storage. Your changes may not be saved.");
+    alert(
+      "Failed to save documents to cloud storage. Your changes may not be saved.",
+    );
   }
 };
 
@@ -109,10 +167,12 @@ const persistDocuments = async (docs: Document[]): Promise<void> => {
  *  objects — NOT base64 in JSON — so they sync cross-device without bloating
  *  the app_kv blob or hitting localStorage/JSON size limits. */
 const uploadFileToStorage = async (
-  file: File
+  file: File,
 ): Promise<{ publicUrl: string; filePath: string } | null> => {
   const supabase = getSupabaseClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   if (!user) return null;
 
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
@@ -143,11 +203,11 @@ const buildDocument = (
   docs: Document[],
   file: { name: string; type: string; size: number },
   publicUrl: string,
-  filePath: string
+  filePath: string,
 ): Document => {
   const id = nextDocId(docs);
   const folderId = categorizeByName(file.name);
-  const folder = DEFAULT_FOLDERS.find(f => f.id === folderId);
+  const folder = DEFAULT_FOLDERS.find((f) => f.id === folderId);
   return {
     id,
     name: file.name.replace(/[^a-zA-Z0-9._-]/g, "_"),
@@ -214,7 +274,7 @@ export default function Documents() {
   const [folders, setFolders] = useState<DocumentFolder[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedFolder, setSelectedFolder] = useState<DocumentFolder | null>(
-    null
+    null,
   );
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
@@ -229,7 +289,7 @@ export default function Documents() {
   const [imageRotation, setImageRotation] = useState(0);
   const [showUploadMenu, setShowUploadMenu] = useState(false);
   const [expandedFolders, setExpandedFolders] = useState<Set<number>>(
-    new Set()
+    new Set(),
   );
   const [quickPreviewDoc, setQuickPreviewDoc] = useState<Document | null>(null);
   const [quickPreviewUrl, setQuickPreviewUrl] = useState<string | null>(null);
@@ -278,11 +338,11 @@ export default function Documents() {
       const current = await cloudStorageService.get<Document[]>(DOCUMENTS_KEY);
       const docs = current || [];
       let changed = false;
-      const organized = docs.map(doc => {
+      const organized = docs.map((doc) => {
         if (doc.folder_id == null) {
           changed = true;
           const folderId = categorizeByName(doc.original_name || doc.name);
-          const folder = DEFAULT_FOLDERS.find(f => f.id === folderId);
+          const folder = DEFAULT_FOLDERS.find((f) => f.id === folderId);
           return {
             ...doc,
             folder_id: folderId,
@@ -298,9 +358,13 @@ export default function Documents() {
       }
 
       // Ensure folders exist in cloud storage.
-      const storedFolders = await cloudStorageService.get<DocumentFolder[]>(FOLDERS_KEY);
+      const storedFolders =
+        await cloudStorageService.get<DocumentFolder[]>(FOLDERS_KEY);
       if (!storedFolders || storedFolders.length === 0) {
-        await cloudStorageService.set<DocumentFolder[]>(FOLDERS_KEY, DEFAULT_FOLDERS);
+        await cloudStorageService.set<DocumentFolder[]>(
+          FOLDERS_KEY,
+          DEFAULT_FOLDERS,
+        );
         setFolders(DEFAULT_FOLDERS);
       }
     } catch (err) {
@@ -316,9 +380,9 @@ export default function Documents() {
     try {
       const current = await cloudStorageService.get<Document[]>(DOCUMENTS_KEY);
       const docs = current || [];
-      const organized = docs.map(doc => {
+      const organized = docs.map((doc) => {
         const folderId = categorizeByName(doc.original_name || doc.name);
-        const folder = DEFAULT_FOLDERS.find(f => f.id === folderId);
+        const folder = DEFAULT_FOLDERS.find((f) => f.id === folderId);
         return {
           ...doc,
           folder_id: folderId,
@@ -327,7 +391,10 @@ export default function Documents() {
       });
 
       await persistDocuments(organized);
-      await cloudStorageService.set<DocumentFolder[]>(FOLDERS_KEY, DEFAULT_FOLDERS);
+      await cloudStorageService.set<DocumentFolder[]>(
+        FOLDERS_KEY,
+        DEFAULT_FOLDERS,
+      );
       setDocuments(organized);
       setFolders(DEFAULT_FOLDERS);
     } catch (err) {
@@ -349,7 +416,7 @@ export default function Documents() {
   const generateHTMLDocument = (
     title: string,
     data: any,
-    type: string
+    type: string,
   ): string => {
     const formatDate = (d: string | Date) =>
       new Date(d).toLocaleDateString("en-GB");
@@ -369,7 +436,7 @@ export default function Documents() {
           <p><strong>Balance:</strong> ${formatCurrency(c.balance || 0)}</p>
           ${c.notes ? `<p><strong>Notes:</strong> ${c.notes}</p>` : ""}
         </div>
-      `
+      `,
         )
         .join("");
     } else if (type === "offloading" && Array.isArray(data)) {
@@ -384,7 +451,7 @@ export default function Documents() {
           <p><strong>Quantity:</strong> ${r.quantity || 0} L</p>
           <p><strong>Total:</strong> ${formatCurrency(r.totalCost || 0)}</p>
         </div>
-      `
+      `,
         )
         .join("");
     } else if (type === "invoices") {
@@ -399,7 +466,7 @@ export default function Documents() {
           <p><strong>Total:</strong> ${formatCurrency(inv.total || 0)}</p>
           <p><strong>Status:</strong> ${inv.status || "Pending"}</p>
         </div>
-      `
+      `,
         )
         .join("");
     } else if (type === "debtHistory" && Array.isArray(data)) {
@@ -413,7 +480,7 @@ export default function Documents() {
           <p><strong>Amount:</strong> ${formatCurrency(h.amount || 0)}</p>
           <p><strong>Balance:</strong> ${formatCurrency(h.balance || 0)}</p>
         </div>
-      `
+      `,
         )
         .join("");
     } else if (type === "sales") {
@@ -429,7 +496,7 @@ export default function Documents() {
           <p><strong>Cash:</strong> ${formatCurrency(s.cashPayments || 0)}</p>
           <p><strong>M-Pesa:</strong> ${formatCurrency(s.mpesaPayments || 0)}</p>
         </div>
-      `
+      `,
         )
         .join("");
     } else if (type === "mpesa" && Array.isArray(data)) {
@@ -443,7 +510,7 @@ export default function Documents() {
           <p><strong>Details:</strong> ${t.details || "-"}</p>
           <p><strong>Amount:</strong> ${formatCurrency(t.paidIn || t.amount || 0)}</p>
         </div>
-      `
+      `,
         )
         .join("");
     } else if (type === "employees" && Array.isArray(data)) {
@@ -457,7 +524,7 @@ export default function Documents() {
           <p><strong>Position:</strong> ${e.position || "-"}</p>
           <p><strong>Salary:</strong> ${formatCurrency(e.basicSalary || 0)}</p>
         </div>
-      `
+      `,
         )
         .join("");
     } else if (type === "payroll" && Array.isArray(data)) {
@@ -471,7 +538,7 @@ export default function Documents() {
           <p><strong>Deductions:</strong> ${formatCurrency(p.totalDeductions || 0)}</p>
           <p><strong>Net:</strong> ${formatCurrency(p.netPay || 0)}</p>
         </div>
-      `
+      `,
         )
         .join("");
     } else if (type === "messages" && Array.isArray(data)) {
@@ -483,7 +550,7 @@ export default function Documents() {
           <p><strong>${m.role === "user" ? "You" : "AI Assistant"}:</strong></p>
           <p>${m.content || "-"}</p>
         </div>
-      `
+      `,
         )
         .join("");
     }
@@ -601,20 +668,21 @@ export default function Documents() {
 
     // Load the latest documents from cloud storage so we don't clobber
     // concurrent writes from other tabs/devices.
-    let currentDocs = (await cloudStorageService.get<Document[]>(DOCUMENTS_KEY)) || [];
+    let currentDocs =
+      (await cloudStorageService.get<Document[]>(DOCUMENTS_KEY)) || [];
     let modified = false;
 
     for (const doc of documentsToSave) {
       if (doc.check) {
         // Check if document already exists today
         const existingDoc = currentDocs.find(
-          d => d.name === doc.name || d.original_name === doc.name
+          (d) => d.name === doc.name || d.original_name === doc.name,
         );
         if (!existingDoc) {
           const htmlContent = generateHTMLDocument(
             doc.title,
             doc.data,
-            doc.type
+            doc.type,
           );
           const blob = new Blob([htmlContent], { type: "text/html" });
           const fileObj = new File([blob], doc.name, { type: "text/html" });
@@ -629,7 +697,7 @@ export default function Documents() {
               currentDocs,
               { name: doc.name, type: "text/html", size: blob.size },
               uploaded.publicUrl,
-              uploaded.filePath
+              uploaded.filePath,
             );
             currentDocs = [newDoc, ...currentDocs];
             modified = true;
@@ -666,7 +734,8 @@ export default function Documents() {
 
     // Load the latest documents from cloud storage so new uploads append to
     // the current set rather than overwriting it.
-    let currentDocs = (await cloudStorageService.get<Document[]>(DOCUMENTS_KEY)) || [];
+    let currentDocs =
+      (await cloudStorageService.get<Document[]>(DOCUMENTS_KEY)) || [];
     const uploadedIds: number[] = [];
 
     for (let i = 0; i < files.length; i++) {
@@ -682,7 +751,7 @@ export default function Documents() {
           currentDocs,
           { name: file.name, type: file.type, size: file.size },
           uploaded.publicUrl,
-          uploaded.filePath
+          uploaded.filePath,
         );
         currentDocs = [newDoc, ...currentDocs];
         uploadedIds.push(newDoc.id);
@@ -691,7 +760,9 @@ export default function Documents() {
       } catch (err) {
         console.error(`[Documents] failed to upload ${file.name}:`, err);
         setError(`Error uploading ${file.name}`);
-        alert(`Failed to upload "${file.name}": ${err instanceof Error ? err.message : "unknown error"}. Please try again.`);
+        alert(
+          `Failed to upload "${file.name}": ${err instanceof Error ? err.message : "unknown error"}. Please try again.`,
+        );
       }
     }
 
@@ -831,13 +902,13 @@ export default function Documents() {
       } else if (shareUrl) {
         await navigator.clipboard.writeText(shareUrl);
         import("@/react-app/lib/toast").then(({ toastSuccess }) =>
-          toastSuccess("Document link copied to clipboard!")
+          toastSuccess("Document link copied to clipboard!"),
         );
       } else {
         const message = `Document: ${doc.original_name}`;
         await navigator.clipboard.writeText(message);
         import("@/react-app/lib/toast").then(({ toastSuccess }) =>
-          toastSuccess("Document name copied to clipboard!")
+          toastSuccess("Document name copied to clipboard!"),
         );
       }
     } catch {
@@ -855,11 +926,15 @@ export default function Documents() {
           const supabase = getSupabaseClient();
           await supabase.storage.from("fuelpro-files").remove([doc.file_path]);
         } catch (storageErr) {
-          console.warn("[Documents] storage delete failed (non-fatal):", storageErr);
+          console.warn(
+            "[Documents] storage delete failed (non-fatal):",
+            storageErr,
+          );
         }
       }
-      const current = (await cloudStorageService.get<Document[]>(DOCUMENTS_KEY)) || [];
-      const updated = current.filter(d => d.id !== doc.id);
+      const current =
+        (await cloudStorageService.get<Document[]>(DOCUMENTS_KEY)) || [];
+      const updated = current.filter((d) => d.id !== doc.id);
       await persistDocuments(updated);
       setDocuments(updated);
       if (selectedDoc?.id === doc.id) {
@@ -887,7 +962,7 @@ export default function Documents() {
       return <FileSpreadsheet className={`${sizeClass} text-emerald-500`} />;
     if (fileType.includes("word") || fileType.includes("document"))
       return <FileText className={`${sizeClass} text-blue-500`} />;
-    return <File className={`${sizeClass} text-gray-500`} />;
+    return <FileIcon className={`${sizeClass} text-gray-500`} />;
   };
 
   const canPreview = (fileType: string) => {
@@ -914,7 +989,7 @@ export default function Documents() {
     });
   };
 
-  const filteredDocuments = documents.filter(doc => {
+  const filteredDocuments = documents.filter((doc) => {
     const matchesSearch =
       doc.original_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       doc.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -933,7 +1008,7 @@ export default function Documents() {
 
   // Calculate actual document counts per folder from loaded documents
   const getFolderDocCount = (folderId: number): number => {
-    return documents.filter(doc => Number(doc.folder_id) === Number(folderId))
+    return documents.filter((doc) => Number(doc.folder_id) === Number(folderId))
       .length;
   };
 
@@ -1005,7 +1080,7 @@ export default function Documents() {
                 />
               ) : (
                 <div className="flex flex-col items-center justify-center h-full text-gray-500 dark:text-gray-400">
-                  <File className="w-16 h-16 mb-4 opacity-50" />
+                  <FileIcon className="w-16 h-16 mb-4 opacity-50" />
                   <p className="font-medium">Preview not available</p>
                   <button
                     onClick={() => handleDownload(quickPreviewDoc)}
@@ -1205,17 +1280,17 @@ export default function Documents() {
           </h3>
           <div className="space-y-2">
             {folders
-              .filter(f => f.parent_id === null)
-              .map(mainFolder => {
+              .filter((f) => f.parent_id === null)
+              .map((mainFolder) => {
                 const subFolders = folders.filter(
-                  f => f.parent_id === mainFolder.id
+                  (f) => f.parent_id === mainFolder.id,
                 );
                 const isExpanded = expandedFolders.has(mainFolder.id);
                 // Calculate actual document counts from loaded documents
                 const mainFolderDocs = getFolderDocCount(mainFolder.id);
                 const subFolderDocs = subFolders.reduce(
                   (sum, sf) => sum + getFolderDocCount(sf.id),
-                  0
+                  0,
                 );
                 const totalDocs = mainFolderDocs + subFolderDocs;
 
@@ -1228,7 +1303,7 @@ export default function Documents() {
                     <button
                       onClick={() => {
                         if (subFolders.length > 0) {
-                          setExpandedFolders(prev => {
+                          setExpandedFolders((prev) => {
                             const next = new Set(prev);
                             if (next.has(mainFolder.id))
                               next.delete(mainFolder.id);
@@ -1268,9 +1343,9 @@ export default function Documents() {
                     {isExpanded && subFolders.length > 0 && (
                       <div className="border-t border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 p-3">
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                          {subFolders.map(subFolder => {
+                          {subFolders.map((subFolder) => {
                             const subFolderDocCount = getFolderDocCount(
-                              subFolder.id
+                              subFolder.id,
                             );
                             return (
                               <button
@@ -1312,7 +1387,7 @@ export default function Documents() {
           type="text"
           placeholder="Search documents by name..."
           value={searchQuery}
-          onChange={e => setSearchQuery(e.target.value)}
+          onChange={(e) => setSearchQuery(e.target.value)}
           className="w-full pl-12 pr-4 py-3 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all text-gray-900 dark:text-white"
         />
         {searchQuery && (
@@ -1376,7 +1451,7 @@ export default function Documents() {
           )}
           {(showAllDocuments || selectedFolder) && (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {filteredDocuments.map(doc => (
+              {filteredDocuments.map((doc) => (
                 <div
                   key={doc.id}
                   className="group bg-white dark:bg-gray-700 rounded-xl border border-gray-200 dark:border-gray-600 p-4 hover:shadow-lg hover:border-amber-300 dark:hover:border-amber-500 transition-all cursor-pointer relative"
@@ -1426,7 +1501,7 @@ export default function Documents() {
                   <div className="flex items-center gap-2 mt-3">
                     {canPreview(doc.file_type) && (
                       <button
-                        onClick={e => {
+                        onClick={(e) => {
                           e.stopPropagation();
                           handleQuickPreview(doc);
                         }}
@@ -1441,7 +1516,7 @@ export default function Documents() {
                       </button>
                     )}
                     <button
-                      onClick={e => {
+                      onClick={(e) => {
                         e.stopPropagation();
                         handleDownload(doc);
                       }}
@@ -1451,7 +1526,7 @@ export default function Documents() {
                       {!canPreview(doc.file_type) && "Download"}
                     </button>
                     <button
-                      onClick={e => {
+                      onClick={(e) => {
                         e.stopPropagation();
                         handleShare(doc);
                       }}
@@ -1460,7 +1535,7 @@ export default function Documents() {
                       <Share2 className="w-4 h-4" />
                     </button>
                     <button
-                      onClick={e => {
+                      onClick={(e) => {
                         e.stopPropagation();
                         handleDelete(doc);
                       }}
@@ -1485,7 +1560,7 @@ export default function Documents() {
           {/* Preview Header */}
           <div
             className="flex items-center justify-between p-4 bg-black/50"
-            onClick={e => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center gap-3 text-white">
               {getFileIcon(selectedDoc.file_type, "sm")}
@@ -1500,7 +1575,7 @@ export default function Documents() {
               {selectedDoc.file_type.includes("image") && (
                 <>
                   <button
-                    onClick={() => setImageZoom(z => Math.max(0.5, z - 0.25))}
+                    onClick={() => setImageZoom((z) => Math.max(0.5, z - 0.25))}
                     className="p-2 text-white/80 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
                     title="Zoom out"
                   >
@@ -1510,14 +1585,14 @@ export default function Documents() {
                     {Math.round(imageZoom * 100)}%
                   </span>
                   <button
-                    onClick={() => setImageZoom(z => Math.min(3, z + 0.25))}
+                    onClick={() => setImageZoom((z) => Math.min(3, z + 0.25))}
                     className="p-2 text-white/80 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
                     title="Zoom in"
                   >
                     <ZoomIn className="w-5 h-5" />
                   </button>
                   <button
-                    onClick={() => setImageRotation(r => r + 90)}
+                    onClick={() => setImageRotation((r) => r + 90)}
                     className="p-2 text-white/80 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
                     title="Rotate"
                   >
@@ -1527,7 +1602,7 @@ export default function Documents() {
                 </>
               )}
               <button
-                onClick={e => {
+                onClick={(e) => {
                   e.stopPropagation();
                   handleDownload(selectedDoc);
                 }}
@@ -1537,7 +1612,7 @@ export default function Documents() {
                 <Download className="w-5 h-5" />
               </button>
               <button
-                onClick={e => {
+                onClick={(e) => {
                   e.stopPropagation();
                   handleShare(selectedDoc);
                 }}
@@ -1559,7 +1634,7 @@ export default function Documents() {
           {/* Preview Content */}
           <div
             className="flex-1 flex items-center justify-center overflow-auto p-4"
-            onClick={e => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
           >
             {previewLoading ? (
               <Loader2 className="w-12 h-12 animate-spin text-white" />
@@ -1583,7 +1658,7 @@ export default function Documents() {
                 />
               ) : (
                 <div className="text-white text-center">
-                  <File className="w-16 h-16 mx-auto mb-4 opacity-50" />
+                  <FileIcon className="w-16 h-16 mx-auto mb-4 opacity-50" />
                   <p>Preview not available for this file type</p>
                   <button
                     onClick={() => handleDownload(selectedDoc)}
@@ -1610,7 +1685,7 @@ export default function Documents() {
         >
           <div
             className="bg-white dark:bg-gray-800 rounded-2xl max-w-lg w-full p-6 space-y-4"
-            onClick={e => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-3">

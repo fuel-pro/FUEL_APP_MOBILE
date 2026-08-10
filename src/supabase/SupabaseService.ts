@@ -1,6 +1,6 @@
 /**
  * Supabase Service - Cloud persistence for FuelPro
- * 
+ *
  * This service replaces Firebase for:
  * - Authentication
  * - Database operations
@@ -8,19 +8,19 @@
  * - Cloud sync
  */
 
-import { supabase } from './client';
-import { User, Session, AuthError } from '@supabase/supabase-js';
+import { supabase } from "./client";
+import { User, Session, AuthError } from "@supabase/supabase-js";
 
 // Storage keys
-const SUPABASE_AUTH_TOKEN = 'supabase-auth-token';
-const SUPABASE_LAST_SYNC = 'supabase_last_sync';
+const SUPABASE_AUTH_TOKEN = "supabase-auth-token";
+const SUPABASE_LAST_SYNC = "supabase_last_sync";
 
 /**
  * SupabaseService - Main service for Supabase operations
  */
 export const SupabaseService = {
   // ============ CONFIGURATION ============
-  
+
   /**
    * Check if Supabase is configured
    */
@@ -46,8 +46,12 @@ export const SupabaseService = {
   async signUp(
     email: string,
     password: string,
-    metadata?: Record<string, any>
-  ): Promise<{ user: User | null; session: Session | null; error: AuthError | null }> {
+    metadata?: Record<string, any>,
+  ): Promise<{
+    user: User | null;
+    session: Session | null;
+    error: AuthError | null;
+  }> {
     try {
       const { data, error } = await supabase.auth.signUp({
         email,
@@ -58,7 +62,7 @@ export const SupabaseService = {
       });
       return { user: data.user, session: data.session, error };
     } catch (err) {
-      console.error('Supabase signUp error:', err);
+      console.error("Supabase signUp error:", err);
       return { user: null, session: null, error: err as AuthError };
     }
   },
@@ -68,8 +72,12 @@ export const SupabaseService = {
    */
   async signIn(
     email: string,
-    password: string
-  ): Promise<{ user: User | null; session: Session | null; error: AuthError | null }> {
+    password: string,
+  ): Promise<{
+    user: User | null;
+    session: Session | null;
+    error: AuthError | null;
+  }> {
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
@@ -77,7 +85,7 @@ export const SupabaseService = {
       });
       return { user: data.user, session: data.session, error };
     } catch (err) {
-      console.error('Supabase signIn error:', err);
+      console.error("Supabase signIn error:", err);
       return { user: null, session: null, error: err as AuthError };
     }
   },
@@ -90,7 +98,7 @@ export const SupabaseService = {
       const { error } = await supabase.auth.signOut();
       return { error };
     } catch (err) {
-      console.error('Supabase signOut error:', err);
+      console.error("Supabase signOut error:", err);
       return { error: err as AuthError };
     }
   },
@@ -100,10 +108,12 @@ export const SupabaseService = {
    */
   async getCurrentUser(): Promise<User | null> {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       return user;
     } catch (err) {
-      console.error('Supabase getCurrentUser error:', err);
+      console.error("Supabase getCurrentUser error:", err);
       return null;
     }
   },
@@ -113,10 +123,12 @@ export const SupabaseService = {
    */
   async getCurrentSession(): Promise<Session | null> {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       return session;
     } catch (err) {
-      console.error('Supabase getCurrentSession error:', err);
+      console.error("Supabase getCurrentSession error:", err);
       return null;
     }
   },
@@ -124,7 +136,9 @@ export const SupabaseService = {
   /**
    * Listen to auth state changes
    */
-  onAuthStateChange(callback: (event: string, session: Session | null) => void) {
+  onAuthStateChange(
+    callback: (event: string, session: Session | null) => void,
+  ) {
     return supabase.auth.onAuthStateChange(callback);
   },
 
@@ -136,7 +150,7 @@ export const SupabaseService = {
   async saveData<T>(
     table: string,
     data: T,
-    id?: string
+    id?: string,
   ): Promise<{ success: boolean; error?: string; data?: any }> {
     try {
       if (id) {
@@ -144,10 +158,10 @@ export const SupabaseService = {
         const { data: result, error } = await supabase
           .from(table)
           .update(data)
-          .eq('id', id)
+          .eq("id", id)
           .select()
           .single();
-        
+
         if (error) {
           console.error(`Supabase update error in ${table}:`, error);
           return { success: false, error: error.message };
@@ -160,7 +174,7 @@ export const SupabaseService = {
           .insert(data)
           .select()
           .single();
-        
+
         if (error) {
           console.error(`Supabase insert error in ${table}:`, error);
           return { success: false, error: error.message };
@@ -179,30 +193,32 @@ export const SupabaseService = {
   async getData<T>(
     table: string,
     filters?: Record<string, any>,
-    orderBy?: { column: string; ascending?: boolean }
+    orderBy?: { column: string; ascending?: boolean },
   ): Promise<{ success: boolean; data?: T[]; error?: string }> {
     try {
-      let query = supabase.from(table).select('*');
-      
+      let query = supabase.from(table).select("*");
+
       // Apply filters
       if (filters) {
         Object.keys(filters).forEach((key) => {
           query = query.eq(key, filters[key]);
         });
       }
-      
+
       // Apply ordering
       if (orderBy) {
-        query = query.order(orderBy.column, { ascending: orderBy.ascending ?? true });
+        query = query.order(orderBy.column, {
+          ascending: orderBy.ascending ?? true,
+        });
       }
-      
+
       const { data, error } = await query;
-      
+
       if (error) {
         console.error(`Supabase getData error in ${table}:`, error);
         return { success: false, error: error.message };
       }
-      
+
       return { success: true, data: data as T[] };
     } catch (err) {
       console.error(`Supabase getData error in ${table}:`, err);
@@ -215,19 +231,16 @@ export const SupabaseService = {
    */
   async deleteData(
     table: string,
-    id: string
+    id: string,
   ): Promise<{ success: boolean; error?: string }> {
     try {
-      const { error } = await supabase
-        .from(table)
-        .delete()
-        .eq('id', id);
-      
+      const { error } = await supabase.from(table).delete().eq("id", id);
+
       if (error) {
         console.error(`Supabase deleteData error in ${table}:`, error);
         return { success: false, error: error.message };
       }
-      
+
       return { success: true };
     } catch (err) {
       console.error(`Supabase deleteData error in ${table}:`, err);
@@ -242,7 +255,7 @@ export const SupabaseService = {
    */
   async syncToCloud(stationId: string): Promise<boolean> {
     if (!this.isEnabled()) {
-      console.warn('Supabase not enabled - skipping sync');
+      console.warn("Supabase not enabled - skipping sync");
       return false;
     }
 
@@ -250,35 +263,33 @@ export const SupabaseService = {
       // Get local data
       const localData = localStorage.getItem(`fuelpro_station_${stationId}`);
       if (!localData) {
-        console.warn('No local data to sync');
+        console.warn("No local data to sync");
         return false;
       }
 
       const parsedData = JSON.parse(localData);
-      
+
       // Save to Supabase
-      const { error } = await supabase
-        .from('stations')
-        .upsert({
-          id: stationId,
-          ...parsedData,
-          updated_at: new Date().toISOString(),
-        });
+      const { error } = await supabase.from("stations").upsert({
+        id: stationId,
+        ...parsedData,
+        updated_at: new Date().toISOString(),
+      });
 
       if (error) {
-        console.error('Supabase sync error:', error);
+        console.error("Supabase sync error:", error);
         return false;
       }
 
       // Update last sync time
       localStorage.setItem(SUPABASE_LAST_SYNC, new Date().toISOString());
-      
+
       // Dispatch sync event
-      window.dispatchEvent(new CustomEvent('fuelpro-cloud-sync'));
-      
+      window.dispatchEvent(new CustomEvent("fuelpro-cloud-sync"));
+
       return true;
     } catch (err) {
-      console.error('Supabase syncToCloud error:', err);
+      console.error("Supabase syncToCloud error:", err);
       return false;
     }
   },
@@ -288,32 +299,35 @@ export const SupabaseService = {
    */
   async restoreFromCloud(stationId: string): Promise<boolean> {
     if (!this.isEnabled()) {
-      console.warn('Supabase not enabled - skipping restore');
+      console.warn("Supabase not enabled - skipping restore");
       return false;
     }
 
     try {
       const { data, error } = await supabase
-        .from('stations')
-        .select('*')
-        .eq('id', stationId)
+        .from("stations")
+        .select("*")
+        .eq("id", stationId)
         .single();
 
       if (error || !data) {
-        console.warn('No cloud data found for station:', stationId);
+        console.warn("No cloud data found for station:", stationId);
         return false;
       }
 
       // Save to local storage
-      localStorage.setItem(`fuelpro_station_${stationId}`, JSON.stringify(data));
+      localStorage.setItem(
+        `fuelpro_station_${stationId}`,
+        JSON.stringify(data),
+      );
       localStorage.setItem(SUPABASE_LAST_SYNC, new Date().toISOString());
-      
+
       // Dispatch sync event
-      window.dispatchEvent(new CustomEvent('fuelpro-cloud-sync'));
-      
+      window.dispatchEvent(new CustomEvent("fuelpro-cloud-sync"));
+
       return true;
     } catch (err) {
-      console.error('Supabase restoreFromCloud error:', err);
+      console.error("Supabase restoreFromCloud error:", err);
       return false;
     }
   },
@@ -333,19 +347,19 @@ export const SupabaseService = {
   subscribeToChanges(
     table: string,
     callback: (payload: any) => void,
-    filter?: { column: string; value: any }
+    filter?: { column: string; value: any },
   ) {
-    let channel = supabase
+    const channel = supabase
       .channel(`${table}-changes`)
       .on(
-        'postgres_changes',
+        "postgres_changes",
         {
-          event: '*',
-          schema: 'public',
+          event: "*",
+          schema: "public",
           table: table,
           filter: filter ? `${filter.column}=eq.${filter.value}` : undefined,
         },
-        callback
+        callback,
       )
       .subscribe();
 
@@ -360,14 +374,14 @@ export const SupabaseService = {
    * Set encryption key for sensitive data
    */
   setEncryptionKey(key: string) {
-    localStorage.setItem('supabase_encryption_key', key);
+    localStorage.setItem("supabase_encryption_key", key);
   },
 
   /**
    * Get encryption key
    */
   getEncryptionKey(): string | null {
-    return localStorage.getItem('supabase_encryption_key');
+    return localStorage.getItem("supabase_encryption_key");
   },
 };
 

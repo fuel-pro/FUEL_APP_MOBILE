@@ -4,7 +4,7 @@ declare module "pdfjs-dist" {
   export const GlobalWorkerOptions: { workerSrc: string };
   export const version: string;
   export function getDocument(
-    source: { data: ArrayBuffer } | string | { url: string }
+    source: { data: ArrayBuffer } | string | { url: string },
   ): { promise: Promise<PDFDocumentProxy> };
 
   interface PDFDocumentProxy {

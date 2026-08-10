@@ -1,6 +1,6 @@
 /**
  * Firebase Database Helper
- * 
+ *
  * Provides Firestore and Realtime Database utilities:
  * - CRUD operations
  * - Real-time listeners
@@ -12,7 +12,7 @@ import {
   getFirebaseFirestore,
   getFirebaseDatabase,
   getFirebaseApp,
-} from './client';
+} from "./client";
 import {
   collection,
   doc,
@@ -33,7 +33,7 @@ import {
   QueryConstraint,
   Firestore,
   FirestoreError,
-} from 'firebase/firestore';
+} from "firebase/firestore";
 import {
   ref,
   set,
@@ -47,7 +47,7 @@ import {
   equalTo,
   Database,
   DataSnapshot,
-} from 'firebase/database';
+} from "firebase/database";
 
 // Firestore helpers
 export const firestore = {
@@ -56,7 +56,7 @@ export const firestore = {
    */
   async add<T extends DocumentData>(
     collectionPath: string,
-    data: Omit<T, 'id'>
+    data: Omit<T, "id">,
   ): Promise<string> {
     const db = getFirebaseFirestore();
     const docRef = await addDoc(collection(db, collectionPath), {
@@ -73,7 +73,7 @@ export const firestore = {
   async set<T extends DocumentData>(
     collectionPath: string,
     id: string,
-    data: T
+    data: T,
   ): Promise<void> {
     const db = getFirebaseFirestore();
     await setDoc(doc(db, collectionPath, id), {
@@ -88,7 +88,7 @@ export const firestore = {
   async update<T extends DocumentData>(
     collectionPath: string,
     id: string,
-    data: Partial<T>
+    data: Partial<T>,
   ): Promise<void> {
     const db = getFirebaseFirestore();
     await updateDoc(doc(db, collectionPath, id), {
@@ -102,11 +102,11 @@ export const firestore = {
    */
   async get<T = DocumentData>(
     collectionPath: string,
-    id: string
+    id: string,
   ): Promise<T | null> {
     const db = getFirebaseFirestore();
     const docSnap = await getDoc(doc(db, collectionPath, id));
-    
+
     if (docSnap.exists()) {
       return { id: docSnap.id, ...docSnap.data() } as T;
     }
@@ -123,7 +123,7 @@ export const firestore = {
     const db = getFirebaseFirestore();
     const q = query(collection(db, collectionPath), ...constraints);
     const querySnapshot = await getDocs(q);
-    
+
     return querySnapshot.docs.map((doc) => ({
       id: doc.id,
       ...doc.data(),
@@ -149,7 +149,7 @@ export const firestore = {
   ): () => void {
     const db = getFirebaseFirestore();
     const q = query(collection(db, collectionPath), ...constraints);
-    
+
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
@@ -160,11 +160,11 @@ export const firestore = {
         callback(data);
       },
       (error) => {
-        console.error('[Firestore] Subscription error:', error);
+        console.error("[Firestore] Subscription error:", error);
         onError?.(error);
-      }
+      },
     );
-    
+
     return unsubscribe;
   },
 
@@ -175,10 +175,10 @@ export const firestore = {
     collectionPath: string,
     id: string,
     callback: (data: T | null) => void,
-    onError?: (error: FirestoreError) => void
+    onError?: (error: FirestoreError) => void,
   ): () => void {
     const db = getFirebaseFirestore();
-    
+
     const unsubscribe = onSnapshot(
       doc(db, collectionPath, id),
       (docSnap) => {
@@ -189,11 +189,11 @@ export const firestore = {
         }
       },
       (error) => {
-        console.error('[Firestore] Doc subscription error:', error);
+        console.error("[Firestore] Doc subscription error:", error);
         onError?.(error);
-      }
+      },
     );
-    
+
     return unsubscribe;
   },
 };
@@ -220,7 +220,7 @@ export const realtimeDb = {
       ...data,
       createdAt: Date.now(),
     });
-    return newRef.key || '';
+    return newRef.key || "";
   },
 
   /**
@@ -248,7 +248,7 @@ export const realtimeDb = {
   async get<T = any>(path: string): Promise<T | null> {
     const db = getFirebaseDatabase();
     const snapshot = await get(child(ref(db), path));
-    
+
     if (snapshot.exists()) {
       return snapshot.val() as T;
     }
@@ -261,10 +261,10 @@ export const realtimeDb = {
   subscribe<T = any>(
     path: string,
     callback: (data: T | null) => void,
-    onError?: (error: Error) => void
+    onError?: (error: Error) => void,
   ): () => void {
     const db = getFirebaseDatabase();
-    
+
     const unsubscribe = onValue(
       ref(db, path),
       (snapshot) => {
@@ -275,11 +275,11 @@ export const realtimeDb = {
         }
       },
       (error) => {
-        console.error('[RealtimeDB] Subscription error:', error);
+        console.error("[RealtimeDB] Subscription error:", error);
         onError?.(error);
-      }
+      },
     );
-    
+
     return unsubscribe;
   },
 };
@@ -290,27 +290,27 @@ export const stations = {
    * Get station by ID
    */
   async get(stationId: string) {
-    return firestore.get('stations', stationId);
+    return firestore.get("stations", stationId);
   },
 
   /**
    * Get all stations
    */
   async getAll(ownerId?: string) {
-    const constraints: QueryConstraint[] = [orderBy('createdAt', 'desc')];
+    const constraints: QueryConstraint[] = [orderBy("createdAt", "desc")];
     if (ownerId) {
-      constraints.unshift(where('ownerId', '==', ownerId));
+      constraints.unshift(where("ownerId", "==", ownerId));
     }
-    return firestore.getAll('stations', ...constraints);
+    return firestore.getAll("stations", ...constraints);
   },
 
   /**
    * Create a new station
    */
   async create(data: any) {
-    return firestore.add('stations', {
+    return firestore.add("stations", {
       ...data,
-      status: 'active',
+      status: "active",
     });
   },
 
@@ -318,14 +318,14 @@ export const stations = {
    * Update station
    */
   async update(stationId: string, data: any) {
-    return firestore.update('stations', stationId, data);
+    return firestore.update("stations", stationId, data);
   },
 
   /**
    * Subscribe to station updates
    */
   subscribe(stationId: string, callback: (data: any) => void) {
-    return firestore.subscribeToDoc('stations', stationId, callback);
+    return firestore.subscribeToDoc("stations", stationId, callback);
   },
 };
 
@@ -335,9 +335,9 @@ export const sales = {
    * Record a new sale
    */
   async create(data: any) {
-    return firestore.add('sales', {
+    return firestore.add("sales", {
       ...data,
-      status: 'completed',
+      status: "completed",
     });
   },
 
@@ -346,10 +346,10 @@ export const sales = {
    */
   async getByStation(stationId: string, limitCount = 50) {
     return firestore.getAll(
-      'sales',
-      where('stationId', '==', stationId),
-      orderBy('createdAt', 'desc'),
-      limit(limitCount)
+      "sales",
+      where("stationId", "==", stationId),
+      orderBy("createdAt", "desc"),
+      limit(limitCount),
     );
   },
 
@@ -358,12 +358,12 @@ export const sales = {
    */
   subscribeToStation(stationId: string, callback: (data: any[]) => void) {
     return firestore.subscribe(
-      'sales',
+      "sales",
       callback,
       undefined,
-      where('stationId', '==', stationId),
-      orderBy('createdAt', 'desc'),
-      limit(50)
+      where("stationId", "==", stationId),
+      orderBy("createdAt", "desc"),
+      limit(50),
     );
   },
 };

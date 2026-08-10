@@ -25,7 +25,7 @@ import { useStations } from "@/react-app/context/StationContext";
 
 export function useStationCloud<T>(
   baseKey: string,
-  initialValue: T
+  initialValue: T,
 ): {
   data: T;
   setData: (value: T | ((prev: T) => T)) => void;
@@ -74,7 +74,7 @@ export function useStationCloud<T>(
 
   const setData = useCallback(
     (value: T | ((prev: T) => T)) => {
-      setDataState(prev => {
+      setDataState((prev) => {
         const next =
           typeof value === "function" ? (value as (p: T) => T)(prev) : value;
         // Persist to the station-scoped cloud key. Fire-and-forget — the local
@@ -83,7 +83,7 @@ export function useStationCloud<T>(
         return next;
       });
     },
-    [baseKey, stationId]
+    [baseKey, stationId],
   );
 
   return { data, setData, loading, reload: load };

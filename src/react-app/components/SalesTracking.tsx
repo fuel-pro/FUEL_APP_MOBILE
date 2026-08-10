@@ -63,7 +63,7 @@ export default function SalesTracking() {
   const [scanStep, setScanStep] = useState<ScanStep>("idle");
   const [scanResult, setScanResult] = useState<ScanResultData | null>(null);
   const [editableResult, setEditableResult] = useState<ScanResultData | null>(
-    null
+    null,
   );
   const [scanError, setScanError] = useState<string | null>(null);
   const [scanSuggestion, setScanSuggestion] = useState<string | null>(null);
@@ -172,11 +172,11 @@ export default function SalesTracking() {
 
     try {
       // Simulate upload delay
-      await new Promise(r => setTimeout(r, 600));
+      await new Promise((r) => setTimeout(r, 600));
       setScanStep("analyzing");
 
       // Simulate AI processing time
-      await new Promise(r => setTimeout(r, 1500));
+      await new Promise((r) => setTimeout(r, 1500));
 
       // Use local extraction instead of API call
       const extractedData = simulateAIExtraction(file.name);
@@ -187,7 +187,7 @@ export default function SalesTracking() {
     } catch (error: any) {
       setScanError(error.message || "Failed to scan document");
       setScanSuggestion(
-        "Try taking a clearer photo with good lighting, or enter data manually below."
+        "Try taking a clearer photo with good lighting, or enter data manually below.",
       );
       setScanStep("error");
     }
@@ -271,7 +271,7 @@ export default function SalesTracking() {
         .filter(
           (p: any) =>
             p.fuelType?.toLowerCase() === "petrol" ||
-            p.name?.toLowerCase().includes("petrol")
+            p.name?.toLowerCase().includes("petrol"),
         )
         .map((p: any, i: number) => ({
           id: p.name || `PMS-${i + 1}`,
@@ -288,7 +288,7 @@ export default function SalesTracking() {
         .filter(
           (p: any) =>
             p.fuelType?.toLowerCase() === "diesel" ||
-            p.name?.toLowerCase().includes("diesel")
+            p.name?.toLowerCase().includes("diesel"),
         )
         .map((p: any, i: number) => ({
           id: p.name || `AGO-${i + 1}`,
@@ -384,7 +384,7 @@ export default function SalesTracking() {
     index: number,
     type: "pms" | "ago",
     field: string,
-    value: number
+    value: number,
   ) => {
     const pumps = type === "pms" ? [...state.pmsPumps] : [...state.agoPumps];
     const pump = pumps[index];
@@ -445,16 +445,16 @@ export default function SalesTracking() {
   const calculateSummary = () => {
     const totalPmsSalesKsh = state.pmsPumps.reduce(
       (sum, pump) => sum + pump.salesKsh,
-      0
+      0,
     );
     const totalAgoSalesKsh = state.agoPumps.reduce(
       (sum, pump) => sum + pump.salesKsh,
-      0
+      0,
     );
     const totalRevenue = totalPmsSalesKsh + totalAgoSalesKsh;
     const totalExpenses = state.expenses.reduce(
       (sum, expense) => sum + expense.amount,
-      0
+      0,
     );
     const cashInHand = totalRevenue - totalExpenses - state.tillPayment;
     const netIncome = state.tillPayment + cashInHand;
@@ -479,7 +479,10 @@ export default function SalesTracking() {
       dispatch({ type: "SET_TILL_PAYMENT", payload: 0 });
       dispatch({
         type: "SET_PRICES",
-        payload: { pmsPrice: KENYA_BASE_PRICES.petrol, agoPrice: KENYA_BASE_PRICES.diesel },
+        payload: {
+          pmsPrice: KENYA_BASE_PRICES.petrol,
+          agoPrice: KENYA_BASE_PRICES.diesel,
+        },
       });
       dispatch({
         type: "SET_SALES_DATE",
@@ -579,7 +582,7 @@ export default function SalesTracking() {
   };
 
   const getSalesData = () => {
-    return `Date: ${state.salesDate}\nShift: ${state.shift}\n\nFuel Tank Inventory:\nPetrol (PMS) Tank: Opening: ${formatNumber(state.pmsTankOpening)} L, Closing: ${formatNumber(state.pmsTankClosing)} L\nDiesel (AGO) Tank: Opening: ${formatNumber(state.agoTankOpening)} L, Closing: ${formatNumber(state.agoTankClosing)} L\n\nFuel Pricing:\nPetrol (PMS): ${state.companyData.currency} ${state.pmsPrice}/L\nDiesel (AGO): ${state.companyData.currency} ${state.agoPrice}/L\n\nPetrol (PMS) Pumps:\n${state.pmsPumps.map(p => `${p.id}: Sales: ${formatNumber(p.salesL)} L, ${formatNumber(p.salesKsh)} ${state.companyData.currency}`).join("\n")}\n\nDiesel (AGO) Pumps:\n${state.agoPumps.map(p => `${p.id}: Sales: ${formatNumber(p.salesL)} L, ${formatNumber(p.salesKsh)} ${state.companyData.currency}`).join("\n")}\n\nDaily Expenses:\n${state.expenses.map(e => `${e.desc}: ${formatNumber(e.amount)} ${state.companyData.currency}`).join("\n")}\n\nTill/Mobile Payment: ${formatNumber(state.tillPayment)} ${state.companyData.currency}\n\nDaily Summary:\nTotal Petrol Sales: ${state.companyData.currency} ${formatNumber(summary.totalPmsSalesKsh, 2)}\nTotal Diesel Sales: ${state.companyData.currency} ${formatNumber(summary.totalAgoSalesKsh, 2)}\nTotal Revenue: ${state.companyData.currency} ${formatNumber(summary.totalRevenue, 2)}\nTill/Mobile Payment: ${state.companyData.currency} ${formatNumber(state.tillPayment, 2)}\nCash In Hand: ${state.companyData.currency} ${formatNumber(summary.cashInHand, 2)}\nTotal Expenses: ${state.companyData.currency} ${formatNumber(summary.totalExpenses, 2)}\nNet Income: ${state.companyData.currency} ${formatNumber(summary.netIncome, 2)}`;
+    return `Date: ${state.salesDate}\nShift: ${state.shift}\n\nFuel Tank Inventory:\nPetrol (PMS) Tank: Opening: ${formatNumber(state.pmsTankOpening)} L, Closing: ${formatNumber(state.pmsTankClosing)} L\nDiesel (AGO) Tank: Opening: ${formatNumber(state.agoTankOpening)} L, Closing: ${formatNumber(state.agoTankClosing)} L\n\nFuel Pricing:\nPetrol (PMS): ${state.companyData.currency} ${state.pmsPrice}/L\nDiesel (AGO): ${state.companyData.currency} ${state.agoPrice}/L\n\nPetrol (PMS) Pumps:\n${state.pmsPumps.map((p) => `${p.id}: Sales: ${formatNumber(p.salesL)} L, ${formatNumber(p.salesKsh)} ${state.companyData.currency}`).join("\n")}\n\nDiesel (AGO) Pumps:\n${state.agoPumps.map((p) => `${p.id}: Sales: ${formatNumber(p.salesL)} L, ${formatNumber(p.salesKsh)} ${state.companyData.currency}`).join("\n")}\n\nDaily Expenses:\n${state.expenses.map((e) => `${e.desc}: ${formatNumber(e.amount)} ${state.companyData.currency}`).join("\n")}\n\nTill/Mobile Payment: ${formatNumber(state.tillPayment)} ${state.companyData.currency}\n\nDaily Summary:\nTotal Petrol Sales: ${state.companyData.currency} ${formatNumber(summary.totalPmsSalesKsh, 2)}\nTotal Diesel Sales: ${state.companyData.currency} ${formatNumber(summary.totalAgoSalesKsh, 2)}\nTotal Revenue: ${state.companyData.currency} ${formatNumber(summary.totalRevenue, 2)}\nTill/Mobile Payment: ${state.companyData.currency} ${formatNumber(state.tillPayment, 2)}\nCash In Hand: ${state.companyData.currency} ${formatNumber(summary.cashInHand, 2)}\nTotal Expenses: ${state.companyData.currency} ${formatNumber(summary.totalExpenses, 2)}\nNet Income: ${state.companyData.currency} ${formatNumber(summary.netIncome, 2)}`;
   };
 
   return (
@@ -805,7 +808,7 @@ export default function SalesTracking() {
                       // Scroll to manual entry section
                       setTimeout(() => {
                         const dateSection = document.querySelector(
-                          '[data-section="date-shift"]'
+                          '[data-section="date-shift"]',
                         );
                         if (dateSection)
                           dateSection.scrollIntoView({ behavior: "smooth" });
@@ -856,7 +859,7 @@ export default function SalesTracking() {
                     <input
                       type="date"
                       value={editableResult.date || ""}
-                      onChange={e =>
+                      onChange={(e) =>
                         updateEditableField("date", e.target.value)
                       }
                       className="text-sm"
@@ -866,7 +869,7 @@ export default function SalesTracking() {
                     <label className="text-xs">Shift</label>
                     <select
                       value={editableResult.shift || ""}
-                      onChange={e =>
+                      onChange={(e) =>
                         updateEditableField("shift", e.target.value)
                       }
                       className="text-sm"
@@ -881,10 +884,10 @@ export default function SalesTracking() {
                     <input
                       type="number"
                       value={editableResult.tillAmount || 0}
-                      onChange={e =>
+                      onChange={(e) =>
                         updateEditableField(
                           "tillAmount",
-                          parseFloat(e.target.value) || 0
+                          parseFloat(e.target.value) || 0,
                         )
                       }
                       className="text-sm"
@@ -895,10 +898,10 @@ export default function SalesTracking() {
                     <input
                       type="number"
                       value={editableResult.cashAmount || 0}
-                      onChange={e =>
+                      onChange={(e) =>
                         updateEditableField(
                           "cashAmount",
-                          parseFloat(e.target.value) || 0
+                          parseFloat(e.target.value) || 0,
                         )
                       }
                       className="text-sm"
@@ -921,7 +924,7 @@ export default function SalesTracking() {
                           <input
                             type="text"
                             value={pump.name}
-                            onChange={e =>
+                            onChange={(e) =>
                               updateEditablePump(i, "name", e.target.value)
                             }
                             className="flex-1 min-w-0 px-2 py-1 rounded border text-xs"
@@ -929,7 +932,7 @@ export default function SalesTracking() {
                           />
                           <select
                             value={pump.fuelType}
-                            onChange={e =>
+                            onChange={(e) =>
                               updateEditablePump(i, "fuelType", e.target.value)
                             }
                             className="px-2 py-1 rounded border text-xs"
@@ -940,11 +943,11 @@ export default function SalesTracking() {
                           <input
                             type="number"
                             value={pump.salesAmount}
-                            onChange={e =>
+                            onChange={(e) =>
                               updateEditablePump(
                                 i,
                                 "salesAmount",
-                                parseFloat(e.target.value) || 0
+                                parseFloat(e.target.value) || 0,
                               )
                             }
                             className="w-24 px-2 py-1 rounded border text-xs"
@@ -973,7 +976,7 @@ export default function SalesTracking() {
                             <input
                               type="text"
                               value={expense.name}
-                              onChange={e =>
+                              onChange={(e) =>
                                 updateEditableExpense(i, "name", e.target.value)
                               }
                               className="flex-1 min-w-0 px-2 py-1 rounded border text-xs"
@@ -982,11 +985,11 @@ export default function SalesTracking() {
                             <input
                               type="number"
                               value={expense.amount}
-                              onChange={e =>
+                              onChange={(e) =>
                                 updateEditableExpense(
                                   i,
                                   "amount",
-                                  parseFloat(e.target.value) || 0
+                                  parseFloat(e.target.value) || 0,
                                 )
                               }
                               className="w-24 px-2 py-1 rounded border text-xs"
@@ -1068,7 +1071,7 @@ export default function SalesTracking() {
               <input
                 type="date"
                 value={state.salesDate}
-                onChange={e =>
+                onChange={(e) =>
                   dispatch({ type: "SET_SALES_DATE", payload: e.target.value })
                 }
               />
@@ -1077,7 +1080,7 @@ export default function SalesTracking() {
               <label>Shift</label>
               <select
                 value={state.shift}
-                onChange={e =>
+                onChange={(e) =>
                   dispatch({ type: "SET_SHIFT", payload: e.target.value })
                 }
               >
@@ -1105,7 +1108,7 @@ export default function SalesTracking() {
                 <input
                   type="number"
                   value={state.pmsTankOpening}
-                  onChange={e =>
+                  onChange={(e) =>
                     dispatch({
                       type: "SET_TANK_VALUES",
                       payload: {
@@ -1121,7 +1124,7 @@ export default function SalesTracking() {
                 <input
                   type="number"
                   value={state.pmsTankClosing}
-                  onChange={e =>
+                  onChange={(e) =>
                     dispatch({
                       type: "SET_TANK_VALUES",
                       payload: {
@@ -1145,7 +1148,7 @@ export default function SalesTracking() {
                 <input
                   type="number"
                   value={state.agoTankOpening}
-                  onChange={e =>
+                  onChange={(e) =>
                     dispatch({
                       type: "SET_TANK_VALUES",
                       payload: {
@@ -1161,7 +1164,7 @@ export default function SalesTracking() {
                 <input
                   type="number"
                   value={state.agoTankClosing}
-                  onChange={e =>
+                  onChange={(e) =>
                     dispatch({
                       type: "SET_TANK_VALUES",
                       payload: {
@@ -1188,7 +1191,7 @@ export default function SalesTracking() {
               <input
                 type="number"
                 value={state.pmsPrice}
-                onChange={e =>
+                onChange={(e) =>
                   dispatch({
                     type: "SET_PRICES",
                     payload: { pmsPrice: parseFloat(e.target.value) || 0 },
@@ -1202,7 +1205,7 @@ export default function SalesTracking() {
               <input
                 type="number"
                 value={state.agoPrice}
-                onChange={e =>
+                onChange={(e) =>
                   dispatch({
                     type: "SET_PRICES",
                     payload: { agoPrice: parseFloat(e.target.value) || 0 },
@@ -1246,12 +1249,12 @@ export default function SalesTracking() {
                       <input
                         type="number"
                         value={pump.openingKsh}
-                        onChange={e =>
+                        onChange={(e) =>
                           calculateSales(
                             index,
                             "pms",
                             "openingKsh",
-                            parseFloat(e.target.value) || 0
+                            parseFloat(e.target.value) || 0,
                           )
                         }
                         step="0.1"
@@ -1262,12 +1265,12 @@ export default function SalesTracking() {
                       <input
                         type="number"
                         value={pump.closingKsh}
-                        onChange={e =>
+                        onChange={(e) =>
                           calculateSales(
                             index,
                             "pms",
                             "closingKsh",
-                            parseFloat(e.target.value) || 0
+                            parseFloat(e.target.value) || 0,
                           )
                         }
                         step="0.1"
@@ -1278,12 +1281,12 @@ export default function SalesTracking() {
                       <input
                         type="number"
                         value={pump.openingL}
-                        onChange={e =>
+                        onChange={(e) =>
                           calculateSales(
                             index,
                             "pms",
                             "openingL",
-                            parseFloat(e.target.value) || 0
+                            parseFloat(e.target.value) || 0,
                           )
                         }
                         step="0.1"
@@ -1294,12 +1297,12 @@ export default function SalesTracking() {
                       <input
                         type="number"
                         value={pump.closingL}
-                        onChange={e =>
+                        onChange={(e) =>
                           calculateSales(
                             index,
                             "pms",
                             "closingL",
-                            parseFloat(e.target.value) || 0
+                            parseFloat(e.target.value) || 0,
                           )
                         }
                         step="0.1"
@@ -1355,12 +1358,12 @@ export default function SalesTracking() {
                       <input
                         type="number"
                         value={pump.openingKsh}
-                        onChange={e =>
+                        onChange={(e) =>
                           calculateSales(
                             index,
                             "ago",
                             "openingKsh",
-                            parseFloat(e.target.value) || 0
+                            parseFloat(e.target.value) || 0,
                           )
                         }
                         step="0.1"
@@ -1371,12 +1374,12 @@ export default function SalesTracking() {
                       <input
                         type="number"
                         value={pump.closingKsh}
-                        onChange={e =>
+                        onChange={(e) =>
                           calculateSales(
                             index,
                             "ago",
                             "closingKsh",
-                            parseFloat(e.target.value) || 0
+                            parseFloat(e.target.value) || 0,
                           )
                         }
                         step="0.1"
@@ -1387,12 +1390,12 @@ export default function SalesTracking() {
                       <input
                         type="number"
                         value={pump.openingL}
-                        onChange={e =>
+                        onChange={(e) =>
                           calculateSales(
                             index,
                             "ago",
                             "openingL",
-                            parseFloat(e.target.value) || 0
+                            parseFloat(e.target.value) || 0,
                           )
                         }
                         step="0.1"
@@ -1403,12 +1406,12 @@ export default function SalesTracking() {
                       <input
                         type="number"
                         value={pump.closingL}
-                        onChange={e =>
+                        onChange={(e) =>
                           calculateSales(
                             index,
                             "ago",
                             "closingL",
-                            parseFloat(e.target.value) || 0
+                            parseFloat(e.target.value) || 0,
                           )
                         }
                         step="0.1"
@@ -1458,7 +1461,7 @@ export default function SalesTracking() {
                       <input
                         type="text"
                         value={expense.desc}
-                        onChange={e =>
+                        onChange={(e) =>
                           updateExpense(index, "desc", e.target.value)
                         }
                         className="w-full bg-transparent border-none outline-none"
@@ -1469,7 +1472,7 @@ export default function SalesTracking() {
                       <input
                         type="number"
                         value={expense.amount}
-                        onChange={e =>
+                        onChange={(e) =>
                           updateExpense(index, "amount", e.target.value)
                         }
                         step="0.1"
@@ -1501,7 +1504,7 @@ export default function SalesTracking() {
             <input
               type="number"
               value={state.tillPayment}
-              onChange={e =>
+              onChange={(e) =>
                 dispatch({
                   type: "SET_TILL_PAYMENT",
                   payload: parseFloat(e.target.value) || 0,
@@ -1577,7 +1580,7 @@ export default function SalesTracking() {
           {Object.keys(state.salesHistory)
             .sort()
             .reverse()
-            .map(key => {
+            .map((key) => {
               const data = state.salesHistory[key];
               return (
                 <div key={key} className="history-item">
