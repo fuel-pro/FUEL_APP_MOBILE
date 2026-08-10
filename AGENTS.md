@@ -586,5 +586,11 @@ coexist on main:
   to city > municipality > town > county > village (was village-first). This
   fixes "Nawoitorong" → "Lodwar" for GPS coords 3.0970, 35.6138.
 - **Vercel env vars**: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`,
-  `SERPAPI_KEY`, `DEEPSEEK_API_KEY`, `QWEN_API_KEY`, `CRON_SECRET`. All
-  server-only (never VITE_-prefixed).
+  `SERPAPI_KEY` (serpapi.com, 100 free searches/mo, PREFERRED web search),
+  `SERPER_API_KEY` (serper.dev, fallback), `DEEPSEEK_API_KEY`,
+  `QWEN_API_KEY`, `CRON_SECRET`. All server-only (never VITE_-prefixed).
+  **Web search chain (ADDED 2026-08-10, commit f00184e)**: SerpApi → Serper →
+  free public EPRA pages. SerpApi is preferred when `SERPAPI_KEY` is set
+  (returns Google answer_box + organic snippets with official EPRA data).
+  Source labelled "AI-Verified" when SerpApi OR Serper returns real snippets;
+  "AI-Estimated" when only AI knowledge is used.
