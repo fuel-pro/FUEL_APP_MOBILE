@@ -18,7 +18,13 @@ import {
 } from "lucide-react";
 import { genSecret, verifyCode, formatSecret } from "@/react-app/lib/totp";
 import { trpc } from "@/providers/trpc";
-import { getFounderCredentials } from "@/react-app/lib/founder-auth";
+import {
+  getFounderCredentials,
+  changeFounderPassword,
+  saveFounder2FA,
+  loadFounder2FA,
+} from "@/react-app/lib/founder-auth";
+import { getSupabaseClient } from "@/supabase/client";
 
 const FOUNDER_PASSWORD_KEY = "fuelpro_founder_password";
 const FOUNDER_2FA_KEY = "fuelpro_founder_2fa";
@@ -118,17 +124,37 @@ export default function SecuritySection({ logAudit }: Props) {
 
   /* ─── Sync 2FA from backend ─── */
   useEffect(() => {
-    if (dbFounderSession?.twoFactorSecret) {
-      const config = {
-        enabled: dbFounderSession.twoFactorEnabled || false,
-        secret: dbFounderSession.twoFactorSecret,
-        verified: true,
-        createdAt: dbFounderSession.lastLoginAt || new Date().toISOString(),
-      };
-      setFaConfig(config);
-      // Also sync to localStorage for offline login
-      localStorage.setItem(FOUNDER_2FA_KEY, JSON.stringify(config));
-    }
+    // Load 2FA from cloud (profiles table) — the cross-device source of truth.
+    const loadCloud2FA = async () => {
+      const client = getSupabaseClient();
+      const { data: sess } = await client.auth.getSession();
+      if (sess?.user) {
+        const cloud2FA = await loadFounder2FA(sess.user.id);
+        if (cloud2FA.enabled && cloud2FA.secret) {
+          const config = {
+            enabled: true,
+            secret: cloud2FA.secret,
+            verified: true,
+            createdAt: new Date().toISOString(),
+          };
+          setFaConfig(config);
+          localStorage.setItem(FOUNDER_2FA_KEY, JSON.stringify(config));
+          return;
+        }
+      }
+      // Fall back to tRPC backend session, then localStorage.
+      if (dbFounderSession?.twoFactorSecret) {
+        const config = {
+          enabled: dbFounderSession.twoFactorEnabled || false,
+          secret: dbFounderSession.twoFactorSecret,
+          verified: true,
+          createdAt: dbFounderSession.lastLoginAt || new Date().toISOString(),
+        };
+        setFaConfig(config);
+        localStorage.setItem(FOUNDER_2FA_KEY, JSON.stringify(config));
+      }
+    };
+    loadCloud2FA();
     if (dbFounderSession?.contactEmail || dbFounderSession?.contactPhone) {
       const updated = {
         ...contact,
@@ -169,19 +195,9 @@ export default function SecuritySection({ logAudit }: Props) {
     upsertSession.mutate(updates);
   };
 
-  const handleChangePassword = () => {
+  const handleChangePassword = async () => {
     setPwError("");
     setPwSuccess("");
-    const stored = loadStoredPassword();
-    if (currentPw !== atob(stored.password)) {
-      setPwError("Current password is incorrect");
-      logAudit(
-        "Password Change Failed",
-        "Incorrect current password",
-        "danger",
-      );
-      return;
-    }
     if (newPw.length < 8) {
       setPwError("New password must be at least 8 characters");
       return;
@@ -190,17 +206,37 @@ export default function SecuritySection({ logAudit }: Props) {
       setPwError("New passwords do not match");
       return;
     }
-    const newHash = btoa(newPw);
-    localStorage.setItem(
-      FOUNDER_PASSWORD_KEY,
-      JSON.stringify({ ...stored, password: newHash }),
-    );
-
-    // Sync to backend
-    syncSessionToBackend({ passwordHash: newHash });
-
-    setPwSuccess("Password changed successfully");
-    logAudit("Password Changed", "Founder password updated", "success");
+    // Use Supabase Auth — the cross-device source of truth for passwords.
+    // (currentPw is verified implicitly: updateUser with a valid session
+    // already proves the caller is authenticated; Supabase requires the
+    // session to be active. We additionally re-signIn to verify currentPw.)
+    const client = getSupabaseClient();
+    const { data: sess } = await client.auth.getSession();
+    if (!sess?.user?.email) {
+      setPwError("Not signed in — cannot change password");
+      return;
+    }
+    const { error: reAuthError } = await client.auth.signInWithPassword({
+      email: sess.user.email,
+      password: currentPw,
+    });
+    if (reAuthError) {
+      setPwError("Current password is incorrect");
+      logAudit(
+        "Password Change Failed",
+        "Incorrect current password",
+        "danger",
+      );
+      return;
+    }
+    const result = await changeFounderPassword(newPw);
+    if (!result.success) {
+      setPwError(result.error || "Failed to change password");
+      logAudit("Password Change Failed", result.error || "error", "danger");
+      return;
+    }
+    setPwSuccess("Password changed successfully (synced to all devices)");
+    logAudit("Password Changed", "Founder password updated via Supabase", "success");
     setCurrentPw("");
     setNewPw("");
     setConfirmPw("");
@@ -229,18 +265,26 @@ export default function SecuritySection({ logAudit }: Props) {
         verified: true,
         createdAt: new Date().toISOString(),
       };
+      // Save to localStorage (offline cache) AND to the cloud (profiles
+      // table) so the 2FA secret is available on every device the founder
+      // signs in from.
       localStorage.setItem(FOUNDER_2FA_KEY, JSON.stringify(config));
       setFaConfig(config);
       setFaStep("list");
       setFaCode("");
 
-      // Sync to backend
+      // Sync to cloud (profiles table) + legacy tRPC backend
+      const client = getSupabaseClient();
+      const { data: sess } = await client.auth.getSession();
+      if (sess?.user) {
+        await saveFounder2FA(sess.user.id, true, config.secret);
+      }
       syncSessionToBackend({
         twoFactorEnabled: true,
         twoFactorSecret: config.secret,
       });
 
-      logAudit("2FA Enabled", "Two-factor authentication activated", "success");
+      logAudit("2FA Enabled", "Two-factor authentication activated (cross-device)", "success");
     } else {
       setFaError("Invalid code. Try again.");
       logAudit(
@@ -270,7 +314,12 @@ export default function SecuritySection({ logAudit }: Props) {
       setFaStep("list");
       setFaCode("");
 
-      // Sync to backend
+      // Sync to cloud (profiles table) + legacy tRPC backend
+      const client = getSupabaseClient();
+      const { data: sess } = await client.auth.getSession();
+      if (sess?.user) {
+        await saveFounder2FA(sess.user.id, false, null);
+      }
       syncSessionToBackend({ twoFactorEnabled: false, twoFactorSecret: "" });
 
       logAudit("2FA Disabled", "Two-factor authentication removed", "warning");

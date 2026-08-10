@@ -14,6 +14,7 @@ export interface FounderLoginResult {
   success: boolean;
   error?: string;
   role?: string;
+  userId?: string;
 }
 
 /** Attempt to log in to Founder panel via Supabase.
@@ -81,7 +82,7 @@ export async function loginFounder(
       }),
     );
 
-    return { success: true, role };
+    return { success: true, role, userId: data.user.id };
   } catch (err) {
     // NO FALLBACK - return error
     return {
@@ -89,6 +90,129 @@ export async function loginFounder(
       error:
         err instanceof Error ? err.message : "Unable to connect to Supabase",
     };
+  }
+}
+
+/** Send a password-reset email (Supabase email-link recovery flow).
+ *  The user clicks the link, lands on /reset-password, and sets a new
+ *  password. This is the cross-device "forgot password" path. */
+export async function requestPasswordReset(
+  emailOrUsername: string,
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const client = getSupabaseClient();
+    const email = emailOrUsername.includes("@")
+      ? emailOrUsername
+      : `${emailOrUsername}@fuelpro.local`;
+    const { error } = await client.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/#/reset-password`,
+    });
+    if (error) {
+      return { success: false, error: error.message };
+    }
+    return { success: true };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Unable to send reset email",
+    };
+  }
+}
+
+/** Change the signed-in founder's password via Supabase Auth (not
+ *  localStorage). This works cross-device because Supabase Auth is the
+ *  source of truth for passwords. */
+export async function changeFounderPassword(
+  newPassword: string,
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (newPassword.length < 8) {
+      return { success: false, error: "Password must be at least 8 characters" };
+    }
+    const client = getSupabaseClient();
+    const { error } = await client.auth.updateUser({ password: newPassword });
+    if (error) {
+      return { success: false, error: error.message };
+    }
+    // Record the timestamp on the profiles table (cross-device audit).
+    const { data: session } = await client.auth.getSession();
+    if (session?.user) {
+      await client
+        .from("profiles")
+        .update({ last_password_change: new Date().toISOString() })
+        .eq("id", session.user.id);
+    }
+    return { success: true };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Unable to change password",
+    };
+  }
+}
+
+/** Load the founder's 2FA config from the cloud (profiles table) so it is
+ *  consistent across all devices. Returns null if 2FA is not enabled. */
+export async function loadFounder2FA(
+  userId: string,
+): Promise<{ enabled: boolean; secret: string | null }> {
+  try {
+    const client = getSupabaseClient();
+    const { data, error } = await client
+      .from("profiles")
+      .select("two_factor_enabled, two_factor_secret")
+      .eq("id", userId)
+      .single();
+    if (error || !data) return { enabled: false, secret: null };
+    return {
+      enabled: !!data.two_factor_enabled,
+      secret: data.two_factor_secret || null,
+    };
+  } catch {
+    return { enabled: false, secret: null };
+  }
+}
+
+/** Save the founder's 2FA config to the cloud (profiles table). */
+export async function saveFounder2FA(
+  userId: string,
+  enabled: boolean,
+  secret: string | null,
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const client = getSupabaseClient();
+    const { error } = await client
+      .from("profiles")
+      .update({
+        two_factor_enabled: enabled,
+        two_factor_secret: secret,
+      })
+      .eq("id", userId);
+    if (error) return { success: false, error: error.message };
+    return { success: true };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Unable to save 2FA",
+    };
+  }
+}
+
+/** Get the founder's unique identifier (short human-friendly id) from the
+ *  profiles table. Falls back to the Supabase auth uid. */
+export async function getFounderUniqueId(
+  userId: string,
+): Promise<string | null> {
+  try {
+    const client = getSupabaseClient();
+    const { data } = await client
+      .from("profiles")
+      .select("unique_id")
+      .eq("id", userId)
+      .single();
+    return data?.unique_id || userId.slice(0, 8);
+  } catch {
+    return userId.slice(0, 8);
   }
 }
 

@@ -56,6 +56,8 @@ import {
   CloudOff,
 } from "lucide-react";
 import { loginFounder } from "@/react-app/lib/founder-auth";
+import { requestPasswordReset } from "@/react-app/lib/founder-auth";
+import { loadFounder2FA } from "@/react-app/lib/founder-auth";
 import {
   SecuritySection,
   BackupSection,
@@ -334,6 +336,15 @@ export default function FounderAccess() {
   const [loginAttempts, setLoginAttempts] = useState(0);
   const [isLocked, setIsLocked] = useState(false);
   const [needs2FA, setNeeds2FA] = useState(false);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotStatus, setForgotStatus] = useState<{
+    sent: boolean;
+    error?: string;
+  }>({ sent: false });
+  const [forgotSending, setForgotSending] = useState(false);
+  const [founderUniqueId, setFounderUniqueId] = useState<string | null>(null);
+  const [founderUserId, setFounderUserId] = useState<string | null>(null);
 
   /* ─── Admin State ─── */
   const [activeSection, setActiveSection] = useState<SectionId>("overview");
@@ -565,16 +576,25 @@ export default function FounderAccess() {
     const result = await loginFounder(loginUsername.trim(), loginPassword);
 
     if (result.success) {
-      // Check if 2FA is enabled
-      let faConfig: FAConfig | null = null;
-      try {
-        const faSaved = localStorage.getItem(FOUNDER_2FA_KEY);
-        if (faSaved) faConfig = JSON.parse(faSaved);
-      } catch {
-        /* */
+      setFounderUserId(result.userId || null);
+      // Fetch the unique identifier for display.
+      if (result.userId) {
+        import("@/react-app/lib/founder-auth").then((m) => {
+          m.getFounderUniqueId(result.userId!).then(setFounderUniqueId);
+        });
       }
 
-      if (faConfig?.enabled && faConfig?.secret) {
+      // Check if 2FA is enabled — load from CLOUD (profiles table), not
+      // localStorage, so it is consistent across all devices.
+      let faEnabled = false;
+      let faSecret: string | null = null;
+      if (result.userId) {
+        const cloud2FA = await loadFounder2FA(result.userId);
+        faEnabled = cloud2FA.enabled;
+        faSecret = cloud2FA.secret;
+      }
+
+      if (faEnabled && faSecret) {
         setNeeds2FA(true);
         setLoginError("");
         return;
@@ -673,22 +693,35 @@ export default function FounderAccess() {
       return;
     }
 
-    let faConfig: FAConfig | null = null;
-    try {
-      const faSaved = localStorage.getItem(FOUNDER_2FA_KEY);
-      if (faSaved) faConfig = JSON.parse(faSaved);
-    } catch {
-      /* */
+    // Load the 2FA secret from CLOUD (profiles table) — not localStorage —
+    // so it works on any device the founder signs in from.
+    let secret: string | null = null;
+    if (founderUserId) {
+      const cloud2FA = await loadFounder2FA(founderUserId);
+      secret = cloud2FA.secret;
+    }
+    if (!secret) {
+      // Fallback: legacy localStorage (for accounts set up before the cloud
+      // migration on this device).
+      try {
+        const faSaved = localStorage.getItem(FOUNDER_2FA_KEY);
+        if (faSaved) {
+          const cfg = JSON.parse(faSaved);
+          secret = cfg?.secret || null;
+        }
+      } catch {
+        /* */
+      }
     }
 
-    if (!faConfig?.secret) {
+    if (!secret) {
       setLoginError("2FA configuration error");
       return;
     }
 
     const { verifyCode: verify } = await import("@/react-app/lib/totp");
-    const secret = atob(faConfig.secret);
-    const valid = await verify(secret, login2FACode);
+    const decodedSecret = atob(secret);
+    const valid = await verify(decodedSecret, login2FACode);
 
     if (valid) {
       completeLogin();
@@ -696,6 +729,30 @@ export default function FounderAccess() {
       setLoginError("Invalid 2FA code");
       logAudit("2FA Login Failed", "Invalid TOTP code", "danger");
     }
+  };
+
+  /* ─── Forgot Password ─── */
+  const handleForgotPassword = async () => {
+    setForgotStatus({ sent: false });
+    setForgotSending(true);
+    const email = forgotEmail.trim() || loginUsername.trim();
+    if (!email) {
+      setForgotStatus({ sent: false, error: "Enter your username or email" });
+      setForgotSending(false);
+      return;
+    }
+    const result = await requestPasswordReset(email);
+    if (result.success) {
+      setForgotStatus({ sent: true });
+      logAudit(
+        "Password Reset Requested",
+        `Reset email sent for ${email}`,
+        "warning",
+      );
+    } else {
+      setForgotStatus({ sent: false, error: result.error });
+    }
+    setForgotSending(false);
   };
 
   /* ─── Logout ─── */
@@ -915,6 +972,90 @@ export default function FounderAccess() {
                 >
                   <Shield size={18} /> {isLocked ? "Locked" : "Authenticate"}
                 </button>
+
+                {/* Forgot Password toggle */}
+                {!showForgotPassword ? (
+                  <button
+                    onClick={() => {
+                      setShowForgotPassword(true);
+                      setForgotStatus({ sent: false });
+                      setForgotEmail(loginUsername);
+                    }}
+                    className="w-full mt-3 text-xs text-gray-500 hover:text-amber-400 transition-colors flex items-center justify-center gap-1.5"
+                  >
+                    <Mail size={12} /> Forgot password? Reset via email
+                  </button>
+                ) : (
+                  <div className="mt-4 p-4 bg-white/[0.03] border border-white/[0.08] rounded-xl space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-medium text-amber-400 flex items-center gap-1.5">
+                        <Key size={14} /> Password Reset
+                      </span>
+                      <button
+                        onClick={() => {
+                          setShowForgotPassword(false);
+                          setForgotStatus({ sent: false });
+                        }}
+                        className="text-gray-500 hover:text-white"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                    {forgotStatus.sent ? (
+                      <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-lg flex items-start gap-2">
+                        <CheckCircle2
+                          size={14}
+                          className="mt-0.5 text-green-400 flex-shrink-0"
+                        />
+                        <p className="text-xs text-green-300">
+                          Reset link sent to your email. Click the link to set
+                          a new password, then return here to sign in.
+                        </p>
+                      </div>
+                    ) : (
+                      <>
+                        <p className="text-[11px] text-gray-500">
+                          Enter your username or email. A password-reset link
+                          will be emailed to you.
+                        </p>
+                        <input
+                          type="text"
+                          value={forgotEmail}
+                          onChange={(e) => setForgotEmail(e.target.value)}
+                          onKeyDown={(e) =>
+                            e.key === "Enter" && handleForgotPassword()
+                          }
+                          placeholder="Username or email"
+                          className="w-full px-4 py-2.5 bg-white/[0.05] border border-white/[0.1] rounded-lg text-white text-sm placeholder-gray-500 focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none"
+                        />
+                        {forgotStatus.error && (
+                          <p className="text-xs text-red-400">
+                            {forgotStatus.error}
+                          </p>
+                        )}
+                        <button
+                          onClick={handleForgotPassword}
+                          disabled={forgotSending}
+                          className="w-full py-2.5 bg-white/10 hover:bg-white/15 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                        >
+                          {forgotSending ? (
+                            <>
+                              <RefreshCw
+                                size={14}
+                                className="animate-spin"
+                              />{" "}
+                              Sending…
+                            </>
+                          ) : (
+                            <>
+                              <Mail size={14} /> Send Reset Link
+                            </>
+                          )}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
               </>
             ) : (
               <>
@@ -968,13 +1109,20 @@ export default function FounderAccess() {
               </>
             )}
 
-            <div className="mt-4 flex items-center gap-2 justify-center">
+            <div className="mt-4 flex items-center gap-2 justify-center flex-wrap">
               <Lock size={10} className="text-gray-600" />
               <p className="text-[10px] text-gray-600">
-                Encrypted local storage. 5-attempt lockout.{" "}
-                {needs2FA ? "2FA protected." : ""}
+                Supabase Auth. 5-attempt lockout.{" "}
+                {needs2FA ? "2FA protected (cross-device)." : ""}
               </p>
             </div>
+            {founderUniqueId && (
+              <div className="mt-2 text-center">
+                <span className="text-[9px] text-gray-700 font-mono">
+                  ID: {founderUniqueId}
+                </span>
+              </div>
+            )}
           </div>
         </div>
       </div>
