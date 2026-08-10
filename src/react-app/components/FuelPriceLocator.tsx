@@ -179,9 +179,32 @@ export default function FuelPriceLocator() {
     if (lat && lng) {
       try {
         const apiBase = fuelApiBase();
-        const apiUrl = `${apiBase}/api/fuel-local?lat=${lat}&lon=${lng}&cb=${Date.now()}`;
-        const response = await fetch(apiUrl);
-        if (response.ok) {
+        const apiPath = `/api/fuel-local?lat=${lat}&lon=${lng}&cb=${Date.now()}`;
+        let response: Response | null = null;
+
+        if (apiBase) {
+          // Cross-origin (Cloudflare → Vercel): the deployed Vercel API may
+          // not have CORS headers yet. Try direct first, then fall back to a
+          // CORS proxy if the browser blocks the cross-origin response.
+          try {
+            response = await fetch(`${apiBase}${apiPath}`);
+          } catch {
+            // Network/CORS error — try via CORS proxy
+          }
+          if (!response || !response.ok) {
+            try {
+              const proxied = `https://api.allorigins.win/raw?url=${encodeURIComponent(`${apiBase}${apiPath}`)}`;
+              response = await fetch(proxied);
+            } catch {
+              // Proxy also failed — fall through to offline fallback
+            }
+          }
+        } else {
+          // Same-origin on Vercel — direct fetch, no CORS issues
+          response = await fetch(apiPath);
+        }
+
+        if (response && response.ok) {
           const data: NearbyPriceResult = await response.json();
           if (data.success && data.prices) {
             // /api/fuel-local returns super_petrol/diesel/kerosene as numbers.
