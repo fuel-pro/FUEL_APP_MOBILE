@@ -772,7 +772,83 @@ never in the client bundle):
 ## 2026-08-10 deploy state (commit 2edda45)
 
 Git HEAD = origin/main = 2edda45 ("feat: cross-device founder auth — cloud
-2FA, forgot password, unique ID"). Vercel production READY, aliased to
+2FA, forgot-password, unique ID"). Vercel production READY, aliased to
 fuel-app-mobile.vercel.app (bundle `index-CBkT6CGK.js` + lazy chunk
 `founder-FznFW3ku.js`). Cloudflare Pages mirror live
 (fuel-app-mobile.pages.dev, preview fce6fd74).
+
+## Village-level REAL fuel prices — no estimates (ADDED 2026-08-10, PR #100, commit ea0bb41)
+
+**Requirement**: narrow fuel-price location to village/town/center level and
+show ONLY real/actual prices — no estimates or generalizations of national
+prices to a village.
+
+**What was removed (the estimation that violated the requirement)**:
+- `api/lib/fuel-engine.ts`: deleted `estimateKenyaPrices()` + `EPRA_KE_PRICES`
+  (town→price map) + `KE_REMOTENESS` (county→factor map). These fabricated
+  prices for unlisted Kenyan towns by interpolating between Nairobi (baseline)
+  and Mandera (max) via a remoteness factor. The result was tagged
+  "AI-Estimated" but presented as real data.
+- `api/_lib/hybrid-fetcher.ts`: deleted `estimatePricesFromKnowledge()` which
+  asked the LLM to guess prices from its training knowledge when no web search
+  was configured (also labelled "AI-Estimated").
+
+**What stays (all REAL data, no fabrication)**:
+- `EPRA_KE_REFERENCE` (`fuel-engine.ts`): a pure real-price table of 11 EPRA
+  towns for the current cycle. Used ONLY for an exact town-name match — the AI
+  is told NOT to interpolate between towns.
+- AI extraction (`buildAiPrompt` / `EXTRACTION_SYSTEM_PROMPT`): EXTRACTS
+  verbatim prices from search snippets; explicitly forbidden to estimate,
+  interpolate, or generalize. Returns `null` for any price not explicitly
+  stated for the exact location.
+- Source labels: `AI-Verified` (live SerpApi/Serper snippets) and `Published
+  Reference` (official EPRA pages / reference table) — both real data. The
+  `AI-Estimated` label is GONE from the server path.
+- The ONLY fallback: PostGIS `get_nearest_fuel` nearest-neighbour returns a
+  REAL nearby price tagged `Approx. (nearest: <town>, X km)` with
+  `is_approximate: true` + `nearest_town` + `distance_km`. Real data from a
+  nearby priced location, not a fabricated estimate. When all prices are null
+  the frontend shows "N/A".
+
+**Village-level geocoding** (both impls):
+- `fuel-engine.ts` `getPlaceName()` + `_lib/geocoding.ts` `getExactLocation()`:
+  Nominatim zoom=14 (village/suburb detail) with zoom=18 fallback when zoom=14
+  only yields a state/county. Priority order: village > hamlet > town > city >
+  municipality > suburb > neighbourhood > locality > county > state_district >
+  state. Was zoom=10 (city-level) / state-level. Verified live: Nawoitorong
+  (Lodwar area), Nairobi, Mombasa all resolve to the correct village/town.
+  NOTE: Nominatim is nondeterministic — for sparse-data locations (e.g.
+  Kakuma) it sometimes only returns the state ("Turkana") regardless of zoom;
+  this is an OSM replica limitation, not a code issue. The engine then queries
+  for the best available name and uses real prices (no fabrication).
+
+**Bug fixes bundled in**:
+- `hybrid-fetcher.ts` RPC name `get_nearest_fuel_prices` → `get_nearest_fuel`
+  (the variant in migration 012; the old name returned PGRST202/no result).
+- `hybrid-fetcher.ts` reads both `super_petrol` and `petrol` price keys so
+  cached rows written by either engine are interchangeable.
+
+**Frontend**:
+- `api/fuel-local.ts`: exposes the resolved village name under both
+  `locationName` and `location` for the client.
+- `FuelPriceLocator.tsx`: shows the resolved village name for exact matches
+  (was showing raw GPS coords); nearest-match shows `town (X km away)`.
+- The client-side OFFLINE fallback (`getClosestKenyaCityPrice` + transport
+  surcharge, labelled "EPRA Estimate (offline)") is RETAINED — it only
+  activates when the Vercel API is completely unreachable (no network) and is
+  clearly labeled "offline". It is NOT the server engine path.
+
+**Deploy status 2026-08-10**:
+- GitHub main: commit `ea0bb41` (PR #100 merged). All GitHub Actions CI pass
+  (Build, Lint, TypeCheck, Unit/E2E, CodeQL, Analyze).
+- Cloudflare Pages: LIVE (preview https://2f29f346.fuel-app-mobile.pages.dev +
+  main alias fuel-app-mobile.pages.dev, bundle `index-pZovDNsx.js`).
+- Vercel production: BLOCKED by `api-deployments-free-per-day` (100/day
+  exhausted; quota resets ~04:31 UTC Aug 11). The project has Git integration
+  (repo FUEL_APP_MOBILE, prodBranch main, buildCommand
+  `npm install --legacy-peer-deps && npm run build`) so it will auto-deploy the
+  merged main once the quota resets, OR a manual `vercel deploy --prebuilt
+  --prod` / git-source API deploy can be triggered then. Until then Vercel
+  production still serves the OLD commit 2edda45 (with "AI-Estimated" prices).
+  The Cloudflare mirror has the fixed code NOW but serves ONLY the SPA — the
+  /api/fuel-local endpoint works ONLY on Vercel.
