@@ -125,7 +125,7 @@ export function GeoProvider({ children }: { children: React.ReactNode }) {
         ).toUpperCase();
         const config = WORLD_PAYMENT_CONFIGS[cc];
         if (config) {
-          setGeo(prev => ({
+          setGeo((prev) => ({
             ...prev,
             countryCode: cc,
             countryName: config.countryName,
@@ -159,13 +159,13 @@ export function GeoProvider({ children }: { children: React.ReactNode }) {
           return `en-${cc}`;
         }
       };
-      setGeo(prev => ({
+      setGeo((prev) => ({
         ...prev,
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         locale: getLocale(countryCode, currency),
       }));
     },
-    []
+    [],
   );
 
   const setCountry = useCallback(
@@ -194,29 +194,29 @@ export function GeoProvider({ children }: { children: React.ReactNode }) {
           latitude: newGeo.lat,
           longitude: newGeo.lon,
           detectedAt: new Date().toISOString(),
-        })
+        }),
       );
 
       // Notify
       getEventBus().emit(Events.LOCATION_UPDATED, newGeo);
     },
-    [geo, updateTimezoneLocale]
+    [geo, updateTimezoneLocale],
   );
 
   const refreshLocation = useCallback(() => {
-    setGeo(prev => ({ ...prev, isLoading: true }));
+    setGeo((prev) => ({ ...prev, isLoading: true }));
 
     if (!navigator.geolocation) {
-      setGeo(prev => ({ ...prev, isLoading: false }));
+      setGeo((prev) => ({ ...prev, isLoading: false }));
       return;
     }
 
     navigator.geolocation.getCurrentPosition(
-      async pos => {
+      async (pos) => {
         try {
           const res = await fetch(
             `https://nominatim.openstreetmap.org/reverse?lat=${pos.coords.latitude}&lon=${pos.coords.longitude}&format=json`,
-            { headers: { "Accept-Language": "en" } }
+            { headers: { "Accept-Language": "en" } },
           );
           const data = await res.json();
           const cc = data.address?.country_code?.toUpperCase();
@@ -249,12 +249,12 @@ export function GeoProvider({ children }: { children: React.ReactNode }) {
                 city: newGeo.city,
                 address: newGeo.address,
                 detectedAt: newGeo.detectedAt,
-              })
+              }),
             );
 
             getEventBus().emit(Events.LOCATION_UPDATED, newGeo);
           } else {
-            setGeo(prev => ({
+            setGeo((prev) => ({
               ...prev,
               isLoading: false,
               lat: pos.coords.latitude,
@@ -263,7 +263,7 @@ export function GeoProvider({ children }: { children: React.ReactNode }) {
           }
         } catch (err) {
           console.warn("[useGeo] Failed to fetch location details:", err);
-          setGeo(prev => ({
+          setGeo((prev) => ({
             ...prev,
             isLoading: false,
             lat: pos.coords.latitude,
@@ -271,8 +271,8 @@ export function GeoProvider({ children }: { children: React.ReactNode }) {
           }));
         }
       },
-      () => setGeo(prev => ({ ...prev, isLoading: false })),
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      () => setGeo((prev) => ({ ...prev, isLoading: false })),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
     );
   }, [geo, updateTimezoneLocale]);
 

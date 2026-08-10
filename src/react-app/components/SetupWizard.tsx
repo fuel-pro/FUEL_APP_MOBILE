@@ -20,7 +20,11 @@ import {
 } from "lucide-react";
 import { useFuel } from "../context/FuelContext";
 import { useStations } from "../context/StationContext";
-import { getFuelPrices, getDisplayPrices, FuelPrices } from "../services/FuelPriceService";
+import {
+  getFuelPrices,
+  getDisplayPrices,
+  FuelPrices,
+} from "../services/FuelPriceService";
 import { getCountryFromLocation } from "../lib/world-country-utils";
 import { getCurrencySymbol as getCurrencySymbolForCode } from "../lib/currency";
 
@@ -64,13 +68,19 @@ interface SetupWizardProps {
   onAccessShared?: () => void;
 }
 
-export default function SetupWizard({ onComplete, onAccessShared }: SetupWizardProps) {
+export default function SetupWizard({
+  onComplete,
+  onAccessShared,
+}: SetupWizardProps) {
   const { state, dispatch } = useFuel();
   const { createStation, switchStation } = useStations();
   const [currentStep, setCurrentStep] = useState(1);
-  const [autoDetectedPrices, setAutoDetectedPrices] = useState<FuelPrices | null>(null);
+  const [autoDetectedPrices, setAutoDetectedPrices] =
+    useState<FuelPrices | null>(null);
   const [isDetectingPrices, setIsDetectingPrices] = useState(false);
-  const [priceDetectionError, setPriceDetectionError] = useState<string | null>(null);
+  const [priceDetectionError, setPriceDetectionError] = useState<string | null>(
+    null,
+  );
 
   // Get default prices - try to auto-detect on mount
   const getDefaultPrices = () => {
@@ -102,27 +112,29 @@ export default function SetupWizard({ onComplete, onAccessShared }: SetupWizardP
     const detectPrices = async () => {
       setIsDetectingPrices(true);
       setPriceDetectionError(null);
-      
+
       try {
         const prices = await getFuelPrices(data.location || undefined);
         setAutoDetectedPrices(prices);
-        
+
         // Update the data state with detected prices
-        setData(prev => ({
+        setData((prev) => ({
           ...prev,
           pmsPrice: prices.petrolPrice,
           agoPrice: prices.dieselPrice,
         }));
-        
+
         console.log("[SetupWizard] Auto-detected prices:", prices);
       } catch (error) {
         console.error("[SetupWizard] Failed to detect prices:", error);
-        setPriceDetectionError("Could not auto-detect prices. Using default values.");
+        setPriceDetectionError(
+          "Could not auto-detect prices. Using default values.",
+        );
       } finally {
         setIsDetectingPrices(false);
       }
     };
-    
+
     detectPrices();
     // Re-detect when the user-entered location changes so prices track the
     // station's real country instead of the CDN/browser timezone.
@@ -132,11 +144,11 @@ export default function SetupWizard({ onComplete, onAccessShared }: SetupWizardP
   const refreshPrices = async () => {
     setIsDetectingPrices(true);
     setPriceDetectionError(null);
-    
+
     try {
       const prices = await getFuelPrices(data.location || undefined);
       setAutoDetectedPrices(prices);
-      setData(prev => ({
+      setData((prev) => ({
         ...prev,
         pmsPrice: prices.petrolPrice,
         agoPrice: prices.dieselPrice,
@@ -149,7 +161,7 @@ export default function SetupWizard({ onComplete, onAccessShared }: SetupWizardP
   };
 
   const updateField = (field: keyof WizardData, value: string | number) => {
-    setData(prev => ({ ...prev, [field]: value }));
+    setData((prev) => ({ ...prev, [field]: value }));
   };
 
   const canProceed = () => {
@@ -305,7 +317,7 @@ export default function SetupWizard({ onComplete, onAccessShared }: SetupWizardP
 
       // Read existing stations
       const existingData = localStorage.getItem("fuelpro_stations_v3");
-      let existing = existingData
+      const existing = existingData
         ? JSON.parse(existingData)
         : { stations: [], version: "3.0" };
 
@@ -338,11 +350,11 @@ export default function SetupWizard({ onComplete, onAccessShared }: SetupWizardP
     })();
     localStorage.setItem(
       `fuelpro_station_${newStationId || "default"}_name`,
-      data.stationName || "My Fuel Station"
+      data.stationName || "My Fuel Station",
     );
     localStorage.setItem(
       `fuelpro_station_${newStationId || "default"}_location`,
-      data.location || detectedLocation || "Main Station Location"
+      data.location || detectedLocation || "Main Station Location",
     );
 
     // Mark setup complete and signal completion
@@ -360,8 +372,8 @@ export default function SetupWizard({ onComplete, onAccessShared }: SetupWizardP
         return <PumpsStep data={data} updateField={updateField} />;
       case 4:
         return (
-          <PricingStep 
-            data={data} 
+          <PricingStep
+            data={data}
             updateField={updateField}
             isDetectingPrices={isDetectingPrices}
             autoDetectedPrices={autoDetectedPrices}
@@ -451,7 +463,7 @@ export default function SetupWizard({ onComplete, onAccessShared }: SetupWizardP
           {/* Navigation */}
           <div className="flex justify-between mt-8 pt-6 border-t border-slate-200 dark:border-slate-700">
             <button
-              onClick={() => setCurrentStep(s => s - 1)}
+              onClick={() => setCurrentStep((s) => s - 1)}
               disabled={currentStep === 1}
               className="flex items-center gap-2 px-4 py-2 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
             >
@@ -461,7 +473,7 @@ export default function SetupWizard({ onComplete, onAccessShared }: SetupWizardP
 
             {currentStep < 5 ? (
               <button
-                onClick={() => setCurrentStep(s => s + 1)}
+                onClick={() => setCurrentStep((s) => s + 1)}
                 disabled={!canProceed()}
                 className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-medium rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-amber-500/30"
               >
@@ -515,7 +527,7 @@ function StationInfoStep({ data, updateField }: StepProps) {
           <input
             type="text"
             value={data.stationName}
-            onChange={e => updateField("stationName", e.target.value)}
+            onChange={(e) => updateField("stationName", e.target.value)}
             placeholder="e.g., Sunrise Petrol Station"
             className="w-full pl-10 pr-4 py-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none transition-all text-slate-900 dark:text-white"
           />
@@ -531,7 +543,7 @@ function StationInfoStep({ data, updateField }: StepProps) {
           <input
             type="text"
             value={data.location}
-            onChange={e => updateField("location", e.target.value)}
+            onChange={(e) => updateField("location", e.target.value)}
             placeholder="e.g., Mombasa Road, Nairobi"
             className="w-full pl-10 pr-4 py-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none transition-all text-slate-900 dark:text-white"
           />
@@ -548,7 +560,7 @@ function StationInfoStep({ data, updateField }: StepProps) {
             <input
               type="tel"
               value={data.contacts}
-              onChange={e => updateField("contacts", e.target.value)}
+              onChange={(e) => updateField("contacts", e.target.value)}
               placeholder="e.g., 0712 345 678"
               className="w-full pl-10 pr-4 py-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none transition-all text-slate-900 dark:text-white"
             />
@@ -563,7 +575,7 @@ function StationInfoStep({ data, updateField }: StepProps) {
             <input
               type="email"
               value={data.email}
-              onChange={e => updateField("email", e.target.value)}
+              onChange={(e) => updateField("email", e.target.value)}
               placeholder="e.g., info@station.co.ke"
               className="w-full pl-10 pr-4 py-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none transition-all text-slate-900 dark:text-white"
             />
@@ -598,7 +610,7 @@ function TanksStep({ data, updateField }: StepProps) {
             <input
               type="number"
               value={data.pmsTankCapacity}
-              onChange={e =>
+              onChange={(e) =>
                 updateField("pmsTankCapacity", Number(e.target.value))
               }
               className="w-full px-3 py-2 bg-white dark:bg-slate-700 border border-green-300 dark:border-green-700 rounded-lg focus:ring-2 focus:ring-green-500 outline-none text-slate-900 dark:text-white"
@@ -611,7 +623,7 @@ function TanksStep({ data, updateField }: StepProps) {
             <input
               type="number"
               value={data.pmsTankOpening}
-              onChange={e =>
+              onChange={(e) =>
                 updateField("pmsTankOpening", Number(e.target.value))
               }
               className="w-full px-3 py-2 bg-white dark:bg-slate-700 border border-green-300 dark:border-green-700 rounded-lg focus:ring-2 focus:ring-green-500 outline-none text-slate-900 dark:text-white"
@@ -636,7 +648,7 @@ function TanksStep({ data, updateField }: StepProps) {
             <input
               type="number"
               value={data.agoTankCapacity}
-              onChange={e =>
+              onChange={(e) =>
                 updateField("agoTankCapacity", Number(e.target.value))
               }
               className="w-full px-3 py-2 bg-white dark:bg-slate-700 border border-amber-300 dark:border-amber-700 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none text-slate-900 dark:text-white"
@@ -649,7 +661,7 @@ function TanksStep({ data, updateField }: StepProps) {
             <input
               type="number"
               value={data.agoTankOpening}
-              onChange={e =>
+              onChange={(e) =>
                 updateField("agoTankOpening", Number(e.target.value))
               }
               className="w-full px-3 py-2 bg-white dark:bg-slate-700 border border-amber-300 dark:border-amber-700 rounded-lg focus:ring-2 focus:ring-amber-500 outline-none text-slate-900 dark:text-white"
@@ -706,13 +718,13 @@ function PumpsStep({ data, updateField }: StepProps) {
         <PumpCounter
           label="PMS Pumps"
           value={data.pmsCount}
-          onChange={n => updateField("pmsCount", n)}
+          onChange={(n) => updateField("pmsCount", n)}
           color="bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-green-800 dark:text-green-200"
         />
         <PumpCounter
           label="AGO Pumps"
           value={data.agoCount}
-          onChange={n => updateField("agoCount", n)}
+          onChange={(n) => updateField("agoCount", n)}
           color="bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200"
         />
       </div>
@@ -727,7 +739,14 @@ function PumpsStep({ data, updateField }: StepProps) {
   );
 }
 
-function PricingStep({ data, updateField, isDetectingPrices, autoDetectedPrices, onRefreshPrices, priceDetectionError }: StepProps & {
+function PricingStep({
+  data,
+  updateField,
+  isDetectingPrices,
+  autoDetectedPrices,
+  onRefreshPrices,
+  priceDetectionError,
+}: StepProps & {
   isDetectingPrices?: boolean;
   autoDetectedPrices?: FuelPrices | null;
   onRefreshPrices?: () => void;
@@ -827,7 +846,7 @@ function PricingStep({ data, updateField, isDetectingPrices, autoDetectedPrices,
             <input
               type="number"
               value={data.pmsPrice}
-              onChange={e => updateField("pmsPrice", Number(e.target.value))}
+              onChange={(e) => updateField("pmsPrice", Number(e.target.value))}
               className="w-full pl-14 pr-4 py-4 text-2xl font-bold bg-white dark:bg-slate-700 border border-green-300 dark:border-green-700 rounded-xl focus:ring-2 focus:ring-green-500 outline-none text-slate-900 dark:text-white text-center"
             />
           </div>
@@ -851,7 +870,7 @@ function PricingStep({ data, updateField, isDetectingPrices, autoDetectedPrices,
             <input
               type="number"
               value={data.agoPrice}
-              onChange={e => updateField("agoPrice", Number(e.target.value))}
+              onChange={(e) => updateField("agoPrice", Number(e.target.value))}
               className="w-full pl-14 pr-4 py-4 text-2xl font-bold bg-white dark:bg-slate-700 border border-amber-300 dark:border-amber-700 rounded-xl focus:ring-2 focus:ring-amber-500 outline-none text-slate-900 dark:text-white text-center"
             />
           </div>
@@ -889,7 +908,9 @@ function KRAStep({ data, updateField }: StepProps) {
           <input
             type="text"
             value={data.kraPin}
-            onChange={e => updateField("kraPin", e.target.value.toUpperCase())}
+            onChange={(e) =>
+              updateField("kraPin", e.target.value.toUpperCase())
+            }
             placeholder="e.g., P001234567X"
             className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none transition-all text-slate-900 dark:text-white"
           />
@@ -901,7 +922,7 @@ function KRAStep({ data, updateField }: StepProps) {
           <input
             type="text"
             value={data.vatRegNo}
-            onChange={e => updateField("vatRegNo", e.target.value)}
+            onChange={(e) => updateField("vatRegNo", e.target.value)}
             placeholder="Optional"
             className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none transition-all text-slate-900 dark:text-white"
           />
@@ -915,7 +936,7 @@ function KRAStep({ data, updateField }: StepProps) {
         <input
           type="text"
           value={data.physicalAddress}
-          onChange={e => updateField("physicalAddress", e.target.value)}
+          onChange={(e) => updateField("physicalAddress", e.target.value)}
           placeholder="e.g., Plot 123, Mombasa Road, Nairobi"
           className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none transition-all text-slate-900 dark:text-white"
         />
@@ -928,7 +949,7 @@ function KRAStep({ data, updateField }: StepProps) {
         <input
           type="text"
           value={data.etrSerialNo}
-          onChange={e => updateField("etrSerialNo", e.target.value)}
+          onChange={(e) => updateField("etrSerialNo", e.target.value)}
           placeholder="Optional - from your ETR device"
           className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none transition-all text-slate-900 dark:text-white"
         />

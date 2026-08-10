@@ -26,15 +26,15 @@
 
 ## 🏢 Repository Overview
 
-| Property | Value |
-|-----------|-------|
-| **Repository** | `fuel-pro/FUEL_APP_MOBILE` |
-| **Type** | Fuel Station Management System (SaaS) |
-| **Frontend** | React 19 + TypeScript + Vite |
-| **Cloud** | Firebase (Auth + Firestore) |
-| **Deployment** | Vercel (Static SPA) |
-| **Mobile** | Capacitor (Android/iOS) |
-| **Desktop** | Electron (Windows/Mac/Linux) |
+| Property       | Value                                 |
+| -------------- | ------------------------------------- |
+| **Repository** | `fuel-pro/FUEL_APP_MOBILE`            |
+| **Type**       | Fuel Station Management System (SaaS) |
+| **Frontend**   | React 19 + TypeScript + Vite          |
+| **Cloud**      | Firebase (Auth + Firestore)           |
+| **Deployment** | Vercel (Static SPA)                   |
+| **Mobile**     | Capacitor (Android/iOS)               |
+| **Desktop**    | Electron (Windows/Mac/Linux)          |
 
 ---
 
@@ -74,26 +74,31 @@
 ## 🛠️ Tech Stack
 
 ### Core
+
 - **React**: 19.2.7
 - **TypeScript**: 5.8.3
 - **Vite**: 6.0.0
 - **TailwindCSS**: 3.4.17
 
 ### State Management
+
 - **Zustand**: 5.0.13
 - **React Query**: 5.90.16
 - **tRPC**: 11.8.1
 
 ### Cloud Services
+
 - **Firebase SDK**: 12.13.0
 - **Firebase Admin**: 14.2.0
 
 ### UI
+
 - **Lucide React**: 0.510.0 (Icons)
 - **Chart.js**: 4.5.1
 - **Recharts**: (Graphs)
 
 ### Build Tools
+
 - **Electron**: 42.1.0
 - **Capacitor**: 8.3.4
 - **Drizzle ORM**: 0.45.1
@@ -172,12 +177,12 @@ import { signInWithEmailAndPassword } from "firebase/auth";
 
 ### Auth Methods
 
-| Method | Status | Implementation |
-|--------|--------|----------------|
-| Email/Password | ✅ Working | Firebase Auth |
-| Google Sign-In | ✅ Available | Firebase Auth |
-| Demo Mode | ❌ Removed | Use Firebase |
-| Clerk Auth | ❌ Removed | Migrated to Firebase |
+| Method         | Status       | Implementation       |
+| -------------- | ------------ | -------------------- |
+| Email/Password | ✅ Working   | Firebase Auth        |
+| Google Sign-In | ✅ Available | Firebase Auth        |
+| Demo Mode      | ❌ Removed   | Use Firebase         |
+| Clerk Auth     | ❌ Removed   | Migrated to Firebase |
 
 ---
 
@@ -193,15 +198,15 @@ import { signInWithEmailAndPassword } from "firebase/auth";
 
 ### Firestore Collections
 
-| Collection | Purpose |
-|------------|---------|
-| `users` | User profiles and settings |
-| `stations` | Fuel station data |
-| `sales` | Sales transactions |
-| `audit_log` | System audit trail |
-| `secrets` | Encrypted secrets |
-| `feature_flags` | Feature toggles |
-| `config` | Application configuration |
+| Collection      | Purpose                    |
+| --------------- | -------------------------- |
+| `users`         | User profiles and settings |
+| `stations`      | Fuel station data          |
+| `sales`         | Sales transactions         |
+| `audit_log`     | System audit trail         |
+| `secrets`       | Encrypted secrets          |
+| `feature_flags` | Feature toggles            |
+| `config`        | Application configuration  |
 
 ---
 
@@ -213,20 +218,20 @@ import { signInWithEmailAndPassword } from "firebase/auth";
 
 ### Cloud Sync Endpoints
 
-| Endpoint | Method | Purpose |
-|----------|--------|---------|
-| `/api/data` | GET/POST | Cloud data sync |
-| `/api/user-data` | GET/POST | User-specific data |
-| `/api/users` | GET | List all users |
-| `/api/dashboard/*` | GET | Dashboard stats |
+| Endpoint           | Method   | Purpose            |
+| ------------------ | -------- | ------------------ |
+| `/api/data`        | GET/POST | Cloud data sync    |
+| `/api/user-data`   | GET/POST | User-specific data |
+| `/api/users`       | GET      | List all users     |
+| `/api/dashboard/*` | GET      | Dashboard stats    |
 
 ### tRPC Endpoints
 
-| Router | Purpose |
-|--------|---------|
-| `audit.*` | Audit logging |
-| `station.*` | Station management |
-| `sale.*` | Sales operations |
+| Router          | Purpose              |
+| --------------- | -------------------- |
+| `audit.*`       | Audit logging        |
+| `station.*`     | Station management   |
+| `sale.*`        | Sales operations     |
 | `founderAuth.*` | Admin authentication |
 
 ---
@@ -272,12 +277,12 @@ main                    # Production-ready code
 
 ### Naming Conventions
 
-| Type | Pattern | Example |
-|------|---------|---------|
-| Feature | `feature/name` | `feature/new-dashboard` |
-| Fix | `fix/issue-name` | `fix/auth-bug` |
-| Hotfix | `hotfix/critical-issue` | `hotfix/security-patch` |
-| AI Agent | `ai/name-date` | `ai/openai-integration-2026-07` |
+| Type     | Pattern                 | Example                         |
+| -------- | ----------------------- | ------------------------------- |
+| Feature  | `feature/name`          | `feature/new-dashboard`         |
+| Fix      | `fix/issue-name`        | `fix/auth-bug`                  |
+| Hotfix   | `hotfix/critical-issue` | `hotfix/security-patch`         |
+| AI Agent | `ai/name-date`          | `ai/openai-integration-2026-07` |
 
 ---
 
@@ -326,16 +331,16 @@ npm run cap:build
 
 **Branch**: `fix/build-critical-errors-2026-07-28`
 
-| Task | File | Action |
-|------|------|--------|
-| CloudSyncIndicator export | `src/react-app/components/CloudSyncIndicator.tsx` | Added default export |
-| API_URL undefined | `src/react-app/lib/restApiSync.ts` | Added fallback URL + apiRequest export |
-| updateProfile missing | `src/react-app/context/AuthContext.tsx` | Added import from firebase/auth |
-| cloudSync wrapper | `src/react-app/lib/cloudStorage.ts` | Added compatibility wrapper |
-| PrintSettings printerId | `src/react-app/lib/silent-print-service.ts` | Added field to interface |
-| Clerk dependencies | `src/react-app/hooks/useFounderAuth.ts` | Removed (Firebase-only) |
-| Astro imports | `api/pump-mapping/*.ts` | Removed framework imports |
-| Security | `.gitignore` | Added sensitive file patterns |
+| Task                      | File                                              | Action                                 |
+| ------------------------- | ------------------------------------------------- | -------------------------------------- |
+| CloudSyncIndicator export | `src/react-app/components/CloudSyncIndicator.tsx` | Added default export                   |
+| API_URL undefined         | `src/react-app/lib/restApiSync.ts`                | Added fallback URL + apiRequest export |
+| updateProfile missing     | `src/react-app/context/AuthContext.tsx`           | Added import from firebase/auth        |
+| cloudSync wrapper         | `src/react-app/lib/cloudStorage.ts`               | Added compatibility wrapper            |
+| PrintSettings printerId   | `src/react-app/lib/silent-print-service.ts`       | Added field to interface               |
+| Clerk dependencies        | `src/react-app/hooks/useFounderAuth.ts`           | Removed (Firebase-only)                |
+| Astro imports             | `api/pump-mapping/*.ts`                           | Removed framework imports              |
+| Security                  | `.gitignore`                                      | Added sensitive file patterns          |
 
 **Result**: Build ✅ PASSED, Deployment ✅ LIVE
 
@@ -345,12 +350,12 @@ npm run cap:build
 
 **Branch**: `feature/firebase-auth-production`
 
-| Task | Status |
-|------|--------|
-| Remove demo mode | ✅ |
-| Firebase-only auth | ✅ |
-| Clerk removed | ✅ |
-| Production deployment | ✅ |
+| Task                  | Status |
+| --------------------- | ------ |
+| Remove demo mode      | ✅     |
+| Firebase-only auth    | ✅     |
+| Clerk removed         | ✅     |
+| Production deployment | ✅     |
 
 ---
 
@@ -358,11 +363,11 @@ npm run cap:build
 
 ### TypeScript Errors (61 remaining)
 
-| Category | Count | Impact |
-|----------|-------|--------|
-| tRPC type mismatches | ~25 | Non-blocking |
-| API type definitions | ~15 | Non-blocking |
-| Legacy code cleanup | ~21 | Non-blocking |
+| Category             | Count | Impact       |
+| -------------------- | ----- | ------------ |
+| tRPC type mismatches | ~25   | Non-blocking |
+| API type definitions | ~15   | Non-blocking |
+| Legacy code cleanup  | ~21   | Non-blocking |
 
 **Status**: Build passes, runtime works. Full TS cleanup can be done in future sprint.
 
@@ -419,36 +424,36 @@ npm run cap:build
 
 ### Vercel
 
-| Property | Value |
-|----------|-------|
-| Team | `leons-projects-78a92c96` |
+| Property   | Value                              |
+| ---------- | ---------------------------------- |
+| Team       | `leons-projects-78a92c96`          |
 | Project ID | `prj_hjVrMLO7CxLTI77kthGE020eI3oj` |
-| Token | `[VERCEL_TOKEN]` |
+| Token      | `[VERCEL_TOKEN]`                   |
 
 ### Firebase
 
-| Property | Value |
-|----------|-------|
-| Project ID | `fuel-pro-1` |
-| Web API Key | `[FIREBASE_API_KEY]` |
-| Auth Domain | `fuel-pro-1.firebaseapp.com` |
-| App ID | `1:434474929988:web:f141473bd3acfba6d41111` |
+| Property    | Value                                       |
+| ----------- | ------------------------------------------- |
+| Project ID  | `fuel-pro-1`                                |
+| Web API Key | `[FIREBASE_API_KEY]`                        |
+| Auth Domain | `fuel-pro-1.firebaseapp.com`                |
+| App ID      | `1:434474929988:web:f141473bd3acfba6d41111` |
 
 ### Clerk (Deprecated)
 
-| Property | Value |
-|----------|-------|
-| Publishable Key | `[CLERK_PUBLISHABLE_KEY]` |
-| Secret Key | `[CLERK_SECRET_KEY]` |
-| Frontend API | `https://clerk.fuelpro.com` |
+| Property        | Value                       |
+| --------------- | --------------------------- |
+| Publishable Key | `[CLERK_PUBLISHABLE_KEY]`   |
+| Secret Key      | `[CLERK_SECRET_KEY]`        |
+| Frontend API    | `https://clerk.fuelpro.com` |
 
 ### GitHub
 
-| Property | Value |
-|----------|-------|
-| Repository | `fuel-pro/FUEL_APP_MOBILE` |
-| Owner | `fuel-pro` |
-| Default Branch | `main` |
+| Property       | Value                      |
+| -------------- | -------------------------- |
+| Repository     | `fuel-pro/FUEL_APP_MOBILE` |
+| Owner          | `fuel-pro`                 |
+| Default Branch | `main`                     |
 
 ---
 
@@ -478,10 +483,10 @@ service-account.json
 
 ### Environment Variables
 
-| Variable Type | Prefix | Example |
-|--------------|--------|---------|
-| Client-side | `VITE_` | `VITE_FIREBASE_API_KEY` |
-| Server-side | (none) | `FIREBASE_PRIVATE_KEY` |
+| Variable Type | Prefix  | Example                 |
+| ------------- | ------- | ----------------------- |
+| Client-side   | `VITE_` | `VITE_FIREBASE_API_KEY` |
+| Server-side   | (none)  | `FIREBASE_PRIVATE_KEY`  |
 
 ---
 
@@ -489,15 +494,15 @@ service-account.json
 
 ### Key Files
 
-| File | Purpose |
-|------|---------|
-| `src/react-app/App.tsx` | Main application entry |
-| `src/react-app/context/AuthContext.tsx` | Authentication state |
-| `src/firebase/client.ts` | Firebase client config |
-| `src/firebase/admin.ts` | Firebase admin config |
-| `src/react-app/lib/restApiSync.ts` | Cloud sync layer |
-| `src/react-app/lib/cloudStorage.ts` | Cloud storage adapters |
-| `vercel.json` | Vercel deployment config |
+| File                                    | Purpose                  |
+| --------------------------------------- | ------------------------ |
+| `src/react-app/App.tsx`                 | Main application entry   |
+| `src/react-app/context/AuthContext.tsx` | Authentication state     |
+| `src/firebase/client.ts`                | Firebase client config   |
+| `src/firebase/admin.ts`                 | Firebase admin config    |
+| `src/react-app/lib/restApiSync.ts`      | Cloud sync layer         |
+| `src/react-app/lib/cloudStorage.ts`     | Cloud storage adapters   |
+| `vercel.json`                           | Vercel deployment config |
 
 ### Important Patterns
 
@@ -568,11 +573,11 @@ vercel --prod  # Requires Vercel CLI
 
 ## 📝 Changelog
 
-| Date | Version | Changes |
-|------|---------|---------|
-| 2026-07-28 | 1.0 | Initial AI README documentation |
-| 2026-07-28 | 1.1 | Added task performed log |
-| 2026-07-28 | 1.2 | Updated with latest fixes |
+| Date       | Version | Changes                         |
+| ---------- | ------- | ------------------------------- |
+| 2026-07-28 | 1.0     | Initial AI README documentation |
+| 2026-07-28 | 1.1     | Added task performed log        |
+| 2026-07-28 | 1.2     | Updated with latest fixes       |
 
 ---
 

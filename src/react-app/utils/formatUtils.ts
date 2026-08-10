@@ -7,7 +7,7 @@ export const formatNumber = (num: number, decimals: number = 2): string => {
 
 export const formatCurrency = (
   amount: number,
-  currency: string = "KES"
+  currency: string = "KES",
 ): string => {
   return `${currency} ${formatNumber(amount, 2)}`;
 };

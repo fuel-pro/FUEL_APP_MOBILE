@@ -96,12 +96,12 @@ const LocalizationContext = createContext<LocalizationContextType>({
   config: buildLocalization("kenya"),
   countryKey: "kenya",
   refresh: () => {},
-  formatCurrency: a => `Ksh ${a.toFixed(2)}`,
-  formatNumber: n => n.toLocaleString(),
-  formatDate: d => String(d),
-  formatTime: d => String(d),
-  formatPhone: p => p,
-  formatVolume: v => `${v} L`,
+  formatCurrency: (a) => `Ksh ${a.toFixed(2)}`,
+  formatNumber: (n) => n.toLocaleString(),
+  formatDate: (d) => String(d),
+  formatTime: (d) => String(d),
+  formatPhone: (p) => p,
+  formatVolume: (v) => `${v} L`,
 });
 
 export function LocalizationProvider({
@@ -111,7 +111,7 @@ export function LocalizationProvider({
 }) {
   const [countryKey, setCountryKey] = useState<string>(resolveCountryKey);
   const [config, setConfig] = useState<LocalizationConfig>(
-    buildLocalization(resolveCountryKey())
+    buildLocalization(resolveCountryKey()),
   );
 
   const refresh = useCallback(() => {
@@ -137,7 +137,7 @@ export function LocalizationProvider({
         .replace(/,/g, ts);
       return `${config.currencySymbol}${ds === "," ? " " : ""}${formattedWhole}${fraction ? ds + fraction : ""}`;
     },
-    [config]
+    [config],
   );
 
   const formatNumber = useCallback(
@@ -152,7 +152,7 @@ export function LocalizationProvider({
         .replace(/,/g, ts);
       return fraction ? `${formattedWhole}${ds}${fraction}` : formattedWhole;
     },
-    [config]
+    [config],
   );
 
   const formatDate = useCallback(
@@ -167,7 +167,7 @@ export function LocalizationProvider({
         .replace("MM", month)
         .replace("YYYY", String(year));
     },
-    [config]
+    [config],
   );
 
   const formatTime = useCallback(
@@ -179,7 +179,7 @@ export function LocalizationProvider({
         timeZone: config.timeZone,
       });
     },
-    [config]
+    [config],
   );
 
   const formatPhone = useCallback(
@@ -188,14 +188,14 @@ export function LocalizationProvider({
       if (phone.startsWith("0")) return `${config.phoneCode} ${phone.slice(1)}`;
       return `${config.phoneCode} ${phone}`;
     },
-    [config]
+    [config],
   );
 
   const formatVolume = useCallback(
     (value: number) => {
       return `${formatNumber(value, 2)} ${config.unitVolume}`;
     },
-    [formatNumber, config]
+    [formatNumber, config],
   );
 
   return (

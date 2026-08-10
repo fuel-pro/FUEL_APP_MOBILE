@@ -2794,8 +2794,8 @@ function generateComplianceConfig(countryCode: string): ComplianceConfig {
 
   // Build payment methods from world payment configs
   const paymentMethods: PaymentMethod[] = (paymentConfig?.paymentMethods || [])
-    .filter(m => m.isActive)
-    .map(m => ({
+    .filter((m) => m.isActive)
+    .map((m) => ({
       id: m.id,
       name: m.name,
       type: m.type,
@@ -2827,7 +2827,7 @@ function generateComplianceConfig(countryCode: string): ComplianceConfig {
         type: "cash",
         provider: "Cash",
         chargeRate: 0,
-      }
+      },
     );
   }
 
@@ -2848,7 +2848,7 @@ function generateComplianceConfig(countryCode: string): ComplianceConfig {
       detailed?.hasETR ??
       (isEU ||
         ["KE", "UG", "TZ", "NG", "ZA", "GH", "IN", "BR", "CN", "JP"].includes(
-          code
+          code,
         )),
     etrName:
       detailed?.etrName ||
@@ -2859,10 +2859,10 @@ function generateComplianceConfig(countryCode: string): ComplianceConfig {
     fuelRegulatorShort: detailed?.fuelRegulatorShort || "NFA",
     fuelTypes:
       detailed?.fuelTypes ||
-      DEFAULT_FUEL_TYPES.map(ft => ({ ...ft, taxRate: vatRate })),
+      DEFAULT_FUEL_TYPES.map((ft) => ({ ...ft, taxRate: vatRate })),
     requiredPermits:
       detailed?.requiredPermits ||
-      DEFAULT_PERMITS.map(p => `${countryName} ${p}`),
+      DEFAULT_PERMITS.map((p) => `${countryName} ${p}`),
     reportingFrequency:
       detailed?.reportingFrequency ||
       (isEU ? "monthly/quarterly" : "quarterly"),

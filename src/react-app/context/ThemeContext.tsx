@@ -35,7 +35,7 @@ function getPrefersDarkMode(): boolean {
 // Robust media query listener for all browsers
 function addMediaQueryListener(
   mediaQuery: MediaQueryList,
-  callback: () => void
+  callback: () => void,
 ): () => void {
   if (mediaQuery.addEventListener) {
     mediaQuery.addEventListener("change", callback);
@@ -69,7 +69,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const [resolvedTheme, setResolvedTheme] = useState<"light" | "dark">(
-    getResolvedTheme(theme)
+    getResolvedTheme(theme),
   );
 
   // Apply theme to document
@@ -129,7 +129,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const toggleTheme = useCallback(() => {
-    setThemeState(prev => {
+    setThemeState((prev) => {
       if (prev === "light") return "dark";
       if (prev === "dark") return "system";
       return "light";

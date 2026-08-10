@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════════
 // M-PESA STK PUSH - Server-Side Implementation
 // ═══════════════════════════════════════════════════
-// 
+//
 // SECURITY FIX: Previously this file called Safaricom's Daraja API directly
 // from the browser with credentials from localStorage. This exposed M-PESA
 // API credentials to anyone with browser devtools access.
@@ -62,11 +62,15 @@ function getAuthToken(): string | null {
   try {
     const token = localStorage.getItem("fuelpro_auth_token");
     if (token) return token;
-    
+
     const sessionJson = localStorage.getItem("fuelpro_founder_session");
     if (sessionJson) {
       const session = JSON.parse(sessionJson);
-      if (session.active && session.token && Date.now() - session.loginTime < 8 * 60 * 60 * 1000) {
+      if (
+        session.active &&
+        session.token &&
+        Date.now() - session.loginTime < 8 * 60 * 60 * 1000
+      ) {
         return session.token;
       }
     }
@@ -90,12 +94,13 @@ function generatePassword(config: DarajaConfig): string {
 // STEP 1: Get OAuth Access Token (legacy fallback)
 // ═══════════════════════════════════════════════════
 async function getAccessTokenLegacy(config: DarajaConfig): Promise<string> {
-  const baseUrl = config.environment === "production"
-    ? "https://api.safaricom.co.ke"
-    : "https://sandbox.safaricom.co.ke";
-    
+  const baseUrl =
+    config.environment === "production"
+      ? "https://api.safaricom.co.ke"
+      : "https://sandbox.safaricom.co.ke";
+
   const auth = btoa(`${config.consumerKey}:${config.consumerSecret}`);
-  
+
   const response = await fetch(
     `${baseUrl}/oauth/v1/generate?grant_type=client_credentials`,
     {
@@ -104,7 +109,7 @@ async function getAccessTokenLegacy(config: DarajaConfig): Promise<string> {
         Authorization: `Basic ${auth}`,
         "Content-Type": "application/json",
       },
-    }
+    },
   );
 
   if (!response.ok) {
@@ -140,14 +145,15 @@ export interface STKPushResponse {
 
 export async function initiateSTKPush(
   request: STKPushRequest,
-  _config?: Partial<DarajaConfig> // Kept for backwards compatibility
+  _config?: Partial<DarajaConfig>, // Kept for backwards compatibility
 ): Promise<STKPushResponse> {
   // Validate phone format
   const cleanPhone = request.phoneNumber.replace(/\D/g, "");
   if (!/^2547\d{8}$/.test(cleanPhone)) {
     return {
       success: false,
-      error: "Invalid phone number. Use format: 2547XXXXXXXX (e.g., 254712345678)",
+      error:
+        "Invalid phone number. Use format: 2547XXXXXXXX (e.g., 254712345678)",
     };
   }
 
@@ -164,13 +170,13 @@ export async function initiateSTKPush(
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${authToken}`
+          Authorization: `Bearer ${authToken}`,
         },
         body: JSON.stringify({
           phoneNumber: request.phoneNumber,
           amount: request.amount,
           accountReference: request.accountReference,
-          description: request.transactionDesc || "Fuel purchase"
+          description: request.transactionDesc || "Fuel purchase",
         }),
       });
 
@@ -183,24 +189,34 @@ export async function initiateSTKPush(
         return {
           success: true,
           checkoutRequestId: data.checkoutRequestId,
-          responseDescription: data.responseDescription || "Request sent successfully"
+          responseDescription:
+            data.responseDescription || "Request sent successfully",
         };
       } else {
         return {
           success: false,
-          error: data.error || "Server-side STK push failed"
+          error: data.error || "Server-side STK push failed",
         };
       }
     }
   } catch (err) {
-    console.warn("Backend STK push unavailable, falling back to client-side:", err);
+    console.warn(
+      "Backend STK push unavailable, falling back to client-side:",
+      err,
+    );
   }
 
   // Legacy fallback: direct Safaricom API call (development only)
-  console.warn("Using legacy client-side M-PESA - credentials will be exposed in browser");
+  console.warn(
+    "Using legacy client-side M-PESA - credentials will be exposed in browser",
+  );
   const fullConfig = loadConfig();
-  
-  if (!fullConfig.consumerKey || !fullConfig.consumerSecret || !fullConfig.passkey) {
+
+  if (
+    !fullConfig.consumerKey ||
+    !fullConfig.consumerSecret ||
+    !fullConfig.passkey
+  ) {
     return {
       success: false,
       error: "M-Pesa credentials not configured. Please contact support.",
@@ -209,10 +225,14 @@ export async function initiateSTKPush(
 
   try {
     const accessToken = await getAccessTokenLegacy(fullConfig);
-    const baseUrl = fullConfig.environment === "production"
-      ? "https://api.safaricom.co.ke"
-      : "https://sandbox.safaricom.co.ke";
-    const timestamp = new Date().toISOString().replace(/[^0-9]/g, "").slice(0, 14);
+    const baseUrl =
+      fullConfig.environment === "production"
+        ? "https://api.safaricom.co.ke"
+        : "https://sandbox.safaricom.co.ke";
+    const timestamp = new Date()
+      .toISOString()
+      .replace(/[^0-9]/g, "")
+      .slice(0, 14);
 
     const response = await fetch(`${baseUrl}/mpesa/stkpush/v1/processrequest`, {
       method: "POST",
@@ -258,7 +278,8 @@ export async function initiateSTKPush(
   } catch (err: any) {
     return {
       success: false,
-      error: err.message || "Network error. Please check your internet connection.",
+      error:
+        err.message || "Network error. Please check your internet connection.",
     };
   }
 }
@@ -268,7 +289,7 @@ export async function initiateSTKPush(
 // ═══════════════════════════════════════════════════
 export async function querySTKStatus(
   checkoutRequestId: string,
-  _config?: Partial<DarajaConfig>
+  _config?: Partial<DarajaConfig>,
 ): Promise<{
   success: boolean;
   resultCode?: string;
@@ -287,7 +308,7 @@ export async function querySTKStatus(
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${authToken}`
+          Authorization: `Bearer ${authToken}`,
         },
         body: JSON.stringify({ checkoutRequestId }),
       });
@@ -297,9 +318,9 @@ export async function querySTKStatus(
         const tx = data.localTransaction;
         return {
           success: true,
-          resultCode: tx.status === 'PAID' ? "0" : "1",
+          resultCode: tx.status === "PAID" ? "0" : "1",
           resultDesc: tx.status,
-          paid: tx.status === 'PAID',
+          paid: tx.status === "PAID",
           amount: tx.amount,
           mpesaReceipt: tx.mpesa_receipt,
           phone: tx.phone,
@@ -318,10 +339,14 @@ export async function querySTKStatus(
 
   try {
     const accessToken = await getAccessTokenLegacy(fullConfig);
-    const baseUrl = fullConfig.environment === "production"
-      ? "https://api.safaricom.co.ke"
-      : "https://sandbox.safaricom.co.ke";
-    const timestamp = new Date().toISOString().replace(/[^0-9]/g, "").slice(0, 14);
+    const baseUrl =
+      fullConfig.environment === "production"
+        ? "https://api.safaricom.co.ke"
+        : "https://sandbox.safaricom.co.ke";
+    const timestamp = new Date()
+      .toISOString()
+      .replace(/[^0-9]/g, "")
+      .slice(0, 14);
 
     const response = await fetch(`${baseUrl}/mpesa/stkpushquery/v1/query`, {
       method: "POST",
@@ -345,9 +370,15 @@ export async function querySTKStatus(
         resultCode: data.ResultCode,
         resultDesc: data.ResultDesc,
         paid: true,
-        amount: data.CallbackMetadata?.Item?.find((i: any) => i.Name === "Amount")?.Value,
-        mpesaReceipt: data.CallbackMetadata?.Item?.find((i: any) => i.Name === "MpesaReceiptNumber")?.Value,
-        phone: data.CallbackMetadata?.Item?.find((i: any) => i.Name === "PhoneNumber")?.Value?.toString(),
+        amount: data.CallbackMetadata?.Item?.find(
+          (i: any) => i.Name === "Amount",
+        )?.Value,
+        mpesaReceipt: data.CallbackMetadata?.Item?.find(
+          (i: any) => i.Name === "MpesaReceiptNumber",
+        )?.Value,
+        phone: data.CallbackMetadata?.Item?.find(
+          (i: any) => i.Name === "PhoneNumber",
+        )?.Value?.toString(),
       };
     }
 
@@ -380,11 +411,11 @@ interface PendingTransaction {
 
 function storePendingTransaction(
   checkoutRequestId: string,
-  request: STKPushRequest
+  request: STKPushRequest,
 ) {
   try {
     const pending: PendingTransaction[] = JSON.parse(
-      localStorage.getItem("fuelpro_mpesa_pending") || "[]"
+      localStorage.getItem("fuelpro_mpesa_pending") || "[]",
     );
     pending.unshift({
       checkoutRequestId,
@@ -397,7 +428,7 @@ function storePendingTransaction(
     });
     localStorage.setItem(
       "fuelpro_mpesa_pending",
-      JSON.stringify(pending.slice(0, 100))
+      JSON.stringify(pending.slice(0, 100)),
     );
   } catch (err) {
     console.warn("[MpesaStk] Failed to store pending transaction:", err);
@@ -415,16 +446,16 @@ export function getPendingTransactions(): PendingTransaction[] {
 export function updateTransactionStatus(
   checkoutRequestId: string,
   status: PendingTransaction["status"],
-  details?: { resultCode?: string; resultDesc?: string; mpesaReceipt?: string }
+  details?: { resultCode?: string; resultDesc?: string; mpesaReceipt?: string },
 ) {
   try {
     const pending: PendingTransaction[] = JSON.parse(
-      localStorage.getItem("fuelpro_mpesa_pending") || "[]"
+      localStorage.getItem("fuelpro_mpesa_pending") || "[]",
     );
-    const updated = pending.map(tx =>
+    const updated = pending.map((tx) =>
       tx.checkoutRequestId === checkoutRequestId
         ? { ...tx, status, ...details }
-        : tx
+        : tx,
     );
     localStorage.setItem("fuelpro_mpesa_pending", JSON.stringify(updated));
   } catch (err) {
@@ -446,7 +477,7 @@ export function addToHistory(tx: PendingTransaction) {
     history.unshift(tx);
     localStorage.setItem(
       "fuelpro_mpesa_history",
-      JSON.stringify(history.slice(0, 500))
+      JSON.stringify(history.slice(0, 500)),
     );
   } catch (err) {
     console.warn("[MpesaStk] Failed to add transaction to history:", err);
@@ -478,7 +509,7 @@ export function handleMpesacallback(payload: MpesacallbackPayload): {
   const paid = stkCallback.ResultCode === 0;
 
   const receipt = stkCallback.CallbackMetadata?.Item?.find(
-    (i: any) => i.Name === "MpesaReceiptNumber"
+    (i: any) => i.Name === "MpesaReceiptNumber",
   )?.Value as string;
 
   updateTransactionStatus(
@@ -488,13 +519,13 @@ export function handleMpesacallback(payload: MpesacallbackPayload): {
       resultCode: String(stkCallback.ResultCode),
       resultDesc: stkCallback.ResultDesc,
       mpesaReceipt: receipt,
-    }
+    },
   );
 
   // Move to history
   const pending = getPendingTransactions();
   const tx = pending.find(
-    t => t.checkoutRequestId === stkCallback.CheckoutRequestID
+    (t) => t.checkoutRequestId === stkCallback.CheckoutRequestID,
   );
   if (tx) {
     addToHistory({
@@ -513,27 +544,27 @@ export function handleMpesacallback(payload: MpesacallbackPayload): {
 // ═══════════════════════════════════════════════════
 export function formatPhone254(phone: string): string {
   const clean = phone.replace(/\D/g, "");
-  
+
   // 07xx xxx xxx -> 254xxxxxxxxx
   if (clean.startsWith("0") && clean.length === 10) {
     return "254" + clean.slice(1);
   }
-  
+
   // 254xxxxxxxxxx (already correct format)
   if (clean.startsWith("254") && clean.length === 12) {
     return clean;
   }
-  
+
   // Already 254xxxxxxxxxx without leading 0
   if (clean.length === 11 && clean.startsWith("254")) {
     return clean;
   }
-  
+
   // 7xx xxx xxx -> 254xxxxxxxxx
   if (clean.startsWith("7") && clean.length === 9) {
     return "254" + clean;
   }
-  
+
   return clean; // Return as-is if already correct
 }
 

@@ -46,7 +46,7 @@ export default function DataRecovery({ onRestore }: DataRecoveryProps) {
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = e => {
+    reader.onload = (e) => {
       try {
         const data = JSON.parse(e.target?.result as string);
 
@@ -61,7 +61,7 @@ export default function DataRecovery({ onRestore }: DataRecoveryProps) {
         setStatus("success");
         setMessage("Backup restored successfully. Reloading...");
         import("@/react-app/lib/app-reloader").then(({ triggerSoftReload }) =>
-          triggerSoftReload(1500)
+          triggerSoftReload(1500),
         );
       } catch (error) {
         setStatus("error");

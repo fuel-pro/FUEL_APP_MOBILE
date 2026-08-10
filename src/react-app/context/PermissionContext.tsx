@@ -476,7 +476,7 @@ interface PermissionContextType {
   createInvite: (
     role: UserRole,
     expiresInDays?: number,
-    maxUses?: number
+    maxUses?: number,
   ) => AccessInvite;
   acceptInvite: (inviteId: string, username: string) => boolean;
   revokeMember: (memberId: string) => void;
@@ -582,7 +582,7 @@ export function PermissionProvider({
       // Rule 1: Owner can NEVER switch to another role
       if (role === "owner" && newRole !== "owner") {
         console.warn(
-          "[Role Lock] Owner cannot switch to a different role. Owner status is permanent."
+          "[Role Lock] Owner cannot switch to a different role. Owner status is permanent.",
         );
         return;
       }
@@ -590,7 +590,7 @@ export function PermissionProvider({
       // Rule 2: Cannot switch TO owner from another role (owner is set at signup only)
       if (role !== "owner" && newRole === "owner") {
         console.warn(
-          "[Role Lock] Cannot assume Owner role. Owner is assigned at signup only."
+          "[Role Lock] Cannot assume Owner role. Owner is assigned at signup only.",
         );
         return;
       }
@@ -618,7 +618,7 @@ export function PermissionProvider({
       if (binding && binding.active) {
         if (newRole !== binding.role) {
           console.warn(
-            `[Role Lock] Role change rejected. User is bound as ${binding.role} at this station.`
+            `[Role Lock] Role change rejected. User is bound as ${binding.role} at this station.`,
           );
           return;
         }
@@ -627,7 +627,7 @@ export function PermissionProvider({
       setRoleState(newRole);
       localStorage.setItem("fuelpro_v2_role", newRole);
     },
-    [getActiveBinding, role]
+    [getActiveBinding, role],
   );
 
   const permissions = ROLE_PERMISSIONS[role];
@@ -636,7 +636,7 @@ export function PermissionProvider({
     (key: keyof PermissionConfig) => {
       return permissions[key] ?? false;
     },
-    [permissions]
+    [permissions],
   );
 
   // Check if current role can access a specific tab
@@ -647,7 +647,7 @@ export function PermissionProvider({
       // Check role-specific tab grants
       return roleTabGrants[role]?.includes(tabId) ?? false;
     },
-    [role, roleTabGrants]
+    [role, roleTabGrants],
   );
 
   const setRoleTabGrants = useCallback((grants: RoleTabGrants) => {
@@ -656,7 +656,7 @@ export function PermissionProvider({
 
   const grantTabToRole = useCallback((targetRole: UserRole, tabId: string) => {
     if (targetRole === "owner") return; // Owner already has everything
-    setRoleTabGrantsState(prev => ({
+    setRoleTabGrantsState((prev) => ({
       ...prev,
       [targetRole]: [...new Set([...prev[targetRole], tabId])],
     }));
@@ -665,19 +665,19 @@ export function PermissionProvider({
   const revokeTabFromRole = useCallback(
     (targetRole: UserRole, tabId: string) => {
       if (targetRole === "owner") return; // Cannot revoke from owner
-      setRoleTabGrantsState(prev => ({
+      setRoleTabGrantsState((prev) => ({
         ...prev,
-        [targetRole]: prev[targetRole].filter(t => t !== tabId),
+        [targetRole]: prev[targetRole].filter((t) => t !== tabId),
       }));
     },
-    []
+    [],
   );
 
   const createInvite = useCallback(
     (
       inviteRole: UserRole,
       expiresInDays?: number,
-      maxUses = 1
+      maxUses = 1,
     ): AccessInvite => {
       const invite: AccessInvite = {
         id: `inv_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
@@ -690,15 +690,15 @@ export function PermissionProvider({
         maxUses,
         uses: 0,
       };
-      setInvites(prev => [...prev, invite]);
+      setInvites((prev) => [...prev, invite]);
       return invite;
     },
-    [role]
+    [role],
   );
 
   const acceptInvite = useCallback(
     (inviteId: string, username: string): boolean => {
-      const invite = invites.find(i => i.id === inviteId);
+      const invite = invites.find((i) => i.id === inviteId);
       if (!invite) return false;
       if (invite.usedBy) return false;
       if (invite.expiresAt && new Date(invite.expiresAt) < new Date())
@@ -717,9 +717,9 @@ export function PermissionProvider({
         active: true,
       };
 
-      setTeam(prev => [...prev, member]);
-      setInvites(prev =>
-        prev.map(i =>
+      setTeam((prev) => [...prev, member]);
+      setInvites((prev) =>
+        prev.map((i) =>
           i.id === inviteId
             ? {
                 ...i,
@@ -727,42 +727,44 @@ export function PermissionProvider({
                 usedBy: username,
                 usedAt: new Date().toISOString(),
               }
-            : i
-        )
+            : i,
+        ),
       );
       return true;
     },
-    [invites]
+    [invites],
   );
 
   const revokeMember = useCallback((memberId: string) => {
-    setTeam(prev => prev.filter(m => m.id !== memberId));
+    setTeam((prev) => prev.filter((m) => m.id !== memberId));
   }, []);
 
   const extendAccess = useCallback((memberId: string, days: number) => {
-    setTeam(prev =>
-      prev.map(m =>
+    setTeam((prev) =>
+      prev.map((m) =>
         m.id === memberId
           ? {
               ...m,
               expiresAt: new Date(Date.now() + days * 86400000).toISOString(),
             }
-          : m
-      )
+          : m,
+      ),
     );
   }, []);
 
   const assignPumps = useCallback((memberId: string, pumpIds: string[]) => {
-    setTeam(prev =>
-      prev.map(m => (m.id === memberId ? { ...m, assignedPumps: pumpIds } : m))
+    setTeam((prev) =>
+      prev.map((m) =>
+        m.id === memberId ? { ...m, assignedPumps: pumpIds } : m,
+      ),
     );
   }, []);
 
   const assignShifts = useCallback((memberId: string, shiftIds: string[]) => {
-    setTeam(prev =>
-      prev.map(m =>
-        m.id === memberId ? { ...m, assignedShifts: shiftIds } : m
-      )
+    setTeam((prev) =>
+      prev.map((m) =>
+        m.id === memberId ? { ...m, assignedShifts: shiftIds } : m,
+      ),
     );
   }, []);
 

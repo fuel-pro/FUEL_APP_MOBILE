@@ -45,10 +45,10 @@ export default function LocationSelector({
   const currentLoc = location.getStationLocation(stationId);
 
   const filteredCountries = location.allCountries.filter(
-    c =>
+    (c) =>
       c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       c.currency.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.region.toLowerCase().includes(searchQuery.toLowerCase())
+      c.region.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
   const handleSelect = (countryCode: string) => {
@@ -108,7 +108,7 @@ export default function LocationSelector({
         >
           <div
             className="bg-slate-800 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-auto shadow-2xl border border-white/20"
-            onClick={e => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
             <div className="sticky top-0 bg-slate-800 border-b border-white/10 p-5 z-10">
@@ -134,7 +134,7 @@ export default function LocationSelector({
                   />
                   <input
                     value={searchQuery}
-                    onChange={e => setSearchQuery(e.target.value)}
+                    onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Search country, currency, or region..."
                     className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
                   />
@@ -165,7 +165,7 @@ export default function LocationSelector({
 
             {/* Country List */}
             <div className="p-5 space-y-3">
-              {filteredCountries.map(country => {
+              {filteredCountries.map((country) => {
                 const isSelected = stationCountry.id === country.id;
                 const loc = location.getStationLocation(stationId);
                 const hasLocation = loc?.countryCode === country.id;

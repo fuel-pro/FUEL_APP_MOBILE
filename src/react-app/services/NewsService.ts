@@ -211,7 +211,7 @@ const CATEGORY_KEYWORDS: Record<string, string[]> = {
 
 function categorizeNews(
   title: string,
-  summary: string
+  summary: string,
 ): ExternalNewsItem["category"] {
   const text = (title + " " + summary).toLowerCase();
   const scores: Record<string, number> = {};
@@ -230,7 +230,7 @@ function categorizeNews(
 
 function determinePriority(
   title: string,
-  summary: string
+  summary: string,
 ): ExternalNewsItem["priority"] {
   const text = (title + " " + summary).toLowerCase();
   const highKeywords = [
@@ -247,7 +247,7 @@ function determinePriority(
     "hike",
     "shutdown",
   ];
-  if (highKeywords.some(k => text.includes(k))) return "high";
+  if (highKeywords.some((k) => text.includes(k))) return "high";
 
   const mediumKeywords = [
     "update",
@@ -258,7 +258,7 @@ function determinePriority(
     "review",
     "adjustment",
   ];
-  if (mediumKeywords.some(k => text.includes(k))) return "medium";
+  if (mediumKeywords.some((k) => text.includes(k))) return "medium";
 
   return "low";
 }
@@ -267,7 +267,7 @@ function determinePriority(
 function parseRSS(
   xmlText: string,
   sourceName: string,
-  countryCode: string
+  countryCode: string,
 ): ExternalNewsItem[] {
   const items: ExternalNewsItem[] = [];
   try {
@@ -360,7 +360,7 @@ function isFuelRelated(title: string, summary: string): boolean {
     "crude",
   ];
   const text = (title + " " + summary).toLowerCase();
-  return fuelKeywords.some(kw => text.includes(kw.toLowerCase()));
+  return fuelKeywords.some((kw) => text.includes(kw.toLowerCase()));
 }
 
 // Fetch RSS feed via CORS proxy
@@ -408,7 +408,7 @@ function resolveCountryCode(): string {
 
 // Main news fetch function - supports ALL countries dynamically
 export async function fetchExternalNews(
-  countryCode?: string
+  countryCode?: string,
 ): Promise<ExternalNewsItem[]> {
   const allNews: ExternalNewsItem[] = [];
   const cc = (countryCode || resolveCountryCode()).toUpperCase();
@@ -440,13 +440,13 @@ export async function fetchExternalNews(
   const unique = removeDuplicates(allNews);
   return unique.sort(
     (a, b) =>
-      new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime()
+      new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime(),
   );
 }
 
 function removeDuplicates(items: ExternalNewsItem[]): ExternalNewsItem[] {
   const seen = new Set<string>();
-  return items.filter(item => {
+  return items.filter((item) => {
     const key = item.title.toLowerCase().substring(0, 50);
     if (seen.has(key)) return false;
     seen.add(key);
@@ -496,7 +496,7 @@ export function getLastFetchTime(): Date | null {
 
 // Auto-fetch wrapper
 export async function autoFetchNews(
-  countryCode?: string
+  countryCode?: string,
 ): Promise<ExternalNewsItem[]> {
   if (!shouldFetchNews()) {
     return loadExternalNews();

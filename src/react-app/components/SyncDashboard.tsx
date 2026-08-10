@@ -54,7 +54,7 @@ export default function SyncDashboard() {
     loadStats();
 
     // Listen for cross-tab mutations
-    const unsubMutation = onMutation(item => {
+    const unsubMutation = onMutation((item) => {
       setToast(`Synced: ${item.collection} ${item.operation}`);
       setTimeout(() => setToast(""), 3000);
       loadPending();
@@ -62,8 +62,8 @@ export default function SyncDashboard() {
     });
 
     // Listen for online/offline
-    const onOnline = () => setState(s => ({ ...s, isOnline: true }));
-    const onOffline = () => setState(s => ({ ...s, isOnline: false }));
+    const onOnline = () => setState((s) => ({ ...s, isOnline: true }));
+    const onOffline = () => setState((s) => ({ ...s, isOnline: false }));
     window.addEventListener("online", onOnline);
     window.addEventListener("offline", onOffline);
 
@@ -156,7 +156,7 @@ export default function SyncDashboard() {
         try {
           const result = await importAllData(String(reader.result));
           setToast(
-            `Imported: ${result.imported} items, ${result.errors} errors`
+            `Imported: ${result.imported} items, ${result.errors} errors`,
           );
           await loadStats();
         } catch {
@@ -167,7 +167,7 @@ export default function SyncDashboard() {
       reader.readAsText(file);
       e.target.value = "";
     },
-    [loadStats]
+    [loadStats],
   );
 
   const handleCleanup = useCallback(async () => {
@@ -367,7 +367,7 @@ export default function SyncDashboard() {
       <div style={{ marginBottom: 16 }}>
         <textarea
           value={importText}
-          onChange={e => setImportText(e.target.value)}
+          onChange={(e) => setImportText(e.target.value)}
           placeholder="Paste exported JSON data here to import..."
           style={{
             width: "100%",
@@ -437,7 +437,7 @@ export default function SyncDashboard() {
               gap: 4,
             }}
           >
-            {pending.map(item => (
+            {pending.map((item) => (
               <div
                 key={item.id}
                 style={{

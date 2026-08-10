@@ -20,7 +20,7 @@ export async function queryMpesaTransactionStatus(
   mpesaConsumerKey: string,
   mpesaConsumerSecret: string,
   mpesaShortcode: string,
-  mpesaPasskey: string
+  mpesaPasskey: string,
 ): Promise<QueryResponse> {
   // Get access token
   const auth = btoa(`${mpesaConsumerKey}:${mpesaConsumerSecret}`);
@@ -32,7 +32,7 @@ export async function queryMpesaTransactionStatus(
       headers: {
         Authorization: `Basic ${auth}`,
       },
-    }
+    },
   );
 
   if (!tokenResponse.ok) {
@@ -66,7 +66,7 @@ export async function queryMpesaTransactionStatus(
         "Content-Type": "application/json",
       },
       body: JSON.stringify(queryPayload),
-    }
+    },
   );
 
   if (!queryResponse.ok) {

@@ -6,17 +6,40 @@
  */
 import React, { useState } from "react";
 import {
-  User, Mail, Phone, Lock, Save, Loader2, CheckCircle, AlertCircle,
-  AtSign, KeyRound, Share2, Copy, Check, Users, FileUp, FileText,
-  Trash2, Download, Clock,
+  User,
+  Mail,
+  Phone,
+  Lock,
+  Save,
+  Loader2,
+  CheckCircle,
+  AlertCircle,
+  AtSign,
+  KeyRound,
+  Share2,
+  Copy,
+  Check,
+  Users,
+  FileUp,
+  FileText,
+  Trash2,
+  Download,
+  Clock,
 } from "lucide-react";
 import { useAuth } from "@/react-app/context/AuthContext";
 import { useStations } from "@/react-app/context/StationContext";
 import {
-  inviteMember, getStationMembers, revokeMember, type StationMember,
+  inviteMember,
+  getStationMembers,
+  revokeMember,
+  type StationMember,
 } from "@/react-app/lib/station-share-service";
 import {
-  uploadDocument, getDocuments, getDocumentUrl, deleteDocument, type UserDocument,
+  uploadDocument,
+  getDocuments,
+  getDocumentUrl,
+  deleteDocument,
+  type UserDocument,
 } from "@/react-app/lib/document-service";
 
 export default function UserProfileSettings() {
@@ -30,30 +53,48 @@ export default function UserProfileSettings() {
     phone: user?.phone || "",
   });
   const [profileLoading, setProfileLoading] = useState(false);
-  const [profileNotice, setProfileNotice] = useState<{ type: "success" | "error"; msg: string } | null>(null);
+  const [profileNotice, setProfileNotice] = useState<{
+    type: "success" | "error";
+    msg: string;
+  } | null>(null);
 
   // Email form
   const [newEmail, setNewEmail] = useState("");
   const [emailLoading, setEmailLoading] = useState(false);
-  const [emailNotice, setEmailNotice] = useState<{ type: "success" | "error"; msg: string } | null>(null);
+  const [emailNotice, setEmailNotice] = useState<{
+    type: "success" | "error";
+    msg: string;
+  } | null>(null);
 
   // Password form
-  const [passwordForm, setPasswordForm] = useState({ newPassword: "", confirmPassword: "" });
+  const [passwordForm, setPasswordForm] = useState({
+    newPassword: "",
+    confirmPassword: "",
+  });
   const [pwLoading, setPwLoading] = useState(false);
-  const [pwNotice, setPwNotice] = useState<{ type: "success" | "error"; msg: string } | null>(null);
+  const [pwNotice, setPwNotice] = useState<{
+    type: "success" | "error";
+    msg: string;
+  } | null>(null);
 
   // Share access
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState("staff");
   const [members, setMembers] = useState<StationMember[]>([]);
   const [shareLoading, setShareLoading] = useState(false);
-  const [shareNotice, setShareNotice] = useState<{ type: "success" | "error"; msg: string } | null>(null);
+  const [shareNotice, setShareNotice] = useState<{
+    type: "success" | "error";
+    msg: string;
+  } | null>(null);
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
 
   // Documents
   const [documents, setDocuments] = useState<UserDocument[]>([]);
   const [docLoading, setDocLoading] = useState(false);
-  const [docNotice, setDocNotice] = useState<{ type: "success" | "error"; msg: string } | null>(null);
+  const [docNotice, setDocNotice] = useState<{
+    type: "success" | "error";
+    msg: string;
+  } | null>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   // Load members and documents on mount / station change
@@ -73,9 +114,14 @@ export default function UserProfileSettings() {
       phone: profileForm.phone,
     });
     setProfileLoading(false);
-    setProfileNotice(result.success
-      ? { type: "success", msg: "Profile updated successfully! Changes sync across all your devices." }
-      : { type: "error", msg: result.error || "Failed to update profile" });
+    setProfileNotice(
+      result.success
+        ? {
+            type: "success",
+            msg: "Profile updated successfully! Changes sync across all your devices.",
+          }
+        : { type: "error", msg: result.error || "Failed to update profile" },
+    );
     setTimeout(() => setProfileNotice(null), 4000);
   };
 
@@ -85,9 +131,14 @@ export default function UserProfileSettings() {
     setEmailNotice(null);
     const result = await updateEmail(newEmail);
     setEmailLoading(false);
-    setEmailNotice(result.success
-      ? { type: "success", msg: "Email updated! You may receive a confirmation email from Supabase." }
-      : { type: "error", msg: result.error || "Failed to update email" });
+    setEmailNotice(
+      result.success
+        ? {
+            type: "success",
+            msg: "Email updated! You may receive a confirmation email from Supabase.",
+          }
+        : { type: "error", msg: result.error || "Failed to update email" },
+    );
     if (result.success) setNewEmail("");
     setTimeout(() => setEmailNotice(null), 4000);
   };
@@ -101,10 +152,16 @@ export default function UserProfileSettings() {
     setPwNotice(null);
     const result = await updatePassword(passwordForm.newPassword);
     setPwLoading(false);
-    setPwNotice(result.success
-      ? { type: "success", msg: "Password updated successfully! Use it on any device." }
-      : { type: "error", msg: result.error || "Failed to update password" });
-    if (result.success) setPasswordForm({ newPassword: "", confirmPassword: "" });
+    setPwNotice(
+      result.success
+        ? {
+            type: "success",
+            msg: "Password updated successfully! Use it on any device.",
+          }
+        : { type: "error", msg: result.error || "Failed to update password" },
+    );
+    if (result.success)
+      setPasswordForm({ newPassword: "", confirmPassword: "" });
     setTimeout(() => setPwNotice(null), 4000);
   };
 
@@ -112,7 +169,11 @@ export default function UserProfileSettings() {
     if (!currentStation?.id || !inviteEmail) return;
     setShareLoading(true);
     setShareNotice(null);
-    const result = await inviteMember(currentStation.id, inviteEmail, inviteRole);
+    const result = await inviteMember(
+      currentStation.id,
+      inviteEmail,
+      inviteRole,
+    );
     setShareLoading(false);
     if (result.success) {
       const inviteUrl = result.error || "";
@@ -123,7 +184,10 @@ export default function UserProfileSettings() {
       setInviteEmail("");
       getStationMembers(currentStation.id).then(setMembers);
     } else {
-      setShareNotice({ type: "error", msg: result.error || "Failed to send invite" });
+      setShareNotice({
+        type: "error",
+        msg: result.error || "Failed to send invite",
+      });
     }
     setTimeout(() => setShareNotice(null), 6000);
   };
@@ -142,7 +206,10 @@ export default function UserProfileSettings() {
     if (result.success && currentStation?.id) {
       getStationMembers(currentStation.id).then(setMembers);
     } else {
-      setShareNotice({ type: "error", msg: result.error || "Failed to revoke access" });
+      setShareNotice({
+        type: "error",
+        msg: result.error || "Failed to revoke access",
+      });
     }
   };
 
@@ -154,16 +221,21 @@ export default function UserProfileSettings() {
     const results = [];
     for (const file of Array.from(files)) {
       const result = await uploadDocument(file, currentStation?.id);
-      results.push({ name: file.name, success: result.success, error: result.error });
+      results.push({
+        name: file.name,
+        success: result.success,
+        error: result.error,
+      });
     }
     setDocLoading(false);
-    const successCount = results.filter(r => r.success).length;
-    const failCount = results.filter(r => !r.success).length;
+    const successCount = results.filter((r) => r.success).length;
+    const failCount = results.filter((r) => !r.success).length;
     setDocNotice({
       type: failCount > 0 ? "error" : "success",
-      msg: failCount > 0
-        ? `${successCount} uploaded, ${failCount} failed. Last error: ${results.find(r => !r.success)?.error}`
-        : `${successCount} file(s) uploaded! Accessible from any device.`,
+      msg:
+        failCount > 0
+          ? `${successCount} uploaded, ${failCount} failed. Last error: ${results.find((r) => !r.success)?.error}`
+          : `${successCount} file(s) uploaded! Accessible from any device.`,
     });
     getDocuments(currentStation?.id).then(setDocuments);
     if (fileInputRef.current) fileInputRef.current.value = "";
@@ -189,10 +261,12 @@ export default function UserProfileSettings() {
     }
   };
 
-  const inputClass = "w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:border-amber-500 focus:outline-none transition-colors";
+  const inputClass =
+    "w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:border-amber-500 focus:outline-none transition-colors";
   const labelClass = "text-gray-400 text-xs mb-2 block font-medium";
   const cardClass = "bg-white/5 border border-white/10 rounded-xl p-6 mb-6";
-  const btnClass = "w-full py-3 bg-amber-500 hover:bg-amber-600 disabled:bg-gray-600 text-white font-medium rounded-xl flex items-center justify-center gap-2 transition-colors";
+  const btnClass =
+    "w-full py-3 bg-amber-500 hover:bg-amber-600 disabled:bg-gray-600 text-white font-medium rounded-xl flex items-center justify-center gap-2 transition-colors";
 
   return (
     <div className="p-6 max-w-3xl mx-auto">
@@ -200,7 +274,10 @@ export default function UserProfileSettings() {
         <User className="text-amber-400" size={24} /> User Profile
       </h2>
       <p className="text-gray-400 text-sm mb-6">
-        Your unique ID: <code className="text-amber-400 text-xs bg-white/5 px-2 py-1 rounded">{user?.id || "—"}</code>
+        Your unique ID:{" "}
+        <code className="text-amber-400 text-xs bg-white/5 px-2 py-1 rounded">
+          {user?.id || "—"}
+        </code>
         <br />
         Changes sync across all your devices via Supabase cloud.
       </p>
@@ -213,20 +290,54 @@ export default function UserProfileSettings() {
         <div className="space-y-4">
           <div>
             <label className={labelClass}>Full Name</label>
-            <input type="text" value={profileForm.name} onChange={(e) => setProfileForm({ ...profileForm, name: e.target.value })} className={inputClass} placeholder="Your name" />
+            <input
+              type="text"
+              value={profileForm.name}
+              onChange={(e) =>
+                setProfileForm({ ...profileForm, name: e.target.value })
+              }
+              className={inputClass}
+              placeholder="Your name"
+            />
           </div>
           <div>
             <label className={labelClass}>Username (unique identifier)</label>
-            <input type="text" value={profileForm.username} onChange={(e) => setProfileForm({ ...profileForm, username: e.target.value })} className={inputClass} placeholder="Choose a unique username" />
-            <p className="text-gray-500 text-xs mt-1">This is your unique identifier across all devices.</p>
+            <input
+              type="text"
+              value={profileForm.username}
+              onChange={(e) =>
+                setProfileForm({ ...profileForm, username: e.target.value })
+              }
+              className={inputClass}
+              placeholder="Choose a unique username"
+            />
+            <p className="text-gray-500 text-xs mt-1">
+              This is your unique identifier across all devices.
+            </p>
           </div>
           <div>
             <label className={labelClass}>Phone Number</label>
-            <input type="tel" value={profileForm.phone} onChange={(e) => setProfileForm({ ...profileForm, phone: e.target.value })} className={inputClass} placeholder="+254700000000" />
+            <input
+              type="tel"
+              value={profileForm.phone}
+              onChange={(e) =>
+                setProfileForm({ ...profileForm, phone: e.target.value })
+              }
+              className={inputClass}
+              placeholder="+254700000000"
+            />
           </div>
         </div>
-        <button onClick={handleProfileSave} disabled={profileLoading} className={btnClass + " mt-4"}>
-          {profileLoading ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+        <button
+          onClick={handleProfileSave}
+          disabled={profileLoading}
+          className={btnClass + " mt-4"}
+        >
+          {profileLoading ? (
+            <Loader2 size={18} className="animate-spin" />
+          ) : (
+            <Save size={18} />
+          )}
           Save Profile
         </button>
         {profileNotice && <NoticeBanner notice={profileNotice} />}
@@ -237,11 +348,27 @@ export default function UserProfileSettings() {
         <h3 className="text-white font-semibold mb-4 flex items-center gap-2">
           <Mail size={20} className="text-blue-400" /> Change Email
         </h3>
-        <p className="text-gray-400 text-sm mb-3">Current email: <span className="text-white">{user?.email}</span></p>
+        <p className="text-gray-400 text-sm mb-3">
+          Current email: <span className="text-white">{user?.email}</span>
+        </p>
         <div className="flex gap-3">
-          <input type="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} className={inputClass} placeholder="new.email@example.com" />
-          <button onClick={handleEmailUpdate} disabled={emailLoading || !newEmail} className="px-6 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-600 text-white font-medium rounded-xl flex items-center gap-2 whitespace-nowrap">
-            {emailLoading ? <Loader2 size={18} className="animate-spin" /> : <Mail size={18} />}
+          <input
+            type="email"
+            value={newEmail}
+            onChange={(e) => setNewEmail(e.target.value)}
+            className={inputClass}
+            placeholder="new.email@example.com"
+          />
+          <button
+            onClick={handleEmailUpdate}
+            disabled={emailLoading || !newEmail}
+            className="px-6 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-600 text-white font-medium rounded-xl flex items-center gap-2 whitespace-nowrap"
+          >
+            {emailLoading ? (
+              <Loader2 size={18} className="animate-spin" />
+            ) : (
+              <Mail size={18} />
+            )}
             Update
           </button>
         </div>
@@ -255,16 +382,48 @@ export default function UserProfileSettings() {
         </h3>
         <div className="space-y-4">
           <div>
-            <label className={labelClass}>New Password (min 8 characters)</label>
-            <input type="password" value={passwordForm.newPassword} onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })} className={inputClass} placeholder="••••••••" />
+            <label className={labelClass}>
+              New Password (min 8 characters)
+            </label>
+            <input
+              type="password"
+              value={passwordForm.newPassword}
+              onChange={(e) =>
+                setPasswordForm({
+                  ...passwordForm,
+                  newPassword: e.target.value,
+                })
+              }
+              className={inputClass}
+              placeholder="••••••••"
+            />
           </div>
           <div>
             <label className={labelClass}>Confirm New Password</label>
-            <input type="password" value={passwordForm.confirmPassword} onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })} className={inputClass} placeholder="••••••••" />
+            <input
+              type="password"
+              value={passwordForm.confirmPassword}
+              onChange={(e) =>
+                setPasswordForm({
+                  ...passwordForm,
+                  confirmPassword: e.target.value,
+                })
+              }
+              className={inputClass}
+              placeholder="••••••••"
+            />
           </div>
         </div>
-        <button onClick={handlePasswordUpdate} disabled={pwLoading || !passwordForm.newPassword} className={btnClass + " mt-4 bg-emerald-500 hover:bg-emerald-600"}>
-          {pwLoading ? <Loader2 size={18} className="animate-spin" /> : <KeyRound size={18} />}
+        <button
+          onClick={handlePasswordUpdate}
+          disabled={pwLoading || !passwordForm.newPassword}
+          className={btnClass + " mt-4 bg-emerald-500 hover:bg-emerald-600"}
+        >
+          {pwLoading ? (
+            <Loader2 size={18} className="animate-spin" />
+          ) : (
+            <KeyRound size={18} />
+          )}
           Update Password
         </button>
         {pwNotice && <NoticeBanner notice={pwNotice} />}
@@ -276,47 +435,91 @@ export default function UserProfileSettings() {
           <Share2 size={20} className="text-purple-400" /> Share Station Access
         </h3>
         <p className="text-gray-400 text-sm mb-4">
-          Invite team members to access <span className="text-white">{currentStation?.name || "your station"}</span> from any device.
-          They'll receive a link to accept access.
+          Invite team members to access{" "}
+          <span className="text-white">
+            {currentStation?.name || "your station"}
+          </span>{" "}
+          from any device. They'll receive a link to accept access.
         </p>
         <div className="flex flex-col sm:flex-row gap-3 mb-4">
-          <input type="email" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} className={inputClass} placeholder="colleague@email.com" />
-          <select value={inviteRole} onChange={(e) => setInviteRole(e.target.value)} className="px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white">
+          <input
+            type="email"
+            value={inviteEmail}
+            onChange={(e) => setInviteEmail(e.target.value)}
+            className={inputClass}
+            placeholder="colleague@email.com"
+          />
+          <select
+            value={inviteRole}
+            onChange={(e) => setInviteRole(e.target.value)}
+            className="px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white"
+          >
             <option value="manager">Manager</option>
             <option value="staff">Staff</option>
             <option value="auditor">Auditor</option>
           </select>
-          <button onClick={handleInvite} disabled={shareLoading || !inviteEmail || !currentStation?.id} className="px-6 bg-purple-500 hover:bg-purple-600 disabled:bg-gray-600 text-white font-medium rounded-xl flex items-center gap-2 whitespace-nowrap">
-            {shareLoading ? <Loader2 size={18} className="animate-spin" /> : <Users size={18} />}
+          <button
+            onClick={handleInvite}
+            disabled={shareLoading || !inviteEmail || !currentStation?.id}
+            className="px-6 bg-purple-500 hover:bg-purple-600 disabled:bg-gray-600 text-white font-medium rounded-xl flex items-center gap-2 whitespace-nowrap"
+          >
+            {shareLoading ? (
+              <Loader2 size={18} className="animate-spin" />
+            ) : (
+              <Users size={18} />
+            )}
             Invite
           </button>
         </div>
         {!currentStation?.id && (
-          <p className="text-yellow-400 text-xs mb-3">Create or select a station first to share access.</p>
+          <p className="text-yellow-400 text-xs mb-3">
+            Create or select a station first to share access.
+          </p>
         )}
 
         {/* Members list */}
         {members.length > 0 && (
           <div className="space-y-2 mt-4">
-            <p className="text-gray-400 text-xs font-medium">Current Members:</p>
+            <p className="text-gray-400 text-xs font-medium">
+              Current Members:
+            </p>
             {members.map((m) => (
-              <div key={m.id} className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
+              <div
+                key={m.id}
+                className="flex items-center justify-between p-3 bg-white/5 rounded-lg"
+              >
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 bg-purple-500/20 rounded-lg flex items-center justify-center">
                     <Users size={16} className="text-purple-400" />
                   </div>
                   <div>
-                    <p className="text-white text-sm font-medium">{m.name || m.invited_email}</p>
-                    <p className="text-gray-500 text-xs">{m.invited_email} · {m.role} · {m.status}</p>
+                    <p className="text-white text-sm font-medium">
+                      {m.name || m.invited_email}
+                    </p>
+                    <p className="text-gray-500 text-xs">
+                      {m.invited_email} · {m.role} · {m.status}
+                    </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
                   {m.status === "pending" && m.invite_token && (
-                    <button onClick={() => handleCopyInvite(m.invite_token, m)} className="p-2 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white" title="Copy invite link">
-                      {copiedToken === m.invite_token ? <Check size={16} className="text-emerald-400" /> : <Copy size={16} />}
+                    <button
+                      onClick={() => handleCopyInvite(m.invite_token, m)}
+                      className="p-2 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white"
+                      title="Copy invite link"
+                    >
+                      {copiedToken === m.invite_token ? (
+                        <Check size={16} className="text-emerald-400" />
+                      ) : (
+                        <Copy size={16} />
+                      )}
                     </button>
                   )}
-                  <button onClick={() => handleRevoke(m.id)} className="p-2 hover:bg-red-500/20 rounded-lg text-gray-400 hover:text-red-400" title="Remove access">
+                  <button
+                    onClick={() => handleRevoke(m.id)}
+                    className="p-2 hover:bg-red-500/20 rounded-lg text-gray-400 hover:text-red-400"
+                    title="Remove access"
+                  >
                     <Trash2 size={16} />
                   </button>
                 </div>
@@ -330,19 +533,25 @@ export default function UserProfileSettings() {
       {/* Cross-Device Documents */}
       <div className={cardClass}>
         <h3 className="text-white font-semibold mb-4 flex items-center gap-2">
-          <FileUp size={20} className="text-orange-400" /> Cross-Device File Storage
+          <FileUp size={20} className="text-orange-400" /> Cross-Device File
+          Storage
         </h3>
         <p className="text-gray-400 text-sm mb-4">
-          Upload files from this device and access them from any other device or browser when you log in.
-          Files are stored in Supabase cloud storage (not localStorage).
+          Upload files from this device and access them from any other device or
+          browser when you log in. Files are stored in Supabase cloud storage
+          (not localStorage).
         </p>
         <div
           className="border-2 border-dashed border-white/10 rounded-xl p-8 text-center cursor-pointer hover:border-amber-500/50 transition-colors"
           onClick={() => fileInputRef.current?.click()}
         >
           <FileUp size={32} className="mx-auto text-gray-500 mb-2" />
-          <p className="text-white text-sm font-medium">Click to upload files</p>
-          <p className="text-gray-500 text-xs mt-1">Any file type · Stored in cloud · Accessible from any device</p>
+          <p className="text-white text-sm font-medium">
+            Click to upload files
+          </p>
+          <p className="text-gray-500 text-xs mt-1">
+            Any file type · Stored in cloud · Accessible from any device
+          </p>
           <input
             ref={fileInputRef}
             type="file"
@@ -361,28 +570,48 @@ export default function UserProfileSettings() {
 
         {documents.length > 0 && (
           <div className="space-y-2 mt-4">
-            <p className="text-gray-400 text-xs font-medium">Your Files ({documents.length}):</p>
+            <p className="text-gray-400 text-xs font-medium">
+              Your Files ({documents.length}):
+            </p>
             {documents.map((doc) => (
-              <div key={doc.id} className="flex items-center justify-between p-3 bg-white/5 rounded-lg">
+              <div
+                key={doc.id}
+                className="flex items-center justify-between p-3 bg-white/5 rounded-lg"
+              >
                 <div className="flex items-center gap-3 min-w-0 flex-1">
                   <div className="w-8 h-8 bg-orange-500/20 rounded-lg flex items-center justify-center shrink-0">
                     <FileText size={16} className="text-orange-400" />
                   </div>
                   <div className="min-w-0">
-                    <p className="text-white text-sm font-medium truncate">{doc.file_name}</p>
+                    <p className="text-white text-sm font-medium truncate">
+                      {doc.file_name}
+                    </p>
                     <p className="text-gray-500 text-xs">
-                      {doc.category} · {doc.file_size ? `${(doc.file_size / 1024).toFixed(1)} KB` : "—"} · {doc.mime_type || "—"}
+                      {doc.category} ·{" "}
+                      {doc.file_size
+                        ? `${(doc.file_size / 1024).toFixed(1)} KB`
+                        : "—"}{" "}
+                      · {doc.mime_type || "—"}
                     </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <span className="text-gray-500 text-xs hidden sm:flex items-center gap-1">
-                    <Clock size={12} /> {new Date(doc.created_at).toLocaleDateString()}
+                    <Clock size={12} />{" "}
+                    {new Date(doc.created_at).toLocaleDateString()}
                   </span>
-                  <button onClick={() => handleDownload(doc)} className="p-2 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white" title="Download/View">
+                  <button
+                    onClick={() => handleDownload(doc)}
+                    className="p-2 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white"
+                    title="Download/View"
+                  >
                     <Download size={16} />
                   </button>
-                  <button onClick={() => handleDeleteDoc(doc.id)} className="p-2 hover:bg-red-500/20 rounded-lg text-gray-400 hover:text-red-400" title="Delete">
+                  <button
+                    onClick={() => handleDeleteDoc(doc.id)}
+                    className="p-2 hover:bg-red-500/20 rounded-lg text-gray-400 hover:text-red-400"
+                    title="Delete"
+                  >
                     <Trash2 size={16} />
                   </button>
                 </div>
@@ -396,14 +625,24 @@ export default function UserProfileSettings() {
   );
 }
 
-function NoticeBanner({ notice }: { notice: { type: "success" | "error"; msg: string } }) {
+function NoticeBanner({
+  notice,
+}: {
+  notice: { type: "success" | "error"; msg: string };
+}) {
   return (
-    <div className={`mt-3 p-3 rounded-xl flex items-start gap-2 text-sm ${
-      notice.type === "success"
-        ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-        : "bg-red-500/10 text-red-400 border border-red-500/20"
-    }`}>
-      {notice.type === "success" ? <CheckCircle size={18} className="shrink-0 mt-0.5" /> : <AlertCircle size={18} className="shrink-0 mt-0.5" />}
+    <div
+      className={`mt-3 p-3 rounded-xl flex items-start gap-2 text-sm ${
+        notice.type === "success"
+          ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+          : "bg-red-500/10 text-red-400 border border-red-500/20"
+      }`}
+    >
+      {notice.type === "success" ? (
+        <CheckCircle size={18} className="shrink-0 mt-0.5" />
+      ) : (
+        <AlertCircle size={18} className="shrink-0 mt-0.5" />
+      )}
       <span className="break-all">{notice.msg}</span>
     </div>
   );

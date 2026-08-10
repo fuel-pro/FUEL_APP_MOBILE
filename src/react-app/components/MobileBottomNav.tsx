@@ -96,7 +96,7 @@ export default function MobileBottomNav({
       icon: Package,
       color: "text-orange-500",
     },
-  ].filter(item => isTabAllowed(item.id));
+  ].filter((item) => isTabAllowed(item.id));
 
   // Secondary nav: all other tabs - filtered by feature flags + permissions
   const secondaryNav: NavItem[] = [
@@ -191,11 +191,31 @@ export default function MobileBottomNav({
       color: "text-amber-500",
     },
     // SalesZote-style additive modules
-    { id: "products", label: "Products", icon: Package, color: "text-indigo-400" },
-    { id: "sales-invoices", label: "Invoices", icon: FileText, color: "text-sky-400" },
-    { id: "purchases", label: "Purchases", icon: ShoppingCart, color: "text-emerald-400" },
-    { id: "terminal", label: "Terminal", icon: Monitor, color: "text-cyan-400" },
-  ].filter(item => isTabAllowed(item.id));
+    {
+      id: "products",
+      label: "Products",
+      icon: Package,
+      color: "text-indigo-400",
+    },
+    {
+      id: "sales-invoices",
+      label: "Invoices",
+      icon: FileText,
+      color: "text-sky-400",
+    },
+    {
+      id: "purchases",
+      label: "Purchases",
+      icon: ShoppingCart,
+      color: "text-emerald-400",
+    },
+    {
+      id: "terminal",
+      label: "Terminal",
+      icon: Monitor,
+      color: "text-cyan-400",
+    },
+  ].filter((item) => isTabAllowed(item.id));
 
   // M-PESA is ONLY shown if feature flag enabled (Kenya/TZ only)
   if (featureFlags.mpesa) {
@@ -212,7 +232,7 @@ export default function MobileBottomNav({
     setShowMoreMenu(false);
   };
 
-  const isMoreActive = secondaryNav.some(item => item.id === activeTab);
+  const isMoreActive = secondaryNav.some((item) => item.id === activeTab);
   const showMoreButton = secondaryNav.length > 0;
 
   return (
@@ -239,7 +259,7 @@ export default function MobileBottomNav({
             <p className="text-[10px] text-gray-400">Tap to navigate</p>
           </div>
           <div className="grid grid-cols-3 gap-1 p-2">
-            {secondaryNav.map(item => {
+            {secondaryNav.map((item) => {
               const Icon = item.icon;
               const isActive = activeTab === item.id;
               return (
@@ -284,7 +304,7 @@ export default function MobileBottomNav({
           className="flex items-center justify-around"
           style={{ height: 64 }}
         >
-          {primaryNav.map(item => {
+          {primaryNav.map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
             return (

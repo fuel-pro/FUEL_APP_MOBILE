@@ -78,7 +78,14 @@ import {
   PaymentMethodsSection,
 } from "./founder-sections";
 import { useFounderBackend } from "@/react-app/hooks/useFounderBackend";
-import { useCloudSync, useCloudUsers, useCloudStations, useCloudAuditLog, useCloudSecrets, useCloudFeatureFlags } from "@/react-app/hooks/useCloudSync";
+import {
+  useCloudSync,
+  useCloudUsers,
+  useCloudStations,
+  useCloudAuditLog,
+  useCloudSecrets,
+  useCloudFeatureFlags,
+} from "@/react-app/hooks/useCloudSync";
 import { checkApiStatus } from "@/react-app/lib/restApiSync";
 import { getBackendUrl } from "@/utils/apiConfig";
 
@@ -277,7 +284,6 @@ type SectionId =
   | "security"
   | "backup"
   | "config"
-  
   | "notifications"
   | "branding"
   | "api"
@@ -350,7 +356,7 @@ export default function FounderAccess() {
     { instruction: string; output: string; timestamp: string }[]
   >([]);
   const [editorTab, setEditorTab] = useState<"chat" | "files" | "preview">(
-    "chat"
+    "chat",
   );
   const [uploadedFiles, setUploadedFiles] = useState<
     { name: string; type: string; content: string; size: number }[]
@@ -358,7 +364,7 @@ export default function FounderAccess() {
   const [newSecretKey, setNewSecretKey] = useState("");
   const [newSecretValue, setNewSecretValue] = useState("");
   const [visibleSecrets, setVisibleSecrets] = useState<Record<string, boolean>>(
-    {}
+    {},
   );
   const [copiedSecret, setCopiedSecret] = useState("");
   const [loading, setLoading] = useState(true);
@@ -405,37 +411,47 @@ export default function FounderAccess() {
   /* ─── Load real users and stations from backend when authenticated ─── */
   useEffect(() => {
     if (!isAuthenticated) return;
-    
+
     // If we have backend data, use it
     if (allBackendUsers && allBackendUsers.length > 0) {
       const backendUsersMapped: AppUser[] = allBackendUsers.map((u: any) => ({
         authId: String(u.id),
-        authMethod: u.email?.includes('@') ? 'email' : 'unknown',
-        name: u.name || 'Unknown',
-        email: u.email || '',
-        role: u.role || 'user',
-        lastActive: u.lastSignInAt ? new Date(u.lastSignInAt).toLocaleString() : 'Never',
+        authMethod: u.email?.includes("@") ? "email" : "unknown",
+        name: u.name || "Unknown",
+        email: u.email || "",
+        role: u.role || "user",
+        lastActive: u.lastSignInAt
+          ? new Date(u.lastSignInAt).toLocaleString()
+          : "Never",
         stations: 0,
-        createdAt: u.createdAt ? new Date(u.createdAt).toLocaleString() : 'Unknown',
+        createdAt: u.createdAt
+          ? new Date(u.createdAt).toLocaleString()
+          : "Unknown",
       }));
       setUsers(backendUsersMapped);
     }
-    
+
     if (allBackendStations && allBackendStations.length > 0) {
-      const backendStationsMapped: StationRecord[] = allBackendStations.map((s: any) => ({
-        id: String(s.id),
-        name: s.name || 'Unnamed Station',
-        location: s.location || 'Unknown',
-        ownerId: String(s.ownerId || 0),
-        ownerName: 'Owner',
-        members: s.members || 0,
-        createdAt: s.createdAt ? new Date(s.createdAt).toLocaleString() : 'Unknown',
-        lastActive: s.updatedAt ? new Date(s.updatedAt).toLocaleString() : 'Unknown',
-        revenue: 0,
-      }));
+      const backendStationsMapped: StationRecord[] = allBackendStations.map(
+        (s: any) => ({
+          id: String(s.id),
+          name: s.name || "Unnamed Station",
+          location: s.location || "Unknown",
+          ownerId: String(s.ownerId || 0),
+          ownerName: "Owner",
+          members: s.members || 0,
+          createdAt: s.createdAt
+            ? new Date(s.createdAt).toLocaleString()
+            : "Unknown",
+          lastActive: s.updatedAt
+            ? new Date(s.updatedAt).toLocaleString()
+            : "Unknown",
+          revenue: 0,
+        }),
+      );
       setStations(backendStationsMapped);
     }
-    
+
     // If no backend data, fall back to localStorage scan
     if ((!allBackendUsers || allBackendUsers.length === 0) && !usersLoading) {
       const discoveredUsers: AppUser[] = [];
@@ -476,7 +492,11 @@ export default function FounderAccess() {
             const stationsList =
               val.stations || (Array.isArray(val) ? val : val.id ? [val] : []);
             stationsList.forEach((s: StationData) => {
-              if (s && s.id && !discoveredStations.some(ds => ds.id === s.id)) {
+              if (
+                s &&
+                s.id &&
+                !discoveredStations.some((ds) => ds.id === s.id)
+              ) {
                 discoveredStations.push({
                   id: s.id,
                   name: s.name || "Unnamed Station",
@@ -497,18 +517,24 @@ export default function FounderAccess() {
         }
       }
 
-      discoveredUsers.forEach(u => {
+      discoveredUsers.forEach((u) => {
         u.stations = discoveredStations.filter(
-          s => s.ownerId === u.authId
+          (s) => s.ownerId === u.authId,
         ).length;
       });
-      
+
       if (users.length === 0) setUsers(discoveredUsers);
       if (stations.length === 0) setStations(discoveredStations);
     }
-    
+
     setLoading(false);
-  }, [isAuthenticated, allBackendUsers, allBackendStations, usersLoading, allStationsLoading]);
+  }, [
+    isAuthenticated,
+    allBackendUsers,
+    allBackendStations,
+    usersLoading,
+    allStationsLoading,
+  ]);
 
   /* ─── Save secrets & flags ─── */
   useEffect(() => {
@@ -558,11 +584,13 @@ export default function FounderAccess() {
     } else {
       const nextAttempts = loginAttempts + 1;
       setLoginAttempts(nextAttempts);
-      setLoginError(result.error || `Invalid credentials. Attempt ${nextAttempts}/5`);
+      setLoginError(
+        result.error || `Invalid credentials. Attempt ${nextAttempts}/5`,
+      );
       logAudit(
         "Login Failed",
         `Invalid login attempt #${nextAttempts}`,
-        "danger"
+        "danger",
       );
       if (nextAttempts >= 5) {
         setIsLocked(true);
@@ -573,7 +601,7 @@ export default function FounderAccess() {
             setLoginAttempts(0);
             setLoginError("");
           },
-          15 * 60 * 1000
+          15 * 60 * 1000,
         );
       }
     }
@@ -581,25 +609,22 @@ export default function FounderAccess() {
 
   const completeLogin = async () => {
     setIsAuthenticated(true);
-    
+
     // Get founder token from backend via REST API
     let token = null;
     const API_URL = getBackendUrl();
-    
+
     try {
       // Try the founder-login REST endpoint first
-      const res = await fetch(
-        `${API_URL}/api/auth/founder-login`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            username: loginUsername.trim(),
-            password: loginPassword,
-          }),
-        }
-      );
-      
+      const res = await fetch(`${API_URL}/api/auth/founder-login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username: loginUsername.trim(),
+          password: loginPassword,
+        }),
+      });
+
       if (res.ok) {
         const data = await res.json();
         if (data?.token) {
@@ -607,26 +632,23 @@ export default function FounderAccess() {
         }
       } else {
         // Try tRPC endpoint as fallback
-        const trpcRes = await fetch(
-          `${API_URL}/api/trpc/founderAuth.login`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              json: { username: loginUsername.trim(), password: loginPassword },
-            }),
-          }
-        );
+        const trpcRes = await fetch(`${API_URL}/api/trpc/founderAuth.login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            json: { username: loginUsername.trim(), password: loginPassword },
+          }),
+        });
         const trpcData = await trpcRes.json();
         if (trpcData?.result?.data?.json?.token) {
           token = trpcData.result.data.json.token;
         }
       }
     } catch (e) {
-      console.warn('Backend unavailable, using local auth');
+      console.warn("Backend unavailable, using local auth");
       // Backend might be unavailable - continue with local auth
     }
-    
+
     // Store session with timestamp for 8-hour expiry
     localStorage.setItem(
       FOUNDER_SESSION_KEY,
@@ -635,7 +657,7 @@ export default function FounderAccess() {
         loginTime: Date.now(),
         username: loginUsername.trim(),
         token: token, // Store backend token for API calls
-      })
+      }),
     );
     setLoginError("");
     setLoginAttempts(0);
@@ -696,25 +718,25 @@ export default function FounderAccess() {
   /* ─── Secret Management ─── */
   const addSecret = () => {
     if (!newSecretKey.trim() || !newSecretValue) return;
-    if (secrets.some(s => s.key === newSecretKey.trim())) {
-      setSecrets(prev =>
-        prev.map(s =>
+    if (secrets.some((s) => s.key === newSecretKey.trim())) {
+      setSecrets((prev) =>
+        prev.map((s) =>
           s.key === newSecretKey.trim()
             ? {
                 ...s,
                 value: btoa(newSecretValue),
                 createdAt: new Date().toISOString(),
               }
-            : s
-        )
+            : s,
+        ),
       );
       logAudit(
         "Secret Updated",
         `Secret "${newSecretKey.trim()}" updated`,
-        "success"
+        "success",
       );
     } else {
-      setSecrets(prev => [
+      setSecrets((prev) => [
         ...prev,
         {
           key: newSecretKey.trim(),
@@ -725,7 +747,7 @@ export default function FounderAccess() {
       logAudit(
         "Secret Created",
         `Secret "${newSecretKey.trim()}" added`,
-        "success"
+        "success",
       );
     }
     setNewSecretKey("");
@@ -735,7 +757,7 @@ export default function FounderAccess() {
 
   const deleteSecret = (key: string) => {
     if (!confirm(`Delete secret "${key}"?`)) return;
-    setSecrets(prev => prev.filter(s => s.key !== key));
+    setSecrets((prev) => prev.filter((s) => s.key !== key));
     logAudit("Secret Deleted", `Secret "${key}" removed`, "warning");
   };
 
@@ -750,37 +772,37 @@ export default function FounderAccess() {
   };
 
   const toggleSecretVisibility = (key: string) => {
-    setVisibleSecrets(prev => ({ ...prev, [key]: !prev[key] }));
+    setVisibleSecrets((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
   /* ─── Feature Flag Toggle ─── */
   const toggleFlag = (id: string) => {
-    setFeatureFlags(prev =>
-      prev.map(f => {
+    setFeatureFlags((prev) =>
+      prev.map((f) => {
         if (f.id === id) {
           const updated = { ...f, enabled: !f.enabled };
           logAudit(
             "Feature Flag Toggled",
             `"${f.name}" is now ${updated.enabled ? "enabled" : "disabled"}`,
-            updated.enabled ? "success" : "warning"
+            updated.enabled ? "success" : "warning",
           );
           return updated;
         }
         return f;
-      })
+      }),
     );
   };
 
   const filteredUsers = users.filter(
-    u =>
+    (u) =>
       u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      u.authMethod.toLowerCase().includes(searchQuery.toLowerCase())
+      u.authMethod.toLowerCase().includes(searchQuery.toLowerCase()),
   );
   const filteredStations = stations.filter(
-    s =>
+    (s) =>
       s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      s.location.toLowerCase().includes(searchQuery.toLowerCase())
+      s.location.toLowerCase().includes(searchQuery.toLowerCase()),
   );
   const totalRevenue = stations.reduce((sum, s) => sum + s.revenue, 0);
   const effectiveStationCount =
@@ -847,11 +869,11 @@ export default function FounderAccess() {
                     <input
                       type="text"
                       value={loginUsername}
-                      onChange={e => {
+                      onChange={(e) => {
                         setLoginUsername(e.target.value);
                         setLoginError("");
                       }}
-                      onKeyDown={e => e.key === "Enter" && handleLogin()}
+                      onKeyDown={(e) => e.key === "Enter" && handleLogin()}
                       placeholder="Enter username"
                       className="w-full pl-10 pr-4 py-3 bg-white/[0.05] border border-white/[0.1] rounded-xl text-white text-sm placeholder-gray-500 focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none transition-all"
                       autoFocus
@@ -870,11 +892,11 @@ export default function FounderAccess() {
                     <input
                       type={showPassword ? "text" : "password"}
                       value={loginPassword}
-                      onChange={e => {
+                      onChange={(e) => {
                         setLoginPassword(e.target.value);
                         setLoginError("");
                       }}
-                      onKeyDown={e => e.key === "Enter" && handleLogin()}
+                      onKeyDown={(e) => e.key === "Enter" && handleLogin()}
                       placeholder="Enter password"
                       className="w-full pl-10 pr-12 py-3 bg-white/[0.05] border border-white/[0.1] rounded-xl text-white text-sm placeholder-gray-500 focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none transition-all"
                     />
@@ -911,13 +933,15 @@ export default function FounderAccess() {
                   <input
                     type="text"
                     value={login2FACode}
-                    onChange={e => {
+                    onChange={(e) => {
                       setLogin2FACode(
-                        e.target.value.replace(/\D/g, "").slice(0, 6)
+                        e.target.value.replace(/\D/g, "").slice(0, 6),
                       );
                       setLoginError("");
                     }}
-                    onKeyDown={e => e.key === "Enter" && handleVerify2FALogin()}
+                    onKeyDown={(e) =>
+                      e.key === "Enter" && handleVerify2FALogin()
+                    }
                     placeholder="000000"
                     className="w-full px-4 py-3 bg-white/[0.05] border border-white/[0.1] rounded-xl text-white text-sm placeholder-gray-500 focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none transition-all font-mono tracking-widest text-center"
                     autoFocus
@@ -1136,12 +1160,12 @@ export default function FounderAccess() {
         </div>
 
         <nav className="flex-1 px-3 space-y-0.5 overflow-y-auto">
-          {navGroups.map(g => (
+          {navGroups.map((g) => (
             <div key={g.label} className="pb-2 pt-1">
               <p className="text-[9px] text-gray-600 uppercase tracking-wider px-4 mb-1">
                 {g.label}
               </p>
-              {g.items.map(item => (
+              {g.items.map((item) => (
                 <NavItem
                   key={item.id}
                   id={item.id}
@@ -1189,17 +1213,21 @@ export default function FounderAccess() {
               />
               <input
                 value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
+                onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search..."
                 className="pl-8 pr-3 py-1.5 bg-white/[0.03] border border-white/[0.08] rounded-lg text-xs text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/30 w-48"
               />
             </div>
             {/* Cloud Sync Status */}
-            <div className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg ${cloudStatus.isOnline ? 'bg-emerald-500/10 border border-emerald-500/20' : 'bg-amber-500/10 border border-amber-500/20'}`}>
+            <div
+              className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg ${cloudStatus.isOnline ? "bg-emerald-500/10 border border-emerald-500/20" : "bg-amber-500/10 border border-amber-500/20"}`}
+            >
               {cloudStatus.isOnline ? (
                 <>
                   <Cloud size={10} className="text-emerald-400" />
-                  <span className="text-[10px] text-emerald-300">Cloud Synced</span>
+                  <span className="text-[10px] text-emerald-300">
+                    Cloud Synced
+                  </span>
                 </>
               ) : (
                 <>
@@ -1241,7 +1269,7 @@ export default function FounderAccess() {
                     icon: Key,
                     color: "text-purple-400",
                   },
-                ].map(s => (
+                ].map((s) => (
                   <div
                     key={s.label}
                     className="bg-[#161618] border border-white/[0.06] rounded-xl p-5"
@@ -1256,7 +1284,7 @@ export default function FounderAccess() {
                   </div>
                 ))}
               </div>
-              
+
               {/* Cloud Sync Status */}
               {!cloudStatus.isOnline && (
                 <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-6">
@@ -1269,15 +1297,18 @@ export default function FounderAccess() {
                         Cloud Sync Status
                       </h3>
                       <p className="text-xs text-gray-400 mb-4">
-                        {cloudStatus.status?.includes("root only") 
+                        {cloudStatus.status?.includes("root only")
                           ? "Backend is online but cloud sync features require the REST API. Railway deployment may be updating."
                           : "This system is currently using local storage. Data is not synced across devices."}
                       </p>
                       {cloudStatus.status?.includes("root only") && (
                         <div className="mb-4">
-                          <p className="text-xs text-emerald-400 mb-2">✓ Backend Connected:</p>
+                          <p className="text-xs text-emerald-400 mb-2">
+                            ✓ Backend Connected:
+                          </p>
                           <p className="text-xs text-gray-500 font-mono">
-                            {import.meta.env.VITE_BACKEND_URL || "Railway Backend (deprecated)"}
+                            {import.meta.env.VITE_BACKEND_URL ||
+                              "Railway Backend (deprecated)"}
                           </p>
                         </div>
                       )}
@@ -1292,7 +1323,7 @@ export default function FounderAccess() {
                   </div>
                 </div>
               )}
-              
+
               <div className="bg-[#161618] border border-white/[0.06] rounded-xl p-6">
                 <h3 className="text-sm font-medium text-gray-300 mb-4">
                   Global Revenue Overview
@@ -1327,7 +1358,7 @@ export default function FounderAccess() {
                           }
                         </span>
                       </div>
-                    )
+                    ),
                   )}
                 </div>
               </div>
@@ -1337,7 +1368,7 @@ export default function FounderAccess() {
                     Recent Audit Events
                   </h3>
                   <div className="space-y-2">
-                    {auditLog.slice(0, 5).map(a => (
+                    {auditLog.slice(0, 5).map((a) => (
                       <div
                         key={a.id}
                         className="flex items-center gap-2 text-xs"
@@ -1369,7 +1400,7 @@ export default function FounderAccess() {
                     Active Feature Flags
                   </h3>
                   <div className="space-y-2">
-                    {featureFlags.slice(0, 5).map(f => (
+                    {featureFlags.slice(0, 5).map((f) => (
                       <div
                         key={f.id}
                         className="flex items-center gap-2 text-xs"
@@ -1409,19 +1440,19 @@ export default function FounderAccess() {
                   <thead>
                     <tr className="border-b border-white/[0.06]">
                       {["User", "Auth", "Role", "Stations", "Status", ""].map(
-                        h => (
+                        (h) => (
                           <th
                             key={h}
                             className="text-left text-[11px] text-gray-500 font-medium px-4 py-3"
                           >
                             {h}
                           </th>
-                        )
+                        ),
                       )}
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredUsers.map(u => (
+                    {filteredUsers.map((u) => (
                       <tr
                         key={u.authId}
                         className="border-b border-white/[0.04] hover:bg-white/[0.02]"
@@ -1495,7 +1526,7 @@ export default function FounderAccess() {
                 </span>
               </div>
               <div className="grid grid-cols-2 gap-4">
-                {filteredStations.map(s => (
+                {filteredStations.map((s) => (
                   <div
                     key={s.id}
                     className="bg-[#161618] border border-white/[0.06] rounded-xl p-5"
@@ -1525,7 +1556,7 @@ export default function FounderAccess() {
                           value: "Active",
                           color: "text-emerald-400",
                         },
-                      ].map(m => (
+                      ].map((m) => (
                         <div
                           key={m.label}
                           className="bg-white/[0.02] rounded-lg p-2 text-center"
@@ -1580,7 +1611,7 @@ export default function FounderAccess() {
                       </label>
                       <input
                         value={newSecretKey}
-                        onChange={e => setNewSecretKey(e.target.value)}
+                        onChange={(e) => setNewSecretKey(e.target.value)}
                         placeholder="API_KEY"
                         className="w-full px-3 py-2.5 bg-white/[0.03] border border-white/[0.08] rounded-lg text-sm text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/30"
                       />
@@ -1591,7 +1622,7 @@ export default function FounderAccess() {
                       </label>
                       <input
                         value={newSecretValue}
-                        onChange={e => setNewSecretValue(e.target.value)}
+                        onChange={(e) => setNewSecretValue(e.target.value)}
                         placeholder="Enter value"
                         className="w-full px-3 py-2.5 bg-white/[0.03] border border-white/[0.08] rounded-lg text-sm text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/30"
                       />
@@ -1619,7 +1650,7 @@ export default function FounderAccess() {
                     </tr>
                   </thead>
                   <tbody>
-                    {secrets.map(s => (
+                    {secrets.map((s) => (
                       <tr
                         key={s.key}
                         className="border-b border-white/[0.04] hover:bg-white/[0.02]"
@@ -1710,18 +1741,20 @@ export default function FounderAccess() {
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-white/[0.06]">
-                      {["Status", "Event", "Detail", "User", "Time"].map(h => (
-                        <th
-                          key={h}
-                          className="text-left text-[11px] text-gray-500 font-medium px-4 py-3"
-                        >
-                          {h}
-                        </th>
-                      ))}
+                      {["Status", "Event", "Detail", "User", "Time"].map(
+                        (h) => (
+                          <th
+                            key={h}
+                            className="text-left text-[11px] text-gray-500 font-medium px-4 py-3"
+                          >
+                            {h}
+                          </th>
+                        ),
+                      )}
                     </tr>
                   </thead>
                   <tbody>
-                    {auditLog.map(a => (
+                    {auditLog.map((a) => (
                       <tr
                         key={a.id}
                         className="border-b border-white/[0.04] hover:bg-white/[0.02]"
@@ -1773,12 +1806,12 @@ export default function FounderAccess() {
                   Feature Flags
                 </h2>
                 <span className="text-xs text-gray-500">
-                  {featureFlags.filter(f => f.enabled).length} of{" "}
+                  {featureFlags.filter((f) => f.enabled).length} of{" "}
                   {featureFlags.length} enabled
                 </span>
               </div>
               <div className="space-y-2">
-                {featureFlags.map(f => (
+                {featureFlags.map((f) => (
                   <div
                     key={f.id}
                     className="bg-[#161618] border border-white/[0.06] rounded-xl p-4 flex items-center justify-between"
@@ -1852,7 +1885,7 @@ export default function FounderAccess() {
                     icon: Globe,
                     status: "healthy" as const,
                   },
-                ].map(m => (
+                ].map((m) => (
                   <div
                     key={m.label}
                     className="bg-[#161618] border border-white/[0.06] rounded-xl p-5"
@@ -1882,11 +1915,11 @@ export default function FounderAccess() {
                 </h3>
                 <div className="space-y-2 max-h-48 overflow-y-auto">
                   {Array.from({ length: localStorage.length }, (_, i) =>
-                    localStorage.key(i)
+                    localStorage.key(i),
                   )
                     .filter(Boolean)
                     .sort()
-                    .map(key => {
+                    .map((key) => {
                       const val = localStorage.getItem(key!) || "";
                       return (
                         <div
@@ -1929,7 +1962,7 @@ export default function FounderAccess() {
                     },
                     { id: "files" as const, label: "Files", icon: Upload },
                     { id: "preview" as const, label: "History", icon: Clock },
-                  ].map(tab => (
+                  ].map((tab) => (
                     <button
                       key={tab.id}
                       onClick={() => setEditorTab(tab.id)}
@@ -2011,7 +2044,7 @@ export default function FounderAccess() {
                       <div className="flex-1">
                         <textarea
                           value={editorInstruction}
-                          onChange={e => setEditorInstruction(e.target.value)}
+                          onChange={(e) => setEditorInstruction(e.target.value)}
                           placeholder="Describe the changes you want to make..."
                           className="w-full h-20 px-3 py-2 bg-white/[0.03] border border-white/[0.08] rounded-lg text-sm text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/30 resize-none"
                         />
@@ -2090,8 +2123,8 @@ export default function FounderAccess() {
                             </div>
                             <button
                               onClick={() =>
-                                setUploadedFiles(prev =>
-                                  prev.filter((_, idx) => idx !== i)
+                                setUploadedFiles((prev) =>
+                                  prev.filter((_, idx) => idx !== i),
                                 )
                               }
                               className="text-gray-500 hover:text-red-400"
@@ -2218,18 +2251,18 @@ export default function FounderAccess() {
     setTimeout(() => {
       const output = generateAIResponse(instruction);
       setEditorOutput(output);
-      setEditorHistory(prev =>
+      setEditorHistory((prev) =>
         [
           { instruction, output, timestamp: new Date().toISOString() },
           ...prev,
-        ].slice(0, 50)
+        ].slice(0, 50),
       );
       setEditorExecuting(false);
       setEditorInstruction("");
       logAudit(
         "AI Editor Used",
         `Instruction: ${instruction.slice(0, 100)}`,
-        "info"
+        "info",
       );
     }, 1500);
   }
@@ -2238,10 +2271,10 @@ export default function FounderAccess() {
   function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const files = e.target.files;
     if (!files) return;
-    Array.from(files).forEach(file => {
+    Array.from(files).forEach((file) => {
       const reader = new FileReader();
       reader.onload = () => {
-        setUploadedFiles(prev => [
+        setUploadedFiles((prev) => [
           ...prev,
           {
             name: file.name,
@@ -2256,7 +2289,7 @@ export default function FounderAccess() {
     logAudit(
       "File Uploaded",
       `${files.length} file(s) uploaded to AI Editor`,
-      "info"
+      "info",
     );
   }
 
@@ -2275,7 +2308,7 @@ export default function FounderAccess() {
       lower.includes("table") ||
       lower.includes("date")
     ) {
-      return `// Date Range Filter for Tables\n// Based on: "${instruction}"\n\nfunction DateRangeFilter({ onFilter }: { onFilter: (s: Date, e: Date) => void }) {\n  const [start, setStart] = useState<Date | null>(null);\n  const [end, setEnd] = useState<Date | null>(null);\n  return (\n    <div className=\"flex items-center gap-2\">\n      <input type=\"date\" onChange={e => setStart(e.target.valueAsDate)} />\n      <span>to</span>\n      <input type=\"date\" onChange={e => setEnd(e.target.valueAsDate)} />\n      <button onClick={() => start && end && onFilter(start, end)}>Apply</button>\n    </div>\n  );\n}`;
+      return `// Date Range Filter for Tables\n// Based on: "${instruction}"\n\nfunction DateRangeFilter({ onFilter }: { onFilter: (s: Date, e: Date) => void }) {\n  const [start, setStart] = useState<Date | null>(null);\n  const [end, setEnd] = useState<Date | null>(null);\n  return (\n    <div className="flex items-center gap-2">\n      <input type="date" onChange={e => setStart(e.target.valueAsDate)} />\n      <span>to</span>\n      <input type="date" onChange={e => setEnd(e.target.valueAsDate)} />\n      <button onClick={() => start && end && onFilter(start, end)}>Apply</button>\n    </div>\n  );\n}`;
     }
     if (
       lower.includes("tab") ||

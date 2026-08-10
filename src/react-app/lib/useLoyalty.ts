@@ -43,7 +43,7 @@ function saveToStorage<T>(key: string, data: T): void {
 // ─── Default Station Config ───
 function getDefaultStationConfig(
   stationId: string,
-  stationName: string
+  stationName: string,
 ): StationLoyaltyConfig {
   return {
     stationId,
@@ -67,7 +67,7 @@ function getDefaultStationConfig(
 function getDefaultRewards(stationId: string): StationReward[] {
   const now = new Date().toISOString();
   const yearLater = new Date(
-    Date.now() + 365 * 24 * 60 * 60 * 1000
+    Date.now() + 365 * 24 * 60 * 60 * 1000,
   ).toISOString();
 
   return [
@@ -208,29 +208,29 @@ function getDefaultRewards(stationId: string): StationReward[] {
 export function useLoyalty(stationId: string) {
   // ─── State ───
   const [customers, setCustomers] = useState<LoyaltyCustomer[]>(() =>
-    loadFromStorage(LOYALTY_CUSTOMERS_KEY, [])
+    loadFromStorage(LOYALTY_CUSTOMERS_KEY, []),
   );
   const [rewards, setRewards] = useState<StationReward[]>(() =>
-    loadFromStorage(LOYALTY_REWARDS_KEY, getDefaultRewards(stationId))
+    loadFromStorage(LOYALTY_REWARDS_KEY, getDefaultRewards(stationId)),
   );
   const [transactions, setTransactions] = useState<LoyaltyTransaction[]>(() =>
-    loadFromStorage(LOYALTY_TRANSACTIONS_KEY, [])
+    loadFromStorage(LOYALTY_TRANSACTIONS_KEY, []),
   );
   const [configs, setConfigs] = useState<Record<string, StationLoyaltyConfig>>(
     () => {
       const stored = loadFromStorage<Record<string, StationLoyaltyConfig>>(
         LOYALTY_CONFIG_KEY,
-        {}
+        {},
       );
       if (!stored[stationId]) {
         stored[stationId] = getDefaultStationConfig(
           stationId,
-          `Station ${stationId.slice(0, 4)}`
+          `Station ${stationId.slice(0, 4)}`,
         );
         saveToStorage(LOYALTY_CONFIG_KEY, stored);
       }
       return stored;
-    }
+    },
   );
   const [isLoading, setIsLoading] = useState(false);
 
@@ -250,18 +250,18 @@ export function useLoyalty(stationId: string) {
 
   // ─── Station-specific data ───
   const stationCustomers = useMemo(
-    () => customers.filter(c => c.stationId === stationId),
-    [customers, stationId]
+    () => customers.filter((c) => c.stationId === stationId),
+    [customers, stationId],
   );
 
   const stationRewards = useMemo(
-    () => rewards.filter(r => r.stationId === stationId && r.isActive),
-    [rewards, stationId]
+    () => rewards.filter((r) => r.stationId === stationId && r.isActive),
+    [rewards, stationId],
   );
 
   const stationTransactions = useMemo(
-    () => transactions.filter(t => t.stationId === stationId),
-    [transactions, stationId]
+    () => transactions.filter((t) => t.stationId === stationId),
+    [transactions, stationId],
   );
 
   const config = useMemo(() => configs[stationId], [configs, stationId]);
@@ -269,19 +269,19 @@ export function useLoyalty(stationId: string) {
   // ─── Stats ───
   const stats: LoyaltyStats = useMemo(() => {
     const stationCusts = stationCustomers.filter(
-      c => c.cardStatus === "active"
+      (c) => c.cardStatus === "active",
     );
     return {
       stationId,
       totalCustomers: stationCustomers.length,
       activeCustomers: stationCusts.length,
       totalPointsIssued: stationTransactions
-        .filter(t => t.type === "earn")
+        .filter((t) => t.type === "earn")
         .reduce((s, t) => s + t.points, 0),
       totalPointsRedeemed: Math.abs(
         stationTransactions
-          .filter(t => t.type === "redeem")
-          .reduce((s, t) => s + t.points, 0)
+          .filter((t) => t.type === "redeem")
+          .reduce((s, t) => s + t.points, 0),
       ),
       totalRevenue: stationCusts.reduce((s, c) => s + c.totalSpent, 0),
       averageSpend:
@@ -290,10 +290,10 @@ export function useLoyalty(stationId: string) {
             stationCusts.length
           : 0,
       topTierBreakdown: {
-        Bronze: stationCusts.filter(c => c.tier === "Bronze").length,
-        Silver: stationCusts.filter(c => c.tier === "Silver").length,
-        Gold: stationCusts.filter(c => c.tier === "Gold").length,
-        Platinum: stationCusts.filter(c => c.tier === "Platinum").length,
+        Bronze: stationCusts.filter((c) => c.tier === "Bronze").length,
+        Silver: stationCusts.filter((c) => c.tier === "Silver").length,
+        Gold: stationCusts.filter((c) => c.tier === "Gold").length,
+        Platinum: stationCusts.filter((c) => c.tier === "Platinum").length,
       },
     };
   }, [stationCustomers, stationTransactions, stationId]);
@@ -318,7 +318,7 @@ export function useLoyalty(stationId: string) {
         | "updatedAt"
         | "createdBy"
       >,
-      createdBy: string
+      createdBy: string,
     ): LoyaltyCustomer => {
       const stationIndex = parseInt(stationId.slice(0, 2), 16) % 100;
       const customerIndex = stationCustomers.length + 1;
@@ -341,50 +341,50 @@ export function useLoyalty(stationId: string) {
         createdBy,
       };
 
-      setCustomers(prev => [newCustomer, ...prev]);
+      setCustomers((prev) => [newCustomer, ...prev]);
       return newCustomer;
     },
-    [stationId, stationCustomers.length]
+    [stationId, stationCustomers.length],
   );
 
   const updateCustomer = useCallback(
     (id: string, updates: Partial<LoyaltyCustomer>) => {
-      setCustomers(prev =>
-        prev.map(c =>
+      setCustomers((prev) =>
+        prev.map((c) =>
           c.id === id
             ? { ...c, ...updates, updatedAt: new Date().toISOString() }
-            : c
-        )
+            : c,
+        ),
       );
     },
-    []
+    [],
   );
 
   const deleteCustomer = useCallback((id: string) => {
-    setCustomers(prev => prev.filter(c => c.id !== id));
+    setCustomers((prev) => prev.filter((c) => c.id !== id));
   }, []);
 
   const getCustomer = useCallback(
     (id: string): LoyaltyCustomer | undefined => {
-      return customers.find(c => c.id === id);
+      return customers.find((c) => c.id === id);
     },
-    [customers]
+    [customers],
   );
 
   const findCustomerByPhone = useCallback(
     (phone: string): LoyaltyCustomer | undefined => {
       return customers.find(
-        c => c.phone === phone && c.stationId === stationId
+        (c) => c.phone === phone && c.stationId === stationId,
       );
     },
-    [customers, stationId]
+    [customers, stationId],
   );
 
   const findCustomerByCard = useCallback(
     (cardNumber: string): LoyaltyCustomer | undefined => {
-      return customers.find(c => c.cardNumber === cardNumber);
+      return customers.find((c) => c.cardNumber === cardNumber);
     },
-    [customers]
+    [customers],
   );
 
   // ─── Points Operations ───
@@ -395,16 +395,16 @@ export function useLoyalty(stationId: string) {
       amount: number,
       liters: number,
       fuelType: string,
-      processedBy: string
+      processedBy: string,
     ): LoyaltyTransaction | null => {
-      const customer = customers.find(c => c.id === customerId);
+      const customer = customers.find((c) => c.id === customerId);
       if (!customer || !config) return null;
 
       const points = calculatePointsEarned(
         liters,
         amount / liters,
         config,
-        customer.tier
+        customer.tier,
       );
       if (points === 0) return null;
 
@@ -432,8 +432,8 @@ export function useLoyalty(stationId: string) {
       };
 
       // Update customer
-      setCustomers(prev =>
-        prev.map(c =>
+      setCustomers((prev) =>
+        prev.map((c) =>
           c.id === customerId
             ? {
                 ...c,
@@ -445,23 +445,23 @@ export function useLoyalty(stationId: string) {
                 lastVisit: new Date().toISOString().split("T")[0],
                 updatedAt: new Date().toISOString(),
               }
-            : c
-        )
+            : c,
+        ),
       );
 
-      setTransactions(prev => [transaction, ...prev]);
+      setTransactions((prev) => [transaction, ...prev]);
 
       // Trigger notification if tier changed
       if (tierChanged && config.upgradeNotifications) {
         // Could trigger a toast/notification here
         console.log(
-          `[Loyalty] Customer ${customer.name} upgraded to ${newTier}!`
+          `[Loyalty] Customer ${customer.name} upgraded to ${newTier}!`,
         );
       }
 
       return transaction;
     },
-    [customers, config, stationId]
+    [customers, config, stationId],
   );
 
   const redeemPoints = useCallback(
@@ -469,10 +469,10 @@ export function useLoyalty(stationId: string) {
       customerId: string,
       rewardId: string,
       pointsCost: number,
-      processedBy: string
+      processedBy: string,
     ): LoyaltyTransaction | null => {
-      const customer = customers.find(c => c.id === customerId);
-      const reward = rewards.find(r => r.id === rewardId);
+      const customer = customers.find((c) => c.id === customerId);
+      const reward = rewards.find((r) => r.id === rewardId);
 
       if (!customer || !reward || customer.points < pointsCost) return null;
       if (
@@ -498,37 +498,37 @@ export function useLoyalty(stationId: string) {
       };
 
       // Update customer
-      setCustomers(prev =>
-        prev.map(c =>
+      setCustomers((prev) =>
+        prev.map((c) =>
           c.id === customerId
             ? {
                 ...c,
                 points: c.points - pointsCost,
                 updatedAt: new Date().toISOString(),
               }
-            : c
-        )
+            : c,
+        ),
       );
 
       // Update reward quantity
       if (reward.remainingQuantity !== undefined) {
-        setRewards(prev =>
-          prev.map(r =>
+        setRewards((prev) =>
+          prev.map((r) =>
             r.id === rewardId
               ? {
                   ...r,
                   remainingQuantity: r.remainingQuantity! - 1,
                   updatedAt: new Date().toISOString(),
                 }
-              : r
-          )
+              : r,
+          ),
         );
       }
 
-      setTransactions(prev => [transaction, ...prev]);
+      setTransactions((prev) => [transaction, ...prev]);
       return transaction;
     },
-    [customers, rewards, stationId]
+    [customers, rewards, stationId],
   );
 
   const adjustPoints = useCallback(
@@ -536,9 +536,9 @@ export function useLoyalty(stationId: string) {
       customerId: string,
       points: number,
       reason: string,
-      processedBy: string
+      processedBy: string,
     ): LoyaltyTransaction | null => {
-      const customer = customers.find(c => c.id === customerId);
+      const customer = customers.find((c) => c.id === customerId);
       if (!customer) return null;
 
       const transaction: LoyaltyTransaction = {
@@ -554,8 +554,8 @@ export function useLoyalty(stationId: string) {
         processedAt: new Date().toISOString(),
       };
 
-      setCustomers(prev =>
-        prev.map(c =>
+      setCustomers((prev) =>
+        prev.map((c) =>
           c.id === customerId
             ? {
                 ...c,
@@ -564,20 +564,20 @@ export function useLoyalty(stationId: string) {
                   points > 0 ? c.lifetimePoints + points : c.lifetimePoints,
                 updatedAt: new Date().toISOString(),
               }
-            : c
-        )
+            : c,
+        ),
       );
 
-      setTransactions(prev => [transaction, ...prev]);
+      setTransactions((prev) => [transaction, ...prev]);
       return transaction;
     },
-    [customers, stationId]
+    [customers, stationId],
   );
 
   // ─── Reward Operations ───
   const addReward = useCallback(
     (
-      data: Omit<StationReward, "id" | "stationId" | "createdAt" | "updatedAt">
+      data: Omit<StationReward, "id" | "stationId" | "createdAt" | "updatedAt">,
     ): StationReward => {
       const reward: StationReward = {
         ...data,
@@ -586,33 +586,33 @@ export function useLoyalty(stationId: string) {
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
-      setRewards(prev => [reward, ...prev]);
+      setRewards((prev) => [reward, ...prev]);
       return reward;
     },
-    [stationId]
+    [stationId],
   );
 
   const updateReward = useCallback(
     (id: string, updates: Partial<StationReward>) => {
-      setRewards(prev =>
-        prev.map(r =>
+      setRewards((prev) =>
+        prev.map((r) =>
           r.id === id
             ? { ...r, ...updates, updatedAt: new Date().toISOString() }
-            : r
-        )
+            : r,
+        ),
       );
     },
-    []
+    [],
   );
 
   const deleteReward = useCallback((id: string) => {
-    setRewards(prev => prev.filter(r => r.id !== id));
+    setRewards((prev) => prev.filter((r) => r.id !== id));
   }, []);
 
   // ─── Config Operations ───
   const updateConfig = useCallback(
     (updates: Partial<StationLoyaltyConfig>) => {
-      setConfigs(prev => ({
+      setConfigs((prev) => ({
         ...prev,
         [stationId]: {
           ...prev[stationId],
@@ -621,7 +621,7 @@ export function useLoyalty(stationId: string) {
         },
       }));
     },
-    [stationId]
+    [stationId],
   );
 
   // ─── Export/Import ───
@@ -636,9 +636,9 @@ export function useLoyalty(stationId: string) {
   }, [stationCustomers, stationRewards, stationTransactions, config]);
 
   const importCustomers = useCallback((data: LoyaltyCustomer[]) => {
-    setCustomers(prev => {
-      const existing = new Set(prev.map(c => c.id));
-      const newCustomers = data.filter(c => !existing.has(c.id));
+    setCustomers((prev) => {
+      const existing = new Set(prev.map((c) => c.id));
+      const newCustomers = data.filter((c) => !existing.has(c.id));
       return [...newCustomers, ...prev];
     });
   }, []);
@@ -682,23 +682,24 @@ export function useLoyalty(stationId: string) {
 // ─── Multi-Station Hook ───
 export function useAllStationLoyalty() {
   const [allCustomers, setAllCustomers] = useState<LoyaltyCustomer[]>(() =>
-    loadFromStorage(LOYALTY_CUSTOMERS_KEY, [])
+    loadFromStorage(LOYALTY_CUSTOMERS_KEY, []),
   );
   const [allRewards, setAllRewards] = useState<StationReward[]>(() =>
-    loadFromStorage(LOYALTY_REWARDS_KEY, [])
+    loadFromStorage(LOYALTY_REWARDS_KEY, []),
   );
 
   const getStationCustomers = useCallback(
-    (stationId: string) => allCustomers.filter(c => c.stationId === stationId),
-    [allCustomers]
+    (stationId: string) =>
+      allCustomers.filter((c) => c.stationId === stationId),
+    [allCustomers],
   );
 
   const getCustomerStation = useCallback(
     (customerId: string) => {
-      const customer = allCustomers.find(c => c.id === customerId);
+      const customer = allCustomers.find((c) => c.id === customerId);
       return customer?.stationId;
     },
-    [allCustomers]
+    [allCustomers],
   );
 
   return {

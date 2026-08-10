@@ -20,7 +20,7 @@ interface Props {
   logAudit: (
     e: string,
     d: string,
-    s: "success" | "warning" | "danger" | "info"
+    s: "success" | "warning" | "danger" | "info",
   ) => void;
 }
 
@@ -31,9 +31,9 @@ export default function PayoutSection({ logAudit }: Props) {
   const [searchTerm, setSearchTerm] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
 
-  const gateways = [...new Set(payments.map(p => p.gateway))];
+  const gateways = [...new Set(payments.map((p) => p.gateway))];
 
-  const filtered = payments.filter(p => {
+  const filtered = payments.filter((p) => {
     if (filterStatus !== "all" && p.status !== filterStatus) return false;
     if (filterGateway !== "all" && p.gateway !== filterGateway) return false;
     if (
@@ -46,14 +46,14 @@ export default function PayoutSection({ logAudit }: Props) {
   });
 
   const totalRevenue = filtered
-    .filter(p => p.status === "success")
+    .filter((p) => p.status === "success")
     .reduce((s, p) => s + p.amount, 0);
   const totalPending = filtered
-    .filter(p => p.status === "pending")
+    .filter((p) => p.status === "pending")
     .reduce((s, p) => s + p.amount, 0);
-  const totalFailed = filtered.filter(p => p.status === "failed").length;
+  const totalFailed = filtered.filter((p) => p.status === "failed").length;
   const totalRefunded = filtered
-    .filter(p => p.status === "refunded")
+    .filter((p) => p.status === "refunded")
     .reduce((s, p) => s + p.amount, 0);
 
   const exportCSV = () => {
@@ -67,7 +67,7 @@ export default function PayoutSection({ logAudit }: Props) {
       "Idempotency Key",
       "Date",
     ];
-    const rows = filtered.map(p => [
+    const rows = filtered.map((p) => [
       p.id,
       p.gateway,
       p.amount,
@@ -77,7 +77,7 @@ export default function PayoutSection({ logAudit }: Props) {
       p.idempotencyKey,
       p.createdAt,
     ]);
-    const csv = [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
+    const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -88,7 +88,7 @@ export default function PayoutSection({ logAudit }: Props) {
     logAudit(
       "Payments Exported",
       `Exported ${filtered.length} payments as CSV`,
-      "success"
+      "success",
     );
   };
 
@@ -105,15 +105,15 @@ export default function PayoutSection({ logAudit }: Props) {
     logAudit(
       "Payments Exported",
       `Exported ${filtered.length} payments as JSON`,
-      "success"
+      "success",
     );
   };
 
   const refundPayment = (id: string) => {
     if (!confirm("Mark this payment as refunded?")) return;
-    setPayments(prev => {
-      const updated = prev.map(p =>
-        p.id === id ? { ...p, status: "refunded" as const } : p
+    setPayments((prev) => {
+      const updated = prev.map((p) =>
+        p.id === id ? { ...p, status: "refunded" as const } : p,
       );
       savePayments(updated);
       return updated;
@@ -122,17 +122,17 @@ export default function PayoutSection({ logAudit }: Props) {
   };
 
   const retryPayment = (id: string) => {
-    setPayments(prev => {
-      const updated = prev.map(p =>
-        p.id === id ? { ...p, status: "pending" as const } : p
+    setPayments((prev) => {
+      const updated = prev.map((p) =>
+        p.id === id ? { ...p, status: "pending" as const } : p,
       );
       savePayments(updated);
       return updated;
     });
     setTimeout(() => {
-      setPayments(prev => {
-        const updated = prev.map(p =>
-          p.id === id ? { ...p, status: "success" as const } : p
+      setPayments((prev) => {
+        const updated = prev.map((p) =>
+          p.id === id ? { ...p, status: "success" as const } : p,
         );
         savePayments(updated);
         return updated;
@@ -140,7 +140,7 @@ export default function PayoutSection({ logAudit }: Props) {
       logAudit(
         "Payment Retried",
         `Payment ${id} retried and succeeded`,
-        "success"
+        "success",
       );
     }, 1500);
   };
@@ -200,7 +200,7 @@ export default function PayoutSection({ logAudit }: Props) {
             icon: ArrowUpDown,
             color: "text-gray-400",
           },
-        ].map(s => (
+        ].map((s) => (
           <div
             key={s.label}
             className="bg-[#161618] border border-white/[0.06] rounded-xl p-4"
@@ -223,14 +223,14 @@ export default function PayoutSection({ logAudit }: Props) {
           />
           <input
             value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
+            onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search transactions..."
             className="w-full pl-8 pr-3 py-2 bg-[#161618] border border-white/[0.06] rounded-lg text-xs text-white placeholder-gray-600 focus:outline-none focus:border-blue-500/30"
           />
         </div>
         <select
           value={filterStatus}
-          onChange={e => setFilterStatus(e.target.value)}
+          onChange={(e) => setFilterStatus(e.target.value)}
           className="px-3 py-2 bg-[#161618] border border-white/[0.06] rounded-lg text-xs text-white focus:outline-none focus:border-blue-500/30"
         >
           <option value="all">All Status</option>
@@ -241,11 +241,11 @@ export default function PayoutSection({ logAudit }: Props) {
         </select>
         <select
           value={filterGateway}
-          onChange={e => setFilterGateway(e.target.value)}
+          onChange={(e) => setFilterGateway(e.target.value)}
           className="px-3 py-2 bg-[#161618] border border-white/[0.06] rounded-lg text-xs text-white focus:outline-none focus:border-blue-500/30"
         >
           <option value="all">All Gateways</option>
-          {gateways.map(g => (
+          {gateways.map((g) => (
             <option key={g} value={g}>
               {g}
             </option>
@@ -259,7 +259,7 @@ export default function PayoutSection({ logAudit }: Props) {
         <table className="w-full">
           <thead>
             <tr className="border-b border-white/[0.06]">
-              {["Status", "Gateway", "Amount", "Ref", "Date", ""].map(h => (
+              {["Status", "Gateway", "Amount", "Ref", "Date", ""].map((h) => (
                 <th
                   key={h}
                   className="text-left text-[10px] text-gray-500 font-medium px-4 py-2.5"
@@ -270,7 +270,7 @@ export default function PayoutSection({ logAudit }: Props) {
             </tr>
           </thead>
           <tbody>
-            {filtered.slice(0, 50).map(p => (
+            {filtered.slice(0, 50).map((p) => (
               <tr
                 key={p.id}
                 className="border-b border-white/[0.04] hover:bg-white/[0.02]"

@@ -1,14 +1,18 @@
 /**
  * Print & Storage Integration Utilities
- * 
+ *
  * Provides convenience methods to integrate silent printing and indexed storage
  * throughout the application
  */
 
-import { silentPrintService, type SilentPrintJob, type PrintSettings } from './silent-print-service';
-import { indexedStorage, type IndexedStorageStats } from './indexed-storage';
-import { cloudStorage } from './cloudStorage';
-import type { ReceiptData } from './pos/printer-service';
+import {
+  silentPrintService,
+  type SilentPrintJob,
+  type PrintSettings,
+} from "./silent-print-service";
+import { indexedStorage, type IndexedStorageStats } from "./indexed-storage";
+import { cloudStorage } from "./cloudStorage";
+import type { ReceiptData } from "./pos/printer-service";
 
 const cloudSync = cloudStorage;
 
@@ -21,7 +25,7 @@ export const PrintingAPI = {
    */
   async receipt(
     receipt: ReceiptData,
-    options?: { printerId?: string; settings?: PrintSettings }
+    options?: { printerId?: string; settings?: PrintSettings },
   ): Promise<string> {
     return silentPrintService.queueReceipt(receipt, options?.printerId);
   },
@@ -32,7 +36,7 @@ export const PrintingAPI = {
   async report(
     html: string,
     name: string,
-    settings?: PrintSettings
+    settings?: PrintSettings,
   ): Promise<string> {
     return silentPrintService.queueReport(html, name);
   },
@@ -40,21 +44,15 @@ export const PrintingAPI = {
   /**
    * Print a document silently
    */
-  async document(
-    content: any,
-    settings?: PrintSettings
-  ): Promise<string> {
-    return silentPrintService.queuePrint(content, 'document', settings);
+  async document(content: any, settings?: PrintSettings): Promise<string> {
+    return silentPrintService.queuePrint(content, "document", settings);
   },
 
   /**
    * Print a label silently
    */
-  async label(
-    labelData: any,
-    settings?: PrintSettings
-  ): Promise<string> {
-    return silentPrintService.queuePrint(labelData, 'label', settings);
+  async label(labelData: any, settings?: PrintSettings): Promise<string> {
+    return silentPrintService.queuePrint(labelData, "label", settings);
   },
 
   /**
@@ -100,7 +98,7 @@ export const StorageAPI = {
       expiresInDays?: number;
       metadata?: Record<string, any>;
       syncImmediately?: boolean;
-    }
+    },
   ): Promise<void> {
     const expiresAt = options?.expiresInDays
       ? Date.now() + options.expiresInDays * 24 * 60 * 60 * 1000
@@ -174,7 +172,7 @@ export const StorageAPI = {
    * Store fuel prices
    */
   async storeFuelPrices(prices: Record<string, number>): Promise<void> {
-    return this.store('fuel_prices', prices, {
+    return this.store("fuel_prices", prices, {
       expiresInDays: 1, // Refresh daily
       syncImmediately: true,
     });
@@ -184,7 +182,7 @@ export const StorageAPI = {
    * Retrieve fuel prices
    */
   async getFuelPrices(): Promise<Record<string, number> | null> {
-    return this.retrieve('fuel_prices');
+    return this.retrieve("fuel_prices");
   },
 
   /**
@@ -249,7 +247,7 @@ export const OfflineFirstAPI = {
   async execute<T>(
     operationName: string,
     operation: () => Promise<T>,
-    fallbackData?: T
+    fallbackData?: T,
   ): Promise<T> {
     try {
       return await operation();
@@ -276,7 +274,7 @@ export const OfflineFirstAPI = {
   async cacheResult<T>(
     operationName: string,
     data: T,
-    expiresInHours: number = 24
+    expiresInHours: number = 24,
   ): Promise<void> {
     await StorageAPI.store(`cache_${operationName}`, data, {
       expiresInDays: expiresInHours / 24,
@@ -310,7 +308,7 @@ export const OfflineFirstAPI = {
     return {
       isOnline: navigator.onLine,
       pendingSyncs: stats.pendingSyncs,
-      cloudSyncEnabled: cloudSync.isEnabled(),
+      cloudSyncEnabled: (cloudSync as any).isEnabled(),
       lastSync: stats.lastSync,
     };
   },
@@ -386,7 +384,7 @@ export const UseCases = {
    */
   async generateReport(
     reportData: any,
-    options?: { silent?: boolean; autoPrint?: boolean }
+    options?: { silent?: boolean; autoPrint?: boolean },
   ): Promise<string> {
     const html = this.formatReportHTML(reportData);
     const reportName = `Report_${Date.now()}`;
@@ -408,14 +406,14 @@ export const UseCases = {
   formatReportHTML(data: any): string {
     return `
       <div style="font-family: Arial, sans-serif; padding: 20px;">
-        <h1>${data.title || 'Report'}</h1>
+        <h1>${data.title || "Report"}</h1>
         <div style="margin: 20px 0;">
           ${Object.entries(data)
             .map(
               ([key, value]) =>
-                `<p><strong>${key}:</strong> ${JSON.stringify(value)}</p>`
+                `<p><strong>${key}:</strong> ${JSON.stringify(value)}</p>`,
             )
-            .join('')}
+            .join("")}
         </div>
         <p style="margin-top: 40px; color: #666; font-size: 12px;">
           Generated on ${new Date().toLocaleString()}
@@ -429,7 +427,7 @@ export const UseCases = {
    */
   async bulkStore(data: Record<string, any>): Promise<void> {
     const promises = Object.entries(data).map(([key, value]) =>
-      StorageAPI.store(key, value)
+      StorageAPI.store(key, value),
     );
     await Promise.all(promises);
   },
@@ -447,7 +445,7 @@ export const UseCases = {
 };
 
 // Initialize on module load
-if (typeof window !== 'undefined') {
+if (typeof window !== "undefined") {
   // Make APIs available globally for debugging
   (window as any).FuelProPrinting = PrintingAPI;
   (window as any).FuelProStorage = StorageAPI;

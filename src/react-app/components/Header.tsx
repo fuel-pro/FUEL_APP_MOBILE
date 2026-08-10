@@ -106,7 +106,7 @@ export default function Header({
   // not clobber in-progress edits with freshly-loaded state.
   const updateEdit = (patch: Partial<typeof editData>) => {
     setEditDirty(true);
-    setEditData(prev => ({ ...prev, ...patch }));
+    setEditData((prev) => ({ ...prev, ...patch }));
   };
 
   const handleLogoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -127,7 +127,7 @@ export default function Header({
       // device signed into the same account.
       const { url } = await uploadStationLogo(file, user.id);
       setLogoPreview(url);
-      setEditData(p => ({ ...p, logo: url }));
+      setEditData((p) => ({ ...p, logo: url }));
       dispatch({
         type: "SET_COMPANY_DATA",
         payload: { ...state.companyData, logo: url },
@@ -206,7 +206,7 @@ export default function Header({
                 </button>
                 {showStationMenu && (
                   <div className="absolute top-full left-0 mt-1 w-52 bg-gray-800 rounded-xl shadow-xl border border-white/10 overflow-hidden z-50">
-                    {stations.map(s => (
+                    {stations.map((s) => (
                       <button
                         key={s.id}
                         onClick={() => {
@@ -289,8 +289,14 @@ export default function Header({
               <span className="hidden lg:inline">Tabs</span>
             </button>
             <label className="px-2.5 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-xs text-gray-300 transition-colors flex items-center gap-1.5 cursor-pointer">
-              {logoUploading ? <Loader2 size={12} className="animate-spin" /> : <Image size={12} />}
-              <span className="hidden lg:inline">{logoUploading ? "Uploading…" : "Logo"}</span>
+              {logoUploading ? (
+                <Loader2 size={12} className="animate-spin" />
+              ) : (
+                <Image size={12} />
+              )}
+              <span className="hidden lg:inline">
+                {logoUploading ? "Uploading…" : "Logo"}
+              </span>
               <input
                 type="file"
                 accept="image/*"
@@ -374,7 +380,7 @@ export default function Header({
                   </button>
                   {showStationMenu && (
                     <div className="absolute right-0 top-full mt-1 w-48 bg-gray-800 rounded-xl shadow-xl border border-white/10 overflow-hidden z-50">
-                      {stations.map(s => (
+                      {stations.map((s) => (
                         <button
                           key={s.id}
                           onClick={() => {
@@ -418,13 +424,19 @@ export default function Header({
                 <span className="text-[10px] text-gray-400">Tabs</span>
               </button>
               <label className="flex flex-col items-center gap-1.5 p-3 bg-white/5 rounded-xl hover:bg-white/10 transition-colors cursor-pointer">
-                {logoUploading ? <Loader2 size={16} className="text-gray-300 animate-spin" /> : <Image size={16} className="text-gray-300" />}
-                <span className="text-[10px] text-gray-400">{logoUploading ? "Uploading…" : "Logo"}</span>
+                {logoUploading ? (
+                  <Loader2 size={16} className="text-gray-300 animate-spin" />
+                ) : (
+                  <Image size={16} className="text-gray-300" />
+                )}
+                <span className="text-[10px] text-gray-400">
+                  {logoUploading ? "Uploading…" : "Logo"}
+                </span>
                 <input
                   type="file"
                   accept="image/*"
                   disabled={logoUploading}
-                  onChange={e => {
+                  onChange={(e) => {
                     handleLogoChange(e);
                     setShowMobileMenu(false);
                   }}
@@ -528,9 +540,7 @@ export default function Header({
                 </label>
                 <input
                   value={editData.name}
-                  onChange={e =>
-                    updateEdit({ name: e.target.value })
-                  }
+                  onChange={(e) => updateEdit({ name: e.target.value })}
                   placeholder="e.g. Acme Fuel Station Ltd"
                   className="w-full px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400"
                 />
@@ -541,9 +551,7 @@ export default function Header({
                 </label>
                 <input
                   value={editData.poBox}
-                  onChange={e =>
-                    updateEdit({ poBox: e.target.value })
-                  }
+                  onChange={(e) => updateEdit({ poBox: e.target.value })}
                   placeholder="e.g. 12345-00100"
                   className="w-full px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400"
                 />
@@ -554,9 +562,7 @@ export default function Header({
                 </label>
                 <input
                   value={editData.contacts}
-                  onChange={e =>
-                    updateEdit({ contacts: e.target.value })
-                  }
+                  onChange={(e) => updateEdit({ contacts: e.target.value })}
                   placeholder="+254 700 000 000"
                   className="w-full px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400"
                 />
@@ -569,9 +575,7 @@ export default function Header({
                 </label>
                 <input
                   value={editData.email}
-                  onChange={e =>
-                    updateEdit({ email: e.target.value })
-                  }
+                  onChange={(e) => updateEdit({ email: e.target.value })}
                   placeholder="info@company.co.ke"
                   type="email"
                   className="w-full px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400"
@@ -583,9 +587,7 @@ export default function Header({
                 </label>
                 <select
                   value={editData.currency}
-                  onChange={e =>
-                    updateEdit({ currency: e.target.value })
-                  }
+                  onChange={(e) => updateEdit({ currency: e.target.value })}
                   className="w-full px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-white text-sm focus:outline-none focus:ring-1 focus:ring-amber-400"
                 >
                   <option value="KSh" className="bg-gray-800">
@@ -638,9 +640,7 @@ export default function Header({
                 </label>
                 <input
                   value={editData.vatRegNo}
-                  onChange={e =>
-                    updateEdit({ vatRegNo: e.target.value })
-                  }
+                  onChange={(e) => updateEdit({ vatRegNo: e.target.value })}
                   placeholder="VAT Reg No"
                   className="w-full px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400"
                 />
@@ -658,9 +658,7 @@ export default function Header({
                     </label>
                     <input
                       value={editData.bankName}
-                      onChange={e =>
-                        updateEdit({ bankName: e.target.value })
-                      }
+                      onChange={(e) => updateEdit({ bankName: e.target.value })}
                       placeholder="e.g. Equity Bank"
                       className="w-full px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400"
                     />
@@ -671,7 +669,7 @@ export default function Header({
                     </label>
                     <input
                       value={editData.branchName}
-                      onChange={e =>
+                      onChange={(e) =>
                         updateEdit({ branchName: e.target.value })
                       }
                       placeholder="e.g. Mombasa Road"
@@ -684,7 +682,7 @@ export default function Header({
                     </label>
                     <input
                       value={editData.accountHolder}
-                      onChange={e =>
+                      onChange={(e) =>
                         updateEdit({
                           accountHolder: e.target.value,
                         })
@@ -699,7 +697,7 @@ export default function Header({
                     </label>
                     <input
                       value={editData.accountNumber}
-                      onChange={e =>
+                      onChange={(e) =>
                         updateEdit({
                           accountNumber: e.target.value,
                         })
@@ -735,7 +733,7 @@ export default function Header({
         >
           <div
             className="bg-gray-800 rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-white/20"
-            onClick={e => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold">Company QR Code</h3>

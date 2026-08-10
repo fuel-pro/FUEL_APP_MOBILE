@@ -47,7 +47,7 @@ interface Props {
   logAudit: (
     e: string,
     d: string,
-    s: "success" | "warning" | "danger" | "info"
+    s: "success" | "warning" | "danger" | "info",
   ) => void;
 }
 
@@ -61,7 +61,7 @@ export default function CouponSection({ logAudit }: Props) {
   // Form state
   const [formCode, setFormCode] = useState("");
   const [formType, setFormType] = useState<"percentage" | "fixed">(
-    "percentage"
+    "percentage",
   );
   const [formValue, setFormValue] = useState("");
   const [formMaxUses, setFormMaxUses] = useState("100");
@@ -112,13 +112,13 @@ export default function CouponSection({ logAudit }: Props) {
 
   const toggleActive = (id: string) => {
     persist(
-      coupons.map(c => (c.id === id ? { ...c, isActive: !c.isActive } : c))
+      coupons.map((c) => (c.id === id ? { ...c, isActive: !c.isActive } : c)),
     );
   };
 
   const deleteCoupon = (id: string) => {
     if (!confirm("Delete this coupon?")) return;
-    persist(coupons.filter(c => c.id !== id));
+    persist(coupons.filter((c) => c.id !== id));
     logAudit("Coupon Deleted", `Removed coupon ${id}`, "warning");
   };
 
@@ -164,7 +164,7 @@ export default function CouponSection({ logAudit }: Props) {
               <label className="text-xs text-gray-400 mb-1 block">Code</label>
               <input
                 value={formCode}
-                onChange={e => setFormCode(e.target.value.toUpperCase())}
+                onChange={(e) => setFormCode(e.target.value.toUpperCase())}
                 placeholder="WELCOME50"
                 className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.08] rounded-lg text-sm text-white font-mono placeholder-gray-600 focus:outline-none focus:border-purple-500/30"
               />
@@ -175,7 +175,7 @@ export default function CouponSection({ logAudit }: Props) {
               </label>
               <input
                 value={formDesc}
-                onChange={e => setFormDesc(e.target.value)}
+                onChange={(e) => setFormDesc(e.target.value)}
                 placeholder="50% off for new users"
                 className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.08] rounded-lg text-sm text-white placeholder-gray-600 focus:outline-none focus:border-purple-500/30"
               />
@@ -204,7 +204,7 @@ export default function CouponSection({ logAudit }: Props) {
               <input
                 type="number"
                 value={formValue}
-                onChange={e => setFormValue(e.target.value)}
+                onChange={(e) => setFormValue(e.target.value)}
                 placeholder={formType === "percentage" ? "50" : "500"}
                 className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.08] rounded-lg text-sm text-white placeholder-gray-600 focus:outline-none focus:border-purple-500/30"
               />
@@ -216,7 +216,7 @@ export default function CouponSection({ logAudit }: Props) {
               <input
                 type="number"
                 value={formMaxUses}
-                onChange={e => setFormMaxUses(e.target.value)}
+                onChange={(e) => setFormMaxUses(e.target.value)}
                 placeholder="100"
                 className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.08] rounded-lg text-sm text-white placeholder-gray-600 focus:outline-none focus:border-purple-500/30"
               />
@@ -228,7 +228,7 @@ export default function CouponSection({ logAudit }: Props) {
               <input
                 type="datetime-local"
                 value={formExpires}
-                onChange={e => setFormExpires(e.target.value)}
+                onChange={(e) => setFormExpires(e.target.value)}
                 className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.08] rounded-lg text-sm text-white focus:outline-none focus:border-purple-500/30"
               />
             </div>
@@ -239,14 +239,14 @@ export default function CouponSection({ logAudit }: Props) {
               Valid Tiers
             </label>
             <div className="flex flex-wrap gap-2">
-              {ALL_TIERS.map(t => (
+              {ALL_TIERS.map((t) => (
                 <button
                   key={t.id}
                   onClick={() =>
-                    setFormTierIds(prev =>
+                    setFormTierIds((prev) =>
                       prev.includes(t.id)
-                        ? prev.filter(x => x !== t.id)
-                        : [...prev, t.id]
+                        ? prev.filter((x) => x !== t.id)
+                        : [...prev, t.id],
                     )
                   }
                   className={`text-[10px] px-2.5 py-1 rounded border transition-colors ${formTierIds.includes(t.id) ? "bg-purple-500/15 border-purple-500/30 text-purple-300" : "bg-white/5 border-white/10 text-gray-500"}`}
@@ -262,14 +262,14 @@ export default function CouponSection({ logAudit }: Props) {
               Valid Regions
             </label>
             <div className="flex flex-wrap gap-2">
-              {REGIONS.map(r => (
+              {REGIONS.map((r) => (
                 <button
                   key={r.code}
                   onClick={() =>
-                    setFormRegions(prev =>
+                    setFormRegions((prev) =>
                       prev.includes(r.code)
-                        ? prev.filter(x => x !== r.code)
-                        : [...prev, r.code]
+                        ? prev.filter((x) => x !== r.code)
+                        : [...prev, r.code],
                     )
                   }
                   className={`text-[10px] px-2.5 py-1 rounded border transition-colors ${formRegions.includes(r.code) ? "bg-purple-500/15 border-purple-500/30 text-purple-300" : "bg-white/5 border-white/10 text-gray-500"}`}
@@ -291,7 +291,7 @@ export default function CouponSection({ logAudit }: Props) {
 
       {/* Coupons List */}
       <div className="space-y-2">
-        {coupons.map(c => (
+        {coupons.map((c) => (
           <div
             key={c.id}
             className="bg-[#161618] border border-white/[0.06] rounded-xl p-4"
@@ -330,7 +330,7 @@ export default function CouponSection({ logAudit }: Props) {
                     {c.description}
                   </p>
                   <div className="flex gap-1 mt-1">
-                    {c.tierIds.map(t => (
+                    {c.tierIds.map((t) => (
                       <span
                         key={t}
                         className="text-[9px] px-1.5 py-0.5 bg-white/5 rounded text-gray-500 capitalize"
@@ -338,7 +338,7 @@ export default function CouponSection({ logAudit }: Props) {
                         {t}
                       </span>
                     ))}
-                    {c.regionCodes.map(r => (
+                    {c.regionCodes.map((r) => (
                       <span
                         key={r}
                         className="text-[9px] px-1.5 py-0.5 bg-blue-500/10 rounded text-blue-400"

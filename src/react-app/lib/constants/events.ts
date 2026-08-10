@@ -1,6 +1,6 @@
 /**
  * CENTRALIZED EVENT NAMES
- * 
+ *
  * Standardized event naming convention: "fuelpro:event-name"
  * Using colon separator for namespace consistency
  */
@@ -13,7 +13,7 @@ export const APP_EVENTS = {
   APP_RELOAD: "fuelpro:app-reload",
   APP_READY: "fuelpro:app-ready",
   APP_ERROR: "fuelpro:app-error",
-  
+
   // Theme
   THEME_CHANGE: "fuelpro:theme-change",
   THEME_TOGGLE: "fuelpro:theme-toggle",
@@ -144,7 +144,11 @@ export function onEvent(event: string, callback: EventCallback): () => void {
 /**
  * Emit to BroadcastChannel (for cross-tab sync)
  */
-export function broadcastEvent(channel: string, event: string, data?: unknown): boolean {
+export function broadcastEvent(
+  channel: string,
+  event: string,
+  data?: unknown,
+): boolean {
   try {
     const bc = new BroadcastChannel(channel);
     bc.postMessage({ event, data, timestamp: Date.now() });

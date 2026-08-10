@@ -1928,7 +1928,7 @@ const CORE_COUNTRIES: Record<string, CountryProfile> = {
 function generateCountryProfile(
   code: string,
   name: string,
-  currency: string
+  currency: string,
 ): CountryProfile {
   return {
     id: code.toUpperCase(),
@@ -2071,7 +2071,7 @@ function getFlagEmoji(code: string): string {
   const OFFSET = 0x1f1e6;
   return String.fromCodePoint(
     OFFSET + (upper.charCodeAt(0) - 65),
-    OFFSET + (upper.charCodeAt(1) - 65)
+    OFFSET + (upper.charCodeAt(1) - 65),
   );
 }
 
@@ -2122,7 +2122,7 @@ Object.entries(WORLD_PAYMENT_CONFIGS).forEach(([code, config]) => {
     ALL_COUNTRY_PROFILES[code] = generateCountryProfile(
       code,
       config.countryName,
-      config.defaultCurrency
+      config.defaultCurrency,
     );
   }
 });
@@ -2187,7 +2187,7 @@ export function detectCountryFromTimezone(): string {
 
 export function formatPhoneForCountry(
   phone: string,
-  countryCode: string
+  countryCode: string,
 ): string {
   const country = getCountryById(countryCode);
   if (!country) return phone;
@@ -2208,7 +2208,7 @@ export function formatCurrency(amount: number, countryCode: string): string {
 
 export function getFuelTaxBreakdown(
   pricePerLiter: number,
-  countryCode: string
+  countryCode: string,
 ) {
   const country = getCountryById(countryCode);
   if (!country) return null;

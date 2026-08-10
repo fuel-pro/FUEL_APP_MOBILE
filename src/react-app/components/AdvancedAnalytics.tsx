@@ -45,7 +45,9 @@ export default function AdvancedAnalytics() {
   const location = useLocation();
   const { currentStation } = useStations();
   const currencySymbol = location.currencySymbol;
-  const [timeRange, setTimeRange] = useState<"7d" | "30d" | "90d" | "1y">("30d");
+  const [timeRange, setTimeRange] = useState<"7d" | "30d" | "90d" | "1y">(
+    "30d",
+  );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [salesData, setSalesData] = useState<DailySales[]>([]);
@@ -56,12 +58,19 @@ export default function AdvancedAnalytics() {
   const dateRange = useMemo(() => {
     const end = new Date();
     const start = new Date();
-    const days = timeRange === "7d" ? 7 : timeRange === "30d" ? 30 : timeRange === "90d" ? 90 : 365;
+    const days =
+      timeRange === "7d"
+        ? 7
+        : timeRange === "30d"
+          ? 30
+          : timeRange === "90d"
+            ? 90
+            : 365;
     start.setDate(start.getDate() - days);
     return {
       start: start.toISOString().split("T")[0],
       end: end.toISOString().split("T")[0],
-      days
+      days,
     };
   }, [timeRange]);
 
@@ -109,7 +118,9 @@ export default function AdvancedAnalytics() {
         // Aggregate sales_enhanced data
         if (sales && sales.length > 0) {
           for (const sale of sales) {
-            const dateStr = new Date(sale.sale_date).toISOString().split("T")[0];
+            const dateStr = new Date(sale.sale_date)
+              .toISOString()
+              .split("T")[0];
             if (salesByDate[dateStr]) {
               salesByDate[dateStr].total += sale.total_amount || 0;
               salesByDate[dateStr].count += 1;
@@ -120,9 +131,12 @@ export default function AdvancedAnalytics() {
         // Aggregate legacy fuel sales data
         if (fuelSales && fuelSales.length > 0) {
           for (const sale of fuelSales) {
-            const dateStr = new Date(sale.created_at).toISOString().split("T")[0];
+            const dateStr = new Date(sale.created_at)
+              .toISOString()
+              .split("T")[0];
             if (salesByDate[dateStr]) {
-              salesByDate[dateStr].total += (sale.quantity * sale.price_per_liter) || 0;
+              salesByDate[dateStr].total +=
+                sale.quantity * sale.price_per_liter || 0;
               salesByDate[dateStr].count += 1;
             }
           }
@@ -144,7 +158,7 @@ export default function AdvancedAnalytics() {
             .select("id, name");
 
           const fuelTypeMap: Record<string, string> = {};
-          fuelTypes?.forEach(ft => {
+          fuelTypes?.forEach((ft) => {
             fuelTypeMap[ft.id] = ft.name;
           });
 
@@ -152,9 +166,10 @@ export default function AdvancedAnalytics() {
             fuel_type: fuelTypeMap[inv.fuel_type_id] || "Unknown",
             current_level: inv.current_level || 0,
             tank_capacity: inv.tank_capacity || 10000,
-            percentage: inv.tank_capacity > 0 
-              ? ((inv.current_level || 0) / inv.tank_capacity) * 100 
-              : 0
+            percentage:
+              inv.tank_capacity > 0
+                ? ((inv.current_level || 0) / inv.tank_capacity) * 100
+                : 0,
           }));
           setInventoryLevels(invLevels);
         }
@@ -166,9 +181,11 @@ export default function AdvancedAnalytics() {
           .eq("station_id", currentStation.id);
 
         if (pumps && pumps.length > 0) {
-          const { data: fuelTypes } = await supabase.from("fuel_types").select("id, code");
+          const { data: fuelTypes } = await supabase
+            .from("fuel_types")
+            .select("id, code");
           const ftMap: Record<string, string> = {};
-          fuelTypes?.forEach(ft => ftMap[ft.id] = ft.code);
+          fuelTypes?.forEach((ft) => (ftMap[ft.id] = ft.code));
 
           const prices = { pms: 0, ago: 0 };
           pumps.forEach((p: any) => {
@@ -178,7 +195,6 @@ export default function AdvancedAnalytics() {
           });
           setFuelPrices(prices);
         }
-
       } catch (err: any) {
         console.error("Analytics fetch error:", err);
         setError(err.message || "Failed to load analytics data");
@@ -204,7 +220,7 @@ export default function AdvancedAnalytics() {
         data.push({
           date: dateStr,
           total: Math.round(dailyAvg),
-          count: Math.round(dailyAvg / 50)
+          count: Math.round(dailyAvg / 50),
         });
       }
       setSalesData(data);
@@ -220,7 +236,8 @@ export default function AdvancedAnalytics() {
 
     const last7 = salesData.slice(-7);
     const avgDaily = last7.reduce((s, d) => s + d.total, 0) / 7;
-    const variance = last7.reduce((s, d) => s + Math.pow(d.total - avgDaily, 2), 0) / 7;
+    const variance =
+      last7.reduce((s, d) => s + Math.pow(d.total - avgDaily, 2), 0) / 7;
     const stdDev = Math.sqrt(variance);
 
     // Calculate simple linear trend
@@ -228,7 +245,7 @@ export default function AdvancedAnalytics() {
     for (let i = 0; i < last7.length; i++) {
       trendSum += (last7[i].total - avgDaily) * (i - (last7.length - 1) / 2);
     }
-    const trend = trendSum / (last7.length * (last7.length - 1) / 2);
+    const trend = trendSum / ((last7.length * (last7.length - 1)) / 2);
 
     const preds: PredictionPoint[] = [];
     const now = new Date();
@@ -263,8 +280,11 @@ export default function AdvancedAnalytics() {
     return {
       totalRevenue,
       estimatedVolume,
-      avgDaily: salesData.length > 0 ? salesData.reduce((s, d) => s + d.total, 0) / salesData.length : 0,
-      totalTransactions: salesData.reduce((s, d) => s + d.count, 0)
+      avgDaily:
+        salesData.length > 0
+          ? salesData.reduce((s, d) => s + d.total, 0) / salesData.length
+          : 0,
+      totalTransactions: salesData.reduce((s, d) => s + d.count, 0),
     };
   }, [salesData, fuelPrices]);
 
@@ -280,8 +300,12 @@ export default function AdvancedAnalytics() {
     const prev7Total = prev7.reduce((s, d) => s + d.total, 0);
     const prev30Total = prev30.reduce((s, d) => s + d.total, 0);
 
-    const growth7d = prev7Total > 0 ? ((last7Total - prev7Total) / prev7Total) * 100 : 0;
-    const growth30d = prev30Total > 0 ? ((last7Total * 4 - prev30Total) / prev30Total) * 100 : 0;
+    const growth7d =
+      prev7Total > 0 ? ((last7Total - prev7Total) / prev7Total) * 100 : 0;
+    const growth30d =
+      prev30Total > 0
+        ? ((last7Total * 4 - prev30Total) / prev30Total) * 100
+        : 0;
 
     return { growth7d, growth30d };
   }, [salesData]);
@@ -289,14 +313,25 @@ export default function AdvancedAnalytics() {
   // Find peak day
   const peakDay = useMemo(() => {
     if (salesData.length === 0) return "N/A";
-    const peak = salesData.reduce((max, d) => d.total > max.total ? d : max, salesData[0]);
+    const peak = salesData.reduce(
+      (max, d) => (d.total > max.total ? d : max),
+      salesData[0],
+    );
     const dayIndex = new Date(peak.date).getDay();
-    const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+    const days = [
+      "Sunday",
+      "Monday",
+      "Tuesday",
+      "Wednesday",
+      "Thursday",
+      "Friday",
+      "Saturday",
+    ];
     return days[dayIndex];
   }, [salesData]);
 
-  const maxVol = Math.max(...salesData.map(d => d.total), 1);
-  const predMax = Math.max(...predictions.map(p => p.upper), 1, 1);
+  const maxVol = Math.max(...salesData.map((d) => d.total), 1);
+  const predMax = Math.max(...predictions.map((p) => p.upper), 1, 1);
 
   if (loading) {
     return (
@@ -311,7 +346,10 @@ export default function AdvancedAnalytics() {
     <div className="space-y-6">
       <div className="flex items-center gap-3">
         <div className="p-2.5 bg-violet-100 dark:bg-violet-900/30 rounded-xl">
-          <BarChart3 size={24} className="text-violet-600 dark:text-violet-400" />
+          <BarChart3
+            size={24}
+            className="text-violet-600 dark:text-violet-400"
+          />
         </div>
         <div>
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
@@ -327,21 +365,31 @@ export default function AdvancedAnalytics() {
         <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4 flex items-start gap-3">
           <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5" />
           <div>
-            <p className="text-sm text-amber-800 dark:text-amber-200">{error}</p>
-            <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">Showing estimated data from local records.</p>
+            <p className="text-sm text-amber-800 dark:text-amber-200">
+              {error}
+            </p>
+            <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+              Showing estimated data from local records.
+            </p>
           </div>
         </div>
       )}
 
       {/* Time Range */}
       <div className="flex gap-2">
-        {(["7d", "30d", "90d", "1y"] as const).map(r => (
+        {(["7d", "30d", "90d", "1y"] as const).map((r) => (
           <button
             key={r}
             onClick={() => setTimeRange(r)}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${timeRange === r ? "bg-violet-600 text-white" : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600"}`}
           >
-            {r === "7d" ? "7 Days" : r === "30d" ? "30 Days" : r === "90d" ? "90 Days" : "1 Year"}
+            {r === "7d"
+              ? "7 Days"
+              : r === "30d"
+                ? "30 Days"
+                : r === "90d"
+                  ? "90 Days"
+                  : "1 Year"}
           </button>
         ))}
       </div>
@@ -351,19 +399,27 @@ export default function AdvancedAnalytics() {
         <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
           <p className="text-xs text-gray-500">Total Revenue</p>
           <p className="text-2xl font-bold text-gray-900 dark:text-white">
-            {currencySymbol}{formatNumber(totals.totalRevenue, 0)}
+            {currencySymbol}
+            {formatNumber(totals.totalRevenue, 0)}
           </p>
         </div>
         <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
           <p className="text-xs text-gray-500">Avg Daily Sales</p>
           <p className="text-2xl font-bold text-green-600 dark:text-green-400">
-            {currencySymbol}{formatNumber(totals.avgDaily, 0)}
+            {currencySymbol}
+            {formatNumber(totals.avgDaily, 0)}
           </p>
         </div>
         <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
           <p className="text-xs text-gray-500">7-Day Growth</p>
-          <p className={`text-2xl font-bold flex items-center gap-1 ${growthData.growth7d >= 0 ? "text-green-600" : "text-red-600"}`}>
-            {growthData.growth7d >= 0 ? <TrendingUp size={20} /> : <TrendingDown size={20} />}
+          <p
+            className={`text-2xl font-bold flex items-center gap-1 ${growthData.growth7d >= 0 ? "text-green-600" : "text-red-600"}`}
+          >
+            {growthData.growth7d >= 0 ? (
+              <TrendingUp size={20} />
+            ) : (
+              <TrendingDown size={20} />
+            )}
             {Math.abs(growthData.growth7d).toFixed(1)}%
           </p>
         </div>
@@ -396,7 +452,10 @@ export default function AdvancedAnalytics() {
                 >
                   <div
                     className="w-full bg-gradient-to-t from-violet-600 to-violet-400 rounded-t-sm"
-                    style={{ height: `${height * 0.4}px`, minHeight: d.total > 0 ? '4px' : '0' }}
+                    style={{
+                      height: `${height * 0.4}px`,
+                      minHeight: d.total > 0 ? "4px" : "0",
+                    }}
                   />
                   {i % Math.max(1, Math.floor(salesData.length / 10)) === 0 && (
                     <span className="text-[8px] text-gray-400 mt-1 -rotate-45 origin-top-left whitespace-nowrap">
@@ -409,8 +468,12 @@ export default function AdvancedAnalytics() {
           </div>
         )}
         <div className="flex gap-4 mt-4 text-xs text-gray-500">
-          <span>Peak Day: <strong className="text-violet-600">{peakDay}</strong></span>
-          <span>Data Points: <strong>{salesData.length}</strong></span>
+          <span>
+            Peak Day: <strong className="text-violet-600">{peakDay}</strong>
+          </span>
+          <span>
+            Data Points: <strong>{salesData.length}</strong>
+          </span>
         </div>
       </div>
 
@@ -439,7 +502,7 @@ export default function AdvancedAnalytics() {
                   >
                     <div
                       className="absolute bottom-0 w-full bg-violet-500 rounded-sm"
-                      style={{ height: `${predH * 0.3}px`, minHeight: '4px' }}
+                      style={{ height: `${predH * 0.3}px`, minHeight: "4px" }}
                     />
                   </div>
                 </div>
@@ -455,7 +518,8 @@ export default function AdvancedAnalytics() {
             <div className="w-3 h-3 bg-violet-500 rounded-sm" /> Predicted
           </span>
           <span className="flex items-center gap-1">
-            <div className="w-3 h-3 bg-violet-200 rounded-sm" /> Confidence Range
+            <div className="w-3 h-3 bg-violet-200 rounded-sm" /> Confidence
+            Range
           </span>
         </div>
       </div>
@@ -477,13 +541,17 @@ export default function AdvancedAnalytics() {
               <Target size={12} className="text-blue-500 mt-0.5" />
               <p className="text-blue-700 dark:text-blue-400">
                 14-day forecast: {currencySymbol}
-                {formatNumber(predictions.reduce((s, p) => s + p.predicted, 0), 0)}
+                {formatNumber(
+                  predictions.reduce((s, p) => s + p.predicted, 0),
+                  0,
+                )}
               </p>
             </div>
             <div className="flex items-start gap-2 p-2 bg-amber-50 dark:bg-amber-900/10 rounded-lg">
               <Layers size={12} className="text-amber-500 mt-0.5" />
               <p className="text-amber-700 dark:text-amber-400">
-                Avg daily: {currencySymbol}{formatNumber(totals.avgDaily, 0)}
+                Avg daily: {currencySymbol}
+                {formatNumber(totals.avgDaily, 0)}
               </p>
             </div>
           </div>
@@ -495,29 +563,43 @@ export default function AdvancedAnalytics() {
           <div className="space-y-3">
             <div>
               <div className="flex justify-between text-xs mb-1">
-                <span className="text-gray-600 dark:text-gray-400">7-Day Change</span>
-                <span className={`font-semibold ${growthData.growth7d >= 0 ? "text-green-600" : "text-red-600"}`}>
-                  {growthData.growth7d >= 0 ? "+" : ""}{growthData.growth7d.toFixed(1)}%
+                <span className="text-gray-600 dark:text-gray-400">
+                  7-Day Change
+                </span>
+                <span
+                  className={`font-semibold ${growthData.growth7d >= 0 ? "text-green-600" : "text-red-600"}`}
+                >
+                  {growthData.growth7d >= 0 ? "+" : ""}
+                  {growthData.growth7d.toFixed(1)}%
                 </span>
               </div>
               <div className="w-full h-3 bg-gray-200 dark:bg-gray-700 rounded-full">
                 <div
                   className={`h-full rounded-full transition-all ${growthData.growth7d >= 0 ? "bg-green-500" : "bg-red-500"}`}
-                  style={{ width: `${Math.min(100, Math.abs(growthData.growth7d) * 2)}%` }}
+                  style={{
+                    width: `${Math.min(100, Math.abs(growthData.growth7d) * 2)}%`,
+                  }}
                 />
               </div>
             </div>
             <div>
               <div className="flex justify-between text-xs mb-1">
-                <span className="text-gray-600 dark:text-gray-400">30-Day Trend</span>
-                <span className={`font-semibold ${growthData.growth30d >= 0 ? "text-green-600" : "text-red-600"}`}>
-                  {growthData.growth30d >= 0 ? "+" : ""}{growthData.growth30d.toFixed(1)}%
+                <span className="text-gray-600 dark:text-gray-400">
+                  30-Day Trend
+                </span>
+                <span
+                  className={`font-semibold ${growthData.growth30d >= 0 ? "text-green-600" : "text-red-600"}`}
+                >
+                  {growthData.growth30d >= 0 ? "+" : ""}
+                  {growthData.growth30d.toFixed(1)}%
                 </span>
               </div>
               <div className="w-full h-3 bg-gray-200 dark:bg-gray-700 rounded-full">
                 <div
                   className={`h-full rounded-full transition-all ${growthData.growth30d >= 0 ? "bg-blue-500" : "bg-red-500"}`}
-                  style={{ width: `${Math.min(100, Math.abs(growthData.growth30d) * 2)}%` }}
+                  style={{
+                    width: `${Math.min(100, Math.abs(growthData.growth30d) * 2)}%`,
+                  }}
                 />
               </div>
             </div>
@@ -535,8 +617,12 @@ export default function AdvancedAnalytics() {
             {inventoryLevels.map((inv, i) => (
               <div key={i} className="space-y-2">
                 <div className="flex justify-between text-xs">
-                  <span className="text-gray-600 dark:text-gray-400">{inv.fuel_type}</span>
-                  <span className="font-semibold dark:text-white">{inv.percentage.toFixed(1)}%</span>
+                  <span className="text-gray-600 dark:text-gray-400">
+                    {inv.fuel_type}
+                  </span>
+                  <span className="font-semibold dark:text-white">
+                    {inv.percentage.toFixed(1)}%
+                  </span>
                 </div>
                 <div className="w-full h-4 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
                   <div
@@ -545,7 +631,8 @@ export default function AdvancedAnalytics() {
                   />
                 </div>
                 <p className="text-[10px] text-gray-400">
-                  {formatNumber(inv.current_level)} / {formatNumber(inv.tank_capacity)} L
+                  {formatNumber(inv.current_level)} /{" "}
+                  {formatNumber(inv.tank_capacity)} L
                 </p>
               </div>
             ))}

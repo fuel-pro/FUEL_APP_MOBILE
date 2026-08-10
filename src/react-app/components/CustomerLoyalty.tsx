@@ -142,7 +142,7 @@ export default function CustomerLoyalty() {
     notes: "",
   });
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(
-    null
+    null,
   );
   const [showRewards, setShowRewards] = useState(false);
 
@@ -157,8 +157,10 @@ export default function CustomerLoyalty() {
   useEffect(() => {
     if (!user) return;
     (async () => {
-      const cloudData =
-        await cloudStorageService.get<Customer[]>("loyalty_customers", stationId);
+      const cloudData = await cloudStorageService.get<Customer[]>(
+        "loyalty_customers",
+        stationId,
+      );
       if (cloudData && Array.isArray(cloudData)) setCustomers(cloudData);
     })();
     // Real-time: when another device updates customers, update instantly
@@ -173,10 +175,10 @@ export default function CustomerLoyalty() {
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
     return customers.filter(
-      c =>
+      (c) =>
         c.name.toLowerCase().includes(q) ||
         c.phone.includes(q) ||
-        c.vehicleReg.toLowerCase().includes(q)
+        c.vehicleReg.toLowerCase().includes(q),
     );
   }, [customers, search]);
 
@@ -212,7 +214,7 @@ export default function CustomerLoyalty() {
 
   const addPoints = (id: string, points: number) => {
     save(
-      customers.map(c => {
+      customers.map((c) => {
         if (c.id === id) {
           const newPoints = c.loyaltyPoints + points;
           return {
@@ -223,17 +225,17 @@ export default function CustomerLoyalty() {
           };
         }
         return c;
-      })
+      }),
     );
   };
 
   const redeem = (customerId: string, points: number) => {
     save(
-      customers.map(c =>
+      customers.map((c) =>
         c.id === customerId
           ? { ...c, loyaltyPoints: Math.max(0, c.loyaltyPoints - points) }
-          : c
-      )
+          : c,
+      ),
     );
   };
 
@@ -303,7 +305,7 @@ export default function CustomerLoyalty() {
           type="text"
           placeholder="Search by name, phone, or vehicle..."
           value={search}
-          onChange={e => setSearch(e.target.value)}
+          onChange={(e) => setSearch(e.target.value)}
           className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-white"
         />
       </div>
@@ -318,7 +320,7 @@ export default function CustomerLoyalty() {
             <input
               placeholder="Full Name *"
               value={newCustomer.name}
-              onChange={e =>
+              onChange={(e) =>
                 setNewCustomer({ ...newCustomer, name: e.target.value })
               }
               className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
@@ -326,7 +328,7 @@ export default function CustomerLoyalty() {
             <input
               placeholder="Phone *"
               value={newCustomer.phone}
-              onChange={e =>
+              onChange={(e) =>
                 setNewCustomer({ ...newCustomer, phone: e.target.value })
               }
               className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
@@ -334,7 +336,7 @@ export default function CustomerLoyalty() {
             <input
               placeholder="Email"
               value={newCustomer.email}
-              onChange={e =>
+              onChange={(e) =>
                 setNewCustomer({ ...newCustomer, email: e.target.value })
               }
               className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
@@ -342,14 +344,14 @@ export default function CustomerLoyalty() {
             <input
               placeholder="Vehicle Registration"
               value={newCustomer.vehicleReg}
-              onChange={e =>
+              onChange={(e) =>
                 setNewCustomer({ ...newCustomer, vehicleReg: e.target.value })
               }
               className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
             />
             <select
               value={newCustomer.preferredFuel}
-              onChange={e =>
+              onChange={(e) =>
                 setNewCustomer({
                   ...newCustomer,
                   preferredFuel: e.target.value as "PMS" | "AGO" | "Both",
@@ -364,7 +366,7 @@ export default function CustomerLoyalty() {
             <input
               placeholder="Notes"
               value={newCustomer.notes}
-              onChange={e =>
+              onChange={(e) =>
                 setNewCustomer({ ...newCustomer, notes: e.target.value })
               }
               className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
@@ -472,7 +474,7 @@ export default function CustomerLoyalty() {
                 Available Rewards
               </h3>
               <div className="space-y-2 max-h-64 overflow-y-auto">
-                {REWARDS.map(r => {
+                {REWARDS.map((r) => {
                   const canRedeem = selectedCustomer.loyaltyPoints >= r.points;
                   return (
                     <div
@@ -527,7 +529,7 @@ export default function CustomerLoyalty() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map(c => (
+              {filtered.map((c) => (
                 <tr
                   key={c.id}
                   onClick={() => setSelectedCustomer(c)}
@@ -561,7 +563,7 @@ export default function CustomerLoyalty() {
                   </td>
                   <td className="px-4 py-3 text-center">
                     <button
-                      onClick={e => {
+                      onClick={(e) => {
                         e.stopPropagation();
                         setSelectedCustomer(c);
                         setShowRewards(true);

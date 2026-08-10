@@ -29,7 +29,7 @@ export default function CookieConsent({
         analytics: true,
         marketing: false,
         timestamp: Date.now(),
-      })
+      }),
     );
     setVisible(false);
     onAccept?.();
@@ -43,7 +43,7 @@ export default function CookieConsent({
         analytics: false,
         marketing: false,
         timestamp: Date.now(),
-      })
+      }),
     );
     setVisible(false);
     onDecline?.();
@@ -271,8 +271,10 @@ export default function CookieConsent({
                 cursor: "pointer",
                 transition: "all 0.2s",
               }}
-              onMouseOver={e => (e.currentTarget.style.background = "#d97706")}
-              onMouseOut={e => (e.currentTarget.style.background = "#f59e0b")}
+              onMouseOver={(e) =>
+                (e.currentTarget.style.background = "#d97706")
+              }
+              onMouseOut={(e) => (e.currentTarget.style.background = "#f59e0b")}
             >
               Accept All
             </button>
@@ -289,11 +291,11 @@ export default function CookieConsent({
                 cursor: "pointer",
                 transition: "all 0.2s",
               }}
-              onMouseOver={e => {
+              onMouseOver={(e) => {
                 e.currentTarget.style.borderColor = "#6b7280";
                 e.currentTarget.style.color = "#fff";
               }}
-              onMouseOut={e => {
+              onMouseOut={(e) => {
                 e.currentTarget.style.borderColor = "#4b5563";
                 e.currentTarget.style.color = "#9ca3af";
               }}

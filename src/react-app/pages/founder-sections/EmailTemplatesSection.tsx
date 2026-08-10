@@ -70,7 +70,7 @@ interface Props {
   logAudit: (
     e: string,
     d: string,
-    s: "success" | "warning" | "danger" | "info"
+    s: "success" | "warning" | "danger" | "info",
   ) => void;
 }
 
@@ -88,7 +88,7 @@ export default function EmailTemplatesSection({ logAudit }: Props) {
 
   const handleSave = () => {
     if (!active) return;
-    const updated = templates.map(t => (t.id === active.id ? active : t));
+    const updated = templates.map((t) => (t.id === active.id ? active : t));
     localStorage.setItem(TMPL_KEY, JSON.stringify(updated));
     setTemplates(updated);
     setSaved(true);
@@ -96,7 +96,7 @@ export default function EmailTemplatesSection({ logAudit }: Props) {
     logAudit(
       "Email Template Updated",
       `Template "${active.name}" modified`,
-      "success"
+      "success",
     );
   };
 
@@ -133,7 +133,7 @@ export default function EmailTemplatesSection({ logAudit }: Props) {
       <div className="grid grid-cols-3 gap-4">
         {/* Template List */}
         <div className="bg-[#161618] border border-white/[0.06] rounded-xl p-3 space-y-1">
-          {templates.map(t => (
+          {templates.map((t) => (
             <button
               key={t.id}
               onClick={() => select(t)}
@@ -192,7 +192,7 @@ export default function EmailTemplatesSection({ logAudit }: Props) {
                     </label>
                     <input
                       value={active.subject}
-                      onChange={e =>
+                      onChange={(e) =>
                         setActive({ ...active, subject: e.target.value })
                       }
                       className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.08] rounded-lg text-sm text-white focus:outline-none focus:border-amber-500/30"
@@ -204,7 +204,7 @@ export default function EmailTemplatesSection({ logAudit }: Props) {
                     </label>
                     <textarea
                       value={active.body}
-                      onChange={e =>
+                      onChange={(e) =>
                         setActive({ ...active, body: e.target.value })
                       }
                       rows={10}
@@ -212,7 +212,7 @@ export default function EmailTemplatesSection({ logAudit }: Props) {
                     />
                   </div>
                   <div className="flex flex-wrap gap-1">
-                    {active.variables.map(v => (
+                    {active.variables.map((v) => (
                       <span
                         key={v}
                         className="text-[10px] px-1.5 py-0.5 bg-blue-500/10 text-blue-300 rounded border border-blue-500/20"

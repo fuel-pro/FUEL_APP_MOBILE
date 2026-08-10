@@ -82,12 +82,12 @@ export default function StationLoyaltyManager({
   const [pointsReason, setPointsReason] = useState("");
 
   const filteredCustomers = customers.filter(
-    c =>
+    (c) =>
       c.name.toLowerCase().includes(search.toLowerCase()) ||
       c.phone.includes(search) ||
       c.cardNumber.includes(search) ||
       (c.vehicleReg &&
-        c.vehicleReg.toLowerCase().includes(search.toLowerCase()))
+        c.vehicleReg.toLowerCase().includes(search.toLowerCase())),
   );
 
   const handleEarnPoints = () => {
@@ -99,7 +99,7 @@ export default function StationLoyaltyManager({
       pointsAmount * 10, // Simulate sale amount
       pointsAmount, // Liters
       "PMS",
-      "admin"
+      "admin",
     );
 
     setShowPointsModal(false);
@@ -115,7 +115,7 @@ export default function StationLoyaltyManager({
       selectedCustomer.id,
       rewards[0]?.id || "",
       pointsAmount,
-      "admin"
+      "admin",
     );
 
     setShowPointsModal(false);
@@ -130,7 +130,7 @@ export default function StationLoyaltyManager({
       selectedCustomer.id,
       pointsAction === "adjust" ? pointsAmount : 0,
       pointsReason,
-      "admin"
+      "admin",
     );
 
     setShowPointsModal(false);
@@ -216,7 +216,7 @@ export default function StationLoyaltyManager({
           Tier Distribution
         </h3>
         <div className="flex gap-2">
-          {(["Bronze", "Silver", "Gold", "Platinum"] as const).map(tier => (
+          {(["Bronze", "Silver", "Gold", "Platinum"] as const).map((tier) => (
             <div
               key={tier}
               className={`flex-1 p-3 rounded-lg ${TIER_COLORS[tier].bg}`}
@@ -239,7 +239,7 @@ export default function StationLoyaltyManager({
           { id: "rewards", label: "Rewards", icon: Gift },
           { id: "settings", label: "Settings", icon: Settings },
           { id: "stats", label: "Statistics", icon: BarChart3 },
-        ].map(tab => (
+        ].map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id as any)}
@@ -268,7 +268,7 @@ export default function StationLoyaltyManager({
               type="text"
               placeholder="Search by name, phone, card number..."
               value={search}
-              onChange={e => setSearch(e.target.value)}
+              onChange={(e) => setSearch(e.target.value)}
               className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-white"
             />
           </div>
@@ -276,7 +276,7 @@ export default function StationLoyaltyManager({
           {/* Add Customer Form */}
           {showAddCustomer && (
             <AddCustomerForm
-              onAdd={data => {
+              onAdd={(data) => {
                 addCustomer(data, "admin");
                 setShowAddCustomer(false);
               }}
@@ -338,7 +338,7 @@ export default function StationLoyaltyManager({
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredCustomers.map(c => (
+                  {filteredCustomers.map((c) => (
                     <tr
                       key={c.id}
                       onClick={() => setSelectedCustomer(c)}
@@ -370,7 +370,7 @@ export default function StationLoyaltyManager({
                       </td>
                       <td className="px-4 py-3 text-center">
                         <button
-                          onClick={e => {
+                          onClick={(e) => {
                             e.stopPropagation();
                             setSelectedCustomer(c);
                             setPointsAction("earn");
@@ -409,7 +409,7 @@ export default function StationLoyaltyManager({
 
           {showAddReward && (
             <AddRewardForm
-              onAdd={data => {
+              onAdd={(data) => {
                 addReward(data);
                 setShowAddReward(false);
               }}
@@ -418,7 +418,7 @@ export default function StationLoyaltyManager({
           )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {rewards.map(r => (
+            {rewards.map((r) => (
               <div
                 key={r.id}
                 className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700"
@@ -508,7 +508,7 @@ export default function StationLoyaltyManager({
               <input
                 type="number"
                 value={config.pointsPerLiter}
-                onChange={e =>
+                onChange={(e) =>
                   updateConfig({
                     pointsPerLiter: parseFloat(e.target.value) || 1,
                   })
@@ -524,7 +524,7 @@ export default function StationLoyaltyManager({
               <input
                 type="number"
                 value={config.minimumLiters}
-                onChange={e =>
+                onChange={(e) =>
                   updateConfig({
                     minimumLiters: parseFloat(e.target.value) || 1,
                   })
@@ -597,7 +597,9 @@ export default function StationLoyaltyManager({
                 <input
                   type="number"
                   value={pointsAmount}
-                  onChange={e => setPointsAmount(parseInt(e.target.value) || 0)}
+                  onChange={(e) =>
+                    setPointsAmount(parseInt(e.target.value) || 0)
+                  }
                   className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                 />
               </div>
@@ -610,7 +612,7 @@ export default function StationLoyaltyManager({
                   <input
                     type="text"
                     value={pointsReason}
-                    onChange={e => setPointsReason(e.target.value)}
+                    onChange={(e) => setPointsReason(e.target.value)}
                     placeholder="Enter reason for adjustment"
                     className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                   />
@@ -672,30 +674,30 @@ function AddCustomerForm({
         <input
           placeholder="Full Name *"
           value={form.name}
-          onChange={e => setForm({ ...form, name: e.target.value })}
+          onChange={(e) => setForm({ ...form, name: e.target.value })}
           className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
         />
         <input
           placeholder="Phone *"
           value={form.phone}
-          onChange={e => setForm({ ...form, phone: e.target.value })}
+          onChange={(e) => setForm({ ...form, phone: e.target.value })}
           className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
         />
         <input
           placeholder="Email"
           value={form.email}
-          onChange={e => setForm({ ...form, email: e.target.value })}
+          onChange={(e) => setForm({ ...form, email: e.target.value })}
           className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
         />
         <input
           placeholder="Vehicle Registration"
           value={form.vehicleReg}
-          onChange={e => setForm({ ...form, vehicleReg: e.target.value })}
+          onChange={(e) => setForm({ ...form, vehicleReg: e.target.value })}
           className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
         />
         <select
           value={form.preferredFuel}
-          onChange={e =>
+          onChange={(e) =>
             setForm({ ...form, preferredFuel: e.target.value as any })
           }
           className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
@@ -754,20 +756,20 @@ function AddRewardForm({
         <input
           placeholder="Reward Name *"
           value={form.name}
-          onChange={e => setForm({ ...form, name: e.target.value })}
+          onChange={(e) => setForm({ ...form, name: e.target.value })}
           className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
         />
         <input
           placeholder="Description"
           value={form.description}
-          onChange={e => setForm({ ...form, description: e.target.value })}
+          onChange={(e) => setForm({ ...form, description: e.target.value })}
           className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
         />
         <input
           type="number"
           placeholder="Points Cost *"
           value={form.pointsCost}
-          onChange={e =>
+          onChange={(e) =>
             setForm({ ...form, pointsCost: parseInt(e.target.value) || 0 })
           }
           className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
@@ -776,14 +778,16 @@ function AddRewardForm({
           type="number"
           placeholder="Value *"
           value={form.value}
-          onChange={e =>
+          onChange={(e) =>
             setForm({ ...form, value: parseFloat(e.target.value) || 0 })
           }
           className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
         />
         <select
           value={form.category}
-          onChange={e => setForm({ ...form, category: e.target.value as any })}
+          onChange={(e) =>
+            setForm({ ...form, category: e.target.value as any })
+          }
           className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
         >
           <option value="discount">Discount</option>
@@ -793,7 +797,9 @@ function AddRewardForm({
         </select>
         <select
           value={form.valueType}
-          onChange={e => setForm({ ...form, valueType: e.target.value as any })}
+          onChange={(e) =>
+            setForm({ ...form, valueType: e.target.value as any })
+          }
           className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
         >
           <option value="percentage">Percentage</option>
@@ -945,8 +951,8 @@ function CustomerDetail({
         </h3>
         <div className="space-y-2 max-h-80 overflow-y-auto">
           {rewards
-            .filter(r => r.isActive)
-            .map(r => {
+            .filter((r) => r.isActive)
+            .map((r) => {
               const canRedeem = customer.points >= r.pointsCost;
               return (
                 <div

@@ -7,10 +7,10 @@
 /**
  * Safely round currency values to 2 decimal places
  * Uses Number.EPSILON to avoid floating-point precision issues
- * 
+ *
  * @param value - The value to round
  * @returns Rounded value with 2 decimal places
- * 
+ *
  * @example
  * roundCurrency(0.1 + 0.2) // Returns 0.30 (not 0.30000000000000004)
  * roundCurrency(1234.567) // Returns 1234.57
@@ -27,11 +27,11 @@ export const roundCurrency = (value: number): number => {
  */
 export const formatCurrency = (
   value: number,
-  currency: string = 'KES'
+  currency: string = "KES",
 ): string => {
   const rounded = roundCurrency(value);
-  return new Intl.NumberFormat('en-KE', {
-    style: 'currency',
+  return new Intl.NumberFormat("en-KE", {
+    style: "currency",
     currency: currency,
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
@@ -45,7 +45,7 @@ export const formatCurrency = (
  */
 export const parseCurrency = (value: string): number => {
   // Remove currency symbols, spaces, and other non-numeric characters (except . and -)
-  const cleaned = value.replace(/[^\d.-]/g, '');
+  const cleaned = value.replace(/[^\d.-]/g, "");
   return roundCurrency(parseFloat(cleaned) || 0);
 };
 
@@ -54,7 +54,7 @@ export const parseCurrency = (value: string): number => {
  * @param a - First value
  * @param b - Second value
  * @returns Sum, safely rounded
- * 
+ *
  * @example
  * addCurrency(0.1, 0.2) // Returns 0.30 (not 0.30000000000000004)
  */
@@ -77,7 +77,7 @@ export const subtractCurrency = (a: number, b: number): number => {
  * @param value - The value to multiply
  * @param multiplier - The multiplier
  * @returns Product, safely rounded
- * 
+ *
  * @example
  * multiplyCurrency(0.1, 3) // Returns 0.30 (not 0.30000000000000003)
  */

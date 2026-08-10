@@ -31,7 +31,7 @@ export default function Invoice() {
   const [aiResponse, setAiResponse] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
   const [quantityLabel, setQuantityLabel] = useState(
-    state.invoiceSettings.quantityLabel
+    state.invoiceSettings.quantityLabel,
   );
   // Tracks the last value *this component* wrote, so the sync-from-global
   // effect below never fights the user's own typing.
@@ -88,7 +88,7 @@ export default function Invoice() {
     }
 
     // FIX: Round to 2 decimal places to prevent floating point errors
-    item.total = Math.round((item.qty * item.price) * 100) / 100;
+    item.total = Math.round(item.qty * item.price * 100) / 100;
 
     dispatch({ type: "SET_INVOICE_ITEMS", payload: updatedItems });
   };
@@ -101,9 +101,10 @@ export default function Invoice() {
 
   const calculateTotals = () => {
     // FIX: Round to 2 decimal places to prevent floating point errors
-    const totalDue = Math.round(
-      state.invoiceItems.reduce((sum, item) => sum + item.total, 0) * 100
-    ) / 100;
+    const totalDue =
+      Math.round(
+        state.invoiceItems.reduce((sum, item) => sum + item.total, 0) * 100,
+      ) / 100;
     return { totalDue };
   };
 
@@ -145,7 +146,9 @@ export default function Invoice() {
   // Silent print invoice using print service
   const handleSilentPrint = async () => {
     if (!customerName || state.invoiceItems.length === 0) {
-      setPrintError("Please add customer details and invoice items before printing.");
+      setPrintError(
+        "Please add customer details and invoice items before printing.",
+      );
       return;
     }
 
@@ -155,30 +158,34 @@ export default function Invoice() {
     try {
       const invoiceData = {
         invoiceNumber: getInvoiceNumber(),
-        stationName: state.companyData.name || 'FuelPro Station',
-        stationLocation: state.companyData.poBox || state.companyData.physicalAddress || state.companyData.town || '',
+        stationName: state.companyData.name || "FuelPro Station",
+        stationLocation:
+          state.companyData.poBox ||
+          state.companyData.physicalAddress ||
+          state.companyData.town ||
+          "",
         date: invoiceDate,
         time: new Date().toLocaleTimeString(),
         customerName,
         customerAddress,
         customerPhone,
-        items: state.invoiceItems.map(item => ({
-          desc: item.desc || item.name || '',
+        items: state.invoiceItems.map((item) => ({
+          desc: item.desc || item.name || "",
           qty: item.qty || 1,
           price: item.price || 0,
-          total: item.total || (item.qty * item.price),
+          total: item.total || item.qty * item.price,
         })),
         subtotal: totalDue,
         tax: 0,
         discount: 0,
         totalDue: totalDue,
-        currency: state.companyData.currency || 'KSh',
-        attendantName: 'System',
-        footerMessage: 'Thank you for your business',
+        currency: state.companyData.currency || "KSh",
+        attendantName: "System",
+        footerMessage: "Thank you for your business",
       };
 
       await silentPrintService.queueInvoice(invoiceData);
-      
+
       // Show brief success indicator
       setTimeout(() => {
         setIsPrinting(false);
@@ -264,12 +271,12 @@ export default function Invoice() {
       };
 
       // Local AI analysis for invoice
-      await new Promise(r => setTimeout(r, 800));
+      await new Promise((r) => setTimeout(r, 800));
       const items = state.invoiceItems;
       const itemSummary = items
         .map(
           (item: any, i: number) =>
-            `${i + 1}. ${item.name}: ${item.qty} x Ksh ${item.price?.toLocaleString()} = Ksh ${(item.qty * item.price)?.toLocaleString()}`
+            `${i + 1}. ${item.name}: ${item.qty} x Ksh ${item.price?.toLocaleString()} = Ksh ${(item.qty * item.price)?.toLocaleString()}`,
         )
         .join("\n");
       const vatTotal = items.reduce((s: number, i: any) => s + (i.vat || 0), 0);
@@ -290,7 +297,7 @@ export default function Invoice() {
     } catch (error) {
       console.error("AI Error:", error);
       setAiResponse(
-        "FuelPro AI Assistant is temporarily unavailable. Please check your subscription or try again later."
+        "FuelPro AI Assistant is temporarily unavailable. Please check your subscription or try again later.",
       );
     } finally {
       setAiLoading(false);
@@ -302,7 +309,7 @@ export default function Invoice() {
     pdf: () => {
       if (!customerName || state.invoiceItems.length === 0) {
         alert(
-          "Please add customer details and invoice items before exporting."
+          "Please add customer details and invoice items before exporting.",
         );
         return;
       }
@@ -321,7 +328,7 @@ export default function Invoice() {
     excel: () => {
       if (!customerName || state.invoiceItems.length === 0) {
         alert(
-          "Please add customer details and invoice items before exporting."
+          "Please add customer details and invoice items before exporting.",
         );
         return;
       }
@@ -340,7 +347,7 @@ export default function Invoice() {
     txt: () => {
       if (!customerName || state.invoiceItems.length === 0) {
         alert(
-          "Please add customer details and invoice items before exporting."
+          "Please add customer details and invoice items before exporting.",
         );
         return;
       }
@@ -391,8 +398,8 @@ export default function Invoice() {
   const getInvoiceData = () => {
     const itemsList = state.invoiceItems
       .map(
-        i =>
-          `${i.desc} | ${i.qty} ${quantityLabel.replace("Qty ", "").replace("(", "").replace(")", "")} | Ksh${formatNumber(i.price, 0)} | Ksh${formatNumber(i.total, 0)}`
+        (i) =>
+          `${i.desc} | ${i.qty} ${quantityLabel.replace("Qty ", "").replace("(", "").replace(")", "")} | Ksh${formatNumber(i.price, 0)} | Ksh${formatNumber(i.total, 0)}`,
       )
       .join("\n");
 
@@ -443,21 +450,21 @@ export default function Invoice() {
               <input
                 type="text"
                 value={customerName}
-                onChange={e => setCustomerName(e.target.value)}
+                onChange={(e) => setCustomerName(e.target.value)}
                 placeholder="Client Name"
                 className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
               <input
                 type="text"
                 value={customerAddress}
-                onChange={e => setCustomerAddress(e.target.value)}
+                onChange={(e) => setCustomerAddress(e.target.value)}
                 placeholder="Client Address"
                 className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
               <input
                 type="text"
                 value={customerPhone}
-                onChange={e => setCustomerPhone(e.target.value)}
+                onChange={(e) => setCustomerPhone(e.target.value)}
                 placeholder="Phone Number"
                 className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
@@ -477,7 +484,7 @@ export default function Invoice() {
                 <input
                   type="date"
                   value={invoiceDate}
-                  onChange={e => setInvoiceDate(e.target.value)}
+                  onChange={(e) => setInvoiceDate(e.target.value)}
                   className="border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
@@ -494,7 +501,7 @@ export default function Invoice() {
             <input
               type="text"
               value={quantityLabel}
-              onChange={e => updateQuantityLabel(e.target.value)}
+              onChange={(e) => updateQuantityLabel(e.target.value)}
               placeholder="e.g., Qty (DAYS), Litres, Units, Hours"
               className="flex-1 px-3 py-2 border border-blue-300 dark:border-blue-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
             />
@@ -533,7 +540,7 @@ export default function Invoice() {
                     <input
                       type="text"
                       value={item.desc}
-                      onChange={e =>
+                      onChange={(e) =>
                         updateInvoiceItem(index, "desc", e.target.value)
                       }
                       className="w-full bg-transparent border-none outline-none"
@@ -544,7 +551,7 @@ export default function Invoice() {
                     <input
                       type="number"
                       value={item.qty}
-                      onChange={e =>
+                      onChange={(e) =>
                         updateInvoiceItem(index, "qty", e.target.value)
                       }
                       className="w-full bg-transparent border-none outline-none text-center"
@@ -557,7 +564,7 @@ export default function Invoice() {
                       <input
                         type="number"
                         value={item.price}
-                        onChange={e =>
+                        onChange={(e) =>
                           updateInvoiceItem(index, "price", e.target.value)
                         }
                         className="w-24 bg-transparent border-none outline-none text-right"
@@ -680,7 +687,9 @@ export default function Invoice() {
           </div>
           <button
             onClick={handleSilentPrint}
-            disabled={isPrinting || !customerName || state.invoiceItems.length === 0}
+            disabled={
+              isPrinting || !customerName || state.invoiceItems.length === 0
+            }
             className="btn btn-primary w-full flex items-center justify-center gap-2"
           >
             {isPrinting ? (
@@ -746,10 +755,10 @@ export default function Invoice() {
                 <input
                   type="text"
                   value={aiMessage}
-                  onChange={e => setAiMessage(e.target.value)}
+                  onChange={(e) => setAiMessage(e.target.value)}
                   placeholder="Ask FuelPro AI about this invoice..."
                   className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                  onKeyPress={e => e.key === "Enter" && sendAIMessage()}
+                  onKeyPress={(e) => e.key === "Enter" && sendAIMessage()}
                   disabled={aiLoading}
                 />
                 <button
@@ -779,7 +788,7 @@ export default function Invoice() {
         <div className="card">
           <h3 className="text-xl font-bold mb-4">Saved Invoices</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {Object.keys(state.invoices).map(key => (
+            {Object.keys(state.invoices).map((key) => (
               <div
                 key={key}
                 className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50"

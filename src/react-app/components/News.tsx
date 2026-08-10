@@ -251,13 +251,13 @@ function getCuratedNews(countryCode: string): DisplayNewsItem[] {
         priority: "medium",
         bookmarked: false,
         read: false,
-      }
+      },
     );
   }
 
   return items.sort(
     (a, b) =>
-      new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime()
+      new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime(),
   );
 }
 
@@ -269,7 +269,7 @@ export default function News() {
   const [loading, setLoading] = useState(true);
   const [fetchingExternal, setFetchingExternal] = useState(false);
   const [selectedItem, setSelectedItem] = useState<DisplayNewsItem | null>(
-    null
+    null,
   );
   const [bookmarks, setBookmarks] = useState<Set<string>>(new Set<string>());
   const [lastFetch, setLastFetch] = useState<Date | null>(null);
@@ -314,7 +314,7 @@ export default function News() {
 
     if (external.length > 0) {
       // Apply bookmarks to external news
-      external.forEach(item => {
+      external.forEach((item) => {
         item.bookmarked = bookmarks.has(item.id);
         item.read = false;
       });
@@ -323,7 +323,7 @@ export default function News() {
     } else {
       // Fall back to curated news
       const curated = getCuratedNews(currentCountry.id);
-      curated.forEach(item => {
+      curated.forEach((item) => {
         item.bookmarked = bookmarks.has(item.id);
       });
       setNews(curated);
@@ -339,7 +339,7 @@ export default function News() {
     try {
       const fetched = await NewsService.autoFetchNews(currentCountry.id);
       if (fetched.length > 0) {
-        const withFlags = fetched.map(item => ({
+        const withFlags = fetched.map((item) => ({
           ...item,
           bookmarked: bookmarks.has(item.id),
           read: false,
@@ -356,26 +356,25 @@ export default function News() {
   }
 
   const toggleBookmark = (id: string) => {
-    setBookmarks(prev => {
+    setBookmarks((prev) => {
       const next = new Set<string>(Array.from(prev));
       if (next.has(id)) next.delete(id);
       else next.add(id);
       const arr = Array.from(next);
-      localStorage.setItem(
-        "fuelpro_news_bookmarks",
-        JSON.stringify(arr)
-      );
+      localStorage.setItem("fuelpro_news_bookmarks", JSON.stringify(arr));
       // Cross-device sync
       cloudStorageService.set("news_bookmarks", arr).catch(() => {});
       return next;
     });
-    setNews(prev =>
-      prev.map(n => (n.id === id ? { ...n, bookmarked: !n.bookmarked } : n))
+    setNews((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, bookmarked: !n.bookmarked } : n)),
     );
   };
 
   const markAsRead = (id: string) => {
-    setNews(prev => prev.map(n => (n.id === id ? { ...n, read: true } : n)));
+    setNews((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, read: true } : n)),
+    );
   };
 
   const shareNews = (item: DisplayNewsItem) => {
@@ -389,8 +388,8 @@ export default function News() {
         .writeText(text)
         .then(() =>
           import("@/react-app/lib/toast").then(({ toastSuccess }) =>
-            toastSuccess("News copied to clipboard")
-          )
+            toastSuccess("News copied to clipboard"),
+          ),
         );
     }
   };
@@ -399,10 +398,10 @@ export default function News() {
     activeFilter === "all"
       ? news
       : activeFilter === "bookmarked"
-        ? news.filter(n => n.bookmarked)
-        : news.filter(n => n.category === activeFilter);
+        ? news.filter((n) => n.bookmarked)
+        : news.filter((n) => n.category === activeFilter);
 
-  const unreadCount = news.filter(n => !n.read).length;
+  const unreadCount = news.filter((n) => !n.read).length;
 
   return (
     <div className="space-y-6 p-4 md:p-6 max-w-6xl mx-auto">
@@ -444,7 +443,7 @@ export default function News() {
           </button>
           <button
             onClick={() =>
-              setNews(prev => prev.map(n => ({ ...n, read: true })))
+              setNews((prev) => prev.map((n) => ({ ...n, read: true })))
             }
             className="px-3 py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-lg text-xs hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
           >
@@ -469,7 +468,7 @@ export default function News() {
           All ({news.length})
         </button>
         {Object.entries(CATEGORY_LABELS).map(([key, label]) => {
-          const count = news.filter(n => n.category === key).length;
+          const count = news.filter((n) => n.category === key).length;
           if (count === 0) return null;
           const Icon = CATEGORY_ICONS[key];
           return (
@@ -538,8 +537,8 @@ export default function News() {
                 <button
                   onClick={() =>
                     setVideoIndex(
-                      vi =>
-                        (vi - 1 + VIDEO_SOURCES.length) % VIDEO_SOURCES.length
+                      (vi) =>
+                        (vi - 1 + VIDEO_SOURCES.length) % VIDEO_SOURCES.length,
                     )
                   }
                   className="p-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-white transition-all"
@@ -549,7 +548,7 @@ export default function News() {
                 </button>
                 <button
                   onClick={() =>
-                    setVideoIndex(vi => (vi + 1) % VIDEO_SOURCES.length)
+                    setVideoIndex((vi) => (vi + 1) % VIDEO_SOURCES.length)
                   }
                   className="p-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-white transition-all"
                   title="Next"
@@ -613,7 +612,7 @@ export default function News() {
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {filteredNews.map(item => {
+          {filteredNews.map((item) => {
             const Icon = CATEGORY_ICONS[item.category] || Newspaper;
             const colorClass = CATEGORY_COLORS[item.category];
             const isPriority = item.priority === "high";
@@ -633,7 +632,7 @@ export default function News() {
                     window.open(
                       item.sourceUrl,
                       "_blank",
-                      "noopener,noreferrer"
+                      "noopener,noreferrer",
                     );
                   }
                   markAsRead(item.id);
@@ -658,7 +657,7 @@ export default function News() {
                     </div>
                     <div className="flex items-center gap-1">
                       <button
-                        onClick={e => {
+                        onClick={(e) => {
                           e.stopPropagation();
                           toggleBookmark(item.id);
                         }}
@@ -671,7 +670,7 @@ export default function News() {
                         )}
                       </button>
                       <button
-                        onClick={e => {
+                        onClick={(e) => {
                           e.stopPropagation();
                           shareNews(item);
                         }}
@@ -727,7 +726,7 @@ export default function News() {
         >
           <div
             className="bg-white dark:bg-gray-800 rounded-2xl max-w-lg w-full shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden"
-            onClick={e => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
           >
             <div className="p-6 max-h-[80vh] overflow-auto">
               <div className="flex items-center justify-between mb-4">
@@ -762,7 +761,7 @@ export default function News() {
                       window.open(
                         selectedItem.sourceUrl,
                         "_blank",
-                        "noopener,noreferrer"
+                        "noopener,noreferrer",
                       )
                     }
                     className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-colors"
@@ -774,8 +773,8 @@ export default function News() {
                   <button
                     onClick={() => {
                       toggleBookmark(selectedItem.id);
-                      setSelectedItem(p =>
-                        p ? { ...p, bookmarked: !p.bookmarked } : null
+                      setSelectedItem((p) =>
+                        p ? { ...p, bookmarked: !p.bookmarked } : null,
                       );
                     }}
                     className="flex-1 py-2 bg-amber-500/20 text-amber-600 dark:text-amber-400 rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 hover:bg-amber-500/30"

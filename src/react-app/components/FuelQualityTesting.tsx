@@ -69,13 +69,16 @@ export default function FuelQualityTesting() {
   useEffect(() => {
     if (!user) return;
     (async () => {
-      const cloudTests = await cloudStorageService.get<QualityTest[]>("fuel_quality_tests", stationId);
+      const cloudTests = await cloudStorageService.get<QualityTest[]>(
+        "fuel_quality_tests",
+        stationId,
+      );
       if (cloudTests && Array.isArray(cloudTests)) setTests(cloudTests);
     })();
   }, [user, stationId]);
 
-  const passed = tests.filter(t => t.passed).length;
-  const failed = tests.filter(t => !t.passed).length;
+  const passed = tests.filter((t) => t.passed).length;
+  const failed = tests.filter((t) => !t.passed).length;
 
   const addTest = () => {
     if (!newTest.date || !newTest.batchNumber || !newTest.density) return;
@@ -207,12 +210,12 @@ export default function FuelQualityTesting() {
             <input
               type="date"
               value={newTest.date || ""}
-              onChange={e => setNewTest({ ...newTest, date: e.target.value })}
+              onChange={(e) => setNewTest({ ...newTest, date: e.target.value })}
               className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
             />
             <select
               value={newTest.fuelType}
-              onChange={e =>
+              onChange={(e) =>
                 setNewTest({ ...newTest, fuelType: e.target.value as any })
               }
               className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
@@ -224,7 +227,7 @@ export default function FuelQualityTesting() {
             <input
               placeholder="Batch Number *"
               value={newTest.batchNumber || ""}
-              onChange={e =>
+              onChange={(e) =>
                 setNewTest({ ...newTest, batchNumber: e.target.value })
               }
               className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
@@ -232,7 +235,7 @@ export default function FuelQualityTesting() {
             <input
               placeholder="Supplier"
               value={newTest.supplier || ""}
-              onChange={e =>
+              onChange={(e) =>
                 setNewTest({ ...newTest, supplier: e.target.value })
               }
               className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
@@ -242,7 +245,7 @@ export default function FuelQualityTesting() {
               step="0.1"
               placeholder="Density (kg/m) *"
               value={newTest.density || ""}
-              onChange={e =>
+              onChange={(e) =>
                 setNewTest({ ...newTest, density: parseFloat(e.target.value) })
               }
               className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
@@ -252,7 +255,7 @@ export default function FuelQualityTesting() {
               step="0.1"
               placeholder="Temperature (C)"
               value={newTest.temperature || ""}
-              onChange={e =>
+              onChange={(e) =>
                 setNewTest({
                   ...newTest,
                   temperature: parseFloat(e.target.value),
@@ -264,7 +267,7 @@ export default function FuelQualityTesting() {
               type="number"
               placeholder="Water Content (ppm)"
               value={newTest.waterContent || ""}
-              onChange={e =>
+              onChange={(e) =>
                 setNewTest({
                   ...newTest,
                   waterContent: parseFloat(e.target.value),
@@ -276,7 +279,7 @@ export default function FuelQualityTesting() {
               type="number"
               placeholder="Sulfur Content (ppm)"
               value={newTest.sulfurContent || ""}
-              onChange={e =>
+              onChange={(e) =>
                 setNewTest({
                   ...newTest,
                   sulfurContent: parseFloat(e.target.value),
@@ -289,7 +292,7 @@ export default function FuelQualityTesting() {
               step="0.1"
               placeholder="Flash Point (C)"
               value={newTest.flashPoint || ""}
-              onChange={e =>
+              onChange={(e) =>
                 setNewTest({
                   ...newTest,
                   flashPoint: parseFloat(e.target.value),
@@ -299,7 +302,7 @@ export default function FuelQualityTesting() {
             />
             <select
               value={newTest.appearance}
-              onChange={e =>
+              onChange={(e) =>
                 setNewTest({ ...newTest, appearance: e.target.value as any })
               }
               className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
@@ -311,7 +314,7 @@ export default function FuelQualityTesting() {
             <input
               placeholder="Tested By"
               value={newTest.testedBy || ""}
-              onChange={e =>
+              onChange={(e) =>
                 setNewTest({ ...newTest, testedBy: e.target.value })
               }
               className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
@@ -319,7 +322,9 @@ export default function FuelQualityTesting() {
             <input
               placeholder="Notes"
               value={newTest.notes || ""}
-              onChange={e => setNewTest({ ...newTest, notes: e.target.value })}
+              onChange={(e) =>
+                setNewTest({ ...newTest, notes: e.target.value })
+              }
               className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
             />
           </div>
@@ -357,7 +362,7 @@ export default function FuelQualityTesting() {
               </tr>
             </thead>
             <tbody>
-              {tests.map(t => (
+              {tests.map((t) => (
                 <tr
                   key={t.id}
                   className="border-b border-gray-100 dark:border-gray-700/50"

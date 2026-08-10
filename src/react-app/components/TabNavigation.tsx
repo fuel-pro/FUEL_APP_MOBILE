@@ -35,7 +35,6 @@ import {
   Gauge,
   PackageSearch,
   FileText,
-  ShoppingCart,
   Store,
 } from "lucide-react";
 
@@ -164,8 +163,8 @@ const TabNavigation: React.FC<TabNavigationProps> = ({
   // Get visible tabs sorted by order, filtered by role permissions
   const { canAccessTab } = usePermissions();
   const visibleTabs = state.tabConfigurations
-    .filter(tab => tab.visible !== false)
-    .filter(tab => canAccessTab(tab.id))
+    .filter((tab) => tab.visible !== false)
+    .filter((tab) => canAccessTab(tab.id))
     .sort((a, b) => a.order - b.order);
 
   return (
@@ -197,7 +196,7 @@ const TabNavigation: React.FC<TabNavigationProps> = ({
           div::-webkit-scrollbar { display: none !important; width: 0 !important; height: 0 !important; }
         `}</style>
 
-        {visibleTabs.map(tab => {
+        {visibleTabs.map((tab) => {
           const isActive = activeTab === tab.id;
           const icon = iconMap[tab.id];
 

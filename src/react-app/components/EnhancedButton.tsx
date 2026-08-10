@@ -5,12 +5,7 @@ interface EnhancedButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   children: ReactNode;
   icon?: ReactNode;
   variant?:
-    | "primary"
-    | "secondary"
-    | "outline"
-    | "success"
-    | "warning"
-    | "danger";
+    "primary" | "secondary" | "outline" | "success" | "warning" | "danger";
   size?: "sm" | "md" | "lg";
   loading?: boolean;
   fullWidth?: boolean;

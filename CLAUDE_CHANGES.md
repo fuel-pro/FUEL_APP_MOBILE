@@ -160,7 +160,7 @@ they're worth cleaning up or finishing later:
 ## Additional pass (this session)
 
 - Re-verified everything above from a clean checkout: `npm install`, `npm run
-  build`, and served the production `dist/` output locally — confirmed
+build`, and served the production `dist/` output locally — confirmed
   `HTTP 200` with the correct `<title>FuelPro - Fuel Management System</title>`,
   and confirmed the bundle has the real Supabase project URL baked in.
 - Removed leftover `clerk-publishable-key` / `clerk-frontend-api` `<meta>`
@@ -171,119 +171,119 @@ they're worth cleaning up or finishing later:
 ## Station Manager Upgrade (update-6)
 
 6. **Station Manager upgraded (update-6).**
-    Rewrote `src/react-app/components/StationManager.tsx` on top of the existing
-    `useStations()` context and added `src/react-app/lib/station-stats.ts`:
-    - Live stat cards (stations, combined revenue, today's revenue, shared users)
-      plus cloud sync status and a "Sync Now" button wired to
-      `syncToBackend()` + `syncFromBackend()` (update-22 Supabase layer).
-    - Search, status filter chips (All/Active/Inactive/Maintenance) and sorting
-      (Name / Revenue / Recently updated / Oldest).
-    - Enriched station cards: per-station revenue (today/month/total), sales
-      count, one-tap status toggle, relative "updated" time, cloud-sync badge
-      (UUID-backed vs legacy local id), Open/Edit/Share/Export/Delete actions.
-    - New modals: Create/Edit station (validated), Share Access (grant + revoke
-      list), Access Station (password unlock via `verifyStationAccess`),
-      Combined View (aggregated totals via `combineStations()`), and a delete
-      confirmation dialog. Skeleton loaders, empty state, no-results state,
-      auto-dismissing notices.
-    - UPDATE-4 compliance: every subcomponent (StatCard, StatusBadge,
-      StationCard, all modals, SkeletonCard, EmptyState) is defined at module
-      scope — no component is ever defined inside a render function, so inputs
-      cannot remount/clear while typing. All callbacks memoized; derived lists
-      via useMemo keyed on station.id.
-    - All analytics are computed defensively from the free-form `station.data`
-      blob (`station-stats.ts`) and never throw; currency symbol auto-detects
-      from `fuelpro_location_country` (defaults to Ksh).
+   Rewrote `src/react-app/components/StationManager.tsx` on top of the existing
+   `useStations()` context and added `src/react-app/lib/station-stats.ts`:
+   - Live stat cards (stations, combined revenue, today's revenue, shared users)
+     plus cloud sync status and a "Sync Now" button wired to
+     `syncToBackend()` + `syncFromBackend()` (update-22 Supabase layer).
+   - Search, status filter chips (All/Active/Inactive/Maintenance) and sorting
+     (Name / Revenue / Recently updated / Oldest).
+   - Enriched station cards: per-station revenue (today/month/total), sales
+     count, one-tap status toggle, relative "updated" time, cloud-sync badge
+     (UUID-backed vs legacy local id), Open/Edit/Share/Export/Delete actions.
+   - New modals: Create/Edit station (validated), Share Access (grant + revoke
+     list), Access Station (password unlock via `verifyStationAccess`),
+     Combined View (aggregated totals via `combineStations()`), and a delete
+     confirmation dialog. Skeleton loaders, empty state, no-results state,
+     auto-dismissing notices.
+   - UPDATE-4 compliance: every subcomponent (StatCard, StatusBadge,
+     StationCard, all modals, SkeletonCard, EmptyState) is defined at module
+     scope — no component is ever defined inside a render function, so inputs
+     cannot remount/clear while typing. All callbacks memoized; derived lists
+     via useMemo keyed on station.id.
+   - All analytics are computed defensively from the free-form `station.data`
+     blob (`station-stats.ts`) and never throw; currency symbol auto-detects
+     from `fuelpro_location_country` (defaults to Ksh).
 
 ## Invoice & Number Input Fixes
 
 7. **Fixed Qty (DAYS) and other number inputs not being editable.**
-    - `Invoice.tsx`: Fixed `updateInvoiceItem` to create new object references
-      instead of mutating state directly (React anti-pattern fix). Also ensured
-      qty and price inputs use `value={item.qty ?? ""}` and `value={item.price ?? ""}`
-      so they properly handle undefined/null values.
-    - `FuelOffloading.tsx`: Fixed quantity, rate, and totalAmount inputs to use
-      `value={formData.field ?? ""}` for proper number input handling.
-    - `DeliveryTracker.tsx`: Fixed deliveryYear, petrolPrice, and dieselPrice
-      inputs to use `value={state.field ?? ""}`.
-    - All inputs now have `step` attributes for proper decimal handling and
-      `cursor-text` class for consistent cursor behavior.
+   - `Invoice.tsx`: Fixed `updateInvoiceItem` to create new object references
+     instead of mutating state directly (React anti-pattern fix). Also ensured
+     qty and price inputs use `value={item.qty ?? ""}` and `value={item.price ?? ""}`
+     so they properly handle undefined/null values.
+   - `FuelOffloading.tsx`: Fixed quantity, rate, and totalAmount inputs to use
+     `value={formData.field ?? ""}` for proper number input handling.
+   - `DeliveryTracker.tsx`: Fixed deliveryYear, petrolPrice, and dieselPrice
+     inputs to use `value={state.field ?? ""}`.
+   - All inputs now have `step` attributes for proper decimal handling and
+     `cursor-text` class for consistent cursor behavior.
 
 ## Working Version Sync (from FuelPro-working.zip)
 
 8. **Synced key files with working version for consistency:**
-    - `StationContext.tsx`: Added Supabase cross-device sync functions
-      (`pushStationUpsert`, `pushStationDelete`, `syncStationsWithSupabase`)
-      for proper station data synchronization across devices.
-    - `Invoice.tsx`: Added `useRef` to track `lastDispatchedLabel` to prevent
-      the quantity label input from fighting with global state changes.
-    - `useFuelStore.ts`: Using working version with proper Zustand store
-      configuration for state persistence.
+   - `StationContext.tsx`: Added Supabase cross-device sync functions
+     (`pushStationUpsert`, `pushStationDelete`, `syncStationsWithSupabase`)
+     for proper station data synchronization across devices.
+   - `Invoice.tsx`: Added `useRef` to track `lastDispatchedLabel` to prevent
+     the quantity label input from fighting with global state changes.
+   - `useFuelStore.ts`: Using working version with proper Zustand store
+     configuration for state persistence.
 
 ## SalesZote Business Suite Integration (update-8)
 
 9. **Full SalesZote-style POS & Inventory feature set integrated.**
-    Based on the FuelPro × SalesZote Business Suit implementation guide:
-    
-    - **SQL Migration** (`supabase/migrations/005_saleszote_features.sql`): 15 new tables
-      with RLS policies for products, customers, suppliers, sales_enhanced,
-      sale_items, inventory_transactions, stock_transfers, purchase_orders,
-      purchase_order_items, expenses, expense_categories, terminal_sessions,
-      and integrations.
-    
-    - **pos-service.ts**: Central checkout + stock-movement engine. Every sale,
-      adjustment, transfer, count, wastage, and PO-receipt writes an
-      inventory_transactions row and keeps products.stock_quantity in sync.
-    
-    - **BusinessSuite.tsx**: Full SalesZote-style sidebar navigation shell with
-      collapsible sections for Overview, POS, Catalog, Stock Management,
-      Sales, Purchases, Customers, Expenses, Reports, and Settings.
-    
-    - **EnhancedDashboard.tsx**: KPI cards (sales, expenses, profit, inventory),
-      sales trend chart, payment breakdown, top products, and recent activity.
-    
-    - **AdvancedPOS.tsx**: Full-featured POS with product grid, cart, customer
-      selector, multiple payment methods (cash/M-PESA/card), terminal session
-      integration, and success/completion screens.
-    
-    - **ProductsManagement.tsx**: Product CRUD with categories, barcode support,
-      pricing (cost/selling), stock levels, reorder alerts, and active status.
-    
-    - **InventoryManagement.tsx**: Stock adjustments, transfers between stations,
-      stock counts with variance calculation, wastage recording, and full
-      transaction history.
-    
-    - **SalesInvoices.tsx**: Sales listing with search, date filter, and
-      invoice detail modal with line items.
-    
-    - **PurchasesSuppliers.tsx**: Purchase order creation with line items,
-      receive-to-stock flow, and supplier CRUD.
-    
-    - **CustomersManagement.tsx**: Customer profiles with contact info, credit
-      limits, and purchase history.
-    
-    - **ExpensesManagement.tsx**: Auto-seeded expense categories, period
-      filters, and category totals with P&L contribution.
-    
-    - **ReportsAnalytics.tsx**: P&L report, payment breakdown, top products,
-      inventory valuation, and real CSV exports.
-    
-    - **TerminalSessions.tsx**: Open/close shifts, cash reconciliation,
-      and variance computation.
-    
-    - **SettingsPanel.tsx**: Station info, tax rates, and integrations
-      placeholder (M-PESA, Kopo Kopo).
-    
-    - **Home.tsx**: Wired to render BusinessSuite when a station is selected.
+   Based on the FuelPro × SalesZote Business Suit implementation guide:
 
-    Architecture compliance: all subcomponents module-scoped (UPDATE-4),
-    all callbacks memoized, no effect-dependency loops, all inserts set
-    owner_id from the Supabase session (UPDATE-22 RLS).
+   - **SQL Migration** (`supabase/migrations/005_saleszote_features.sql`): 15 new tables
+     with RLS policies for products, customers, suppliers, sales_enhanced,
+     sale_items, inventory_transactions, stock_transfers, purchase_orders,
+     purchase_order_items, expenses, expense_categories, terminal_sessions,
+     and integrations.
+
+   - **pos-service.ts**: Central checkout + stock-movement engine. Every sale,
+     adjustment, transfer, count, wastage, and PO-receipt writes an
+     inventory_transactions row and keeps products.stock_quantity in sync.
+
+   - **BusinessSuite.tsx**: Full SalesZote-style sidebar navigation shell with
+     collapsible sections for Overview, POS, Catalog, Stock Management,
+     Sales, Purchases, Customers, Expenses, Reports, and Settings.
+
+   - **EnhancedDashboard.tsx**: KPI cards (sales, expenses, profit, inventory),
+     sales trend chart, payment breakdown, top products, and recent activity.
+
+   - **AdvancedPOS.tsx**: Full-featured POS with product grid, cart, customer
+     selector, multiple payment methods (cash/M-PESA/card), terminal session
+     integration, and success/completion screens.
+
+   - **ProductsManagement.tsx**: Product CRUD with categories, barcode support,
+     pricing (cost/selling), stock levels, reorder alerts, and active status.
+
+   - **InventoryManagement.tsx**: Stock adjustments, transfers between stations,
+     stock counts with variance calculation, wastage recording, and full
+     transaction history.
+
+   - **SalesInvoices.tsx**: Sales listing with search, date filter, and
+     invoice detail modal with line items.
+
+   - **PurchasesSuppliers.tsx**: Purchase order creation with line items,
+     receive-to-stock flow, and supplier CRUD.
+
+   - **CustomersManagement.tsx**: Customer profiles with contact info, credit
+     limits, and purchase history.
+
+   - **ExpensesManagement.tsx**: Auto-seeded expense categories, period
+     filters, and category totals with P&L contribution.
+
+   - **ReportsAnalytics.tsx**: P&L report, payment breakdown, top products,
+     inventory valuation, and real CSV exports.
+
+   - **TerminalSessions.tsx**: Open/close shifts, cash reconciliation,
+     and variance computation.
+
+   - **SettingsPanel.tsx**: Station info, tax rates, and integrations
+     placeholder (M-PESA, Kopo Kopo).
+
+   - **Home.tsx**: Wired to render BusinessSuite when a station is selected.
+
+   Architecture compliance: all subcomponents module-scoped (UPDATE-4),
+   all callbacks memoized, no effect-dependency loops, all inserts set
+   owner_id from the Supabase session (UPDATE-22 RLS).
 
 ## Still worth doing (not done this pass — flagging so it's not lost)
 
 - Delete or fix `src/react-app/lib/open-source/{chatwootIntegration,
-  sentryIntegration}.ts` (`react-query-devtools.tsx` is empty) — these have
+sentryIntegration}.ts` (`react-query-devtools.tsx` is empty) — these have
   real syntax errors caught by `tsc -b`. Nothing in the running app imports
   them today so the build isn't affected, but it's a landmine for later.
 - `api/pump-mapping/*.ts` and `db/connection.ts` reference an `astro`

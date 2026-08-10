@@ -110,14 +110,14 @@ export default function APIKeyManager() {
 
   const showNotification = (
     message: string,
-    type: "success" | "warning" = "success"
+    type: "success" | "warning" = "success",
   ) => {
     setNotification({ message, type });
     setTimeout(() => setNotification(null), 3000);
   };
 
   const toggleSecret = (id: string) =>
-    setShowSecrets(prev => ({ ...prev, [id]: !prev[id] }));
+    setShowSecrets((prev) => ({ ...prev, [id]: !prev[id] }));
 
   const copyKey = (key: string, id: string) => {
     navigator.clipboard.writeText(key);
@@ -148,7 +148,7 @@ export default function APIKeyManager() {
       active: formData.active ?? true,
       createdAt: new Date().toISOString(),
     };
-    setApiKeys(prev => [newKey, ...prev]);
+    setApiKeys((prev) => [newKey, ...prev]);
     showNotification("API Key created successfully");
     setShowForm(false);
     setFormData({ name: "", scopes: [], active: true });
@@ -156,23 +156,23 @@ export default function APIKeyManager() {
 
   const handleDelete = (id: string) => {
     if (confirm("Delete this API key? This action cannot be undone.")) {
-      setApiKeys(prev => prev.filter(k => k.id !== id));
+      setApiKeys((prev) => prev.filter((k) => k.id !== id));
       showNotification("API Key deleted");
     }
   };
 
   const toggleActive = (id: string) => {
-    setApiKeys(prev =>
-      prev.map(k => (k.id === id ? { ...k, active: !k.active } : k))
+    setApiKeys((prev) =>
+      prev.map((k) => (k.id === id ? { ...k, active: !k.active } : k)),
     );
     showNotification("API Key status updated");
   };
 
   const toggleScope = (scopeId: string) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
       scopes: prev.scopes?.includes(scopeId)
-        ? prev.scopes.filter(s => s !== scopeId)
+        ? prev.scopes.filter((s) => s !== scopeId)
         : [...(prev.scopes || []), scopeId],
     }));
   };
@@ -240,13 +240,13 @@ export default function APIKeyManager() {
         <div className="bg-green-50 dark:bg-green-900/10 rounded-xl p-4 border border-green-200 dark:border-green-800">
           <p className="text-xs text-green-600">Active Keys</p>
           <p className="text-2xl font-bold text-green-600 dark:text-green-400">
-            {apiKeys.filter(k => k.active).length}
+            {apiKeys.filter((k) => k.active).length}
           </p>
         </div>
         <div className="bg-cyan-50 dark:bg-cyan-900/10 rounded-xl p-4 border border-cyan-200 dark:border-cyan-800">
           <p className="text-xs text-cyan-600">Total Scopes</p>
           <p className="text-2xl font-bold text-cyan-600 dark:text-cyan-400">
-            {new Set(apiKeys.flatMap(k => k.scopes)).size}
+            {new Set(apiKeys.flatMap((k) => k.scopes)).size}
           </p>
         </div>
       </div>
@@ -270,7 +270,7 @@ export default function APIKeyManager() {
         </div>
       ) : (
         <div className="space-y-2">
-          {apiKeys.map(apiKey => (
+          {apiKeys.map((apiKey) => (
             <div
               key={apiKey.id}
               className="bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700"
@@ -320,12 +320,12 @@ export default function APIKeyManager() {
 
                   {/* Scopes */}
                   <div className="mt-3 flex flex-wrap gap-1">
-                    {apiKey.scopes.map(scope => (
+                    {apiKey.scopes.map((scope) => (
                       <span
                         key={scope}
                         className="px-2 py-0.5 bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400 rounded text-xs"
                       >
-                        {AVAILABLE_SCOPES.find(s => s.id === scope)?.label ||
+                        {AVAILABLE_SCOPES.find((s) => s.id === scope)?.label ||
                           scope}
                       </span>
                     ))}
@@ -372,7 +372,7 @@ export default function APIKeyManager() {
       {showForm && (
         <div
           className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-          onClick={e => e.target === e.currentTarget && setShowForm(false)}
+          onClick={(e) => e.target === e.currentTarget && setShowForm(false)}
         >
           <div className="bg-white dark:bg-gray-900 rounded-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-6">
@@ -395,7 +395,7 @@ export default function APIKeyManager() {
                 <input
                   type="text"
                   value={formData.name || ""}
-                  onChange={e =>
+                  onChange={(e) =>
                     setFormData({ ...formData, name: e.target.value })
                   }
                   placeholder="Production API Key"
@@ -408,7 +408,7 @@ export default function APIKeyManager() {
                   Permissions (Scopes)
                 </label>
                 <div className="grid grid-cols-2 gap-2">
-                  {AVAILABLE_SCOPES.map(scope => (
+                  {AVAILABLE_SCOPES.map((scope) => (
                     <label
                       key={scope.id}
                       className={`flex items-start gap-2 p-3 rounded-lg border cursor-pointer transition-all ${formData.scopes?.includes(scope.id) ? "border-cyan-500 bg-cyan-50 dark:bg-cyan-900/20" : "border-gray-200 dark:border-gray-700 hover:border-gray-300"}`}
@@ -436,7 +436,7 @@ export default function APIKeyManager() {
                 <input
                   type="checkbox"
                   checked={formData.active ?? true}
-                  onChange={e =>
+                  onChange={(e) =>
                     setFormData({ ...formData, active: e.target.checked })
                   }
                   className="w-4 h-4 rounded border-gray-300 text-cyan-600 focus:ring-cyan-500"

@@ -121,12 +121,12 @@ export default function MPESAAnalyzer() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const addProgress = useCallback((msg: string) => {
-    setProgress(prev => [...prev, msg]);
+    setProgress((prev) => [...prev, msg]);
   }, []);
 
   // ===== CORE PATTERN EXTRACTION =====
   const extractFromLines = (
-    lines: string[]
+    lines: string[],
   ): { inflows: InflowRecord[]; excluded: ExcludedRecord[] } => {
     const inflows: InflowRecord[] = [];
     const excluded: ExcludedRecord[] = [];
@@ -138,7 +138,7 @@ export default function MPESAAnalyzer() {
       // Extract amounts: last 3 are [Paid In, Withdrawn, Balance]
       const amounts: number[] = [];
       for (const m of line.matchAll(
-        /([0-9]{1,3}(?:,[0-9]{3})+\.[0-9]{2}|[0-9]+\.[0-9]{2})/g
+        /([0-9]{1,3}(?:,[0-9]{3})+\.[0-9]{2}|[0-9]+\.[0-9]{2})/g,
       )) {
         amounts.push(parseFloat(m[1].replace(/,/g, "")));
       }
@@ -213,7 +213,7 @@ export default function MPESAAnalyzer() {
       }
 
       // Skip non-inflow types
-      if (SKIP_KEYWORDS.some(k => line.includes(k))) continue;
+      if (SKIP_KEYWORDS.some((k) => line.includes(k))) continue;
 
       // Must be "Merchant Payment from"
       if (!line.includes("Merchant Payment from")) continue;
@@ -235,7 +235,7 @@ export default function MPESAAnalyzer() {
 
       // Name extraction
       const nameMatch = fullContext.match(
-        /(?:\d{3,4}\*+\d{3}|254\d{0,3}\*+\d{3})\s*-\s*(.+?)(?:\s+Merchant|\s+Payment|$)/i
+        /(?:\d{3,4}\*+\d{3}|254\d{0,3}\*+\d{3})\s*-\s*(.+?)(?:\s+Merchant|\s+Payment|$)/i,
       );
 
       if (nameMatch) {
@@ -247,7 +247,7 @@ export default function MPESAAnalyzer() {
         // Surname continuation fix
         for (const ctxLine of contextLines.slice(1)) {
           const surnameMatch = ctxLine.match(
-            /^([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+){0,2})\s+Payment\s+ENERGY/
+            /^([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+){0,2})\s+Payment\s+ENERGY/,
           );
           if (surnameMatch) {
             for (const word of surnameMatch[1].split(/\s+/)) {
@@ -278,7 +278,7 @@ export default function MPESAAnalyzer() {
 
   // ===== PDF TEXT EXTRACTION (v5 - robust) =====
   const extractPDFText = async (
-    file: File
+    file: File,
   ): Promise<{ lines: string[]; error?: string }> => {
     try {
       const arrayBuffer = await file.arrayBuffer();
@@ -337,7 +337,7 @@ export default function MPESAAnalyzer() {
           .map(([, row]) => {
             row.sort((a, b) => a.x - b.x);
             return row
-              .map(i => i.text)
+              .map((i) => i.text)
               .join(" ")
               .trim();
           })
@@ -356,9 +356,11 @@ export default function MPESAAnalyzer() {
   const extractWithAI = async (text: string): Promise<InflowRecord[]> => {
     const geminiUrl = getGeminiUrl();
     if (!geminiUrl) {
-      throw new Error("Gemini API key not configured. Please set VITE_GEMINI_API_KEY environment variable.");
+      throw new Error(
+        "Gemini API key not configured. Please set VITE_GEMINI_API_KEY environment variable.",
+      );
     }
-    
+
     const allRecords: InflowRecord[] = [];
     const chunkSize = 20000;
 
@@ -408,7 +410,7 @@ export default function MPESAAnalyzer() {
 
         allRecords.push(...records);
         addProgress(
-          `AI processed ${Math.min(offset + chunkSize, text.length).toLocaleString()} / ${text.length.toLocaleString()} chars`
+          `AI processed ${Math.min(offset + chunkSize, text.length).toLocaleString()} / ${text.length.toLocaleString()} chars`,
         );
       } catch {
         /* continue */
@@ -421,7 +423,7 @@ export default function MPESAAnalyzer() {
   // ===== STATS CALCULATION =====
   const calculateStats = (
     records: InflowRecord[],
-    excluded: ExcludedRecord[]
+    excluded: ExcludedRecord[],
   ): AnalysisStats => {
     const totalAmount = records.reduce((s, r) => s + r.paidIn, 0);
     const customerMap = new Map<string, { amount: number; count: number }>();
@@ -438,7 +440,7 @@ export default function MPESAAnalyzer() {
       if (d.amount > topCustomer.amount) topCustomer = { name, ...d };
     }
     const dates = records
-      .map(r => r.date)
+      .map((r) => r.date)
       .filter(Boolean)
       .sort();
 
@@ -498,21 +500,22 @@ export default function MPESAAnalyzer() {
       totalInflows: records.length,
       totalAmount,
       uniqueCustomers: customerMap.size,
-      onlinePayments: records.filter(r => r.isOnline).length,
+      onlinePayments: records.filter((r) => r.isOnline).length,
       averagePayment: records.length > 0 ? totalAmount / records.length : 0,
       topCustomer,
       dateRange: { from: dates[0] || "", to: dates[dates.length - 1] || "" },
       cleanRevenue: {
         genuineRevenue: totalAmount,
         excludedLoans: excluded
-          .filter(e => e.reason.includes("Loan"))
+          .filter((e) => e.reason.includes("Loan"))
           .reduce((s, e) => s + e.amount, 0),
         excludedCharges: excluded
-          .filter(e => e.reason.includes("charge"))
+          .filter((e) => e.reason.includes("charge"))
           .reduce((s, e) => s + e.amount, 0),
         excludedTransfers: excluded
           .filter(
-            e => e.reason.includes("Utility") || e.reason.includes("Transfer")
+            (e) =>
+              e.reason.includes("Utility") || e.reason.includes("Transfer"),
           )
           .reduce((s, e) => s + e.amount, 0),
         totalExcluded: excluded.reduce((s, e) => s + e.amount, 0),
@@ -543,7 +546,7 @@ export default function MPESAAnalyzer() {
     try {
       addProgress(`Reading ${pdfFiles.length} PDF(s)...`);
 
-      let allLines: string[] = [];
+      const allLines: string[] = [];
       for (const file of pdfFiles) {
         addProgress(`Extracting text from "${file.name}"...`);
         const { lines, error } = await extractPDFText(file);
@@ -551,7 +554,7 @@ export default function MPESAAnalyzer() {
         if (error) {
           addProgress(`ERROR: ${error}`);
           setDebugInfo(
-            `PDF Extraction Error: ${error}\n\nTry using "Manual Text Paste" mode instead. Copy text from your PDF viewer and paste it.`
+            `PDF Extraction Error: ${error}\n\nTry using "Manual Text Paste" mode instead. Copy text from your PDF viewer and paste it.`,
           );
           setIsProcessing(false);
           return;
@@ -587,7 +590,7 @@ export default function MPESAAnalyzer() {
     try {
       const lines = pastedText
         .split("\n")
-        .map(l => l.trim())
+        .map((l) => l.trim())
         .filter(Boolean);
       addProgress(`Pasted text: ${lines.length} lines`);
       setExtractedRawLines(lines);
@@ -614,7 +617,7 @@ export default function MPESAAnalyzer() {
       if (!line.includes("Completed")) continue;
       const amounts: number[] = [];
       for (const m of line.matchAll(
-        /([0-9]{1,3}(?:,[0-9]{3})+\.[0-9]{2}|[0-9]+\.[0-9]{2})/g
+        /([0-9]{1,3}(?:,[0-9]{3})+\.[0-9]{2}|[0-9]+\.[0-9]{2})/g,
       )) {
         amounts.push(parseFloat(m[1].replace(/,/g, "")));
       }
@@ -627,12 +630,12 @@ export default function MPESAAnalyzer() {
       }
     }
     addProgress(
-      `Quick scan: ${quickCount} potential "Merchant Payment from" transactions found`
+      `Quick scan: ${quickCount} potential "Merchant Payment from" transactions found`,
     );
 
     if (quickCount === 0) {
       setDebugInfo(
-        `No "Merchant Payment from" transactions found with Paid In > 0.\n\nDebug:\n- Total lines: ${lines.length}\n- Lines with "Completed": ${lines.filter(l => l.includes("Completed")).length}\n- Lines with "Merchant Payment": ${lines.filter(l => l.includes("Merchant Payment")).length}\n\nThe PDF text may not have been extracted correctly. Try the "Manual Text Paste" method: open the PDF in a viewer, select all text, copy, and paste it here.`
+        `No "Merchant Payment from" transactions found with Paid In > 0.\n\nDebug:\n- Total lines: ${lines.length}\n- Lines with "Completed": ${lines.filter((l) => l.includes("Completed")).length}\n- Lines with "Merchant Payment": ${lines.filter((l) => l.includes("Merchant Payment")).length}\n\nThe PDF text may not have been extracted correctly. Try the "Manual Text Paste" method: open the PDF in a viewer, select all text, copy, and paste it here.`,
       );
       return;
     }
@@ -643,10 +646,10 @@ export default function MPESAAnalyzer() {
     setInflowData(records);
     setStats(st);
     addProgress(
-      `Done! ${records.length} inflows extracted | Total: Ksh ${formatNumber(st.totalAmount, 2)}`
+      `Done! ${records.length} inflows extracted | Total: Ksh ${formatNumber(st.totalAmount, 2)}`,
     );
     setValidationWarning(
-      `Validated: ${records.length} inflows | Ksh ${formatNumber(st.totalAmount, 2)} | ${excluded.length} excluded (loans/charges)`
+      `Validated: ${records.length} inflows | Ksh ${formatNumber(st.totalAmount, 2)} | ${excluded.length} excluded (loans/charges)`,
     );
   };
 
@@ -665,21 +668,21 @@ export default function MPESAAnalyzer() {
   // ===== FILE HANDLING =====
   const handleFiles = (files: FileList | null) => {
     if (!files?.length) return;
-    const valid = Array.from(files).filter(f =>
-      f.name.toLowerCase().endsWith(".pdf")
+    const valid = Array.from(files).filter((f) =>
+      f.name.toLowerCase().endsWith(".pdf"),
     );
     if (!valid.length) return;
-    setPdfFiles(prev => [...prev, ...valid]);
+    setPdfFiles((prev) => [...prev, ...valid]);
   };
 
   const removeFile = (idx: number) =>
-    setPdfFiles(prev => prev.filter((_, i) => i !== idx));
+    setPdfFiles((prev) => prev.filter((_, i) => i !== idx));
 
   // ===== EXPORT =====
   const exportCSV = () => {
     if (!inflowData.length) return;
     const header = "Details,Paid In (Ksh),Balance (Ksh),Receipt,Date,Time\n";
-    const rows = inflowData.map(r =>
+    const rows = inflowData.map((r) =>
       [
         `"${(r.details || "").replace(/"/g, '""')}"`,
         r.paidIn.toFixed(2),
@@ -687,7 +690,7 @@ export default function MPESAAnalyzer() {
         r.receipt,
         r.date,
         r.time,
-      ].join(",")
+      ].join(","),
     );
     const blob = new Blob([header + rows.join("\n")], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
@@ -699,8 +702,8 @@ export default function MPESAAnalyzer() {
   };
 
   const filtered = searchTerm
-    ? inflowData.filter(r =>
-        r.details.toLowerCase().includes(searchTerm.toLowerCase())
+    ? inflowData.filter((r) =>
+        r.details.toLowerCase().includes(searchTerm.toLowerCase()),
       )
     : inflowData;
 
@@ -791,7 +794,7 @@ export default function MPESAAnalyzer() {
             type="file"
             accept=".pdf"
             multiple
-            onChange={e => {
+            onChange={(e) => {
               handleFiles(e.target.files);
               e.target.value = "";
             }}
@@ -885,7 +888,7 @@ export default function MPESAAnalyzer() {
 
           <textarea
             value={pastedText}
-            onChange={e => setPastedText(e.target.value)}
+            onChange={(e) => setPastedText(e.target.value)}
             placeholder={`Paste M-PESA statement text here...\n\nExample format:\nTI66P7TDSE 2025-09-06 Merchant Payment from Completed 80.00 0.00 200.00 Customer 578590-\n18:26:32 0746***921 - john doe\nMerchant Payment\n...`}
             className="w-full h-64 px-4 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-xl text-xs font-mono dark:text-white focus:ring-2 focus:ring-green-500 outline-none resize-y"
           />
@@ -939,7 +942,7 @@ export default function MPESAAnalyzer() {
 
           <textarea
             value={pastedText}
-            onChange={e => setPastedText(e.target.value)}
+            onChange={(e) => setPastedText(e.target.value)}
             placeholder="Paste M-PESA statement text here for AI analysis..."
             className="w-full h-64 px-4 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-xl text-xs font-mono dark:text-white focus:ring-2 focus:ring-purple-500 outline-none resize-y"
           />
@@ -1325,7 +1328,7 @@ export default function MPESAAnalyzer() {
                   <input
                     type="text"
                     value={receiptFilter}
-                    onChange={e =>
+                    onChange={(e) =>
                       setReceiptFilter(e.target.value.toUpperCase())
                     }
                     placeholder="UED9N3YOMC"
@@ -1339,7 +1342,7 @@ export default function MPESAAnalyzer() {
                   <input
                     type="datetime-local"
                     value={timeRangeStart}
-                    onChange={e => setTimeRangeStart(e.target.value)}
+                    onChange={(e) => setTimeRangeStart(e.target.value)}
                     className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs dark:text-white"
                   />
                 </div>
@@ -1350,7 +1353,7 @@ export default function MPESAAnalyzer() {
                   <input
                     type="datetime-local"
                     value={timeRangeEnd}
-                    onChange={e => setTimeRangeEnd(e.target.value)}
+                    onChange={(e) => setTimeRangeEnd(e.target.value)}
                     className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs dark:text-white"
                   />
                 </div>
@@ -1360,26 +1363,26 @@ export default function MPESAAnalyzer() {
                   onClick={() => {
                     let filtered = inflowData;
                     if (receiptFilter.trim()) {
-                      filtered = filtered.filter(r =>
+                      filtered = filtered.filter((r) =>
                         r.receipt
                           .toUpperCase()
-                          .includes(receiptFilter.toUpperCase())
+                          .includes(receiptFilter.toUpperCase()),
                       );
                     }
                     if (timeRangeStart) {
                       const start = new Date(timeRangeStart).getTime();
-                      filtered = filtered.filter(r => {
+                      filtered = filtered.filter((r) => {
                         const d = new Date(
-                          `${r.date}T${r.time || "00:00:00"}`
+                          `${r.date}T${r.time || "00:00:00"}`,
                         ).getTime();
                         return !isNaN(d) && d >= start;
                       });
                     }
                     if (timeRangeEnd) {
                       const end = new Date(timeRangeEnd).getTime();
-                      filtered = filtered.filter(r => {
+                      filtered = filtered.filter((r) => {
                         const d = new Date(
-                          `${r.date}T${r.time || "23:59:59"}`
+                          `${r.date}T${r.time || "23:59:59"}`,
                         ).getTime();
                         return !isNaN(d) && d <= end;
                       });
@@ -1439,7 +1442,7 @@ export default function MPESAAnalyzer() {
               <input
                 type="text"
                 value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
+                onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="Search customers..."
                 className="px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:text-white w-48"
               />

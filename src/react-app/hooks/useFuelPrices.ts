@@ -1,9 +1,9 @@
 /**
  * useFuelPrices - Unified hook for fuel pricing across the application
- * 
+ *
  * This hook provides a SINGLE INTERFACE for accessing fuel prices
  * throughout the application, ensuring consistency.
- * 
+ *
  * Features:
  * - Location-aware pricing (GPS-based city detection for Kenya)
  * - Fallback to regional/national prices
@@ -130,14 +130,15 @@ export function clearPriceOverride(): void {
  */
 export function useFuelPrices() {
   const { state } = useFuel();
-  const { currentCountry, preciseLocation, preciseLocationLoading } = useLocation();
-  
+  const { currentCountry, preciseLocation, preciseLocationLoading } =
+    useLocation();
+
   // State for prices and metadata
   const [prices, setPrices] = useState<FuelPricesWithMeta>(() => {
     // Try to load from cache first
     const cached = loadCachedPrices();
     if (cached) return cached;
-    
+
     // Default to Kenya base prices
     return {
       petrol: KENYA_BASE_PRICES.petrol,
@@ -145,8 +146,8 @@ export function useFuelPrices() {
       kerosene: KENYA_BASE_PRICES.kerosene,
       vPower: 214.35,
       premiumDiesel: 213.72,
-      lpg: 120.00,
-      cng: 80.00,
+      lpg: 120.0,
+      cng: 80.0,
       currency: "KES",
       currencySymbol: "KSh",
       source: "Default (Kenya EPRA)",
@@ -155,17 +156,19 @@ export function useFuelPrices() {
       isOverride: false,
     };
   });
-  
+
   // State for loading and manual override
   const [isLoading, setIsLoading] = useState(false);
-  const [priceOverride, setPriceOverride] = useState<PriceOverride | null>(() => loadPriceOverride());
-  
+  const [priceOverride, setPriceOverride] = useState<PriceOverride | null>(() =>
+    loadPriceOverride(),
+  );
+
   // Get location-based prices for Kenya
   const getLocationBasedPrices = useCallback((): FuelPricesWithMeta => {
     const countryCode = currentCountry?.id || "KE";
     const currency = currentCountry?.currency?.code || "KES";
     const symbol = currentCountry?.currency?.symbol || "KSh";
-    
+
     // Check for manual override first
     const override = loadPriceOverride();
     if (override && override.enabled) {
@@ -181,14 +184,14 @@ export function useFuelPrices() {
         isOverride: true,
       };
     }
-    
+
     // For Kenya with GPS location
     if (countryCode === "KE" && preciseLocation?.lat && preciseLocation?.lng) {
       const cityPrices = getClosestKenyaCityPrice(
         preciseLocation.lat,
-        preciseLocation.lng
+        preciseLocation.lng,
       );
-      
+
       return {
         petrol: cityPrices.petrolPrice,
         diesel: cityPrices.dieselPrice,
@@ -202,7 +205,7 @@ export function useFuelPrices() {
         isOverride: false,
       };
     }
-    
+
     // For other countries
     const regional = REGIONAL_PRICES[countryCode];
     if (regional) {
@@ -218,21 +221,21 @@ export function useFuelPrices() {
         isOverride: false,
       };
     }
-    
+
     // Default fallback
     return {
       ...DEFAULT_PRICES,
       vPower: 214.35,
       premiumDiesel: 213.72,
-      lpg: 120.00,
-      cng: 80.00,
+      lpg: 120.0,
+      cng: 80.0,
       source: "Default",
       location: "Unknown",
       lastUpdated: new Date().toISOString(),
       isOverride: false,
     };
   }, [currentCountry, preciseLocation]);
-  
+
   // Update prices when location changes
   useEffect(() => {
     if (!isLoading) {
@@ -241,14 +244,14 @@ export function useFuelPrices() {
       savePricesToCache(locationPrices);
     }
   }, [currentCountry, preciseLocation, isLoading, getLocationBasedPrices]);
-  
+
   // Refresh prices (force reload)
   const refreshPrices = useCallback(async () => {
     setIsLoading(true);
     try {
       // Simulate network delay for realistic UX
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
       const locationPrices = getLocationBasedPrices();
       setPrices(locationPrices);
       savePricesToCache(locationPrices);
@@ -256,33 +259,36 @@ export function useFuelPrices() {
       setIsLoading(false);
     }
   }, [getLocationBasedPrices]);
-  
+
   // Set manual price override
-  const setPriceOverrideValues = useCallback((
-    newPrices: Partial<Pick<FuelPrices, "petrol" | "diesel" | "kerosene">>
-  ) => {
-    const override: PriceOverride = {
-      ...loadPriceOverride(),
-      ...newPrices,
-      enabled: true,
-      updatedAt: new Date().toISOString(),
-    };
-    
-    setPriceOverride(override);
-    savePriceOverride(override);
-    
-    // Immediately update displayed prices
-    setPrices(prev => ({
-      ...prev,
-      petrol: override.petrol || prev.petrol,
-      diesel: override.diesel || prev.diesel,
-      kerosene: override.kerosene || prev.kerosene,
-      source: "Manual Override",
-      isOverride: true,
-      lastUpdated: override.updatedAt,
-    }));
-  }, []);
-  
+  const setPriceOverrideValues = useCallback(
+    (
+      newPrices: Partial<Pick<FuelPrices, "petrol" | "diesel" | "kerosene">>,
+    ) => {
+      const override: PriceOverride = {
+        ...loadPriceOverride(),
+        ...newPrices,
+        enabled: true,
+        updatedAt: new Date().toISOString(),
+      };
+
+      setPriceOverride(override);
+      savePriceOverride(override);
+
+      // Immediately update displayed prices
+      setPrices((prev) => ({
+        ...prev,
+        petrol: override.petrol || prev.petrol,
+        diesel: override.diesel || prev.diesel,
+        kerosene: override.kerosene || prev.kerosene,
+        source: "Manual Override",
+        isOverride: true,
+        lastUpdated: override.updatedAt,
+      }));
+    },
+    [],
+  );
+
   // Clear manual override
   const clearOverride = useCallback(() => {
     clearPriceOverride();
@@ -290,26 +296,36 @@ export function useFuelPrices() {
     // Refresh to get location-based prices
     refreshPrices();
   }, [refreshPrices]);
-  
+
   // Derived values
-  const displayPrices = useMemo(() => ({
-    pmsPrice: prices.petrol,
-    agoPrice: prices.diesel,
-    petrolPrice: prices.petrol,
-    dieselPrice: prices.diesel,
-    kerosenePrice: prices.kerosene,
-    vPowerPrice: prices.vPower,
-    premiumDieselPrice: prices.premiumDiesel,
-  }), [prices]);
-  
-  const formattedPrices = useMemo(() => ({
-    petrol: formatPrice(prices.petrol, prices.currencySymbol),
-    diesel: formatPrice(prices.diesel, prices.currencySymbol),
-    kerosene: formatPrice(prices.kerosene, prices.currencySymbol),
-    vPower: prices.vPower ? formatPrice(prices.vPower, prices.currencySymbol) : undefined,
-    premiumDiesel: prices.premiumDiesel ? formatPrice(prices.premiumDiesel, prices.currencySymbol) : undefined,
-  }), [prices]);
-  
+  const displayPrices = useMemo(
+    () => ({
+      pmsPrice: prices.petrol,
+      agoPrice: prices.diesel,
+      petrolPrice: prices.petrol,
+      dieselPrice: prices.diesel,
+      kerosenePrice: prices.kerosene,
+      vPowerPrice: prices.vPower,
+      premiumDieselPrice: prices.premiumDiesel,
+    }),
+    [prices],
+  );
+
+  const formattedPrices = useMemo(
+    () => ({
+      petrol: formatPrice(prices.petrol, prices.currencySymbol),
+      diesel: formatPrice(prices.diesel, prices.currencySymbol),
+      kerosene: formatPrice(prices.kerosene, prices.currencySymbol),
+      vPower: prices.vPower
+        ? formatPrice(prices.vPower, prices.currencySymbol)
+        : undefined,
+      premiumDiesel: prices.premiumDiesel
+        ? formatPrice(prices.premiumDiesel, prices.currencySymbol)
+        : undefined,
+    }),
+    [prices],
+  );
+
   // Use station-specific prices if available (from FuelContext)
   // These take precedence over detected prices (for custom station pricing)
   const effectivePrices = useMemo(() => {
@@ -334,14 +350,14 @@ export function useFuelPrices() {
       diesel: state.agoPrice || prices.diesel,
     };
   }, [state.pmsPrice, state.agoPrice, prices]);
-  
+
   return {
     // Raw prices
     prices,
     effectivePrices,
     displayPrices,
     formattedPrices,
-    
+
     // Metadata
     currency: prices.currency,
     currencySymbol: prices.currencySymbol,
@@ -350,16 +366,16 @@ export function useFuelPrices() {
     source: prices.source,
     lastUpdated: prices.lastUpdated,
     isOverride: prices.isOverride,
-    
+
     // State
     isLoading,
     hasOverride: !!priceOverride?.enabled,
-    
+
     // Actions
     refreshPrices,
     setPriceOverride: setPriceOverrideValues,
     clearOverride,
-    
+
     // Shortcuts
     petrolPrice: effectivePrices.petrol,
     dieselPrice: effectivePrices.diesel,

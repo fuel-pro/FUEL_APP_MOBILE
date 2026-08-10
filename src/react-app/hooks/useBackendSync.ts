@@ -32,13 +32,13 @@ function getAuthToken(): string | null {
     try {
       val = localStorage.getItem(key);
       if (!val) continue;
-      
+
       // Try parsing as JSON
       const parsed = JSON.parse(val);
       if (parsed.token) return parsed.token;
       if (parsed.accessToken) return parsed.accessToken;
       if (parsed.active && parsed.token) return parsed.token;
-      
+
       // Try as plain string
       if (typeof val === "string" && val.length > 20) {
         return val;
@@ -159,108 +159,111 @@ export function useBackendSync(): UseBackendSyncResult {
         setSyncData(null);
       }
     };
-    
+
     checkAuth();
     const interval = setInterval(checkAuth, 5000);
     return () => clearInterval(interval);
   }, []);
 
   // Fetch data from backend (Firebase or optional REST backend)
-  const syncFromServer = useCallback(async (): Promise<BackendSyncData | null> => {
-    if (!authenticated) {
-      setSyncData(null);
-      return null;
-    }
-
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      // Try Firebase cloud sync first
-      const stationId = localStorage.getItem("fuelpro_current_station_id");
-      if (stationId && isCloudSyncEnabled()) {
-        const success = await FirebaseService.syncToCloud(stationId);
-        if (success) {
-          console.log("[useBackendSync] Firebase sync successful");
-        }
+  const syncFromServer =
+    useCallback(async (): Promise<BackendSyncData | null> => {
+      if (!authenticated) {
+        setSyncData(null);
+        return null;
       }
 
-      // Try optional REST backend if configured
-      const apiBase = getApiBase();
-      if (apiBase) {
-        const token = getAuthToken();
-        if (!token) {
-          setAuthenticated(false);
-          throw new Error("No authentication token available");
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        // Try Firebase cloud sync first
+        const stationId = localStorage.getItem("fuelpro_current_station_id");
+        if (stationId && isCloudSyncEnabled()) {
+          const success = await FirebaseService.syncToCloud(stationId);
+          if (success) {
+            console.log("[useBackendSync] Firebase sync successful");
+          }
         }
 
-        const response = await fetch(`${apiBase}/api/trpc/sync.fullSync`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        });
+        // Try optional REST backend if configured
+        const apiBase = getApiBase();
+        if (apiBase) {
+          const token = getAuthToken();
+          if (!token) {
+            setAuthenticated(false);
+            throw new Error("No authentication token available");
+          }
 
-        if (!response.ok) {
-          throw new Error(`Failed to sync: ${response.status} ${response.statusText}`);
+          const response = await fetch(`${apiBase}/api/trpc/sync.fullSync`, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+          });
+
+          if (!response.ok) {
+            throw new Error(
+              `Failed to sync: ${response.status} ${response.statusText}`,
+            );
+          }
+
+          const result = await response.json();
+
+          // tRPC returns data in nested format
+          const data = result.result?.data?.json || result.data;
+
+          if (data && data.success) {
+            setSyncData(data);
+            setLastSyncTime(Date.now());
+            return data;
+          }
         }
 
-        const result = await response.json();
-        
-        // tRPC returns data in nested format
-        const data = result.result?.data?.json || result.data;
-        
-        if (data && data.success) {
-          setSyncData(data);
-          setLastSyncTime(Date.now());
-          return data;
-        }
+        // If no backend is configured, use Firebase-only mode
+        // Return placeholder data - actual data is in localStorage
+        setLastSyncTime(Date.now());
+        return {
+          success: true,
+          timestamp: Date.now(),
+          stations: [],
+          stationCount: 0,
+          sales: [],
+          salesCount: 0,
+          inventory: [],
+          stats: { totalRevenue: "0", totalSales: 0, totalLiters: "0" },
+        };
+      } catch (err) {
+        const error = err instanceof Error ? err : new Error("Unknown error");
+        setError(error);
+        console.error("[useBackendSync] Sync failed:", error);
+        // Don't fail completely - we can still work with local data
+        setLastSyncTime(Date.now());
+        return {
+          success: true,
+          timestamp: Date.now(),
+          stations: [],
+          stationCount: 0,
+          sales: [],
+          salesCount: 0,
+          inventory: [],
+          stats: { totalRevenue: "0", totalSales: 0, totalLiters: "0" },
+        };
+      } finally {
+        setIsLoading(false);
       }
-
-      // If no backend is configured, use Firebase-only mode
-      // Return placeholder data - actual data is in localStorage
-      setLastSyncTime(Date.now());
-      return {
-        success: true,
-        timestamp: Date.now(),
-        stations: [],
-        stationCount: 0,
-        sales: [],
-        salesCount: 0,
-        inventory: [],
-        stats: { totalRevenue: "0", totalSales: 0, totalLiters: "0" },
-      };
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error("Unknown error");
-      setError(error);
-      console.error("[useBackendSync] Sync failed:", error);
-      // Don't fail completely - we can still work with local data
-      setLastSyncTime(Date.now());
-      return {
-        success: true,
-        timestamp: Date.now(),
-        stations: [],
-        stationCount: 0,
-        sales: [],
-        salesCount: 0,
-        inventory: [],
-        stats: { totalRevenue: "0", totalSales: 0, totalLiters: "0" },
-      };
-    } finally {
-      setIsLoading(false);
-    }
-  }, [authenticated]);
+    }, [authenticated]);
 
   // Auto-sync on mount and periodically
   useEffect(() => {
     if (authenticated) {
       syncFromServer();
-      
+
       // Periodic sync every 30 seconds
       const interval = setInterval(() => {
         syncFromServer();
       }, 30000);
-      
+
       return () => clearInterval(interval);
     }
   }, [authenticated, syncFromServer]);
@@ -286,10 +289,10 @@ export function useBackendStations(): {
   stations: BackendStation[];
   isLoading: boolean;
   error: Error | null;
-  refresh: () => Promise<void>;
+  refresh: () => Promise<BackendSyncData | null>;
 } {
   const { syncData, isLoading, error, syncFromServer } = useBackendSync();
-  
+
   return {
     stations: syncData?.stations || [],
     isLoading,
@@ -306,13 +309,17 @@ export function useBackendSales(): {
   stats: { totalRevenue: string; totalSales: number; totalLiters: string };
   isLoading: boolean;
   error: Error | null;
-  refresh: () => Promise<void>;
+  refresh: () => Promise<BackendSyncData | null>;
 } {
   const { syncData, isLoading, error, syncFromServer } = useBackendSync();
-  
+
   return {
     sales: syncData?.sales || [],
-    stats: syncData?.stats || { totalRevenue: "0", totalSales: 0, totalLiters: "0" },
+    stats: syncData?.stats || {
+      totalRevenue: "0",
+      totalSales: 0,
+      totalLiters: "0",
+    },
     isLoading,
     error,
     refresh: syncFromServer,

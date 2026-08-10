@@ -94,7 +94,7 @@ if (typeof window !== "undefined" && typeof window.CustomEvent !== "function") {
       event,
       params.bubbles,
       params.cancelable,
-      params.detail
+      params.detail,
     );
     return evt;
   };
@@ -180,7 +180,9 @@ if (!Array.prototype.findIndex) {
   Object.defineProperty(Array.prototype, "findIndex", {
     value: function (predicate) {
       if (this === null || this === undefined) {
-        throw TypeError("Array.prototype.findIndex called on null or undefined");
+        throw TypeError(
+          "Array.prototype.findIndex called on null or undefined",
+        );
       }
       if (typeof predicate !== "function") {
         throw TypeError("predicate must be a function");
@@ -205,9 +207,7 @@ if (!Array.prototype.includes) {
   Object.defineProperty(Array.prototype, "includes", {
     value: function (searchElement, fromIndex) {
       if (this === null || this === undefined) {
-        throw TypeError(
-          "Array.prototype.includes called on null or undefined"
-        );
+        throw TypeError("Array.prototype.includes called on null or undefined");
       }
       const O = Object(this);
       const len = parseInt(O.length) || 0;

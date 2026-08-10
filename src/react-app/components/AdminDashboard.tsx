@@ -45,13 +45,7 @@ interface AdminDashboardProps {
 
 // ─── Tab Definitions ───
 type Tab =
-  | "overview"
-  | "users"
-  | "stations"
-  | "settings"
-  | "audit"
-  | "api"
-  | "system";
+  "overview" | "users" | "stations" | "settings" | "audit" | "api" | "system";
 
 const TABS = [
   { id: "overview", label: "Overview", icon: Activity },
@@ -112,7 +106,7 @@ export default function AdminDashboard({ user }: AdminDashboardProps) {
 
         {/* Navigation */}
         <nav className="flex-1 p-2 space-y-1">
-          {TABS.filter(tab => canAccessTab(tab.id)).map(tab => (
+          {TABS.filter((tab) => canAccessTab(tab.id)).map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as Tab)}
@@ -161,7 +155,7 @@ export default function AdminDashboard({ user }: AdminDashboardProps) {
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-                {TABS.find(t => t.id === activeTab)?.label}
+                {TABS.find((t) => t.id === activeTab)?.label}
               </h2>
               <p className="text-sm text-gray-500">Welcome back, {user.name}</p>
             </div>
@@ -326,7 +320,7 @@ function OverviewTab({ user }: { user: AdminUser }) {
             </button>
           </div>
           <div className="space-y-3">
-            {recentLogs.map(log => (
+            {recentLogs.map((log) => (
               <div
                 key={log.id}
                 className="flex items-start gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg"
@@ -416,9 +410,9 @@ function UsersTab() {
   }, []);
 
   const filteredUsers = users.filter(
-    u =>
+    (u) =>
       u.name?.toLowerCase().includes(search.toLowerCase()) ||
-      u.email?.toLowerCase().includes(search.toLowerCase())
+      u.email?.toLowerCase().includes(search.toLowerCase()),
   );
 
   return (
@@ -435,7 +429,7 @@ function UsersTab() {
             placeholder={loading ? "Loading users..." : "Search users..."}
             value={search}
             disabled={loading}
-            onChange={e => setSearch(e.target.value)}
+            onChange={(e) => setSearch(e.target.value)}
             className="pl-10 pr-4 py-2 w-64 border rounded-lg dark:bg-gray-800 dark:border-gray-700"
           />
         </div>
@@ -470,7 +464,7 @@ function UsersTab() {
             </tr>
           </thead>
           <tbody>
-            {filteredUsers.map(user => (
+            {filteredUsers.map((user) => (
               <tr
                 key={user.id}
                 className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/30"
@@ -570,7 +564,7 @@ function StationsTab() {
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {stations.map(station => (
+        {stations.map((station) => (
           <div
             key={station.id}
             className="bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700"
@@ -710,20 +704,22 @@ function SettingsTab() {
             Integrations
           </h3>
           <div className="space-y-3">
-            {Object.entries(settings.integrations || {}).map(([key, config]: [string, any]) => (
-              <div key={key} className="flex items-center justify-between">
-                <span className="capitalize">{key}</span>
-                <span
-                  className={`text-xs px-2 py-1 rounded-full ${
-                    config?.enabled
-                      ? "bg-green-100 text-green-700"
-                      : "bg-gray-100 text-gray-500"
-                  }`}
-                >
-                  {config?.enabled ? "Enabled" : "Disabled"}
-                </span>
-              </div>
-            ))}
+            {Object.entries(settings.integrations || {}).map(
+              ([key, config]: [string, any]) => (
+                <div key={key} className="flex items-center justify-between">
+                  <span className="capitalize">{key}</span>
+                  <span
+                    className={`text-xs px-2 py-1 rounded-full ${
+                      config?.enabled
+                        ? "bg-green-100 text-green-700"
+                        : "bg-gray-100 text-gray-500"
+                    }`}
+                  >
+                    {config?.enabled ? "Enabled" : "Disabled"}
+                  </span>
+                </div>
+              ),
+            )}
           </div>
           <button className="mt-4 text-sm text-amber-600 hover:underline">
             Configure
@@ -784,7 +780,7 @@ function AuditTab() {
             </tr>
           </thead>
           <tbody>
-            {logs.map(log => (
+            {logs.map((log) => (
               <tr
                 key={log.id}
                 className="border-b border-gray-100 dark:border-gray-700"
@@ -859,7 +855,7 @@ function APIKeysTab() {
       </div>
 
       <div className="space-y-4">
-        {apiKeys.map(key => (
+        {apiKeys.map((key) => (
           <div
             key={key.id}
             className="bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700"
@@ -874,7 +870,7 @@ function APIKeysTab() {
                   <span>Last used: {key.lastUsed}</span>
                 </div>
                 <div className="flex items-center gap-2 mt-2">
-                  {key.permissions.map(p => (
+                  {key.permissions.map((p) => (
                     <span
                       key={p}
                       className="px-2 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-xs"

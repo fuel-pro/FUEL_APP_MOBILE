@@ -63,7 +63,7 @@ interface Props {
   logAudit: (
     e: string,
     d: string,
-    s: "success" | "warning" | "danger" | "info"
+    s: "success" | "warning" | "danger" | "info",
   ) => void;
 }
 
@@ -76,18 +76,21 @@ export default function PerformanceSection({ logAudit }: Props) {
   const [longTasks, setLongTasks] = useState(0);
 
   useEffect(() => {
-    initVitalsTracking(v => setVitals({ ...v }));
+    initVitalsTracking((v) => setVitals({ ...v }));
     const res = performance.getEntriesByType("resource");
     setResourceCount(res.length);
     setPageWeight(
-      res.reduce((s, r) => s + (r as PerformanceResourceTiming).transferSize, 0)
+      res.reduce(
+        (s, r) => s + (r as PerformanceResourceTiming).transferSize,
+        0,
+      ),
     );
 
     // Long Task Observer
     if ("PerformanceLongTaskTiming" in window) {
       try {
-        new PerformanceObserver(list => {
-          setLongTasks(prev => prev + list.getEntries().length);
+        new PerformanceObserver((list) => {
+          setLongTasks((prev) => prev + list.getEntries().length);
         }).observe({ type: "longtask", buffered: true });
       } catch {
         /* */
@@ -104,28 +107,28 @@ export default function PerformanceSection({ logAudit }: Props) {
   }, []);
 
   const targets = checkPerformanceTargets(vitals);
-  const allPass = targets.every(t => t.pass);
+  const allPass = targets.every((t) => t.pass);
 
   const toggleSetting = useCallback(
     (key: keyof PerfSettings) => {
-      setSettings(prev => {
+      setSettings((prev) => {
         const next = { ...prev, [key]: !prev[key] };
         saveSettings(next);
         logAudit(
           "Performance Setting Changed",
           `${key}: ${next[key] ? "enabled" : "disabled"}`,
-          "info"
+          "info",
         );
         return next;
       });
     },
-    [logAudit]
+    [logAudit],
   );
 
   const clearCache = useCallback(() => {
     caches
       .keys()
-      .then(names => Promise.all(names.map(n => caches.delete(n))))
+      .then((names) => Promise.all(names.map((n) => caches.delete(n))))
       .then(() => {
         logAudit("Cache Cleared", "All caches cleared", "warning");
       });
@@ -139,7 +142,7 @@ export default function PerformanceSection({ logAudit }: Props) {
     logAudit(
       "Performance Entries Cleared",
       "Resource timing entries cleared",
-      "info"
+      "info",
     );
   }, [logAudit]);
 
@@ -166,7 +169,7 @@ export default function PerformanceSection({ logAudit }: Props) {
 
       {/* Core Web Vitals Cards */}
       <div className="grid grid-cols-5 gap-3">
-        {targets.map(t => (
+        {targets.map((t) => (
           <div
             key={t.metric}
             className="bg-[#161618] border border-white/[0.06] rounded-xl p-4"
@@ -290,7 +293,7 @@ export default function PerformanceSection({ logAudit }: Props) {
               desc: "Preload likely routes",
               icon: Timer,
             },
-          ].map(s => (
+          ].map((s) => (
             <div
               key={s.key}
               className="flex items-center justify-between p-3 bg-white/[0.02] rounded-lg"
@@ -373,7 +376,7 @@ export default function PerformanceSection({ logAudit }: Props) {
               target: 0.6,
               unit: "MB",
             },
-          ].map(b => {
+          ].map((b) => {
             const pct = Math.min((b.current / b.target) * 100, 100);
             const overBudget = b.current > b.target;
             return (

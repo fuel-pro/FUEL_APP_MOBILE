@@ -58,6 +58,7 @@ FIREBASE_DATABASE_URL=https://fuel-pro-1.firebaseio.com
 ### 3. Configure Firebase Security Rules
 
 The security rules are defined in:
+
 - `firestore.rules` - For Firestore Database
 - `database.rules.json` - For Realtime Database
 
@@ -72,20 +73,24 @@ The security rules are defined in:
 ## Firebase Services Used
 
 ### Authentication
+
 - Email/password login
 - Google Sign-In
 - Session management
 
 ### Database
+
 - **Firestore**: Primary database for structured data
 - **Realtime Database**: Real-time sync data
 
 ## Troubleshooting
 
 ### "Permission Denied" Errors
+
 1. Check authentication is working
 2. Verify security rules allow the operation
 
 ### Data Not Syncing
+
 1. Verify Firebase config is correct
 2. Check network connectivity

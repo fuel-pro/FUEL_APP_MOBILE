@@ -48,20 +48,49 @@ interface AuthContextType {
   isLoading: boolean;
   error: string | null;
   token: string | null;
-  loginWithEmail: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  registerWithEmail: (email: string, password: string, name: string) => Promise<boolean>;
+  loginWithEmail: (
+    email: string,
+    password: string,
+  ) => Promise<{ success: boolean; error?: string }>;
+  registerWithEmail: (
+    email: string,
+    password: string,
+    name: string,
+  ) => Promise<boolean>;
   loginWithUsername: (username: string, password: string) => Promise<boolean>;
-  registerWithUsername: (username: string, password: string, name: string, email: string) => Promise<boolean>;
+  registerWithUsername: (
+    username: string,
+    password: string,
+    name: string,
+    email: string,
+  ) => Promise<boolean>;
   logout: () => void;
   clearError: () => void;
   refreshAuth: () => Promise<boolean>;
-  requestPasswordReset: (email: string) => Promise<{ success: boolean; code?: string; message: string }>;
+  requestPasswordReset: (
+    email: string,
+  ) => Promise<{ success: boolean; code?: string; message: string }>;
   verifyResetCode: (email: string, code: string) => boolean;
   resetPassword: (email: string, newPassword: string) => Promise<boolean>;
-  updateProfile: (updates: { name?: string; phone?: string; username?: string; avatarUrl?: string }) => Promise<{ success: boolean; error?: string }>;
-  updateEmail: (newEmail: string) => Promise<{ success: boolean; error?: string }>;
-  updatePassword: (newPassword: string) => Promise<{ success: boolean; error?: string }>;
-  bindRole: (stationId: string, stationName: string, role: StationRoleBinding["role"], invitedBy: string, expiresAt?: string) => void;
+  updateProfile: (updates: {
+    name?: string;
+    phone?: string;
+    username?: string;
+    avatarUrl?: string;
+  }) => Promise<{ success: boolean; error?: string }>;
+  updateEmail: (
+    newEmail: string,
+  ) => Promise<{ success: boolean; error?: string }>;
+  updatePassword: (
+    newPassword: string,
+  ) => Promise<{ success: boolean; error?: string }>;
+  bindRole: (
+    stationId: string,
+    stationName: string,
+    role: StationRoleBinding["role"],
+    invitedBy: string,
+    expiresAt?: string,
+  ) => void;
   terminateRole: (stationId: string) => void;
   getActiveBinding: (stationId: string) => StationRoleBinding | null;
   hasAnyBinding: () => boolean;
@@ -111,7 +140,10 @@ function loadBindings(): StationRoleBinding[] {
 }
 
 // Convert Supabase user to AuthIdentity (enriched with profiles table data)
-async function supabaseUserToIdentityEnriched(user: User, session: Session | null): Promise<AuthIdentity> {
+async function supabaseUserToIdentityEnriched(
+  user: User,
+  session: Session | null,
+): Promise<AuthIdentity> {
   const base: AuthIdentity = {
     id: user.id,
     authId: `supabase_${user.id}`,
@@ -146,7 +178,10 @@ async function supabaseUserToIdentityEnriched(user: User, session: Session | nul
 }
 
 // Convert Supabase user to AuthIdentity (synchronous, from metadata only)
-function supabaseUserToIdentity(user: User, session: Session | null): AuthIdentity {
+function supabaseUserToIdentity(
+  user: User,
+  session: Session | null,
+): AuthIdentity {
   return {
     id: user.id,
     authId: `supabase_${user.id}`,
@@ -177,7 +212,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [token, setToken] = useState<string | null>(loadToken);
-  const refreshIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const refreshIntervalRef = useRef<ReturnType<typeof setInterval> | null>(
+    null,
+  );
   const handleLogoutRef = useRef<(() => void) | null>(null);
   const refreshAuthRef = useRef<(() => Promise<boolean>) | null>(null);
 
@@ -188,12 +225,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const initAuth = async () => {
       try {
         // Get current session
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        
+        const {
+          data: { session },
+          error: sessionError,
+        } = await supabase.auth.getSession();
+
         if (cancelled) return;
-        
+
         if (session?.user) {
-          const identity = await supabaseUserToIdentityEnriched(session.user, session);
+          const identity = await supabaseUserToIdentityEnriched(
+            session.user,
+            session,
+          );
           setUser(identity);
           setToken(session.access_token);
           localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(identity));
@@ -215,30 +258,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     initAuth();
 
     // Subscribe to auth state changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        if (cancelled) return;
-        
-        if (event === 'SIGNED_IN' && session?.user) {
-          const identity = await supabaseUserToIdentityEnriched(session.user, session);
-          setUser(identity);
-          setToken(session.access_token);
-          localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(identity));
-          localStorage.setItem(TOKEN_STORAGE_KEY, session.access_token);
-        } else if (event === 'SIGNED_OUT') {
-          setUser(null);
-          setToken(null);
-          localStorage.removeItem(AUTH_STORAGE_KEY);
-          localStorage.removeItem(TOKEN_STORAGE_KEY);
-        } else if (event === 'TOKEN_REFRESHED' && session?.user) {
-          const identity = await supabaseUserToIdentityEnriched(session.user, session);
-          setUser(identity);
-          setToken(session.access_token);
-          localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(identity));
-          localStorage.setItem(TOKEN_STORAGE_KEY, session.access_token);
-        }
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (cancelled) return;
+
+      if (event === "SIGNED_IN" && session?.user) {
+        const identity = await supabaseUserToIdentityEnriched(
+          session.user,
+          session,
+        );
+        setUser(identity);
+        setToken(session.access_token);
+        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(identity));
+        localStorage.setItem(TOKEN_STORAGE_KEY, session.access_token);
+      } else if (event === "SIGNED_OUT") {
+        setUser(null);
+        setToken(null);
+        localStorage.removeItem(AUTH_STORAGE_KEY);
+        localStorage.removeItem(TOKEN_STORAGE_KEY);
+      } else if (event === "TOKEN_REFRESHED" && session?.user) {
+        const identity = await supabaseUserToIdentityEnriched(
+          session.user,
+          session,
+        );
+        setUser(identity);
+        setToken(session.access_token);
+        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(identity));
+        localStorage.setItem(TOKEN_STORAGE_KEY, session.access_token);
       }
-    );
+    });
 
     return () => {
       cancelled = true;
@@ -247,39 +296,56 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Broadcast auth update - stable callback
-  const broadcastAuthUpdate = useCallback((newUser: AuthIdentity | null, newToken: string | null) => {
-    if (syncChannel) {
-      try {
-        syncChannel.postMessage({ type: newUser ? "AUTH_UPDATE" : "LOGOUT", user: newUser, token: newToken });
-      } catch {
-        // ignore
+  const broadcastAuthUpdate = useCallback(
+    (newUser: AuthIdentity | null, newToken: string | null) => {
+      if (syncChannel) {
+        try {
+          syncChannel.postMessage({
+            type: newUser ? "AUTH_UPDATE" : "LOGOUT",
+            user: newUser,
+            token: newToken,
+          });
+        } catch {
+          // ignore
+        }
       }
-    }
-  }, []);
+    },
+    [],
+  );
 
   // ---- EMAIL AUTH ----
   const loginWithEmail = useCallback(
-    async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
+    async (
+      email: string,
+      password: string,
+    ): Promise<{ success: boolean; error?: string }> => {
       setIsPending(true);
       setError(null);
 
       console.info("[AuthContext] Starting Supabase login for:", email);
 
       try {
-        const { data, error: supabaseError } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
+        const { data, error: supabaseError } =
+          await supabase.auth.signInWithPassword({
+            email,
+            password,
+          });
 
         if (supabaseError) {
-          console.error("[AuthContext] Supabase login error:", supabaseError.message);
+          console.error(
+            "[AuthContext] Supabase login error:",
+            supabaseError.message,
+          );
           setError(supabaseError.message);
           setIsPending(false);
           return { success: false, error: supabaseError.message };
         }
 
         if (data.user && data.session) {
-          const newUser = await supabaseUserToIdentityEnriched(data.user, data.session);
+          const newUser = await supabaseUserToIdentityEnriched(
+            data.user,
+            data.session,
+          );
 
           setUser(newUser);
           setToken(data.session.access_token);
@@ -297,7 +363,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { success: false, error: err.message };
       }
     },
-    [broadcastAuthUpdate]
+    [broadcastAuthUpdate],
   );
 
   // ---- EMAIL REGISTRATION ----
@@ -321,7 +387,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         });
 
         if (supabaseError) {
-          console.error("[AuthContext] Supabase registration error:", supabaseError.message);
+          console.error(
+            "[AuthContext] Supabase registration error:",
+            supabaseError.message,
+          );
           setError(supabaseError.message);
           setIsPending(false);
           return false;
@@ -339,69 +408,82 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           // Explicitly upsert profiles row (the DB trigger should also do this, but
           // we add a belt-and-suspenders upsert in case trigger timing or RLS blocks it)
           try {
-            await supabase
-              .from("profiles")
-              .upsert({
+            await supabase.from("profiles").upsert(
+              {
                 id: data.user.id,
                 email: email,
                 name: name,
-              }, { onConflict: "id" });
+              },
+              { onConflict: "id" },
+            );
           } catch (profileErr) {
-            console.warn("[AuthContext] profiles upsert failed (trigger should handle it):", profileErr);
+            console.warn(
+              "[AuthContext] profiles upsert failed (trigger should handle it):",
+              profileErr,
+            );
           }
         } else if (data.user && !data.session) {
           // Email confirmation required
-          console.info("[AuthContext] Registration successful, email confirmation required");
+          console.info(
+            "[AuthContext] Registration successful, email confirmation required",
+          );
         }
 
         setIsPending(false);
         return true;
       } catch (err: any) {
-        console.error("[AuthContext] Supabase registration error:", err.message);
+        console.error(
+          "[AuthContext] Supabase registration error:",
+          err.message,
+        );
         setError(err.message || "Registration failed. Please try again.");
         setIsPending(false);
         return false;
       }
     },
-    [broadcastAuthUpdate]
+    [broadcastAuthUpdate],
   );
 
   // ---- GOOGLE AUTH (Supabase OAuth) ----
-  const loginWithGoogle = useCallback(
-    async (): Promise<{ success: boolean; error?: string }> => {
-      setIsPending(true);
-      setError(null);
+  const loginWithGoogle = useCallback(async (): Promise<{
+    success: boolean;
+    error?: string;
+  }> => {
+    setIsPending(true);
+    setError(null);
 
-      console.info("[AuthContext] Starting Google login with Supabase");
+    console.info("[AuthContext] Starting Google login with Supabase");
 
-      try {
-        const { data, error: supabaseError } = await supabase.auth.signInWithOAuth({
-          provider: 'google',
+    try {
+      const { data, error: supabaseError } =
+        await supabase.auth.signInWithOAuth({
+          provider: "google",
           options: {
             redirectTo: window.location.origin,
           },
         });
 
-        if (supabaseError) {
-          console.error("[AuthContext] Supabase Google login error:", supabaseError.message);
-          setError(supabaseError.message);
-          setIsPending(false);
-          return { success: false, error: supabaseError.message };
-        }
-
-        // OAuth will redirect, so we don't set user here
-        // The auth state change will be handled by onAuthStateChange
+      if (supabaseError) {
+        console.error(
+          "[AuthContext] Supabase Google login error:",
+          supabaseError.message,
+        );
+        setError(supabaseError.message);
         setIsPending(false);
-        return { success: true };
-      } catch (err: any) {
-        console.error("[AuthContext] Supabase Google login error:", err.message);
-        setError(err.message || "Google login failed. Please try again.");
-        setIsPending(false);
-        return { success: false, error: err.message };
+        return { success: false, error: supabaseError.message };
       }
-    },
-    []
-  );
+
+      // OAuth will redirect, so we don't set user here
+      // The auth state change will be handled by onAuthStateChange
+      setIsPending(false);
+      return { success: true };
+    } catch (err: any) {
+      console.error("[AuthContext] Supabase Google login error:", err.message);
+      setError(err.message || "Google login failed. Please try again.");
+      setIsPending(false);
+      return { success: false, error: err.message };
+    }
+  }, []);
 
   // ---- USERNAME AUTH (Local Fallback) ----
   const loginWithUsername = useCallback(
@@ -409,8 +491,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsPending(true);
       setError(null);
 
-      const users: Record<string, any> = JSON.parse(localStorage.getItem("fuelpro_username_users") || "{}");
-      const found = Object.values(users).find((u: any) => u.username === username && u.password === password);
+      const users: Record<string, any> = JSON.parse(
+        localStorage.getItem("fuelpro_username_users") || "{}",
+      );
+      const found = Object.values(users).find(
+        (u: any) => u.username === username && u.password === password,
+      );
       if (found) {
         const u = found as any;
         console.info("[AuthContext] Username login successful for:", u.name);
@@ -430,28 +516,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsPending(false);
       return false;
     },
-    []
+    [],
   );
 
   const registerWithUsername = useCallback(
-    async (username: string, password: string, name: string, email: string): Promise<boolean> => {
+    async (
+      username: string,
+      password: string,
+      name: string,
+      email: string,
+    ): Promise<boolean> => {
       setIsPending(true);
       setError(null);
 
-      const users: Record<string, any> = JSON.parse(localStorage.getItem("fuelpro_username_users") || "{}");
+      const users: Record<string, any> = JSON.parse(
+        localStorage.getItem("fuelpro_username_users") || "{}",
+      );
       if (users[username]) {
         setError("Username already exists");
         setIsPending(false);
         return false;
       }
 
-      users[username] = { username, password, name, email, role: "user", createdAt: new Date().toISOString() };
+      users[username] = {
+        username,
+        password,
+        name,
+        email,
+        role: "user",
+        createdAt: new Date().toISOString(),
+      };
       localStorage.setItem("fuelpro_username_users", JSON.stringify(users));
-      setUser({ id: `username_${username}`, authId: `username_${username}`, authMethod: "username", email: email || "", name: name || username });
+      setUser({
+        id: `username_${username}`,
+        authId: `username_${username}`,
+        authMethod: "username",
+        email: email || "",
+        name: name || username,
+      });
       setIsPending(false);
       return true;
     },
-    []
+    [],
   );
 
   // ---- LOGOUT ----
@@ -461,7 +567,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       console.error("[AuthContext] Supabase sign out error:", err);
     }
-    
+
     setUser(null);
     setToken(null);
     setBindings([]);
@@ -477,7 +583,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // ---- REFRESH AUTH ----
   const refreshAuth = useCallback(async (): Promise<boolean> => {
     try {
-      const { data: { session }, error } = await supabase.auth.getSession();
+      const {
+        data: { session },
+        error,
+      } = await supabase.auth.getSession();
       if (error) throw error;
       if (session) {
         setToken(session.access_token);
@@ -490,8 +599,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Keep refs in sync
-  useEffect(() => { handleLogoutRef.current = handleLogout; }, [handleLogout]);
-  useEffect(() => { refreshAuthRef.current = refreshAuth; }, [refreshAuth]);
+  useEffect(() => {
+    handleLogoutRef.current = handleLogout;
+  }, [handleLogout]);
+  useEffect(() => {
+    refreshAuthRef.current = refreshAuth;
+  }, [refreshAuth]);
 
   // Token refresh interval
   useEffect(() => {
@@ -500,9 +613,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       refreshIntervalRef.current = null;
     }
     if (token) {
-      refreshIntervalRef.current = setInterval(() => {
-        refreshAuthRef.current?.();
-      }, 14 * 60 * 1000);
+      refreshIntervalRef.current = setInterval(
+        () => {
+          refreshAuthRef.current?.();
+        },
+        14 * 60 * 1000,
+      );
     }
     return () => {
       if (refreshIntervalRef.current) {
@@ -558,29 +674,56 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // ---- ROLE BINDING ----
   const bindRole = useCallback(
-    (stationId: string, stationName: string, role: StationRoleBinding["role"], invitedBy: string, expiresAt?: string) => {
+    (
+      stationId: string,
+      stationName: string,
+      role: StationRoleBinding["role"],
+      invitedBy: string,
+      expiresAt?: string,
+    ) => {
       if (!user) return;
-      setBindings(prev => {
-        const filtered = prev.filter(b => b.stationId !== stationId);
-        return [...filtered, { stationId, stationName, role, invitedBy, joinedAt: new Date().toISOString(), expiresAt, active: true, authId: user.authId }];
+      setBindings((prev) => {
+        const filtered = prev.filter((b) => b.stationId !== stationId);
+        return [
+          ...filtered,
+          {
+            stationId,
+            stationName,
+            role,
+            invitedBy,
+            joinedAt: new Date().toISOString(),
+            expiresAt,
+            active: true,
+            authId: user.authId,
+          },
+        ];
       });
     },
-    [user]
+    [user],
   );
 
   const terminateRole = useCallback((stationId: string) => {
-    setBindings(prev => prev.map(b => b.stationId === stationId ? { ...b, active: false } : b));
+    setBindings((prev) =>
+      prev.map((b) =>
+        b.stationId === stationId ? { ...b, active: false } : b,
+      ),
+    );
   }, []);
 
   const getActiveBinding = useCallback(
     (stationId: string): StationRoleBinding | null =>
-      bindings.find(b => b.stationId === stationId && b.active && (!b.authId || b.authId === user?.authId)) || null,
-    [bindings, user]
+      bindings.find(
+        (b) =>
+          b.stationId === stationId &&
+          b.active &&
+          (!b.authId || b.authId === user?.authId),
+      ) || null,
+    [bindings, user],
   );
 
   const hasAnyBinding = useCallback(() => {
     if (!user) return false;
-    return bindings.some(b => b.active && b.authId === user.authId);
+    return bindings.some((b) => b.active && b.authId === user.authId);
   }, [bindings, user]);
 
   // Sync role bindings from cloud (station_members table) — ensures cross-device station access
@@ -595,12 +738,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .or(`user_id.eq.${user.id},invited_email.eq.${user.email}`)
         .eq("status", "accepted");
       if (error) {
-        console.warn("[AuthContext] syncBindingsFromCloud error:", error.message);
+        console.warn(
+          "[AuthContext] syncBindingsFromCloud error:",
+          error.message,
+        );
         return;
       }
       if (members && members.length > 0) {
-        setBindings(prev => {
-          const cloudBindings: StationRoleBinding[] = members.map(m => ({
+        setBindings((prev) => {
+          const cloudBindings: StationRoleBinding[] = members.map((m) => ({
             stationId: m.station_id,
             stationName: m.name || "Shared Station",
             role: (m.role as StationRoleBinding["role"]) || "staff",
@@ -610,9 +756,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             authId: user.authId,
           }));
           // Merge: keep existing owner bindings, add/update cloud bindings
-          const existingIds = new Set(cloudBindings.map(b => b.stationId));
+          const existingIds = new Set(cloudBindings.map((b) => b.stationId));
           const merged = [
-            ...prev.filter(b => !existingIds.has(b.stationId)),
+            ...prev.filter((b) => !existingIds.has(b.stationId)),
             ...cloudBindings,
           ];
           return merged;
@@ -632,17 +778,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // ---- PASSWORD RESET ----
   const requestPasswordReset = useCallback(
-    async (email: string): Promise<{ success: boolean; code?: string; message: string }> => {
+    async (
+      email: string,
+    ): Promise<{ success: boolean; code?: string; message: string }> => {
       setIsPending(true);
       setError(null);
 
       try {
-        const { error: supabaseError } = await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: `${window.location.origin}/reset-password`,
-        });
+        const { error: supabaseError } =
+          await supabase.auth.resetPasswordForEmail(email, {
+            redirectTo: `${window.location.origin}/reset-password`,
+          });
 
         if (supabaseError) {
-          console.error("[AuthContext] Password reset error:", supabaseError.message);
+          console.error(
+            "[AuthContext] Password reset error:",
+            supabaseError.message,
+          );
           setError(supabaseError.message);
           setIsPending(false);
           return { success: false, message: supabaseError.message };
@@ -650,23 +802,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         console.log("[Password Reset] Reset email sent to:", email);
         setIsPending(false);
-        return { success: true, message: "Password reset email sent. Check your inbox." };
+        return {
+          success: true,
+          message: "Password reset email sent. Check your inbox.",
+        };
       } catch (err: any) {
         console.error("[AuthContext] Password reset error:", err.message);
         setError(err.message || "Failed to send reset email.");
         setIsPending(false);
-        return { success: false, message: err.message || "Failed to send reset email." };
+        return {
+          success: false,
+          message: err.message || "Failed to send reset email.",
+        };
       }
     },
-    []
+    [],
   );
 
   const verifyResetCode = useCallback(
     (email: string, code: string): boolean => {
-      setError("Supabase handles password reset via email link. Code verification not needed.");
+      setError(
+        "Supabase handles password reset via email link. Code verification not needed.",
+      );
       return false;
     },
-    []
+    [],
   );
 
   const resetPassword = useCallback(
@@ -683,7 +843,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         // For Supabase, password update requires the user to be logged in
         // or use the reset password flow with the token from email
-        setError("Please use the password reset link from your email to change your password.");
+        setError(
+          "Please use the password reset link from your email to change your password.",
+        );
         setIsPending(false);
         return false;
       } catch (err: any) {
@@ -692,11 +854,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return false;
       }
     },
-    []
+    [],
   );
 
   const updateProfile = useCallback(
-    async (updates: { name?: string; phone?: string; username?: string; avatarUrl?: string }): Promise<{ success: boolean; error?: string }> => {
+    async (updates: {
+      name?: string;
+      phone?: string;
+      username?: string;
+      avatarUrl?: string;
+    }): Promise<{ success: boolean; error?: string }> => {
       if (!user) return { success: false, error: "Not logged in" };
       setIsPending(true);
       setError(null);
@@ -705,13 +872,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         // 1. Update auth.user metadata (for name, avatar)
         const authUpdates: { data?: Record<string, string> } = {};
-        if (updates.name) authUpdates.data = { ...authUpdates.data, full_name: updates.name };
-        if (updates.avatarUrl) authUpdates.data = { ...authUpdates.data, avatar_url: updates.avatarUrl };
-        if (updates.phone) authUpdates.data = { ...authUpdates.data, phone: updates.phone };
-        if (updates.username) authUpdates.data = { ...authUpdates.data, username: updates.username };
+        if (updates.name)
+          authUpdates.data = { ...authUpdates.data, full_name: updates.name };
+        if (updates.avatarUrl)
+          authUpdates.data = {
+            ...authUpdates.data,
+            avatar_url: updates.avatarUrl,
+          };
+        if (updates.phone)
+          authUpdates.data = { ...authUpdates.data, phone: updates.phone };
+        if (updates.username)
+          authUpdates.data = {
+            ...authUpdates.data,
+            username: updates.username,
+          };
 
         if (Object.keys(authUpdates).length > 0) {
-          const { error: authErr } = await supabase.auth.updateUser(authUpdates);
+          const { error: authErr } =
+            await supabase.auth.updateUser(authUpdates);
           if (authErr) {
             setError(authErr.message);
             setIsPending(false);
@@ -723,8 +901,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const profileUpdates: Record<string, string> = {};
         if (updates.name !== undefined) profileUpdates.name = updates.name;
         if (updates.phone !== undefined) profileUpdates.phone = updates.phone;
-        if (updates.username !== undefined) profileUpdates.username = updates.username;
-        if (updates.avatarUrl !== undefined) profileUpdates.avatar_url = updates.avatarUrl;
+        if (updates.username !== undefined)
+          profileUpdates.username = updates.username;
+        if (updates.avatarUrl !== undefined)
+          profileUpdates.avatar_url = updates.avatarUrl;
 
         if (Object.keys(profileUpdates).length > 0) {
           const { error: profileErr } = await supabase
@@ -734,7 +914,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (profileErr) {
             // Unique username constraint violation
             if (profileErr.code === "23505") {
-              const msg = "That username is already taken. Please choose another.";
+              const msg =
+                "That username is already taken. Please choose another.";
               setError(msg);
               setIsPending(false);
               return { success: false, error: msg };
@@ -765,7 +946,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { success: false, error: err.message };
       }
     },
-    [user, token, broadcastAuthUpdate]
+    [user, token, broadcastAuthUpdate],
   );
 
   const updateEmail = useCallback(
@@ -778,7 +959,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setError(null);
       try {
         const supabase = getSupabaseClient();
-        const { error: authErr } = await supabase.auth.updateUser({ email: newEmail });
+        const { error: authErr } = await supabase.auth.updateUser({
+          email: newEmail,
+        });
         if (authErr) {
           setError(authErr.message);
           setIsPending(false);
@@ -791,7 +974,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           .update({ email: newEmail })
           .eq("id", user.id);
         if (profileErr) {
-          console.warn("[AuthContext] profiles email update failed:", profileErr.message);
+          console.warn(
+            "[AuthContext] profiles email update failed:",
+            profileErr.message,
+          );
         }
 
         // Update local state (email change may require confirmation)
@@ -808,19 +994,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { success: false, error: err.message };
       }
     },
-    [user, token, broadcastAuthUpdate]
+    [user, token, broadcastAuthUpdate],
   );
 
   const updatePassword = useCallback(
-    async (newPassword: string): Promise<{ success: boolean; error?: string }> => {
+    async (
+      newPassword: string,
+    ): Promise<{ success: boolean; error?: string }> => {
       if (!newPassword || newPassword.length < 8) {
-        return { success: false, error: "Password must be at least 8 characters" };
+        return {
+          success: false,
+          error: "Password must be at least 8 characters",
+        };
       }
       setIsPending(true);
       setError(null);
       try {
         const supabase = getSupabaseClient();
-        const { error: authErr } = await supabase.auth.updateUser({ password: newPassword });
+        const { error: authErr } = await supabase.auth.updateUser({
+          password: newPassword,
+        });
         if (authErr) {
           setError(authErr.message);
           setIsPending(false);
@@ -834,18 +1027,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { success: false, error: err.message };
       }
     },
-    []
+    [],
   );
 
   return (
     <AuthContext.Provider
       value={{
-        user, bindings, isPending, isLoading, error, token,
-        loginWithEmail, registerWithEmail, loginWithUsername, registerWithUsername,
-        logout, clearError, refreshAuth,
-        requestPasswordReset, verifyResetCode, resetPassword,
-        updateProfile, updateEmail, updatePassword,
-        bindRole, terminateRole, getActiveBinding, hasAnyBinding, syncBindingsFromCloud,
+        user,
+        bindings,
+        isPending,
+        isLoading,
+        error,
+        token,
+        loginWithEmail,
+        registerWithEmail,
+        loginWithUsername,
+        registerWithUsername,
+        logout,
+        clearError,
+        refreshAuth,
+        requestPasswordReset,
+        verifyResetCode,
+        resetPassword,
+        updateProfile,
+        updateEmail,
+        updatePassword,
+        bindRole,
+        terminateRole,
+        getActiveBinding,
+        hasAnyBinding,
+        syncBindingsFromCloud,
       }}
     >
       {children}

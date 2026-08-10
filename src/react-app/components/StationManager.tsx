@@ -84,15 +84,25 @@ function StatCard({
   );
 }
 
-function StatusBadge({ status }: { status: "active" | "inactive" | "maintenance" }) {
+function StatusBadge({
+  status,
+}: {
+  status: "active" | "inactive" | "maintenance";
+}) {
   const styles = {
     active: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
     inactive: "bg-gray-500/20 text-gray-400 border-gray-500/30",
     maintenance: "bg-amber-500/20 text-amber-400 border-amber-500/30",
   };
-  const labels = { active: "Active", inactive: "Inactive", maintenance: "Maintenance" };
+  const labels = {
+    active: "Active",
+    inactive: "Inactive",
+    maintenance: "Maintenance",
+  };
   return (
-    <span className={`px-2 py-0.5 rounded-full text-xs border ${styles[status]}`}>
+    <span
+      className={`px-2 py-0.5 rounded-full text-xs border ${styles[status]}`}
+    >
       {labels[status]}
     </span>
   );
@@ -166,7 +176,8 @@ function StationCard({
   const status = stationStatus(data);
   const sharedUsers = data.sharedUsers || [];
   const updated = relativeTime(station.updatedAt);
-  const isCloudBacked = station.id.includes("backend_") || station.id.includes("-");
+  const isCloudBacked =
+    station.id.includes("backend_") || station.id.includes("-");
 
   return (
     <div
@@ -179,7 +190,7 @@ function StationCard({
         <div className="flex items-center gap-3">
           <div
             className={`w-12 h-12 rounded-xl ${avatarColor(
-              station.name
+              station.name,
             )} flex items-center justify-center text-white font-bold text-sm`}
           >
             {initialsOf(station.name)}
@@ -346,52 +357,73 @@ function StationFormModal({
 
         <div className="space-y-4">
           <div>
-            <label className="block text-xs text-gray-400 mb-1.5">Station Name *</label>
+            <label className="block text-xs text-gray-400 mb-1.5">
+              Station Name *
+            </label>
             <input
               type="text"
               value={form.name || ""}
-              onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
+              onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
               placeholder="e.g., downtown_branch"
               className="w-full px-4 py-2.5 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-400"
             />
           </div>
           <div>
-            <label className="block text-xs text-gray-400 mb-1.5">Location</label>
+            <label className="block text-xs text-gray-400 mb-1.5">
+              Location
+            </label>
             <input
               type="text"
               value={form.location || ""}
-              onChange={e => setForm(p => ({ ...p, location: e.target.value }))}
+              onChange={(e) =>
+                setForm((p) => ({ ...p, location: e.target.value }))
+              }
               placeholder="e.g., Downtown, Nairobi"
               className="w-full px-4 py-2.5 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-400"
             />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs text-gray-400 mb-1.5">Phone</label>
+              <label className="block text-xs text-gray-400 mb-1.5">
+                Phone
+              </label>
               <input
                 type="tel"
                 value={form.phone || ""}
-                onChange={e => setForm(p => ({ ...p, phone: e.target.value }))}
+                onChange={(e) =>
+                  setForm((p) => ({ ...p, phone: e.target.value }))
+                }
                 placeholder="+254..."
                 className="w-full px-4 py-2.5 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-400"
               />
             </div>
             <div>
-              <label className="block text-xs text-gray-400 mb-1.5">Tax Rate (%)</label>
+              <label className="block text-xs text-gray-400 mb-1.5">
+                Tax Rate (%)
+              </label>
               <input
                 type="number"
                 value={form.taxRate ?? 16}
-                onChange={e => setForm(p => ({ ...p, taxRate: parseFloat(e.target.value) || 16 }))}
+                onChange={(e) =>
+                  setForm((p) => ({
+                    ...p,
+                    taxRate: parseFloat(e.target.value) || 16,
+                  }))
+                }
                 className="w-full px-4 py-2.5 rounded-lg bg-white/10 border border-white/20 text-white focus:outline-none focus:ring-2 focus:ring-amber-400"
               />
             </div>
           </div>
           <div>
-            <label className="block text-xs text-gray-400 mb-1.5">Email / Manager</label>
+            <label className="block text-xs text-gray-400 mb-1.5">
+              Email / Manager
+            </label>
             <input
               type="email"
               value={form.email || ""}
-              onChange={e => setForm(p => ({ ...p, email: e.target.value }))}
+              onChange={(e) =>
+                setForm((p) => ({ ...p, email: e.target.value }))
+              }
               placeholder="manager@station.com"
               className="w-full px-4 py-2.5 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-400"
             />
@@ -466,7 +498,7 @@ function ShareModal({
           <input
             type="email"
             value={email}
-            onChange={e => setEmail(e.target.value)}
+            onChange={(e) => setEmail(e.target.value)}
             placeholder="User email address"
             className="w-full px-4 py-2.5 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-400"
           />
@@ -474,7 +506,7 @@ function ShareModal({
             <input
               type={showPw ? "text" : "password"}
               value={password}
-              onChange={e => setPassword(e.target.value)}
+              onChange={(e) => setPassword(e.target.value)}
               placeholder="Set access password"
               className="w-full px-4 py-2.5 pr-10 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-400"
             />
@@ -554,7 +586,9 @@ function AccessModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
       <div className={`${GLASS_CARD} w-full max-w-md p-6`}>
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-lg font-bold text-white">Access Shared Station</h2>
+          <h2 className="text-lg font-bold text-white">
+            Access Shared Station
+          </h2>
           <button
             onClick={onClose}
             className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center"
@@ -571,14 +605,18 @@ function AccessModal({
 
         <div className="space-y-4">
           <div>
-            <label className="block text-xs text-gray-400 mb-1.5">Select Station</label>
+            <label className="block text-xs text-gray-400 mb-1.5">
+              Select Station
+            </label>
             <select
               value={selectedId}
-              onChange={e => setSelectedId(e.target.value)}
+              onChange={(e) => setSelectedId(e.target.value)}
               className="w-full px-4 py-2.5 rounded-lg bg-white/10 border border-white/20 text-white focus:outline-none focus:ring-2 focus:ring-blue-400"
             >
-              <option value="" className="bg-gray-800">Choose a station...</option>
-              {stations.map(s => (
+              <option value="" className="bg-gray-800">
+                Choose a station...
+              </option>
+              {stations.map((s) => (
                 <option key={s.id} value={s.id} className="bg-gray-800">
                   {s.name}
                 </option>
@@ -586,11 +624,13 @@ function AccessModal({
             </select>
           </div>
           <div>
-            <label className="block text-xs text-gray-400 mb-1.5">Station Password</label>
+            <label className="block text-xs text-gray-400 mb-1.5">
+              Station Password
+            </label>
             <input
               type="password"
               value={password}
-              onChange={e => setPassword(e.target.value)}
+              onChange={(e) => setPassword(e.target.value)}
               placeholder="Enter the access password"
               className="w-full px-4 py-2.5 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-400"
             />
@@ -629,19 +669,19 @@ function CombinedViewModal({
 }) {
   const totalRevenue = stations.reduce(
     (sum, s) => sum + stationTotalRevenue(s.data || {}),
-    0
+    0,
   );
   const todayRevenue = stations.reduce(
     (sum, s) => sum + stationRevenueSince(s.data || {}, startOfToday()),
-    0
+    0,
   );
   const monthRevenue = stations.reduce(
     (sum, s) => sum + stationRevenueSince(s.data || {}, startOfMonth()),
-    0
+    0,
   );
   const totalSales = stations.reduce(
     (sum, s) => sum + stationSalesCount(s.data || {}),
-    0
+    0,
   );
 
   return (
@@ -690,7 +730,7 @@ function CombinedViewModal({
             {stations.length} Stations Combined
           </h3>
           <div className="space-y-2 max-h-48 overflow-y-auto">
-            {stations.map(s => (
+            {stations.map((s) => (
               <div
                 key={s.id}
                 className="flex items-center justify-between p-3 bg-white/5 rounded-lg"
@@ -833,14 +873,16 @@ export default function StationManager({ onClose }: StationManagerProps) {
   const stats = useMemo(() => {
     const totalRev = stations.reduce(
       (sum, s) => sum + stationTotalRevenue(s.data || {}),
-      0
+      0,
     );
     const todayRev = stations.reduce(
       (sum, s) => sum + stationRevenueSince(s.data || {}, startOfToday()),
-      0
+      0,
     );
     const sharedUsers = new Set(
-      stations.flatMap(s => (s.data?.sharedUsers || []).map((u: any) => u.email))
+      stations.flatMap((s) =>
+        (s.data?.sharedUsers || []).map((u: any) => u.email),
+      ),
     ).size;
     return {
       totalRevenue: totalRev,
@@ -857,27 +899,35 @@ export default function StationManager({ onClose }: StationManagerProps) {
     if (search.trim()) {
       const q = search.toLowerCase();
       result = result.filter(
-        s =>
+        (s) =>
           s.name.toLowerCase().includes(q) ||
           s.location?.toLowerCase().includes(q) ||
           s.phone?.includes(q) ||
-          s.email?.toLowerCase().includes(q)
+          s.email?.toLowerCase().includes(q),
       );
     }
 
     // Filter by status
     if (filterStatus !== "all") {
-      result = result.filter(s => stationStatus(s.data) === filterStatus);
+      result = result.filter((s) => stationStatus(s.data) === filterStatus);
     }
 
     // Sort
     result.sort((a, b) => {
       if (sortBy === "name") return a.name.localeCompare(b.name);
       if (sortBy === "revenue")
-        return stationTotalRevenue(b.data || {}) - stationTotalRevenue(a.data || {});
+        return (
+          stationTotalRevenue(b.data || {}) - stationTotalRevenue(a.data || {})
+        );
       if (sortBy === "recent")
-        return new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime();
-      return new Date(a.updatedAt || 0).getTime() - new Date(b.updatedAt || 0).getTime();
+        return (
+          new Date(b.updatedAt || 0).getTime() -
+          new Date(a.updatedAt || 0).getTime()
+        );
+      return (
+        new Date(a.updatedAt || 0).getTime() -
+        new Date(b.updatedAt || 0).getTime()
+      );
     });
 
     return result;
@@ -893,26 +943,23 @@ export default function StationManager({ onClose }: StationManagerProps) {
       showNotice(`Switched to ${station.name}`);
       if (onClose) onClose();
     },
-    [switchStation, showNotice, onClose]
+    [switchStation, showNotice, onClose],
   );
 
-  const handleEdit = useCallback(
-    (station: any) => {
-      setEditForm({
-        name: station.name,
-        location: station.location || "",
-        phone: station.phone || "",
-        email: station.email || "",
-        kraPin: station.kraPin || "",
-        etrSerial: station.etrSerial || "",
-        taxRate: station.taxRate ?? 16,
-        theme: station.theme || "dark",
-        description: station.description || "",
-      });
-      setModal({ type: "edit", station });
-    },
-    []
-  );
+  const handleEdit = useCallback((station: any) => {
+    setEditForm({
+      name: station.name,
+      location: station.location || "",
+      phone: station.phone || "",
+      email: station.email || "",
+      kraPin: station.kraPin || "",
+      etrSerial: station.etrSerial || "",
+      taxRate: station.taxRate ?? 16,
+      theme: station.theme || "dark",
+      description: station.description || "",
+    });
+    setModal({ type: "edit", station });
+  }, []);
 
   const handleSaveStation = useCallback(
     (formData: any) => {
@@ -926,15 +973,12 @@ export default function StationManager({ onClose }: StationManagerProps) {
         closeModal();
       }
     },
-    [modal, createStation, updateStation, showNotice, closeModal]
+    [modal, createStation, updateStation, showNotice, closeModal],
   );
 
-  const handleShareOpen = useCallback(
-    (station: any) => {
-      setModal({ type: "share", station });
-    },
-    []
-  );
+  const handleShareOpen = useCallback((station: any) => {
+    setModal({ type: "share", station });
+  }, []);
 
   const handleShare = useCallback(
     (email: string, password: string) => {
@@ -944,7 +988,7 @@ export default function StationManager({ onClose }: StationManagerProps) {
         closeModal();
       }
     },
-    [modal, shareStation, showNotice, closeModal]
+    [modal, shareStation, showNotice, closeModal],
   );
 
   const handleRevoke = useCallback(
@@ -954,7 +998,7 @@ export default function StationManager({ onClose }: StationManagerProps) {
         showNotice(`Access revoked for ${email}`);
       }
     },
-    [modal, revokeAccess, showNotice]
+    [modal, revokeAccess, showNotice],
   );
 
   const handleAccessStation = useCallback(
@@ -964,7 +1008,7 @@ export default function StationManager({ onClose }: StationManagerProps) {
       closeModal();
       if (onClose) onClose();
     },
-    [switchStation, showNotice, closeModal, onClose]
+    [switchStation, showNotice, closeModal, onClose],
   );
 
   const handleExport = useCallback(
@@ -972,15 +1016,12 @@ export default function StationManager({ onClose }: StationManagerProps) {
       downloadJson(`${station.name.replace(/\s+/g, "_")}_export.json`, station);
       showNotice("Station data exported");
     },
-    [showNotice]
+    [showNotice],
   );
 
-  const handleDeleteOpen = useCallback(
-    (station: any) => {
-      setModal({ type: "delete", station });
-    },
-    []
-  );
+  const handleDeleteOpen = useCallback((station: any) => {
+    setModal({ type: "delete", station });
+  }, []);
 
   const handleDeleteConfirmed = useCallback(() => {
     if (modal?.station) {
@@ -997,15 +1038,15 @@ export default function StationManager({ onClose }: StationManagerProps) {
         current === "active"
           ? "inactive"
           : current === "inactive"
-          ? "maintenance"
-          : "active";
+            ? "maintenance"
+            : "active";
       updateStation(station.id, {
         ...station,
         data: { ...station.data, status: next },
       });
       showNotice(`Status changed to ${next}`);
     },
-    [updateStation, showNotice]
+    [updateStation, showNotice],
   );
 
   const handleSyncNow = useCallback(async () => {
@@ -1062,7 +1103,12 @@ export default function StationManager({ onClose }: StationManagerProps) {
                   disabled={syncing || isBackendSyncing}
                   className="px-4 py-2 bg-sky-500/20 text-sky-300 rounded-lg text-sm flex items-center gap-2 hover:bg-sky-500/30 transition-colors disabled:opacity-50"
                 >
-                  <RefreshCw size={14} className={syncing || isBackendSyncing ? "animate-spin" : ""} />
+                  <RefreshCw
+                    size={14}
+                    className={
+                      syncing || isBackendSyncing ? "animate-spin" : ""
+                    }
+                  />
                   Sync Now
                 </button>
               </>
@@ -1128,7 +1174,7 @@ export default function StationManager({ onClose }: StationManagerProps) {
             <input
               type="text"
               value={search}
-              onChange={e => setSearch(e.target.value)}
+              onChange={(e) => setSearch(e.target.value)}
               placeholder="Search stations..."
               className="w-full pl-10 pr-4 py-2 rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-400 text-sm"
             />
@@ -1136,7 +1182,9 @@ export default function StationManager({ onClose }: StationManagerProps) {
 
           {/* Status filter */}
           <div className="flex items-center gap-1 bg-white/5 rounded-xl p-1">
-            {(["all", "active", "inactive", "maintenance"] as FilterStatus[]).map(s => (
+            {(
+              ["all", "active", "inactive", "maintenance"] as FilterStatus[]
+            ).map((s) => (
               <button
                 key={s}
                 onClick={() => setFilterStatus(s)}
@@ -1154,7 +1202,7 @@ export default function StationManager({ onClose }: StationManagerProps) {
           {/* Sort */}
           <select
             value={sortBy}
-            onChange={e => setSortBy(e.target.value as SortBy)}
+            onChange={(e) => setSortBy(e.target.value as SortBy)}
             className="px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
           >
             <option value="recent">Recent first</option>
@@ -1199,7 +1247,7 @@ export default function StationManager({ onClose }: StationManagerProps) {
             </div>
           ) : (
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              {visibleStations.map(s => (
+              {visibleStations.map((s) => (
                 <StationCard
                   key={s.id}
                   station={s}

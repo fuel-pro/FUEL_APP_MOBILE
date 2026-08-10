@@ -13,15 +13,20 @@ type Unsubscribe = () => void;
  */
 function safeSubscribe(
   service: unknown,
-  handler: (status: any) => void
+  handler: (status: any) => void,
 ): Unsubscribe {
   try {
-    const svc = service as { subscribe?: (cb: (s: any) => void) => Unsubscribe };
+    const svc = service as {
+      subscribe?: (cb: (s: any) => void) => Unsubscribe;
+    };
     if (svc && typeof svc.subscribe === "function") {
       const unsub = svc.subscribe(handler);
       return typeof unsub === "function" ? unsub : () => {};
     }
-    console.warn("[OfflineIndicator] service has no subscribe(), skipping:", svc);
+    console.warn(
+      "[OfflineIndicator] service has no subscribe(), skipping:",
+      svc,
+    );
   } catch (e) {
     console.warn("[OfflineIndicator] subscribe threw:", e);
   }
@@ -30,7 +35,7 @@ function safeSubscribe(
 
 export default function OfflineIndicator() {
   const [isOnline, setIsOnline] = useState(
-    typeof navigator !== "undefined" ? navigator.onLine : true
+    typeof navigator !== "undefined" ? navigator.onLine : true,
   );
   const [pendingPrints, setPendingPrints] = useState(0);
   const [pendingSyncs, setPendingSyncs] = useState(0);
@@ -46,7 +51,9 @@ export default function OfflineIndicator() {
       try {
         const queue = Array.isArray(status?.queue) ? status.queue : [];
         setPendingPrints(
-          queue.filter((j: any) => j?.status === "pending" || j?.status === "failed").length
+          queue.filter(
+            (j: any) => j?.status === "pending" || j?.status === "failed",
+          ).length,
         );
       } catch {
         setPendingPrints(0);
@@ -56,7 +63,9 @@ export default function OfflineIndicator() {
     const unsubscribeStorage = safeSubscribe(indexedStorage, (status) => {
       try {
         setPendingSyncs(
-          typeof status?.pendingChanges === "number" ? status.pendingChanges : 0
+          typeof status?.pendingChanges === "number"
+            ? status.pendingChanges
+            : 0,
         );
       } catch {
         setPendingSyncs(0);
@@ -68,8 +77,16 @@ export default function OfflineIndicator() {
     return () => {
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
-      try { unsubscribePrint(); } catch { /* noop */ }
-      try { unsubscribeStorage(); } catch { /* noop */ }
+      try {
+        unsubscribePrint();
+      } catch {
+        /* noop */
+      }
+      try {
+        unsubscribeStorage();
+      } catch {
+        /* noop */
+      }
     };
   }, []);
 
@@ -84,9 +101,11 @@ export default function OfflineIndicator() {
           onClick={() => setShowDetails(!showDetails)}
           className={`
             flex items-center gap-2 px-4 py-3 rounded-full shadow-lg transition-all
-            ${!isOnline
-              ? "bg-red-500 hover:bg-red-600 text-white"
-              : "bg-amber-500 hover:bg-amber-600 text-white"}
+            ${
+              !isOnline
+                ? "bg-red-500 hover:bg-red-600 text-white"
+                : "bg-amber-500 hover:bg-amber-600 text-white"
+            }
           `}
         >
           {!isOnline ? (
@@ -118,7 +137,10 @@ export default function OfflineIndicator() {
                   </>
                 ) : (
                   <>
-                    <RefreshCw size={18} className="text-amber-500 animate-spin" />
+                    <RefreshCw
+                      size={18}
+                      className="text-amber-500 animate-spin"
+                    />
                     Syncing Data
                   </>
                 )}
@@ -126,10 +148,13 @@ export default function OfflineIndicator() {
               <div className="space-y-2 text-sm">
                 {!isOnline && (
                   <div className="flex items-start gap-2 text-gray-600 dark:text-gray-300">
-                    <CloudOff size={16} className="mt-0.5 flex-shrink-0 text-red-400" />
+                    <CloudOff
+                      size={16}
+                      className="mt-0.5 flex-shrink-0 text-red-400"
+                    />
                     <span>
-                      You're working offline. Your data is being saved locally and will sync
-                      automatically when connected.
+                      You're working offline. Your data is being saved locally
+                      and will sync automatically when connected.
                     </span>
                   </div>
                 )}

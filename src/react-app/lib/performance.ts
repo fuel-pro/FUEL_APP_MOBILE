@@ -6,7 +6,7 @@
 /** Debounce: delay execution until ms after last call */
 export function debounce<T extends (...args: any[]) => void>(
   fn: T,
-  ms: number
+  ms: number,
 ): T {
   let timer: ReturnType<typeof setTimeout>;
   return ((...args: any[]) => {
@@ -18,7 +18,7 @@ export function debounce<T extends (...args: any[]) => void>(
 /** Throttle: execute at most once per ms */
 export function throttle<T extends (...args: any[]) => void>(
   fn: T,
-  ms: number
+  ms: number,
 ): T {
   let last = 0;
   let timer: ReturnType<typeof setTimeout> | null = null;
@@ -34,7 +34,7 @@ export function throttle<T extends (...args: any[]) => void>(
           timer = null;
           fn(...args);
         },
-        ms - (now - last)
+        ms - (now - last),
       );
     }
   }) as T;
@@ -55,7 +55,7 @@ export function rafThrottle<T extends (...args: any[]) => void>(fn: T): T {
 /** Measure function execution time */
 export function measurePerformance<T extends (...args: any[]) => any>(
   fn: T,
-  label: string
+  label: string,
 ): T {
   return ((...args: any[]) => {
     const start = performance.now();
@@ -63,7 +63,7 @@ export function measurePerformance<T extends (...args: any[]) => any>(
     const duration = performance.now() - start;
     if (duration > 16) {
       console.warn(
-        `[Performance] ${label} took ${duration.toFixed(1)}ms (>16ms frame budget)`
+        `[Performance] ${label} took ${duration.toFixed(1)}ms (>16ms frame budget)`,
       );
     }
     return result;
@@ -72,13 +72,13 @@ export function measurePerformance<T extends (...args: any[]) => any>(
 
 /** Batch DOM reads to avoid layout thrashing */
 export function batchReads<T>(reads: (() => T)[]): T[] {
-  return reads.map(r => r());
+  return reads.map((r) => r());
 }
 
 /** Batch DOM writes using requestAnimationFrame */
 export function batchWrites(writes: (() => void)[]) {
   requestAnimationFrame(() => {
-    writes.forEach(w => w());
+    writes.forEach((w) => w());
   });
 }
 
@@ -86,19 +86,19 @@ export function batchWrites(writes: (() => void)[]) {
 export function lazyLoadElement(
   el: HTMLElement,
   callback: () => void,
-  options?: IntersectionObserverInit
+  options?: IntersectionObserverInit,
 ) {
   if ("IntersectionObserver" in window) {
     const observer = new IntersectionObserver(
-      entries => {
-        entries.forEach(entry => {
+      (entries) => {
+        entries.forEach((entry) => {
           if (entry.isIntersecting) {
             callback();
             observer.unobserve(el);
           }
         });
       },
-      { rootMargin: "200px", ...options }
+      { rootMargin: "200px", ...options },
     );
     observer.observe(el);
   } else {
@@ -109,7 +109,7 @@ export function lazyLoadElement(
 /** Preload critical resources */
 export function preloadResource(
   href: string,
-  as: "script" | "style" | "font" | "image"
+  as: "script" | "style" | "font" | "image",
 ) {
   const link = document.createElement("link");
   link.rel = as === "font" ? "preload" : "preload";
@@ -129,7 +129,7 @@ export interface WebVitals {
   fcp?: number; // First Contentful Paint
 }
 
-let vitalsSnapshot: WebVitals = {};
+const vitalsSnapshot: WebVitals = {};
 
 export function getVitalsSnapshot(): WebVitals {
   return { ...vitalsSnapshot };
@@ -137,14 +137,14 @@ export function getVitalsSnapshot(): WebVitals {
 
 export function initVitalsTracking(callback?: (v: WebVitals) => void) {
   // FCP
-  new PerformanceObserver(list => {
+  new PerformanceObserver((list) => {
     const entry = list.getEntries()[0] as PerformanceEntry;
     vitalsSnapshot.fcp = entry.startTime;
     callback?.({ ...vitalsSnapshot });
   }).observe({ type: "paint", buffered: true });
 
   // LCP
-  new PerformanceObserver(list => {
+  new PerformanceObserver((list) => {
     const entries = list.getEntries();
     const last = entries[entries.length - 1] as PerformanceEntry;
     vitalsSnapshot.lcp = last.startTime;
@@ -153,7 +153,7 @@ export function initVitalsTracking(callback?: (v: WebVitals) => void) {
 
   // CLS
   let clsValue = 0;
-  new PerformanceObserver(list => {
+  new PerformanceObserver((list) => {
     for (const entry of list.getEntries()) {
       if (!(entry as any).hadRecentInput) {
         clsValue += (entry as any).value;
@@ -165,7 +165,7 @@ export function initVitalsTracking(callback?: (v: WebVitals) => void) {
 
   // TTFB
   const nav = performance.getEntriesByType(
-    "navigation"
+    "navigation",
   )[0] as PerformanceNavigationTiming;
   if (nav) {
     vitalsSnapshot.ttfb = nav.responseStart;
@@ -174,7 +174,7 @@ export function initVitalsTracking(callback?: (v: WebVitals) => void) {
   // INP (using Event Timing API)
   if ("PerformanceEventTiming" in window) {
     let maxInp = 0;
-    new PerformanceObserver(list => {
+    new PerformanceObserver((list) => {
       for (const entry of list.getEntries()) {
         if ((entry as any).interactionId && entry.duration > maxInp) {
           maxInp = entry.duration;
@@ -188,7 +188,7 @@ export function initVitalsTracking(callback?: (v: WebVitals) => void) {
 
 /** Check if performance targets are met */
 export function checkPerformanceTargets(
-  vitals: WebVitals
+  vitals: WebVitals,
 ): { metric: string; value: number; target: number; pass: boolean }[] {
   return [
     {
@@ -249,7 +249,7 @@ export const CacheAPI = {
       key,
       new Response(JSON.stringify(data), {
         headers: { "Content-Type": "application/json" },
-      })
+      }),
     );
   },
   async get(key: string): Promise<any | null> {

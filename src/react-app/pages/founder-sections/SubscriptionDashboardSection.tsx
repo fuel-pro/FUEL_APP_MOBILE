@@ -25,7 +25,7 @@ interface Props {
   logAudit: (
     e: string,
     d: string,
-    s: "success" | "warning" | "danger" | "info"
+    s: "success" | "warning" | "danger" | "info",
   ) => void;
 }
 
@@ -36,7 +36,7 @@ export default function SubscriptionDashboardSection({ logAudit }: Props) {
   const payments = loadPayments();
   const coupons = loadCoupons();
   const [timeRange, setTimeRange] = useState<"7d" | "30d" | "90d" | "all">(
-    "30d"
+    "30d",
   );
 
   const stats = useMemo(() => {
@@ -46,19 +46,19 @@ export default function SubscriptionDashboardSection({ logAudit }: Props) {
         : Date.now() -
           ({ "7d": 7, "30d": 30, "90d": 90 }[timeRange] || 30) * 86400000;
     const filtered = payments.filter(
-      p => new Date(p.createdAt).getTime() > cutoff
+      (p) => new Date(p.createdAt).getTime() > cutoff,
     );
     const revenue = filtered
-      .filter(p => p.status === "success")
+      .filter((p) => p.status === "success")
       .reduce((s, p) => s + p.amount, 0);
-    const failed = filtered.filter(p => p.status === "failed").length;
-    const refunded = filtered.filter(p => p.status === "refunded").length;
+    const failed = filtered.filter((p) => p.status === "failed").length;
+    const refunded = filtered.filter((p) => p.status === "refunded").length;
     const avgOrder = filtered.length > 0 ? revenue / filtered.length : 0;
 
     const byGateway: Record<string, { revenue: number; count: number }> = {};
     filtered
-      .filter(p => p.status === "success")
-      .forEach(p => {
+      .filter((p) => p.status === "success")
+      .forEach((p) => {
         if (!byGateway[p.gateway])
           byGateway[p.gateway] = { revenue: 0, count: 0 };
         byGateway[p.gateway].revenue += p.amount;
@@ -67,14 +67,14 @@ export default function SubscriptionDashboardSection({ logAudit }: Props) {
 
     const dailyData: Record<string, number> = {};
     filtered
-      .filter(p => p.status === "success")
-      .forEach(p => {
+      .filter((p) => p.status === "success")
+      .forEach((p) => {
         const d = new Date(p.createdAt).toISOString().slice(0, 10);
         dailyData[d] = (dailyData[d] || 0) + p.amount;
       });
 
     const dates = Object.keys(dailyData).sort().slice(-14);
-    const chartData = dates.map(d => ({
+    const chartData = dates.map((d) => ({
       date: d.slice(5),
       amount: dailyData[d],
     }));
@@ -91,7 +91,7 @@ export default function SubscriptionDashboardSection({ logAudit }: Props) {
   }, [payments, timeRange]);
 
   const mrr = useMemo(() => {
-    const monthPayments = payments.filter(p => {
+    const monthPayments = payments.filter((p) => {
       const d = new Date(p.createdAt);
       const now = new Date();
       return (
@@ -114,7 +114,7 @@ export default function SubscriptionDashboardSection({ logAudit }: Props) {
     return sub ? 100 : 0;
   }, [trial, sub]);
 
-  const maxChart = Math.max(...stats.chartData.map(d => d.amount), 1);
+  const maxChart = Math.max(...stats.chartData.map((d) => d.amount), 1);
 
   return (
     <div className="space-y-6">
@@ -134,7 +134,7 @@ export default function SubscriptionDashboardSection({ logAudit }: Props) {
             { id: "30d" as const, label: "30D" },
             { id: "90d" as const, label: "90D" },
             { id: "all" as const, label: "All" },
-          ].map(t => (
+          ].map((t) => (
             <button
               key={t.id}
               onClick={() => setTimeRange(t.id)}
@@ -185,7 +185,7 @@ export default function SubscriptionDashboardSection({ logAudit }: Props) {
             up: trialConversionRate > 0,
             color: "text-amber-400",
           },
-        ].map(k => (
+        ].map((k) => (
           <div
             key={k.label}
             className="bg-[#161618] border border-white/[0.06] rounded-xl p-4"
@@ -278,7 +278,7 @@ export default function SubscriptionDashboardSection({ logAudit }: Props) {
                 value: stats.refunded,
                 color: "bg-amber-400",
               },
-            ].map(s => (
+            ].map((s) => (
               <div key={s.label}>
                 <div className="flex justify-between text-xs mb-1">
                   <span className="text-gray-400">{s.label}</span>
@@ -304,7 +304,7 @@ export default function SubscriptionDashboardSection({ logAudit }: Props) {
           Recent Transactions
         </h3>
         <div className="space-y-2 max-h-48 overflow-y-auto">
-          {payments.slice(0, 20).map(p => (
+          {payments.slice(0, 20).map((p) => (
             <div
               key={p.id}
               className="flex items-center justify-between py-1.5 border-b border-white/[0.04]"

@@ -81,20 +81,22 @@ export default function FuelSalesReport() {
             // Only process if we have actual sales data
             if (salesData && (salesData.pmsPumps || salesData.agoPumps)) {
               // Calculate petrol sales from all PMS pumps (with rounding for safety)
-              const petrolSales = Math.round(
-                (salesData.pmsPumps || []).reduce(
-                  (sum: number, pump: any) => sum + (pump.salesKsh || 0),
-                  0
-                ) * 100
-              ) / 100;
+              const petrolSales =
+                Math.round(
+                  (salesData.pmsPumps || []).reduce(
+                    (sum: number, pump: any) => sum + (pump.salesKsh || 0),
+                    0,
+                  ) * 100,
+                ) / 100;
 
               // Calculate diesel sales from all AGO pumps (with rounding for safety)
-              const dieselSales = Math.round(
-                (salesData.agoPumps || []).reduce(
-                  (sum: number, pump: any) => sum + (pump.salesKsh || 0),
-                  0
-                ) * 100
-              ) / 100;
+              const dieselSales =
+                Math.round(
+                  (salesData.agoPumps || []).reduce(
+                    (sum: number, pump: any) => sum + (pump.salesKsh || 0),
+                    0,
+                  ) * 100,
+                ) / 100;
 
               // Format date as DD/MM/YYYY(SHIFT)
               const day = salesDate.getDate().toString().padStart(2, "0");
@@ -113,22 +115,23 @@ export default function FuelSalesReport() {
                   shift: shift as "DAY" | "NIGHT",
                   petrolSales,
                   dieselSales,
-                  totalSales: Math.round((petrolSales + dieselSales) * 100) / 100,
+                  totalSales:
+                    Math.round((petrolSales + dieselSales) * 100) / 100,
                 });
               }
             }
           }
-        }
+        },
       );
     }
 
     // Sort entries by date for better presentation
     entries.sort((a, b) => {
       const dateA = new Date(
-        a.date.split("(")[0].split("/").reverse().join("-")
+        a.date.split("(")[0].split("/").reverse().join("-"),
       );
       const dateB = new Date(
-        b.date.split("(")[0].split("/").reverse().join("-")
+        b.date.split("(")[0].split("/").reverse().join("-"),
       );
       return dateA.getTime() - dateB.getTime();
     });
@@ -138,11 +141,11 @@ export default function FuelSalesReport() {
     // Calculate totals from real data only
     const petrolTotal = entries.reduce(
       (sum, entry) => sum + entry.petrolSales,
-      0
+      0,
     );
     const dieselTotal = entries.reduce(
       (sum, entry) => sum + entry.dieselSales,
-      0
+      0,
     );
 
     setTotals({
@@ -246,11 +249,11 @@ export default function FuelSalesReport() {
     try {
       const reportHTML = document.getElementById("report-content");
       const reportDataForPrint = {
-        stationName: state.companyData.name || 'FuelPro Station',
+        stationName: state.companyData.name || "FuelPro Station",
         monthYear: `${months[selectedMonth - 1]} ${selectedYear}`,
         period: `${months[selectedMonth - 1]} ${selectedYear}`,
-        currency: state.companyData.currency || 'KSh',
-        entries: reportData.map(entry => ({
+        currency: state.companyData.currency || "KSh",
+        entries: reportData.map((entry) => ({
           date: entry.date,
           petrolSales: entry.petrolSales,
           dieselSales: entry.dieselSales,
@@ -264,7 +267,7 @@ export default function FuelSalesReport() {
       };
 
       await silentPrintService.queueSalesReport(reportDataForPrint);
-      
+
       setTimeout(() => setIsPrinting(false), 1500);
     } catch (error) {
       console.error("Silent print error:", error);
@@ -386,7 +389,7 @@ export default function FuelSalesReport() {
     } catch (error) {
       console.error("Error generating PDF:", error);
       import("@/react-app/lib/toast").then(({ toastError }) =>
-        toastError("Error generating PDF. Please try again.")
+        toastError("Error generating PDF. Please try again."),
       );
     } finally {
       setIsSaving(false);
@@ -408,7 +411,7 @@ export default function FuelSalesReport() {
           <div className="flex gap-2">
             <select
               value={selectedMonth}
-              onChange={e => setSelectedMonth(parseInt(e.target.value))}
+              onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
               className="bg-gray-700 border border-gray-600 rounded p-2 text-white text-sm"
             >
               {months.map((month, index) => (
@@ -419,10 +422,10 @@ export default function FuelSalesReport() {
             </select>
             <select
               value={selectedYear}
-              onChange={e => setSelectedYear(parseInt(e.target.value))}
+              onChange={(e) => setSelectedYear(parseInt(e.target.value))}
               className="bg-gray-700 border border-gray-600 rounded p-2 text-white text-sm"
             >
-              {yearOptions.map(year => (
+              {yearOptions.map((year) => (
                 <option key={year} value={year}>
                   {year}
                 </option>

@@ -34,7 +34,7 @@ export default function TabConfigModal({ onClose }: TabConfigModalProps) {
 
   function handleReset() {
     if (!confirm("Reset all tab names to defaults?")) return;
-    setTabs(prev => prev.map(t => ({ ...t, label: t.originalLabel })));
+    setTabs((prev) => prev.map((t) => ({ ...t, label: t.originalLabel })));
   }
 
   function moveTab(index: number, direction: "up" | "down") {
@@ -46,8 +46,8 @@ export default function TabConfigModal({ onClose }: TabConfigModalProps) {
   }
 
   function toggleVisibility(id: string) {
-    setTabs(prev =>
-      prev.map(t => (t.id === id ? { ...t, visible: !t.visible } : t))
+    setTabs((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, visible: !t.visible } : t)),
     );
   }
 
@@ -58,7 +58,7 @@ export default function TabConfigModal({ onClose }: TabConfigModalProps) {
     >
       <div
         className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-2xl max-h-[85vh] shadow-2xl border border-gray-200 dark:border-gray-700 flex flex-col overflow-hidden"
-        onClick={e => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-gray-200 dark:border-gray-700">
@@ -110,11 +110,11 @@ export default function TabConfigModal({ onClose }: TabConfigModalProps) {
                 <div className="flex-1 min-w-0">
                   <input
                     value={tab.label}
-                    onChange={e =>
-                      setTabs(prev =>
-                        prev.map(t =>
-                          t.id === tab.id ? { ...t, label: e.target.value } : t
-                        )
+                    onChange={(e) =>
+                      setTabs((prev) =>
+                        prev.map((t) =>
+                          t.id === tab.id ? { ...t, label: e.target.value } : t,
+                        ),
                       )
                     }
                     className="w-full px-3 py-2 rounded-lg bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"

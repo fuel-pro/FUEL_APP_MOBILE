@@ -1,6 +1,6 @@
 /**
  * Firebase Authentication Helper
- * 
+ *
  * Provides authentication utilities using Firebase Auth:
  * - Email/password authentication
  * - Google sign-in
@@ -8,10 +8,7 @@
  * - Token handling
  */
 
-import {
-  getFirebaseAuth,
-  getFirebaseApp,
-} from './client';
+import { getFirebaseAuth, getFirebaseApp } from "./client";
 import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
@@ -25,13 +22,13 @@ import {
   getIdTokenResult,
   User,
   UserCredential,
-} from 'firebase/auth';
-import { browserLocalPersistence, setPersistence } from 'firebase/auth';
+} from "firebase/auth";
+import { browserLocalPersistence, setPersistence } from "firebase/auth";
 
 // Google Auth Provider instance
 const googleProvider = new GoogleAuthProvider();
-googleProvider.addScope('email');
-googleProvider.addScope('profile');
+googleProvider.addScope("email");
+googleProvider.addScope("profile");
 
 export interface AuthUser {
   uid: string;
@@ -60,8 +57,8 @@ function toAuthUser(user: User): AuthUser {
     phoneNumber: user.phoneNumber,
     providerId: user.providerId,
     metadata: {
-      creationTime: user.metadata.creationTime || '',
-      lastSignInTime: user.metadata.lastSignInTime || '',
+      creationTime: user.metadata.creationTime || "",
+      lastSignInTime: user.metadata.lastSignInTime || "",
     },
   };
 }
@@ -71,22 +68,22 @@ function toAuthUser(user: User): AuthUser {
  */
 export function onAuthChange(
   callback: (user: AuthUser | null) => void,
-  errorCallback?: (error: Error) => void
+  errorCallback?: (error: Error) => void,
 ): () => void {
   const auth = getFirebaseAuth();
-  
+
   // Set persistence to local for better UX
   setPersistence(auth, browserLocalPersistence).catch(console.error);
-  
+
   return onAuthStateChanged(
     auth,
     (user) => {
       callback(user ? toAuthUser(user) : null);
     },
     (error) => {
-      console.error('[Firebase Auth] Auth state error:', error);
+      console.error("[Firebase Auth] Auth state error:", error);
       errorCallback?.(error);
-    }
+    },
   );
 }
 
@@ -95,7 +92,7 @@ export function onAuthChange(
  */
 export async function signInWithEmail(
   email: string,
-  password: string
+  password: string,
 ): Promise<{ user: AuthUser; credential: UserCredential }> {
   const auth = getFirebaseAuth();
   const credential = await signInWithEmailAndPassword(auth, email, password);
@@ -111,16 +108,20 @@ export async function signInWithEmail(
 export async function signUpWithEmail(
   email: string,
   password: string,
-  displayName?: string
+  displayName?: string,
 ): Promise<{ user: AuthUser; credential: UserCredential }> {
   const auth = getFirebaseAuth();
-  const credential = await createUserWithEmailAndPassword(auth, email, password);
-  
+  const credential = await createUserWithEmailAndPassword(
+    auth,
+    email,
+    password,
+  );
+
   // Update display name if provided
   if (displayName && credential.user) {
     await updateProfile(credential.user, { displayName });
   }
-  
+
   return {
     user: toAuthUser(credential.user),
     credential,
@@ -171,15 +172,15 @@ export function getCurrentUser(): AuthUser | null {
  * Get ID token for current user
  */
 export async function getCurrentUserToken(
-  forceRefresh = false
+  forceRefresh = false,
 ): Promise<string | null> {
   const auth = getFirebaseAuth();
   const user = auth.currentUser;
-  
+
   if (!user) {
     return null;
   }
-  
+
   return await getIdToken(user, forceRefresh);
 }
 
@@ -193,11 +194,11 @@ export async function getIdTokenWithClaims(): Promise<{
 } | null> {
   const auth = getFirebaseAuth();
   const user = auth.currentUser;
-  
+
   if (!user) {
     return null;
   }
-  
+
   const result = await getIdTokenResult(user, true);
   return {
     token: result.token,
@@ -218,14 +219,14 @@ export async function verifyUserToken(token: string): Promise<{
   // For client-side, we just return the user info
   const auth = getFirebaseAuth();
   const user = auth.currentUser;
-  
+
   if (!user) {
-    throw new Error('No user logged in');
+    throw new Error("No user logged in");
   }
-  
+
   return {
     uid: user.uid,
-    email: user.email || '',
+    email: user.email || "",
     email_verified: user.emailVerified,
   };
 }
@@ -247,11 +248,11 @@ export async function createTokenForUser(uid: string): Promise<string> {
   // For now, we'll use Firebase Auth directly
   const auth = getFirebaseAuth();
   const user = auth.currentUser;
-  
+
   if (!user || user.uid !== uid) {
-    throw new Error('Unauthorized');
+    throw new Error("Unauthorized");
   }
-  
+
   // Generate a custom token (this would normally be done server-side)
   // For client-side, we use the ID token
   return await getIdToken(user);

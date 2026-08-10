@@ -22,7 +22,7 @@ function base32Decode(secret: string): Uint8Array {
     .toUpperCase()
     .replace(/[^A-Z2-7]/g, "")
     .split("")
-    .map(c => BASE32_CHARS.indexOf(c).toString(2).padStart(5, "0"))
+    .map((c) => BASE32_CHARS.indexOf(c).toString(2).padStart(5, "0"))
     .join("");
   const bytes: number[] = [];
   for (let i = 0; i + 8 <= bits.length; i += 8) {
@@ -34,23 +34,23 @@ function base32Decode(secret: string): Uint8Array {
 /** Generate HMAC-SHA1 (simplified for client-side use) */
 async function hmacSha1(
   key: Uint8Array,
-  data: Uint8Array
+  data: Uint8Array,
 ): Promise<Uint8Array> {
   const cryptoKey = await crypto.subtle.importKey(
     "raw",
-    key,
+    key as BufferSource,
     { name: "HMAC", hash: "SHA-1" },
     false,
-    ["sign"]
+    ["sign"],
   );
-  const sig = await crypto.subtle.sign("HMAC", cryptoKey, data);
+  const sig = await crypto.subtle.sign("HMAC", cryptoKey, data as BufferSource);
   return new Uint8Array(sig);
 }
 
 /** Generate TOTP code from secret at given time step */
 export async function genCode(
   secret: string,
-  timestamp?: number
+  timestamp?: number,
 ): Promise<string> {
   const step = Math.floor((timestamp || Date.now()) / 30000);
   const key = base32Decode(secret);
@@ -77,7 +77,7 @@ export async function genCode(
 /** Verify a TOTP code with window of +/- 1 step */
 export async function verifyCode(
   secret: string,
-  code: string
+  code: string,
 ): Promise<boolean> {
   const now = Date.now();
   for (let i = -1; i <= 1; i++) {
