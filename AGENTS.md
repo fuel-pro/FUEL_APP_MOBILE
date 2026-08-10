@@ -557,3 +557,34 @@ to this project's Vite SPA + Vercel serverless architecture.
   **Note**: the /api/fuel-local response has `Cache-Control: max-age=300`
   (5-min CDN cache); use a `&cb=<timestamp>` cache-bust param to test fresh
   data immediately after a DB update.
+
+## Smart-Cache fuel price architecture (ADDED 2026-08-10, commit c0f1c33)
+A second parallel implementation of the fuel-price engine, created in a
+separate session and merged to main alongside PR #98. Both implementations
+coexist on main:
+- **My implementation** (`api/_lib/hybrid-fetcher.ts` + `api/fuel-prices.ts` +
+  `api/cron-monthly-sync.ts`): enhances the existing `/api/fuel-prices`
+  endpoint with a smart-cache mode (lat+lng+name+country). Uses a Groq →
+  DeepSeek → QWEN AI provider chain (QWEN via OpenRouter). Has AI-knowledge
+  fallback when SerpApi is absent (source labelled "AI-Estimated"). The
+  `/api/fuel-prices` endpoint supports 3 modes: Kenya EPRA (no coords),
+  smart-cache (lat+lng+name+country), legacy geolocation (CollectAPI).
+  Frontend: `FuelPriceLocator.tsx` with EPRA-style UI (cost breakdown,
+  GPS coordinates, "per litre" labels, "SUPER PETROL / DIESEL / KEROSENE"
+  format). Registered as `price-finder` tab (order 36).
+- **Parallel branch implementation** (`api/lib/fuel-engine.ts` +
+  `api/fuel-local.ts` + `api/cron/monthly-fuel-sync.ts`): separate
+  `/api/fuel-local` endpoint. Uses deterministic EPRA estimation for Kenya
+  (reference table + remoteness factor — more accurate than AI for Kenya).
+  Frontend: `FuelTracker.tsx`. Registered as `fueltracker` tab (order 32).
+- **vercel.json cron**: consolidated to single `/api/cron/monthly-fuel-sync`
+  entry (the parallel branch's endpoint, which is the one deployed on Vercel
+  and tested live).
+- **Geocoding fix (commit a7ed641)**: BOTH `api/_lib/geocoding.ts` and
+  `api/lib/fuel-engine.ts` now use Nominatim `zoom=10` (town/city-level)
+  instead of `zoom=18` (building-level). Name resolution priority changed
+  to city > municipality > town > county > village (was village-first). This
+  fixes "Nawoitorong" → "Lodwar" for GPS coords 3.0970, 35.6138.
+- **Vercel env vars**: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`,
+  `SERPAPI_KEY`, `DEEPSEEK_API_KEY`, `QWEN_API_KEY`, `CRON_SECRET`. All
+  server-only (never VITE_-prefixed).

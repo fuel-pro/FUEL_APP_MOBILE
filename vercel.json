@@ -6,10 +6,6 @@
   "framework": "vite",
   "crons": [
     {
-      "path": "/api/cron-monthly-sync",
-      "schedule": "0 0 1 * *"
-    },
-    {
       "path": "/api/cron/monthly-fuel-sync",
       "schedule": "0 0 1 * *"
     }
