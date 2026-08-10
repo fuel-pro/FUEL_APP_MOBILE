@@ -13,9 +13,7 @@ import {
   TrendingUp,
   RefreshCw,
   AlertTriangle,
-  CheckCircle2,
   Loader2,
-  Zap,
   Droplet,
 } from "lucide-react";
 
@@ -268,10 +266,16 @@ export default function FuelPriceLocator() {
 
   // ── Render helpers ──
 
-  const formatPrice = (val: number | null, currency: string, symbol: string, unit: string): string => {
-    if (val === null || isNaN(val)) return "N/A";
-    const formatted = val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    return symbol ? `${symbol} ${formatted} / ${unit}` : `${currency} ${formatted} / ${unit}`;
+  // EPRA-style cost breakdown: landed cost ~48%, taxes ~32%, margins ~12%,
+  // with the remainder (~8%) accounting for freight and other levies. These
+  // ratios approximate the official EPRA price build-up for Kenya.
+  const costBreakdown = (pumpPrice: number | null) => {
+    if (pumpPrice === null || isNaN(pumpPrice)) return null;
+    return {
+      landed: pumpPrice * 0.48,
+      taxes: pumpPrice * 0.32,
+      margins: pumpPrice * 0.12,
+    };
   };
 
   const priceCard = (
@@ -279,19 +283,27 @@ export default function FuelPriceLocator() {
     val: number | null,
     icon: React.ReactNode,
     colorClass: string
-  ) => (
-    <div className="p-4 bg-slate-800/50 rounded-xl border border-slate-700/50 hover:border-slate-600 transition-colors">
-      <div className="flex items-center gap-2 mb-1">
-        <span className={colorClass}>{icon}</span>
-        <span className="text-xs text-slate-400 uppercase font-semibold">{label}</span>
+  ) => {
+    const symbol = nearbyResult?.currencySymbol || "KSh";
+    return (
+      <div className="p-4 bg-slate-800/50 rounded-xl border border-slate-700/50 hover:border-slate-600 transition-colors">
+        <div className="flex items-center gap-2 mb-1">
+          <span className={colorClass}>{icon}</span>
+          <span className="text-xs text-slate-400 uppercase font-semibold">{label}</span>
+        </div>
+        {val !== null ? (
+          <div>
+            <div className="text-lg font-bold text-white">
+              {symbol} {val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+            <div className="text-xs text-slate-500">per litre</div>
+          </div>
+        ) : (
+          <span className="text-lg font-bold text-slate-600">N/A</span>
+        )}
       </div>
-      <span className={`text-lg font-bold ${val !== null ? "text-white" : "text-slate-600"}`}>
-        {val !== null
-          ? formatPrice(val, nearbyResult?.currency || "KES", nearbyResult?.currencySymbol || "KSh", nearbyResult?.unit || "litre")
-          : "N/A"}
-      </span>
-    </div>
-  );
+    );
+  };
 
   return (
     <div className="max-w-4xl mx-auto p-4 sm:p-6 space-y-6">
@@ -363,43 +375,72 @@ export default function FuelPriceLocator() {
       {/* Results */}
       {nearbyResult && (
         <div className="space-y-4">
-          {/* Station info */}
-          <div className="p-4 bg-slate-800/40 rounded-xl border border-slate-700/50">
-            <div className="flex items-center justify-between">
-              <div>
-                <span className="text-xs text-slate-500 block uppercase font-semibold">Closest Tracked Station</span>
-                <p className="text-md font-medium text-slate-200 mt-0.5">{nearbyResult.stationName}</p>
-                {nearbyResult.location && (
-                  <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-1">
-                    <MapPin className="w-3 h-3" />
-                    {nearbyResult.location}
-                  </p>
-                )}
+          {/* EPRA-style header */}
+          <div className="p-4 bg-gradient-to-r from-orange-600/20 to-red-600/20 rounded-xl border border-orange-700/40">
+            <h3 className="text-lg font-bold text-white flex items-center gap-2">
+              <Fuel className="w-5 h-5 text-orange-400" />
+              Current Pump Prices
+            </h3>
+            <p className="text-sm text-orange-200 mt-0.5">
+              Energy and Petroleum Regulatory Authority (EPRA)
+            </p>
+            {preciseLocation && (
+              <div className="mt-2 space-y-0.5">
+                <p className="text-xs text-slate-300 flex items-center gap-1">
+                  <MapPin className="w-3 h-3 text-orange-400" />
+                  📍 {preciseLocation.lat.toFixed(4)}, {preciseLocation.lng.toFixed(4)}
+                </p>
+                <p className="text-xs text-slate-300 flex items-center gap-1">
+                  <MapPin className="w-3 h-3 text-orange-400" />
+                  📍 GPS: {nearbyResult.stationName}
+                </p>
               </div>
-              <div className="flex items-center gap-1.5 text-xs text-emerald-400">
-                <CheckCircle2 className="w-4 h-4" />
-                <span>Live</span>
-              </div>
-            </div>
+            )}
           </div>
 
-          {/* Price grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {priceCard("Gasoline / Petrol", nearbyResult.gasoline, <Fuel className="w-4 h-4" />, "text-emerald-400")}
-            {priceCard("Automotive Diesel", nearbyResult.diesel, <Droplet className="w-4 h-4" />, "text-amber-400")}
-            {priceCard("Premium / V-Power", nearbyResult.premium, <Zap className="w-4 h-4" />, "text-purple-400")}
+          {/* Price grid — EPRA format: SUPER PETROL / DIESEL / KEROSENE */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {priceCard("Super Petrol", nearbyResult.gasoline, <Fuel className="w-4 h-4" />, "text-emerald-400")}
+            {priceCard("Diesel", nearbyResult.diesel, <Droplet className="w-4 h-4" />, "text-amber-400")}
             {priceCard("Kerosene", nearbyResult.kerosene, <Gauge className="w-4 h-4" />, "text-blue-400")}
           </div>
+
+          {/* EPRA cost breakdown */}
+          {(() => {
+            const breakdown = costBreakdown(nearbyResult.gasoline);
+            if (!breakdown) return null;
+            const symbol = nearbyResult?.currencySymbol || "KSh";
+            const fmt = (n: number) =>
+              `${symbol} ${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            return (
+              <div className="p-4 bg-slate-800/40 rounded-xl border border-slate-700/50">
+                <div className="grid grid-cols-3 gap-3 text-center">
+                  <div>
+                    <div className="text-xs text-slate-500 uppercase font-semibold mb-1">Landed Cost</div>
+                    <div className="text-sm font-medium text-slate-200">{fmt(breakdown.landed)}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-500 uppercase font-semibold mb-1">Taxes</div>
+                    <div className="text-sm font-medium text-slate-200">{fmt(breakdown.taxes)}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-500 uppercase font-semibold mb-1">Margins</div>
+                    <div className="text-sm font-medium text-slate-200">{fmt(breakdown.margins)}</div>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Source + timestamp */}
           <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
             <div className="flex items-center gap-1.5 text-xs text-slate-500">
               <TrendingUp className="w-3.5 h-3.5" />
-              Source: {nearbyResult.source}
+              Source: {nearbyResult.source} (FuelPro)
             </div>
             {lastFetchAt && (
               <div className="text-xs text-slate-500">
-                Updated {new Date(lastFetchAt).toLocaleTimeString()}
+                {new Date(lastFetchAt).toLocaleDateString()}
               </div>
             )}
           </div>

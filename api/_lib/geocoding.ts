@@ -20,7 +20,11 @@ export async function getExactLocation(
   lat: number,
   lon: number
 ): Promise<ResolvedLocation> {
-  const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=18&addressdetails=1`;
+  // zoom=10 gives town/city-level resolution (not building-level like zoom=18).
+  // This returns the primary town name rather than a sub-village/hamlet, so
+  // the cache key is the town users actually recognise (e.g. "Lodwar" not
+  // "Nawoitorong").
+  const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=10&addressdetails=1`;
   const res = await fetch(url, {
     headers: { "User-Agent": "FuelAppMobile/1.0 (fuel-app-mobile.vercel.app)" },
   });
@@ -30,9 +34,16 @@ export async function getExactLocation(
   const data = await res.json();
   const addr = data.address || {};
 
+  // Prioritise the most recognisable administrative unit: city > town >
+  // county (for Kenya, the county seat is what people call "town") > village.
   const village = addr.village || addr.hamlet || addr.suburb || null;
   const town = addr.town || null;
-  const city = addr.city || addr.municipality || addr.county || null;
+  const city =
+    addr.city ||
+    addr.municipality ||
+    addr.county ||
+    addr.state_district ||
+    null;
   const country = addr.country || "Unknown";
   const countryCode = addr.country_code?.toUpperCase() || null;
 
