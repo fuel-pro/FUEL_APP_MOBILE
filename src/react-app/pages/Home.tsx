@@ -100,6 +100,9 @@ const ExpenseTracker = lazy(
   () => import("@/react-app/components/ExpenseTracker"),
 );
 const PriceBoard = lazy(() => import("@/react-app/components/PriceBoard"));
+const FuelTracker = lazy(
+  () => import("@/react-app/components/FuelTracker"),
+);
 const PumpMappingV1 = lazy(
   () => import("@/react-app/components/PumpMappingV1"),
 );
@@ -410,6 +413,8 @@ function HomeContent() {
         return <ExpenseTracker />;
       case "priceboard":
         return <PriceBoard />;
+      case "fueltracker":
+        return <FuelTracker />;
       case "pumpmapping":
         return <PumpMappingV1 />;
       // ─── SalesZote-style additive modules ───
