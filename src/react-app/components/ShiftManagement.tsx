@@ -129,7 +129,6 @@ export default function ShiftManagement() {
       const cloudShifts = await cloudStorageService.get<Shift[]>("shift_data", stationId);
       if (cloudShifts && Array.isArray(cloudShifts)) setShifts(cloudShifts);
     })();
-
     // Real-time: when another device updates shifts/employees, update instantly
     const unsubs = [
       cloudStorageService.subscribe<Employee[]>("shift_employees", stationId, (val) => {

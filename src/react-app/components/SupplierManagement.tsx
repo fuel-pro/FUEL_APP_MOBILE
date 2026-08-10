@@ -150,7 +150,6 @@ export default function SupplierManagement() {
         await cloudStorageService.get<PurchaseOrder[]>("purchase_orders", stationId);
       if (cloudOrders && Array.isArray(cloudOrders)) setOrders(cloudOrders);
     })();
-
     // Real-time: when another device updates suppliers/orders, update instantly
     const unsubs = [
       cloudStorageService.subscribe<Supplier[]>("suppliers_data", stationId, (val) => {

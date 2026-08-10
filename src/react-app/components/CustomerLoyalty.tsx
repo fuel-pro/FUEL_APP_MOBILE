@@ -161,7 +161,6 @@ export default function CustomerLoyalty() {
         await cloudStorageService.get<Customer[]>("loyalty_customers", stationId);
       if (cloudData && Array.isArray(cloudData)) setCustomers(cloudData);
     })();
-
     // Real-time: when another device updates customers, update instantly
     const unsubs = [
       cloudStorageService.subscribe<Customer[]>("loyalty_customers", stationId, (val) => {

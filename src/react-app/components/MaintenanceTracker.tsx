@@ -109,7 +109,6 @@ export default function MaintenanceTracker() {
         await cloudStorageService.get<MaintenanceRecord[]>("maintenance_records", stationId);
       if (cloudData && Array.isArray(cloudData)) setRecords(cloudData);
     })();
-
     // Real-time: when another device updates records, update instantly
     const unsubs = [
       cloudStorageService.subscribe<MaintenanceRecord[]>("maintenance_records", stationId, (val) => {

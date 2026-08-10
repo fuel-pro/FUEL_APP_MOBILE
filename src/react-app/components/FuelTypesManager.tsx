@@ -307,7 +307,6 @@ export default function FuelTypesManager() {
         await cloudStorageService.get<CustomFuelType[]>("fuel_types_config", stationId);
       if (cloudData && Array.isArray(cloudData)) setFuelTypes(cloudData);
     })();
-
     // Real-time: when another device updates fuel types, update instantly
     const unsubs = [
       cloudStorageService.subscribe<CustomFuelType[]>("fuel_types_config", stationId, (val) => {

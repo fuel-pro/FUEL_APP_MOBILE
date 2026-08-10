@@ -103,7 +103,6 @@ export default function CreditManagement() {
         await cloudStorageService.get<CreditTransaction[]>("credit_transactions", stationId);
       if (cloudTx && Array.isArray(cloudTx)) setTransactions(cloudTx);
     })();
-
     // Real-time: when another device updates accounts/transactions, update instantly
     const unsubs = [
       cloudStorageService.subscribe<CreditAccount[]>("credit_accounts", stationId, (val) => {
