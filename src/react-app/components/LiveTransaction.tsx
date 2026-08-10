@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { useFuel } from "@/react-app/context/FuelContext";
 import { useAuth } from "@/react-app/context/AuthContext";
+import { useStations } from "@/react-app/context/StationContext";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 
 interface PaymentSource {
@@ -55,6 +56,8 @@ interface STKPushRequest {
 export default function LiveTransaction() {
   const { state } = useFuel();
   const { user } = useAuth();
+  const { currentStation } = useStations();
+  const stationId = currentStation?.id;
 
   // State management
   const [paymentSources, setPaymentSources] = useState<PaymentSource[]>([]);
@@ -119,7 +122,7 @@ export default function LiveTransaction() {
 
       return () => clearInterval(interval);
     }
-  }, [user]);
+  }, [user, stationId]);
 
   // Filter transactions when search parameters change
   useEffect(() => {
@@ -141,7 +144,7 @@ export default function LiveTransaction() {
   const loadPaymentSources = async () => {
     try {
       const sources =
-        (await cloudStorageService.get<PaymentSource[]>("payment_sources")) ||
+        (await cloudStorageService.get<PaymentSource[]>("payment_sources", stationId)) ||
         [];
       setPaymentSources(sources);
     } catch (error) {
@@ -154,7 +157,7 @@ export default function LiveTransaction() {
     try {
       setIsRefreshing(true);
       const transactions =
-        (await cloudStorageService.get<LiveTransaction[]>("live_transactions")) ||
+        (await cloudStorageService.get<LiveTransaction[]>("live_transactions", stationId)) ||
         [];
       setLiveTransactions(transactions);
     } catch (error) {
@@ -176,7 +179,7 @@ export default function LiveTransaction() {
       setError("");
 
       const existing =
-        (await cloudStorageService.get<PaymentSource[]>("payment_sources")) ||
+        (await cloudStorageService.get<PaymentSource[]>("payment_sources", stationId)) ||
         [];
       const newSourceRecord: PaymentSource = {
         id: Date.now(),
@@ -189,7 +192,7 @@ export default function LiveTransaction() {
         updated_at: new Date().toISOString(),
       };
       const updated = [...existing, newSourceRecord];
-      await cloudStorageService.set<PaymentSource[]>("payment_sources", updated);
+      await cloudStorageService.set<PaymentSource[]>("payment_sources", updated, stationId);
 
       setSuccess("Payment source added successfully");
       setShowAddSource(false);
@@ -219,7 +222,7 @@ export default function LiveTransaction() {
       setError("");
 
       const existing =
-        (await cloudStorageService.get<PaymentSource[]>("payment_sources")) ||
+        (await cloudStorageService.get<PaymentSource[]>("payment_sources", stationId)) ||
         [];
       const updated = existing.map(source =>
         source.id === selectedSource.id
@@ -233,7 +236,7 @@ export default function LiveTransaction() {
             }
           : source
       );
-      await cloudStorageService.set<PaymentSource[]>("payment_sources", updated);
+      await cloudStorageService.set<PaymentSource[]>("payment_sources", updated, stationId);
 
       setSuccess("Payment source updated successfully");
       setShowEditSource(false);
@@ -257,12 +260,12 @@ export default function LiveTransaction() {
       setError("");
 
       const existing =
-        (await cloudStorageService.get<PaymentSource[]>("payment_sources")) ||
+        (await cloudStorageService.get<PaymentSource[]>("payment_sources", stationId)) ||
         [];
       const updated = existing.filter(
         source => source.id !== selectedSource.id
       );
-      await cloudStorageService.set<PaymentSource[]>("payment_sources", updated);
+      await cloudStorageService.set<PaymentSource[]>("payment_sources", updated, stationId);
 
       setSuccess("Payment source deleted successfully");
       setShowDeleteConfirm(false);

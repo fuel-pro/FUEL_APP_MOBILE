@@ -19,6 +19,7 @@ import {
 import { useFuel } from "@/react-app/context/FuelContext";
 import { useLocation } from "@/react-app/context/LocationContext";
 import { useAuth } from "@/react-app/context/AuthContext";
+import { useStations } from "@/react-app/context/StationContext";
 import { formatNumber } from "@/react-app/utils/formatUtils";
 import QRCode from "qrcode";
 import { useLoyalty } from "@/react-app/lib/useLoyalty";
@@ -64,6 +65,8 @@ export default function PointOfSale() {
   const { state, dispatch } = useFuel();
   const location = useLocation();
   const { user } = useAuth();
+  const { currentStation } = useStations();
+  const stationId = currentStation?.id;
   const [cart, setCart] = useState<CartItem[]>([]);
   const [paymentMethod, setPaymentMethod] = useState<
     "cash" | "mpesa" | "card" | "bank"
@@ -90,14 +93,14 @@ export default function PointOfSale() {
   const receiptRef = useRef<HTMLDivElement>(null);
 
   // ─── Loyalty Integration ───
-  const stationId = location.currentLocation?.stationId || "default";
+  const loyaltyStationId = location.currentLocation?.stationId || "default";
   const {
     customers,
     earnPoints,
     findCustomerByPhone,
     findCustomerByCard,
     config: loyaltyConfig,
-  } = useLoyalty(stationId);
+  } = useLoyalty(loyaltyStationId);
   const [loyaltyCustomer, setLoyaltyCustomer] =
     useState<LoyaltyCustomer | null>(null);
   const [showLoyaltyScanner, setShowLoyaltyScanner] = useState(false);
@@ -131,10 +134,10 @@ export default function PointOfSale() {
   useEffect(() => {
     if (!user) return;
     (async () => {
-      const cloud = await cloudStorageService.get<POSTransaction[]>("pos_transactions");
+      const cloud = await cloudStorageService.get<POSTransaction[]>("pos_transactions", stationId);
       if (cloud && Array.isArray(cloud)) setTransactions(cloud);
     })();
-  }, [user]);
+  }, [user, stationId]);
 
   // Award points after successful transaction
   const awardLoyaltyPoints = (transaction: POSTransaction) => {
@@ -425,7 +428,7 @@ export default function PointOfSale() {
         JSON.stringify(trimmed)
       );
       // Cross-device sync
-      cloudStorageService.set("pos_transactions", trimmed).catch(() => {});
+      cloudStorageService.set("pos_transactions", trimmed, stationId).catch(() => {});
     } catch (error) {
       console.error("Failed to save POS transaction locally:", error);
     }

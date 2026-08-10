@@ -3,6 +3,7 @@ import { useFuel } from "@/react-app/context/FuelContext";
 import { useLocation } from "@/react-app/context/LocationContext";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 import { useAuth } from "@/react-app/context/AuthContext";
+import { useStations } from "@/react-app/context/StationContext";
 import {
   Users,
   Star,
@@ -114,6 +115,8 @@ export default function CustomerLoyalty() {
   const { state } = useFuel();
   const location = useLocation();
   const { user } = useAuth();
+  const { currentStation } = useStations();
+  const stationId = currentStation?.id;
   const [customers, setCustomers] = useState<Customer[]>(() => {
     try {
       return JSON.parse(localStorage.getItem("fuelpro_customers") || "[]");
@@ -147,7 +150,7 @@ export default function CustomerLoyalty() {
   const save = (c: Customer[]) => {
     setCustomers(c);
     localStorage.setItem("fuelpro_customers", JSON.stringify(c));
-    cloudStorageService.set("loyalty_customers", c).catch(() => {});
+    cloudStorageService.set("loyalty_customers", c, stationId).catch(() => {});
   };
 
   // Load from cloud on mount (cross-device sync)
@@ -155,10 +158,10 @@ export default function CustomerLoyalty() {
     if (!user) return;
     (async () => {
       const cloudData =
-        await cloudStorageService.get<Customer[]>("loyalty_customers");
+        await cloudStorageService.get<Customer[]>("loyalty_customers", stationId);
       if (cloudData && Array.isArray(cloudData)) setCustomers(cloudData);
     })();
-  }, [user]);
+  }, [user, stationId]);
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();

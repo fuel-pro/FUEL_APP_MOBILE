@@ -8,6 +8,7 @@ import React, {
   ReactNode,
 } from "react";
 import { useAuth } from "@/react-app/context/AuthContext";
+import { useStations } from "@/react-app/context/StationContext";
 // Unified pricing - single source of truth for all fuel prices
 import { KENYA_BASE_PRICES, DEFAULT_PRICES } from "@/react-app/config/pricing";
 // Cross-device cloud storage (Supabase app_kv-backed) — replaces /api/user-data
@@ -17,6 +18,18 @@ import { cloudStorageService } from "@/react-app/lib/cloud-storage-service";
 // Use unified pricing defaults (Kenya EPRA prices as default)
 const DEFAULT_PMS_PRICE = KENYA_BASE_PRICES.petrol; // 220.30 KES
 const DEFAULTAGO_PRICE = KENYA_BASE_PRICES.diesel;   // 250.01 KES
+
+/**
+ * Build the station-scoped compact-blob cloud key. Each station gets its own
+ * isolated FuelContext blob so companyData, salesHistory, debtHistory, etc.
+ * differ per station. Falls back to the legacy user-scoped key (no station
+ * segment) when there is no current station (Combined View, or pre-station
+ * migration), preserving backward compatibility.
+ */
+function compactCloudKey(userId: string | undefined, stationId: string | undefined): string {
+  const uid = userId ? `user_${userId}` : "guest";
+  return stationId ? `${uid}_${stationId}_compact` : `${uid}_compact`;
+}
 
 // Types
 export interface Station {
@@ -1030,6 +1043,8 @@ const FuelContext = createContext<FuelContextType | undefined>(undefined);
 export function FuelProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(fuelReducer, initialState);
   const { user } = useAuth();
+  const { currentStation } = useStations();
+  const stationId = currentStation?.id;
   const [isCloudSaving, setIsCloudSaving] = React.useState(false);
   const [lastCloudSave, setLastCloudSave] = React.useState<Date | null>(null);
 
@@ -1040,6 +1055,14 @@ export function FuelProvider({ children }: { children: ReactNode }) {
   // 300ms save debounce could persist them.
   const stateRef = useRef(state);
   useEffect(() => { stateRef.current = state; }, [state]);
+
+  // Ref that always points to the current station id, so saveToCloud/loadFromCloud
+  // (which are memoized on [user]) can scope the compact blob per-station without
+  // being recreated on every station switch. Each station gets its own isolated
+  // compact blob (companyData, salesHistory, debtHistory, etc.) so a user with
+  // multiple stations has independent data per station. Combined View aggregates.
+  const stationIdRef = useRef<string | undefined>(stationId);
+  useEffect(() => { stationIdRef.current = stationId; }, [stationId]);
 
   // CRITICAL: Guards the cross-device cloud-sync race. On login, the
   // aggressive auto-save effect (1500ms) can fire BEFORE loadFromCloud has
@@ -1054,8 +1077,9 @@ export function FuelProvider({ children }: { children: ReactNode }) {
   const saveToStorage = useCallback(() => {
     try {
       const s = stateRef.current;
-      // Compact storage: use single compressed JSON blob instead of individual keys
-      const userKey = user?.id ? `user_${user.id}_compact` : "guest_compact";
+      // Compact storage: single compressed JSON blob, station-scoped so each
+      // station's local cache is independent (matches the cloud key).
+      const userKey = compactCloudKey(user?.id, stationIdRef.current);
 
       // Create compact data object with only non-empty values
       const compactData: any = {
@@ -1271,13 +1295,12 @@ export function FuelProvider({ children }: { children: ReactNode }) {
       if (s.dataBackups?.length > 0)
         compactData.dataBackups = s.dataBackups.slice(-3); // Keep only last 3 backups in cloud
 
-      // Persist to Supabase app_kv (cross-device). Keyed per-user so each
-      // account's data is isolated and RLS-protected by owner_id. localStorage
+      // Persist to Supabase app_kv (cross-device). Keyed per-user + per-station
+      // so each station has its own isolated FuelContext blob (companyData,
+      // salesHistory, debtHistory, etc.). RLS-protected by owner_id. localStorage
       // remains a read-through cache via saveToStorage for offline reads.
-      const cloudKey = user?.id
-        ? `user_${user.id}_compact`
-        : "guest_compact";
-      await cloudStorageService.set(cloudKey, compactData);
+      const cloudKey = compactCloudKey(user?.id, stationIdRef.current);
+      await cloudStorageService.set(cloudKey, compactData, stationIdRef.current);
 
       setLastCloudSave(new Date());
 
@@ -1297,12 +1320,13 @@ export function FuelProvider({ children }: { children: ReactNode }) {
     if (!user) return;
 
     try {
-      // Read the user's compact data blob from Supabase app_kv (cross-device).
-      // Falls back to the local read-through cache when offline/unauthenticated.
-      const cloudKey = user?.id
-        ? `user_${user.id}_compact`
-        : "guest_compact";
-      const compactData = (await cloudStorageService.get<Record<string, unknown>>(cloudKey)) as
+      // Read the station-scoped compact data blob from Supabase app_kv
+      // (cross-device). Each station has its own blob. Falls back to the
+      // legacy user-scoped blob (and then legacy bare-key) via
+      // cloudStorageService.get so existing data migrates transparently on
+      // first read. localStorage is only a read-through cache.
+      const cloudKey = compactCloudKey(user.id, stationIdRef.current);
+      const compactData = (await cloudStorageService.get<Record<string, unknown>>(cloudKey, stationIdRef.current)) as
         | Record<string, unknown>
         | null;
 
@@ -1336,7 +1360,7 @@ export function FuelProvider({ children }: { children: ReactNode }) {
 
   const loadFromStorage = useCallback(() => {
     try {
-      const userKey = user?.id ? `user_${user.id}_compact` : "guest_compact";
+      const userKey = compactCloudKey(user?.id, stationIdRef.current);
       
       // Try loading from compact storage first
       const compactData = localStorage.getItem(userKey);
@@ -1626,6 +1650,47 @@ export function FuelProvider({ children }: { children: ReactNode }) {
       clearTimeout(timer);
     };
   }, [user, loadFromCloud, loadFromStorage, saveToStorage]);
+
+  // CRITICAL: Reload cloud data when the current station changes. Each station
+  // has its own isolated FuelContext blob (companyData, salesHistory,
+  // debtHistory, etc.). Without this, switching stations keeps the previous
+  // station's data in memory, so edits bleed across stations. We:
+  // 1. Block saves (cloudLoadCompleteRef = false) so the auto-save effect
+  //    can't overwrite the new station's cloud blob with the old station's
+  //    in-memory state during the ~200-500ms load window.
+  // 2. Load the new station's blob from cloud (falling back to localStorage
+  //    cache, then defaults).
+  // 3. Unblock saves in finally.
+  // We skip the very first run (the mount effect above handles it) by tracking
+  // whether a station was previously selected.
+  const prevStationRef = useRef<string | undefined>(stationId);
+  useEffect(() => {
+    // Only react to an actual station CHANGE, not the initial mount.
+    if (prevStationRef.current === stationId) return;
+    prevStationRef.current = stationId;
+
+    if (!user) return;
+
+    let cancelled = false;
+    // Block saves until the new station's data is loaded.
+    cloudLoadCompleteRef.current = false;
+    const timer = setTimeout(async () => {
+      if (cancelled) return;
+      loadFromStorage();
+      try {
+        await loadFromCloud();
+        if (!cancelled) saveToStorage();
+      } catch (error) {
+        console.warn("Failed to load station cloud data:", error);
+      } finally {
+        if (!cancelled) cloudLoadCompleteRef.current = true;
+      }
+    }, 100);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [user, stationId, loadFromCloud, loadFromStorage, saveToStorage]);
 
   // Apply theme to body - robust for all browsers
   useEffect(() => {

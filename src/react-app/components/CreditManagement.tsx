@@ -3,6 +3,7 @@ import { useFuel } from "@/react-app/context/FuelContext";
 import { useLocation } from "@/react-app/context/LocationContext";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 import { useAuth } from "@/react-app/context/AuthContext";
+import { useStations } from "@/react-app/context/StationContext";
 import {
   CreditCard,
   Plus,
@@ -49,6 +50,8 @@ export default function CreditManagement() {
   const location = useLocation();
   const currencySymbol = location.currencySymbol;
   const { user } = useAuth();
+  const { currentStation } = useStations();
+  const stationId = currentStation?.id;
   const [accounts, setAccounts] = useState<CreditAccount[]>(() => {
     try {
       return JSON.parse(
@@ -81,12 +84,12 @@ export default function CreditManagement() {
   const saveAcc = (a: CreditAccount[]) => {
     setAccounts(a);
     localStorage.setItem("fuelpro_credit_accounts", JSON.stringify(a));
-    cloudStorageService.set("credit_accounts", a).catch(() => {});
+    cloudStorageService.set("credit_accounts", a, stationId).catch(() => {});
   };
   const saveTx = (t: CreditTransaction[]) => {
     setTransactions(t);
     localStorage.setItem("fuelpro_credit_tx", JSON.stringify(t));
-    cloudStorageService.set("credit_transactions", t).catch(() => {});
+    cloudStorageService.set("credit_transactions", t, stationId).catch(() => {});
   };
 
   // Load from cloud on mount (cross-device sync)
@@ -94,13 +97,13 @@ export default function CreditManagement() {
     if (!user) return;
     (async () => {
       const cloudAccounts =
-        await cloudStorageService.get<CreditAccount[]>("credit_accounts");
+        await cloudStorageService.get<CreditAccount[]>("credit_accounts", stationId);
       if (cloudAccounts && Array.isArray(cloudAccounts)) setAccounts(cloudAccounts);
       const cloudTx =
-        await cloudStorageService.get<CreditTransaction[]>("credit_transactions");
+        await cloudStorageService.get<CreditTransaction[]>("credit_transactions", stationId);
       if (cloudTx && Array.isArray(cloudTx)) setTransactions(cloudTx);
     })();
-  }, [user]);
+  }, [user, stationId]);
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();

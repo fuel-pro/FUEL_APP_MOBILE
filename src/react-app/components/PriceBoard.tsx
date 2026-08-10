@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { useAutoSync } from "@/react-app/hooks/useAutoSync";
 import { useLocation } from "@/react-app/context/LocationContext";
+import { useStations } from "@/react-app/context/StationContext";
 
 interface PriceEntry {
   id: string;
@@ -83,6 +84,8 @@ export default function PriceBoard() {
   const location = useLocation();
   const { fuelPrice, isSyncing, syncNow, refreshPrices, arePricesStale } = useAutoSync(location.currentCountry.id);
   const { user } = useAuth();
+  const { currentStation } = useStations();
+  const stationId = currentStation?.id;
   const [prices, setPrices] = useState<PriceEntry[]>(loadPrices);
   const [history, setHistory] = useState<PriceHistory[]>(loadHistory);
   const [showForm, setShowForm] = useState(false);
@@ -206,23 +209,23 @@ export default function PriceBoard() {
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(prices));
-    cloudStorageService.set(CLOUD_KEY, prices).catch(() => {});
-  }, [prices]);
+    cloudStorageService.set(CLOUD_KEY, prices, stationId).catch(() => {});
+  }, [prices, stationId]);
   useEffect(() => {
     localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
-    cloudStorageService.set(CLOUD_HISTORY_KEY, history).catch(() => {});
-  }, [history]);
+    cloudStorageService.set(CLOUD_HISTORY_KEY, history, stationId).catch(() => {});
+  }, [history, stationId]);
 
   // Load from cloud on mount (cross-device sync)
   useEffect(() => {
     if (!user) return;
     (async () => {
-      const cloudPrices = await cloudStorageService.get<PriceEntry[]>(CLOUD_KEY);
+      const cloudPrices = await cloudStorageService.get<PriceEntry[]>(CLOUD_KEY, stationId);
       if (cloudPrices && Array.isArray(cloudPrices)) setPrices(cloudPrices);
-      const cloudHistory = await cloudStorageService.get<PriceHistory[]>(CLOUD_HISTORY_KEY);
+      const cloudHistory = await cloudStorageService.get<PriceHistory[]>(CLOUD_HISTORY_KEY, stationId);
       if (cloudHistory && Array.isArray(cloudHistory)) setHistory(cloudHistory);
     })();
-  }, [user]);
+  }, [user, stationId]);
 
   const showNotification = (
     message: string,

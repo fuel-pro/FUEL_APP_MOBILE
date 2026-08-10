@@ -55,6 +55,7 @@ export default function Header({
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [showTabConfig, setShowTabConfig] = useState(false);
   const [editData, setEditData] = useState({ ...state.companyData });
+  const [editDirty, setEditDirty] = useState(false);
   const [logoPreview, setLogoPreview] = useState(state.companyData.logo || "");
   const [logoUploading, setLogoUploading] = useState(false);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
@@ -73,16 +74,23 @@ export default function Header({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // CRITICAL: Sync logoPreview with state after loading from storage.
-  // Always track the authoritative state.companyData.logo (no !logoPreview
-  // guard) so a cloud-loaded logo wins over a stale local blob URL preview
-  // after refresh. This fixes the "logo shows then disappears on refresh" race.
+  // CRITICAL: Sync the Company Profile form with the authoritative
+  // state.companyData whenever it changes (e.g. after an async cloud load on a
+  // fresh device/browser). Without this, editData is captured once at mount
+  // from the default/empty state and never updates — so the user sees empty
+  // fields and must re-type their company details every session, even though
+  // the data is correctly persisted in cloud storage. We only re-sync when the
+  // user has NOT started editing (editDirty flag) so in-progress edits are not
+  // clobbered. Also tracks the logo so a cloud-loaded logo wins over a stale
+  // local blob URL preview after refresh.
   useEffect(() => {
+    if (!editDirty) {
+      setEditData({ ...state.companyData });
+    }
     if (state.companyData.logo) {
       setLogoPreview(state.companyData.logo);
-      setEditData(prev => ({ ...prev, logo: state.companyData.logo }));
     }
-  }, [state.companyData.logo]);
+  }, [state.companyData, editDirty]);
 
   const handleToggleTheme = () => {
     toggleTheme();
@@ -90,7 +98,15 @@ export default function Header({
 
   const handleEditInfo = () => {
     dispatch({ type: "SET_COMPANY_DATA", payload: editData });
+    setEditDirty(false);
     setShowEditInfo(false);
+  };
+
+  // Wrapper that marks the form as dirty so the cloud-sync effect above does
+  // not clobber in-progress edits with freshly-loaded state.
+  const updateEdit = (patch: Partial<typeof editData>) => {
+    setEditDirty(true);
+    setEditData(prev => ({ ...prev, ...patch }));
   };
 
   const handleLogoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -513,7 +529,7 @@ export default function Header({
                 <input
                   value={editData.name}
                   onChange={e =>
-                    setEditData(p => ({ ...p, name: e.target.value }))
+                    updateEdit({ name: e.target.value })
                   }
                   placeholder="e.g. Acme Fuel Station Ltd"
                   className="w-full px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400"
@@ -526,7 +542,7 @@ export default function Header({
                 <input
                   value={editData.poBox}
                   onChange={e =>
-                    setEditData(p => ({ ...p, poBox: e.target.value }))
+                    updateEdit({ poBox: e.target.value })
                   }
                   placeholder="e.g. 12345-00100"
                   className="w-full px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400"
@@ -539,7 +555,7 @@ export default function Header({
                 <input
                   value={editData.contacts}
                   onChange={e =>
-                    setEditData(p => ({ ...p, contacts: e.target.value }))
+                    updateEdit({ contacts: e.target.value })
                   }
                   placeholder="+254 700 000 000"
                   className="w-full px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400"
@@ -554,7 +570,7 @@ export default function Header({
                 <input
                   value={editData.email}
                   onChange={e =>
-                    setEditData(p => ({ ...p, email: e.target.value }))
+                    updateEdit({ email: e.target.value })
                   }
                   placeholder="info@company.co.ke"
                   type="email"
@@ -568,7 +584,7 @@ export default function Header({
                 <select
                   value={editData.currency}
                   onChange={e =>
-                    setEditData(p => ({ ...p, currency: e.target.value }))
+                    updateEdit({ currency: e.target.value })
                   }
                   className="w-full px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-white text-sm focus:outline-none focus:ring-1 focus:ring-amber-400"
                 >
@@ -623,7 +639,7 @@ export default function Header({
                 <input
                   value={editData.vatRegNo}
                   onChange={e =>
-                    setEditData(p => ({ ...p, vatRegNo: e.target.value }))
+                    updateEdit({ vatRegNo: e.target.value })
                   }
                   placeholder="VAT Reg No"
                   className="w-full px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400"
@@ -643,7 +659,7 @@ export default function Header({
                     <input
                       value={editData.bankName}
                       onChange={e =>
-                        setEditData(p => ({ ...p, bankName: e.target.value }))
+                        updateEdit({ bankName: e.target.value })
                       }
                       placeholder="e.g. Equity Bank"
                       className="w-full px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400"
@@ -656,7 +672,7 @@ export default function Header({
                     <input
                       value={editData.branchName}
                       onChange={e =>
-                        setEditData(p => ({ ...p, branchName: e.target.value }))
+                        updateEdit({ branchName: e.target.value })
                       }
                       placeholder="e.g. Mombasa Road"
                       className="w-full px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400"
@@ -669,10 +685,9 @@ export default function Header({
                     <input
                       value={editData.accountHolder}
                       onChange={e =>
-                        setEditData(p => ({
-                          ...p,
+                        updateEdit({
                           accountHolder: e.target.value,
-                        }))
+                        })
                       }
                       placeholder="Account holder name"
                       className="w-full px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400"
@@ -685,10 +700,9 @@ export default function Header({
                     <input
                       value={editData.accountNumber}
                       onChange={e =>
-                        setEditData(p => ({
-                          ...p,
+                        updateEdit({
                           accountNumber: e.target.value,
-                        }))
+                        })
                       }
                       placeholder="1234567890"
                       type="text"
