@@ -103,6 +103,7 @@ const PriceBoard = lazy(() => import("@/react-app/components/PriceBoard"));
 const PumpMappingV1 = lazy(
   () => import("@/react-app/components/PumpMappingV1"),
 );
+const FuelPriceLocator = lazy(() => import("@/react-app/components/FuelPriceLocator"));
 
 // ─── SalesZote-style POS business suite modules ───
 // These are ADDITIVE features layered onto the existing FuelPro tab system
@@ -422,6 +423,8 @@ function HomeContent() {
         return <PurchasesSuppliers />;
       case "terminal":
         return <TerminalSessions />;
+      case "price-finder":
+        return <FuelPriceLocator />;
       default:
         return <Dashboard />;
     }
