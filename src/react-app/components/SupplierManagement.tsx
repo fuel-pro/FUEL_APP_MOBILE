@@ -92,7 +92,7 @@ export default function SupplierManagement() {
   const [suppliers, setSuppliers] = useState<Supplier[]>(loadSuppliers);
   const [orders, setOrders] = useState<PurchaseOrder[]>(loadOrders);
   const [activeView, setActiveView] = useState<"suppliers" | "orders">(
-    "suppliers"
+    "suppliers",
   );
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -132,35 +132,44 @@ export default function SupplierManagement() {
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(suppliers));
-    cloudStorageService.set("suppliers_data", suppliers, stationId).catch(() => {});
+    cloudStorageService
+      .set("suppliers_data", suppliers, stationId)
+      .catch(() => {});
   }, [suppliers, stationId]);
   useEffect(() => {
     localStorage.setItem(ORDERS_KEY, JSON.stringify(orders));
-    cloudStorageService.set("purchase_orders", orders, stationId).catch(() => {});
+    cloudStorageService
+      .set("purchase_orders", orders, stationId)
+      .catch(() => {});
   }, [orders, stationId]);
 
   // Load from cloud on mount (cross-device sync)
   useEffect(() => {
     if (!user) return;
     (async () => {
-      const cloudSuppliers =
-        await cloudStorageService.get<Supplier[]>("suppliers_data", stationId);
-      if (cloudSuppliers && Array.isArray(cloudSuppliers)) setSuppliers(cloudSuppliers);
-      const cloudOrders =
-        await cloudStorageService.get<PurchaseOrder[]>("purchase_orders", stationId);
+      const cloudSuppliers = await cloudStorageService.get<Supplier[]>(
+        "suppliers_data",
+        stationId,
+      );
+      if (cloudSuppliers && Array.isArray(cloudSuppliers))
+        setSuppliers(cloudSuppliers);
+      const cloudOrders = await cloudStorageService.get<PurchaseOrder[]>(
+        "purchase_orders",
+        stationId,
+      );
       if (cloudOrders && Array.isArray(cloudOrders)) setOrders(cloudOrders);
     })();
   }, [user, stationId]);
 
   const showNotification = (
     message: string,
-    type: "success" | "warning" = "success"
+    type: "success" | "warning" = "success",
   ) => {
     setNotification({ message, type });
     setTimeout(() => setNotification(null), 3000);
   };
 
-  const filteredSuppliers = suppliers.filter(s => {
+  const filteredSuppliers = suppliers.filter((s) => {
     const matchesSearch =
       s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       s.contactPerson.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -175,10 +184,10 @@ export default function SupplierManagement() {
       return;
     }
     if (editingId) {
-      setSuppliers(prev =>
-        prev.map(s =>
-          s.id === editingId ? ({ ...s, ...formData } as Supplier) : s
-        )
+      setSuppliers((prev) =>
+        prev.map((s) =>
+          s.id === editingId ? ({ ...s, ...formData } as Supplier) : s,
+        ),
       );
       showNotification("Supplier updated");
     } else {
@@ -187,7 +196,7 @@ export default function SupplierManagement() {
         id: `sup_${Date.now()}`,
         createdAt: new Date().toISOString(),
       };
-      setSuppliers(prev => [...prev, newSupplier]);
+      setSuppliers((prev) => [...prev, newSupplier]);
       showNotification("Supplier added");
     }
     setShowForm(false);
@@ -210,7 +219,7 @@ export default function SupplierManagement() {
 
   const handleDelete = (id: string) => {
     if (confirm("Delete this supplier?")) {
-      setSuppliers(prev => prev.filter(s => s.id !== id));
+      setSuppliers((prev) => prev.filter((s) => s.id !== id));
       showNotification("Supplier deleted");
     }
   };
@@ -220,7 +229,7 @@ export default function SupplierManagement() {
       showNotification("Please fill all required fields", "warning");
       return;
     }
-    const supplier = suppliers.find(s => s.id === selectedSupplierId);
+    const supplier = suppliers.find((s) => s.id === selectedSupplierId);
     if (!supplier) return;
     const newOrder: PurchaseOrder = {
       id: `po_${Date.now()}`,
@@ -237,18 +246,18 @@ export default function SupplierManagement() {
         new Date(Date.now() + 3 * 86400000).toISOString(),
       notes: orderForm.notes,
     };
-    setOrders(prev => [newOrder, ...prev]);
+    setOrders((prev) => [newOrder, ...prev]);
     // Update supplier balance
-    setSuppliers(prev =>
-      prev.map(s =>
+    setSuppliers((prev) =>
+      prev.map((s) =>
         s.id === selectedSupplierId
           ? {
               ...s,
               currentBalance: s.currentBalance + newOrder.total,
               lastOrderAt: new Date().toISOString(),
             }
-          : s
-      )
+          : s,
+      ),
     );
     setShowOrderForm(false);
     setOrderForm({
@@ -264,10 +273,10 @@ export default function SupplierManagement() {
 
   const updateOrderStatus = (
     orderId: string,
-    newStatus: PurchaseOrder["status"]
+    newStatus: PurchaseOrder["status"],
   ) => {
-    setOrders(prev =>
-      prev.map(o =>
+    setOrders((prev) =>
+      prev.map((o) =>
         o.id === orderId
           ? {
               ...o,
@@ -277,8 +286,8 @@ export default function SupplierManagement() {
                   ? new Date().toISOString()
                   : o.actualDate,
             }
-          : o
-      )
+          : o,
+      ),
     );
     showNotification(`Order ${newStatus}`);
   };
@@ -350,14 +359,14 @@ export default function SupplierManagement() {
               />
               <input
                 value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
+                onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="Search suppliers..."
                 className="w-full pl-9 pr-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500/30"
               />
             </div>
             <select
               value={statusFilter}
-              onChange={e => setStatusFilter(e.target.value)}
+              onChange={(e) => setStatusFilter(e.target.value)}
               className="px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-700 dark:text-gray-300 focus:outline-none"
             >
               <option value="all">All Status</option>
@@ -392,7 +401,7 @@ export default function SupplierManagement() {
 
           {/* Supplier Cards */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {filteredSuppliers.map(supplier => (
+            {filteredSuppliers.map((supplier) => (
               <div
                 key={supplier.id}
                 className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden hover:shadow-lg transition-all"
@@ -435,7 +444,7 @@ export default function SupplierManagement() {
                   </div>
 
                   <div className="mt-3 flex flex-wrap gap-1">
-                    {supplier.fuelTypes.map(ft => (
+                    {supplier.fuelTypes.map((ft) => (
                       <span
                         key={ft}
                         className="px-2 py-0.5 bg-amber-500/10 text-amber-600 dark:text-amber-400 rounded-md text-[10px] font-medium flex items-center gap-1"
@@ -470,7 +479,7 @@ export default function SupplierManagement() {
                     <button
                       onClick={() => {
                         setExpandedId(
-                          expandedId === supplier.id ? null : supplier.id
+                          expandedId === supplier.id ? null : supplier.id,
                         );
                       }}
                       className="flex-1 px-3 py-1.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg text-xs text-gray-600 dark:text-gray-300 transition-colors flex items-center justify-center gap-1"
@@ -615,7 +624,7 @@ export default function SupplierManagement() {
                   </tr>
                 </thead>
                 <tbody>
-                  {orders.map(order => (
+                  {orders.map((order) => (
                     <tr
                       key={order.id}
                       className="border-b border-gray-100 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700/20"
@@ -719,7 +728,7 @@ export default function SupplierManagement() {
                   </label>
                   <input
                     value={formData.name}
-                    onChange={e =>
+                    onChange={(e) =>
                       setFormData({ ...formData, name: e.target.value })
                     }
                     className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
@@ -732,7 +741,7 @@ export default function SupplierManagement() {
                     </label>
                     <input
                       value={formData.contactPerson}
-                      onChange={e =>
+                      onChange={(e) =>
                         setFormData({
                           ...formData,
                           contactPerson: e.target.value,
@@ -747,7 +756,7 @@ export default function SupplierManagement() {
                     </label>
                     <input
                       value={formData.phone}
-                      onChange={e =>
+                      onChange={(e) =>
                         setFormData({ ...formData, phone: e.target.value })
                       }
                       className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
@@ -761,7 +770,7 @@ export default function SupplierManagement() {
                     </label>
                     <input
                       value={formData.email}
-                      onChange={e =>
+                      onChange={(e) =>
                         setFormData({ ...formData, email: e.target.value })
                       }
                       className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
@@ -773,7 +782,7 @@ export default function SupplierManagement() {
                     </label>
                     <input
                       value={formData.deliveryDays}
-                      onChange={e =>
+                      onChange={(e) =>
                         setFormData({
                           ...formData,
                           deliveryDays: e.target.value,
@@ -790,7 +799,7 @@ export default function SupplierManagement() {
                   </label>
                   <input
                     value={formData.address}
-                    onChange={e =>
+                    onChange={(e) =>
                       setFormData({ ...formData, address: e.target.value })
                     }
                     className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
@@ -801,14 +810,14 @@ export default function SupplierManagement() {
                     Fuel Types Supplied
                   </label>
                   <div className="flex flex-wrap gap-2">
-                    {FUEL_TYPES.map(ft => (
+                    {FUEL_TYPES.map((ft) => (
                       <button
                         key={ft}
                         onClick={() =>
                           setFormData({
                             ...formData,
                             fuelTypes: formData.fuelTypes?.includes(ft)
-                              ? formData.fuelTypes.filter(f => f !== ft)
+                              ? formData.fuelTypes.filter((f) => f !== ft)
                               : [...(formData.fuelTypes || []), ft],
                           })
                         }
@@ -827,7 +836,7 @@ export default function SupplierManagement() {
                     <input
                       type="number"
                       value={formData.creditLimit}
-                      onChange={e =>
+                      onChange={(e) =>
                         setFormData({
                           ...formData,
                           creditLimit: Number(e.target.value),
@@ -846,7 +855,7 @@ export default function SupplierManagement() {
                       max={5}
                       step={0.5}
                       value={formData.rating}
-                      onChange={e =>
+                      onChange={(e) =>
                         setFormData({
                           ...formData,
                           rating: Number(e.target.value),
@@ -862,7 +871,7 @@ export default function SupplierManagement() {
                   </label>
                   <textarea
                     value={formData.notes}
-                    onChange={e =>
+                    onChange={(e) =>
                       setFormData({ ...formData, notes: e.target.value })
                     }
                     rows={2}
@@ -904,13 +913,13 @@ export default function SupplierManagement() {
                   </label>
                   <select
                     value={selectedSupplierId}
-                    onChange={e => setSelectedSupplierId(e.target.value)}
+                    onChange={(e) => setSelectedSupplierId(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
                   >
                     <option value="">Select supplier...</option>
                     {suppliers
-                      .filter(s => s.status === "active")
-                      .map(s => (
+                      .filter((s) => s.status === "active")
+                      .map((s) => (
                         <option key={s.id} value={s.id}>
                           {s.name} (Credit: KES{" "}
                           {(s.creditLimit - s.currentBalance).toLocaleString()})
@@ -924,12 +933,12 @@ export default function SupplierManagement() {
                   </label>
                   <select
                     value={orderForm.fuelType}
-                    onChange={e =>
+                    onChange={(e) =>
                       setOrderForm({ ...orderForm, fuelType: e.target.value })
                     }
                     className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
                   >
-                    {FUEL_TYPES.map(ft => (
+                    {FUEL_TYPES.map((ft) => (
                       <option key={ft} value={ft}>
                         {ft}
                       </option>
@@ -944,7 +953,7 @@ export default function SupplierManagement() {
                     <input
                       type="number"
                       value={orderForm.liters || ""}
-                      onChange={e =>
+                      onChange={(e) =>
                         setOrderForm({
                           ...orderForm,
                           liters: Number(e.target.value),
@@ -962,7 +971,7 @@ export default function SupplierManagement() {
                     <input
                       type="number"
                       value={orderForm.pricePerLiter || ""}
-                      onChange={e =>
+                      onChange={(e) =>
                         setOrderForm({
                           ...orderForm,
                           pricePerLiter: Number(e.target.value),
@@ -988,7 +997,7 @@ export default function SupplierManagement() {
                   <input
                     type="date"
                     value={orderForm.expectedDate}
-                    onChange={e =>
+                    onChange={(e) =>
                       setOrderForm({
                         ...orderForm,
                         expectedDate: e.target.value,
@@ -1003,7 +1012,7 @@ export default function SupplierManagement() {
                   </label>
                   <textarea
                     value={orderForm.notes}
-                    onChange={e =>
+                    onChange={(e) =>
                       setOrderForm({ ...orderForm, notes: e.target.value })
                     }
                     rows={2}

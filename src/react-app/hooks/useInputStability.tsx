@@ -2,7 +2,7 @@
  * useInputStability - Prevents input clearing and ensures stable input handling
  * Fixes issues with microsecond timeouts that cause inputs to clear or reject text
  */
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect } from "react";
 
 interface UseInputStabilityOptions {
   /** Delay before considering input stable (ms) */
@@ -14,24 +14,20 @@ interface UseInputStabilityOptions {
 }
 
 export function useInputStability<T extends string = string>(
-  initialValue: T = '' as T,
-  options: UseInputStabilityOptions = {}
+  initialValue: T = "" as T,
+  options: UseInputStabilityOptions = {},
 ) {
-  const {
-    stabilityDelay = 150,
-    preserveOnBlur = true,
-    validate
-  } = options;
+  const { stabilityDelay = 150, preserveOnBlur = true, validate } = options;
 
   // Internal state - never exposed directly to avoid race conditions
   const [internalValue, setInternalValue] = useState<T>(initialValue);
-  
+
   // Track if we're currently typing
   const isTypingRef = useRef(false);
   const lastUpdateRef = useRef(Date.now());
   const blurValueRef = useRef<T>(initialValue);
   const mountedRef = useRef(true);
-  
+
   // Debounce timer for stability
   const stabilityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -47,36 +43,40 @@ export function useInputStability<T extends string = string>(
   }, []);
 
   // Stable value setter - doesn't clear on re-render
-  const setValue = useCallback((newValue: T | ((prev: T) => T)) => {
-    if (!mountedRef.current) return;
-    
-    isTypingRef.current = true;
-    lastUpdateRef.current = Date.now();
-    
-    const valueToSet = typeof newValue === 'function' 
-      ? (newValue as (prev: T) => T)(internalValue)
-      : newValue;
-    
-    // Validate if validator provided
-    if (validate && !validate(valueToSet)) {
-      return;
-    }
-    
-    // Clear any pending stability timer
-    if (stabilityTimerRef.current) {
-      clearTimeout(stabilityTimerRef.current);
-    }
-    
-    // Update immediately for responsive feel
-    setInternalValue(valueToSet);
-    
-    // Set stability timer
-    stabilityTimerRef.current = setTimeout(() => {
-      if (mountedRef.current) {
-        isTypingRef.current = false;
+  const setValue = useCallback(
+    (newValue: T | ((prev: T) => T)) => {
+      if (!mountedRef.current) return;
+
+      isTypingRef.current = true;
+      lastUpdateRef.current = Date.now();
+
+      const valueToSet =
+        typeof newValue === "function"
+          ? (newValue as (prev: T) => T)(internalValue)
+          : newValue;
+
+      // Validate if validator provided
+      if (validate && !validate(valueToSet)) {
+        return;
       }
-    }, stabilityDelay);
-  }, [internalValue, stabilityDelay, validate]);
+
+      // Clear any pending stability timer
+      if (stabilityTimerRef.current) {
+        clearTimeout(stabilityTimerRef.current);
+      }
+
+      // Update immediately for responsive feel
+      setInternalValue(valueToSet);
+
+      // Set stability timer
+      stabilityTimerRef.current = setTimeout(() => {
+        if (mountedRef.current) {
+          isTypingRef.current = false;
+        }
+      }, stabilityDelay);
+    },
+    [internalValue, stabilityDelay, validate],
+  );
 
   // Handle blur - preserve value
   const handleBlur = useCallback(() => {
@@ -96,20 +96,26 @@ export function useInputStability<T extends string = string>(
   }, [internalValue, preserveOnBlur]);
 
   // Reset to specific value
-  const reset = useCallback((value: T = initialValue) => {
-    if (stabilityTimerRef.current) {
-      clearTimeout(stabilityTimerRef.current);
-    }
-    blurValueRef.current = value;
-    setInternalValue(value);
-    isTypingRef.current = false;
-  }, [initialValue]);
+  const reset = useCallback(
+    (value: T = initialValue) => {
+      if (stabilityTimerRef.current) {
+        clearTimeout(stabilityTimerRef.current);
+      }
+      blurValueRef.current = value;
+      setInternalValue(value);
+      isTypingRef.current = false;
+    },
+    [initialValue],
+  );
 
   // Check if currently typing
   const isTyping = useCallback(() => isTypingRef.current, []);
 
   // Get time since last update
-  const timeSinceUpdate = useCallback(() => Date.now() - lastUpdateRef.current, []);
+  const timeSinceUpdate = useCallback(
+    () => Date.now() - lastUpdateRef.current,
+    [],
+  );
 
   return {
     value: internalValue,
@@ -136,15 +142,18 @@ export function StableInput({
   ...props
 }: StableInputProps) {
   const { value, setValue, handleBlur, handleFocus } = useInputStability(
-    (props.value as string) || '',
-    { stabilityDelay }
+    (props.value as string) || "",
+    { stabilityDelay },
   );
 
-  const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const newValue = e.target.value;
-    setValue(newValue);
-    onStableChange?.(newValue);
-  }, [setValue, onStableChange]);
+  const handleChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const newValue = e.target.value;
+      setValue(newValue);
+      onStableChange?.(newValue);
+    },
+    [setValue, onStableChange],
+  );
 
   return (
     <input
@@ -171,15 +180,18 @@ export function StableTextarea({
   ...props
 }: StableTextareaProps) {
   const { value, setValue, handleBlur, handleFocus } = useInputStability(
-    (props.value as string) || '',
-    { stabilityDelay }
+    (props.value as string) || "",
+    { stabilityDelay },
   );
 
-  const handleChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const newValue = e.target.value;
-    setValue(newValue);
-    onStableChange?.(newValue);
-  }, [setValue, onStableChange]);
+  const handleChange = useCallback(
+    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+      const newValue = e.target.value;
+      setValue(newValue);
+      onStableChange?.(newValue);
+    },
+    [setValue, onStableChange],
+  );
 
   return (
     <textarea
@@ -208,7 +220,7 @@ export function useClickGuard(options: ClickGuardOptions = {}) {
   const {
     minClickInterval = 300,
     showLoading = true,
-    loadingDuration = 500
+    loadingDuration = 500,
   } = options;
 
   const lastClickRef = useRef(0);
@@ -235,14 +247,14 @@ export function useClickGuard(options: ClickGuardOptions = {}) {
 
   const recordClick = useCallback(() => {
     lastClickRef.current = Date.now();
-    
+
     if (showLoading) {
       isLoadingRef.current = true;
-      
+
       if (loadingTimerRef.current) {
         clearTimeout(loadingTimerRef.current);
       }
-      
+
       loadingTimerRef.current = setTimeout(() => {
         if (mountedRef.current) {
           isLoadingRef.current = false;
@@ -251,15 +263,18 @@ export function useClickGuard(options: ClickGuardOptions = {}) {
     }
   }, [showLoading, loadingDuration]);
 
-  const withClickGuard = useCallback(<T extends (...args: any[]) => any>(
-    handler: T
-  ): ((...args: Parameters<T>) => ReturnType<T> | void) => {
-    return (...args: Parameters<T>) => {
-      if (!canClick()) return;
-      recordClick();
-      return handler(...args);
-    };
-  }, [canClick, recordClick]);
+  const withClickGuard = useCallback(
+    <T extends (...args: any[]) => any>(
+      handler: T,
+    ): ((...args: Parameters<T>) => ReturnType<T> | void) => {
+      return (...args: Parameters<T>) => {
+        if (!canClick()) return;
+        recordClick();
+        return handler(...args);
+      };
+    },
+    [canClick, recordClick],
+  );
 
   return {
     canClick,

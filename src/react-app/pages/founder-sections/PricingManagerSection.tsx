@@ -29,7 +29,7 @@ import { ALL_COUNTRIES } from "@/react-app/lib/world-country-utils";
 import SearchableCountryDropdown from "@/react-app/components/SearchableCountryDropdown";
 
 // Use all 250+ countries from world configs
-const COUNTRIES = ALL_COUNTRIES.map(c => ({
+const COUNTRIES = ALL_COUNTRIES.map((c) => ({
   code: c.code,
   name: c.name,
   currency: c.currency,
@@ -39,7 +39,7 @@ interface Props {
   logAudit: (
     e: string,
     d: string,
-    s: "success" | "warning" | "danger" | "info"
+    s: "success" | "warning" | "danger" | "info",
   ) => void;
 }
 
@@ -57,7 +57,7 @@ export default function PricingManagerSection({ logAudit }: Props) {
 
   useEffect(() => {
     const ep: Record<string, number> = {};
-    prices.forEach(p => {
+    prices.forEach((p) => {
       ep[`${p.tierId}_${p.currency}`] = p.price;
     });
     setEditPrices(ep);
@@ -70,12 +70,12 @@ export default function PricingManagerSection({ logAudit }: Props) {
     logAudit(
       "Pricing Updated",
       `Modified ${tiers.length} pricing tiers`,
-      "success"
+      "success",
     );
   };
 
   const handleSavePrices = () => {
-    const updated = prices.map(p => {
+    const updated = prices.map((p) => {
       const key = `${p.tierId}_${p.currency}`;
       if (editPrices[key] !== undefined) {
         return { ...p, price: editPrices[key] };
@@ -88,24 +88,24 @@ export default function PricingManagerSection({ logAudit }: Props) {
     setTimeout(() => setSaved(false), 2000);
     logAudit(
       "Regional Pricing Updated",
-      `Updated ${COUNTRIES.find(c => c.code === selectedCountry)?.name} prices`,
-      "success"
+      `Updated ${COUNTRIES.find((c) => c.code === selectedCountry)?.name} prices`,
+      "success",
     );
   };
 
   const toggleTier = (id: TierSlug) => {
-    setTiers(prev =>
-      prev.map(t => (t.id === id ? { ...t, isActive: !t.isActive } : t))
+    setTiers((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, isActive: !t.isActive } : t)),
     );
     setSaved(false);
   };
 
   const toggleRecommended = (id: TierSlug) => {
-    setTiers(prev =>
-      prev.map(t => ({
+    setTiers((prev) =>
+      prev.map((t) => ({
         ...t,
         recommended: t.id === id ? !t.recommended : false,
-      }))
+      })),
     );
     setSaved(false);
   };
@@ -120,7 +120,7 @@ export default function PricingManagerSection({ logAudit }: Props) {
   };
 
   const updateTierEdit = (id: TierSlug) => {
-    const t = tiers.find(x => x.id === id);
+    const t = tiers.find((x) => x.id === id);
     if (!t) return;
     setEditingTier(id);
     setEditName(t.name);
@@ -130,26 +130,26 @@ export default function PricingManagerSection({ logAudit }: Props) {
 
   const saveTierEdit = () => {
     if (!editingTier) return;
-    setTiers(prev =>
-      prev.map(t =>
+    setTiers((prev) =>
+      prev.map((t) =>
         t.id === editingTier
           ? {
               ...t,
               name: editName,
               durationDays: parseInt(editDays) || t.durationDays,
-              features: editFeatures.split("\n").filter(f => f.trim()),
+              features: editFeatures.split("\n").filter((f) => f.trim()),
             }
-          : t
-      )
+          : t,
+      ),
     );
     setEditingTier(null);
     setSaved(false);
   };
 
-  const currencyPrices = prices.filter(p =>
-    p.regionCodes.includes(selectedCountry)
+  const currencyPrices = prices.filter((p) =>
+    p.regionCodes.includes(selectedCountry),
   );
-  const countryInfo = COUNTRIES.find(c => c.code === selectedCountry);
+  const countryInfo = COUNTRIES.find((c) => c.code === selectedCountry);
 
   return (
     <div className="space-y-6">
@@ -187,7 +187,7 @@ export default function PricingManagerSection({ logAudit }: Props) {
         {[
           { id: "tiers" as const, label: "Tiers", icon: Layers },
           { id: "regional" as const, label: "Regional Prices", icon: Globe },
-        ].map(t => (
+        ].map((t) => (
           <button
             key={t.id}
             onClick={() => setActiveTab(t.id)}
@@ -200,7 +200,7 @@ export default function PricingManagerSection({ logAudit }: Props) {
 
       {activeTab === "tiers" && (
         <div className="space-y-3">
-          {tiers.map(tier => (
+          {tiers.map((tier) => (
             <div
               key={tier.id}
               className="bg-[#161618] border border-white/[0.06] rounded-xl p-4"
@@ -214,7 +214,7 @@ export default function PricingManagerSection({ logAudit }: Props) {
                       </label>
                       <input
                         value={editName}
-                        onChange={e => setEditName(e.target.value)}
+                        onChange={(e) => setEditName(e.target.value)}
                         className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.08] rounded-lg text-sm text-white focus:outline-none focus:border-green-500/30"
                       />
                     </div>
@@ -225,7 +225,7 @@ export default function PricingManagerSection({ logAudit }: Props) {
                       <input
                         type="number"
                         value={editDays}
-                        onChange={e => setEditDays(e.target.value)}
+                        onChange={(e) => setEditDays(e.target.value)}
                         className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.08] rounded-lg text-sm text-white focus:outline-none focus:border-green-500/30"
                       />
                     </div>
@@ -250,7 +250,7 @@ export default function PricingManagerSection({ logAudit }: Props) {
                     </label>
                     <textarea
                       value={editFeatures}
-                      onChange={e => setEditFeatures(e.target.value)}
+                      onChange={(e) => setEditFeatures(e.target.value)}
                       rows={3}
                       className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.08] rounded-lg text-sm text-white focus:outline-none focus:border-green-500/30 resize-none"
                     />
@@ -290,7 +290,7 @@ export default function PricingManagerSection({ logAudit }: Props) {
                         )}
                       </div>
                       <div className="flex gap-1 mt-1">
-                        {tier.features.slice(0, 3).map(f => (
+                        {tier.features.slice(0, 3).map((f) => (
                           <span
                             key={f}
                             className="text-[9px] px-1.5 py-0.5 bg-white/5 rounded text-gray-500"
@@ -357,9 +357,9 @@ export default function PricingManagerSection({ logAudit }: Props) {
             </h3>
             <div className="space-y-3">
               {tiers
-                .filter(t => t.isActive)
-                .map(tier => {
-                  const rp = currencyPrices.find(p => p.tierId === tier.id);
+                .filter((t) => t.isActive)
+                .map((tier) => {
+                  const rp = currencyPrices.find((p) => p.tierId === tier.id);
                   const key = `${tier.id}_${countryInfo?.currency}`;
                   return (
                     <div
@@ -376,8 +376,8 @@ export default function PricingManagerSection({ logAudit }: Props) {
                       </div>
                       <div className="flex items-center gap-3">
                         <div className="flex flex-wrap gap-1 max-w-[200px]">
-                          {rp?.paymentGateways.map(g => {
-                            const gi = GATEWAYS.find(x => x.id === g);
+                          {rp?.paymentGateways.map((g) => {
+                            const gi = GATEWAYS.find((x) => x.id === g);
                             return (
                               <span
                                 key={g}
@@ -395,8 +395,8 @@ export default function PricingManagerSection({ logAudit }: Props) {
                           <input
                             type="number"
                             value={editPrices[key] || rp?.price || 0}
-                            onChange={e =>
-                              setEditPrices(p => ({
+                            onChange={(e) =>
+                              setEditPrices((p) => ({
                                 ...p,
                                 [key]: Number(e.target.value),
                               }))

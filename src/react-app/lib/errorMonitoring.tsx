@@ -28,11 +28,13 @@ export function initErrorMonitoring() {
 
   // Dynamic import Sentry
   import("@sentry/react")
-    .then(Sentry => {
+    .then((Sentry) => {
       Sentry.init({
         dsn: SENTRY_DSN,
         integrations: (integrations: any[]) => {
-          return integrations.filter(i => !["BrowserTracing"].includes(i.name));
+          return integrations.filter(
+            (i) => !["BrowserTracing"].includes(i.name),
+          );
         },
         tracesSampleRate: 0.1,
         replaysSessionSampleRate: 0.1,
@@ -45,7 +47,7 @@ export function initErrorMonitoring() {
             event.exception?.values?.some(
               (e: any) =>
                 e.type === "ResizeObserver loop" ||
-                e.type === "Non-Error promise rejection"
+                e.type === "Non-Error promise rejection",
             )
           ) {
             return null;
@@ -80,10 +82,12 @@ export class ErrorBoundary extends React.Component<
     // Report to Sentry
     if (SENTRY_DSN) {
       import("@sentry/react")
-        .then(Sentry => {
+        .then((Sentry) => {
           Sentry.captureException(error, { extra: errorInfo as any });
         })
-        .catch((err) => console.warn("[ErrorMonitoring] Failed to load Sentry:", err));
+        .catch((err) =>
+          console.warn("[ErrorMonitoring] Failed to load Sentry:", err),
+        );
     }
   }
 
@@ -160,7 +164,9 @@ export const analytics = {
         timestamp: Date.now(),
         referrer: document.referrer,
       }),
-    }).catch((err) => console.warn("[ErrorMonitoring] async report failed:", err));
+    }).catch((err) =>
+      console.warn("[ErrorMonitoring] async report failed:", err),
+    );
 
     // Also log in development
     if (import.meta.env.DEV) {
@@ -181,7 +187,9 @@ export const analytics = {
         properties,
         timestamp: Date.now(),
       }),
-    }).catch((err) => console.warn("[ErrorMonitoring] async report failed:", err));
+    }).catch((err) =>
+      console.warn("[ErrorMonitoring] async report failed:", err),
+    );
 
     if (import.meta.env.DEV) {
       console.log("[Analytics] Event:", name, properties);
@@ -199,7 +207,9 @@ export const analytics = {
         stack,
         timestamp: Date.now(),
       }),
-    }).catch((err) => console.warn("[ErrorMonitoring] async report failed:", err));
+    }).catch((err) =>
+      console.warn("[ErrorMonitoring] async report failed:", err),
+    );
   },
 };
 
@@ -225,7 +235,7 @@ export const perfMonitor = {
     if (typeof window === "undefined" || !window.performance) return null;
 
     const entries = window.performance.getEntriesByType(
-      "navigation"
+      "navigation",
     )[0] as PerformanceNavigationTiming;
     if (!entries) return null;
 

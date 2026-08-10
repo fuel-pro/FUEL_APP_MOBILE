@@ -91,7 +91,7 @@ export default function ShiftManagement() {
     }
   });
   const [selectedDate, setSelectedDate] = useState(
-    new Date().toISOString().split("T")[0]
+    new Date().toISOString().split("T")[0],
   );
   const [showAddShift, setShowAddShift] = useState(false);
   const [showAddEmployee, setShowAddEmployee] = useState(false);
@@ -124,26 +124,32 @@ export default function ShiftManagement() {
   useEffect(() => {
     if (!user) return;
     (async () => {
-      const cloudEmps = await cloudStorageService.get<Employee[]>("shift_employees", stationId);
+      const cloudEmps = await cloudStorageService.get<Employee[]>(
+        "shift_employees",
+        stationId,
+      );
       if (cloudEmps && Array.isArray(cloudEmps)) setEmployees(cloudEmps);
-      const cloudShifts = await cloudStorageService.get<Shift[]>("shift_data", stationId);
+      const cloudShifts = await cloudStorageService.get<Shift[]>(
+        "shift_data",
+        stationId,
+      );
       if (cloudShifts && Array.isArray(cloudShifts)) setShifts(cloudShifts);
     })();
   }, [user, stationId]);
 
   const dayShifts = useMemo(
-    () => shifts.filter(s => s.date === selectedDate),
-    [shifts, selectedDate]
+    () => shifts.filter((s) => s.date === selectedDate),
+    [shifts, selectedDate],
   );
-  const activeNow = dayShifts.filter(s => s.status === "active").length;
-  const scheduled = dayShifts.filter(s => s.status === "scheduled").length;
+  const activeNow = dayShifts.filter((s) => s.status === "active").length;
+  const scheduled = dayShifts.filter((s) => s.status === "scheduled").length;
 
   const addShift = () => {
     if (!newShift.employeeId) return;
-    const emp = employees.find(e => e.id === newShift.employeeId);
+    const emp = employees.find((e) => e.id === newShift.employeeId);
     if (!emp) return;
     const tmpl =
-      SHIFT_TEMPLATES.find(t => t.type === newShift.shiftType) ||
+      SHIFT_TEMPLATES.find((t) => t.type === newShift.shiftType) ||
       SHIFT_TEMPLATES[0];
     const shift: Shift = {
       id: `shift_${Date.now()}`,
@@ -177,7 +183,7 @@ export default function ShiftManagement() {
 
   const toggleStatus = (id: string) => {
     saveShifts(
-      shifts.map(s => {
+      shifts.map((s) => {
         if (s.id !== id) return s;
         if (s.status === "scheduled")
           return {
@@ -192,14 +198,14 @@ export default function ShiftManagement() {
             checkOut: new Date().toISOString(),
           };
         return s;
-      })
+      }),
     );
   };
 
   const filteredEmp = employees.filter(
-    e =>
+    (e) =>
       e.name.toLowerCase().includes(searchEmp.toLowerCase()) ||
-      e.role.toLowerCase().includes(searchEmp.toLowerCase())
+      e.role.toLowerCase().includes(searchEmp.toLowerCase()),
   );
 
   return (
@@ -250,7 +256,7 @@ export default function ShiftManagement() {
         <input
           type="date"
           value={selectedDate}
-          onChange={e => setSelectedDate(e.target.value)}
+          onChange={(e) => setSelectedDate(e.target.value)}
           className="px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-white"
         />
         <button
@@ -276,15 +282,15 @@ export default function ShiftManagement() {
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
             <select
               value={newShift.employeeId}
-              onChange={e =>
+              onChange={(e) =>
                 setNewShift({ ...newShift, employeeId: e.target.value })
               }
               className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
             >
               <option value="">Select Employee</option>
               {employees
-                .filter(e => e.status === "active")
-                .map(e => (
+                .filter((e) => e.status === "active")
+                .map((e) => (
                   <option key={e.id} value={e.id}>
                     {e.name} ({e.role})
                   </option>
@@ -292,12 +298,12 @@ export default function ShiftManagement() {
             </select>
             <select
               value={newShift.shiftType}
-              onChange={e =>
+              onChange={(e) =>
                 setNewShift({ ...newShift, shiftType: e.target.value as any })
               }
               className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
             >
-              {SHIFT_TEMPLATES.map(t => (
+              {SHIFT_TEMPLATES.map((t) => (
                 <option key={t.type} value={t.type}>
                   {t.label} ({t.start}-{t.end})
                 </option>
@@ -306,7 +312,7 @@ export default function ShiftManagement() {
             <input
               placeholder="Pump Assignment (e.g., Pump 1)"
               value={newShift.pumpAssigned}
-              onChange={e =>
+              onChange={(e) =>
                 setNewShift({ ...newShift, pumpAssigned: e.target.value })
               }
               className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
@@ -339,7 +345,7 @@ export default function ShiftManagement() {
             <input
               placeholder="Full Name *"
               value={newEmployee.name}
-              onChange={e =>
+              onChange={(e) =>
                 setNewEmployee({ ...newEmployee, name: e.target.value })
               }
               className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
@@ -347,14 +353,14 @@ export default function ShiftManagement() {
             <input
               placeholder="Phone"
               value={newEmployee.phone}
-              onChange={e =>
+              onChange={(e) =>
                 setNewEmployee({ ...newEmployee, phone: e.target.value })
               }
               className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
             />
             <select
               value={newEmployee.role}
-              onChange={e =>
+              onChange={(e) =>
                 setNewEmployee({ ...newEmployee, role: e.target.value })
               }
               className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
@@ -386,8 +392,8 @@ export default function ShiftManagement() {
 
       {/* Shift Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {dayShifts.map(shift => {
-          const tmpl = SHIFT_TEMPLATES.find(t => t.type === shift.shiftType);
+        {dayShifts.map((shift) => {
+          const tmpl = SHIFT_TEMPLATES.find((t) => t.type === shift.shiftType);
           const Icon = tmpl?.icon || Clock;
           return (
             <div
@@ -463,7 +469,7 @@ export default function ShiftManagement() {
             <input
               placeholder="Search..."
               value={searchEmp}
-              onChange={e => setSearchEmp(e.target.value)}
+              onChange={(e) => setSearchEmp(e.target.value)}
               className="pl-8 pr-3 py-1.5 border rounded-lg text-xs dark:bg-gray-700 dark:border-gray-600 dark:text-white"
             />
           </div>
@@ -480,7 +486,7 @@ export default function ShiftManagement() {
               </tr>
             </thead>
             <tbody>
-              {filteredEmp.map(e => (
+              {filteredEmp.map((e) => (
                 <tr
                   key={e.id}
                   className="border-b border-gray-100 dark:border-gray-700/50"

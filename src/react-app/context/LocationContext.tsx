@@ -243,7 +243,7 @@ function detectCountryFromCoords(lat: number, lng: number): string | null {
       return "SN";
     }
   }
-  
+
   // Europe
   if (lng >= -25 && lng <= 40 && lat >= 35 && lat <= 72) {
     // UK
@@ -263,7 +263,7 @@ function detectCountryFromCoords(lat: number, lng: number): string | null {
       return "ES";
     }
   }
-  
+
   // Asia
   if (lat >= -10 && lat <= 55 && lng >= 60 && lng <= 180) {
     // India
@@ -275,7 +275,7 @@ function detectCountryFromCoords(lat: number, lng: number): string | null {
       return "CN";
     }
   }
-  
+
   // Americas
   if (lat >= -55 && lat <= 72 && lng >= -170 && lng <= -30) {
     // USA
@@ -291,7 +291,7 @@ function detectCountryFromCoords(lat: number, lng: number): string | null {
       return "MX";
     }
   }
-  
+
   // Oceania
   if (lat >= -50 && lat <= -10 && lng >= 110 && lng <= 180) {
     // Australia
@@ -299,7 +299,7 @@ function detectCountryFromCoords(lat: number, lng: number): string | null {
       return "AU";
     }
   }
-  
+
   return null;
 }
 
@@ -380,7 +380,7 @@ interface LocationContextType {
   // Mobile money
   getActiveMobileMoney: () => CountryProfile["mobileMoney"];
   getMobileMoneyById: (
-    id: string
+    id: string,
   ) => CountryProfile["mobileMoney"][0] | undefined;
 
   // Payment methods
@@ -407,7 +407,7 @@ function loadStationCountries(): Record<string, StationLocation> {
     if (!raw) return {};
     const data = JSON.parse(raw) as Record<string, StationLocation>;
     // Migrate old data: add missing precise fields
-    Object.values(data).forEach(loc => {
+    Object.values(data).forEach((loc) => {
       (loc as any).preciseCoords ??= null;
       (loc as any).preciseAddress ??= "";
       (loc as any).preciseTimestamp ??= "";
@@ -486,7 +486,7 @@ export function LocationProvider({
     (sid: string) => {
       return stationCountries[sid] || null;
     },
-    [stationCountries]
+    [stationCountries],
   );
 
   const getStationCountry = useCallback(
@@ -499,21 +499,21 @@ export function LocationProvider({
       // keeps the header selector in sync with the station's real country.
       return currentCountry;
     },
-    [stationCountries, currentCountry]
+    [stationCountries, currentCountry],
   );
 
   const fmtCurrency = useCallback(
     (amount: number) => {
       return formatCurrency(amount, currentCountry.id);
     },
-    [currentCountry]
+    [currentCountry],
   );
 
   const fmtPhone = useCallback(
     (phone: string) => {
       return formatPhoneForCountry(phone, currentCountry.id);
     },
-    [currentCountry]
+    [currentCountry],
   );
 
   const fmtDate = useCallback(
@@ -537,7 +537,7 @@ export function LocationProvider({
         });
       }
     },
-    [currentCountry]
+    [currentCountry],
   );
 
   const fmtNumber = useCallback((num: number) => {
@@ -551,13 +551,13 @@ export function LocationProvider({
     (pricePerLiter: number) => {
       return getFuelTaxBreakdown(pricePerLiter, currentCountry.id);
     },
-    [currentCountry]
+    [currentCountry],
   );
 
   const setStationCountry = useCallback((sid: string, countryCode: string) => {
     const upperCode = countryCode.toUpperCase();
     const country = getCountryById(upperCode) as CountryProfile | undefined;
-    setStationCountries(prev => ({
+    setStationCountries((prev) => ({
       ...prev,
       [sid]: {
         ...(prev[sid] || {
@@ -583,7 +583,7 @@ export function LocationProvider({
 
   const setStationCity = useCallback((sid: string, city: string) => {
     const resolved = resolveUserCountry();
-    setStationCountries(prev => ({
+    setStationCountries((prev) => ({
       ...prev,
       [sid]: {
         ...(prev[sid] || {
@@ -607,14 +607,14 @@ export function LocationProvider({
 
   const detectLocation = useCallback(
     async (sid: string): Promise<StationLocation> => {
-      return new Promise(resolve => {
+      return new Promise((resolve) => {
         // Try geolocation API
         if ("geolocation" in navigator) {
           navigator.geolocation.getCurrentPosition(
-            position => {
+            (position) => {
               const coordCountry = detectCountryFromCoords(
                 position.coords.latitude,
-                position.coords.longitude
+                position.coords.longitude,
               );
               const detected = coordCountry || detectCountryFromTimezone();
               const loc: StationLocation = {
@@ -636,7 +636,7 @@ export function LocationProvider({
                 preciseAddress: "GPS-detected",
                 preciseTimestamp: new Date().toISOString(),
               };
-              setStationCountries(prev => ({ ...prev, [sid]: loc }));
+              setStationCountries((prev) => ({ ...prev, [sid]: loc }));
               resolve(loc);
             },
             () => {
@@ -654,10 +654,10 @@ export function LocationProvider({
                 preciseAddress: "",
                 preciseTimestamp: "",
               };
-              setStationCountries(prev => ({ ...prev, [sid]: loc }));
+              setStationCountries((prev) => ({ ...prev, [sid]: loc }));
               resolve(loc);
             },
-            { timeout: 10000, enableHighAccuracy: false }
+            { timeout: 10000, enableHighAccuracy: false },
           );
         } else {
           const detected = detectCountryFromTimezone();
@@ -673,25 +673,25 @@ export function LocationProvider({
             preciseAddress: "",
             preciseTimestamp: "",
           };
-          setStationCountries(prev => ({ ...prev, [sid]: loc }));
+          setStationCountries((prev) => ({ ...prev, [sid]: loc }));
           resolve(loc);
         }
       });
     },
-    []
+    [],
   );
 
   const getActiveMobileMoney = useCallback(
     () => currentCountry.mobileMoney,
-    [currentCountry]
+    [currentCountry],
   );
   const getMobileMoneyById = useCallback(
-    (id: string) => currentCountry.mobileMoney.find(m => m.id === id),
-    [currentCountry]
+    (id: string) => currentCountry.mobileMoney.find((m) => m.id === id),
+    [currentCountry],
   );
   const getActivePaymentMethods = useCallback(
     () => currentCountry.paymentMethods,
-    [currentCountry]
+    [currentCountry],
   );
 
   // Precise GPS location detection with improved accuracy
@@ -712,26 +712,35 @@ export function LocationProvider({
 
       // First: Use coordinate-based country detection for accuracy
       const detectedCountry = detectCountryFromCoords(lat, lng);
-      
+
       // Reverse geocode using OpenStreetMap Nominatim
       let address = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
       let city = "";
       try {
         const res = await fetch(
           `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&zoom=18&addressdetails=1`,
-          { headers: { "User-Agent": "FuelPro/1.0 (contact@fuelpro.app)" } }
+          { headers: { "User-Agent": "FuelPro/1.0 (contact@fuelpro.app)" } },
         );
         if (res.ok) {
           const data = await res.json();
           const a = data.address || {};
-          city = a.city || a.town || a.village || a.suburb || a.district || a.county || "";
+          city =
+            a.city ||
+            a.town ||
+            a.village ||
+            a.suburb ||
+            a.district ||
+            a.county ||
+            "";
           address = city || a.state || `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
-          
+
           // If no country detected from coords, try from reverse geocode
           if (!detectedCountry && a.country_code) {
             // Update country based on actual location
             const countryCode = a.country_code.toUpperCase();
-            console.log(`[Location] Detected country from geocode: ${countryCode}`);
+            console.log(
+              `[Location] Detected country from geocode: ${countryCode}`,
+            );
           }
         }
       } catch {
@@ -741,12 +750,15 @@ export function LocationProvider({
       // If location is imprecise (>1000m accuracy) and we detected Nairobi/Kenya incorrectly
       // it's likely a VPN or proxy issue - show warning
       const isImprecise = accuracy > 1000;
-      
+
       setPreciseLocation({ lat, lng, accuracy, address, city, isImprecise });
-      
+
       // Store coordinates for fuel price lookup
       if (lat && lng) {
-        localStorage.setItem("fuelpro_user_coords", JSON.stringify({ lat, lng }));
+        localStorage.setItem(
+          "fuelpro_user_coords",
+          JSON.stringify({ lat, lng }),
+        );
       }
     } catch {
       // Fallback: try country detection with timezone only

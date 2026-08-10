@@ -1,13 +1,19 @@
 // POS Hardware Interface Component
-import React, { useState, useEffect, useCallback } from 'react';
-import { hardwareManager, type PrinterDevice, type CardReaderDevice, type CashDrawerDevice, type BarcodeScannerDevice } from '@/react-app/lib/pos/hardware-manager';
-import { printerService } from '@/react-app/lib/pos/printer-service';
-import { paymentService } from '@/react-app/lib/pos/payment-service';
-import { 
-  Printer, 
-  CreditCard, 
+import React, { useState, useEffect, useCallback } from "react";
+import {
+  hardwareManager,
+  type PrinterDevice,
+  type CardReaderDevice,
+  type CashDrawerDevice,
+  type BarcodeScannerDevice,
+} from "@/react-app/lib/pos/hardware-manager";
+import { printerService } from "@/react-app/lib/pos/printer-service";
+import { paymentService } from "@/react-app/lib/pos/payment-service";
+import {
+  Printer,
+  CreditCard,
   CircleDollarSign,
-  ScanLine, 
+  ScanLine,
   Bluetooth,
   Usb,
   Wifi,
@@ -15,8 +21,8 @@ import {
   CheckCircle,
   XCircle,
   AlertTriangle,
-  Plus
-} from 'lucide-react';
+  Plus,
+} from "lucide-react";
 
 interface DeviceStatusProps {
   device: { name: string; type: string; status: string };
@@ -24,10 +30,18 @@ interface DeviceStatusProps {
 }
 
 function DeviceStatus({ device }: DeviceStatusProps) {
-  const statusColor = device.status === 'connected' ? 'text-green-600' : 
-                      device.status === 'waiting_for_card' ? 'text-yellow-600' : 'text-red-600';
-  const StatusIcon = device.status === 'connected' ? CheckCircle : 
-                    device.status === 'waiting_for_card' ? RefreshCw : XCircle;
+  const statusColor =
+    device.status === "connected"
+      ? "text-green-600"
+      : device.status === "waiting_for_card"
+        ? "text-yellow-600"
+        : "text-red-600";
+  const StatusIcon =
+    device.status === "connected"
+      ? CheckCircle
+      : device.status === "waiting_for_card"
+        ? RefreshCw
+        : XCircle;
 
   return (
     <div className="flex items-center justify-between p-3 bg-white rounded-lg border">
@@ -42,12 +56,22 @@ function DeviceStatus({ device }: DeviceStatusProps) {
   );
 }
 
-function StatusCard({ icon: Icon, label, count, color }: { icon: any; label: string; count: number; color: string }) {
+function StatusCard({
+  icon: Icon,
+  label,
+  count,
+  color,
+}: {
+  icon: any;
+  label: string;
+  count: number;
+  color: string;
+}) {
   const colorClasses: Record<string, string> = {
-    blue: 'bg-blue-100 text-blue-600',
-    green: 'bg-green-100 text-green-600',
-    yellow: 'bg-yellow-100 text-yellow-600',
-    purple: 'bg-purple-100 text-purple-600',
+    blue: "bg-blue-100 text-blue-600",
+    green: "bg-green-100 text-green-600",
+    yellow: "bg-yellow-100 text-yellow-600",
+    purple: "bg-purple-100 text-purple-600",
   };
 
   return (
@@ -72,9 +96,11 @@ export default function POSInterface() {
     cashDrawers: [] as CashDrawerDevice[],
     barcodeScanners: [] as BarcodeScannerDevice[],
   });
-  const [networkPrinterIP, setNetworkPrinterIP] = useState('');
+  const [networkPrinterIP, setNetworkPrinterIP] = useState("");
   const [isScanning, setIsScanning] = useState(false);
-  const [testResults, setTestResults] = useState<Record<string, 'success' | 'error' | 'pending'>>({});
+  const [testResults, setTestResults] = useState<
+    Record<string, "success" | "error" | "pending">
+  >({});
 
   const refreshDevices = useCallback(() => {
     setDevices({
@@ -88,14 +114,14 @@ export default function POSInterface() {
   useEffect(() => {
     refreshDevices();
 
-    hardwareManager.on('printerConnected', refreshDevices);
-    hardwareManager.on('printerDisconnected', refreshDevices);
-    hardwareManager.on('cardReaderConnected', refreshDevices);
-    hardwareManager.on('cardReaderDisconnected', refreshDevices);
-    hardwareManager.on('cashDrawerConnected', refreshDevices);
-    hardwareManager.on('cashDrawerDisconnected', refreshDevices);
-    hardwareManager.on('barcodeScannerConnected', refreshDevices);
-    hardwareManager.on('barcodeScannerDisconnected', refreshDevices);
+    hardwareManager.on("printerConnected", refreshDevices);
+    hardwareManager.on("printerDisconnected", refreshDevices);
+    hardwareManager.on("cardReaderConnected", refreshDevices);
+    hardwareManager.on("cardReaderDisconnected", refreshDevices);
+    hardwareManager.on("cashDrawerConnected", refreshDevices);
+    hardwareManager.on("cashDrawerDisconnected", refreshDevices);
+    hardwareManager.on("barcodeScannerConnected", refreshDevices);
+    hardwareManager.on("barcodeScannerDisconnected", refreshDevices);
 
     return () => {
       hardwareManager.removeAllListeners();
@@ -107,7 +133,7 @@ export default function POSInterface() {
     try {
       await hardwareManager.scanUSBDevices();
     } catch (error) {
-      console.error('USB scan failed:', error);
+      console.error("USB scan failed:", error);
     }
     setIsScanning(false);
     refreshDevices();
@@ -118,7 +144,7 @@ export default function POSInterface() {
     try {
       await hardwareManager.scanBluetoothDevices();
     } catch (error) {
-      console.error('Bluetooth scan failed:', error);
+      console.error("Bluetooth scan failed:", error);
     }
     setIsScanning(false);
     refreshDevices();
@@ -126,23 +152,23 @@ export default function POSInterface() {
 
   const handleAddNetworkPrinter = async () => {
     if (!networkPrinterIP) return;
-    
+
     try {
       await hardwareManager.addNetworkPrinter(networkPrinterIP, 9100);
-      setNetworkPrinterIP('');
+      setNetworkPrinterIP("");
       refreshDevices();
     } catch (error) {
-      console.error('Failed to add network printer:', error);
+      console.error("Failed to add network printer:", error);
     }
   };
 
   const handleTestPrinter = async (printerId: string) => {
-    setTestResults(prev => ({ ...prev, [printerId]: 'pending' }));
+    setTestResults((prev) => ({ ...prev, [printerId]: "pending" }));
     try {
       await printerService.testPrint(printerId);
-      setTestResults(prev => ({ ...prev, [printerId]: 'success' }));
+      setTestResults((prev) => ({ ...prev, [printerId]: "success" }));
     } catch {
-      setTestResults(prev => ({ ...prev, [printerId]: 'error' }));
+      setTestResults((prev) => ({ ...prev, [printerId]: "error" }));
     }
   };
 
@@ -150,15 +176,15 @@ export default function POSInterface() {
     try {
       await printerService.openCashDrawer();
     } catch (error) {
-      console.error('Failed to open cash drawer:', error);
+      console.error("Failed to open cash drawer:", error);
     }
   };
 
   const handleTestCardReader = async () => {
     try {
-      await paymentService.simulateCardPayment(10, 'KES');
+      await paymentService.simulateCardPayment(10, "KES");
     } catch (error) {
-      console.error('Card reader test failed:', error);
+      console.error("Card reader test failed:", error);
     }
   };
 
@@ -166,21 +192,43 @@ export default function POSInterface() {
     <div className="p-6 max-w-6xl mx-auto">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">POS Hardware Setup</h1>
-        <p className="text-gray-600">Configure your point-of-sale hardware devices</p>
+        <p className="text-gray-600">
+          Configure your point-of-sale hardware devices
+        </p>
       </div>
 
       {/* Connection Status */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-        <StatusCard icon={Printer} label="Printers" count={devices.printers.length} color="blue" />
-        <StatusCard icon={CreditCard} label="Card Readers" count={devices.cardReaders.length} color="green" />
-        <StatusCard icon={CircleDollarSign} label="Cash Drawers" count={devices.cashDrawers.length} color="yellow" />
-        <StatusCard icon={ScanLine} label="Scanners" count={devices.barcodeScanners.length} color="purple" />
+        <StatusCard
+          icon={Printer}
+          label="Printers"
+          count={devices.printers.length}
+          color="blue"
+        />
+        <StatusCard
+          icon={CreditCard}
+          label="Card Readers"
+          count={devices.cardReaders.length}
+          color="green"
+        />
+        <StatusCard
+          icon={CircleDollarSign}
+          label="Cash Drawers"
+          count={devices.cashDrawers.length}
+          color="yellow"
+        />
+        <StatusCard
+          icon={ScanLine}
+          label="Scanners"
+          count={devices.barcodeScanners.length}
+          color="purple"
+        />
       </div>
 
       {/* Add Devices */}
       <div className="bg-white rounded-lg shadow p-6 mb-6">
         <h2 className="text-lg font-semibold mb-4">Add Devices</h2>
-        
+
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <button
             onClick={handleScanUSB}
@@ -188,7 +236,7 @@ export default function POSInterface() {
             className="flex items-center justify-center gap-2 p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition disabled:opacity-50"
           >
             <Usb className="w-6 h-6 text-gray-600" />
-            <span>{isScanning ? 'Scanning...' : 'Scan USB'}</span>
+            <span>{isScanning ? "Scanning..." : "Scan USB"}</span>
           </button>
 
           <button
@@ -197,7 +245,7 @@ export default function POSInterface() {
             className="flex items-center justify-center gap-2 p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition disabled:opacity-50"
           >
             <Bluetooth className="w-6 h-6 text-gray-600" />
-            <span>{isScanning ? 'Scanning...' : 'Scan Bluetooth'}</span>
+            <span>{isScanning ? "Scanning..." : "Scan Bluetooth"}</span>
           </button>
 
           <div className="flex items-center gap-2 p-4 border-2 border-dashed border-gray-300 rounded-lg">
@@ -229,14 +277,19 @@ export default function POSInterface() {
               <Printer className="w-5 h-5" />
               Printers
             </h2>
-            <button onClick={refreshDevices} className="p-2 hover:bg-gray-100 rounded">
+            <button
+              onClick={refreshDevices}
+              className="p-2 hover:bg-gray-100 rounded"
+            >
               <RefreshCw className="w-4 h-4" />
             </button>
           </div>
-          
+
           <div className="space-y-3">
             {devices.printers.length === 0 ? (
-              <p className="text-gray-500 text-center py-4">No printers connected</p>
+              <p className="text-gray-500 text-center py-4">
+                No printers connected
+              </p>
             ) : (
               devices.printers.map((printer) => (
                 <DeviceStatus key={printer.id} device={printer} />
@@ -262,10 +315,12 @@ export default function POSInterface() {
               Card Readers
             </h2>
           </div>
-          
+
           <div className="space-y-3">
             {devices.cardReaders.length === 0 ? (
-              <p className="text-gray-500 text-center py-4">No card readers connected</p>
+              <p className="text-gray-500 text-center py-4">
+                No card readers connected
+              </p>
             ) : (
               devices.cardReaders.map((reader) => (
                 <DeviceStatus key={reader.id} device={reader} />
@@ -291,10 +346,12 @@ export default function POSInterface() {
               Cash Drawers
             </h2>
           </div>
-          
+
           <div className="space-y-3">
             {devices.cashDrawers.length === 0 ? (
-              <p className="text-gray-500 text-center py-4">No cash drawers connected</p>
+              <p className="text-gray-500 text-center py-4">
+                No cash drawers connected
+              </p>
             ) : (
               devices.cashDrawers.map((drawer) => (
                 <DeviceStatus key={drawer.id} device={drawer} />
@@ -318,12 +375,14 @@ export default function POSInterface() {
               Barcode Scanners
             </h2>
           </div>
-          
+
           <div className="space-y-3">
             {devices.barcodeScanners.length === 0 ? (
               <div className="text-center py-4">
                 <p className="text-gray-500 mb-2">No scanners detected</p>
-                <p className="text-sm text-gray-400">Keyboard wedge scanners are auto-detected</p>
+                <p className="text-sm text-gray-400">
+                  Keyboard wedge scanners are auto-detected
+                </p>
               </div>
             ) : (
               devices.barcodeScanners.map((scanner) => (
@@ -341,12 +400,21 @@ export default function POSInterface() {
           <div className="space-y-2">
             {Object.entries(testResults).map(([printerId, result]) => (
               <div key={printerId} className="flex items-center gap-2">
-                {result === 'success' && <CheckCircle className="w-5 h-5 text-green-600" />}
-                {result === 'error' && <XCircle className="w-5 h-5 text-red-600" />}
-                {result === 'pending' && <RefreshCw className="w-5 h-5 text-yellow-600 animate-spin" />}
+                {result === "success" && (
+                  <CheckCircle className="w-5 h-5 text-green-600" />
+                )}
+                {result === "error" && (
+                  <XCircle className="w-5 h-5 text-red-600" />
+                )}
+                {result === "pending" && (
+                  <RefreshCw className="w-5 h-5 text-yellow-600 animate-spin" />
+                )}
                 <span>
-                  {result === 'success' ? 'Test print successful' : 
-                   result === 'error' ? 'Test print failed' : 'Printing...'}
+                  {result === "success"
+                    ? "Test print successful"
+                    : result === "error"
+                      ? "Test print failed"
+                      : "Printing..."}
                 </span>
               </div>
             ))}

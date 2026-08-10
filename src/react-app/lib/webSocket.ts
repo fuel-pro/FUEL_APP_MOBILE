@@ -95,19 +95,19 @@ class FuelProWSClient {
       this.options.onConnect?.();
     };
 
-    this.ws.onclose = event => {
+    this.ws.onclose = (event) => {
       console.log(`[WS] Disconnected (${event.code})`);
       this.state = WS_STATES.DISCONNECTED;
       this.options.onDisconnect?.();
       this.scheduleReconnect();
     };
 
-    this.ws.onerror = error => {
+    this.ws.onerror = (error) => {
       console.error("[WS] Error:", error);
       this.options.onError?.(error);
     };
 
-    this.ws.onmessage = event => {
+    this.ws.onmessage = (event) => {
       try {
         const message = JSON.parse(event.data);
         this.handleMessage(message);
@@ -153,7 +153,7 @@ class FuelProWSClient {
 
   private getLocalData(collections: string[]) {
     const data: Record<string, any[]> = {};
-    collections.forEach(col => {
+    collections.forEach((col) => {
       try {
         const key = `fuelpro_${col}_v3`;
         const stored = localStorage.getItem(key);
@@ -177,7 +177,7 @@ class FuelProWSClient {
     const delay =
       this.options.reconnectInterval! * Math.min(this.reconnectAttempts, 5);
     console.log(
-      `[WS] Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})`
+      `[WS] Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})`,
     );
 
     this.reconnectTimer = setTimeout(() => this.connect(), delay);
@@ -201,7 +201,7 @@ class FuelProWSClient {
   push(
     collection: string,
     record: any,
-    operation: "create" | "update" | "delete"
+    operation: "create" | "update" | "delete",
   ) {
     this.send({
       type: "push",
@@ -232,7 +232,7 @@ class FuelProWSClient {
   }
 
   private emit(event: string, data: any) {
-    this.listeners.get(event)?.forEach(cb => cb(data));
+    this.listeners.get(event)?.forEach((cb) => cb(data));
   }
 
   disconnect() {
@@ -263,7 +263,7 @@ export function useWebSocket(options: WSOptions) {
       ...options,
       onConnect: () => setConnected(true),
       onDisconnect: () => setConnected(false),
-      onSync: data => setLastSync(data),
+      onSync: (data) => setLastSync(data),
     });
 
     clientRef.current = client;
@@ -279,7 +279,7 @@ export function useWebSocket(options: WSOptions) {
     push: (
       collection: string,
       record: any,
-      op: "create" | "update" | "delete"
+      op: "create" | "update" | "delete",
     ) => clientRef.current?.push(collection, record, op),
     broadcast: (event: string, data: any) =>
       clientRef.current?.broadcast(event, data),

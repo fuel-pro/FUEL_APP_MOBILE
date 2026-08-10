@@ -3,15 +3,15 @@
  * Handles session tracking, device management, and real-time sync
  */
 
-import { useCallback, useEffect, useState } from 'react';
-import { syncService, STORAGE_KEYS } from '../lib/syncService';
+import { useCallback, useEffect, useState } from "react";
+import { syncService, STORAGE_KEYS } from "../lib/syncService";
 
 interface Device {
   id: string;
   lastActive: number;
   current: boolean;
   name?: string;
-  type?: 'desktop' | 'mobile' | 'tablet';
+  type?: "desktop" | "mobile" | "tablet";
 }
 
 interface SessionInfo {
@@ -26,13 +26,17 @@ interface SessionInfo {
  */
 export function useCrossDeviceSync() {
   const [devices, setDevices] = useState<Device[]>([]);
-  const [currentSession, setCurrentSession] = useState<SessionInfo | null>(null);
+  const [currentSession, setCurrentSession] = useState<SessionInfo | null>(
+    null,
+  );
   const [isOnline, setIsOnline] = useState(navigator.onLine);
 
   // Initialize session on mount
   useEffect(() => {
     // Get or create session
-    const existingSession = syncService.getItem<SessionInfo>(STORAGE_KEYS.SESSION_ID);
+    const existingSession = syncService.getItem<SessionInfo>(
+      STORAGE_KEYS.SESSION_ID,
+    );
     if (existingSession) {
       setCurrentSession(existingSession);
     } else {
@@ -54,8 +58,8 @@ export function useCrossDeviceSync() {
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
 
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
 
     // Update last active periodically
     const activityInterval = setInterval(() => {
@@ -63,8 +67,8 @@ export function useCrossDeviceSync() {
     }, 60000); // Every minute
 
     return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
       clearInterval(activityInterval);
     };
   }, []);
@@ -77,7 +81,7 @@ export function useCrossDeviceSync() {
         if (Array.isArray(data)) {
           setDevices(data as Device[]);
         }
-      }
+      },
     );
 
     return unsubscribe;
@@ -93,24 +97,27 @@ export function useCrossDeviceSync() {
     }
 
     // Update device list
-    syncService.trackDevice(session?.sessionId || 'unknown');
+    syncService.trackDevice(session?.sessionId || "unknown");
     const updatedDevices = syncService.getTrackedDevices();
     setDevices(updatedDevices);
   }, []);
 
   // Track current device
-  const trackDevice = useCallback((userId: string) => {
-    syncService.trackDevice(userId);
-    const updatedDevices = syncService.getTrackedDevices();
-    setDevices(updatedDevices);
-    updateActivity();
-  }, [updateActivity]);
+  const trackDevice = useCallback(
+    (userId: string) => {
+      syncService.trackDevice(userId);
+      const updatedDevices = syncService.getTrackedDevices();
+      setDevices(updatedDevices);
+      updateActivity();
+    },
+    [updateActivity],
+  );
 
   // Logout from all devices
   const logoutAllDevices = useCallback(async () => {
     // Clear all local data
     syncService.clearLocalData();
-    
+
     // Broadcast logout to all tabs
     setDevices([]);
     setCurrentSession(null);
@@ -119,12 +126,12 @@ export function useCrossDeviceSync() {
   // Get device info
   const getDeviceInfo = useCallback((): Partial<Device> => {
     const ua = navigator.userAgent;
-    let type: Device['type'] = 'desktop';
-    
+    let type: Device["type"] = "desktop";
+
     if (/mobile/i.test(ua)) {
-      type = 'mobile';
+      type = "mobile";
     } else if (/tablet|ipad/i.test(ua)) {
-      type = 'tablet';
+      type = "tablet";
     }
 
     return {
@@ -142,7 +149,7 @@ export function useCrossDeviceSync() {
     const hours = Math.floor(diff / 3600000);
     const days = Math.floor(diff / 86400000);
 
-    if (minutes < 1) return 'Just now';
+    if (minutes < 1) return "Just now";
     if (minutes < 60) return `${minutes}m ago`;
     if (hours < 24) return `${hours}h ago`;
     return `${days}d ago`;
@@ -171,7 +178,7 @@ export function useRealtimeSync<T>(
     interval?: number;
     enabled?: boolean;
     onUpdate?: (data: T) => void;
-  } = {}
+  } = {},
 ) {
   const { interval = 30000, enabled = true, onUpdate } = options;
   const [data, setData] = useState<T | null>(null);
@@ -194,7 +201,7 @@ export function useRealtimeSync<T>(
     const fetchData = async () => {
       setIsLoading(true);
       setError(null);
-      
+
       try {
         const result = await fetchFn();
         setData(result);
@@ -227,7 +234,7 @@ export function useRealtimeSync<T>(
   const refresh = useCallback(async () => {
     setIsLoading(true);
     setError(null);
-    
+
     try {
       const result = await fetchFn();
       setData(result);

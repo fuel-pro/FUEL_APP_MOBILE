@@ -28,12 +28,7 @@ interface MaintenanceRecord {
   id: string;
   equipmentName: string;
   equipmentType:
-    | "pump"
-    | "tank"
-    | "dispenser"
-    | "generator"
-    | "compressor"
-    | "other";
+    "pump" | "tank" | "dispenser" | "generator" | "compressor" | "other";
   stationId: string;
   description: string;
   priority: "low" | "medium" | "high" | "critical";
@@ -98,28 +93,32 @@ export default function MaintenanceTracker() {
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
-    cloudStorageService.set("maintenance_records", records, stationId).catch(() => {});
+    cloudStorageService
+      .set("maintenance_records", records, stationId)
+      .catch(() => {});
   }, [records, stationId]);
 
   // Load from cloud on mount (cross-device sync)
   useEffect(() => {
     if (!user) return;
     (async () => {
-      const cloudData =
-        await cloudStorageService.get<MaintenanceRecord[]>("maintenance_records", stationId);
+      const cloudData = await cloudStorageService.get<MaintenanceRecord[]>(
+        "maintenance_records",
+        stationId,
+      );
       if (cloudData && Array.isArray(cloudData)) setRecords(cloudData);
     })();
   }, [user, stationId]);
 
   const showNotification = (
     message: string,
-    type: "success" | "warning" = "success"
+    type: "success" | "warning" = "success",
   ) => {
     setNotification({ message, type });
     setTimeout(() => setNotification(null), 3000);
   };
 
-  const filtered = records.filter(r => {
+  const filtered = records.filter((r) => {
     const matchesSearch =
       r.equipmentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       r.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -134,15 +133,15 @@ export default function MaintenanceTracker() {
     if (!formData.equipmentName || !formData.description) {
       showNotification(
         "Equipment name and description are required",
-        "warning"
+        "warning",
       );
       return;
     }
     if (editingId) {
-      setRecords(prev =>
-        prev.map(r =>
-          r.id === editingId ? ({ ...r, ...formData } as MaintenanceRecord) : r
-        )
+      setRecords((prev) =>
+        prev.map((r) =>
+          r.id === editingId ? ({ ...r, ...formData } as MaintenanceRecord) : r,
+        ),
       );
       showNotification("Maintenance record updated");
     } else {
@@ -152,7 +151,7 @@ export default function MaintenanceTracker() {
         stationId: "default",
         createdAt: new Date().toISOString(),
       };
-      setRecords(prev => [newRecord, ...prev]);
+      setRecords((prev) => [newRecord, ...prev]);
       showNotification("Maintenance record added");
     }
     setShowForm(false);
@@ -161,14 +160,14 @@ export default function MaintenanceTracker() {
 
   const handleDelete = (id: string) => {
     if (confirm("Delete this maintenance record?")) {
-      setRecords(prev => prev.filter(r => r.id !== id));
+      setRecords((prev) => prev.filter((r) => r.id !== id));
       showNotification("Record deleted");
     }
   };
 
   const updateStatus = (id: string, newStatus: MaintenanceRecord["status"]) => {
-    setRecords(prev =>
-      prev.map(r =>
+    setRecords((prev) =>
+      prev.map((r) =>
         r.id === id
           ? {
               ...r,
@@ -178,8 +177,8 @@ export default function MaintenanceTracker() {
                   ? new Date().toISOString()
                   : r.completedDate,
             }
-          : r
-      )
+          : r,
+      ),
     );
     showNotification(`Status updated to ${newStatus}`);
   };
@@ -207,12 +206,12 @@ export default function MaintenanceTracker() {
 
   const stats = {
     total: records.length,
-    scheduled: records.filter(r => r.status === "scheduled").length,
-    inProgress: records.filter(r => r.status === "in_progress").length,
-    completed: records.filter(r => r.status === "completed").length,
-    overdue: records.filter(r => r.status === "overdue").length,
+    scheduled: records.filter((r) => r.status === "scheduled").length,
+    inProgress: records.filter((r) => r.status === "in_progress").length,
+    completed: records.filter((r) => r.status === "completed").length,
+    overdue: records.filter((r) => r.status === "overdue").length,
     critical: records.filter(
-      r => r.priority === "critical" && r.status !== "completed"
+      (r) => r.priority === "critical" && r.status !== "completed",
     ).length,
   };
 
@@ -303,7 +302,7 @@ export default function MaintenanceTracker() {
             color: "text-red-600 dark:text-red-400",
             bg: "bg-red-50 dark:bg-red-500/10",
           },
-        ].map(s => (
+        ].map((s) => (
           <div key={s.label} className={`${s.bg} rounded-xl p-3 text-center`}>
             <p className={`text-xl font-bold ${s.color}`}>{s.value}</p>
             <p className="text-[10px] text-gray-500 mt-0.5">{s.label}</p>
@@ -320,14 +319,14 @@ export default function MaintenanceTracker() {
           />
           <input
             value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
+            onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search equipment or technician..."
             className="w-full pl-9 pr-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500/30"
           />
         </div>
         <select
           value={statusFilter}
-          onChange={e => setStatusFilter(e.target.value)}
+          onChange={(e) => setStatusFilter(e.target.value)}
           className="px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-gray-300 focus:outline-none"
         >
           <option value="all">All Status</option>
@@ -338,7 +337,7 @@ export default function MaintenanceTracker() {
         </select>
         <select
           value={priorityFilter}
-          onChange={e => setPriorityFilter(e.target.value)}
+          onChange={(e) => setPriorityFilter(e.target.value)}
           className="px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-gray-300 focus:outline-none"
         >
           <option value="all">All Priority</option>
@@ -351,10 +350,10 @@ export default function MaintenanceTracker() {
 
       {/* Records */}
       <div className="space-y-3">
-        {filtered.map(record => {
+        {filtered.map((record) => {
           const EquipIcon =
-            EQUIPMENT_TYPES.find(e => e.value === record.equipmentType)?.icon ||
-            Wrench;
+            EQUIPMENT_TYPES.find((e) => e.value === record.equipmentType)
+              ?.icon || Wrench;
           return (
             <div
               key={record.id}
@@ -535,7 +534,7 @@ export default function MaintenanceTracker() {
                     </label>
                     <input
                       value={formData.equipmentName}
-                      onChange={e =>
+                      onChange={(e) =>
                         setFormData({
                           ...formData,
                           equipmentName: e.target.value,
@@ -550,7 +549,7 @@ export default function MaintenanceTracker() {
                     </label>
                     <select
                       value={formData.equipmentType}
-                      onChange={e =>
+                      onChange={(e) =>
                         setFormData({
                           ...formData,
                           equipmentType: e.target.value as any,
@@ -558,7 +557,7 @@ export default function MaintenanceTracker() {
                       }
                       className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
                     >
-                      {EQUIPMENT_TYPES.map(t => (
+                      {EQUIPMENT_TYPES.map((t) => (
                         <option key={t.value} value={t.value}>
                           {t.label}
                         </option>
@@ -572,7 +571,7 @@ export default function MaintenanceTracker() {
                   </label>
                   <textarea
                     value={formData.description}
-                    onChange={e =>
+                    onChange={(e) =>
                       setFormData({ ...formData, description: e.target.value })
                     }
                     rows={2}
@@ -586,7 +585,7 @@ export default function MaintenanceTracker() {
                     </label>
                     <select
                       value={formData.priority}
-                      onChange={e =>
+                      onChange={(e) =>
                         setFormData({
                           ...formData,
                           priority: e.target.value as any,
@@ -594,7 +593,7 @@ export default function MaintenanceTracker() {
                       }
                       className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
                     >
-                      {["low", "medium", "high", "critical"].map(p => (
+                      {["low", "medium", "high", "critical"].map((p) => (
                         <option key={p} value={p}>
                           {p}
                         </option>
@@ -607,7 +606,7 @@ export default function MaintenanceTracker() {
                     </label>
                     <select
                       value={formData.status}
-                      onChange={e =>
+                      onChange={(e) =>
                         setFormData({
                           ...formData,
                           status: e.target.value as any,
@@ -616,11 +615,11 @@ export default function MaintenanceTracker() {
                       className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
                     >
                       {["scheduled", "in_progress", "completed", "overdue"].map(
-                        s => (
+                        (s) => (
                           <option key={s} value={s}>
                             {s.replace("_", " ")}
                           </option>
-                        )
+                        ),
                       )}
                     </select>
                   </div>
@@ -631,7 +630,7 @@ export default function MaintenanceTracker() {
                     <input
                       type="number"
                       value={formData.cost}
-                      onChange={e =>
+                      onChange={(e) =>
                         setFormData({
                           ...formData,
                           cost: Number(e.target.value),
@@ -648,7 +647,7 @@ export default function MaintenanceTracker() {
                     </label>
                     <input
                       value={formData.assignedTo}
-                      onChange={e =>
+                      onChange={(e) =>
                         setFormData({ ...formData, assignedTo: e.target.value })
                       }
                       className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
@@ -661,7 +660,7 @@ export default function MaintenanceTracker() {
                     <input
                       type="date"
                       value={formData.scheduledDate}
-                      onChange={e =>
+                      onChange={(e) =>
                         setFormData({
                           ...formData,
                           scheduledDate: e.target.value,
@@ -678,7 +677,7 @@ export default function MaintenanceTracker() {
                   <input
                     type="date"
                     value={formData.nextDueDate}
-                    onChange={e =>
+                    onChange={(e) =>
                       setFormData({ ...formData, nextDueDate: e.target.value })
                     }
                     className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
@@ -690,7 +689,7 @@ export default function MaintenanceTracker() {
                   </label>
                   <textarea
                     value={formData.notes}
-                    onChange={e =>
+                    onChange={(e) =>
                       setFormData({ ...formData, notes: e.target.value })
                     }
                     rows={2}

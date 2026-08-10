@@ -22,7 +22,7 @@ interface Props {
   logAudit: (
     e: string,
     d: string,
-    s: "success" | "warning" | "danger" | "info"
+    s: "success" | "warning" | "danger" | "info",
   ) => void;
 }
 
@@ -47,19 +47,19 @@ export default function DataManagementSection({ logAudit }: Props) {
       if (key.includes("config") || key.includes("setting"))
         category = "Config";
       return { key, size: val.length, category };
-    }
+    },
   ).sort((a, b) => b.size - a.size);
 
-  const filtered = items.filter(i =>
-    i.key.toLowerCase().includes(search.toLowerCase())
+  const filtered = items.filter((i) =>
+    i.key.toLowerCase().includes(search.toLowerCase()),
   );
   const totalSize = items.reduce((s, i) => s + i.size, 0);
   const selectedSize = items
-    .filter(i => selected.has(i.key))
+    .filter((i) => selected.has(i.key))
     .reduce((s, i) => s + i.size, 0);
 
   const toggleSelect = (key: string) => {
-    setSelected(prev => {
+    setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
       else next.add(key);
@@ -68,10 +68,10 @@ export default function DataManagementSection({ logAudit }: Props) {
   };
 
   const toggleAll = () => {
-    setSelected(prev =>
+    setSelected((prev) =>
       prev.size === filtered.length
         ? new Set()
-        : new Set(filtered.map(i => i.key))
+        : new Set(filtered.map((i) => i.key)),
     );
   };
 
@@ -79,41 +79,42 @@ export default function DataManagementSection({ logAudit }: Props) {
     if (!confirm(`Delete ${selected.size} items? This cannot be undone.`))
       return;
     setClearing(true);
-    selected.forEach(key => localStorage.removeItem(key));
+    selected.forEach((key) => localStorage.removeItem(key));
     logAudit(
       "Data Cleared",
       `Removed ${selected.size} localStorage items`,
-      "warning"
+      "warning",
     );
     setSelected(new Set());
     setClearing(false);
     import("@/react-app/lib/app-reloader").then(({ broadcastReload }) =>
-      broadcastReload()
+      broadcastReload(),
     );
   };
 
   const handleClearCategory = (cat: string) => {
-    const catItems = items.filter(i => i.category === cat);
+    const catItems = items.filter((i) => i.category === cat);
     if (!confirm(`Delete all ${catItems.length} ${cat} items?`)) return;
-    catItems.forEach(i => localStorage.removeItem(i.key));
+    catItems.forEach((i) => localStorage.removeItem(i.key));
     logAudit(
       "Category Cleared",
       `Removed ${catItems.length} ${cat} items`,
-      "warning"
+      "warning",
     );
     import("@/react-app/lib/app-reloader").then(({ broadcastReload }) =>
-      broadcastReload()
+      broadcastReload(),
     );
   };
 
-  const categories = [...new Set(items.map(i => i.category))];
+  const categories = [...new Set(items.map((i) => i.category))];
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h2 className="text-lg font-medium text-white flex items-center gap-2">
-            <Database size={18} className="text-purple-400" /> Database Management
+            <Database size={18} className="text-purple-400" /> Database
+            Management
           </h2>
           <p className="text-xs text-gray-500 mt-0.5">
             Live Supabase schema &amp; local storage management
@@ -154,8 +155,8 @@ export default function DataManagementSection({ logAudit }: Props) {
         <>
           {/* Category Summary */}
           <div className="flex flex-wrap gap-2">
-            {categories.map(cat => {
-              const catItems = items.filter(i => i.category === cat);
+            {categories.map((cat) => {
+              const catItems = items.filter((i) => i.category === cat);
               const catSize = catItems.reduce((s, i) => s + i.size, 0);
               return (
                 <div
@@ -189,7 +190,7 @@ export default function DataManagementSection({ logAudit }: Props) {
               />
               <input
                 value={search}
-                onChange={e => setSearch(e.target.value)}
+                onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search keys..."
                 className="w-full pl-8 pr-3 py-2 bg-[#161618] border border-white/[0.06] rounded-lg text-xs text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/30"
               />
@@ -197,14 +198,17 @@ export default function DataManagementSection({ logAudit }: Props) {
             <div className="flex items-center gap-2">
               {selected.size > 0 && (
                 <span className="text-xs text-amber-400">
-                  {selected.size} selected ({(selectedSize / 1024).toFixed(1)} KB)
+                  {selected.size} selected ({(selectedSize / 1024).toFixed(1)}{" "}
+                  KB)
                 </span>
               )}
               <button
                 onClick={toggleAll}
                 className="px-2 py-1 bg-white/5 hover:bg-white/10 text-gray-400 text-xs rounded transition-colors"
               >
-                {selected.size === filtered.length ? "Deselect All" : "Select All"}
+                {selected.size === filtered.length
+                  ? "Deselect All"
+                  : "Select All"}
               </button>
               {selected.size > 0 && (
                 <button
@@ -246,7 +250,7 @@ export default function DataManagementSection({ logAudit }: Props) {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map(item => (
+                {filtered.map((item) => (
                   <tr
                     key={item.key}
                     className="border-b border-white/[0.04] hover:bg-white/[0.02]"

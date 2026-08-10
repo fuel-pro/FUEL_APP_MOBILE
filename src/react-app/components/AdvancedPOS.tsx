@@ -65,9 +65,13 @@ const ProductCard = ({
         {product.name?.charAt(0) || "P"}
       </span>
     </div>
-    <h4 className="text-white font-medium text-sm mb-1 truncate">{product.name}</h4>
+    <h4 className="text-white font-medium text-sm mb-1 truncate">
+      {product.name}
+    </h4>
     <p className="text-gray-400 text-xs mb-2">{product.sku}</p>
-    <p className="text-amber-400 font-semibold">{formatMoney(product.selling_price)}</p>
+    <p className="text-amber-400 font-semibold">
+      {formatMoney(product.selling_price)}
+    </p>
     {product.stock_quantity <= product.reorder_level && (
       <span className="text-xs text-red-400 mt-1 block">
         Low stock: {product.stock_quantity}
@@ -90,7 +94,9 @@ const CartItem = ({
   <div className="flex items-center gap-3 py-3 border-b border-white/5">
     <div className="flex-1">
       <p className="text-white text-sm font-medium">{item.name}</p>
-      <p className="text-gray-400 text-xs">{formatMoney(item.unitPrice)} each</p>
+      <p className="text-gray-400 text-xs">
+        {formatMoney(item.unitPrice)} each
+      </p>
     </div>
     <div className="flex items-center gap-2">
       <button
@@ -99,7 +105,9 @@ const CartItem = ({
       >
         <Minus size={14} className="text-white" />
       </button>
-      <span className="text-white font-medium w-8 text-center">{item.quantity}</span>
+      <span className="text-white font-medium w-8 text-center">
+        {item.quantity}
+      </span>
       <button
         onClick={onIncrease}
         className="w-8 h-8 bg-white/10 rounded-lg flex items-center justify-center hover:bg-white/20 transition-colors"
@@ -137,7 +145,7 @@ const CustomerSelector = ({
   const filtered = customers.filter(
     (c) =>
       c.name?.toLowerCase().includes(search.toLowerCase()) ||
-      c.phone?.includes(search)
+      c.phone?.includes(search),
   );
 
   return (
@@ -276,7 +284,9 @@ const CheckoutModal = ({
           {cart.discountAmount > 0 && (
             <div className="flex justify-between mb-2">
               <span className="text-gray-400">Discount</span>
-              <span className="text-emerald-400">-{formatMoney(cart.discountAmount)}</span>
+              <span className="text-emerald-400">
+                -{formatMoney(cart.discountAmount)}
+              </span>
             </div>
           )}
           <div className="flex justify-between mb-2">
@@ -376,9 +386,7 @@ const SuccessScreen = ({
         <CheckCircle className="w-10 h-10 text-emerald-400" />
       </div>
       <h3 className="text-2xl font-bold text-white mb-2">Sale Complete!</h3>
-      <p className="text-gray-400 mb-6">
-        Transaction processed successfully.
-      </p>
+      <p className="text-gray-400 mb-6">Transaction processed successfully.</p>
       <div className="bg-white/5 rounded-xl p-4 mb-6">
         <p className="text-gray-400 text-sm mb-1">Invoice Number</p>
         <p className="text-amber-400 font-mono text-lg">{invoiceNumber}</p>
@@ -420,7 +428,10 @@ export default function AdvancedPOS() {
   const [search, setSearch] = useState("");
   const [showCheckout, setShowCheckout] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
-  const [lastSale, setLastSale] = useState<{ invoiceNumber: string; amount: number } | null>(null);
+  const [lastSale, setLastSale] = useState<{
+    invoiceNumber: string;
+    amount: number;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
 
   const loadData = useCallback(async () => {
@@ -452,12 +463,12 @@ export default function AdvancedPOS() {
     (p) =>
       p.name?.toLowerCase().includes(search.toLowerCase()) ||
       p.sku?.toLowerCase().includes(search.toLowerCase()) ||
-      p.barcode?.includes(search)
+      p.barcode?.includes(search),
   );
 
   const addToCart = (product: any) => {
     const existingIndex = cart.items.findIndex(
-      (item) => item.productId === product.id
+      (item) => item.productId === product.id,
     );
 
     let newItems: POSItem[];
@@ -550,7 +561,7 @@ export default function AdvancedPOS() {
         paymentMethod,
         reference || null,
         selectedCustomer?.id || null,
-        activeSession?.id || null
+        activeSession?.id || null,
       );
 
       if (result.success) {
@@ -577,7 +588,10 @@ export default function AdvancedPOS() {
     try {
       const result = await openTerminalSession(currentStation.id);
       if (result.success && result.sessionId) {
-        setActiveSession({ id: result.sessionId, session_number: result.sessionNumber });
+        setActiveSession({
+          id: result.sessionId,
+          session_number: result.sessionNumber,
+        });
         setShowCheckout(false);
       } else {
         alert(result.error || "Failed to open session");
@@ -614,7 +628,10 @@ export default function AdvancedPOS() {
 
         {/* Search */}
         <div className="relative mb-6">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+          <Search
+            className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
+            size={20}
+          />
           <input
             type="text"
             placeholder="Search products by name, SKU, or barcode..."
@@ -636,7 +653,11 @@ export default function AdvancedPOS() {
         {/* Products */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
           {filteredProducts.map((product) => (
-            <ProductCard key={product.id} product={product} onAddToCart={addToCart} />
+            <ProductCard
+              key={product.id}
+              product={product}
+              onAddToCart={addToCart}
+            />
           ))}
         </div>
 
@@ -676,7 +697,9 @@ export default function AdvancedPOS() {
             <div className="text-center py-12">
               <ShoppingCart className="w-12 h-12 text-gray-600 mx-auto mb-3" />
               <p className="text-gray-400">Cart is empty</p>
-              <p className="text-gray-500 text-sm">Add products to get started</p>
+              <p className="text-gray-500 text-sm">
+                Add products to get started
+              </p>
             </div>
           ) : (
             cart.items.map((item, index) => (
@@ -702,12 +725,16 @@ export default function AdvancedPOS() {
               {cart.discountAmount > 0 && (
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-400">Discount</span>
-                  <span className="text-emerald-400">-{formatMoney(cart.discountAmount)}</span>
+                  <span className="text-emerald-400">
+                    -{formatMoney(cart.discountAmount)}
+                  </span>
                 </div>
               )}
               <div className="flex justify-between text-sm">
                 <span className="text-gray-400">Tax</span>
-                <span className="text-white">{formatMoney(cart.taxAmount)}</span>
+                <span className="text-white">
+                  {formatMoney(cart.taxAmount)}
+                </span>
               </div>
               <div className="flex justify-between pt-2 border-t border-white/10">
                 <span className="text-white font-semibold">Total</span>

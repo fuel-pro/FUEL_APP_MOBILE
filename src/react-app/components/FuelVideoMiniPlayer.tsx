@@ -281,8 +281,8 @@ function getVideosForLocation(): {
   const countryName = country?.name || countryCode;
 
   // Get local videos + global videos
-  const local = VIDEO_DATABASE.filter(v => v.region === countryCode);
-  const global = VIDEO_DATABASE.filter(v => v.region === "GLOBAL");
+  const local = VIDEO_DATABASE.filter((v) => v.region === countryCode);
+  const global = VIDEO_DATABASE.filter((v) => v.region === "GLOBAL");
 
   // If no local videos, just show global
   const videos = local.length > 0 ? [...local, ...global] : global;
@@ -292,7 +292,7 @@ function getVideosForLocation(): {
 
 export default function FuelVideoMiniPlayer() {
   const [{ countryName, videos }, setLocationVideos] = useState(() =>
-    getVideosForLocation()
+    getVideosForLocation(),
   );
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isMinimized, setIsMinimized] = useState(false);
@@ -303,7 +303,7 @@ export default function FuelVideoMiniPlayer() {
   const [showControls, setShowControls] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const controlsTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(
-    undefined
+    undefined,
   );
 
   const currentVideo = videos[currentIndex];
@@ -337,11 +337,11 @@ export default function FuelVideoMiniPlayer() {
 
   // Navigate to next/previous
   const goNext = useCallback(() => {
-    setCurrentIndex(i => (i + 1) % videos.length);
+    setCurrentIndex((i) => (i + 1) % videos.length);
   }, [videos.length]);
 
   const goPrev = useCallback(() => {
-    setCurrentIndex(i => (i - 1 + videos.length) % videos.length);
+    setCurrentIndex((i) => (i - 1 + videos.length) % videos.length);
   }, [videos.length]);
 
   // Keyboard shortcuts
@@ -349,7 +349,7 @@ export default function FuelVideoMiniPlayer() {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "ArrowRight" && !isMinimized) goNext();
       if (e.key === "ArrowLeft" && !isMinimized) goPrev();
-      if (e.key === "m") setIsMuted(m => !m);
+      if (e.key === "m") setIsMuted((m) => !m);
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
@@ -401,7 +401,7 @@ export default function FuelVideoMiniPlayer() {
             <MapPin size={8} /> {countryName}
           </span>
           <button
-            onClick={e => {
+            onClick={(e) => {
               e.stopPropagation();
               setIsMinimized(!isMinimized);
             }}
@@ -411,7 +411,7 @@ export default function FuelVideoMiniPlayer() {
             {isMinimized ? <Maximize2 size={11} /> : <Minimize2 size={11} />}
           </button>
           <button
-            onClick={e => {
+            onClick={(e) => {
               e.stopPropagation();
               setIsClosed(true);
             }}

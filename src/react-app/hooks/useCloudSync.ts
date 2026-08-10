@@ -1,6 +1,6 @@
 /**
  * useCloudSync - Cloud-synced data hook for FuelPro
- * 
+ *
  * This hook provides a complete cloud-synced data layer that:
  * 1. Attempts to sync all data to the backend API
  * 2. Falls back to localStorage only when API is unavailable
@@ -8,7 +8,17 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { checkApiStatus, listRecords, createRecord, updateRecord, deleteRecord, Collections, getPendingCount, queuePendingChange, apiRequest } from "@/react-app/lib/restApiSync";
+import {
+  checkApiStatus,
+  listRecords,
+  createRecord,
+  updateRecord,
+  deleteRecord,
+  Collections,
+  getPendingCount,
+  queuePendingChange,
+  apiRequest,
+} from "@/react-app/lib/restApiSync";
 
 // Types
 export interface CloudUser {
@@ -92,29 +102,28 @@ export function useCloudSync() {
   // Initial connection check
   useEffect(() => {
     checkConnectionRef.current();
-    
+
     // Recheck every 30 seconds - use ref to avoid stale closure
     const interval = setInterval(() => checkConnectionRef.current(), 30000);
     return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Sync all data
   const syncAll = useCallback(async () => {
     setState((prev) => ({ ...prev, isSyncing: true, error: undefined }));
-    
+
     try {
       const connected = await checkConnection();
-      
+
       if (!connected) {
-        setState((prev) => ({ 
-          ...prev, 
-          isSyncing: false, 
-          error: "API unavailable - changes saved locally" 
+        setState((prev) => ({
+          ...prev,
+          isSyncing: false,
+          error: "API unavailable - changes saved locally",
         }));
         return false;
       }
-      
+
       // Fetch all data from cloud
       await Promise.all([
         listRecords(Collections.USERS),
@@ -123,14 +132,14 @@ export function useCloudSync() {
         listRecords(Collections.FEATURE_FLAGS),
         listRecords(Collections.AUDIT_LOG, { limit: 100 }),
       ]);
-      
+
       setState((prev) => ({
         ...prev,
         isSyncing: false,
         lastSync: Date.now(),
         error: undefined,
       }));
-      
+
       return true;
     } catch (err: any) {
       setState((prev) => ({
@@ -159,28 +168,28 @@ export function useCloudUsers() {
   const fetchUsers = useCallback(async () => {
     setLoading(true);
     setError(undefined);
-    
+
     try {
       // Use the backend's /api/users endpoint to get all registered users
-      const result = await apiRequest<{ users: any[]; pagination?: any }>("GET", "/api/users");
-      
-      if (result.success && result.data) {
-        // Backend returns { users: [...] } format
-        const userData = result.data.users || result.data;
-        if (Array.isArray(userData)) {
-          setUsers(userData.map((u: any) => ({
+      const result = await apiRequest<{ users: any[]; pagination?: any }>(
+        "GET",
+        "/api/users",
+      );
+
+      // apiRequest returns the response body directly ({ users: [...] }).
+      const userData = result?.users || [];
+      if (Array.isArray(userData)) {
+        setUsers(
+          userData.map((u: any) => ({
             id: u.id,
             name: u.name,
             email: u.email,
             role: u.role,
             createdAt: u.createdAt,
             lastActive: u.lastLoginAt || u.lastActive,
-          })) as CloudUser[]);
-        } else {
-          setUsers([]);
-        }
+          })) as CloudUser[],
+        );
       } else {
-        // API unavailable, return empty
         setUsers([]);
       }
     } catch (err: any) {
@@ -195,21 +204,29 @@ export function useCloudUsers() {
     fetchUsers();
   }, [fetchUsers, isOnline]);
 
-  const addUser = useCallback(async (user: Omit<CloudUser, "id" | "createdAt">) => {
-    // User creation is handled by the registration flow, not here
-    return { success: false, error: "Use registration to create users" };
-  }, []);
-	
-  const updateUser = useCallback(async (id: string, data: Partial<CloudUser>) => {
-    const result = await apiRequest("PUT", `/api/users/${id}`, data);
-    
-    if (result.success) {
-      setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, ...data } : u)));
-      return { success: true };
-    }
-    
-    return { success: false, error: result.error };
-  }, []);
+  const addUser = useCallback(
+    async (user: Omit<CloudUser, "id" | "createdAt">) => {
+      // User creation is handled by the registration flow, not here
+      return { success: false, error: "Use registration to create users" };
+    },
+    [],
+  );
+
+  const updateUser = useCallback(
+    async (id: string, data: Partial<CloudUser>) => {
+      const result = await apiRequest("PUT", `/api/users/${id}`, data);
+
+      if (result.success) {
+        setUsers((prev) =>
+          prev.map((u) => (u.id === id ? { ...u, ...data } : u)),
+        );
+        return { success: true };
+      }
+
+      return { success: false, error: result.error };
+    },
+    [],
+  );
 
   return { users, loading, error, fetchUsers, addUser, updateUser };
 }
@@ -224,10 +241,10 @@ export function useCloudStations() {
   const fetchStations = useCallback(async () => {
     setLoading(true);
     setError(undefined);
-    
+
     try {
       const result = await listRecords(Collections.STATIONS);
-      
+
       if (result.success && result.data) {
         setStations(result.data as CloudStation[]);
       }
@@ -242,22 +259,25 @@ export function useCloudStations() {
     fetchStations();
   }, [fetchStations, isOnline]);
 
-  const addStation = useCallback(async (station: Omit<CloudStation, "id" | "createdAt" | "lastActive">) => {
-    const result = await createRecord(Collections.STATIONS, station);
-    
-    if (result.success) {
-      const newStation: CloudStation = {
-        ...station,
-        id: result.id!,
-        createdAt: new Date().toISOString(),
-        lastActive: new Date().toISOString(),
-      };
-      setStations((prev) => [newStation, ...prev]);
-      return { success: true, id: result.id };
-    }
-    
-    return { success: false, error: result.error };
-  }, []);
+  const addStation = useCallback(
+    async (station: Omit<CloudStation, "id" | "createdAt" | "lastActive">) => {
+      const result = await createRecord(Collections.STATIONS, station);
+
+      if (result.success) {
+        const newStation: CloudStation = {
+          ...station,
+          id: result.id!,
+          createdAt: new Date().toISOString(),
+          lastActive: new Date().toISOString(),
+        };
+        setStations((prev) => [newStation, ...prev]);
+        return { success: true, id: result.id };
+      }
+
+      return { success: false, error: result.error };
+    },
+    [],
+  );
 
   return { stations, loading, error, fetchStations, addStation };
 }
@@ -270,10 +290,10 @@ export function useCloudAuditLog() {
 
   const fetchEntries = useCallback(async () => {
     setLoading(true);
-    
+
     try {
       const result = await listRecords(Collections.AUDIT_LOG, { limit: 100 });
-      
+
       if (result.success && result.data) {
         setEntries(result.data as CloudAuditEntry[]);
       }
@@ -286,37 +306,45 @@ export function useCloudAuditLog() {
     fetchEntries();
   }, [fetchEntries, isOnline]);
 
-  const addEntry = useCallback(async (
-    event: string,
-    detail: string,
-    user: string = "SYSTEM",
-    severity: "success" | "warning" | "danger" | "info" = "info"
-  ) => {
-    const result = await createRecord(Collections.AUDIT_LOG, {
-      event,
-      detail,
-      user,
-      severity,
-      timestamp: new Date().toISOString(),
-    });
-    
-    if (result.success) {
-      const newEntry: CloudAuditEntry = {
-        id: result.id!,
+  const addEntry = useCallback(
+    async (
+      event: string,
+      detail: string,
+      user: string = "SYSTEM",
+      severity: "success" | "warning" | "danger" | "info" = "info",
+    ) => {
+      const result = await createRecord(Collections.AUDIT_LOG, {
         event,
         detail,
         user,
         severity,
         timestamp: new Date().toISOString(),
-      };
-      setEntries((prev) => [newEntry, ...prev]);
-      return true;
-    }
-    
-    // Queue for later sync
-    queuePendingChange(Collections.AUDIT_LOG, "create", { event, detail, user, severity });
-    return true; // Still return true as we saved locally
-  }, []);
+      });
+
+      if (result.success) {
+        const newEntry: CloudAuditEntry = {
+          id: result.id!,
+          event,
+          detail,
+          user,
+          severity,
+          timestamp: new Date().toISOString(),
+        };
+        setEntries((prev) => [newEntry, ...prev]);
+        return true;
+      }
+
+      // Queue for later sync
+      queuePendingChange(Collections.AUDIT_LOG, "create", {
+        event,
+        detail,
+        user,
+        severity,
+      });
+      return true; // Still return true as we saved locally
+    },
+    [],
+  );
 
   return { entries, loading, fetchEntries, addEntry };
 }
@@ -329,10 +357,10 @@ export function useCloudSecrets() {
 
   const fetchSecrets = useCallback(async () => {
     setLoading(true);
-    
+
     try {
       const result = await listRecords(Collections.SECRETS);
-      
+
       if (result.success && result.data) {
         setSecrets(result.data as CloudSecret[]);
       }
@@ -347,43 +375,55 @@ export function useCloudSecrets() {
 
   const addSecret = useCallback(async (key: string, value: string) => {
     const result = await createRecord(Collections.SECRETS, { key, value });
-    
+
     if (result.success) {
-      setSecrets((prev) => [{
-        id: result.id!,
-        key,
-        value,
-        createdAt: new Date().toISOString(),
-      }, ...prev]);
+      setSecrets((prev) => [
+        {
+          id: result.id!,
+          key,
+          value,
+          createdAt: new Date().toISOString(),
+        },
+        ...prev,
+      ]);
       return { success: true, id: result.id };
     }
-    
+
     return { success: false, error: result.error };
   }, []);
 
   const updateSecret = useCallback(async (id: string, value: string) => {
     const result = await updateRecord(Collections.SECRETS, id, { value });
-    
+
     if (result.success) {
-      setSecrets((prev) => prev.map((s) => (s.id === id ? { ...s, value } : s)));
+      setSecrets((prev) =>
+        prev.map((s) => (s.id === id ? { ...s, value } : s)),
+      );
       return { success: true };
     }
-    
+
     return { success: false, error: result.error };
   }, []);
 
   const deleteSecret = useCallback(async (id: string) => {
     const result = await deleteRecord(Collections.SECRETS, id);
-    
+
     if (result.success) {
       setSecrets((prev) => prev.filter((s) => s.id !== id));
       return { success: true };
     }
-    
+
     return { success: false, error: result.error };
   }, []);
 
-  return { secrets, loading, fetchSecrets, addSecret, updateSecret, deleteSecret };
+  return {
+    secrets,
+    loading,
+    fetchSecrets,
+    addSecret,
+    updateSecret,
+    deleteSecret,
+  };
 }
 
 // Hook for Feature Flags
@@ -394,10 +434,10 @@ export function useCloudFeatureFlags() {
 
   const fetchFlags = useCallback(async () => {
     setLoading(true);
-    
+
     try {
       const result = await listRecords(Collections.FEATURE_FLAGS);
-      
+
       if (result.success && result.data) {
         setFlags(result.data as CloudFeatureFlag[]);
       }
@@ -411,13 +451,17 @@ export function useCloudFeatureFlags() {
   }, [fetchFlags, isOnline]);
 
   const updateFlag = useCallback(async (id: string, enabled: boolean) => {
-    const result = await updateRecord(Collections.FEATURE_FLAGS, id, { enabled });
-    
+    const result = await updateRecord(Collections.FEATURE_FLAGS, id, {
+      enabled,
+    });
+
     if (result.success) {
-      setFlags((prev) => prev.map((f) => (f.id === id ? { ...f, enabled } : f)));
+      setFlags((prev) =>
+        prev.map((f) => (f.id === id ? { ...f, enabled } : f)),
+      );
       return { success: true };
     }
-    
+
     return { success: false, error: result.error };
   }, []);
 

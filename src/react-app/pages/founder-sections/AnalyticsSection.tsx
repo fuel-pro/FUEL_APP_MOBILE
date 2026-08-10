@@ -21,7 +21,7 @@ interface Props {
   logAudit: (
     e: string,
     d: string,
-    s: "success" | "warning" | "danger" | "info"
+    s: "success" | "warning" | "danger" | "info",
   ) => void;
 }
 
@@ -30,7 +30,9 @@ export default function AnalyticsSection({ logAudit }: Props) {
     Record<string, { qty: number; amount: number }>
   >({});
   const [backendError, setBackendError] = useState<string | null>(null);
-  const [dataSource, setDataSource] = useState<"backend" | "local" | "none">("none");
+  const [dataSource, setDataSource] = useState<"backend" | "local" | "none">(
+    "none",
+  );
 
   /* ─── Backend Queries with proper error handling ─── */
   const {
@@ -81,7 +83,7 @@ export default function AnalyticsSection({ logAudit }: Props) {
     logAudit(
       "Analytics Refreshed",
       "Manually refreshed analytics data from backend",
-      "info"
+      "info",
     );
   };
 
@@ -101,7 +103,7 @@ export default function AnalyticsSection({ logAudit }: Props) {
       setBackendError(null);
       return;
     }
-    
+
     // Check for errors
     if (salesError || stationsError) {
       setBackendError("Backend unavailable - showing local data");
@@ -109,7 +111,7 @@ export default function AnalyticsSection({ logAudit }: Props) {
     logAudit(
       "Analytics Viewed",
       "Analytics dashboard accessed with backend data",
-      "info"
+      "info",
     );
   }, [salesAnalytics, logAudit]);
 
@@ -151,7 +153,7 @@ export default function AnalyticsSection({ logAudit }: Props) {
           const amt = Number(item.amount || item.total || item.paid || 0);
           const qty = Number(item.quantity || item.liters || item.volume || 0);
           const fType = String(
-            item.fuelType || item.fuel || item.product || "Other"
+            item.fuelType || item.fuel || item.product || "Other",
           );
           if (amt > 0) {
             rev += amt;
@@ -272,7 +274,7 @@ export default function AnalyticsSection({ logAudit }: Props) {
             up: true,
             color: "text-purple-400",
           },
-        ].map(k => (
+        ].map((k) => (
           <div
             key={k.label}
             className="bg-[#161618] border border-white/[0.06] rounded-xl p-4"
@@ -309,7 +311,7 @@ export default function AnalyticsSection({ logAudit }: Props) {
                 label: "Success",
                 value: (
                   auditSummary.bySeverity?.find(
-                    (s: any) => s.severity === "success"
+                    (s: any) => s.severity === "success",
                   )?.count || 0
                 ).toString(),
                 color: "text-green-400",
@@ -318,7 +320,7 @@ export default function AnalyticsSection({ logAudit }: Props) {
                 label: "Warnings",
                 value: (
                   auditSummary.bySeverity?.find(
-                    (s: any) => s.severity === "warning"
+                    (s: any) => s.severity === "warning",
                   )?.count || 0
                 ).toString(),
                 color: "text-amber-400",
@@ -327,12 +329,12 @@ export default function AnalyticsSection({ logAudit }: Props) {
                 label: "Danger",
                 value: (
                   auditSummary.bySeverity?.find(
-                    (s: any) => s.severity === "danger"
+                    (s: any) => s.severity === "danger",
                   )?.count || 0
                 ).toString(),
                 color: "text-red-400",
               },
-            ].map(s => (
+            ].map((s) => (
               <div
                 key={s.label}
                 className="text-center p-3 bg-white/[0.02] rounded-lg"
@@ -404,7 +406,7 @@ export default function AnalyticsSection({ logAudit }: Props) {
             Device Breakdown
           </h3>
           <div className="space-y-2">
-            {deviceData.map(d => (
+            {deviceData.map((d) => (
               <div
                 key={d.label}
                 className="flex items-center justify-between py-2 border-b border-white/[0.04]"

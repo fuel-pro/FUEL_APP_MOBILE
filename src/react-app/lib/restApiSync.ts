@@ -74,7 +74,7 @@ export async function createRecord(
   collection: string,
   data: Record<string, any>,
   userId?: string,
-  stationId?: string
+  stationId?: string,
 ): Promise<{ success: boolean; id?: string; error?: string }> {
   const id = `${collection}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   const record: DataRecord = {
@@ -106,22 +106,34 @@ export async function createRecord(
   } catch (err: any) {
     // Fallback to localStorage so the UI keeps working offline
     localStorage.setItem(`fuelpro_${collection}_${id}`, JSON.stringify(record));
-    return { success: true, id, error: `Saved locally: ${err?.message ?? "unknown error"}` };
+    return {
+      success: true,
+      id,
+      error: `Saved locally: ${err?.message ?? "unknown error"}`,
+    };
   }
 }
 
 export async function getRecord(
   collection: string,
-  id: string
+  id: string,
 ): Promise<{ success: boolean; data?: any; error?: string }> {
   try {
     const table = tableFor(collection);
     if (table) {
-      const { data, error } = await supabase.from(table).select("*").eq("id", id).single();
+      const { data, error } = await supabase
+        .from(table)
+        .select("*")
+        .eq("id", id)
+        .single();
       if (error) throw error;
       return { success: true, data };
     } else {
-      const { data, error } = await supabase.from("app_kv").select("*").eq("id", id).single();
+      const { data, error } = await supabase
+        .from("app_kv")
+        .select("*")
+        .eq("id", id)
+        .single();
       if (error) throw error;
       return { success: true, data: data?.data ?? data };
     }
@@ -137,7 +149,7 @@ export async function getRecord(
 export async function updateRecord(
   collection: string,
   id: string,
-  data: Record<string, any>
+  data: Record<string, any>,
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const table = tableFor(collection);
@@ -158,15 +170,21 @@ export async function updateRecord(
       const record = JSON.parse(existing);
       record.data = { ...record.data, ...data };
       record.updatedAt = new Date().toISOString();
-      localStorage.setItem(`fuelpro_${collection}_${id}`, JSON.stringify(record));
+      localStorage.setItem(
+        `fuelpro_${collection}_${id}`,
+        JSON.stringify(record),
+      );
     }
-    return { success: true, error: `Saved locally: ${err?.message ?? "unknown error"}` };
+    return {
+      success: true,
+      error: `Saved locally: ${err?.message ?? "unknown error"}`,
+    };
   }
 }
 
 export async function deleteRecord(
   collection: string,
-  id: string
+  id: string,
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const table = tableFor(collection) ?? "app_kv";
@@ -175,13 +193,16 @@ export async function deleteRecord(
     return { success: true };
   } catch (err: any) {
     localStorage.removeItem(`fuelpro_${collection}_${id}`);
-    return { success: true, error: `Deleted locally: ${err?.message ?? "unknown error"}` };
+    return {
+      success: true,
+      error: `Deleted locally: ${err?.message ?? "unknown error"}`,
+    };
   }
 }
 
 export async function listRecords(
   collection: string,
-  options?: { userId?: string; stationId?: string; limit?: number }
+  options?: { userId?: string; stationId?: string; limit?: number },
 ): Promise<{ success: boolean; data?: any[]; error?: string }> {
   try {
     const table = tableFor(collection);
@@ -199,7 +220,10 @@ export async function listRecords(
       if (options?.limit) q = q.limit(options.limit);
       const { data, error } = await q;
       if (error) throw error;
-      return { success: true, data: (data ?? []).map((row) => ({ id: row.id, ...row.data })) };
+      return {
+        success: true,
+        data: (data ?? []).map((row) => ({ id: row.id, ...row.data })),
+      };
     }
   } catch (err: any) {
     // Fallback to localStorage cache
@@ -211,7 +235,11 @@ export async function listRecords(
         if (data) results.push(JSON.parse(data));
       }
     }
-    return { success: true, data: results, error: `Retrieved from local cache: ${err?.message ?? "unknown error"}` };
+    return {
+      success: true,
+      data: results,
+      error: `Retrieved from local cache: ${err?.message ?? "unknown error"}`,
+    };
   }
 }
 
@@ -220,7 +248,12 @@ export async function listRecords(
 // ═══════════════════════════════════════════════════
 
 export const auditLogStore = {
-  async add(event: string, detail: string, user: string, severity: string = "info") {
+  async add(
+    event: string,
+    detail: string,
+    user: string,
+    severity: string = "info",
+  ) {
     return createRecord(Collections.AUDIT_LOG, {
       event,
       detail,
@@ -281,7 +314,12 @@ export const secretsStore = {
 };
 
 export const featureFlagsStore = {
-  async create(data: { id: string; name: string; description: string; enabled: boolean }) {
+  async create(data: {
+    id: string;
+    name: string;
+    description: string;
+    enabled: boolean;
+  }) {
     return createRecord(Collections.FEATURE_FLAGS, data);
   },
   async update(id: string, data: any) {
@@ -339,7 +377,11 @@ export async function checkApiStatus(): Promise<{
     if (error) throw error;
     return { connected: true, url: supabaseUrl };
   } catch (err: any) {
-    return { connected: false, url: supabaseUrl, error: err?.message ?? "Unable to reach Supabase" };
+    return {
+      connected: false,
+      url: supabaseUrl,
+      error: err?.message ?? "Unable to reach Supabase",
+    };
   }
 }
 
@@ -351,7 +393,7 @@ export async function checkApiStatus(): Promise<{
 export async function apiRequest<T = any>(
   method: "GET" | "POST" | "PUT" | "DELETE",
   path: string,
-  body?: Record<string, any>
+  body?: Record<string, any>,
 ): Promise<T> {
   // /api/users
   if (path === "/api/users" && method === "GET") {
@@ -363,7 +405,12 @@ export async function apiRequest<T = any>(
   const userMatch = path.match(/^\/api\/users\/(.+)$/);
   if (userMatch && method === "PUT") {
     const [, id] = userMatch;
-    const { data, error } = await supabase.from("team_members").update(body ?? {}).eq("id", id).select().single();
+    const { data, error } = await supabase
+      .from("team_members")
+      .update(body ?? {})
+      .eq("id", id)
+      .select()
+      .single();
     if (error) throw error;
     return data as unknown as T;
   }
@@ -388,7 +435,7 @@ export function queuePendingChange(
   collection: string,
   operation: "create" | "update" | "delete",
   data?: any,
-  localId?: string
+  localId?: string,
 ): void {
   const queue = getPendingChanges();
   queue.push({

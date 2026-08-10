@@ -57,10 +57,12 @@ function rowToMeta(r: DocRow): DocMetadata {
 
 export async function saveDocument(
   file: File,
-  opts?: { folderPath?: string; content?: string; thumbnail?: string }
+  opts?: { folderPath?: string; content?: string; thumbnail?: string },
 ): Promise<DocMetadata> {
   const supabase = getSupabaseClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   if (!user) throw new Error("Not authenticated — cannot upload document.");
 
   const category = autoCategorize(file.name);
@@ -99,7 +101,10 @@ export async function saveDocument(
 
   if (dbErr) {
     // Rollback the Storage upload so we don't leave orphaned files.
-    await supabase.storage.from(BUCKET).remove([filePath]).catch(() => {});
+    await supabase.storage
+      .from(BUCKET)
+      .remove([filePath])
+      .catch(() => {});
     throw new Error(`Metadata insert failed: ${dbErr.message}`);
   }
 
@@ -107,7 +112,7 @@ export async function saveDocument(
 }
 
 export async function getDocument(
-  id: string
+  id: string,
 ): Promise<{ meta: DocMetadata; data: ArrayBuffer } | null> {
   const supabase = getSupabaseClient();
   const { data: row, error } = await supabase
@@ -166,7 +171,10 @@ export async function deleteDocument(id: string): Promise<void> {
   if (error) throw new Error(`Delete failed: ${error.message}`);
   // 3. Delete the file from Storage (best-effort).
   if (row?.file_path) {
-    await supabase.storage.from(BUCKET).remove([row.file_path]).catch(() => {});
+    await supabase.storage
+      .from(BUCKET)
+      .remove([row.file_path])
+      .catch(() => {});
   }
 }
 
@@ -187,7 +195,7 @@ export async function getTotalStorageUsed(): Promise<number> {
   if (error || !data) return 0;
   return (data as { file_size: number }[]).reduce(
     (sum, d) => sum + (d.file_size || 0),
-    0
+    0,
   );
 }
 

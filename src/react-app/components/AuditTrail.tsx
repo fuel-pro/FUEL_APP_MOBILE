@@ -88,15 +88,16 @@ export default function AuditTrail({ stationId }: AuditTrailProps) {
       const todayStart = new Date(
         now.getFullYear(),
         now.getMonth(),
-        now.getDate()
+        now.getDate(),
       ).getTime();
       const weekStart = todayStart - now.getDay() * 86400000;
       setStats({
         total: data.length,
-        today: data.filter(e => new Date(e.timestamp).getTime() >= todayStart)
+        today: data.filter((e) => new Date(e.timestamp).getTime() >= todayStart)
           .length,
-        thisWeek: data.filter(e => new Date(e.timestamp).getTime() >= weekStart)
-          .length,
+        thisWeek: data.filter(
+          (e) => new Date(e.timestamp).getTime() >= weekStart,
+        ).length,
       });
     } catch (e) {
       console.error(e);
@@ -109,15 +110,15 @@ export default function AuditTrail({ stationId }: AuditTrailProps) {
   }, [stationId, category]);
 
   const filtered = entries.filter(
-    e =>
+    (e) =>
       e.action.toLowerCase().includes(search.toLowerCase()) ||
       e.details.toLowerCase().includes(search.toLowerCase()) ||
-      e.user?.toLowerCase().includes(search.toLowerCase())
+      e.user?.toLowerCase().includes(search.toLowerCase()),
   );
 
   const exportCSV = () => {
     const headers = ["Timestamp", "Action", "Category", "User", "Details"];
-    const rows = filtered.map(e => [
+    const rows = filtered.map((e) => [
       e.timestamp,
       e.action,
       e.category,
@@ -125,7 +126,7 @@ export default function AuditTrail({ stationId }: AuditTrailProps) {
       e.details,
     ]);
     const csv = [headers, ...rows]
-      .map(r => r.map(c => `"${c}"`).join(","))
+      .map((r) => r.map((c) => `"${c}"`).join(","))
       .join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
@@ -186,13 +187,13 @@ export default function AuditTrail({ stationId }: AuditTrailProps) {
             type="text"
             placeholder="Search audit log..."
             value={search}
-            onChange={e => setSearch(e.target.value)}
+            onChange={(e) => setSearch(e.target.value)}
             className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-white"
           />
         </div>
         <select
           value={category}
-          onChange={e => setCategory(e.target.value)}
+          onChange={(e) => setCategory(e.target.value)}
           className="px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-white"
         >
           <option value="all">All Categories</option>
@@ -234,7 +235,7 @@ export default function AuditTrail({ stationId }: AuditTrailProps) {
               </tr>
             </thead>
             <tbody>
-              {filtered.map(e => {
+              {filtered.map((e) => {
                 const cfg = categoryConfig[e.category] || categoryConfig.data;
                 const Icon = cfg.icon;
                 return (

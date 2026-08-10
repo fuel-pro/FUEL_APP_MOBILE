@@ -44,7 +44,7 @@ class NoSQLDB {
         resolve();
       };
 
-      request.onupgradeneeded = e => {
+      request.onupgradeneeded = (e) => {
         const db = (e.target as IDBOpenDBRequest).result;
 
         // Create collections (object stores)
@@ -62,7 +62,7 @@ class NoSQLDB {
           "cache",
         ];
 
-        collections.forEach(name => {
+        collections.forEach((name) => {
           if (!db.objectStoreNames.contains(name)) {
             const store = db.createObjectStore(name, { keyPath: "id" });
             store.createIndex("_updatedAt", "_updatedAt", { unique: false });
@@ -79,7 +79,7 @@ class NoSQLDB {
 
   private async getStore(
     collection: string,
-    mode: IDBTransactionMode = "readonly"
+    mode: IDBTransactionMode = "readonly",
   ): Promise<IDBObjectStore> {
     await this.ensureReady();
     if (!this.db) throw new Error("Database not initialized");
@@ -92,7 +92,7 @@ class NoSQLDB {
   async insert<T>(
     collection: string,
     data: T,
-    id?: string
+    id?: string,
   ): Promise<Document<T>> {
     const docId =
       id || `${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
@@ -118,7 +118,7 @@ class NoSQLDB {
   async upsert<T>(
     collection: string,
     id: string,
-    data: T
+    data: T,
   ): Promise<Document<T>> {
     const existing = await this.get<T>(collection, id);
     const now = Date.now();
@@ -161,7 +161,7 @@ class NoSQLDB {
 
   async getAll<T>(
     collection: string,
-    options: QueryOptions = {}
+    options: QueryOptions = {},
   ): Promise<Document<T>[]> {
     const store = await this.getStore(collection);
     const {
@@ -179,7 +179,7 @@ class NoSQLDB {
 
         // Filter deleted
         if (!includeDeleted) {
-          docs = docs.filter(d => !d._deleted);
+          docs = docs.filter((d) => !d._deleted);
         }
 
         // Apply custom filter
@@ -213,7 +213,7 @@ class NoSQLDB {
 
   async find<T>(
     collection: string,
-    predicate: (doc: Document<T>) => boolean
+    predicate: (doc: Document<T>) => boolean,
   ): Promise<Document<T>[]> {
     const docs = await this.getAll<T>(collection);
     return docs.filter(predicate);
@@ -269,7 +269,7 @@ class NoSQLDB {
 
   async bulkUpsert<T>(
     collection: string,
-    items: { id: string; data: T }[]
+    items: { id: string; data: T }[],
   ): Promise<Document<T>[]> {
     const results: Document<T>[] = [];
     for (const item of items) {
@@ -372,19 +372,19 @@ export function useNoSQL<T>(collection: string) {
 
   const insert = async (item: T, id?: string) => {
     const doc = await nosqlDB.insert(collection, item, id);
-    setData(prev => [doc, ...prev]);
+    setData((prev) => [doc, ...prev]);
     return doc;
   };
 
   const update = async (id: string, item: T) => {
     const doc = await nosqlDB.upsert(collection, id, item);
-    setData(prev => prev.map(d => (d.id === id ? doc : d)));
+    setData((prev) => prev.map((d) => (d.id === id ? doc : d)));
     return doc;
   };
 
   const remove = async (id: string) => {
     await nosqlDB.delete(collection, id);
-    setData(prev => prev.filter(d => d.id !== id));
+    setData((prev) => prev.filter((d) => d.id !== id));
   };
 
   return { data, loading, error, insert, update, remove, refresh: () => {} };

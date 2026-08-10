@@ -158,8 +158,8 @@ export default function DocumentCenter() {
       }
 
       // Mark as uploading
-      setUploads(prev =>
-        prev.map(u => (u.id === item.id ? { ...u, status: "uploading" } : u))
+      setUploads((prev) =>
+        prev.map((u) => (u.id === item.id ? { ...u, status: "uploading" } : u)),
       );
       uploadQueueRef.current[0] = { ...item, status: "uploading" };
 
@@ -167,10 +167,10 @@ export default function DocumentCenter() {
         await saveDocument(item.file, {
           folderPath: item.folderPath || "",
         });
-        setUploads(prev =>
-          prev.map(u =>
-            u.id === item.id ? { ...u, status: "done", progress: 100 } : u
-          )
+        setUploads((prev) =>
+          prev.map((u) =>
+            u.id === item.id ? { ...u, status: "done", progress: 100 } : u,
+          ),
         );
         uploadQueueRef.current[0] = {
           ...uploadQueueRef.current[0],
@@ -179,10 +179,10 @@ export default function DocumentCenter() {
         };
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Save failed";
-        setUploads(prev =>
-          prev.map(u =>
-            u.id === item.id ? { ...u, status: "error", error: msg } : u
-          )
+        setUploads((prev) =>
+          prev.map((u) =>
+            u.id === item.id ? { ...u, status: "error", error: msg } : u,
+          ),
         );
         uploadQueueRef.current[0] = {
           ...uploadQueueRef.current[0],
@@ -202,7 +202,7 @@ export default function DocumentCenter() {
   const addFilesToQueue = useCallback(
     (files: FileList | null, folderPath?: string) => {
       if (!files || files.length === 0) return;
-      const newItems: UploadItem[] = Array.from(files).map(file => ({
+      const newItems: UploadItem[] = Array.from(files).map((file) => ({
         file,
         id: `up_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
         status: "queued" as const,
@@ -210,10 +210,10 @@ export default function DocumentCenter() {
         folderPath,
       }));
       uploadQueueRef.current = [...uploadQueueRef.current, ...newItems];
-      setUploads(prev => [...prev, ...newItems]);
+      setUploads((prev) => [...prev, ...newItems]);
       processQueue();
     },
-    [processQueue]
+    [processQueue],
   );
 
   // Handlers
@@ -222,7 +222,7 @@ export default function DocumentCenter() {
       addFilesToQueue(e.target.files);
       e.target.value = "";
     },
-    [addFilesToQueue]
+    [addFilesToQueue],
   );
 
   const handleFolderSelect = useCallback(
@@ -238,7 +238,7 @@ export default function DocumentCenter() {
       }
       e.target.value = "";
     },
-    [addFilesToQueue]
+    [addFilesToQueue],
   );
 
   // Drag & drop
@@ -267,14 +267,14 @@ export default function DocumentCenter() {
       const allFiles: File[] = [];
       const traverseEntry = (entry: FileSystemEntry, path: string = "") => {
         if (entry.isFile) {
-          (entry as FileSystemFileEntry).file(file => {
+          (entry as FileSystemFileEntry).file((file) => {
             allFiles.push(file);
             if (allFiles.length >= 1000) return; // safety limit
           });
         } else if (entry.isDirectory) {
           const dirReader = (entry as FileSystemDirectoryEntry).createReader();
-          dirReader.readEntries(entries => {
-            entries.forEach(e => traverseEntry(e, path + entry.name + "/"));
+          dirReader.readEntries((entries) => {
+            entries.forEach((e) => traverseEntry(e, path + entry.name + "/"));
           });
         }
       };
@@ -289,11 +289,11 @@ export default function DocumentCenter() {
         addFilesToQueue(e.dataTransfer.files);
       } else if (allFiles.length > 0) {
         const dt = new DataTransfer();
-        allFiles.forEach(f => dt.items.add(f));
+        allFiles.forEach((f) => dt.items.add(f));
         addFilesToQueue(dt.files);
       }
     },
-    [addFilesToQueue]
+    [addFilesToQueue],
   );
 
   const handleDelete = useCallback(
@@ -302,7 +302,7 @@ export default function DocumentCenter() {
       setSelectedDoc(null);
       await loadDocs();
     },
-    [loadDocs]
+    [loadDocs],
   );
 
   const handleDownload = useCallback(async (doc: DocMetadata) => {
@@ -320,8 +320,8 @@ export default function DocumentCenter() {
   }, []);
 
   const clearCompleted = useCallback(() => {
-    setUploads(prev =>
-      prev.filter(u => u.status === "queued" || u.status === "uploading")
+    setUploads((prev) =>
+      prev.filter((u) => u.status === "queued" || u.status === "uploading"),
     );
   }, []);
 
@@ -354,17 +354,17 @@ export default function DocumentCenter() {
   // Category counts
   const categoryCounts = useMemo(() => {
     const counts: Record<string, number> = {};
-    documents.forEach(d => {
+    documents.forEach((d) => {
       counts[d.category] = (counts[d.category] || 0) + 1;
     });
     return counts;
   }, [documents]);
 
   const activeUploads = uploads.filter(
-    u => u.status === "queued" || u.status === "uploading"
+    (u) => u.status === "queued" || u.status === "uploading",
   ).length;
-  const doneUploads = uploads.filter(u => u.status === "done").length;
-  const errorUploads = uploads.filter(u => u.status === "error").length;
+  const doneUploads = uploads.filter((u) => u.status === "done").length;
+  const errorUploads = uploads.filter((u) => u.status === "error").length;
 
   return (
     <div
@@ -459,9 +459,8 @@ export default function DocumentCenter() {
         <input
           ref={folderInputRef}
           type="file"
-          // @ts-ignore - webkitdirectory is not in TypeScript types but works in browsers
+          // @ts-expect-error - webkitdirectory/directory are not in React DOM TS types but work in browsers
           webkitdirectory=""
-          // @ts-ignore
           directory=""
           multiple
           onChange={handleFolderSelect}
@@ -575,7 +574,7 @@ export default function DocumentCenter() {
               gap: 4,
             }}
           >
-            {uploads.map(item => (
+            {uploads.map((item) => (
               <div
                 key={item.id}
                 style={{
@@ -673,7 +672,7 @@ export default function DocumentCenter() {
           <input
             type="text"
             value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
+            onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search documents..."
             style={{
               width: "100%",
@@ -738,7 +737,7 @@ export default function DocumentCenter() {
         </button>
         <div style={{ position: "relative" }}>
           <button
-            onClick={() => setSortDir(d => (d === "asc" ? "desc" : "asc"))}
+            onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
             style={{
               padding: "8px 12px",
               background: "#1a1a1f",
@@ -774,7 +773,7 @@ export default function DocumentCenter() {
           paddingBottom: 4,
         }}
       >
-        {CATEGORIES.map(cat => {
+        {CATEGORIES.map((cat) => {
           const isActive = activeCategory === cat;
           const count = cat === "All" ? stats.count : categoryCounts[cat] || 0;
           return (
@@ -824,7 +823,7 @@ export default function DocumentCenter() {
             gap: 10,
           }}
         >
-          {sortedDocs.map(doc => (
+          {sortedDocs.map((doc) => (
             <DocGridCard
               key={doc.id}
               doc={doc}
@@ -836,7 +835,7 @@ export default function DocumentCenter() {
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          {sortedDocs.map(doc => (
+          {sortedDocs.map((doc) => (
             <DocListRow
               key={doc.id}
               doc={doc}
@@ -952,8 +951,8 @@ function DocGridCard({
         flexDirection: "column",
         gap: 8,
       }}
-      onMouseEnter={e => (e.currentTarget.style.borderColor = "#475569")}
-      onMouseLeave={e => (e.currentTarget.style.borderColor = "#334155")}
+      onMouseEnter={(e) => (e.currentTarget.style.borderColor = "#475569")}
+      onMouseLeave={(e) => (e.currentTarget.style.borderColor = "#334155")}
     >
       <div
         style={{
@@ -965,7 +964,7 @@ function DocGridCard({
         <Icon size={20} style={{ color }} />
         <div style={{ display: "flex", gap: 4 }}>
           <button
-            onClick={e => {
+            onClick={(e) => {
               e.stopPropagation();
               onDownload(doc);
             }}
@@ -980,7 +979,7 @@ function DocGridCard({
             <Download size={13} />
           </button>
           <button
-            onClick={e => {
+            onClick={(e) => {
               e.stopPropagation();
               onDelete(doc.id);
             }}
@@ -1057,8 +1056,8 @@ function DocListRow({
         fontSize: 12,
         transition: "border-color 0.2s",
       }}
-      onMouseEnter={e => (e.currentTarget.style.borderColor = "#475569")}
-      onMouseLeave={e => (e.currentTarget.style.borderColor = "#334155")}
+      onMouseEnter={(e) => (e.currentTarget.style.borderColor = "#475569")}
+      onMouseLeave={(e) => (e.currentTarget.style.borderColor = "#334155")}
     >
       <Icon size={16} style={{ color, flexShrink: 0 }} />
       <span
@@ -1094,7 +1093,7 @@ function DocListRow({
       </span>
       <div style={{ display: "flex", gap: 2, flexShrink: 0 }}>
         <button
-          onClick={e => {
+          onClick={(e) => {
             e.stopPropagation();
             onDownload(doc);
           }}
@@ -1109,7 +1108,7 @@ function DocListRow({
           <Download size={13} />
         </button>
         <button
-          onClick={e => {
+          onClick={(e) => {
             e.stopPropagation();
             onDelete(doc.id);
           }}

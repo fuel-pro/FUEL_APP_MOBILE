@@ -46,13 +46,13 @@ export default function Compliance() {
   });
 
   const [expandedSection, setExpandedSection] = useState<string | null>(
-    "overview"
+    "overview",
   );
   const [showTemplate, setShowTemplate] = useState(false);
 
   const config = useMemo(
     () => getComplianceConfig(selectedCountryCode),
-    [selectedCountryCode]
+    [selectedCountryCode],
   );
   const countries = useMemo(() => getAllComplianceCountries(), []);
 
@@ -178,7 +178,7 @@ export default function Compliance() {
 
       {/* Expandable Sections */}
       <div className="space-y-3">
-        {sections.map(section => {
+        {sections.map((section) => {
           const isExpanded = expandedSection === section.id;
           const SectionIcon = section.icon;
           return (
@@ -405,7 +405,7 @@ function FuelSection({ config }: { config: ComplianceConfig }) {
         {config.fuelRegulatorShort})
       </p>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-        {config.fuelTypes.map(ft => (
+        {config.fuelTypes.map((ft) => (
           <div
             key={ft.code}
             className="p-3 bg-gray-50 dark:bg-gray-900 rounded-lg"
@@ -488,7 +488,7 @@ function ReceiptsSection({ config }: { config: ComplianceConfig }) {
 function FeaturesSection({ config }: { config: ComplianceConfig }) {
   return (
     <div className="space-y-2">
-      {config.complianceFeatures.map(f => (
+      {config.complianceFeatures.map((f) => (
         <div
           key={f.id}
           className="flex items-start gap-3 p-3 bg-gray-50 dark:bg-gray-900 rounded-lg"
@@ -523,7 +523,7 @@ function PaymentsSection({ config }: { config: ComplianceConfig }) {
   return (
     <div className="space-y-2">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-        {config.paymentMethods.map(pm => (
+        {config.paymentMethods.map((pm) => (
           <div
             key={pm.id}
             className="p-3 bg-gray-50 dark:bg-gray-900 rounded-lg"
@@ -560,7 +560,7 @@ function PaymentsSection({ config }: { config: ComplianceConfig }) {
           Supported Banks
         </p>
         <div className="flex flex-wrap gap-2 mt-1">
-          {config.bankSupport.map(b => (
+          {config.bankSupport.map((b) => (
             <span
               key={b.code}
               className="text-[10px] px-2 py-1 bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700"
@@ -644,13 +644,13 @@ function generateComplianceTemplate(config: ComplianceConfig) {
         date_format: config.dateFormat,
         currency: config.currency,
       },
-      permits: config.requiredPermits.map(p => ({
+      permits: config.requiredPermits.map((p) => ({
         name: p,
         status: "pending",
         issued_by: config.fuelRegulatorShort,
         valid_until: `[YYYY-MM-DD]`,
       })),
-      fuel_operations: config.fuelTypes.map(ft => ({
+      fuel_operations: config.fuelTypes.map((ft) => ({
         type: ft.code,
         name: ft.localName,
         tax_rate: ft.taxRate,
@@ -669,7 +669,7 @@ function generateComplianceTemplate(config: ComplianceConfig) {
         etr_format: config.etrFormat,
         sample_receipt_number: `[AUTO-GENERATED]`,
       },
-      payment_methods: config.paymentMethods.map(pm => ({
+      payment_methods: config.paymentMethods.map((pm) => ({
         id: pm.id,
         name: pm.name,
         type: pm.type,

@@ -1,5 +1,8 @@
 import { useState, useEffect } from "react";
-import { KENYA_BASE_PRICES, KENYA_SPECIALTY_PRICES } from "@/react-app/config/pricing";
+import {
+  KENYA_BASE_PRICES,
+  KENYA_SPECIALTY_PRICES,
+} from "@/react-app/config/pricing";
 import {
   Fuel,
   Plus,
@@ -296,15 +299,19 @@ export default function FuelTypesManager() {
   const persist = (types: CustomFuelType[]) => {
     setFuelTypes(types);
     saveFuelTypes(types);
-    cloudStorageService.set("fuel_types_config", types, stationId).catch(() => {});
+    cloudStorageService
+      .set("fuel_types_config", types, stationId)
+      .catch(() => {});
   };
 
   // Load from cloud on mount (cross-device sync)
   useEffect(() => {
     if (!user) return;
     (async () => {
-      const cloudData =
-        await cloudStorageService.get<CustomFuelType[]>("fuel_types_config", stationId);
+      const cloudData = await cloudStorageService.get<CustomFuelType[]>(
+        "fuel_types_config",
+        stationId,
+      );
       if (cloudData && Array.isArray(cloudData)) setFuelTypes(cloudData);
     })();
   }, [user, stationId]);
@@ -346,17 +353,17 @@ export default function FuelTypesManager() {
 
   const handleDelete = (id: string) => {
     if (!confirm("Delete this fuel type?")) return;
-    persist(fuelTypes.filter(f => f.id !== id));
+    persist(fuelTypes.filter((f) => f.id !== id));
   };
 
   const handleToggleActive = (id: string) => {
     persist(
-      fuelTypes.map(f => (f.id === id ? { ...f, active: !f.active } : f))
+      fuelTypes.map((f) => (f.id === id ? { ...f, active: !f.active } : f)),
     );
   };
 
   const handleAddPreset = (preset: CustomFuelType) => {
-    const exists = fuelTypes.some(f => f.code === preset.code);
+    const exists = fuelTypes.some((f) => f.code === preset.code);
     if (exists) {
       alert(`${preset.name} already exists!`);
       return;
@@ -394,7 +401,7 @@ export default function FuelTypesManager() {
         </div>
         <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 text-center">
           <p className="text-2xl font-bold text-green-600 dark:text-green-400">
-            {fuelTypes.filter(f => f.active).length}
+            {fuelTypes.filter((f) => f.active).length}
           </p>
           <p className="text-[10px] text-gray-500">Active</p>
         </div>
@@ -407,8 +414,8 @@ export default function FuelTypesManager() {
         <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 text-center">
           <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">
             {marginPercent(
-              fuelTypes.find(f => f.id === "pms")?.price || 0,
-              fuelTypes.find(f => f.id === "pms")?.costPrice || 0
+              fuelTypes.find((f) => f.id === "pms")?.price || 0,
+              fuelTypes.find((f) => f.id === "pms")?.costPrice || 0,
             )}
             %
           </p>
@@ -449,7 +456,7 @@ export default function FuelTypesManager() {
               <label className="block text-xs text-gray-500 mb-1">Code *</label>
               <input
                 value={formCode}
-                onChange={e => setFormCode(e.target.value)}
+                onChange={(e) => setFormCode(e.target.value)}
                 placeholder="e.g. V-PWR"
                 className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
               />
@@ -458,7 +465,7 @@ export default function FuelTypesManager() {
               <label className="block text-xs text-gray-500 mb-1">Name *</label>
               <input
                 value={formName}
-                onChange={e => setFormName(e.target.value)}
+                onChange={(e) => setFormName(e.target.value)}
                 placeholder="e.g. V-Power"
                 className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
               />
@@ -469,7 +476,7 @@ export default function FuelTypesManager() {
               </label>
               <input
                 value={formLocalName}
-                onChange={e => setFormLocalName(e.target.value)}
+                onChange={(e) => setFormLocalName(e.target.value)}
                 placeholder="e.g. V-Power Premium"
                 className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
               />
@@ -482,7 +489,7 @@ export default function FuelTypesManager() {
                 type="number"
                 step="0.01"
                 value={formPrice}
-                onChange={e => setFormPrice(parseFloat(e.target.value) || 0)}
+                onChange={(e) => setFormPrice(parseFloat(e.target.value) || 0)}
                 className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
               />
             </div>
@@ -494,7 +501,7 @@ export default function FuelTypesManager() {
                 type="number"
                 step="0.01"
                 value={formCostPrice}
-                onChange={e =>
+                onChange={(e) =>
                   setFormCostPrice(parseFloat(e.target.value) || 0)
                 }
                 className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
@@ -507,7 +514,9 @@ export default function FuelTypesManager() {
               <input
                 type="number"
                 value={formTaxRate}
-                onChange={e => setFormTaxRate(parseFloat(e.target.value) || 0)}
+                onChange={(e) =>
+                  setFormTaxRate(parseFloat(e.target.value) || 0)
+                }
                 className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
               />
             </div>
@@ -518,14 +527,14 @@ export default function FuelTypesManager() {
               <input
                 type="number"
                 value={formPumps}
-                onChange={e => setFormPumps(parseInt(e.target.value) || 0)}
+                onChange={(e) => setFormPumps(parseInt(e.target.value) || 0)}
                 className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
               />
             </div>
             <div>
               <label className="block text-xs text-gray-500 mb-1">Color</label>
               <div className="flex flex-wrap gap-1">
-                {COLOR_OPTIONS.map(c => (
+                {COLOR_OPTIONS.map((c) => (
                   <button
                     key={c}
                     onClick={() => setFormColor(c)}
@@ -542,7 +551,7 @@ export default function FuelTypesManager() {
             </label>
             <textarea
               value={formDesc}
-              onChange={e => setFormDesc(e.target.value)}
+              onChange={(e) => setFormDesc(e.target.value)}
               rows={2}
               className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
             />
@@ -563,8 +572,8 @@ export default function FuelTypesManager() {
             Quick Add Preset Fuel Types
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {PRESET_FUELS.map(preset => {
-              const exists = fuelTypes.some(f => f.code === preset.code);
+            {PRESET_FUELS.map((preset) => {
+              const exists = fuelTypes.some((f) => f.code === preset.code);
               return (
                 <div
                   key={preset.id}
@@ -602,7 +611,7 @@ export default function FuelTypesManager() {
 
       {/* Fuel Types List */}
       <div className="space-y-3">
-        {fuelTypes.map(ft => {
+        {fuelTypes.map((ft) => {
           const isExpanded = expandedId === ft.id;
           const colorClass = FUEL_COLORS[ft.color] || FUEL_COLORS.red;
           return (
@@ -638,7 +647,7 @@ export default function FuelTypesManager() {
                 </div>
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={e => {
+                    onClick={(e) => {
                       e.stopPropagation();
                       handleToggleActive(ft.id);
                     }}
@@ -647,7 +656,7 @@ export default function FuelTypesManager() {
                     {ft.active ? "Active" : "Inactive"}
                   </button>
                   <button
-                    onClick={e => {
+                    onClick={(e) => {
                       e.stopPropagation();
                       handleDelete(ft.id);
                     }}

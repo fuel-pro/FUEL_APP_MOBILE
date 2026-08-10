@@ -30,7 +30,7 @@ export default function RegionalCompliance() {
     setSelectedCountryCode(code);
     // Map code to key (country code lowercase)
     const lower = code.toLowerCase();
-    const byKey = countries.find(c => c.key === lower);
+    const byKey = countries.find((c) => c.key === lower);
     if (byKey) {
       setSelectedCountryKey(byKey.key);
       return;
@@ -128,7 +128,7 @@ export default function RegionalCompliance() {
 
       {/* Expandable Sections */}
       <div className="space-y-3">
-        {sections.map(section => {
+        {sections.map((section) => {
           const isExpanded = expandedSection === section.id;
           const SectionIcon = section.icon;
           return (
@@ -271,7 +271,7 @@ function FuelSection({ config }: { config: RegionalConfig }) {
         Regulated by: <strong>{config.fuelRegulator}</strong>
       </p>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-        {config.fuelTypes.map(ft => (
+        {config.fuelTypes.map((ft) => (
           <div
             key={ft.code}
             className="p-3 bg-gray-50 dark:bg-gray-900 rounded-lg"
@@ -340,7 +340,7 @@ function ReceiptsSection({ config }: { config: RegionalConfig }) {
 function FeaturesSection({ config }: { config: RegionalConfig }) {
   return (
     <div className="space-y-2">
-      {config.complianceFeatures.map(f => (
+      {config.complianceFeatures.map((f) => (
         <div
           key={f.id}
           className="flex items-start gap-3 p-3 bg-gray-50 dark:bg-gray-900 rounded-lg"
@@ -370,7 +370,7 @@ function PaymentsSection({ config }: { config: RegionalConfig }) {
   return (
     <div className="space-y-2">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-        {config.paymentMethods.map(pm => (
+        {config.paymentMethods.map((pm) => (
           <div
             key={pm.id}
             className="p-3 bg-gray-50 dark:bg-gray-900 rounded-lg"
@@ -407,7 +407,7 @@ function PaymentsSection({ config }: { config: RegionalConfig }) {
           Supported Banks
         </p>
         <div className="flex flex-wrap gap-2 mt-1">
-          {config.bankSupport.map(b => (
+          {config.bankSupport.map((b) => (
             <span
               key={b.code}
               className="text-[10px] px-2 py-1 bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700"

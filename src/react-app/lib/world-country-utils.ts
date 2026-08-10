@@ -25,7 +25,7 @@ function getFlagEmoji(countryCode: string): string {
 
 // ─── All 250+ countries sorted alphabetically ───
 export const ALL_COUNTRIES: CountryInfo[] = Object.entries(
-  WORLD_PAYMENT_CONFIGS
+  WORLD_PAYMENT_CONFIGS,
 )
   .map(([code, config]) => ({
     code,
@@ -37,7 +37,7 @@ export const ALL_COUNTRIES: CountryInfo[] = Object.entries(
 
 // ─── Get country by code ───
 export function getCountryByCode(code: string): CountryInfo | undefined {
-  return ALL_COUNTRIES.find(c => c.code === code.toUpperCase());
+  return ALL_COUNTRIES.find((c) => c.code === code.toUpperCase());
 }
 
 // ─── Get country by name (case-insensitive, trimmed) ───
@@ -46,19 +46,21 @@ export function getCountryByCode(code: string): CountryInfo | undefined {
 export function getCountryByName(name: string): CountryInfo | undefined {
   const n = name.trim().toLowerCase();
   if (!n) return undefined;
-  return ALL_COUNTRIES.find(c => c.name.toLowerCase() === n);
+  return ALL_COUNTRIES.find((c) => c.name.toLowerCase() === n);
 }
 
 // ─── Extract a country from a free-text location string ───
 // Handles "City, Country", "Country", and common variants. Returns the
 // matched CountryInfo, or undefined if no known country is found.
-export function getCountryFromLocation(location: string): CountryInfo | undefined {
+export function getCountryFromLocation(
+  location: string,
+): CountryInfo | undefined {
   if (!location) return undefined;
   // Split on commas / semicolons / pipes and try each segment, longest first
   // so "Mombasa Road, Nairobi, Kenya" prefers the most specific match.
   const segments = location
     .split(/[,;|]/)
-    .map(s => s.trim())
+    .map((s) => s.trim())
     .filter(Boolean)
     .sort((a, b) => b.length - a.length);
   for (const seg of segments) {
@@ -66,8 +68,8 @@ export function getCountryFromLocation(location: string): CountryInfo | undefine
     if (direct) return direct;
     // Also try matching a country name that appears as a substring
     // (e.g. "Nairobi Kenya" without a separator, or "Mombasa Road Kenya").
-    const contained = ALL_COUNTRIES.find(
-      c => seg.toLowerCase().includes(c.name.toLowerCase())
+    const contained = ALL_COUNTRIES.find((c) =>
+      seg.toLowerCase().includes(c.name.toLowerCase()),
     );
     if (contained) return contained;
   }
@@ -79,14 +81,14 @@ export function getCountryPaymentMethods(countryCode: string) {
   const config = WORLD_PAYMENT_CONFIGS[countryCode.toUpperCase()];
   if (!config) return { banks: [], digitalWallets: [], cards: [], methods: [] };
   const banks = config.paymentMethods
-    .filter(m => m.type === "bank")
-    .map(m => m.name);
+    .filter((m) => m.type === "bank")
+    .map((m) => m.name);
   const digitalWallets = config.paymentMethods
-    .filter(m => m.type === "digital_wallet")
-    .map(m => m.name);
+    .filter((m) => m.type === "digital_wallet")
+    .map((m) => m.name);
   const cards = config.paymentMethods
-    .filter(m => m.type === "card")
-    .map(m => m.name);
+    .filter((m) => m.type === "card")
+    .map((m) => m.name);
   return { banks, digitalWallets, cards, methods: config.paymentMethods };
 }
 
@@ -356,7 +358,7 @@ export function getCountryGateways(countryCode: string): string[] {
   // Southeast Asia
   if (
     ["TH", "MY", "VN", "ID", "PH", "BN", "KH", "LA", "MM", "TW", "MO"].includes(
-      cc
+      cc,
     )
   ) {
     return ["Stripe", "PayPal", "Alipay", "Card (Visa/Mastercard)"];
@@ -503,11 +505,11 @@ export function generateRegionalPricesForAllCountries(): {
     const rate = getExchangeRate(currency);
     const gateways = getCountryGateways(code);
 
-    (Object.keys(USD_BASE_PRICES) as TierSlug[]).forEach(tierId => {
+    (Object.keys(USD_BASE_PRICES) as TierSlug[]).forEach((tierId) => {
       const usdPrice = USD_BASE_PRICES[tierId];
       const mult = TIER_MULTIPLIERS[tierId] || 1;
       const localPrice = Math.round(
-        (usdPrice * rate * mult) / TIER_MULTIPLIERS.daily
+        (usdPrice * rate * mult) / TIER_MULTIPLIERS.daily,
       );
       const nicePrice =
         localPrice < 100
@@ -538,8 +540,8 @@ export function getDefaultStationForCountry(countryCode: string): string {
 // ─── Get all currencies used worldwide ───
 export function getAllCurrencies(): string[] {
   const currencies = new Set<string>();
-  Object.values(WORLD_PAYMENT_CONFIGS).forEach(c =>
-    currencies.add(c.defaultCurrency)
+  Object.values(WORLD_PAYMENT_CONFIGS).forEach((c) =>
+    currencies.add(c.defaultCurrency),
   );
   return Array.from(currencies).sort();
 }

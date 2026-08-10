@@ -74,7 +74,7 @@ export const S3Storage = {
       region?: string;
       accessKeyId?: string;
       secretAccessKey?: string;
-    } = {}
+    } = {},
   ): Promise<string | null> {
     const {
       bucket = import.meta.env.VITE_S3_BUCKET || "fuelpro-files",
@@ -113,7 +113,7 @@ export const S3Storage = {
 
   async getSignedUploadUrl(
     filename: string,
-    contentType: string
+    contentType: string,
   ): Promise<string | null> {
     try {
       const res = await fetch("/api/s3/upload-url", {
@@ -204,7 +204,7 @@ export const R2Storage = {
 
   async listFiles(prefix: string = ""): Promise<string[]> {
     const metadata = getFileMetadata();
-    return Object.keys(metadata).filter(k => k.startsWith(prefix));
+    return Object.keys(metadata).filter((k) => k.startsWith(prefix));
   },
 
   getSignedUrl(path: string, expiresIn: number = 3600): string {
@@ -215,8 +215,12 @@ export const R2Storage = {
 };
 
 // ─── Supabase Storage ───
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://ojjscjwatikixlpshmub.supabase.co";
-const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "sb_publishable_-uUkeBG1KzESv3O4v90rcw_jY9NxTc4";
+const SUPABASE_URL =
+  import.meta.env.VITE_SUPABASE_URL ||
+  "https://ojjscjwatikixlpshmub.supabase.co";
+const SUPABASE_KEY =
+  import.meta.env.VITE_SUPABASE_ANON_KEY ||
+  "sb_publishable_-uUkeBG1KzESv3O4v90rcw_jY9NxTc4";
 
 export const SupabaseStorage = {
   async uploadFile(file: File | Blob, path: string): Promise<string | null> {
@@ -274,7 +278,7 @@ export const SupabaseStorage = {
 
   async getSignedUrl(
     path: string,
-    expiresIn: number = 3600
+    expiresIn: number = 3600,
   ): Promise<string | null> {
     if (!SUPABASE_URL || !SUPABASE_KEY) return null;
     try {
@@ -299,7 +303,7 @@ export const UpstashCache = {
         `${UPSTASH_CONFIG.url}/get/${encodeURIComponent(key)}`,
         {
           headers: { Authorization: `Bearer ${UPSTASH_CONFIG.token}` },
-        }
+        },
       );
       const data = await res.json();
       return data.result ? JSON.parse(data.result) : null;
@@ -311,7 +315,7 @@ export const UpstashCache = {
   async set<T>(
     key: string,
     value: T,
-    ttlSeconds: number = 300
+    ttlSeconds: number = 300,
   ): Promise<boolean> {
     if (!UPSTASH_CONFIG.url || !UPSTASH_CONFIG.token) return false;
     try {
@@ -348,7 +352,7 @@ export const UpstashCache = {
   async setSession(
     userId: string,
     sessionData: Record<string, any>,
-    ttlSeconds: number = 2592000
+    ttlSeconds: number = 2592000,
   ): Promise<boolean> {
     const key = `session:${userId}`;
     return this.set(key, { ...sessionData, createdAt: Date.now() }, ttlSeconds);
@@ -367,21 +371,21 @@ export const UpstashCache = {
   // Cache fuel prices (frequently accessed)
   async cacheFuelPrices(
     prices: Record<string, number>,
-    ttlSeconds: number = 300
+    ttlSeconds: number = 300,
   ): Promise<boolean> {
     return this.set("fuel_prices:v1", prices, ttlSeconds);
   },
 
   async getCachedFuelPrices(): Promise<Record<string, number> | null> {
     return (this as typeof UpstashCache).get<Record<string, number>>(
-      "fuel_prices:v1"
+      "fuel_prices:v1",
     );
   },
 
   // Cache station data
   async cacheStations(
     stations: any[],
-    ttlSeconds: number = 600
+    ttlSeconds: number = 600,
   ): Promise<boolean> {
     return this.set("stations:v1", stations, ttlSeconds);
   },
@@ -408,7 +412,7 @@ const SWR_REVALIDATE_INTERVAL = 30 * 1000; // 30 seconds
 export async function swr<T>(
   key: string,
   fetcher: () => Promise<T>,
-  options: { ttl?: number; revalidate?: boolean } = {}
+  options: { ttl?: number; revalidate?: boolean } = {},
 ): Promise<T | null> {
   const { ttl = SWR_STALE_TIME, revalidate = true } = options;
   const now = Date.now();
@@ -420,7 +424,7 @@ export async function swr<T>(
     if (revalidate && now - entry.timestamp > SWR_REVALIDATE_INTERVAL) {
       entry.loading = true;
       fetcher()
-        .then(data => {
+        .then((data) => {
           SWR_CACHE.set(key, { data, timestamp: Date.now(), loading: false });
         })
         .catch(() => {
@@ -473,7 +477,7 @@ async function openFileMetaDB(): Promise<IDBDatabase> {
     const req = indexedDB.open(FILE_META_DB, 1);
     req.onerror = () => reject(req.error);
     req.onsuccess = () => resolve(req.result);
-    req.onupgradeneeded = e => {
+    req.onupgradeneeded = (e) => {
       const db = (e.target as IDBOpenDBRequest).result;
       if (!db.objectStoreNames.contains(FILE_META_STORE)) {
         db.createObjectStore(FILE_META_STORE, { keyPath: "path" });
@@ -484,7 +488,7 @@ async function openFileMetaDB(): Promise<IDBDatabase> {
 
 async function storeFileMetadata(
   path: string,
-  meta: Record<string, any>
+  meta: Record<string, any>,
 ): Promise<void> {
   try {
     const db = await openFileMetaDB();
@@ -522,7 +526,7 @@ export const RealtimeSync = {
       eventType: "INSERT" | "UPDATE" | "DELETE";
       new: any;
       old: any;
-    }) => void
+    }) => void,
   ): Promise<RealtimeChannel | null> {
     if (!SUPABASE_URL || !SUPABASE_KEY) return null;
 
@@ -535,13 +539,13 @@ export const RealtimeSync = {
         .on(
           "postgres_changes",
           { event: "*", schema: "public", table: collection },
-          payload => {
+          (payload) => {
             callback({
               eventType: payload.eventType as "INSERT" | "UPDATE" | "DELETE",
               new: payload.new,
               old: payload.old,
             });
-          }
+          },
         )
         .subscribe();
 
@@ -556,7 +560,7 @@ export const RealtimeSync = {
 
   // Subscribe to fuel prices changes
   async subscribeToFuelPrices(
-    callback: (prices: Record<string, number>) => void
+    callback: (prices: Record<string, number>) => void,
   ): Promise<RealtimeChannel | null> {
     return this.subscribeToCollection("fuel_prices", ({ new: data }) => {
       if (data) {
@@ -569,7 +573,7 @@ export const RealtimeSync = {
 
   // Subscribe to station data changes
   async subscribeToStations(
-    callback: (stations: any[]) => void
+    callback: (stations: any[]) => void,
   ): Promise<RealtimeChannel | null> {
     return this.subscribeToCollection("stations", ({ new: data }) => {
       if (data) callback(data);
@@ -585,7 +589,7 @@ export const SeafileSync = {
   async getAuthToken(
     endpoint: string,
     username: string,
-    password: string
+    password: string,
   ): Promise<string | null> {
     try {
       const res = await fetch(
@@ -594,7 +598,7 @@ export const SeafileSync = {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ username, password }),
-        }
+        },
       );
       if (!res.ok) return null;
       const data = await res.json();
@@ -606,7 +610,7 @@ export const SeafileSync = {
 
   async listLibraries(
     endpoint: string,
-    token: string
+    token: string,
   ): Promise<{ id: string; name: string }[]> {
     try {
       const res = await fetch(`${endpoint.replace(/\/$/, "")}/api2/repos/`, {
@@ -625,7 +629,7 @@ export const SeafileSync = {
     token: string,
     libId: string,
     file: File | Blob,
-    path: string = "/"
+    path: string = "/",
   ): Promise<string | null> {
     try {
       const dirUrl = `${endpoint.replace(/\/$/, "")}/api2/repos/${libId}/dir/?p=${encodeURIComponent(path)}`;
@@ -635,10 +639,13 @@ export const SeafileSync = {
         method: "POST",
         headers: { Authorization: `Token ${token}` },
         body: JSON.stringify({ operation: "mkdir", dirname: "" }),
-      }).catch(err =>
+      }).catch((err) =>
         // mkdir is best-effort (the dir may already exist); log so a genuine
         // auth/network failure isn't completely invisible.
-        console.warn("[CloudStorage] mkdir failed (may be harmless if dir exists):", err)
+        console.warn(
+          "[CloudStorage] mkdir failed (may be harmless if dir exists):",
+          err,
+        ),
       );
 
       // Upload file
@@ -648,7 +655,7 @@ export const SeafileSync = {
 
       const uploadRes = await fetch(
         `${endpoint.replace(/\/$/, "")}/api2/repos/${libId}/upload-link/`,
-        { headers: { Authorization: `Token ${token}` } }
+        { headers: { Authorization: `Token ${token}` } },
       );
       if (!uploadRes.ok) return null;
 
@@ -670,12 +677,12 @@ export const SeafileSync = {
     endpoint: string,
     token: string,
     libId: string,
-    path: string
+    path: string,
   ): Promise<Blob | null> {
     try {
       const downloadRes = await fetch(
         `${endpoint.replace(/\/$/, "")}/api2/repos/${libId}/file/?p=${encodeURIComponent(path)}`,
-        { headers: { Authorization: `Token ${token}`, Accept: "*/*" } }
+        { headers: { Authorization: `Token ${token}`, Accept: "*/*" } },
       );
       if (!downloadRes.ok) return null;
       return await downloadRes.blob();
@@ -688,14 +695,14 @@ export const SeafileSync = {
     endpoint: string,
     token: string,
     libId: string,
-    path: string = "/"
+    path: string = "/",
   ): Promise<
     { name: string; type: "file" | "dir"; size: number; mtime: number }[]
   > {
     try {
       const res = await fetch(
         `${endpoint.replace(/\/$/, "")}/api2/repos/${libId}/dir/?p=${encodeURIComponent(path)}`,
-        { headers: { Authorization: `Token ${token}` } }
+        { headers: { Authorization: `Token ${token}` } },
       );
       if (!res.ok) return [];
       return await res.json();
@@ -713,7 +720,7 @@ export const CustomAPISync = {
   async push(
     endpoint: string,
     apiKey: string,
-    data: Record<string, any>
+    data: Record<string, any>,
   ): Promise<boolean> {
     try {
       const res = await fetch(`${endpoint.replace(/\/$/, "")}/sync`, {
@@ -736,7 +743,7 @@ export const CustomAPISync = {
 
   async pull(
     endpoint: string,
-    apiKey: string
+    apiKey: string,
   ): Promise<Record<string, any> | null> {
     try {
       const res = await fetch(`${endpoint.replace(/\/$/, "")}/sync`, {
@@ -752,7 +759,7 @@ export const CustomAPISync = {
   async getSignedUploadUrl(
     endpoint: string,
     apiKey: string,
-    filename: string
+    filename: string,
   ): Promise<string | null> {
     try {
       const res = await fetch(`${endpoint.replace(/\/$/, "")}/upload-url`, {
@@ -876,7 +883,7 @@ export class FuelProCloudSync {
               device_id: getDeviceId(),
               station_id: this.getStationId(),
               synced_at: new Date().toISOString(),
-            }))
+            })),
           );
         }
       }
@@ -972,7 +979,7 @@ export class FuelProCloudSync {
           (await SeafileSync.getAuthToken(
             this.config.apiEndpoint,
             this.config.seafileConfig.username,
-            this.config.seafileConfig.password
+            this.config.seafileConfig.password,
           )) || "";
       }
 
@@ -989,7 +996,7 @@ export class FuelProCloudSync {
         token,
         this.config.seafileConfig.libId,
         jsonBlob,
-        `/fuelpro`
+        `/fuelpro`,
       );
 
       return !!url;
@@ -1013,7 +1020,7 @@ export class FuelProCloudSync {
           (await SeafileSync.getAuthToken(
             this.config.apiEndpoint,
             this.config.seafileConfig.username,
-            this.config.seafileConfig.password
+            this.config.seafileConfig.password,
           )) || "";
       }
 
@@ -1024,11 +1031,11 @@ export class FuelProCloudSync {
         this.config.apiEndpoint,
         token,
         this.config.seafileConfig.libId,
-        "/fuelpro"
+        "/fuelpro",
       );
 
       const backupFile = files
-        .filter(f => f.type === "file" && f.name.endsWith(".json"))
+        .filter((f) => f.type === "file" && f.name.endsWith(".json"))
         .sort((a, b) => b.mtime - a.mtime)[0];
 
       if (!backupFile) return null;
@@ -1037,7 +1044,7 @@ export class FuelProCloudSync {
         this.config.apiEndpoint,
         token,
         this.config.seafileConfig.libId,
-        `/fuelpro/${backupFile.name}`
+        `/fuelpro/${backupFile.name}`,
       );
 
       if (!blob) return null;
@@ -1054,7 +1061,7 @@ export class FuelProCloudSync {
     return CustomAPISync.push(
       this.config.apiEndpoint,
       this.config.apiKey,
-      data || this.getAllLocalData()
+      data || this.getAllLocalData(),
     );
   }
 
@@ -1068,19 +1075,19 @@ export class FuelProCloudSync {
     this.stopRealtime();
     if (!this.config || this.config.provider !== "supabase") return;
 
-    RealtimeSync.subscribeToFuelPrices(prices => {
+    RealtimeSync.subscribeToFuelPrices((prices) => {
       UpstashCache.cacheFuelPrices(prices);
       invalidateSWR("fuel_prices");
     });
 
-    RealtimeSync.subscribeToStations(stations => {
+    RealtimeSync.subscribeToStations((stations) => {
       UpstashCache.cacheStations(stations);
       invalidateSWR("stations");
     });
   }
 
   stopRealtime(): void {
-    this.realtimeChannels.forEach(ch => ch.unsubscribe());
+    this.realtimeChannels.forEach((ch) => ch.unsubscribe());
     this.realtimeChannels = [];
   }
 
@@ -1115,7 +1122,7 @@ export class FuelProCloudSync {
   private getPendingCount(): number {
     try {
       const queue = JSON.parse(
-        localStorage.getItem("fuelpro_sync_queue") || "[]"
+        localStorage.getItem("fuelpro_sync_queue") || "[]",
       );
       return queue.length;
     } catch {
@@ -1141,7 +1148,7 @@ export class FuelProCloudSync {
   private getStationId(): string {
     try {
       const station = JSON.parse(
-        localStorage.getItem("fuelpro_station") || "{}"
+        localStorage.getItem("fuelpro_station") || "{}",
       );
       return station.id || "default";
     } catch {
@@ -1157,7 +1164,7 @@ export class FuelProCloudSync {
 
   private notifyListeners(): void {
     const status = this.getStatus();
-    this.listeners.forEach(cb => cb(status));
+    this.listeners.forEach((cb) => cb(status));
   }
 }
 

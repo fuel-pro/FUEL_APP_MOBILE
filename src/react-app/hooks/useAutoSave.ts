@@ -3,8 +3,8 @@
  * Saves data to localStorage and syncs across tabs
  */
 
-import { useCallback, useEffect, useRef } from 'react';
-import { syncService, STORAGE_KEYS } from '../lib/syncService';
+import { useCallback, useEffect, useRef } from "react";
+import { syncService, STORAGE_KEYS } from "../lib/syncService";
 
 interface UseAutoSaveOptions<T> {
   key: string;
@@ -64,7 +64,7 @@ export function useAutoSave<T>({
         onSave?.(data);
       }, debounceMs);
     },
-    [key, debounceMs, onSave]
+    [key, debounceMs, onSave],
   );
 
   // Immediate save (no debounce)
@@ -77,7 +77,7 @@ export function useAutoSave<T>({
       syncService.setItem(key, data);
       onSave?.(data);
     },
-    [key, onSave]
+    [key, onSave],
   );
 
   // Get current data
@@ -117,7 +117,7 @@ export function useAutoSave<T>({
  */
 export function useFormPersistence<T extends Record<string, unknown>>(
   formKey: string,
-  initialData?: T
+  initialData?: T,
 ) {
   const { save, getData, clear } = useAutoSave<T>({
     key: `${STORAGE_KEYS.APP_STATE}_form_${formKey}`,
@@ -138,7 +138,7 @@ export function useFormPersistence<T extends Record<string, unknown>>(
  */
 export function useUserPreferences() {
   const key = `${STORAGE_KEYS.USER_DATA}_preferences`;
-  
+
   const { save, getData } = useAutoSave<Record<string, unknown>>({
     key,
     debounceMs: 1000,
@@ -151,7 +151,7 @@ export function useUserPreferences() {
       const current = getData() ?? {};
       save({ ...current, [key]: value } as Record<string, unknown>);
     },
-    [getData, save]
+    [getData, save],
   );
 
   const getPreference = useCallback(
@@ -159,7 +159,7 @@ export function useUserPreferences() {
       const current = getData() ?? {};
       return current[prefKey];
     },
-    [getData]
+    [getData],
   );
 
   return {

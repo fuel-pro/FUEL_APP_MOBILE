@@ -114,7 +114,7 @@ interface PlatformDataContextType {
 
 // ─── Context ───
 const PlatformDataContext = createContext<PlatformDataContextType | undefined>(
-  undefined
+  undefined,
 );
 
 // ─── Shared Storage Keys (aligned with main app) ───
@@ -157,7 +157,7 @@ function setItem(key: string, value: unknown): void {
   } catch {
     localStorage.setItem(
       "fuelpro_sync_event",
-      JSON.stringify({ key, data: value, timestamp: Date.now() })
+      JSON.stringify({ key, data: value, timestamp: Date.now() }),
     );
   }
 }
@@ -165,16 +165,16 @@ function setItem(key: string, value: unknown): void {
 // ─── Provider Component ───
 export function PlatformDataProvider({ children }: { children: ReactNode }) {
   const [sales, setSales] = useState<PlatformSales[]>(() =>
-    getItem(KEYS.SALES, [])
+    getItem(KEYS.SALES, []),
   );
   const [users, setUsers] = useState<PlatformUser[]>(() =>
-    getItem(KEYS.USERS, [])
+    getItem(KEYS.USERS, []),
   );
   const [stations, setStations] = useState<PlatformStation[]>(() =>
-    getItem(KEYS.STATIONS, [])
+    getItem(KEYS.STATIONS, []),
   );
   const [inventory, setInventory] = useState<PlatformInventory[]>(() =>
-    getItem(KEYS.INVENTORY, [])
+    getItem(KEYS.INVENTORY, []),
   );
   const [isLoading, setIsLoading] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -252,10 +252,10 @@ export function PlatformDataProvider({ children }: { children: ReactNode }) {
       logActivity(
         "Sale recorded",
         `${sale.fuelType} - $${sale.total.toFixed(2)}`,
-        "#10b981"
+        "#10b981",
       );
     },
-    [sales]
+    [sales],
   );
 
   // Add a new user
@@ -271,7 +271,7 @@ export function PlatformDataProvider({ children }: { children: ReactNode }) {
       setItem(KEYS.USERS, updated);
       logActivity("New user", `${user.name} (${user.role})`, "#8b5cf6");
     },
-    [users]
+    [users],
   );
 
   // Get recent activity
@@ -290,7 +290,7 @@ export function PlatformDataProvider({ children }: { children: ReactNode }) {
     return activity
       .sort((a, b) => b.timestamp - a.timestamp)
       .slice(0, limit)
-      .map(item => ({
+      .map((item) => ({
         id: item.id,
         action: item.action,
         details: item.details,
@@ -335,7 +335,7 @@ function calculateStats(
   sales: PlatformSales[],
   users: PlatformUser[],
   stations: PlatformStation[],
-  inventory: PlatformInventory[]
+  inventory: PlatformInventory[],
 ): PlatformStats {
   const now = new Date();
   const today = now.toISOString().split("T")[0];
@@ -343,16 +343,16 @@ function calculateStats(
   const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
   const totalRevenue = sales.reduce((sum, s) => sum + (s.total || 0), 0);
-  const todaySales = sales.filter(s => s.date?.startsWith(today));
+  const todaySales = sales.filter((s) => s.date?.startsWith(today));
   const todayRevenue = todaySales.reduce((sum, s) => sum + (s.total || 0), 0);
-  const weeklySales = sales.filter(s => new Date(s.date) >= weekAgo);
+  const weeklySales = sales.filter((s) => new Date(s.date) >= weekAgo);
   const weeklyRevenue = weeklySales.reduce((sum, s) => sum + (s.total || 0), 0);
-  const monthlySales = sales.filter(s => new Date(s.date) >= monthAgo);
+  const monthlySales = sales.filter((s) => new Date(s.date) >= monthAgo);
   const monthlyRevenue = monthlySales.reduce(
     (sum, s) => sum + (s.total || 0),
-    0
+    0,
   );
-  const activeUsers = users.filter(u => u.status === "active").length;
+  const activeUsers = users.filter((u) => u.status === "active").length;
 
   return {
     totalRevenue,
@@ -415,7 +415,7 @@ export function usePlatformData() {
   const context = useContext(PlatformDataContext);
   if (!context) {
     throw new Error(
-      "usePlatformData must be used within a PlatformDataProvider"
+      "usePlatformData must be used within a PlatformDataProvider",
     );
   }
   return context;

@@ -42,8 +42,12 @@ export default function DataManager() {
   const [activeTab, setActiveTab] = useState("overview");
 
   // Member-accessible pump settings
-  const [pmsPrice, setPmsPrice] = useState(state.pmsPrice || KENYA_BASE_PRICES.petrol);
-  const [agoPrice, setAgoPrice] = useState(state.agoPrice || KENYA_BASE_PRICES.diesel);
+  const [pmsPrice, setPmsPrice] = useState(
+    state.pmsPrice || KENYA_BASE_PRICES.petrol,
+  );
+  const [agoPrice, setAgoPrice] = useState(
+    state.agoPrice || KENYA_BASE_PRICES.diesel,
+  );
   const [pmsPumpCount, setPmsPumpCount] = useState(state.pmsPumps?.length || 1);
   const [agoPumpCount, setAgoPumpCount] = useState(state.agoPumps?.length || 1);
 
@@ -89,18 +93,18 @@ export default function DataManager() {
 
         URL.revokeObjectURL(url);
         import("@/react-app/lib/toast").then(({ toastSuccess }) =>
-          toastSuccess("Data exported successfully!")
+          toastSuccess("Data exported successfully!"),
         );
       }
 
       if (format === "csv") {
         // Export delivery data as CSV
         const headers = state.deliveryData.columns
-          .map(col => col.label)
+          .map((col) => col.label)
           .join(",");
         const rows = state.deliveryData.rows
-          .map(row =>
-            state.deliveryData.columns.map(col => row[col.key]).join(",")
+          .map((row) =>
+            state.deliveryData.columns.map((col) => row[col.key]).join(","),
           )
           .join("\n");
 
@@ -115,13 +119,13 @@ export default function DataManager() {
 
         URL.revokeObjectURL(url);
         import("@/react-app/lib/toast").then(({ toastSuccess }) =>
-          toastSuccess("Delivery data exported as CSV!")
+          toastSuccess("Delivery data exported as CSV!"),
         );
       }
     } catch (error) {
       console.error("Export error:", error);
       import("@/react-app/lib/toast").then(({ toastError }) =>
-        toastError("Export failed. Please try again.")
+        toastError("Export failed. Please try again."),
       );
     }
   };
@@ -138,7 +142,7 @@ export default function DataManager() {
     setImportStatus("Reading backup file...");
 
     const reader = new FileReader();
-    reader.onload = e => {
+    reader.onload = (e) => {
       try {
         const content = e.target?.result as string;
         const backupData = JSON.parse(content);
@@ -178,7 +182,7 @@ export default function DataManager() {
   const FUELPRO_PREFIX = "fuelpro_";
   const clearData = () => {
     const confirmed = confirm(
-      "Are you sure you want to clear all FuelPro data? This action cannot be undone!"
+      "Are you sure you want to clear all FuelPro data? This action cannot be undone!",
     );
     if (confirmed) {
       // Only remove FuelPro keys — never clear all localStorage (destructive to other apps)
@@ -196,9 +200,9 @@ export default function DataManager() {
           keysToRemove.push(key);
         }
       }
-      keysToRemove.forEach(k => localStorage.removeItem(k));
+      keysToRemove.forEach((k) => localStorage.removeItem(k));
       import("@/react-app/lib/app-reloader").then(({ broadcastReload }) =>
-        broadcastReload()
+        broadcastReload(),
       );
     }
   };
@@ -386,18 +390,18 @@ export default function DataManager() {
                 <table>
                     <thead>
                         <tr>
-                            ${state.deliveryData.columns.map(col => `<th>${col.label}</th>`).join("")}
+                            ${state.deliveryData.columns.map((col) => `<th>${col.label}</th>`).join("")}
                         </tr>
                     </thead>
                     <tbody>
                         ${state.deliveryData.rows
                           .slice(0, 50)
                           .map(
-                            row => `
+                            (row) => `
                             <tr>
-                                ${state.deliveryData.columns.map(col => `<td>${row[col.key] || "-"}</td>`).join("")}
+                                ${state.deliveryData.columns.map((col) => `<td>${row[col.key] || "-"}</td>`).join("")}
                             </tr>
-                        `
+                        `,
                           )
                           .join("")}
                     </tbody>
@@ -423,7 +427,7 @@ export default function DataManager() {
                         <strong>${client.name}</strong>
                         <span style="font-size: 0.9rem; color: #999;">${client.contact || "No contact"}</span>
                     </div>
-                `
+                `,
                   )
                   .join("")}
             </div>
@@ -535,7 +539,7 @@ export default function DataManager() {
       }, 100);
 
       alert(
-        "Standalone version downloaded successfully!\n\nOpen the HTML file in any browser to use your app offline."
+        "Standalone version downloaded successfully!\n\nOpen the HTML file in any browser to use your app offline.",
       );
     } catch (error) {
       console.error("Download error:", error);
@@ -607,7 +611,7 @@ export default function DataManager() {
               { id: "sync", label: "Cross-Device", icon: Wifi },
             ]
               .filter(Boolean)
-              .map(tab => {
+              .map((tab) => {
                 const Icon = tab.icon;
                 return (
                   <button
@@ -669,7 +673,7 @@ export default function DataManager() {
                     value: summary.offloadingRecords,
                     color: "gray",
                   },
-                ].map(item => (
+                ].map((item) => (
                   <div
                     key={item.label}
                     className={`bg-${item.color}-50 dark:bg-${item.color}-900/20 p-4 rounded-lg border border-${item.color}-200 dark:border-${item.color}-700`}
@@ -835,7 +839,7 @@ export default function DataManager() {
                     color: "blue",
                     key: "ago",
                   },
-                ].map(fuel => (
+                ].map((fuel) => (
                   <div
                     key={fuel.key}
                     className={`p-4 bg-${fuel.color}-50 dark:bg-${fuel.color}-900/20 rounded-lg border border-${fuel.color}-200 dark:border-${fuel.color}-700`}
@@ -849,7 +853,7 @@ export default function DataManager() {
                         type="number"
                         step="0.01"
                         value={fuel.value}
-                        onChange={e =>
+                        onChange={(e) =>
                           fuel.setter(parseFloat(e.target.value) || 0)
                         }
                         className="flex-1 px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white focus:ring-2 focus:ring-green-500 outline-none"
@@ -865,7 +869,7 @@ export default function DataManager() {
                     payload: { pmsPrice, agoPrice },
                   });
                   alert(
-                    `Pump prices updated:\nPMS: Ksh ${pmsPrice.toFixed(2)}\nAGO: Ksh ${agoPrice.toFixed(2)}`
+                    `Pump prices updated:\nPMS: Ksh ${pmsPrice.toFixed(2)}\nAGO: Ksh ${agoPrice.toFixed(2)}`,
                   );
                 }}
                 className="mt-4 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium flex items-center gap-2 transition-colors"
@@ -895,7 +899,7 @@ export default function DataManager() {
                       setter: setAgoPumpCount,
                       color: "blue",
                     },
-                  ].map(pump => (
+                  ].map((pump) => (
                     <div
                       key={pump.label}
                       className={`p-4 bg-${pump.color}-50 dark:bg-${pump.color}-900/20 rounded-lg border border-${pump.color}-200 dark:border-${pump.color}-700`}
@@ -942,18 +946,18 @@ export default function DataManager() {
                       { length: pmsPumpCount },
                       (_, i) =>
                         state.pmsPumps[i] ||
-                        makePump(`pms-${i + 1}`, `PMS Pump ${i + 1}`)
+                        makePump(`pms-${i + 1}`, `PMS Pump ${i + 1}`),
                     );
                     const newAgoPumps = Array.from(
                       { length: agoPumpCount },
                       (_, i) =>
                         state.agoPumps[i] ||
-                        makePump(`ago-${i + 1}`, `AGO Pump ${i + 1}`)
+                        makePump(`ago-${i + 1}`, `AGO Pump ${i + 1}`),
                     );
                     dispatch({ type: "SET_PMS_PUMPS", payload: newPmsPumps });
                     dispatch({ type: "SET_AGO_PUMPS", payload: newAgoPumps });
                     alert(
-                      `Pump count updated:\nPMS: ${pmsPumpCount} pumps\nAGO: ${agoPumpCount} pumps`
+                      `Pump count updated:\nPMS: ${pmsPumpCount} pumps\nAGO: ${agoPumpCount} pumps`,
                     );
                   }}
                   className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium flex items-center gap-2 transition-colors"
@@ -1008,7 +1012,7 @@ export default function DataManager() {
                     allowed: hasPermission("canManageCloud"),
                   },
                   { label: "Founder Access", allowed: isOwner },
-                ].map(item => (
+                ].map((item) => (
                   <div
                     key={item.label}
                     className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-900 rounded-lg"

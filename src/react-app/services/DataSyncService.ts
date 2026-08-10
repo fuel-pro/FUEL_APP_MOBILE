@@ -1,5 +1,8 @@
 // ============================================================
-import { KENYA_BASE_PRICES, KENYA_CITIES as BASE_CITIES } from "@/react-app/config/pricing";
+import {
+  KENYA_BASE_PRICES,
+  KENYA_CITIES as BASE_CITIES,
+} from "@/react-app/config/pricing";
 // DataSyncService - Comprehensive auto-update engine for FuelPro
 // Fetches real-time data from credible internet sources
 // Auto-syncs with precise location for exact fuel prices
@@ -20,21 +23,21 @@ const KENYA_CITIES = BASE_CITIES;
 const PRICE_ESTIMATION_CONFIG = {
   // Base prices from last known EPRA prices (June 2026)
   lastKnownBase: {
-    petrol: KENYA_BASE_PRICES.petrol,  // KES/litre - Nairobi Super Petrol
-    diesel: KENYA_BASE_PRICES.diesel,   // KES/litre - Nairobi Diesel (ADO)
+    petrol: KENYA_BASE_PRICES.petrol, // KES/litre - Nairobi Super Petrol
+    diesel: KENYA_BASE_PRICES.diesel, // KES/litre - Nairobi Diesel (ADO)
     kerosene: KENYA_BASE_PRICES.kerosene, // KES/litre - Nairobi Kerosene
   },
   // Estimated monthly change ranges (based on historical patterns)
   monthlyChangeRange: {
-    min: -2.5,  // Max decrease
-    max: 4.5,   // Max increase
+    min: -2.5, // Max decrease
+    max: 4.5, // Max increase
   },
   // Price adjustment factors
   adjustmentFactors: {
-    oilPriceImpact: 0.15,  // 15% of oil price change affects pump price
-    exchangeRateImpact: 0.08,  // 8% of KES/USD change affects pump price
-    seasonalDemand: 0.02,   // 2% seasonal variation
-  }
+    oilPriceImpact: 0.15, // 15% of oil price change affects pump price
+    exchangeRateImpact: 0.08, // 8% of KES/USD change affects pump price
+    seasonalDemand: 0.02, // 2% seasonal variation
+  },
 };
 
 /**
@@ -57,20 +60,26 @@ async function estimateKenyaFuelPrices(): Promise<{
         const rates = JSON.parse(cachedRates);
         if (rates.USD?.rate) exchangeRate = rates.USD.rate;
       }
-    } catch { /* ignore */ }
-    
+    } catch {
+      /* ignore */
+    }
+
     // Calculate months since last known prices (June 2026)
     const lastKnownDate = new Date("2026-06-15");
     const now = new Date();
-    const monthsSinceLastKnown = (now.getFullYear() - lastKnownDate.getFullYear()) * 12 
-      + (now.getMonth() - lastKnownDate.getMonth());
-    
+    const monthsSinceLastKnown =
+      (now.getFullYear() - lastKnownDate.getFullYear()) * 12 +
+      (now.getMonth() - lastKnownDate.getMonth());
+
     // Estimate price change based on:
     // 1. Time elapsed (monthly changes compound)
     // 2. Exchange rate changes from baseline (130 KES/USD)
     const exchangeRateChange = (exchangeRate - 130) / 130; // % change from baseline
-    const exchangeRateAdjustment = exchangeRateChange * PRICE_ESTIMATION_CONFIG.adjustmentFactors.exchangeRateImpact * 100;
-    
+    const exchangeRateAdjustment =
+      exchangeRateChange *
+      PRICE_ESTIMATION_CONFIG.adjustmentFactors.exchangeRateImpact *
+      100;
+
     // Get cached global oil price trend
     let oilTrend = 0;
     try {
@@ -80,25 +89,40 @@ async function estimateKenyaFuelPrices(): Promise<{
         // Brent crude trend: typically 40-120 USD/barrel
         // Each $10 change affects pump price by ~2.5 KES/litre
         if (parsed.brentPrice) {
-          oilTrend = (parsed.brentPrice - 85) / 10 * 2.5; // Deviation from $85 baseline
+          oilTrend = ((parsed.brentPrice - 85) / 10) * 2.5; // Deviation from $85 baseline
         }
       }
-    } catch { /* ignore */ }
-    
+    } catch {
+      /* ignore */
+    }
+
     // Calculate total estimated change
-    const baseChange = monthsSinceLastKnown * (PRICE_ESTIMATION_CONFIG.monthlyChangeRange.max / 2);
+    const baseChange =
+      monthsSinceLastKnown *
+      (PRICE_ESTIMATION_CONFIG.monthlyChangeRange.max / 2);
     const totalChange = baseChange + exchangeRateAdjustment + oilTrend;
-    
+
     // Apply change to base prices
-    const petrolPrice = Math.round((PRICE_ESTIMATION_CONFIG.lastKnownBase.petrol + totalChange) * 100) / 100;
-    const dieselPrice = Math.round((PRICE_ESTIMATION_CONFIG.lastKnownBase.diesel + totalChange * 0.95) * 100) / 100;
-    const kerosenePrice = Math.round((PRICE_ESTIMATION_CONFIG.lastKnownBase.kerosene + totalChange * 0.85) * 100) / 100;
-    
+    const petrolPrice =
+      Math.round(
+        (PRICE_ESTIMATION_CONFIG.lastKnownBase.petrol + totalChange) * 100,
+      ) / 100;
+    const dieselPrice =
+      Math.round(
+        (PRICE_ESTIMATION_CONFIG.lastKnownBase.diesel + totalChange * 0.95) *
+          100,
+      ) / 100;
+    const kerosenePrice =
+      Math.round(
+        (PRICE_ESTIMATION_CONFIG.lastKnownBase.kerosene + totalChange * 0.85) *
+          100,
+      ) / 100;
+
     // Clamp to reasonable ranges
     const clampedPetrol = Math.max(160, Math.min(280, petrolPrice));
     const clampedDiesel = Math.max(150, Math.min(260, dieselPrice));
     const clampedKerosene = Math.max(140, Math.min(240, kerosenePrice));
-    
+
     return {
       petrolPrice: clampedPetrol,
       dieselPrice: clampedDiesel,
@@ -122,7 +146,11 @@ async function estimateKenyaFuelPrices(): Promise<{
  * Update Kenya city prices based on AI estimation
  * This ensures all cities get updated prices proportionally
  */
-async function updateKenyaCityPrices(basePrices: { petrol: number; diesel: number; kerosene: number }) {
+async function updateKenyaCityPrices(basePrices: {
+  petrol: number;
+  diesel: number;
+  kerosene: number;
+}) {
   const transportCostPerKm = 0.05; // KES per km from Mombasa
   const avgDistanceToCity: Record<string, number> = {
     Mombasa: 0,
@@ -151,13 +179,16 @@ async function updateKenyaCityPrices(basePrices: { petrol: number; diesel: numbe
     Embu: 130,
     Kitui: 170,
   };
-  
+
   return Object.entries(avgDistanceToCity).map(([city, distance]) => {
     const transportSurcharge = (distance - 440) * transportCostPerKm; // Relative to Nairobi
-    const cityPetrol = Math.round((basePrices.petrol + transportSurcharge) * 100) / 100;
-    const cityDiesel = Math.round((basePrices.diesel + transportSurcharge * 1.1) * 100) / 100;
-    const cityKerosene = Math.round((basePrices.kerosene + transportSurcharge * 0.9) * 100) / 100;
-    
+    const cityPetrol =
+      Math.round((basePrices.petrol + transportSurcharge) * 100) / 100;
+    const cityDiesel =
+      Math.round((basePrices.diesel + transportSurcharge * 1.1) * 100) / 100;
+    const cityKerosene =
+      Math.round((basePrices.kerosene + transportSurcharge * 0.9) * 100) / 100;
+
     return {
       city,
       petrolPrice: Math.max(160, Math.min(280, cityPetrol)),
@@ -177,30 +208,42 @@ interface GeoLocation {
 }
 
 // Calculate distance between two coordinates (Haversine formula)
-function calculateDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
+function calculateDistance(
+  lat1: number,
+  lng1: number,
+  lat2: number,
+  lng2: number,
+): number {
   const R = 6371; // Earth's radius in km
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLng = (lng2 - lng1) * Math.PI / 180;
-  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-    Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLng / 2) *
+      Math.sin(dLng / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 }
 
 // Get nearest city based on coordinates
-function getNearestCity(lat: number, lng: number, countryCode: string): { city: string; distance: number } | null {
+function getNearestCity(
+  lat: number,
+  lng: number,
+  countryCode: string,
+): { city: string; distance: number } | null {
   if (countryCode !== "KE") return null;
-  
+
   let nearest: { name: string; distance: number } | null = null;
-  
+
   for (const city of KENYA_CITIES) {
     const dist = calculateDistance(lat, lng, city.lat, city.lng);
     if (!nearest || dist < nearest.distance) {
       nearest = { name: city.name, distance: dist };
     }
   }
-  
+
   return nearest ? { city: nearest.name, distance: nearest.distance } : null;
 }
 
@@ -210,7 +253,11 @@ let lastPriceUpdate: number = 0;
 const PRICE_CACHE_DURATION = 1000 * 60 * 60; // 1 hour
 
 // Get precise price for location
-export async function getPriceForLocation(countryCode: string, lat?: number, lng?: number): Promise<{
+export async function getPriceForLocation(
+  countryCode: string,
+  lat?: number,
+  lng?: number,
+): Promise<{
   petrolPrice: number;
   dieselPrice: number;
   kerosenePrice: number;
@@ -250,30 +297,34 @@ export async function getPriceForLocation(countryCode: string, lat?: number, lng
         diesel: estimated.dieselPrice,
         kerosene: estimated.kerosenePrice,
       });
-      
+
       dynamicCityPrices = KENYA_CITIES.map((city, i) => {
-        const updated = updatedCities.find(u => u.city === city.name);
+        const updated = updatedCities.find((u) => u.city === city.name);
         return {
           ...city,
           petrolPrice: updated?.petrolPrice || city.petrolPrice,
           dieselPrice: updated?.dieselPrice || city.dieselPrice,
           kerosenePrice: updated?.kerosenePrice || city.kerosenePrice,
-          transportSurcharge: updated?.transportSurcharge || city.transportSurcharge,
+          transportSurcharge:
+            updated?.transportSurcharge || city.transportSurcharge,
         };
       });
       lastPriceUpdate = now;
-      
+
       // Cache to localStorage
-      localStorage.setItem("fuelpro_dynamic_prices", JSON.stringify({
-        prices: dynamicCityPrices,
-        updated: now,
-        source: estimated.source,
-      }));
+      localStorage.setItem(
+        "fuelpro_dynamic_prices",
+        JSON.stringify({
+          prices: dynamicCityPrices,
+          updated: now,
+          source: estimated.source,
+        }),
+      );
     } catch {
       dynamicCityPrices = KENYA_CITIES;
     }
   }
-  
+
   // Try to load from cache first
   try {
     const cached = localStorage.getItem("fuelpro_dynamic_prices");
@@ -284,7 +335,9 @@ export async function getPriceForLocation(countryCode: string, lat?: number, lng
         lastPriceUpdate = parsed.updated;
       }
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 
   // If too far from any city (>150km), use nearest anyway with interpolation
   if (nearest.distance > 150) {
@@ -295,7 +348,8 @@ export async function getPriceForLocation(countryCode: string, lat?: number, lng
     return {
       petrolPrice: Math.round((193.43 + transportSurcharge) * 100) / 100,
       dieselPrice: Math.round((178.56 + transportSurcharge * 1.1) * 100) / 100,
-      kerosenePrice: Math.round((170.22 + transportSurcharge * 0.9) * 100) / 100,
+      kerosenePrice:
+        Math.round((170.22 + transportSurcharge * 0.9) * 100) / 100,
       isRegional: true,
       cityName: `Near ${nearest.city}`,
       transportSurcharge: Math.round(transportSurcharge * 100) / 100,
@@ -303,7 +357,7 @@ export async function getPriceForLocation(countryCode: string, lat?: number, lng
     };
   }
 
-  const cityData = dynamicCityPrices?.find(c => c.name === nearest.city);
+  const cityData = dynamicCityPrices?.find((c) => c.name === nearest.city);
   if (cityData) {
     return {
       petrolPrice: cityData.petrolPrice,
@@ -320,7 +374,11 @@ export async function getPriceForLocation(countryCode: string, lat?: number, lng
 }
 
 // Sync wrapper for backward compatibility
-export function getPriceForLocationSync(countryCode: string, lat?: number, lng?: number): {
+export function getPriceForLocationSync(
+  countryCode: string,
+  lat?: number,
+  lng?: number,
+): {
   petrolPrice: number;
   dieselPrice: number;
   kerosenePrice: number;
@@ -349,7 +407,7 @@ export function getPriceForLocationSync(countryCode: string, lat?: number, lng?:
     return defaultPrices;
   }
 
-  const cityData = KENYA_CITIES.find(c => c.name === nearest.city);
+  const cityData = KENYA_CITIES.find((c) => c.name === nearest.city);
   if (cityData) {
     return {
       petrolPrice: cityData.petrolPrice,
@@ -377,17 +435,17 @@ function getCurrentPosition(): Promise<GeoResult> {
       reject(new Error("Geolocation not supported"));
       return;
     }
-    
+
     navigator.geolocation.getCurrentPosition(
       (pos) => resolve(pos as unknown as GeoResult),
       (err) => reject(err),
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 },
     );
   });
 }
 
 // Store last known position
-let lastKnownPosition: GeoResult | null = null;
+const lastKnownPosition: GeoResult | null = null;
 const POSITION_CACHE_KEY = "fuelpro_last_geo_position";
 
 // --- SYNC STATUS TRACKER ---
@@ -447,13 +505,13 @@ function markSuccess(
   key: string,
   source: string,
   data?: any,
-  interval?: number
+  interval?: number,
 ) {
   saveSyncRecord({
     key,
     lastSync: new Date().toISOString(),
     nextSync: new Date(
-      Date.now() + (interval || SYNC_INTERVAL_MS)
+      Date.now() + (interval || SYNC_INTERVAL_MS),
     ).toISOString(),
     source,
     status: "success",
@@ -477,33 +535,38 @@ export function arePricesStale(countryCode: string): boolean {
   const records = loadSyncRecords();
   const key = `fuel_price_${countryCode}`;
   const record = records[key];
-  
+
   if (!record) return true; // No record = stale
-  
+
   const lastSync = new Date(record.lastSync).getTime();
   const now = Date.now();
-  
+
   // Check if last update was today - if not, prices are stale
   const lastUpdateDate = new Date(lastSync).toDateString();
   const today = new Date().toDateString();
   if (lastUpdateDate !== today) return true;
-  
+
   // Also check if cache is too old
-  return (now - lastSync) > MAX_PRICE_CACHE_AGE;
+  return now - lastSync > MAX_PRICE_CACHE_AGE;
 }
 
 // Force refresh prices - ignores sync interval
-export async function forceRefreshPrices(countryCode: string): Promise<FuelPriceData | null> {
+export async function forceRefreshPrices(
+  countryCode: string,
+): Promise<FuelPriceData | null> {
   const key = `fuel_price_${countryCode}`;
-  
+
   // Clear sync record to force fresh fetch
   const records = loadSyncRecords();
   delete records[key];
   localStorage.setItem(SYNC_STORAGE_KEY, JSON.stringify(records));
-  
+
   // Fetch fresh prices
   try {
-    const specificFetchers: Record<string, () => Promise<FuelPriceData | null>> = {
+    const specificFetchers: Record<
+      string,
+      () => Promise<FuelPriceData | null>
+    > = {
       KE: fetchKenyaFuelPrices,
       UG: fetchUgandaFuelPrices,
       TZ: fetchTanzaniaFuelPrices,
@@ -513,7 +576,7 @@ export async function forceRefreshPrices(countryCode: string): Promise<FuelPrice
       RW: fetchRwandaFuelPrices,
       GH: fetchGhanaFuelPrices,
     };
-    
+
     const fetcher = specificFetchers[countryCode];
     if (fetcher) {
       return await fetcher();
@@ -521,7 +584,7 @@ export async function forceRefreshPrices(countryCode: string): Promise<FuelPrice
   } catch (error) {
     console.error("[DataSync] Force refresh failed:", error);
   }
-  
+
   return null;
 }
 
@@ -569,7 +632,7 @@ export interface FuelPriceData {
  *  Returns the regional price if available, falls back to national average. */
 export function getPriceForCity(
   data: FuelPriceData | null,
-  city: string
+  city: string,
 ): {
   petrol: number;
   diesel: number;
@@ -599,12 +662,10 @@ export function getPriceForCity(
     const loc = city.toLowerCase();
     const segments = loc
       .split(",")
-      .map(s => s.trim())
+      .map((s) => s.trim())
       .filter(Boolean);
 
-    const exact = data.regionalPrices.find(
-      r => r.city.toLowerCase() === loc
-    );
+    const exact = data.regionalPrices.find((r) => r.city.toLowerCase() === loc);
     if (exact) {
       return {
         petrol: exact.petrolPrice,
@@ -615,8 +676,8 @@ export function getPriceForCity(
       };
     }
 
-    const segmentMatch = data.regionalPrices.find(r =>
-      segments.some(seg => seg === r.city.toLowerCase())
+    const segmentMatch = data.regionalPrices.find((r) =>
+      segments.some((seg) => seg === r.city.toLowerCase()),
     );
     if (segmentMatch) {
       return {
@@ -629,9 +690,9 @@ export function getPriceForCity(
     }
 
     const loose = data.regionalPrices.find(
-      r =>
+      (r) =>
         loc.includes(r.city.toLowerCase()) ||
-        r.city.toLowerCase().includes(loc)
+        r.city.toLowerCase().includes(loc),
     );
     if (loose) {
       return {
@@ -720,10 +781,10 @@ import {
 /** Get all world currency codes for exchange rate fetching */
 function getAllWorldCurrencies(): string[] {
   const currencies = new Set<string>();
-  ALL_COUNTRIES.forEach(c => currencies.add(c.currency));
+  ALL_COUNTRIES.forEach((c) => currencies.add(c.currency));
   // Ensure major currencies are always included
-  ["USD", "EUR", "GBP", "JPY", "CHF", "CAD", "AUD", "CNY", "INR"].forEach(c =>
-    currencies.add(c)
+  ["USD", "EUR", "GBP", "JPY", "CHF", "CAD", "AUD", "CNY", "INR"].forEach((c) =>
+    currencies.add(c),
   );
   return Array.from(currencies).sort();
 }
@@ -751,7 +812,7 @@ function buildWorldExchangeRates(apiData: any): Record<string, number> {
 
 /** Generic fuel price fetcher for any country */
 async function fetchGenericFuelPrices(
-  countryCode: string
+  countryCode: string,
 ): Promise<FuelPriceData | null> {
   const key = `fuel_price_${countryCode}`;
   const country = getCountryByCode(countryCode);
@@ -767,14 +828,14 @@ async function fetchGenericFuelPrices(
     // Try global fuel price API first
     try {
       const response = await fetch(
-        `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://www.globalpetrolprices.com/${country.name.toLowerCase().replace(/\s+/g, "_")}/`)}`
+        `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://www.globalpetrolprices.com/${country.name.toLowerCase().replace(/\s+/g, "_")}/`)}`,
       );
       if (response?.ok) {
         const html = await response.text();
         const priceMatches = html.matchAll(
-          /([\d,]+\.\d{2})\s*<span[^>]*>\s*([A-Z]{3})/g
+          /([\d,]+\.\d{2})\s*<span[^>]*>\s*([A-Z]{3})/g,
         );
-        const prices = Array.from(priceMatches).map(m => ({
+        const prices = Array.from(priceMatches).map((m) => ({
           price: parseFloat(m[1].replace(/,/g, "")),
           currency: m[2],
         }));
@@ -791,7 +852,7 @@ async function fetchGenericFuelPrices(
     if (petrolPrice === 0 || dieselPrice === 0) {
       const estimates = getRegionalPriceEstimates(
         countryCode,
-        country.currency
+        country.currency,
       );
       petrolPrice = estimates.petrol;
       dieselPrice = estimates.diesel;
@@ -816,11 +877,11 @@ async function fetchGenericFuelPrices(
       key,
       `${country.name} Fuel Authority`,
       data,
-      FUEL_PRICE_SYNC_INTERVAL
+      FUEL_PRICE_SYNC_INTERVAL,
     );
     localStorage.setItem(
       `fuelpro_fuel_prices_${countryCode}`,
-      JSON.stringify(data)
+      JSON.stringify(data),
     );
     return data;
   } catch (error) {
@@ -832,7 +893,7 @@ async function fetchGenericFuelPrices(
 /** Get regional price estimates based on economic region */
 function getRegionalPriceEstimates(
   countryCode: string,
-  currency: string
+  currency: string,
 ): { petrol: number; diesel: number; kerosene: number } {
   // Regional price estimates in local currency (approximate)
   const estimates: Record<
@@ -840,7 +901,11 @@ function getRegionalPriceEstimates(
     { petrol: number; diesel: number; kerosene: number }
   > = {
     // East Africa
-    KE: { petrol: KENYA_BASE_PRICES.petrol, diesel: KENYA_BASE_PRICES.diesel, kerosene: 170.22 },
+    KE: {
+      petrol: KENYA_BASE_PRICES.petrol,
+      diesel: KENYA_BASE_PRICES.diesel,
+      kerosene: 170.22,
+    },
     UG: { petrol: 5450, diesel: 4980, kerosene: 4500 },
     TZ: { petrol: 3199, diesel: 2943, kerosene: 2840 },
     RW: { petrol: 1680, diesel: 1620, kerosene: 1450 },
@@ -1191,7 +1256,7 @@ async function fetchKenyaFuelPrices(): Promise<FuelPriceData | null> {
       "https://www.epra.go.ke/api/fuel-prices/current",
       "https://api.allorigins.win/raw?url=" +
         encodeURIComponent(
-          "https://www.epra.go.ke/index.php/component/content/article/25-pump-prices"
+          "https://www.epra.go.ke/index.php/component/content/article/25-pump-prices",
         ),
     ];
 
@@ -1205,14 +1270,14 @@ async function fetchKenyaFuelPrices(): Promise<FuelPriceData | null> {
       const text = await response.text();
       // Try to extract prices from HTML
       const petrolMatch = text.match(
-        /(?:super\s*petrol|petrol).*?([\d,]+\.\d{2})/i
+        /(?:super\s*petrol|petrol).*?([\d,]+\.\d{2})/i,
       );
       const dieselMatch = text.match(/(?:diesel|ago).*?([\d,]+\.\d{2})/i);
       if (petrolMatch)
         petrolPrice = parseFloat(petrolMatch[1].replace(/,/g, ""));
       if (dieselMatch)
         dieselPrice = parseFloat(dieselMatch[1].replace(/,/g, ""));
-      
+
       if (petrolPrice > 0 && dieselPrice > 0) {
         priceSource = "EPRA Official";
       }
@@ -1226,18 +1291,18 @@ async function fetchKenyaFuelPrices(): Promise<FuelPriceData | null> {
           "https://api.allorigins.win/raw?url=" +
             encodeURIComponent(
               "https://www.google.com/search?q=kenya+fuel+prices+epra+" +
-                new Date().toISOString().slice(0, 7)
-            )
+                new Date().toISOString().slice(0, 7),
+            ),
         );
         if (searchResponse?.ok) {
           const html = await searchResponse.text();
           // Extract prices from search results
           const priceMatches = html.matchAll(
-            /KES?\s*([\d,]+\.?\d*)\s*(?:per|\/)?\s*liter/gi
+            /KES?\s*([\d,]+\.?\d*)\s*(?:per|\/)?\s*liter/gi,
           );
           const prices = Array.from(priceMatches)
-            .map(m => parseFloat(m[1].replace(/,/g, "")))
-            .filter(p => p > 100 && p < 500);
+            .map((m) => parseFloat(m[1].replace(/,/g, "")))
+            .filter((p) => p > 100 && p < 500);
           if (prices.length >= 2) {
             petrolPrice = prices[0];
             dieselPrice = prices[1];
@@ -1266,8 +1331,8 @@ async function fetchKenyaFuelPrices(): Promise<FuelPriceData | null> {
         diesel: dieselPrice,
         kerosene: dieselPrice * 0.95,
       });
-      
-      regionalPrices = updatedCities.map(city => ({
+
+      regionalPrices = updatedCities.map((city) => ({
         city: city.city,
         petrolPrice: city.petrolPrice,
         dieselPrice: city.dieselPrice,
@@ -1277,31 +1342,181 @@ async function fetchKenyaFuelPrices(): Promise<FuelPriceData | null> {
     } else {
       // Use default regional prices
       regionalPrices = [
-        { city: "Nairobi", petrolPrice: 193.43, dieselPrice: 178.56, kerosenePrice: 170.22, transportSurcharge: 0.0 },
-        { city: "Mombasa", petrolPrice: 190.15, dieselPrice: 175.21, kerosenePrice: 167.05, transportSurcharge: -3.28 },
-        { city: "Kisumu", petrolPrice: 196.78, dieselPrice: 181.92, kerosenePrice: 173.45, transportSurcharge: 3.35 },
-        { city: "Nakuru", petrolPrice: 195.12, dieselPrice: 180.34, kerosenePrice: 171.88, transportSurcharge: 1.69 },
-        { city: "Eldoret", petrolPrice: 197.55, dieselPrice: 182.67, kerosenePrice: 174.21, transportSurcharge: 4.12 },
-        { city: "Kakamega", petrolPrice: 197.45, dieselPrice: 182.58, kerosenePrice: 174.12, transportSurcharge: 4.02 },
-        { city: "Bungoma", petrolPrice: 197.89, dieselPrice: 183.01, kerosenePrice: 174.55, transportSurcharge: 4.46 },
-        { city: "Kisii", petrolPrice: 197.12, dieselPrice: 182.25, kerosenePrice: 173.78, transportSurcharge: 3.69 },
-        { city: "Nyeri", petrolPrice: 194.76, dieselPrice: 179.89, kerosenePrice: 171.44, transportSurcharge: 1.33 },
-        { city: "Meru", petrolPrice: 195.88, dieselPrice: 181.01, kerosenePrice: 172.55, transportSurcharge: 2.45 },
-        { city: "Thika", petrolPrice: 193.87, dieselPrice: 179.01, kerosenePrice: 170.66, transportSurcharge: 0.44 },
-        { city: "Machakos", petrolPrice: 194.21, dieselPrice: 179.34, kerosenePrice: 171.01, transportSurcharge: 0.78 },
-        { city: "Naivasha", petrolPrice: 194.98, dieselPrice: 180.11, kerosenePrice: 171.66, transportSurcharge: 1.55 },
-        { city: "Kitale", petrolPrice: 198.12, dieselPrice: 183.25, kerosenePrice: 174.78, transportSurcharge: 4.69 },
-        { city: "Malindi", petrolPrice: 190.89, dieselPrice: 175.95, kerosenePrice: 167.79, transportSurcharge: -2.54 },
-        { city: "Lamu", petrolPrice: 192.45, dieselPrice: 177.51, kerosenePrice: 169.35, transportSurcharge: -0.98 },
-        { city: "Garissa", petrolPrice: 198.67, dieselPrice: 183.78, kerosenePrice: 175.32, transportSurcharge: 5.24 },
-        { city: "Lodwar", petrolPrice: 220.3, dieselPrice: 250.01, kerosenePrice: 164.9, transportSurcharge: 15.92 },
-        { city: "Kakuma", petrolPrice: 205.5, dieselPrice: 204.8, kerosenePrice: 166.0, transportSurcharge: 12.07 },
-        { city: "Mandera", petrolPrice: 202.45, dieselPrice: 187.56, kerosenePrice: 179.1, transportSurcharge: 9.02 },
-        { city: "Moyale", petrolPrice: 203.12, dieselPrice: 188.23, kerosenePrice: 179.77, transportSurcharge: 9.69 },
-        { city: "Wundanyi", petrolPrice: 192.34, dieselPrice: 177.4, kerosenePrice: 168.88, transportSurcharge: -1.09 },
-        { city: "Voi", petrolPrice: 193.56, dieselPrice: 178.62, kerosenePrice: 169.98, transportSurcharge: 0.13 },
-        { city: "Embu", petrolPrice: 195.34, dieselPrice: 180.47, kerosenePrice: 172.0, transportSurcharge: 1.91 },
-        { city: "Kitui", petrolPrice: 196.89, dieselPrice: 182.02, kerosenePrice: 173.55, transportSurcharge: 3.46 },
+        {
+          city: "Nairobi",
+          petrolPrice: 193.43,
+          dieselPrice: 178.56,
+          kerosenePrice: 170.22,
+          transportSurcharge: 0.0,
+        },
+        {
+          city: "Mombasa",
+          petrolPrice: 190.15,
+          dieselPrice: 175.21,
+          kerosenePrice: 167.05,
+          transportSurcharge: -3.28,
+        },
+        {
+          city: "Kisumu",
+          petrolPrice: 196.78,
+          dieselPrice: 181.92,
+          kerosenePrice: 173.45,
+          transportSurcharge: 3.35,
+        },
+        {
+          city: "Nakuru",
+          petrolPrice: 195.12,
+          dieselPrice: 180.34,
+          kerosenePrice: 171.88,
+          transportSurcharge: 1.69,
+        },
+        {
+          city: "Eldoret",
+          petrolPrice: 197.55,
+          dieselPrice: 182.67,
+          kerosenePrice: 174.21,
+          transportSurcharge: 4.12,
+        },
+        {
+          city: "Kakamega",
+          petrolPrice: 197.45,
+          dieselPrice: 182.58,
+          kerosenePrice: 174.12,
+          transportSurcharge: 4.02,
+        },
+        {
+          city: "Bungoma",
+          petrolPrice: 197.89,
+          dieselPrice: 183.01,
+          kerosenePrice: 174.55,
+          transportSurcharge: 4.46,
+        },
+        {
+          city: "Kisii",
+          petrolPrice: 197.12,
+          dieselPrice: 182.25,
+          kerosenePrice: 173.78,
+          transportSurcharge: 3.69,
+        },
+        {
+          city: "Nyeri",
+          petrolPrice: 194.76,
+          dieselPrice: 179.89,
+          kerosenePrice: 171.44,
+          transportSurcharge: 1.33,
+        },
+        {
+          city: "Meru",
+          petrolPrice: 195.88,
+          dieselPrice: 181.01,
+          kerosenePrice: 172.55,
+          transportSurcharge: 2.45,
+        },
+        {
+          city: "Thika",
+          petrolPrice: 193.87,
+          dieselPrice: 179.01,
+          kerosenePrice: 170.66,
+          transportSurcharge: 0.44,
+        },
+        {
+          city: "Machakos",
+          petrolPrice: 194.21,
+          dieselPrice: 179.34,
+          kerosenePrice: 171.01,
+          transportSurcharge: 0.78,
+        },
+        {
+          city: "Naivasha",
+          petrolPrice: 194.98,
+          dieselPrice: 180.11,
+          kerosenePrice: 171.66,
+          transportSurcharge: 1.55,
+        },
+        {
+          city: "Kitale",
+          petrolPrice: 198.12,
+          dieselPrice: 183.25,
+          kerosenePrice: 174.78,
+          transportSurcharge: 4.69,
+        },
+        {
+          city: "Malindi",
+          petrolPrice: 190.89,
+          dieselPrice: 175.95,
+          kerosenePrice: 167.79,
+          transportSurcharge: -2.54,
+        },
+        {
+          city: "Lamu",
+          petrolPrice: 192.45,
+          dieselPrice: 177.51,
+          kerosenePrice: 169.35,
+          transportSurcharge: -0.98,
+        },
+        {
+          city: "Garissa",
+          petrolPrice: 198.67,
+          dieselPrice: 183.78,
+          kerosenePrice: 175.32,
+          transportSurcharge: 5.24,
+        },
+        {
+          city: "Lodwar",
+          petrolPrice: 220.3,
+          dieselPrice: 250.01,
+          kerosenePrice: 164.9,
+          transportSurcharge: 15.92,
+        },
+        {
+          city: "Kakuma",
+          petrolPrice: 205.5,
+          dieselPrice: 204.8,
+          kerosenePrice: 166.0,
+          transportSurcharge: 12.07,
+        },
+        {
+          city: "Mandera",
+          petrolPrice: 202.45,
+          dieselPrice: 187.56,
+          kerosenePrice: 179.1,
+          transportSurcharge: 9.02,
+        },
+        {
+          city: "Moyale",
+          petrolPrice: 203.12,
+          dieselPrice: 188.23,
+          kerosenePrice: 179.77,
+          transportSurcharge: 9.69,
+        },
+        {
+          city: "Wundanyi",
+          petrolPrice: 192.34,
+          dieselPrice: 177.4,
+          kerosenePrice: 168.88,
+          transportSurcharge: -1.09,
+        },
+        {
+          city: "Voi",
+          petrolPrice: 193.56,
+          dieselPrice: 178.62,
+          kerosenePrice: 169.98,
+          transportSurcharge: 0.13,
+        },
+        {
+          city: "Embu",
+          petrolPrice: 195.34,
+          dieselPrice: 180.47,
+          kerosenePrice: 172.0,
+          transportSurcharge: 1.91,
+        },
+        {
+          city: "Kitui",
+          petrolPrice: 196.89,
+          dieselPrice: 182.02,
+          kerosenePrice: 173.55,
+          transportSurcharge: 3.46,
+        },
       ];
     }
 
@@ -1484,7 +1699,7 @@ async function fetchEthiopiaFuelPrices(): Promise<FuelPriceData | null> {
       key,
       "Ethiopia Ministry of Trade",
       data,
-      FUEL_PRICE_SYNC_INTERVAL
+      FUEL_PRICE_SYNC_INTERVAL,
     );
     localStorage.setItem("fuelpro_fuel_prices_ET", JSON.stringify(data));
     return data;
@@ -1555,7 +1770,7 @@ async function fetchGhanaFuelPrices(): Promise<FuelPriceData | null> {
 // ============================================================
 
 export async function syncFuelPrices(
-  countryCode?: string
+  countryCode?: string,
 ): Promise<FuelPriceData[]> {
   const results: FuelPriceData[] = [];
 
@@ -1642,7 +1857,7 @@ export async function syncFuelPrices(
 // ============================================================
 
 export async function syncTaxRates(
-  countryCode: string
+  countryCode: string,
 ): Promise<TaxRateData | null> {
   const key = `tax_rates_${countryCode}`;
   if (!shouldSync(key, TAX_SYNC_INTERVAL)) {
@@ -1689,7 +1904,7 @@ export async function syncTaxRates(
   markSuccess(key, country.revenueAuthority.name, taxData, TAX_SYNC_INTERVAL);
   localStorage.setItem(
     `fuelpro_tax_rates_${countryCode}`,
-    JSON.stringify(taxData)
+    JSON.stringify(taxData),
   );
   return taxData;
 }
@@ -1715,7 +1930,7 @@ export async function syncExchangeRates(): Promise<ExchangeRateData | null> {
 
   try {
     const response = await fetch(
-      "https://api.exchangerate-api.com/v4/latest/USD"
+      "https://api.exchangerate-api.com/v4/latest/USD",
     );
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
@@ -1872,7 +2087,7 @@ export async function syncExchangeRates(): Promise<ExchangeRateData | null> {
 // ============================================================
 
 export async function syncRegulatoryUpdates(
-  countryCode: string
+  countryCode: string,
 ): Promise<RegulatoryUpdate[]> {
   const key = `regulatory_${countryCode}`;
   if (!shouldSync(key, NEWS_SYNC_INTERVAL)) {
@@ -1958,11 +2173,11 @@ export async function syncRegulatoryUpdates(
       key,
       `${country.shortName} Regulatory Sources`,
       updates,
-      NEWS_SYNC_INTERVAL
+      NEWS_SYNC_INTERVAL,
     );
     localStorage.setItem(
       `fuelpro_regulatory_${countryCode}`,
-      JSON.stringify(updates)
+      JSON.stringify(updates),
     );
     return updates;
   } catch (error) {
@@ -2005,7 +2220,7 @@ export async function runFullSync(countryCode: string): Promise<SyncResult> {
   // Store the full sync result
   localStorage.setItem(
     `fuelpro_sync_result_${countryCode}`,
-    JSON.stringify(result)
+    JSON.stringify(result),
   );
   localStorage.setItem("fuelpro_last_full_sync", new Date().toISOString());
 
@@ -2538,7 +2753,7 @@ export function useAutoSync(countryCode: string) {
   const doSync = useCallback(async () => {
     if (syncStatus.isSyncing) return;
 
-    setSyncStatus(prev => ({ ...prev, isSyncing: true, error: null }));
+    setSyncStatus((prev) => ({ ...prev, isSyncing: true, error: null }));
 
     try {
       const result = await runFullSync(countryCode);
@@ -2549,7 +2764,7 @@ export function useAutoSync(countryCode: string) {
         error: null,
       });
     } catch (error) {
-      setSyncStatus(prev => ({
+      setSyncStatus((prev) => ({
         ...prev,
         isSyncing: false,
         error: (error as Error).message,
@@ -2567,7 +2782,7 @@ export function useAutoSync(countryCode: string) {
       const cached = localStorage.getItem(`fuelpro_sync_result_${countryCode}`);
       if (cached) {
         try {
-          setSyncStatus(prev => ({
+          setSyncStatus((prev) => ({
             ...prev,
             result: JSON.parse(cached),
             lastSync: localStorage.getItem("fuelpro_last_full_sync"),
@@ -2585,7 +2800,7 @@ export function useAutoSync(countryCode: string) {
           doSync();
         }
       },
-      1000 * 60 * 30
+      1000 * 60 * 30,
     ); // Check every 30 minutes
 
     return () => {

@@ -26,7 +26,7 @@ export default function StationSelector({
   const [editStation, setEditStation] = useState({ name: "", location: "" });
 
   const stations = state.stations || [];
-  const currentStation = stations.find(s => s.id === state.currentStationId);
+  const currentStation = stations.find((s) => s.id === state.currentStationId);
 
   const handleAddStation = () => {
     if (!newStation.name.trim()) return;
@@ -75,7 +75,7 @@ export default function StationSelector({
 
     if (
       confirm(
-        "Are you sure you want to delete this station? All data for this station will be lost."
+        "Are you sure you want to delete this station? All data for this station will be lost.",
       )
     ) {
       dispatch({ type: "DELETE_STATION", payload: stationId });
@@ -154,7 +154,7 @@ export default function StationSelector({
                   <p className="text-xs">Add your first station below</p>
                 </div>
               ) : (
-                stations.map(station => (
+                stations.map((station) => (
                   <div key={station.id}>
                     {isEditing === station.id ? (
                       /* Edit Mode */
@@ -162,7 +162,7 @@ export default function StationSelector({
                         <input
                           type="text"
                           value={editStation.name}
-                          onChange={e =>
+                          onChange={(e) =>
                             setEditStation({
                               ...editStation,
                               name: e.target.value,
@@ -175,7 +175,7 @@ export default function StationSelector({
                         <input
                           type="text"
                           value={editStation.location}
-                          onChange={e =>
+                          onChange={(e) =>
                             setEditStation({
                               ...editStation,
                               location: e.target.value,
@@ -225,7 +225,7 @@ export default function StationSelector({
 
                         <div className="flex items-center gap-1">
                           <button
-                            onClick={e => {
+                            onClick={(e) => {
                               e.stopPropagation();
                               handleEditStation(station);
                             }}
@@ -236,7 +236,7 @@ export default function StationSelector({
                           </button>
                           {stations.length > 1 && (
                             <button
-                              onClick={e => {
+                              onClick={(e) => {
                                 e.stopPropagation();
                                 handleDeleteStation(station.id);
                               }}
@@ -261,7 +261,7 @@ export default function StationSelector({
                   <input
                     type="text"
                     value={newStation.name}
-                    onChange={e =>
+                    onChange={(e) =>
                       setNewStation({ ...newStation, name: e.target.value })
                     }
                     placeholder="Station name (e.g., Main Branch)"
@@ -271,7 +271,7 @@ export default function StationSelector({
                   <input
                     type="text"
                     value={newStation.location}
-                    onChange={e =>
+                    onChange={(e) =>
                       setNewStation({ ...newStation, location: e.target.value })
                     }
                     placeholder="Location (e.g., Nairobi CBD)"

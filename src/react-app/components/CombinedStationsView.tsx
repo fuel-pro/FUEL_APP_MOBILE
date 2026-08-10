@@ -105,7 +105,7 @@ export default function CombinedStationsView() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-              {stationList.map(station => {
+              {stationList.map((station) => {
                 const sData = station.data || {};
                 const sRevenue = sData.totalRevenue || 0;
                 const sFuel = sData.totalFuelSold || 0;
