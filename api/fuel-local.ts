@@ -17,7 +17,7 @@
  * stay server-side. The client only sees the parsed result.
  */
 
-import { getLocalFuelPrices } from "./lib/fuel-engine";
+import { getLocalFuelPrices } from "./lib/fuel-engine.js";
 
 export async function GET(request: Request): Promise<Response> {
   const url = new URL(request.url);

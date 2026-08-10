@@ -15,7 +15,7 @@
  *   limit  — number of top locations to refresh (default 50)
  */
 
-import { refreshTopLocations } from "../lib/fuel-engine";
+import { refreshTopLocations } from "../lib/fuel-engine.js";
 
 export async function GET(request: Request): Promise<Response> {
   const authHeader = request.headers.get("authorization");
