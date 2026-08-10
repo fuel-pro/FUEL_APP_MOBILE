@@ -142,7 +142,14 @@ async function searchWebPrices(
   country: string,
   countryCode: string,
 ): Promise<string> {
-  if (!process.env.SERPER_API_KEY) return "";
+  // When Serper is not configured, return a minimal context stub so the AI
+  // step can still run using the model's own knowledge of recent official
+  // fuel prices for the country. This keeps the engine functional even
+  // without a paid search key; the AI is instructed to only return prices
+  // it is confident about, and the result is cached for 14 days.
+  if (!process.env.SERPER_API_KEY) {
+    return `No live web search available. Use your knowledge of current official fuel pump prices in ${locationName}, ${country}.`;
+  }
   const query = `current official fuel prices petrol diesel kerosene in ${locationName} ${country} ${new Date().getFullYear()}`;
   const res = await fetch("https://google.serper.dev/search", {
     method: "POST",
@@ -182,12 +189,15 @@ async function searchWebPrices(
 function buildAiPrompt(snippet: string, currencyHint: string): string {
   return [
     "Extract the current local fuel prices from the text below.",
+    "If the text says no live web search is available, use your own knowledge",
+    "of the most recent official/regulatory fuel pump prices for the location,",
+    "but ONLY return a price you are confident about — otherwise use null.",
     "Return ONLY a JSON object with this exact shape:",
     '{"super_petrol": <number|null>, "diesel": <number|null>, "kerosene": <number|null>}.',
     "Values are the per-litre price in the local currency (likely " +
       currencyHint +
       ").",
-    "If a price is not mentioned, use null. Do not include any other keys or prose.",
+    "If a price is not mentioned or you are unsure, use null. Do not include any other keys or prose.",
     "Text:",
     '"""',
     snippet,
@@ -405,6 +415,7 @@ export async function getLocalFuelPrices(
       place.country,
       place.countryCode,
     );
+    const usedWebSearch = !!process.env.SERPER_API_KEY && snippets.length > 0;
     if (!snippets)
       throw new Error(
         "No web data (SERPER_API_KEY missing or empty results)",
@@ -420,6 +431,8 @@ export async function getLocalFuelPrices(
       prices.kerosene != null;
     if (!hasAny) throw new Error("AI could not extract any prices");
 
+    const sourceLabel = usedWebSearch ? "AI-Verified" : "AI-Estimated";
+
     if (supabase) {
       const { data: saved, error: upErr } = await supabase
         .from("fuel_prices")
@@ -433,7 +446,7 @@ export async function getLocalFuelPrices(
             location: `POINT(${lon} ${lat})`,
             prices,
             currency: currency.code,
-            source: "AI-Verified",
+            source: sourceLabel,
             last_updated: new Date().toISOString(),
             query_count: 1,
           },
@@ -457,7 +470,7 @@ export async function getLocalFuelPrices(
       lon,
       prices,
       currency: currency.code,
-      source: "AI-Verified (uncached)",
+      source: `${sourceLabel} (uncached)`,
       last_updated: new Date().toISOString(),
     };
   } catch (e) {
