@@ -469,3 +469,25 @@ cross-device sync. Both `app_kv` and `stations` are in the
 - Vercel: fuel-app-mobile.vercel.app (prebuilt deploy, READY)
 - Cloudflare: fuel-app-mobile.pages.dev (preview 6b58195b)
 - PR #95: https://github.com/fuel-pro/FUEL_APP_MOBILE/pull/95
+
+### Fuel Price Finder — GPS geolocation feature (ADDED 2026-08-09)
+- `src/react-app/components/FuelPriceLocator.tsx`: uses existing
+  `LocationContext` for GPS detection, calls enhanced `/api/fuel-prices`
+  endpoint with `?lat=&lng=` query params. Displays gasoline/diesel/premium/
+  kerosene prices in styled cards. Falls back to unified pricing system
+  (location-aware static prices from `pricing.ts` with Kenya city-specific
+  transport surcharges) when the API is unavailable or returns no data. Shows
+  the user's own station prices for comparison. Cross-device cloud cache via
+  `cloudStorageService` (key `fuel_price_locator_cache`, 1h TTL) + real-time
+  subscription so price updates sync instantly across devices. Registered as
+  `price-finder` tab (order 36) in FuelContext tab config.
+- `api/fuel-prices.ts` enhanced with geolocation mode: when `lat`/`lng` query
+  params are provided, queries CollectAPI Gas Prices for station-level nearby
+  prices (requires `GLOBAL_FUEL_API_KEY` env var). Falls back to Kenya EPRA
+  national prices (`OILPRICE_API_KEY`) when CollectAPI is unavailable or coords
+  resolve to Kenya. Preserves existing Kenya EPRA behavior (no lat/lng) with
+  added `mode` field in response. CORS headers added for cross-origin requests.
+- Env vars needed (set in Vercel Project Settings → Environment Variables):
+  - `OILPRICE_API_KEY` — for live Kenya EPRA prices (oilpriceapi.com)
+  - `GLOBAL_FUEL_API_KEY` — for global geolocation station prices (CollectAPI)
+  Both are optional; the app gracefully degrades to static pricing without them.
