@@ -316,11 +316,15 @@ export default function FuelTypesManager() {
     })();
     // Real-time: when another device updates fuel types, update instantly
     const unsubs = [
-      cloudStorageService.subscribe<CustomFuelType[]>("fuel_types_config", stationId, (val) => {
-        if (val && Array.isArray(val)) setFuelTypes(val);
-      }),
+      cloudStorageService.subscribe<CustomFuelType[]>(
+        "fuel_types_config",
+        stationId,
+        (val) => {
+          if (val && Array.isArray(val)) setFuelTypes(val);
+        },
+      ),
     ];
-    return () => unsubs.forEach(u => u());
+    return () => unsubs.forEach((u) => u());
   }, [user, stationId]);
 
   const resetForm = () => {

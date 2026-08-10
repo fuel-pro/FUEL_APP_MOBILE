@@ -18,7 +18,7 @@ export interface ResolvedLocation {
 
 export async function getExactLocation(
   lat: number,
-  lon: number
+  lon: number,
 ): Promise<ResolvedLocation> {
   // zoom=10 gives town/city-level resolution (not building-level like zoom=18).
   // This returns the primary town name rather than a sub-village/hamlet, so
@@ -31,7 +31,7 @@ export async function getExactLocation(
   if (!res.ok) {
     throw new Error(`Geocoding failed: ${res.status}`);
   }
-  const data = await res.json();
+  const data: any = await res.json();
   const addr = data.address || {};
 
   // Prioritise the most recognisable administrative unit: city > town >

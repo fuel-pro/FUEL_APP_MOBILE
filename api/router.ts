@@ -25,9 +25,9 @@ const t = initTRPC.create({
 
 // Procedures accept any input and return any so the stub client type-checks
 // without a real backend. All calls are runtime no-ops (no API URL configured).
- 
+
 const anyQuery = () => t.procedure.input(z.any()).query((): any => null);
- 
+
 const anyMutation = () => t.procedure.input(z.any()).mutation((): any => null);
 
 export const appRouter = t.router({

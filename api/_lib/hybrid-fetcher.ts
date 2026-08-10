@@ -70,7 +70,7 @@ function isFresh(dateStr: string): boolean {
 function rowToResult(
   row: FuelPricesRow,
   source: string,
-  distanceKm?: number
+  distanceKm?: number,
 ): HyperLocalPriceResult {
   const p = row.prices || {};
   return {
@@ -94,7 +94,7 @@ export async function getHyperLocalPrices(
   lat: number,
   lon: number,
   locationName: string,
-  country: string
+  country: string,
 ): Promise<HyperLocalPriceResult> {
   if (!supabaseAdmin) {
     throw new Error("Supabase admin client is not configured.");
@@ -128,7 +128,7 @@ export async function getHyperLocalPrices(
       user_lat: lat,
       user_lon: lon,
       radius_km: SEARCH_RADIUS_KM,
-    }
+    },
   );
 
   if (rpcErr) {
@@ -164,8 +164,11 @@ async function fetchAndCachePrices(
   lat: number,
   lon: number,
   locationName: string,
-  country: string
+  country: string,
 ): Promise<HyperLocalPriceResult> {
+  if (!supabaseAdmin) {
+    throw new Error("Supabase admin client is not configured.");
+  }
   const serpapiKey = process.env.SERPAPI_KEY;
   let prices: ExtractedPrices | null = null;
   let sourceLabel = "Live AI Search";
@@ -185,7 +188,7 @@ async function fetchAndCachePrices(
   if (!prices) {
     throw new Error(
       `No fuel price data available for ${locationName}, ${country}. ` +
-        "SerpApi key may be missing and AI estimation failed."
+        "SerpApi key may be missing and AI estimation failed.",
     );
   }
 
@@ -209,7 +212,7 @@ async function fetchAndCachePrices(
         last_updated: new Date().toISOString(),
         query_count: 1,
       },
-      { onConflict: "location_name,country" }
+      { onConflict: "location_name,country" },
     )
     .select("*")
     .maybeSingle();
@@ -219,7 +222,10 @@ async function fetchAndCachePrices(
   }
 
   if (upserted) {
-    return rowToResult(upserted as FuelPricesRow, serpapiKey ? "Live AI Search" : sourceLabel);
+    return rowToResult(
+      upserted as FuelPricesRow,
+      serpapiKey ? "Live AI Search" : sourceLabel,
+    );
   }
 
   // Even if the upsert failed, return what we extracted so the user sees data.
@@ -234,7 +240,9 @@ async function fetchAndCachePrices(
       kerosene: prices.kerosene,
     },
     currency: prices.currency,
-    source: serpapiKey ? "Live AI Search (uncached)" : `${sourceLabel} (uncached)`,
+    source: serpapiKey
+      ? "Live AI Search (uncached)"
+      : `${sourceLabel} (uncached)`,
     last_updated: new Date().toISOString(),
   };
 }
@@ -255,11 +263,11 @@ interface ExtractedPrices {
 async function extractPricesViaSearch(
   locationName: string,
   country: string,
-  serpapiKey: string
+  serpapiKey: string,
 ): Promise<ExtractedPrices | null> {
   const query = `official government fuel petrol diesel kerosene price in ${locationName} ${country}`;
   const serpUrl = `https://serpapi.com/search.json?engine=google&q=${encodeURIComponent(
-    query
+    query,
   )}&api_key=${serpapiKey}&hl=en`;
 
   const serpRes = await fetch(serpUrl);
@@ -267,7 +275,7 @@ async function extractPricesViaSearch(
     console.error("[hybrid-fetcher] SerpApi error:", serpRes.status);
     return null;
   }
-  const serpJson = await serpRes.json();
+  const serpJson: any = await serpRes.json();
 
   const answerBox = serpJson.answer_box?.answer || serpJson.answer_box?.snippet;
   const snippets =
@@ -286,7 +294,9 @@ async function extractPricesViaSearch(
   return extractPricesWithAI(combined);
 }
 
-async function extractPricesWithAI(text: string): Promise<ExtractedPrices | null> {
+async function extractPricesWithAI(
+  text: string,
+): Promise<ExtractedPrices | null> {
   // Prefer Groq (fast + free tier), then DeepSeek, then QWEN via OpenRouter.
   const groqKey = process.env.GROQ_API_KEY;
   const deepseekKey = process.env.DEEPSEEK_API_KEY || process.env.DEEPSEEK;
@@ -320,7 +330,7 @@ async function extractPricesWithAI(text: string): Promise<ExtractedPrices | null
  */
 async function estimatePricesFromKnowledge(
   locationName: string,
-  country: string
+  country: string,
 ): Promise<ExtractedPrices | null> {
   const prompt =
     `What are the current approximate pump prices for Super Petrol, Diesel, ` +
@@ -355,33 +365,30 @@ const EXTRACTION_SYSTEM_PROMPT =
 
 async function callGroq(
   text: string,
-  apiKey: string
+  apiKey: string,
 ): Promise<ExtractedPrices | null> {
   try {
-    const res = await fetch(
-      "https://api.groq.com/openai/v1/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "llama-3.1-8b-instant",
-          messages: [
-            { role: "system", content: EXTRACTION_SYSTEM_PROMPT },
-            { role: "user", content: text },
-          ],
-          response_format: { type: "json_object" },
-          temperature: 0,
-        }),
-      }
-    );
+    const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "llama-3.1-8b-instant",
+        messages: [
+          { role: "system", content: EXTRACTION_SYSTEM_PROMPT },
+          { role: "user", content: text },
+        ],
+        response_format: { type: "json_object" },
+        temperature: 0,
+      }),
+    });
     if (!res.ok) {
       console.error("[hybrid-fetcher] Groq error:", res.status);
       return null;
     }
-    const data = await res.json();
+    const data: any = await res.json();
     return parseExtraction(data.choices[0].message.content);
   } catch (err) {
     console.error("[hybrid-fetcher] Groq fetch failed:", err);
@@ -391,33 +398,30 @@ async function callGroq(
 
 async function callDeepSeek(
   text: string,
-  apiKey: string
+  apiKey: string,
 ): Promise<ExtractedPrices | null> {
   try {
-    const res = await fetch(
-      "https://api.deepseek.com/v1/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "deepseek-chat",
-          messages: [
-            { role: "system", content: EXTRACTION_SYSTEM_PROMPT },
-            { role: "user", content: text },
-          ],
-          response_format: { type: "json_object" },
-          temperature: 0,
-        }),
-      }
-    );
+    const res = await fetch("https://api.deepseek.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "deepseek-chat",
+        messages: [
+          { role: "system", content: EXTRACTION_SYSTEM_PROMPT },
+          { role: "user", content: text },
+        ],
+        response_format: { type: "json_object" },
+        temperature: 0,
+      }),
+    });
     if (!res.ok) {
       console.error("[hybrid-fetcher] DeepSeek error:", res.status);
       return null;
     }
-    const data = await res.json();
+    const data: any = await res.json();
     return parseExtraction(data.choices[0].message.content);
   } catch (err) {
     console.error("[hybrid-fetcher] DeepSeek fetch failed:", err);
@@ -432,33 +436,30 @@ async function callDeepSeek(
  */
 async function callQwen(
   text: string,
-  apiKey: string
+  apiKey: string,
 ): Promise<ExtractedPrices | null> {
   try {
-    const res = await fetch(
-      "https://openrouter.ai/api/v1/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "qwen/qwen-2.5-72b-instruct",
-          messages: [
-            { role: "system", content: EXTRACTION_SYSTEM_PROMPT },
-            { role: "user", content: text },
-          ],
-          response_format: { type: "json_object" },
-          temperature: 0,
-        }),
-      }
-    );
+    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "qwen/qwen-2.5-72b-instruct",
+        messages: [
+          { role: "system", content: EXTRACTION_SYSTEM_PROMPT },
+          { role: "user", content: text },
+        ],
+        response_format: { type: "json_object" },
+        temperature: 0,
+      }),
+    });
     if (!res.ok) {
       console.error("[hybrid-fetcher] QWEN error:", res.status);
       return null;
     }
-    const data = await res.json();
+    const data: any = await res.json();
     return parseExtraction(data.choices[0].message.content);
   } catch (err) {
     console.error("[hybrid-fetcher] QWEN fetch failed:", err);

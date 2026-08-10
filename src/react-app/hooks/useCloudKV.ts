@@ -21,7 +21,7 @@ import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 export function useCloudKV<T>(
   key: string,
   stationId: string | undefined,
-  initialValue?: T
+  initialValue?: T,
 ): {
   data: T;
   setData: (value: T | ((prev: T) => T)) => void;
@@ -73,7 +73,7 @@ export function useCloudKV<T>(
       skipNextRemoteRef.current = true;
       cloudStorageService.set(key, next, stationId).catch(() => {});
     },
-    [key, stationId]
+    [key, stationId],
   );
 
   const reload = useCallback(() => {

@@ -208,8 +208,9 @@ export default function AdvancedAnalytics() {
     const processLocalData = () => {
       // Use local state data as fallback
       const days = dateRange.days;
-      const pmsTotal = state.pmsSales - (state.pmsReturn || 0);
-      const agoTotal = state.agoSales - (state.agoReturn || 0);
+      // Derive litres sold from tank readings (opening - closing).
+      const pmsTotal = Math.max(0, state.pmsTankOpening - state.pmsTankClosing);
+      const agoTotal = Math.max(0, state.agoTankOpening - state.agoTankClosing);
       const dailyAvg = (pmsTotal + agoTotal) / Math.max(1, days);
 
       const data: DailySales[] = [];

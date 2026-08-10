@@ -60,7 +60,7 @@ async function fetchCode(code: string, apiKey: string): Promise<number | null> {
   try {
     const res = await fetch(
       `https://api.oilpriceapi.com/v1/prices/latest?by_code=${code}`,
-      { headers: { Authorization: `Token ${apiKey}` } }
+      { headers: { Authorization: `Token ${apiKey}` } },
     );
     if (!res.ok) return null;
     const json = (await res.json()) as OilPriceApiResponse;
@@ -81,7 +81,7 @@ async function fetchCode(code: string, apiKey: string): Promise<number | null> {
 async function fetchNearbyPrices(
   lat: string,
   lng: string,
-  apiKey: string
+  apiKey: string,
 ): Promise<{
   stationName: string;
   gasoline: string;
@@ -173,7 +173,7 @@ export async function GET(request: Request): Promise<Response> {
             latNum,
             lngNum,
             locName,
-            locCountry
+            locCountry,
           );
           return new Response(
             JSON.stringify({
@@ -211,7 +211,7 @@ export async function GET(request: Request): Promise<Response> {
                 ...corsHeaders,
                 "Cache-Control": "s-maxage=3600, stale-while-revalidate=600",
               },
-            }
+            },
           );
         } catch (err) {
           console.error("[fuel-prices] smart-cache failed:", err);
@@ -249,7 +249,7 @@ export async function GET(request: Request): Promise<Response> {
               ...corsHeaders,
               "Cache-Control": "s-maxage=3600, stale-while-revalidate=600",
             },
-          }
+          },
         );
       }
     }
@@ -282,7 +282,7 @@ export async function GET(request: Request): Promise<Response> {
             ...corsHeaders,
             "Cache-Control": "s-maxage=3600, stale-while-revalidate=600",
           },
-        }
+        },
       );
     }
 
@@ -295,7 +295,7 @@ export async function GET(request: Request): Promise<Response> {
         error: "No fuel price API keys configured on the server",
         coordinates: { latitude: lat, longitude: lng },
       }),
-      { status: 200, headers: corsHeaders }
+      { status: 200, headers: corsHeaders },
     );
   }
 
@@ -308,7 +308,7 @@ export async function GET(request: Request): Promise<Response> {
         success: false,
         error: "OILPRICE_API_KEY not configured on the server",
       }),
-      { status: 200, headers: corsHeaders }
+      { status: 200, headers: corsHeaders },
     );
   }
 
@@ -334,6 +334,6 @@ export async function GET(request: Request): Promise<Response> {
         // generous cache window is safe and saves API quota.
         "Cache-Control": "public, max-age=43200, s-maxage=43200",
       },
-    }
+    },
   );
 }

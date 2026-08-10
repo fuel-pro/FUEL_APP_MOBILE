@@ -127,7 +127,10 @@ export async function changeFounderPassword(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     if (newPassword.length < 8) {
-      return { success: false, error: "Password must be at least 8 characters" };
+      return {
+        success: false,
+        error: "Password must be at least 8 characters",
+      };
     }
     const client = getSupabaseClient();
     const { error } = await client.auth.updateUser({ password: newPassword });
@@ -135,7 +138,9 @@ export async function changeFounderPassword(
       return { success: false, error: error.message };
     }
     // Record the timestamp on the profiles table (cross-device audit).
-    const { data: session } = await client.auth.getSession();
+    const {
+      data: { session },
+    } = await client.auth.getSession();
     if (session?.user) {
       await client
         .from("profiles")
@@ -271,12 +276,10 @@ export async function verifyFounderToken(): Promise<boolean> {
 
   try {
     const client = getSupabaseClient();
-    const {
-      data: { session },
-      error,
-    } = await client.auth.getSession();
+    const result = await client.auth.getSession();
+    const session = result.data.session;
 
-    if (error || !session) return false;
+    if (result.error || !session) return false;
 
     // Verify user still exists and has founder role
     const { data: userData } = await client

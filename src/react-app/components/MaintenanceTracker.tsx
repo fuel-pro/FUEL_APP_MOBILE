@@ -110,11 +110,15 @@ export default function MaintenanceTracker() {
     })();
     // Real-time: when another device updates records, update instantly
     const unsubs = [
-      cloudStorageService.subscribe<MaintenanceRecord[]>("maintenance_records", stationId, (val) => {
-        if (val && Array.isArray(val)) setRecords(val);
-      }),
+      cloudStorageService.subscribe<MaintenanceRecord[]>(
+        "maintenance_records",
+        stationId,
+        (val) => {
+          if (val && Array.isArray(val)) setRecords(val);
+        },
+      ),
     ];
-    return () => unsubs.forEach(u => u());
+    return () => unsubs.forEach((u) => u());
   }, [user, stationId]);
 
   const showNotification = (

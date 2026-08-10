@@ -118,7 +118,8 @@ export default function SalesTracking() {
   const simulateAIExtraction = (fileName: string): ScanResultData => {
     // Generate placeholder data - user needs to enter actual values
     const today = new Date().toISOString().split("T")[0];
-    const currentReading = Math.round((state.pmsSales || 0) / 1000) * 1000;
+    const currentReading =
+      Math.round((state.pmsTankClosing || 0) / 1000) * 1000;
 
     return {
       date: today,

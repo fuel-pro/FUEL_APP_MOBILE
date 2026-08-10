@@ -137,14 +137,18 @@ export default function ShiftManagement() {
     })();
     // Real-time: when another device updates shifts/employees, update instantly
     const unsubs = [
-      cloudStorageService.subscribe<Employee[]>("shift_employees", stationId, (val) => {
-        if (val && Array.isArray(val)) setEmployees(val);
-      }),
+      cloudStorageService.subscribe<Employee[]>(
+        "shift_employees",
+        stationId,
+        (val) => {
+          if (val && Array.isArray(val)) setEmployees(val);
+        },
+      ),
       cloudStorageService.subscribe<Shift[]>("shift_data", stationId, (val) => {
         if (val && Array.isArray(val)) setShifts(val);
       }),
     ];
-    return () => unsubs.forEach(u => u());
+    return () => unsubs.forEach((u) => u());
   }, [user, stationId]);
 
   const dayShifts = useMemo(

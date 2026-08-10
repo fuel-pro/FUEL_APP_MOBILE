@@ -112,14 +112,22 @@ export default function CreditManagement() {
     })();
     // Real-time: when another device updates accounts/transactions, update instantly
     const unsubs = [
-      cloudStorageService.subscribe<CreditAccount[]>("credit_accounts", stationId, (val) => {
-        if (val && Array.isArray(val)) setAccounts(val);
-      }),
-      cloudStorageService.subscribe<CreditTransaction[]>("credit_transactions", stationId, (val) => {
-        if (val && Array.isArray(val)) setTransactions(val);
-      }),
+      cloudStorageService.subscribe<CreditAccount[]>(
+        "credit_accounts",
+        stationId,
+        (val) => {
+          if (val && Array.isArray(val)) setAccounts(val);
+        },
+      ),
+      cloudStorageService.subscribe<CreditTransaction[]>(
+        "credit_transactions",
+        stationId,
+        (val) => {
+          if (val && Array.isArray(val)) setTransactions(val);
+        },
+      ),
     ];
-    return () => unsubs.forEach(u => u());
+    return () => unsubs.forEach((u) => u());
   }, [user, stationId]);
 
   const filtered = useMemo(() => {
