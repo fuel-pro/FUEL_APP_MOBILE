@@ -491,3 +491,50 @@ cross-device sync. Both `app_kv` and `stations` are in the
   - `OILPRICE_API_KEY` — for live Kenya EPRA prices (oilpriceapi.com)
   - `GLOBAL_FUEL_API_KEY` — for global geolocation station prices (CollectAPI)
   Both are optional; the app gracefully degrades to static pricing without them.
+
+## Auto Fuel Price engine (ADDED 2026-08-10, PR #98)
+Hyper-local GPS fuel price detection per the "AUTO FUEL PRICE" spec, adapted
+to this project's Vite SPA + Vercel serverless architecture.
+- **DB**: `supabase/migrations/012_fuel_prices_postgis.sql` (APPLIED LIVE via
+  Management API). Enables PostGIS; creates `fuel_prices` table (location_name,
+  country, lat/lon, geography POINT, prices JSONB, currency, source,
+  last_updated, query_count) with unique index on (location_name, country),
+  GIST spatial index, and query_count index. Two RPCs: `get_nearest_fuel(lat,
+  lon, radius_km)` (PostGIS ST_DWithin + planar haversine fallback) and
+  `bump_fuel_query_count()`. RLS: public read, service_role writes.
+- **Engine** (`api/lib/fuel-engine.ts`): 1) Nominatim reverse-geocode GPS →
+  village/town. 2) Exact-match Supabase cache check (fresh < 14 days). 3) Web
+  search (Serper, optional) → AI parse (Groq → OpenRouter/Llama fallback) into
+  {super_petrol, diesel, kerosene} JSON, upsert. 4) PostGIS nearest-neighbour
+  fallback within 50 km tagged `is_approximate`. When SERPER_API_KEY is absent,
+  the AI uses its own knowledge with `source: "AI-Estimated"` (vs
+  "AI-Verified" when real web snippets were parsed). Verified live: cache hit
+  (Nairobi) and nearest-neighbor (Thika→Nairobi 40.8km) both return HTTP 200.
+- **API routes**: `api/fuel-local.ts` (GET /api/fuel-local?lat=&lon=),
+  `api/cron/monthly-fuel-sync.ts` (CRON_SECRET-secured monthly refresh of
+  top-50 queried locations).
+- **CRITICAL — Vercel node16 import extensions**: Vercel compiles /api/*
+  serverless functions with `moduleResolution: 'node16'/'nodenext'`, which
+  REQUIRES explicit `.js` extensions on relative imports
+  (`./lib/fuel-engine.js`, NOT `./lib/fuel-engine`). Without the extension the
+  function deploys but crashes at invocation with
+  `FUNCTION_INVOCATION_FAILED`. The local tsconfig.server.json has
+  `allowImportingTsExtensions: true` so `.js` specifiers resolve to `.ts`
+  source files during typecheck. ALL new /api files with relative imports
+  MUST use `.js` extensions.
+- **Frontend**: `FuelTracker.tsx` (GPS → /api/fuel-local → price cards +
+  approximate badge + refresh, graceful fallback to useFuelPrices).
+  `FuelPriceService.getFuelPrices` tries /api/fuel-local first when
+  `fuelpro_user_coords` localStorage key is present. Tab "fueltracker"
+  (order 32) in FuelContext + Home.tsx.
+- **Env vars** (set on Vercel 2026-08-10): `SUPABASE_SERVICE_ROLE_KEY`,
+  `OPENROUTER_API_KEY` (the `$QWEN` secret is actually an OpenRouter
+  sk-or- key), `CRON_SECRET`. `SERPER_API_KEY` and `GROQ_API_KEY` are
+  optional (Serper for live web search, Groq as a faster AI alternative).
+  All are server-only (never VITE_-prefixed).
+- **Vercel deploy status**: Production deploy `dpl_7j66vAGqZB` (commit
+  `5ad604d`) is LIVE with env vars — cache-hit + nearest-neighbor paths work.
+  Commit `7f57d72` (AI-knowledge fallback) blocked by
+  `api-deployments-free-per-day` (100 used, resets 2026-08-11T13:42Z);
+  deployed to Cloudflare Pages (frontend only — Cloudflare doesn't run
+  Vercel serverless functions, so /api/fuel-local only works on Vercel).
