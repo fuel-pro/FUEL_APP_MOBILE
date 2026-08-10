@@ -769,11 +769,15 @@ export default function Dashboard() {
                 {currencySymbol} {displayPmsPrice.toFixed(2)}
               </p>
               <p className="text-[9px] text-gray-400">per litre</p>
-              {regionalPrice.isRegional && (
+              {isLocationBased ? (
+                <p className="text-[9px] text-green-600 dark:text-green-400 mt-0.5">
+                  {priceCityName}
+                </p>
+              ) : regionalPrice.isRegional ? (
                 <p className="text-[9px] text-green-600 dark:text-green-400 mt-0.5">
                   {regionalPrice.cityName}
                 </p>
-              )}
+              ) : null}
             </div>
             <div className="bg-white dark:bg-gray-800 rounded-lg p-3 text-center">
               <p className="text-[10px] text-gray-500 uppercase tracking-wide">
@@ -783,11 +787,15 @@ export default function Dashboard() {
                 {currencySymbol} {displayAgoPrice.toFixed(2)}
               </p>
               <p className="text-[9px] text-gray-400">per litre</p>
-              {regionalPrice.isRegional && (
+              {isLocationBased ? (
+                <p className="text-[9px] text-amber-600 dark:text-amber-400 mt-0.5">
+                  {priceCityName}
+                </p>
+              ) : regionalPrice.isRegional ? (
                 <p className="text-[9px] text-amber-600 dark:text-amber-400 mt-0.5">
                   {regionalPrice.cityName}
                 </p>
-              )}
+              ) : null}
             </div>
           </div>
           {fuelPrice?.breakdown && (
