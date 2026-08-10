@@ -26,17 +26,23 @@ interface NearbyPriceResult {
   mode?: string;
   timestamp?: string;
   coordinates?: { latitude: string; longitude: string };
+  locationName?: string;
+  country?: string;
   stationName?: string;
   currency?: string;
   currencySymbol?: string;
   unit?: string;
   prices?: {
-    gasoline: string;
-    diesel: string;
-    premium: string;
+    gasoline?: string;
+    petrol?: string;
+    diesel?: string;
+    premium?: string;
+    kerosene?: string;
   };
   kerosenePrice?: number | null;
   source?: string;
+  distance_km?: number;
+  last_updated?: string;
   error?: string;
 }
 
@@ -149,21 +155,50 @@ export default function FuelPriceLocator() {
     // Try the serverless API with coordinates
     if (lat && lng) {
       try {
-        const response = await fetch(`/api/fuel-prices?lat=${lat}&lng=${lng}`);
+        // Pass location name + country so the API uses the Smart-Cache
+        // hybrid fetcher (exact cache → PostGIS nearest 50km → live AI).
+        const locName =
+          preciseLocation?.city ||
+          preciseLocation?.address ||
+          cityName ||
+          "";
+        const locCountry = currentCountry?.name || "";
+        const params = new URLSearchParams({
+          lat: String(lat),
+          lng: String(lng),
+        });
+        if (locName) params.set("name", locName);
+        if (locCountry) params.set("country", locCountry);
+
+        const response = await fetch(`/api/fuel-prices?${params.toString()}`);
         if (response.ok) {
           const data: NearbyPriceResult = await response.json();
           if (data.success && data.prices) {
+            // Smart-cache mode uses petrol/diesel/kerosene keys; legacy
+            // geolocation mode uses gasoline/diesel/premium. Support both.
+            const petrolVal =
+              data.prices.petrol ?? data.prices.gasoline ?? "N/A";
+            const dieselVal = data.prices.diesel ?? "N/A";
+            const keroseneVal =
+              data.prices.kerosene ??
+              (data.kerosenePrice !== null && data.kerosenePrice !== undefined
+                ? String(data.kerosenePrice)
+                : "N/A");
+
             const result: StationPriceInfo = {
-              stationName: data.stationName || "Nearby Station",
-              gasoline: parseFloat(data.prices.gasoline) || null,
-              diesel: parseFloat(data.prices.diesel) || null,
-              premium: parseFloat(data.prices.premium) || null,
-              kerosene: data.kerosenePrice ?? null,
+              stationName: data.stationName || data.locationName || "Nearby Station",
+              gasoline: parseFloat(petrolVal) || null,
+              diesel: parseFloat(dieselVal) || null,
+              premium: parseFloat(data.prices.premium || "N/A") || null,
+              kerosene: parseFloat(keroseneVal) || null,
               currency: data.currency || "USD",
               currencySymbol: data.currencySymbol || "",
               unit: data.unit || "litre",
               source: data.source || "Live API",
-              location: `${lat.toFixed(4)}, ${lng.toFixed(4)}`,
+              location:
+                data.distance_km !== undefined
+                  ? `${data.locationName || locName} (${data.distance_km.toFixed(1)} km away)`
+                  : `${lat.toFixed(4)}, ${lng.toFixed(4)}`,
             };
             setNearbyResult(result);
             setLastFetchAt(new Date().toISOString());

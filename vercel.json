@@ -4,6 +4,12 @@
   "outputDirectory": "dist",
   "installCommand": "npm install --legacy-peer-deps",
   "framework": "vite",
+  "crons": [
+    {
+      "path": "/api/cron-monthly-sync",
+      "schedule": "0 0 1 * *"
+    }
+  ],
   "rewrites": [
     { "source": "/((?!assets/|sw\\.js|api/).*)", "destination": "/index.html" }
   ],

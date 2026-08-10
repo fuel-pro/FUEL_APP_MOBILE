@@ -1,22 +1,30 @@
 /**
  * /api/fuel-prices
  *
- * Serverless endpoint with TWO modes:
+ * Serverless endpoint with THREE modes:
  *
  * 1. **Kenya EPRA mode** (no lat/lng): fetches live, EPRA-sourced Kenya pump
  *    prices from oilpriceapi.com. Free tier 200 req/month; the client caches
  *    for a full day so usage stays well under quota.
  *    Requires: OILPRICE_API_KEY env var.
  *
- * 2. **Geolocation mode** (lat/lng provided): queries CollectAPI Gas Prices
- *    for station-level prices near the user's GPS coordinates. Falls back to
- *    Kenya EPRA mode when the coords resolve to Kenya and no CollectAPI key
- *    is configured, so the endpoint always returns useful data.
+ * 2. **Smart-Cache geolocation mode** (lat/lng/name/country provided): uses
+ *    the hybrid fetcher — exact cache → PostGIS nearest-town (50km) → live
+ *    SerpApi+AI search. This is the "Smart-Cache" architecture that minimises
+ *    SerpApi quota usage by serving cached prices from nearby towns.
+ *    Requires: SUPABASE_SERVICE_ROLE_KEY + (SERPAPI_KEY + GROQ/DEEPSEEK key
+ *    for live searches only; cached lookups need none).
+ *
+ * 3. **Legacy geolocation mode** (lat/lng only, no name/country): queries
+ *    CollectAPI Gas Prices for station-level prices. Falls back to Kenya EPRA
+ *    when coords resolve to Kenya and no CollectAPI key is configured.
  *    Requires: GLOBAL_FUEL_API_KEY env var (optional; gracefully degrades).
  *
  * All API keys stay server-side (process.env, never VITE_-prefixed) so they
  * are never exposed in the client bundle.
  */
+import { getHyperLocalPrices } from "./_lib/hybrid-fetcher";
+import { getExactLocation } from "./_lib/geocoding";
 
 const CODES = {
   petrol: "GASOLINE_RETAIL_KE_KES",
@@ -127,6 +135,8 @@ export async function GET(request: Request): Promise<Response> {
   const url = new URL(request.url);
   const lat = url.searchParams.get("lat");
   const lng = url.searchParams.get("lng");
+  const name = url.searchParams.get("name");
+  const country = url.searchParams.get("country");
 
   const corsHeaders: Record<string, string> = {
     "Content-Type": "application/json",
@@ -134,8 +144,83 @@ export async function GET(request: Request): Promise<Response> {
     "Access-Control-Allow-Methods": "GET, OPTIONS",
   };
 
-  // ── Mode 2: Geolocation query ──
+  // ── Mode 2: Smart-Cache geolocation (lat + lng + name + country) ──
+  // Uses the hybrid fetcher: exact cache → PostGIS nearest 50km → live AI.
+  // If name/country aren't provided but lat/lng are, reverse-geocode first.
   if (lat && lng) {
+    const latNum = parseFloat(lat);
+    const lngNum = parseFloat(lng);
+
+    if (!isNaN(latNum) && !isNaN(lngNum)) {
+      let locName = name;
+      let locCountry = country;
+
+      // Reverse-geocode if the client didn't provide name/country.
+      if (!locName || !locCountry) {
+        try {
+          const geo = await getExactLocation(latNum, lngNum);
+          locName = locName || geo.displayName;
+          locCountry = locCountry || geo.country;
+        } catch (err) {
+          console.error("[fuel-prices] geocoding failed:", err);
+        }
+      }
+
+      // Try the smart-cache hybrid fetcher (needs the service-role key).
+      if (locName && locCountry) {
+        try {
+          const result = await getHyperLocalPrices(
+            latNum,
+            lngNum,
+            locName,
+            locCountry
+          );
+          return new Response(
+            JSON.stringify({
+              success: true,
+              mode: "smart-cache",
+              timestamp: new Date().toISOString(),
+              coordinates: { latitude: lat, longitude: lng },
+              locationName: result.location_name,
+              country: result.country,
+              stationName: result.location_name,
+              currency: result.currency,
+              unit: "litre",
+              prices: {
+                petrol:
+                  result.prices.petrol !== null
+                    ? String(result.prices.petrol)
+                    : "N/A",
+                diesel:
+                  result.prices.diesel !== null
+                    ? String(result.prices.diesel)
+                    : "N/A",
+                kerosene:
+                  result.prices.kerosene !== null
+                    ? String(result.prices.kerosene)
+                    : "N/A",
+              },
+              kerosenePrice: result.prices.kerosene,
+              source: result.source,
+              distance_km: result.distance_km,
+              last_updated: result.last_updated,
+            }),
+            {
+              status: 200,
+              headers: {
+                ...corsHeaders,
+                "Cache-Control": "s-maxage=3600, stale-while-revalidate=600",
+              },
+            }
+          );
+        } catch (err) {
+          console.error("[fuel-prices] smart-cache failed:", err);
+          // Fall through to legacy geolocation / EPRA fallback below.
+        }
+      }
+    }
+
+    // ── Mode 3: Legacy geolocation (CollectAPI) ──
     const collectApiKey = process.env.GLOBAL_FUEL_API_KEY;
 
     // Try CollectAPI for station-level nearby prices
