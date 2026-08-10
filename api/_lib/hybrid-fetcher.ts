@@ -287,9 +287,10 @@ async function extractPricesViaSearch(
 }
 
 async function extractPricesWithAI(text: string): Promise<ExtractedPrices | null> {
-  // Prefer Groq (fast + free tier), fall back to DeepSeek (OpenAI-compatible).
+  // Prefer Groq (fast + free tier), then DeepSeek, then QWEN via OpenRouter.
   const groqKey = process.env.GROQ_API_KEY;
   const deepseekKey = process.env.DEEPSEEK_API_KEY || process.env.DEEPSEEK;
+  const qwenKey = process.env.QWEN_API_KEY || process.env.QWEN;
 
   if (groqKey) {
     const result = await callGroq(text, groqKey);
@@ -298,6 +299,11 @@ async function extractPricesWithAI(text: string): Promise<ExtractedPrices | null
 
   if (deepseekKey) {
     const result = await callDeepSeek(text, deepseekKey);
+    if (result) return result;
+  }
+
+  if (qwenKey) {
+    const result = await callQwen(text, qwenKey);
     if (result) return result;
   }
 
@@ -325,6 +331,7 @@ async function estimatePricesFromKnowledge(
 
   const groqKey = process.env.GROQ_API_KEY;
   const deepseekKey = process.env.DEEPSEEK_API_KEY || process.env.DEEPSEEK;
+  const qwenKey = process.env.QWEN_API_KEY || process.env.QWEN;
 
   if (groqKey) {
     const result = await callGroq(prompt, groqKey);
@@ -332,6 +339,10 @@ async function estimatePricesFromKnowledge(
   }
   if (deepseekKey) {
     const result = await callDeepSeek(prompt, deepseekKey);
+    if (result) return result;
+  }
+  if (qwenKey) {
+    const result = await callQwen(prompt, qwenKey);
     if (result) return result;
   }
   return null;
@@ -410,6 +421,47 @@ async function callDeepSeek(
     return parseExtraction(data.choices[0].message.content);
   } catch (err) {
     console.error("[hybrid-fetcher] DeepSeek fetch failed:", err);
+    return null;
+  }
+}
+
+/**
+ * QWEN via OpenRouter — OpenAI-compatible endpoint. Good fallback when Groq
+ * and DeepSeek are unavailable or out of credits (DeepSeek returns 402 when
+ * the free balance is exhausted).
+ */
+async function callQwen(
+  text: string,
+  apiKey: string
+): Promise<ExtractedPrices | null> {
+  try {
+    const res = await fetch(
+      "https://openrouter.ai/api/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "qwen/qwen-2.5-72b-instruct",
+          messages: [
+            { role: "system", content: EXTRACTION_SYSTEM_PROMPT },
+            { role: "user", content: text },
+          ],
+          response_format: { type: "json_object" },
+          temperature: 0,
+        }),
+      }
+    );
+    if (!res.ok) {
+      console.error("[hybrid-fetcher] QWEN error:", res.status);
+      return null;
+    }
+    const data = await res.json();
+    return parseExtraction(data.choices[0].message.content);
+  } catch (err) {
+    console.error("[hybrid-fetcher] QWEN fetch failed:", err);
     return null;
   }
 }
