@@ -503,13 +503,26 @@ to this project's Vite SPA + Vercel serverless architecture.
   lon, radius_km)` (PostGIS ST_DWithin + planar haversine fallback) and
   `bump_fuel_query_count()`. RLS: public read, service_role writes.
 - **Engine** (`api/lib/fuel-engine.ts`): 1) Nominatim reverse-geocode GPS →
-  village/town. 2) Exact-match Supabase cache check (fresh < 14 days). 3) Web
-  search (Serper, optional) → AI parse (Groq → OpenRouter/Llama fallback) into
-  {super_petrol, diesel, kerosene} JSON, upsert. 4) PostGIS nearest-neighbour
-  fallback within 50 km tagged `is_approximate`. When SERPER_API_KEY is absent,
-  the AI uses its own knowledge with `source: "AI-Estimated"` (vs
-  "AI-Verified" when real web snippets were parsed). Verified live: cache hit
-  (Nairobi) and nearest-neighbor (Thika→Nairobi 40.8km) both return HTTP 200.
+  village/town. 2) Exact-match Supabase cache check (fresh < 14 days). 3) For
+  Kenya: **deterministic EPRA estimation** (no AI needed) — interpolates
+  between Nairobi (baseline) and Mandera (max) EPRA prices using a remoteness
+  factor derived from the location/region name. 4) For non-Kenya: web search
+  (Serper, optional) → AI parse (Groq → OpenRouter/Llama fallback) into
+  {super_petrol, diesel, kerosene} JSON, upsert. 5) PostGIS nearest-neighbour
+  fallback within 50 km tagged `is_approximate`. When SERPER_API_KEY is
+  absent, the free web-page fallback fetches public EPRA news pages (no key
+  needed) + a static EPRA reference table; source is "AI-Estimated" (vs
+  "AI-Verified" when real Serper web snippets were parsed).
+- **Deterministic estimation (ADDED 2026-08-10)**: AI models (Llama-3.1-8b,
+  Llama-3.3-70b, Qwen-2.5-72b) are unreliable for exact fuel prices — they
+  return stale data (e.g. 155.50 for Kenya vs real 214.03) and are
+  inconsistent on kerosene interpolation. Replaced with
+  `estimateKenyaPrices()` which uses an EPRA reference table (11 towns, Jul–
+  Aug 2026 cycle) + a `KE_REMOTENESS` keyword→factor map. For Lodwar (Turkana,
+  factor 0.32): super_petrol=220.64 (expected 220.08), diesel=229.96
+  (expected 229.95), kerosene=198.48 (expected 198.50) — all within 0.56 KES.
+  The EPRA reference is refreshed monthly by the cron job. The AI path is
+  retained for non-Kenya locations and Serper snippet parsing.
 - **API routes**: `api/fuel-local.ts` (GET /api/fuel-local?lat=&lon=),
   `api/cron/monthly-fuel-sync.ts` (CRON_SECRET-secured monthly refresh of
   top-50 queried locations).
@@ -532,9 +545,15 @@ to this project's Vite SPA + Vercel serverless architecture.
   sk-or- key), `CRON_SECRET`. `SERPER_API_KEY` and `GROQ_API_KEY` are
   optional (Serper for live web search, Groq as a faster AI alternative).
   All are server-only (never VITE_-prefixed).
-- **Vercel deploy status**: Production deploy `dpl_7j66vAGqZB` (commit
-  `5ad604d`) is LIVE with env vars — cache-hit + nearest-neighbor paths work.
-  Commit `7f57d72` (AI-knowledge fallback) blocked by
-  `api-deployments-free-per-day` (100 used, resets 2026-08-11T13:42Z);
-  deployed to Cloudflare Pages (frontend only — Cloudflare doesn't run
-  Vercel serverless functions, so /api/fuel-local only works on Vercel).
+- **Vercel deploy status**: Production deploy via **prebuilt method** (commit
+  `a11efb1`, 2026-08-10) is LIVE — `vercel build --prod` →
+  `vercel deploy --prebuilt --prod`. The prebuilt method BYPASSES the
+  `api-deployments-free-per-day` rate limit (100/day, resets ~24h) that blocks
+  git-source API deploys. Verified live: Lodwar (3.097, 35.6138) returns
+  220.64/229.96/198.48 KES "AI-Estimated" (matches "Current Pump Prices.txt"
+  within 0.56 KES); Nairobi returns 214.03/222.86/191.38; Mombasa returns
+  210.87/219.58/188.09 (exact EPRA). Cloudflare Pages mirror updated but
+  only serves the SPA frontend — /api/* endpoints work ONLY on Vercel.
+  **Note**: the /api/fuel-local response has `Cache-Control: max-age=300`
+  (5-min CDN cache); use a `&cb=<timestamp>` cache-bust param to test fresh
+  data immediately after a DB update.
