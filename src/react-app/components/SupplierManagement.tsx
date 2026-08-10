@@ -139,7 +139,7 @@ export default function SupplierManagement() {
     cloudStorageService.set("purchase_orders", orders, stationId).catch(() => {});
   }, [orders, stationId]);
 
-  // Load from cloud on mount (cross-device sync)
+  // Load from cloud on mount + real-time cross-device sync
   useEffect(() => {
     if (!user) return;
     (async () => {
@@ -150,6 +150,17 @@ export default function SupplierManagement() {
         await cloudStorageService.get<PurchaseOrder[]>("purchase_orders", stationId);
       if (cloudOrders && Array.isArray(cloudOrders)) setOrders(cloudOrders);
     })();
+
+    // Real-time: when another device updates suppliers/orders, update instantly
+    const unsubs = [
+      cloudStorageService.subscribe<Supplier[]>("suppliers_data", stationId, (val) => {
+        if (val && Array.isArray(val)) setSuppliers(val);
+      }),
+      cloudStorageService.subscribe<PurchaseOrder[]>("purchase_orders", stationId, (val) => {
+        if (val && Array.isArray(val)) setOrders(val);
+      }),
+    ];
+    return () => unsubs.forEach(u => u());
   }, [user, stationId]);
 
   const showNotification = (

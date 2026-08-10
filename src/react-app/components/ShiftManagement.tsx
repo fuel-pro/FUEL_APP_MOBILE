@@ -120,7 +120,7 @@ export default function ShiftManagement() {
     cloudStorageService.set("shift_employees", e, stationId).catch(() => {});
   };
 
-  // Load from cloud on mount (cross-device sync)
+  // Load from cloud on mount + real-time cross-device sync
   useEffect(() => {
     if (!user) return;
     (async () => {
@@ -129,6 +129,17 @@ export default function ShiftManagement() {
       const cloudShifts = await cloudStorageService.get<Shift[]>("shift_data", stationId);
       if (cloudShifts && Array.isArray(cloudShifts)) setShifts(cloudShifts);
     })();
+
+    // Real-time: when another device updates shifts/employees, update instantly
+    const unsubs = [
+      cloudStorageService.subscribe<Employee[]>("shift_employees", stationId, (val) => {
+        if (val && Array.isArray(val)) setEmployees(val);
+      }),
+      cloudStorageService.subscribe<Shift[]>("shift_data", stationId, (val) => {
+        if (val && Array.isArray(val)) setShifts(val);
+      }),
+    ];
+    return () => unsubs.forEach(u => u());
   }, [user, stationId]);
 
   const dayShifts = useMemo(

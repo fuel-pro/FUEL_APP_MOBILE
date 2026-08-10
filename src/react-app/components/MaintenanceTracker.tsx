@@ -101,7 +101,7 @@ export default function MaintenanceTracker() {
     cloudStorageService.set("maintenance_records", records, stationId).catch(() => {});
   }, [records, stationId]);
 
-  // Load from cloud on mount (cross-device sync)
+  // Load from cloud on mount + real-time cross-device sync
   useEffect(() => {
     if (!user) return;
     (async () => {
@@ -109,6 +109,14 @@ export default function MaintenanceTracker() {
         await cloudStorageService.get<MaintenanceRecord[]>("maintenance_records", stationId);
       if (cloudData && Array.isArray(cloudData)) setRecords(cloudData);
     })();
+
+    // Real-time: when another device updates records, update instantly
+    const unsubs = [
+      cloudStorageService.subscribe<MaintenanceRecord[]>("maintenance_records", stationId, (val) => {
+        if (val && Array.isArray(val)) setRecords(val);
+      }),
+    ];
+    return () => unsubs.forEach(u => u());
   }, [user, stationId]);
 
   const showNotification = (

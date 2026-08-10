@@ -20,6 +20,9 @@
 'use client';
 
 import React, { useState, useCallback, useRef, useEffect, memo } from 'react';
+import { useAuth } from '@/react-app/context/AuthContext';
+import { useStations } from '@/react-app/context/StationContext';
+import cloudStorageService from '@/react-app/lib/cloud-storage-service';
 import { 
   Upload, 
   MessageSquare, 
@@ -240,6 +243,11 @@ const DEFAULT_RULES = `{
  * Main component for the Pump Mapping v1 tab
  */
 const PumpMappingV1: React.FC = () => {
+  // Cloud sync: auth + station context for station-scoped persistence
+  const { user } = useAuth();
+  const { currentStation } = useStations();
+  const stationId = currentStation?.id;
+
   // State management
   const [files, setFiles] = useState<File[]>([]);
   const [processing, setProcessing] = useState(false);
@@ -262,6 +270,12 @@ const PumpMappingV1: React.FC = () => {
   const [anchorTime, setAnchorTime] = useState('12:00');
   const [useCustomSchedule, setUseCustomSchedule] = useState(false);
   const [scheduledDateTime, setScheduledDateTime] = useState('');
+
+  // Refs for echo-skip during real-time sync
+  const skipExtractedRef = useRef(false);
+  const skipChatRef = useRef(false);
+  const skipRulesRef = useRef(false);
+  const skipAnchorsRef = useRef(false);
   
   // UI state
   const [showChat, setShowChat] = useState(false);
@@ -287,6 +301,98 @@ const PumpMappingV1: React.FC = () => {
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages]);
+
+  // Load pump mapping data from cloud on mount + subscribe to real-time changes.
+  // This makes extractedData, chatMessages, customRules, and anchor settings
+  // persist cross-device and sync INSTANTLY when another device updates them.
+  useEffect(() => {
+    if (!user || !stationId) return;
+
+    let cancelled = false;
+    (async () => {
+      const [extracted, chat, rules, anchors] = await Promise.all([
+        cloudStorageService.get<ExtractedData | null>("pump_mapping_extracted", stationId),
+        cloudStorageService.get<ChatMessage[]>("pump_mapping_chat", stationId),
+        cloudStorageService.get<string>("pump_mapping_rules", stationId),
+        cloudStorageService.get<{ date: string; shift: string; time: string; useCustom: boolean; scheduled: string }>(
+          "pump_mapping_anchors", stationId
+        ),
+      ]);
+      if (cancelled) return;
+      if (extracted) setExtractedData(extracted);
+      if (chat && Array.isArray(chat) && chat.length > 0) setChatMessages(chat);
+      if (rules) setCustomRules(rules);
+      if (anchors) {
+        if (anchors.date) setAnchorDate(anchors.date);
+        if (anchors.shift) setAnchorShift(anchors.shift);
+        if (anchors.time) setAnchorTime(anchors.time);
+        if (typeof anchors.useCustom === "boolean") setUseCustomSchedule(anchors.useCustom);
+        if (anchors.scheduled) setScheduledDateTime(anchors.scheduled);
+      }
+    })();
+
+    // Real-time subscriptions: when another device updates any of these keys,
+    // the local state updates instantly.
+    const unsubs = [
+      cloudStorageService.subscribe<ExtractedData | null>("pump_mapping_extracted", stationId, (val) => {
+        if (skipExtractedRef.current) { skipExtractedRef.current = false; return; }
+        if (val) setExtractedData(val);
+      }),
+      cloudStorageService.subscribe<ChatMessage[]>("pump_mapping_chat", stationId, (val) => {
+        if (skipChatRef.current) { skipChatRef.current = false; return; }
+        if (val && Array.isArray(val) && val.length > 0) setChatMessages(val);
+      }),
+      cloudStorageService.subscribe<string>("pump_mapping_rules", stationId, (val) => {
+        if (skipRulesRef.current) { skipRulesRef.current = false; return; }
+        if (val) setCustomRules(val);
+      }),
+      cloudStorageService.subscribe<{ date: string; shift: string; time: string; useCustom: boolean; scheduled: string }>(
+        "pump_mapping_anchors", stationId, (val) => {
+          if (skipAnchorsRef.current) { skipAnchorsRef.current = false; return; }
+          if (val) {
+            if (val.date) setAnchorDate(val.date);
+            if (val.shift) setAnchorShift(val.shift);
+            if (val.time) setAnchorTime(val.time);
+            if (typeof val.useCustom === "boolean") setUseCustomSchedule(val.useCustom);
+            if (val.scheduled) setScheduledDateTime(val.scheduled);
+          }
+        }
+      ),
+    ];
+
+    return () => {
+      cancelled = true;
+      unsubs.forEach(u => u());
+    };
+  }, [user, stationId]);
+
+  // Persist extractedData to cloud (with real-time echo skip)
+  useEffect(() => {
+    if (!user || !stationId || !extractedData) return;
+    skipExtractedRef.current = true;
+    cloudStorageService.set("pump_mapping_extracted", extractedData, stationId).catch(() => {});
+  }, [extractedData, user, stationId]);
+
+  // Persist chatMessages to cloud
+  useEffect(() => {
+    if (!user || !stationId) return;
+    skipChatRef.current = true;
+    cloudStorageService.set("pump_mapping_chat", chatMessages, stationId).catch(() => {});
+  }, [chatMessages, user, stationId]);
+
+  // Persist customRules to cloud
+  useEffect(() => {
+    if (!user || !stationId) return;
+    skipRulesRef.current = true;
+    cloudStorageService.set("pump_mapping_rules", customRules, stationId).catch(() => {});
+  }, [customRules, user, stationId]);
+
+  // Persist anchor settings to cloud
+  useEffect(() => {
+    if (!user || !stationId) return;
+    skipAnchorsRef.current = true;
+    cloudStorageService.set("pump_mapping_anchors", { date: anchorDate, shift: anchorShift, time: anchorTime, useCustom: useCustomSchedule, scheduled: scheduledDateTime }, stationId).catch(() => {});
+  }, [anchorDate, anchorShift, anchorTime, useCustomSchedule, scheduledDateTime, user, stationId]);
 
   // File drop handler
   const onDrop = useCallback((acceptedFiles: File[]) => {

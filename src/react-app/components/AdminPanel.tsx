@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useStations } from "@/react-app/context/StationContext";
 import { useAuth } from "@/react-app/context/AuthContext";
 import { useNavigate } from "react-router";
+import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 import {
   Shield,
   Settings,
@@ -350,7 +351,7 @@ export default function AdminPanel() {
     getAccessLogs,
     switchStation,
   } = useStations();
-  const { logout } = useAuth();
+  const { logout, user: adminUser } = useAuth();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<AdminTab>("overview");
   const [loginForm, setLoginForm] = useState({
@@ -421,13 +422,45 @@ export default function AdminPanel() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAdmin]);
 
-  // Persist modules
+  // Persist modules — localStorage (instant) + cloud (cross-device)
   useEffect(() => {
     saveAdminModules(modules);
+    cloudStorageService.set("admin_modules", modules, undefined).catch(() => {});
   }, [modules]);
   useEffect(() => {
     saveBatchUpdates(batchRecords);
+    cloudStorageService.set("batch_updates", batchRecords.slice(0, 200), undefined).catch(() => {});
   }, [batchRecords]);
+
+  // Load admin modules + batch updates + custom APIs from cloud on mount,
+  // and subscribe to real-time changes so another device's edits sync instantly.
+  useEffect(() => {
+    if (!adminUser) return;
+    (async () => {
+      const [cloudModules, cloudBatch, cloudApis] = await Promise.all([
+        cloudStorageService.get<AdminFeatureModule[]>("admin_modules", undefined),
+        cloudStorageService.get<BatchUpdateRecord[]>("batch_updates", undefined),
+        cloudStorageService.get<ApiKeyEntry[]>("custom_apis", undefined),
+      ]);
+      if (cloudModules && Array.isArray(cloudModules) && cloudModules.length > 0)
+        setModules(cloudModules);
+      if (cloudBatch && Array.isArray(cloudBatch)) setBatchRecords(cloudBatch);
+      if (cloudApis && Array.isArray(cloudApis)) setCustomApis(cloudApis);
+    })();
+
+    const unsubs = [
+      cloudStorageService.subscribe<AdminFeatureModule[]>("admin_modules", undefined, (val) => {
+        if (val && Array.isArray(val) && val.length > 0) setModules(val);
+      }),
+      cloudStorageService.subscribe<BatchUpdateRecord[]>("batch_updates", undefined, (val) => {
+        if (val && Array.isArray(val)) setBatchRecords(val);
+      }),
+      cloudStorageService.subscribe<ApiKeyEntry[]>("custom_apis", undefined, (val) => {
+        if (val && Array.isArray(val)) setCustomApis(val);
+      }),
+    ];
+    return () => unsubs.forEach(u => u());
+  }, [adminUser]);
 
   // Security lockout
   useEffect(() => {
@@ -669,6 +702,7 @@ export default function AdminPanel() {
     const updated = [...customApis, entry];
     setCustomApis(updated);
     localStorage.setItem("fuelpro_custom_apis", JSON.stringify(updated));
+    cloudStorageService.set("custom_apis", updated, undefined).catch(() => {});
     updateApiKey(newApiForm.key, newApiForm.value);
     setNewApiForm({ key: "", value: "", category: "General", description: "" });
     addUpdateRecord({
@@ -682,6 +716,7 @@ export default function AdminPanel() {
     const updated = customApis.filter(a => a.key !== key);
     setCustomApis(updated);
     localStorage.setItem("fuelpro_custom_apis", JSON.stringify(updated));
+    cloudStorageService.set("custom_apis", updated, undefined).catch(() => {});
   }
 
   // ===== BATCH UPLOAD =====

@@ -755,6 +755,29 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
     return () => sub.subscription.unsubscribe();
   }, [syncFromBackend]);
 
+  // REAL-TIME cross-device station sync: subscribe to postgres_changes on the
+  // `stations` table. When another device creates/updates/deletes a station,
+  // this fires INSTANTLY and triggers a re-sync so the new station appears
+  // without a page reload.
+  useEffect(() => {
+    const channel = supabase
+      .channel("stations:realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "stations" },
+        () => {
+          // Re-sync stations from cloud. A short debounce prevents multiple
+          // rapid events from triggering redundant fetches.
+          syncFromBackend().catch(() => {});
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [syncFromBackend]);
+
   // Persist stations/admin to localStorage whenever they change.
   // GUARD: never write an empty stations array over a non-empty localStorage
   // list. syncFromBackend can transiently set `stations` to [] when the

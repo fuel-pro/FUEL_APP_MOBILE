@@ -153,7 +153,7 @@ export default function CustomerLoyalty() {
     cloudStorageService.set("loyalty_customers", c, stationId).catch(() => {});
   };
 
-  // Load from cloud on mount (cross-device sync)
+  // Load from cloud on mount + real-time cross-device sync
   useEffect(() => {
     if (!user) return;
     (async () => {
@@ -161,6 +161,14 @@ export default function CustomerLoyalty() {
         await cloudStorageService.get<Customer[]>("loyalty_customers", stationId);
       if (cloudData && Array.isArray(cloudData)) setCustomers(cloudData);
     })();
+
+    // Real-time: when another device updates customers, update instantly
+    const unsubs = [
+      cloudStorageService.subscribe<Customer[]>("loyalty_customers", stationId, (val) => {
+        if (val && Array.isArray(val)) setCustomers(val);
+      }),
+    ];
+    return () => unsubs.forEach(u => u());
   }, [user, stationId]);
 
   const filtered = useMemo(() => {

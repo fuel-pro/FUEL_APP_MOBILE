@@ -299,7 +299,7 @@ export default function FuelTypesManager() {
     cloudStorageService.set("fuel_types_config", types, stationId).catch(() => {});
   };
 
-  // Load from cloud on mount (cross-device sync)
+  // Load from cloud on mount + real-time cross-device sync
   useEffect(() => {
     if (!user) return;
     (async () => {
@@ -307,6 +307,14 @@ export default function FuelTypesManager() {
         await cloudStorageService.get<CustomFuelType[]>("fuel_types_config", stationId);
       if (cloudData && Array.isArray(cloudData)) setFuelTypes(cloudData);
     })();
+
+    // Real-time: when another device updates fuel types, update instantly
+    const unsubs = [
+      cloudStorageService.subscribe<CustomFuelType[]>("fuel_types_config", stationId, (val) => {
+        if (val && Array.isArray(val)) setFuelTypes(val);
+      }),
+    ];
+    return () => unsubs.forEach(u => u());
   }, [user, stationId]);
 
   const resetForm = () => {

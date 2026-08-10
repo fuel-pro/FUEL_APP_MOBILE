@@ -289,6 +289,138 @@ class CloudStorageService {
       this.memoryCache.clear();
     }
   }
+
+  /**
+   * Subscribe to real-time changes on a cloud key. When another device writes
+   * to the same app_kv row, the callback fires INSTANTLY with the new value —
+   * no polling, no delay. Returns an unsubscribe function.
+   *
+   * The subscription listens for UPDATE events on app_kv rows matching the
+   * computed row id (scoped by owner + station). On receipt, it invalidates
+   * the memory cache (so the next get() reads fresh) and calls the callback
+   * with the new data.
+   */
+  subscribe<T = Json>(
+    key: string,
+    stationId: string | undefined,
+    callback: (value: T | null) => void
+  ): () => void {
+    let channel: ReturnType<ReturnType<typeof getSupabaseClient>["channel"]> | null = null;
+    let active = true;
+
+    (async () => {
+      const ownerId = await currentUserId();
+      if (!active || !ownerId) return;
+
+      const ck = stationId ? `${key}__${stationId}` : key;
+      const scopedId = rowId(key, ownerId, stationId);
+      const client = getSupabaseClient();
+
+      channel = client
+        .channel(`app_kv:${scopedId}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "app_kv",
+            filter: `id=eq.${scopedId}`,
+          },
+          (payload) => {
+            // Invalidate memory cache so next get() reads fresh.
+            this.memoryCache.delete(ck);
+            const newData =
+              payload.eventType === "DELETE"
+                ? null
+                : ((payload.new as { data?: T })?.data ?? null);
+            if (newData != null) {
+              writeCache(ck, newData);
+              this.memoryCache.set(ck, { value: newData, ts: Date.now() });
+            } else {
+              clearCache(ck);
+            }
+            callback(newData);
+          }
+        )
+        .subscribe();
+    })();
+
+    return () => {
+      active = false;
+      if (channel) {
+        try {
+          getSupabaseClient().removeChannel(channel);
+        } catch {
+          /* ignore */
+        }
+      }
+    };
+  }
+
+  /**
+   * Subscribe to real-time changes on ALL app_kv rows for a station. Useful
+   * for the FuelContext compact blob + per-component keys that share a
+   * station scope. The callback receives the row id + new data for each
+   * changed row.
+   */
+  subscribeToStation<T = Json>(
+    stationId: string | undefined,
+    callback: (rowId: string, value: T | null) => void
+  ): () => void {
+    let channel: ReturnType<ReturnType<typeof getSupabaseClient>["channel"]> | null = null;
+    let active = true;
+
+    (async () => {
+      const ownerId = await currentUserId();
+      if (!active || !ownerId) return;
+
+      const client = getSupabaseClient();
+      const filter = stationId
+        ? `station_id=eq.${stationId}`
+        : `owner_id=eq.${ownerId}`;
+
+      channel = client
+        .channel(`app_kv:station:${stationId ?? ownerId}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "app_kv",
+            filter,
+          },
+          (payload) => {
+            const row =
+              payload.eventType === "DELETE"
+                ? (payload.old as { id?: string })
+                : (payload.new as { id?: string; data?: T });
+            const id = row?.id ?? "";
+            // Invalidate any memory cache entry whose key is a prefix of this row id.
+            for (const [ck] of this.memoryCache) {
+              if (id.includes(ck.split("__")[0])) {
+                this.memoryCache.delete(ck);
+              }
+            }
+            const value = (payload.new as { data?: T })?.data ?? null;
+            if (value != null && id) {
+              callback(id, value);
+            }
+          }
+        )
+        .subscribe();
+    })();
+
+    return () => {
+      active = false;
+      if (channel) {
+        try {
+          getSupabaseClient().removeChannel(channel);
+        } catch {
+          /* ignore */
+        }
+      }
+    };
+  }
 }
 
 export const cloudStorageService = new CloudStorageService();

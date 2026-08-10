@@ -92,7 +92,7 @@ export default function CreditManagement() {
     cloudStorageService.set("credit_transactions", t, stationId).catch(() => {});
   };
 
-  // Load from cloud on mount (cross-device sync)
+  // Load from cloud on mount + real-time cross-device sync
   useEffect(() => {
     if (!user) return;
     (async () => {
@@ -103,6 +103,17 @@ export default function CreditManagement() {
         await cloudStorageService.get<CreditTransaction[]>("credit_transactions", stationId);
       if (cloudTx && Array.isArray(cloudTx)) setTransactions(cloudTx);
     })();
+
+    // Real-time: when another device updates accounts/transactions, update instantly
+    const unsubs = [
+      cloudStorageService.subscribe<CreditAccount[]>("credit_accounts", stationId, (val) => {
+        if (val && Array.isArray(val)) setAccounts(val);
+      }),
+      cloudStorageService.subscribe<CreditTransaction[]>("credit_transactions", stationId, (val) => {
+        if (val && Array.isArray(val)) setTransactions(val);
+      }),
+    ];
+    return () => unsubs.forEach(u => u());
   }, [user, stationId]);
 
   const filtered = useMemo(() => {

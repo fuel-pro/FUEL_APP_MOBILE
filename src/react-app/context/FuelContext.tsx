@@ -1074,6 +1074,10 @@ export function FuelProvider({ children }: { children: ReactNode }) {
   const cloudLoadCompleteRef = useRef(false);
   useEffect(() => { cloudLoadCompleteRef.current = false; }, [user]);
 
+  // Real-time echo guard: set before saveToCloud writes so the real-time
+  // subscription knows to skip the echo of our own write.
+  const skipRemoteUpdateRef = useRef(false);
+
   const saveToStorage = useCallback(() => {
     try {
       const s = stateRef.current;
@@ -1300,6 +1304,9 @@ export function FuelProvider({ children }: { children: ReactNode }) {
       // salesHistory, debtHistory, etc.). RLS-protected by owner_id. localStorage
       // remains a read-through cache via saveToStorage for offline reads.
       const cloudKey = compactCloudKey(user?.id, stationIdRef.current);
+      // Set the echo-skip flag so the real-time subscription doesn't
+      // re-dispatch our own write as if it came from another device.
+      skipRemoteUpdateRef.current = true;
       await cloudStorageService.set(cloudKey, compactData, stationIdRef.current);
 
       setLastCloudSave(new Date());
@@ -1691,6 +1698,48 @@ export function FuelProvider({ children }: { children: ReactNode }) {
       clearTimeout(timer);
     };
   }, [user, stationId, loadFromCloud, loadFromStorage, saveToStorage]);
+
+  // REAL-TIME cross-device sync: subscribe to postgres_changes on the compact
+  // blob. When another device/browser writes to the same app_kv row (e.g. the
+  // user edits company data on their phone), this subscription fires INSTANTLY
+  // and dispatches LOAD_FROM_STORAGE so the new data is reflected here with
+  // zero delay — no polling, no reload required.
+  //
+  // A `skipRemoteUpdateRef` guard prevents echo: when THIS device writes, the
+  // real-time event comes back to us. We skip it because saveToCloud already
+  // updated local state synchronously.
+  useEffect(() => {
+    if (!user || !stationId) return;
+
+    const cloudKey = compactCloudKey(user.id, stationId);
+    const unsub = cloudStorageService.subscribe<Record<string, unknown>>(
+      cloudKey,
+      stationId,
+      (value) => {
+        // Skip our own echo.
+        if (skipRemoteUpdateRef.current) {
+          skipRemoteUpdateRef.current = false;
+          return;
+        }
+        if (value && Object.keys(value).length > 0) {
+          const cd = value as any;
+          const hasData =
+            cd.companyData?.name ||
+            cd.companyData?.logo ||
+            (cd.deliveryData?.rows && cd.deliveryData.rows.length > 0) ||
+            (cd.invoiceItems && cd.invoiceItems.length > 0) ||
+            (cd.pmsPumps && cd.pmsPumps.length > 0) ||
+            (cd.agoPumps && cd.agoPumps.length > 0) ||
+            (cd.stations && cd.stations.length > 0);
+          if (hasData || cd.theme || cd.tabConfigurations) {
+            dispatch({ type: "LOAD_FROM_STORAGE", payload: cd });
+          }
+        }
+      }
+    );
+
+    return () => unsub();
+  }, [user, stationId]);
 
   // Apply theme to body - robust for all browsers
   useEffect(() => {
