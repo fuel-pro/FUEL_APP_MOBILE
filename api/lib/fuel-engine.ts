@@ -11,13 +11,14 @@
  *      within 50 km and return the closest town's price tagged "approximate".
  *
  * Runs SERVER-SIDE only (Vercel serverless). The Supabase service_role key,
- * SERPER_API_KEY and AI keys live in process.env and are never bundled into
- * the client. The client only ever calls /api/fuel-local?lat=&lon=.
+ * SERPAPI_KEY / SERPER_API_KEY and AI keys live in process.env and are never
+ * bundled into the client. The client only ever calls /api/fuel-local?lat=&lon=.
  *
  * Env vars (set in Vercel Dashboard → Settings → Environment Variables):
  *   SUPABASE_URL                       — project URL (defaults to the hardcoded fallback)
  *   SUPABASE_SERVICE_ROLE_KEY          — service role key (bypasses RLS for writes)
- *   SERPER_API_KEY                     — optional; serper.dev (2,500 free searches/mo)
+ *   SERPAPI_KEY                        — optional; serpapi.com (100 free searches/mo, preferred)
+ *   SERPER_API_KEY                     — optional; serper.dev (2,500 free searches/mo, fallback)
  *   GROQ_API_KEY                       — optional; console.groq.com (Llama-3, fast+free)
  *   OPENROUTER_API_KEY                 — optional; openrouter.ai (Llama fallback)
  *   FUEL_AI_MODEL                      — optional; override the AI model id
@@ -141,7 +142,7 @@ async function getPlaceName(lat: number, lon: number): Promise<PlaceInfo> {
 }
 
 // ---------------------------------------------------------------------------
-// 2. Web Search (Serper) — optional, gracefully skipped if no key
+// 2. Web Search (SerpApi → Serper → free public pages) — optional, gracefully skipped if no key
 // ---------------------------------------------------------------------------
 
 async function searchWebPrices(
@@ -153,21 +154,82 @@ async function searchWebPrices(
   // Build a location descriptor that includes the broader region/state so the
   // AI can reason about area-level prices when the village is obscure.
   const locationDesc = [locationName, region, country].filter(Boolean).join(", ");
-  // When Serper is not configured, fall back to fetching public fuel-price
-  // news pages directly (no API key needed). The AI then parses the real EPRA
-  // price data and estimates the local price for the user's location.
-  if (!process.env.SERPER_API_KEY) {
-    const freeText = await fetchFreeWebPrices(countryCode);
-    if (freeText) {
-      return `Live EPRA/official fuel price data fetched from public news sources:\n${freeText}\n\nThe user is located in ${locationDesc}. Estimate the fuel prices for this specific location based on the data above (remote/northern towns have higher prices than Nairobi; coastal towns like Mombasa are lower).`;
+
+  // ── Tier A: SerpApi (serpapi.com) — Google Search API ──
+  // Preferred when configured; 100 free searches/month. Returns answer_box +
+  // organic snippets with official EPRA/government fuel-price data.
+  if (process.env.SERPAPI_KEY) {
+    try {
+      const serpText = await searchViaSerpApi(
+        locationDesc,
+        countryCode,
+        process.env.SERPAPI_KEY,
+      );
+      if (serpText) return serpText;
+    } catch (err) {
+      console.warn("[fuel-engine] SerpApi search failed:", err);
     }
-    return `No live web search available. Use your knowledge of current official fuel pump prices in ${locationDesc}.`;
   }
+
+  // ── Tier B: Serper (serper.dev) — alternative Google search API ──
+  if (process.env.SERPER_API_KEY) {
+    return searchViaSerper(locationDesc, countryCode);
+  }
+
+  // ── Tier C: Free fallback — fetch public fuel-price news pages directly ──
+  // No API key needed. The AI then parses the real EPRA price data and
+  // estimates the local price for the user's location.
+  const freeText = await fetchFreeWebPrices(countryCode);
+  if (freeText) {
+    return `Live EPRA/official fuel price data fetched from public news sources:\n${freeText}\n\nThe user is located in ${locationDesc}. Estimate the fuel prices for this specific location based on the data above (remote/northern towns have higher prices than Nairobi; coastal towns like Mombasa are lower).`;
+  }
+  return `No live web search available. Use your knowledge of current official fuel pump prices in ${locationDesc}.`;
+}
+
+/**
+ * SerpApi (serpapi.com) Google search. Collects answer_box + organic snippets
+ * with official fuel-price data for the LLM to parse. 100 free searches/month.
+ */
+async function searchViaSerpApi(
+  locationDesc: string,
+  countryCode: string,
+  apiKey: string,
+): Promise<string | null> {
+  const query = `current official fuel prices petrol diesel kerosene in ${locationDesc} ${new Date().getFullYear()}`;
+  const serpUrl = `https://serpapi.com/search.json?engine=google&q=${encodeURIComponent(
+    query,
+  )}&api_key=${apiKey}&hl=en&gl=${countryCode.toLowerCase() || "us"}&num=5`;
+  const res = await fetch(serpUrl);
+  if (!res.ok) throw new Error(`SerpApi HTTP ${res.status}`);
+  const data = (await res.json()) as {
+    answer_box?: { answer?: string; snippet?: string };
+    organic_results?: Array<{ snippet?: string }>;
+    knowledge_graph?: { description?: string };
+  };
+  const answerBox = data.answer_box?.answer || data.answer_box?.snippet || "";
+  const snippets =
+    (data.organic_results || [])
+      .slice(0, 3)
+      .map((r) => r.snippet || "")
+      .filter(Boolean)
+      .join(" ") || "";
+  const kg = data.knowledge_graph?.description || "";
+  const combined = [answerBox, kg, snippets].filter(Boolean).join(" ").trim();
+  return combined || null;
+}
+
+/**
+ * Serper (serper.dev) Google search. Alternative to SerpApi.
+ */
+async function searchViaSerper(
+  locationDesc: string,
+  countryCode: string,
+): Promise<string> {
   const query = `current official fuel prices petrol diesel kerosene in ${locationDesc} ${new Date().getFullYear()}`;
   const res = await fetch("https://google.serper.dev/search", {
     method: "POST",
     headers: {
-      "X-API-KEY": process.env.SERPER_API_KEY,
+      "X-API-KEY": process.env.SERPER_API_KEY!,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
@@ -182,14 +244,12 @@ async function searchWebPrices(
     knowledgeGraph?: { description?: string };
     answerBox?: { answer?: string; snippet?: string };
   };
-  // Combine snippets from the top organic results for richer AI context.
   const organic = data.organic || [];
   const snippets = organic
     .slice(0, 3)
     .map((r) => r.snippet || "")
     .filter(Boolean)
     .join(" ");
-  // Include knowledge-graph / answer-box text when available.
   const kg = data.knowledgeGraph?.description || "";
   const ab = data.answerBox?.answer || data.answerBox?.snippet || "";
   return [ab, kg, snippets].filter(Boolean).join(" ").trim();
@@ -646,10 +706,12 @@ export async function getLocalFuelPrices(
       place.country,
       place.countryCode,
     );
-    const usedWebSearch = !!process.env.SERPER_API_KEY && snippets.length > 0;
+    const usedWebSearch =
+      (!!process.env.SERPAPI_KEY || !!process.env.SERPER_API_KEY) &&
+      snippets.length > 0;
     if (!snippets)
       throw new Error(
-        "No web data (SERPER_API_KEY missing or empty results)",
+        "No web data (SERPAPI_KEY/SERPER_API_KEY missing or empty results)",
       );
 
     const prices = await extractPricesWithAI(snippets, currency.code);
