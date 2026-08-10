@@ -623,3 +623,27 @@ locations" bug is FIXED.
 **Deploy**: dpl_HY7iVUcT7btjXk5H77gRSqpGb9oZ, READY, aliased to
 fuel-app-mobile.vercel.app. Cloudflare mirror:
 https://f40cad3d.fuel-app-mobile.pages.dev.
+
+## Dashboard price card "Nairobi" label fix (DEPLOYED LIVE 2026-08-10, commit f49d376)
+**Symptom**: the Dashboard "Current Pump Prices" cards showed "Nairobi" as
+the location label next to Super Petrol and Diesel, even when GPS pricing was
+active and the badge correctly showed "📍 GPS: Lodwar (+5.50)". The price
+VALUES were correct (Lodwar with surcharge), but the card LABEL was wrong.
+
+**Root cause**: `Dashboard.tsx` L772-774 & L786-788 rendered
+`regionalPrice.cityName` for the card label. `regionalPrice` =
+`getPriceForCity(fuelPrice, stationCity)` where `stationCity =
+currentStation?.location || "Nairobi"` — a STATION-based path that ignores
+GPS. When the station has no `location` set, it defaults to "Nairobi".
+
+**Fix**: the card labels now use a ternary: when `isLocationBased` (GPS
+active), show `priceCityName` (the GPS-detected city, e.g. "Lodwar");
+otherwise fall back to `regionalPrice.cityName`. The top badge already
+used `priceCityName` correctly — only the card captions were wrong.
+
+**Verified in production bundle**: Dashboard-DxyyCwfb.js contains
+`M?g.jsx("p",{...children:_}):y.isRegional?...` where M=isLocationBased,
+_=priceCityName.
+**Deploy**: dpl_F4p4sS1qaZdye1jCHj9Zfccuf6q1, READY, aliased to
+fuel-app-mobile.vercel.app. Cloudflare mirror:
+https://bd4ff357.fuel-app-mobile.pages.dev.
