@@ -7,7 +7,7 @@ import React, {
   useRef,
 } from "react";
 import { getDetectedCurrency } from "@/react-app/lib/currency";
-import { supabase } from "@/supabase/client";
+import { supabase, supabaseUrl, supabaseAnonKey } from "@/supabase/client";
 
 // Lazy API base URL getter using dynamic import to avoid circular deps
 let _apiBase: string | null = null;
@@ -478,9 +478,93 @@ async function pushStationDelete(id: string) {
 async function syncStationsWithSupabase(
   localStations: Station[]
 ): Promise<Station[] | null> {
-  const { data: userData } = await supabase.auth.getUser();
-  const user = userData?.user;
-  if (!user) return null;
+  let userId: string | null = null;
+
+  // Primary: Supabase client session (works when the client detected the
+  // session via detectSessionInUrl or recovered it from localStorage).
+  // Try getSession first — it reads from localStorage synchronously and is
+  // faster than getUser (which makes a network call). If getSession returns
+  // a session, getUser will use the same token.
+  const { data: sessionData } = await supabase.auth.getSession();
+  if (sessionData?.session?.user?.id) {
+    userId = sessionData.session.user.id;
+  }
+
+  if (!userId) {
+    // Try getUser (makes a network call to /auth/v1/user with the token
+    // from localStorage, if the client recovered it).
+    const { data: userData } = await supabase.auth.getUser();
+    if (userData?.user?.id) {
+      userId = userData.user.id;
+    }
+  }
+
+  // Fallback: read the auth identity + token that AuthContext persists. This
+  // covers the cross-device case where the Supabase JS client hasn't finished
+  // initializing its session (or detectSessionInUrl didn't fire because the
+  // hash router consumed the URL params) but the app already knows the user
+  // from its own localStorage cache. Without this, syncFromBackend returns
+  // null and the user is stranded on the "create station" screen.
+  if (!userId) {
+    try {
+      const identityRaw = localStorage.getItem("fuelpro_auth_identity");
+      if (identityRaw) {
+        const identity = JSON.parse(identityRaw);
+        if (identity?.id) {
+          userId = identity.id;
+          console.log("[StationContext] Supabase auth.getUser() returned no session, falling back to fuelpro_auth_identity for user:", userId);
+
+          // The Supabase JS client may not have recovered the session from
+          // localStorage yet (detectSessionInUrl didn't fire, or
+          // _recoverAndRefresh hasn't completed). Without a session, all
+          // .from() calls use the anon key → RLS blocks them → empty
+          // results → user stranded on wizard. Inject the session explicitly
+          // from the sb-auth-token localStorage key so RLS-scoped queries work.
+          const sbTokenRaw = localStorage.getItem("sb-ojjscjwatikixlpshmub-auth-token");
+          if (sbTokenRaw) {
+            const sbToken = JSON.parse(sbTokenRaw);
+            if (sbToken.access_token && sbToken.refresh_token) {
+              try {
+                await supabase.auth.setSession({
+                  access_token: sbToken.access_token,
+                  refresh_token: sbToken.refresh_token,
+                });
+                console.log("[StationContext] Injected Supabase session from localStorage for RLS queries");
+              } catch (e) {
+                console.warn("[StationContext] Failed to inject session:", e);
+              }
+            }
+          }
+        }
+      }
+    } catch {
+      // ignore parse errors
+    }
+  }
+
+  if (!userId) return null;
+
+  // Helper: make a direct PostgREST fetch with the token from localStorage.
+  // This bypasses the Supabase JS client's session management entirely and
+  // is used when the client doesn't have a session (the .from() calls would
+  // use the anon key and RLS would block them).
+  const directFetch = async (path: string, options: RequestInit = {}): Promise<any | null> => {
+    const token = localStorage.getItem("fuelpro_token");
+    if (!token) return null;
+    const url = `${supabaseUrl}/rest/v1/${path}`;
+    const headers: Record<string, string> = {
+      "apikey": supabaseAnonKey,
+      "Authorization": `Bearer ${token}`,
+      "Content-Type": "application/json",
+      ...options.headers as Record<string, string>,
+    };
+    const resp = await fetch(url, { ...options, headers });
+    if (!resp.ok) {
+      console.warn(`[StationContext] directFetch ${path} failed:`, resp.status, await resp.text().catch(() => ""));
+      return null;
+    }
+    return resp.json();
+  };
 
   // Migrate any local-only stations (old non-UUID ids, never pushed) up first
   const localOnly = localStations.filter(s => !isValidUuid(s.id));
@@ -489,7 +573,7 @@ async function syncStationsWithSupabase(
     try {
       const { data: inserted, error } = await supabase
         .from("stations")
-        .insert({ owner_id: user.id, code: s.code || generateStationCode(s.name), ...stationToRowFields(s) })
+        .insert({ owner_id: userId, code: s.code || generateStationCode(s.name), ...stationToRowFields(s) })
         .select()
         .single();
       if (!error && inserted) {
@@ -497,7 +581,7 @@ async function syncStationsWithSupabase(
         await supabase.from("app_kv").upsert({
           id: `station_data_${inserted.id}`,
           collection: "station_data",
-          owner_id: user.id,
+          owner_id: userId,
           data: s.data ?? {},
         });
         migrated.push(newStation);
@@ -508,10 +592,23 @@ async function syncStationsWithSupabase(
   }
 
   // Fetch everything now owned by this user (RLS already scopes this to them)
-  const { data: rows, error } = await supabase
+  let { data: rows, error } = await supabase
     .from("stations")
     .select("*")
     .order("created_at", { ascending: true });
+
+  // If the Supabase client returned empty (likely because it doesn't have
+  // the auth session, so RLS blocked the query), retry with a direct
+  // PostgREST fetch using the token from localStorage.
+  if ((!rows || rows.length === 0) && !error) {
+    const directRows = await directFetch(
+      "stations?order=created_at.asc&select=*"
+    );
+    if (directRows && directRows.length > 0) {
+      console.log(`[StationContext] Supabase client returned 0 stations, direct fetch found ${directRows.length}`);
+      rows = directRows;
+    }
+  }
 
   if (error) {
     console.warn("[StationContext] Supabase station fetch failed:", error);
@@ -521,7 +618,96 @@ async function syncStationsWithSupabase(
     return [...validLocal, ...migrated];
   }
 
-  const rowIds: string[] = (rows || []).map((r: any) => r.id);
+  // CROSS-DEVICE FALLBACK: If the stations table is empty AND localStorage has
+  // no stations, check the FuelContext's cloud blob (app_kv user_<id>_compact)
+  // for stations. This handles the case where a user set up their station on
+  // device A — the station was saved to the FuelContext's compact cloud blob
+  // but never made it to the stations table (e.g. the push failed silently or
+  // the station had a non-UUID id that the migration step above didn't catch
+  // because localStorage was empty on this device). Without this fallback, the
+  // user is stranded on the "create station" screen on every new device.
+  let effectiveRows = rows || [];
+  if (
+    effectiveRows.length === 0 &&
+    localStations.length === 0 &&
+    migrated.length === 0
+  ) {
+    const compactKey = `user_${userId}_compact`;
+    let kvRowData: any = null;
+    const { data: kvRow, error: kvError } = await supabase
+      .from("app_kv")
+      .select("data")
+      .eq("id", compactKey)
+      .eq("owner_id", userId)
+      .maybeSingle();
+
+    if (!kvError && kvRow?.data) {
+      kvRowData = kvRow.data;
+    } else {
+      // Direct fetch fallback (same RLS issue as the stations query above)
+      const directKv = await directFetch(
+        `app_kv?id=eq.${compactKey}&owner_id=eq.${userId}&select=data`
+      );
+      if (directKv && directKv.length > 0) {
+        kvRowData = directKv[0].data;
+      }
+    }
+
+    if (kvRowData) {
+      const blob = kvRowData as any;
+      const blobStations: Station[] = Array.isArray(blob?.stations)
+        ? blob.stations
+        : [];
+      if (blobStations.length > 0) {
+        console.log(
+          `[StationContext] Cross-device fallback: found ${blobStations.length} station(s) in app_kv blob, migrating to stations table`
+        );
+        for (const s of blobStations) {
+          try {
+            const { data: inserted, error: insertErr } = await supabase
+              .from("stations")
+              .insert({
+                owner_id: userId,
+                code: s.code || generateStationCode(s.name || "Station"),
+                ...stationToRowFields(s),
+              })
+              .select()
+              .single();
+            if (!insertErr && inserted) {
+              const newStation = { ...s, id: inserted.id, code: inserted.code || s.code };
+              if (s.data && Object.keys(s.data).length > 0) {
+                await supabase.from("app_kv").upsert({
+                  id: `station_data_${inserted.id}`,
+                  collection: "station_data",
+                  owner_id: userId,
+                  data: s.data,
+                });
+              }
+              migrated.push(newStation);
+            } else if (insertErr) {
+              console.warn("[StationContext] Cross-device migration insert failed:", insertErr);
+            }
+          } catch (err) {
+            console.warn("[StationContext] Cross-device migration error:", err);
+          }
+        }
+        // Re-fetch to get the freshly inserted rows
+        const { data: refetched } = await supabase
+          .from("stations")
+          .select("*")
+          .order("created_at", { ascending: true });
+        effectiveRows = refetched || [];
+        if (effectiveRows.length === 0) {
+          const directRefetched = await directFetch(
+            "stations?order=created_at.asc&select=*"
+          );
+          if (directRefetched) effectiveRows = directRefetched;
+        }
+      }
+    }
+  }
+
+  const rowIds: string[] = effectiveRows.map((r: any) => r.id);
   let dataBlobs: Record<string, any> = {};
   if (rowIds.length > 0) {
     const kvIds = rowIds.map(id => `station_data_${id}`);
@@ -533,10 +719,23 @@ async function syncStationsWithSupabase(
       const stationId = String(row.id).replace(/^station_data_/, "");
       dataBlobs[stationId] = row.data;
     }
+    // Direct fetch fallback for data blobs
+    if (Object.keys(dataBlobs).length === 0) {
+      const idsParam = kvIds.map(id => `"${id}"`).join(",");
+      const directKvRows = await directFetch(
+        `app_kv?id=in.(${idsParam})&select=id,data`
+      );
+      if (directKvRows) {
+        for (const row of directKvRows) {
+          const stationId = String(row.id).replace(/^station_data_/, "");
+          dataBlobs[stationId] = row.data;
+        }
+      }
+    }
   }
 
   const cachedById = new Map(localStations.map(s => [s.id, s]));
-  const merged = (rows || []).map((row: any) =>
+  const merged = effectiveRows.map((row: any) =>
     stationRowToStation(row, dataBlobs[row.id], cachedById.get(row.id))
   );
 
@@ -546,7 +745,7 @@ async function syncStationsWithSupabase(
   // the time the next mount's sync runs. Without this, the cloud fetch
   // returns [] and overwrites the local station, causing data loss and
   // stranding the user on the "create station" screen.
-  const cloudIds = new Set((rows || []).map((r: any) => r.id));
+  const cloudIds = new Set(effectiveRows.map((r: any) => r.id));
   for (const local of localStations) {
     if (isValidUuid(local.id) && !cloudIds.has(local.id)) {
       merged.push(local);
