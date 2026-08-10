@@ -23,8 +23,8 @@
  * All API keys stay server-side (process.env, never VITE_-prefixed) so they
  * are never exposed in the client bundle.
  */
-import { getHyperLocalPrices } from "./_lib/hybrid-fetcher";
-import { getExactLocation } from "./_lib/geocoding";
+import { getHyperLocalPrices } from "./_lib/hybrid-fetcher.js";
+import { getExactLocation } from "./_lib/geocoding.js";
 
 const CODES = {
   petrol: "GASOLINE_RETAIL_KE_KES",

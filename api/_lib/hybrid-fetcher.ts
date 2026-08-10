@@ -20,7 +20,7 @@
  * SerpApi free tier is 100 searches/month — tiers 1 & 2 ensure those searches
  * are only consumed for genuinely new, isolated locations.
  */
-import { supabaseAdmin } from "./supabase-admin";
+import { supabaseAdmin } from "./supabase-admin.js";
 
 const FRESH_WINDOW_MS = 15 * 24 * 60 * 60 * 1000; // 15 days
 const SEARCH_RADIUS_KM = 50;
@@ -167,13 +167,25 @@ async function fetchAndCachePrices(
   country: string
 ): Promise<HyperLocalPriceResult> {
   const serpapiKey = process.env.SERPAPI_KEY;
-  const prices = serpapiKey
-    ? await extractPricesViaSearch(locationName, country, serpapiKey)
-    : null;
+  let prices: ExtractedPrices | null = null;
+  let sourceLabel = "Live AI Search";
+
+  if (serpapiKey) {
+    prices = await extractPricesViaSearch(locationName, country, serpapiKey);
+  }
+
+  // Fallback: ask the AI to estimate from its own training knowledge when no
+  // web search is available or the search returned no usable snippets. The
+  // source is labelled 'AI-Estimated' so the UI can show provenance.
+  if (!prices) {
+    prices = await estimatePricesFromKnowledge(locationName, country);
+    sourceLabel = "AI-Estimated";
+  }
 
   if (!prices) {
     throw new Error(
-      `No fuel price data available for ${locationName}, ${country}. SerpApi key may be missing or search returned no results.`
+      `No fuel price data available for ${locationName}, ${country}. ` +
+        "SerpApi key may be missing and AI estimation failed."
     );
   }
 
@@ -193,7 +205,7 @@ async function fetchAndCachePrices(
           kerosene: prices.kerosene,
         },
         currency: prices.currency,
-        source: "AI-Verified",
+        source: serpapiKey ? "AI-Verified" : sourceLabel,
         last_updated: new Date().toISOString(),
         query_count: 1,
       },
@@ -207,7 +219,7 @@ async function fetchAndCachePrices(
   }
 
   if (upserted) {
-    return rowToResult(upserted as FuelPricesRow, "Live AI Search");
+    return rowToResult(upserted as FuelPricesRow, serpapiKey ? "Live AI Search" : sourceLabel);
   }
 
   // Even if the upsert failed, return what we extracted so the user sees data.
@@ -222,7 +234,7 @@ async function fetchAndCachePrices(
       kerosene: prices.kerosene,
     },
     currency: prices.currency,
-    source: "Live AI Search (uncached)",
+    source: serpapiKey ? "Live AI Search (uncached)" : `${sourceLabel} (uncached)`,
     last_updated: new Date().toISOString(),
   };
 }
@@ -290,6 +302,38 @@ async function extractPricesWithAI(text: string): Promise<ExtractedPrices | null
   }
 
   console.warn("[hybrid-fetcher] No AI provider available for extraction.");
+  return null;
+}
+
+/**
+ * When no SerpApi key is configured (or a search returns no snippets), ask the
+ * LLM to estimate current fuel prices from its training knowledge. The AI is
+ * instructed to return null for any price it is not confident about so it
+ * doesn't hallucinate. The result is labelled 'AI-Estimated' to distinguish
+ * it from 'AI-Verified' prices that were parsed from real search snippets.
+ */
+async function estimatePricesFromKnowledge(
+  locationName: string,
+  country: string
+): Promise<ExtractedPrices | null> {
+  const prompt =
+    `What are the current approximate pump prices for Super Petrol, Diesel, ` +
+    `and Kerosene in ${locationName}, ${country}? ` +
+    `If you are not confident about a specific price, return null for that field. ` +
+    `Return ONLY valid JSON: ` +
+    `{ "petrol": number|null, "diesel": number|null, "kerosene": number|null, "currency": string }`;
+
+  const groqKey = process.env.GROQ_API_KEY;
+  const deepseekKey = process.env.DEEPSEEK_API_KEY || process.env.DEEPSEEK;
+
+  if (groqKey) {
+    const result = await callGroq(prompt, groqKey);
+    if (result) return result;
+  }
+  if (deepseekKey) {
+    const result = await callDeepSeek(prompt, deepseekKey);
+    if (result) return result;
+  }
   return null;
 }
 

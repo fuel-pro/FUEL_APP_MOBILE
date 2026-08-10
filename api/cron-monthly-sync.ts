@@ -8,8 +8,8 @@
  * Protected by CRON_SECRET: the `Authorization: Bearer <CRON_SECRET>` header
  * must match. Vercel Cron automatically sends this header.
  */
-import { supabaseAdmin } from "./_lib/supabase-admin";
-import { getHyperLocalPrices } from "./_lib/hybrid-fetcher";
+import { supabaseAdmin } from "./_lib/supabase-admin.js";
+import { getHyperLocalPrices } from "./_lib/hybrid-fetcher.js";
 
 export async function GET(request: Request): Promise<Response> {
   const authHeader = request.headers.get("authorization");
