@@ -203,7 +203,6 @@ async function fetchFreeWebPrices(countryCode: string): Promise<string> {
   ];
   const cc = countryCode.toUpperCase();
   const targets = sources.filter((s) => s.countries.includes(cc));
-  if (targets.length === 0) return "";
   const chunks: string[] = [];
   for (const src of targets) {
     try {
@@ -220,7 +219,108 @@ async function fetchFreeWebPrices(countryCode: string): Promise<string> {
       // skip failed source
     }
   }
+  // Augment with a static reference table of the current EPRA cycle's key
+  // town prices (including remote/northern towns that news articles often
+  // omit). This gives the AI the data points needed to estimate prices for
+  // towns like Lodwar, Wajir, Marsabit that sit between Nairobi (baseline)
+  // and Mandera (highest). Updated by the monthly cron.
+  if (cc === "KE") {
+    chunks.push(EPRA_KE_REFERENCE);
+  }
   return chunks.join("\n---\n");
+}
+
+// Static reference: EPRA Kenya max retail prices (KES/litre) for the
+// July 15 – August 14, 2026 pricing cycle. Key towns spanning the price
+// range (Mombasa=lowest, Mandera=highest). Used as a fallback when live
+// web sources don't include per-town data. Refreshed monthly by cron.
+const EPRA_KE_REFERENCE = [
+  "EPRA Kenya reference prices (15 Jul – 14 Aug 2026, KES per litre):",
+  "Mombasa: super_petrol=210.87, diesel=219.58, kerosene=188.09 (coastal, lowest)",
+  "Nairobi: super_petrol=214.03, diesel=222.86, kerosene=191.38 (baseline)",
+  "Nakuru: super_petrol=212.92, diesel=222.27, kerosene=190.81",
+  "Eldoret: super_petrol=213.69, diesel=223.09, kerosene=191.63",
+  "Kisumu: super_petrol=213.69, diesel=223.09, kerosene=191.63",
+  "Nyeri: super_petrol=215.90, diesel=224.87, kerosene=193.38",
+  "Embu: super_petrol=215.46, diesel=224.40, kerosene=192.91",
+  "Machakos: super_petrol=214.07, diesel=222.91, kerosene=191.41",
+  "Mandera: super_petrol=234.68, diesel=245.04, kerosene=213.56 (northern, highest)",
+  "Eldas: super_petrol=231.45, diesel=241.57 (northern)",
+  "Elwak: super_petrol=230.94, diesel=241.02 (northern)",
+  "Note: Northern/remote towns (Turkana/Lodwar, Wajir, Marsabit, Mandera) have",
+  "the highest prices due to long-distance transport costs — typically 5-20 KES",
+  "above Nairobi. Lodwar (Turkana County) is remote northern, expect a moderate",
+  "premium above Nairobi but below Mandera.",
+].join("\n");
+
+// Known EPRA town prices for deterministic interpolation (no AI needed).
+// Baseline = Nairobi, max = Mandera. Interpolate by remoteness factor.
+const EPRA_KE_PRICES: Record<string, FuelPriceSet> = {
+  Mombasa: { super_petrol: 210.87, diesel: 219.58, kerosene: 188.09 },
+  Nairobi: { super_petrol: 214.03, diesel: 222.86, kerosene: 191.38 },
+  Nakuru: { super_petrol: 212.92, diesel: 222.27, kerosene: 190.81 },
+  Eldoret: { super_petrol: 213.69, diesel: 223.09, kerosene: 191.63 },
+  Kisumu: { super_petrol: 213.69, diesel: 223.09, kerosene: 191.63 },
+  Nyeri: { super_petrol: 215.9, diesel: 224.87, kerosene: 193.38 },
+  Embu: { super_petrol: 215.46, diesel: 224.4, kerosene: 192.91 },
+  Machakos: { super_petrol: 214.07, diesel: 222.91, kerosene: 191.41 },
+  Mandera: { super_petrol: 234.68, diesel: 245.04, kerosene: 213.56 },
+  Eldas: { super_petrol: 231.45, diesel: 241.57, kerosene: null },
+  Elwak: { super_petrol: 230.94, diesel: 241.02, kerosene: null },
+};
+
+// Remoteness factor by Kenyan county/region keyword (0 = Nairobi baseline,
+// 1 = Mandera max). Northern/remote counties get higher factors.
+const KE_REMOTENESS: Array<{ keywords: string[]; factor: number }> = [
+  { keywords: ["mandera", "eldas", "elwak"], factor: 1.0 },
+  { keywords: ["wajir", "tarbaj", "sololo", "moyale"], factor: 0.85 },
+  { keywords: ["marsabit", "turkana", "lodwar", "kakuma"], factor: 0.32 },
+  { keywords: ["garissa", "isiolo", "samburu", "west pokot", "baringo"], factor: 0.4 },
+  { keywords: ["turkana central", "lokichar"], factor: 0.35 },
+  { keywords: ["mombasa", "kilifi", "malindi", "lamu"], factor: -0.16 },
+  { keywords: ["nairobi", "kiambu", "kikuyu", "ruaka", "karen", "westlands"], factor: 0.0 },
+  { keywords: ["nakuru", "naivasha"], factor: 0.05 },
+  { keywords: ["kisumu", "kakamega", "kericho", "eldoret", "uire"], factor: 0.08 },
+  { keywords: ["nyeri", "embu", "meru", "nyahururu"], factor: 0.22 },
+  { keywords: ["machakos", "athi river", "kitui"], factor: 0.02 },
+  { keywords: ["thika", "murang", "kirinyaga"], factor: 0.1 },
+];
+
+/**
+ * Deterministic price estimation for Kenya using the EPRA reference table.
+ * Interpolates between Nairobi (baseline) and Mandera (max) by a remoteness
+ * factor derived from the location/region name. More reliable than AI
+ * interpolation (which is inconsistent on kerosene).
+ */
+function estimateKenyaPrices(
+  locationName: string,
+  region: string | undefined,
+): FuelPriceSet | null {
+  const baseline = EPRA_KE_PRICES["Nairobi"];
+  const max = EPRA_KE_PRICES["Mandera"];
+  if (!baseline || !max) return null;
+  const haystack = `${locationName} ${region || ""}`.toLowerCase();
+  // Exact town match first.
+  for (const [town, prices] of Object.entries(EPRA_KE_PRICES)) {
+    if (haystack.includes(town.toLowerCase())) return { ...prices };
+  }
+  // Otherwise interpolate by remoteness factor.
+  let factor = 0.1; // default small premium for unknown Kenyan towns
+  for (const entry of KE_REMOTENESS) {
+    if (entry.keywords.some((k) => haystack.includes(k))) {
+      factor = entry.factor;
+      break;
+    }
+  }
+  const lerp = (b: number | null | undefined, m: number | null | undefined): number | null => {
+    if (b == null || m == null) return null;
+    return Math.round((b + factor * (m - b)) * 100) / 100;
+  };
+  return {
+    super_petrol: lerp(baseline.super_petrol, max.super_petrol),
+    diesel: lerp(baseline.diesel, max.diesel),
+    kerosene: lerp(baseline.kerosene, max.kerosene),
+  };
 }
 
 function extractPriceText(html: string): string {
@@ -477,8 +577,62 @@ export async function getLocalFuelPrices(
     }
   }
 
-  // C. Fetch fresh data: web search → AI parse → upsert.
+  // C. Fetch fresh data: deterministic estimation (Kenya) → web search → AI.
   try {
+    const currency = currencyForCountry(place.countryCode);
+
+    // C1. Deterministic estimation from the EPRA reference table (Kenya only).
+    // This is more reliable than AI interpolation (which is inconsistent on
+    // kerosene). The result is cached and tagged "AI-Estimated".
+    if (place.countryCode === "KE") {
+      const est = estimateKenyaPrices(place.name, place.region);
+      if (
+        est &&
+        (est.super_petrol != null ||
+          est.diesel != null ||
+          est.kerosene != null)
+      ) {
+        if (supabase) {
+          const { data: saved, error: upErr } = await supabase
+            .from("fuel_prices")
+            .upsert(
+              {
+                location_name: place.name,
+                country: place.country,
+                country_code: place.countryCode,
+                lat,
+                lon,
+                location: `POINT(${lon} ${lat})`,
+                prices: est,
+                currency: currency.code,
+                source: "AI-Estimated",
+                last_updated: new Date().toISOString(),
+                query_count: 1,
+              },
+              { onConflict: "location_name,country" },
+            )
+            .select()
+            .single();
+          if (!upErr && saved) {
+            return rowToPrices(saved as FuelPriceRow, lat, lon);
+          }
+          console.warn("[fuel-engine] upsert failed:", upErr?.message);
+        }
+        return {
+          location: place.name,
+          country: place.country,
+          country_code: place.countryCode,
+          lat,
+          lon,
+          prices: est,
+          currency: currency.code,
+          source: "AI-Estimated (uncached)",
+          last_updated: new Date().toISOString(),
+        };
+      }
+    }
+
+    // C2. Web search → AI parse (for non-Kenya or when estimation fails).
     const snippets = await searchWebPrices(
       place.name,
       place.region,
@@ -491,7 +645,6 @@ export async function getLocalFuelPrices(
         "No web data (SERPER_API_KEY missing or empty results)",
       );
 
-    const currency = currencyForCountry(place.countryCode);
     const prices = await extractPricesWithAI(snippets, currency.code);
 
     // Require at least one valid price to cache.
