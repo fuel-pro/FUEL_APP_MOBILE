@@ -139,18 +139,24 @@ async function getPlaceName(lat: number, lon: number): Promise<PlaceInfo> {
 
 async function searchWebPrices(
   locationName: string,
+  region: string | undefined,
   country: string,
   countryCode: string,
 ): Promise<string> {
-  // When Serper is not configured, return a minimal context stub so the AI
-  // step can still run using the model's own knowledge of recent official
-  // fuel prices for the country. This keeps the engine functional even
-  // without a paid search key; the AI is instructed to only return prices
-  // it is confident about, and the result is cached for 14 days.
+  // Build a location descriptor that includes the broader region/state so the
+  // AI can reason about area-level prices when the village is obscure.
+  const locationDesc = [locationName, region, country].filter(Boolean).join(", ");
+  // When Serper is not configured, fall back to fetching public fuel-price
+  // news pages directly (no API key needed). The AI then parses the real EPRA
+  // price data and estimates the local price for the user's location.
   if (!process.env.SERPER_API_KEY) {
-    return `No live web search available. Use your knowledge of current official fuel pump prices in ${locationName}, ${country}.`;
+    const freeText = await fetchFreeWebPrices(countryCode);
+    if (freeText) {
+      return `Live EPRA/official fuel price data fetched from public news sources:\n${freeText}\n\nThe user is located in ${locationDesc}. Estimate the fuel prices for this specific location based on the data above (remote/northern towns have higher prices than Nairobi; coastal towns like Mombasa are lower).`;
+    }
+    return `No live web search available. Use your knowledge of current official fuel pump prices in ${locationDesc}.`;
   }
-  const query = `current official fuel prices petrol diesel kerosene in ${locationName} ${country} ${new Date().getFullYear()}`;
+  const query = `current official fuel prices petrol diesel kerosene in ${locationDesc} ${new Date().getFullYear()}`;
   const res = await fetch("https://google.serper.dev/search", {
     method: "POST",
     headers: {
@@ -182,22 +188,85 @@ async function searchWebPrices(
   return [ab, kg, snippets].filter(Boolean).join(" ").trim();
 }
 
+/**
+ * Fetch public fuel-price news pages directly (no API key required) and
+ * extract the price-relevant text. This is the free fallback for Serper.
+ * Returns combined text from 1-2 known public pages, or "" if all fail.
+ */
+async function fetchFreeWebPrices(countryCode: string): Promise<string> {
+  // Known public pages that publish official fuel prices. Kenya-focused for now.
+  const sources: Array<{ url: string; countries: string[] }> = [
+    {
+      url: "https://www.kenyans.co.ke/news/125252-epra-retains-fuel-prices-petrol-diesel-and-kerosene-costs-remain-unchanged-until-august",
+      countries: ["KE"],
+    },
+  ];
+  const cc = countryCode.toUpperCase();
+  const targets = sources.filter((s) => s.countries.includes(cc));
+  if (targets.length === 0) return "";
+  const chunks: string[] = [];
+  for (const src of targets) {
+    try {
+      const res = await fetch(src.url, {
+        headers: { "User-Agent": "FuelPro/1.0 (contact@fuelpro.app)" },
+        signal: AbortSignal.timeout(8000),
+      });
+      if (!res.ok) continue;
+      const html = await res.text();
+      // Extract visible text from <p> and <li> tags near fuel-price keywords.
+      const text = extractPriceText(html);
+      if (text) chunks.push(text.slice(0, 1500));
+    } catch {
+      // skip failed source
+    }
+  }
+  return chunks.join("\n---\n");
+}
+
+function extractPriceText(html: string): string {
+  // Remove script/style/noscript blocks, then strip remaining tags.
+  const cleaned = html
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<noscript[\s\S]*?<\/noscript>/gi, "");
+  // Extract text from <p> and <li> elements.
+  const blocks = cleaned.match(/<(?:p|li)[^>]*>([\s\S]*?)<\/(?:p|li)>/gi) || [];
+  const texts = blocks
+    .map((b) => b.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim())
+    .filter((t) => {
+      const lower = t.toLowerCase();
+      // Keep paragraphs that mention fuel products or prices (Ksh/shilling).
+      return (
+        (lower.includes("petrol") ||
+          lower.includes("diesel") ||
+          lower.includes("kerosene") ||
+          lower.includes("fuel")) &&
+        (lower.includes("ksh") ||
+          lower.includes("sh") ||
+          /\d+\.\d{2}/.test(t))
+      );
+    });
+  return texts.slice(0, 12).join("\n");
+}
+
 // ---------------------------------------------------------------------------
 // 3. AI Extraction (Groq → OpenRouter/Llama fallback)
 // ---------------------------------------------------------------------------
 
 function buildAiPrompt(snippet: string, currencyHint: string): string {
   return [
-    "Extract the current local fuel prices from the text below.",
-    "If the text says no live web search is available, use your own knowledge",
-    "of the most recent official/regulatory fuel pump prices for the location,",
-    "but ONLY return a price you are confident about — otherwise use null.",
+    "Extract or estimate the current local fuel prices from the text below.",
+    "The text may contain official EPRA/regulatory prices for various towns.",
+    "If the user's specific town is not listed, estimate its prices based on",
+    "the nearest listed town and the note that remote/northern towns have",
+    "higher prices while coastal towns are lower. Many countries (e.g. Kenya)",
+    "regulate fuel prices nationally with small regional transport adjustments.",
     "Return ONLY a JSON object with this exact shape:",
     '{"super_petrol": <number|null>, "diesel": <number|null>, "kerosene": <number|null>}.',
-    "Values are the per-litre price in the local currency (likely " +
+    "Values are the per-litre pump price in the local currency (likely " +
       currencyHint +
       ").",
-    "If a price is not mentioned or you are unsure, use null. Do not include any other keys or prose.",
+    "If you cannot determine a price at all, use null. Do not include any other keys or prose.",
     "Text:",
     '"""',
     snippet,
@@ -412,6 +481,7 @@ export async function getLocalFuelPrices(
   try {
     const snippets = await searchWebPrices(
       place.name,
+      place.region,
       place.country,
       place.countryCode,
     );
