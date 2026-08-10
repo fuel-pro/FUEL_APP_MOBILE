@@ -48,16 +48,25 @@ export async function GET(request: Request): Promise<Response> {
 
   try {
     const data = await getLocalFuelPrices(lat, lon);
-    return new Response(JSON.stringify({ success: true, ...data }), {
-      status: 200,
-      headers: {
-        "Content-Type": "application/json",
-        // Brief CDN cache (5 min) keyed by lat/lon — the engine itself has a
-        // 14-day DB cache, this just absorbs burst traffic for the same spot.
-        "Cache-Control": "public, max-age=300, s-maxage=300",
-        ...CORS_HEADERS,
+    return new Response(
+      JSON.stringify({
+        success: true,
+        // Expose the resolved village/town name under both `locationName`
+        // (what the frontend reads) and `location` (the engine's field).
+        ...data,
+        locationName: data.location,
+      }),
+      {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+          // Brief CDN cache (5 min) keyed by lat/lon — the engine itself has a
+          // 14-day DB cache, this just absorbs burst traffic for the same spot.
+          "Cache-Control": "public, max-age=300, s-maxage=300",
+          ...CORS_HEADERS,
+        },
       },
-    });
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return new Response(

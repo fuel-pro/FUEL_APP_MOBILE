@@ -67,6 +67,18 @@ function isFresh(dateStr: string): boolean {
   return Date.now() - new Date(dateStr).getTime() < FRESH_WINDOW_MS;
 }
 
+// Cached rows may store the petrol price under either `super_petrol` (written
+// by api/lib/fuel-engine.ts) or `petrol` (written by this fetcher). Read both
+// so the nearest-neighbour fallback works regardless of which engine wrote
+// the row.
+function petrolOf(
+  p: Record<string, number | null> | null | undefined,
+): number | null {
+  if (!p) return null;
+  if (p.super_petrol != null) return p.super_petrol;
+  return p.petrol ?? null;
+}
+
 function rowToResult(
   row: FuelPricesRow,
   source: string,
@@ -79,7 +91,7 @@ function rowToResult(
     latitude: row.lat ?? 0,
     longitude: row.lon ?? 0,
     prices: {
-      petrol: p.petrol ?? null,
+      petrol: petrolOf(p),
       diesel: p.diesel ?? null,
       kerosene: p.kerosene ?? null,
     },
@@ -122,8 +134,12 @@ export async function getHyperLocalPrices(
   }
 
   // ── Tier 2: Nearest cached town (PostGIS spatial fallback) ──
+  // Returns the closest cached location's REAL price within the radius. This
+  // is real data from a nearby priced location (labelled with distance), not
+  // a fabricated estimate. The RPC is `get_nearest_fuel` (singular) — the
+  // variant defined in migration 012.
   const { data: nearestRows, error: rpcErr } = await supabaseAdmin.rpc(
-    "get_nearest_fuel_prices",
+    "get_nearest_fuel",
     {
       user_lat: lat,
       user_lon: lon,
@@ -144,7 +160,7 @@ export async function getHyperLocalPrices(
         latitude: lat,
         longitude: lon,
         prices: {
-          petrol: nearest.prices?.petrol ?? null,
+          petrol: petrolOf(nearest.prices),
           diesel: nearest.prices?.diesel ?? null,
           kerosene: nearest.prices?.kerosene ?? null,
         },
@@ -157,6 +173,9 @@ export async function getHyperLocalPrices(
   }
 
   // ── Tier 3: Live AI search (SerpApi + LLM extraction) ──
+  // The AI EXTRACTS verbatim prices from search snippets — it must NOT
+  // estimate or generalise. If no real price is found, we throw and the
+  // caller surfaces "no data" rather than a fabricated estimate.
   return fetchAndCachePrices(lat, lon, locationName, country);
 }
 
@@ -171,24 +190,20 @@ async function fetchAndCachePrices(
   }
   const serpapiKey = process.env.SERPAPI_KEY;
   let prices: ExtractedPrices | null = null;
-  let sourceLabel = "Live AI Search";
 
   if (serpapiKey) {
     prices = await extractPricesViaSearch(locationName, country, serpapiKey);
   }
 
-  // Fallback: ask the AI to estimate from its own training knowledge when no
-  // web search is available or the search returned no usable snippets. The
-  // source is labelled 'AI-Estimated' so the UI can show provenance.
-  if (!prices) {
-    prices = await estimatePricesFromKnowledge(locationName, country);
-    sourceLabel = "AI-Estimated";
-  }
-
+  // No estimation fallback: if SerpApi is not configured or returned no usable
+  // snippets, we do NOT ask the AI to guess from its training knowledge. We
+  // surface "no real data available" rather than fabricate a price.
   if (!prices) {
     throw new Error(
-      `No fuel price data available for ${locationName}, ${country}. ` +
-        "SerpApi key may be missing and AI estimation failed.",
+      `No real fuel price data available for ${locationName}, ${country}. ` +
+        "SerpApi key is missing or returned no usable snippets. " +
+        "No estimation is performed — pass coordinates near a cached location " +
+        "or configure SERPAPI_KEY.",
     );
   }
 
@@ -208,7 +223,7 @@ async function fetchAndCachePrices(
           kerosene: prices.kerosene,
         },
         currency: prices.currency,
-        source: serpapiKey ? "AI-Verified" : sourceLabel,
+        source: "AI-Verified",
         last_updated: new Date().toISOString(),
         query_count: 1,
       },
@@ -222,10 +237,7 @@ async function fetchAndCachePrices(
   }
 
   if (upserted) {
-    return rowToResult(
-      upserted as FuelPricesRow,
-      serpapiKey ? "Live AI Search" : sourceLabel,
-    );
+    return rowToResult(upserted as FuelPricesRow, "AI-Verified");
   }
 
   // Even if the upsert failed, return what we extracted so the user sees data.
@@ -240,9 +252,7 @@ async function fetchAndCachePrices(
       kerosene: prices.kerosene,
     },
     currency: prices.currency,
-    source: serpapiKey
-      ? "Live AI Search (uncached)"
-      : `${sourceLabel} (uncached)`,
+    source: "AI-Verified (uncached)",
     last_updated: new Date().toISOString(),
   };
 }
@@ -321,46 +331,13 @@ async function extractPricesWithAI(
   return null;
 }
 
-/**
- * When no SerpApi key is configured (or a search returns no snippets), ask the
- * LLM to estimate current fuel prices from its training knowledge. The AI is
- * instructed to return null for any price it is not confident about so it
- * doesn't hallucinate. The result is labelled 'AI-Estimated' to distinguish
- * it from 'AI-Verified' prices that were parsed from real search snippets.
- */
-async function estimatePricesFromKnowledge(
-  locationName: string,
-  country: string,
-): Promise<ExtractedPrices | null> {
-  const prompt =
-    `What are the current approximate pump prices for Super Petrol, Diesel, ` +
-    `and Kerosene in ${locationName}, ${country}? ` +
-    `If you are not confident about a specific price, return null for that field. ` +
-    `Return ONLY valid JSON: ` +
-    `{ "petrol": number|null, "diesel": number|null, "kerosene": number|null, "currency": string }`;
-
-  const groqKey = process.env.GROQ_API_KEY;
-  const deepseekKey = process.env.DEEPSEEK_API_KEY || process.env.DEEPSEEK;
-  const qwenKey = process.env.QWEN_API_KEY || process.env.QWEN;
-
-  if (groqKey) {
-    const result = await callGroq(prompt, groqKey);
-    if (result) return result;
-  }
-  if (deepseekKey) {
-    const result = await callDeepSeek(prompt, deepseekKey);
-    if (result) return result;
-  }
-  if (qwenKey) {
-    const result = await callQwen(prompt, qwenKey);
-    if (result) return result;
-  }
-  return null;
-}
-
 const EXTRACTION_SYSTEM_PROMPT =
-  "Extract Super Petrol, Diesel, and Kerosene prices from the text. " +
-  "Pay attention to local currencies. " +
+  "Extract the Super Petrol, Diesel, and Kerosene prices explicitly stated " +
+  "for the user's exact location from the text. Pay attention to local " +
+  "currencies. If the exact location is NOT named in the text, return null " +
+  "for every field. Do NOT estimate, interpolate, or generalise from nearby " +
+  "towns, national averages, or your own knowledge — only verbatim prices " +
+  "from the text count. " +
   'Return ONLY valid JSON: { "petrol": number|null, "diesel": number|null, "kerosene": number|null, "currency": string }';
 
 async function callGroq(
