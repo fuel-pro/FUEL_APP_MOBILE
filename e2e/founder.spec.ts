@@ -37,8 +37,8 @@ test.describe('Founder Page', () => {
   test('should show error for empty credentials', async ({ page }) => {
     await page.getByRole('button', { name: /Authenticate/i }).click();
     
-    // Should show error message
-    await expect(page.getByText(/invalid credentials/i)).toBeVisible({ timeout: 5000 });
+    // Should show the required-fields error message
+    await expect(page.getByText(/username and password are required/i)).toBeVisible({ timeout: 5000 });
   });
 
   test('should have security notice', async ({ page }) => {
