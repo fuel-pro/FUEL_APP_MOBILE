@@ -30,7 +30,11 @@ import {
   Info,
 } from "lucide-react";
 import { formatNumber } from "@/react-app/utils/formatUtils";
-import { CANONICAL_FUEL_TYPES } from "@/react-app/config/pricing";
+import {
+  CANONICAL_FUEL_TYPES,
+  currencySymbolFor,
+} from "@/react-app/config/pricing";
+import { getCountryById } from "@/react-app/config/countries";
 import { useState, useEffect, useMemo, useCallback } from "react";
 
 // Lazy API base URL getter using dynamic import to avoid circular deps
@@ -84,6 +88,11 @@ export default function Dashboard() {
   const { state } = useFuel();
   const location = useLocation();
   const { currentStation } = useStations();
+  // The station's country is the authoritative source for pricing/tax/currency
+  // — NOT the GPS-detected country (which may be a VPN/tourist location and
+  // would otherwise show foreign prices on a station's dashboard). Fall back to
+  // the detected country only until the station has been loaded from cloud.
+  const stationCountry = currentStation?.country || location.currentCountry.id;
   const {
     fuelPrice,
     taxRates,
@@ -95,7 +104,7 @@ export default function Dashboard() {
     currentLocation,
     refreshLocation,
     refreshPrices,
-  } = useAutoSync(location.currentCountry.id);
+  } = useAutoSync(stationCountry);
   const [currentTime, setCurrentTime] = useState(new Date());
 
   // Backend data state
@@ -127,9 +136,20 @@ export default function Dashboard() {
     locationPrice?.kerosenePrice ?? fuelPrice?.kerosenePrice ?? 0; // Kerosene price not in base state
   // Show the detected city for location-based pricing
   const priceCityName =
-    locationPrice?.cityName || regionalPrice.cityName || "Nairobi";
+    locationPrice?.cityName || regionalPrice.cityName || stationCity;
   const isLocationBased = !!locationPrice;
-  const currencySymbol = location.currencySymbol;
+  // Currency symbol must match the STATION's currency (e.g. "€" for a German
+  // station), never the GPS/browser-detected currency. Fall back to the
+  // location-derived symbol only if the station has no currency set.
+  const currencySymbol =
+    currentStation?.currencySymbol ||
+    currencySymbolFor(currentStation?.currency || "") ||
+    location.currencySymbol;
+  // Resolve the station's own country profile (authoritative) for fuel-
+  // regulation labels, falling back to the GPS-detected profile so the UI
+  // always has a valid object even before the station loads from cloud.
+  const stationCountryProfile =
+    getCountryById(stationCountry.toUpperCase()) || location.currentCountry;
   const [animatedValues, setAnimatedValues] = useState({
     revenue: 0,
     profit: 0,
@@ -576,7 +596,7 @@ export default function Dashboard() {
         </div>
         <div className="flex items-center gap-3">
           <SyncStatusIndicator
-            countryCode={location.currentCountry.id}
+            countryCode={stationCountry}
             compact
           />
           <div className="flex items-center gap-3 bg-white dark:bg-gray-800 rounded-xl px-4 py-2.5 shadow-sm border border-gray-200 dark:border-gray-700">
@@ -740,7 +760,7 @@ export default function Dashboard() {
             </h3>
             <span className="text-[9px] bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full font-medium">
               {fuelPrice?.priceSettingBody ||
-                location.currentCountry.fuelRegulations.priceSettingBody}
+                stationCountryProfile.fuelRegulations.priceSettingBody}
             </span>
           </div>
           {/* Location-based price indicator */}
@@ -757,7 +777,7 @@ export default function Dashboard() {
               {isLocationBased
                 ? `📍 GPS: ${priceCityName} (${locationPrice.transportSurcharge >= 0 ? "+" : ""}${locationPrice.transportSurcharge.toFixed(2)})`
                 : regionalPrice.isRegional
-                  ? `${location.currentCountry.fuelRegulations.priceSettingBody} ${regionalPrice.cityName} Price`
+                  ? `${stationCountryProfile.fuelRegulations.priceSettingBody} ${regionalPrice.cityName} Price`
                   : `${stationCity} - National Average`}
             </span>
           </div>
@@ -945,7 +965,7 @@ export default function Dashboard() {
 
         {/* Regulatory Alerts */}
         <div className="bg-white dark:bg-gray-800 rounded-xl p-3 border border-gray-200 dark:border-gray-700 shadow-sm">
-          <RegulatoryAlerts countryCode={location.currentCountry.id} />
+          <RegulatoryAlerts countryCode={stationCountry} />
         </div>
       </div>
 

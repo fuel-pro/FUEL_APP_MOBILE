@@ -259,7 +259,7 @@ export function getWorldFuelPrices(): Record<
 }
 
 /** Minimal currency → symbol map for currencies not in REGIONAL_PRICES. */
-function currencySymbolFor(currency: string): string {
+export function currencySymbolFor(currency: string): string {
   const map: Record<string, string> = {
     USD: "$", EUR: "€", GBP: "£", JPY: "¥", CNY: "¥", INR: "₹", AUD: "A$",
     CAD: "C$", CHF: "CHF", BRL: "R$", MXN: "Mex$", ARS: "AR$", RUB: "₽",

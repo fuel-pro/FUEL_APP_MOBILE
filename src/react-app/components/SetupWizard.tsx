@@ -27,7 +27,7 @@ import {
 } from "../services/FuelPriceService";
 import { getCountryFromLocation } from "../lib/world-country-utils";
 import { getCurrencySymbol as getCurrencySymbolForCode } from "../lib/currency";
-import { getCountryPrice, getVATRate } from "../config/pricing";
+import { getCountryPrice, getVATRate, currencySymbolFor } from "../config/pricing";
 import { getRegionalConfig } from "../config/regions";
 import SearchableCountryDropdown from "./SearchableCountryDropdown";
 import { resolveCountryFromBrowser } from "../lib/geo-utils";
@@ -311,6 +311,7 @@ export default function SetupWizard({
         // every device — never silently overridden by GPS/timezone defaults.
         country: data.countryCode || "US",
         currency: regionalConfig.currency || "USD",
+        currencySymbol: currencySymbolFor(regionalConfig.currency || "USD"),
         timezone: countryTimezone,
       });
       if (newStation && newStation.id) {

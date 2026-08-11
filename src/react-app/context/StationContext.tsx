@@ -7,6 +7,7 @@ import React, {
   useRef,
 } from "react";
 import { getDetectedCurrency } from "@/react-app/lib/currency";
+import { currencySymbolFor } from "@/react-app/config/pricing";
 import { supabase, supabaseUrl, supabaseAnonKey } from "@/supabase/client";
 
 // Lazy API base URL getter using dynamic import to avoid circular deps
@@ -118,6 +119,7 @@ export interface Station {
   description: string;
   country: string; // ISO country code (e.g. "DE", "US", "KE") — drives currency/tax/fuel prices
   currency: string; // ISO currency code (e.g. "EUR", "USD", "KES")
+  currencySymbol: string; // display symbol (e.g. "€", "$", "KSh")
   timezone: string; // IANA timezone (e.g. "Europe/Berlin")
   createdAt: string;
   updatedAt: string;
@@ -474,6 +476,7 @@ function stationRowToStation(
     description: row.description || "",
     country: row.country || "",
     currency: row.currency || "",
+    currencySymbol: row.currency_symbol || currencySymbolFor(row.currency || "USD"),
     timezone: row.timezone || "",
     createdAt: row.created_at || new Date().toISOString(),
     updatedAt: row.updated_at || new Date().toISOString(),
@@ -502,6 +505,11 @@ function stationToRowFields(s: Partial<Station>) {
   if (s.country !== undefined) fields.country = s.country;
   if (s.currency !== undefined) fields.currency = s.currency;
   if (s.timezone !== undefined) fields.timezone = s.timezone;
+  if (s.currencySymbol !== undefined) {
+    fields.currency_symbol = s.currencySymbol;
+  } else if (s.currency !== undefined) {
+    fields.currency_symbol = currencySymbolFor(s.currency);
+  }
   return fields;
 }
 
@@ -1258,6 +1266,9 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
         description: stationData.description || "",
         country: stationData.country || "",
         currency: stationData.currency || "",
+        currencySymbol:
+          stationData.currencySymbol ||
+          currencySymbolFor(stationData.currency || "KES"),
         timezone: stationData.timezone || "",
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),

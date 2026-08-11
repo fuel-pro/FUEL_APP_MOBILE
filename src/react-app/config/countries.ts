@@ -1911,6 +1911,7 @@ const ghana: CountryProfile = {
 };
 
 import { WORLD_PAYMENT_CONFIGS } from "./worldPaymentConfigs";
+import { currencySymbolFor } from "./pricing";
 
 // 8 core countries with full detailed profiles
 const CORE_COUNTRIES: Record<string, CountryProfile> = {
@@ -1966,6 +1967,129 @@ function regionForCode(code: string): string {
   return "Global";
 }
 
+// Region-aware payroll defaults so generated country profiles aren't all
+// Kenya clones (which would show "Min. Wage €15,000" for Germany). The values
+// are approximate monthly figures in the country's own currency and are only
+// used as a sane starting point until a real sync/tax-rate fetch overrides them.
+function getRegionalPayroll(
+  code: string,
+  currency: string,
+): CountryProfile["payroll"] {
+  const c = code.toUpperCase();
+  const region = regionForCode(c);
+
+  // Region baselines (monthly, local currency). These are intentionally rough
+  // economic-region averages — they exist so the dashboard renders a plausible
+  // figure instead of a Kenya-clone value, and are replaced by synced rates.
+  const REGION_BASE: Record<
+    string,
+    { minimumWage: number; payeThreshold: number; bands: [number, number][] }
+  > = {
+    Europe: {
+      minimumWage: 1800,
+      payeThreshold: 12000,
+      bands: [
+        [0, 12000],
+        [12001, 30000],
+        [30001, 80000],
+        [80001, Infinity],
+      ],
+    },
+    Americas: {
+      minimumWage: 1500,
+      payeThreshold: 12000,
+      bands: [
+        [0, 12000],
+        [12001, 45000],
+        [45001, 120000],
+        [120001, Infinity],
+      ],
+    },
+    Asia: {
+      minimumWage: 1200,
+      payeThreshold: 6000,
+      bands: [
+        [0, 6000],
+        [6001, 20000],
+        [20001, 60000],
+        [60001, Infinity],
+      ],
+    },
+    Oceania: {
+      minimumWage: 2200,
+      payeThreshold: 18000,
+      bands: [
+        [0, 18000],
+        [18001, 45000],
+        [45001, 120000],
+        [120001, Infinity],
+      ],
+    },
+    Africa: {
+      minimumWage: 15000,
+      payeThreshold: 24000,
+      bands: [
+        [0, 24000],
+        [24001, 32333],
+        [32334, 500000],
+        [500001, 800000],
+        [800001, Infinity],
+      ],
+    },
+    Global: {
+      minimumWage: 1500,
+      payeThreshold: 12000,
+      bands: [
+        [0, 12000],
+        [12001, 40000],
+        [40001, 100000],
+        [100001, Infinity],
+      ],
+    },
+  };
+
+  const base = REGION_BASE[region] || REGION_BASE.Global;
+  const rates = [0, 0.2, 0.3, 0.37, 0.4].slice(0, base.bands.length);
+  const payeRates = base.bands.map(([from, to], i) => ({
+    from,
+    to,
+    rate: rates[i] ?? 0.35,
+  }));
+
+  return {
+    payeThreshold: base.payeThreshold,
+    payeRates,
+    nssfRequired: true,
+    nssfLabel: "Social Security",
+    nssfEmployeeRate: 0.06,
+    nssfEmployerRate: 0.06,
+    nhifRequired: region === "Europe" || region === "Oceania",
+    nhifLabel: "Health Insurance",
+    nhifRates: [
+      { minSalary: 0, maxSalary: 5999, amount: 150 },
+      { minSalary: 6000, maxSalary: 9999, amount: 300 },
+      { minSalary: 10000, maxSalary: 19999, amount: 500 },
+      { minSalary: 20000, maxSalary: 39999, amount: 750 },
+      { minSalary: 40000, maxSalary: Infinity, amount: 1000 },
+    ],
+    housingLevy: false,
+    housingLevyRate: 0,
+    pensionFund: true,
+    pensionRate: region === "Europe" ? 0.093 : 0.05,
+    statutoryHolidays: [
+      "01-01",
+      "05-01",
+      "12-25",
+      "12-26",
+    ],
+    minimumWage: base.minimumWage,
+    workingHoursPerWeek: 40,
+    overtimeRate: 1.5,
+    severancePayRequired: true,
+    severanceFormula: "12 days per year of service",
+  };
+}
+
 function generateCountryProfile(
   code: string,
   name: string,
@@ -1981,7 +2105,7 @@ function generateCountryProfile(
     defaultLanguage: "en",
     currency: {
       code: currency,
-      symbol: currency,
+      symbol: currencySymbolFor(currency),
       name: currency,
       isoCode: currency,
       subunit: "cents",
@@ -1993,7 +2117,7 @@ function generateCountryProfile(
     numberFormat: "1,000.00",
     mobileMoney: [],
     revenueAuthority: {
-      name: "Revenue Authority",
+      name: `${name} Revenue Authority`,
       shortName: "RA",
       pinLabel: "Tax ID",
       website: "",
@@ -2008,68 +2132,13 @@ function generateCountryProfile(
       supportPhone: "",
       supportEmail: "",
       etimsRequired: false,
-      electronicInvoiceRequired: false,
+      electronicInvoiceRequired: regionForCode(code) === "Europe",
       fiscalDeviceRequired: false,
       monthlyReturnDue: "20th",
       annualReturnDue: "31st March",
       eFilingPortal: "",
     },
-    payroll: {
-      payeThreshold: 24000,
-      payeRates: [
-        { from: 0, to: 24000, rate: 0 },
-        { from: 24001, to: 32333, rate: 0.25 },
-        { from: 32334, to: 500000, rate: 0.3 },
-        { from: 500001, to: 800000, rate: 0.325 },
-        { from: 800001, to: Infinity, rate: 0.35 },
-      ],
-      nssfRequired: true,
-      nssfLabel: "Social Security",
-      nssfEmployeeRate: 0.06,
-      nssfEmployerRate: 0.06,
-      nhifRequired: true,
-      nhifLabel: "Health Insurance",
-      nhifRates: [
-        { minSalary: 0, maxSalary: 5999, amount: 150 },
-        { minSalary: 6000, maxSalary: 7999, amount: 300 },
-        { minSalary: 8000, maxSalary: 11999, amount: 400 },
-        { minSalary: 12000, maxSalary: 14999, amount: 500 },
-        { minSalary: 15000, maxSalary: 19999, amount: 600 },
-        { minSalary: 20000, maxSalary: 24999, amount: 750 },
-        { minSalary: 25000, maxSalary: 29999, amount: 850 },
-        { minSalary: 30000, maxSalary: 34999, amount: 900 },
-        { minSalary: 35000, maxSalary: 39999, amount: 950 },
-        { minSalary: 40000, maxSalary: 44999, amount: 1000 },
-        { minSalary: 45000, maxSalary: 49999, amount: 1100 },
-        { minSalary: 50000, maxSalary: 59999, amount: 1200 },
-        { minSalary: 60000, maxSalary: 69999, amount: 1300 },
-        { minSalary: 70000, maxSalary: 79999, amount: 1400 },
-        { minSalary: 80000, maxSalary: 89999, amount: 1500 },
-        { minSalary: 90000, maxSalary: 99999, amount: 1600 },
-        { minSalary: 100000, maxSalary: Infinity, amount: 1700 },
-      ],
-      housingLevy: false,
-      housingLevyRate: 0,
-      pensionFund: true,
-      pensionRate: 0.05,
-      statutoryHolidays: [
-        "01-01",
-        "04-10",
-        "04-11",
-        "05-01",
-        "06-01",
-        "10-10",
-        "10-20",
-        "12-12",
-        "12-25",
-        "12-26",
-      ],
-      minimumWage: 15000,
-      workingHoursPerWeek: 45,
-      overtimeRate: 1.5,
-      severancePayRequired: true,
-      severanceFormula: "12 days per year of service",
-    },
+    payroll: getRegionalPayroll(code, currency),
     paymentMethods: [],
     communication: {
       smsGateway: "",
@@ -2095,12 +2164,12 @@ function generateCountryProfile(
     complianceDocuments: [],
     fuelRegulations: {
       priceControlled: false,
-      priceSettingBody: "Ministry of Energy",
+      priceSettingBody: `${name} Energy Regulator`,
       priceReviewFrequency: "monthly",
       licensingRequired: false,
-      licenseBody: "Energy Regulator",
+      licenseBody: `${name} Energy Regulator`,
       environmentalLevy: 0,
-      qualityStandardsBody: "Standards Bureau",
+      qualityStandardsBody: `${name} Standards Bureau`,
     },
   };
 }
