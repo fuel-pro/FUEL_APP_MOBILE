@@ -113,6 +113,44 @@ function tierColor(tier: Customer["tier"]): string {
   }
 }
 
+function normalizeLoyaltyCustomer(
+  c: Partial<Customer> | null | undefined,
+): Customer {
+  const id =
+    c?.id || `cust_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const loyaltyPoints =
+    typeof c?.loyaltyPoints === "number" ? c.loyaltyPoints : 0;
+  return {
+    id,
+    name: c?.name ?? "",
+    phone: c?.phone ?? "",
+    email: c?.email ?? "",
+    vehicleReg: c?.vehicleReg ?? "",
+    loyaltyPoints,
+    totalSpent: typeof c?.totalSpent === "number" ? c.totalSpent : 0,
+    visits: typeof c?.visits === "number" ? c.visits : 0,
+    lastVisit: c?.lastVisit ?? new Date().toISOString(),
+    preferredFuel:
+      c?.preferredFuel === "PMS" || c?.preferredFuel === "AGO"
+        ? c.preferredFuel
+        : "Both",
+    tier:
+      c?.tier === "Bronze" ||
+      c?.tier === "Silver" ||
+      c?.tier === "Gold" ||
+      c?.tier === "Platinum"
+        ? c.tier
+        : getTier(loyaltyPoints),
+    notes: c?.notes ?? "",
+    joinDate: c?.joinDate ?? new Date().toISOString().split("T")[0],
+  };
+}
+
+function normalizeLoyaltyCustomers(arr: unknown): Customer[] {
+  if (!Array.isArray(arr)) return [];
+  return arr.map((c) => normalizeLoyaltyCustomer(c as Partial<Customer>));
+}
+
 export default function CustomerLoyalty() {
   const { state } = useFuel();
   const location = useLocation();
@@ -125,7 +163,9 @@ export default function CustomerLoyalty() {
   const stationId = currentStation?.id;
   const [customers, setCustomers] = useState<Customer[]>(() => {
     try {
-      return JSON.parse(localStorage.getItem("fuelpro_customers") || "[]");
+      return normalizeLoyaltyCustomers(
+        JSON.parse(localStorage.getItem("fuelpro_customers") || "[]"),
+      );
     } catch {
       return defaultCustomers();
     }
@@ -167,7 +207,7 @@ export default function CustomerLoyalty() {
         "loyalty_customers",
         stationId,
       );
-      if (cloudData && Array.isArray(cloudData)) setCustomers(cloudData);
+      if (cloudData) setCustomers(normalizeLoyaltyCustomers(cloudData));
     })();
     // Real-time: when another device updates customers, update instantly
     const unsubs = [
@@ -175,7 +215,7 @@ export default function CustomerLoyalty() {
         "loyalty_customers",
         stationId,
         (val) => {
-          if (val && Array.isArray(val)) setCustomers(val);
+          if (val) setCustomers(normalizeLoyaltyCustomers(val));
         },
       ),
     ];
@@ -186,16 +226,22 @@ export default function CustomerLoyalty() {
     const q = search.toLowerCase();
     return customers.filter(
       (c) =>
-        c.name.toLowerCase().includes(q) ||
-        c.phone.includes(q) ||
-        c.vehicleReg.toLowerCase().includes(q),
+        (c.name || "").toLowerCase().includes(q) ||
+        (c.phone || "").includes(q) ||
+        (c.vehicleReg || "").toLowerCase().includes(q),
     );
   }, [customers, search]);
 
-  const totalPoints = customers.reduce((s, c) => s + c.loyaltyPoints, 0);
+  const totalPoints = customers.reduce(
+    (s, c) => s + (typeof c.loyaltyPoints === "number" ? c.loyaltyPoints : 0),
+    0,
+  );
   const avgSpend =
     customers.length > 0
-      ? customers.reduce((s, c) => s + c.totalSpent, 0) / customers.length
+      ? customers.reduce(
+          (s, c) => s + (typeof c.totalSpent === "number" ? c.totalSpent : 0),
+          0,
+        ) / customers.length
       : 0;
 
   const addCustomer = () => {
@@ -224,9 +270,9 @@ export default function CustomerLoyalty() {
 
   const addPoints = (id: string, points: number) => {
     save(
-      customers.map((c) => {
+      (customers || []).map((c) => {
         if (c.id === id) {
-          const newPoints = c.loyaltyPoints + points;
+          const newPoints = (c.loyaltyPoints || 0) + points;
           return {
             ...c,
             loyaltyPoints: newPoints,
@@ -241,9 +287,12 @@ export default function CustomerLoyalty() {
 
   const redeem = (customerId: string, points: number) => {
     save(
-      customers.map((c) =>
+      (customers || []).map((c) =>
         c.id === customerId
-          ? { ...c, loyaltyPoints: Math.max(0, c.loyaltyPoints - points) }
+          ? {
+              ...c,
+              loyaltyPoints: Math.max(0, (c.loyaltyPoints || 0) - points),
+            }
           : c,
       ),
     );
@@ -298,7 +347,10 @@ export default function CustomerLoyalty() {
           <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
             {customers.length > 0
               ? (
-                  customers.reduce((s, c) => s + c.visits, 0) / customers.length
+                  customers.reduce(
+                    (s, c) => s + (typeof c.visits === "number" ? c.visits : 0),
+                    0,
+                  ) / customers.length
                 ).toFixed(1)
               : "0"}
           </p>
@@ -413,12 +465,14 @@ export default function CustomerLoyalty() {
                 </div>
                 <div>
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white">
-                    {selectedCustomer.name}
+                    {selectedCustomer.name || "Unnamed"}
                   </h3>
                   <span
-                    className={`text-xs px-2 py-0.5 rounded-full border ${tierColor(selectedCustomer.tier)}`}
+                    className={`text-xs px-2 py-0.5 rounded-full border ${tierColor(
+                      selectedCustomer.tier || "Bronze",
+                    )}`}
                   >
-                    {selectedCustomer.tier}
+                    {selectedCustomer.tier || "Bronze"}
                   </span>
                 </div>
               </div>
@@ -432,7 +486,7 @@ export default function CustomerLoyalty() {
             <div className="grid grid-cols-2 gap-3 text-sm mb-3">
               <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
                 <Phone size={14} />
-                {selectedCustomer.phone}
+                {selectedCustomer.phone || ""}
               </div>
               {selectedCustomer.email && (
                 <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
@@ -448,7 +502,7 @@ export default function CustomerLoyalty() {
               )}
               <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
                 <Star size={14} className="text-amber-500" />
-                {formatNumber(selectedCustomer.loyaltyPoints)} pts
+                {formatNumber(selectedCustomer.loyaltyPoints || 0)} pts
               </div>
             </div>
             <div className="flex gap-2">
@@ -484,8 +538,9 @@ export default function CustomerLoyalty() {
                 Available Rewards
               </h3>
               <div className="space-y-2 max-h-64 overflow-y-auto">
-                {REWARDS.map((r) => {
-                  const canRedeem = selectedCustomer.loyaltyPoints >= r.points;
+                {(REWARDS || []).map((r) => {
+                  const canRedeem =
+                    (selectedCustomer.loyaltyPoints || 0) >= r.points;
                   return (
                     <div
                       key={r.id}
@@ -539,37 +594,41 @@ export default function CustomerLoyalty() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((c) => (
+              {(filtered || []).map((c) => (
                 <tr
                   key={c.id}
                   onClick={() => setSelectedCustomer(c)}
                   className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/30 cursor-pointer transition-colors"
                 >
                   <td className="px-4 py-3">
-                    <p className="font-medium dark:text-white">{c.name}</p>
+                    <p className="font-medium dark:text-white">
+                      {c.name || ""}
+                    </p>
                     <p className="text-[11px] text-gray-500">
-                      {c.vehicleReg} {c.preferredFuel}
+                      {c.vehicleReg || ""} {c.preferredFuel || ""}
                     </p>
                   </td>
                   <td className="px-4 py-3 text-gray-600 dark:text-gray-400">
-                    {c.phone}
+                    {c.phone || ""}
                   </td>
                   <td className="px-4 py-3 text-right font-semibold text-amber-600 dark:text-amber-400">
-                    {formatNumber(c.loyaltyPoints)}
+                    {formatNumber(c.loyaltyPoints || 0)}
                   </td>
                   <td className="px-4 py-3 text-right dark:text-white">
                     {currencySymbol}
-                    {formatNumber(c.totalSpent)}
+                    {formatNumber(c.totalSpent || 0)}
                   </td>
                   <td className="px-4 py-3 text-center">
                     <span
-                      className={`text-[10px] px-2 py-0.5 rounded-full border ${tierColor(c.tier)}`}
+                      className={`text-[10px] px-2 py-0.5 rounded-full border ${tierColor(
+                        c.tier || "Bronze",
+                      )}`}
                     >
-                      {c.tier}
+                      {c.tier || "Bronze"}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-right dark:text-white">
-                    {c.visits}
+                    {c.visits || 0}
                   </td>
                   <td className="px-4 py-3 text-center">
                     <button

@@ -66,10 +66,50 @@ const EXPENSE_CATEGORIES = [
 
 const PAYMENT_METHODS = ["Cash", "Bank Transfer", "M-PESA", "Card", "Cheque"];
 
+const VALID_STATUSES: Expense["status"][] = ["pending", "approved", "rejected"];
+const VALID_CATEGORIES = EXPENSE_CATEGORIES.map((c) => c.value);
+
+/**
+ * Normalize an expense from cloud/localStorage so it always has every field
+ * the UI expects. Cloud data may be partial (older app versions, API imports,
+ * or cross-device sync where the record was created with a subset of fields).
+ * Without this, rendering crashes with
+ * "Cannot read properties of undefined (reading 'toLowerCase'/'toLocaleString')".
+ */
+function normalizeExpense(e: Partial<Expense> | null | undefined): Expense {
+  const id =
+    e?.id || `exp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const status = VALID_STATUSES.includes(e?.status as Expense["status"])
+    ? (e!.status as Expense["status"])
+    : "pending";
+  const category = VALID_CATEGORIES.includes(e?.category)
+    ? e!.category
+    : "other";
+  return {
+    id,
+    date: e?.date ?? new Date().toISOString().slice(0, 10),
+    category,
+    description: e?.description ?? "",
+    amount: typeof e?.amount === "number" ? e.amount : 0,
+    paymentMethod: e?.paymentMethod ?? "Bank Transfer",
+    reference: e?.reference ?? "",
+    receiptUrl: e?.receiptUrl,
+    approvedBy: e?.approvedBy ?? "",
+    status,
+    stationId: e?.stationId ?? "default",
+    createdAt: e?.createdAt ?? new Date().toISOString(),
+  };
+}
+
+function normalizeExpenses(arr: unknown): Expense[] {
+  if (!Array.isArray(arr)) return [];
+  return arr.map((e) => normalizeExpense(e as Partial<Expense>));
+}
+
 function loadExpenses(): Expense[] {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) return JSON.parse(saved);
+    if (saved) return normalizeExpenses(JSON.parse(saved));
   } catch {
     /* ignore */
   }
@@ -145,17 +185,26 @@ export default function ExpenseTracker() {
     let cancelled = false;
     (async () => {
       try {
-        const cloud = await cloudStorageService.get<Expense[]>(
+        const cloud = await cloudStorageService.get<unknown>(
           CLOUD_KEY,
           stationId,
         );
-        if (!cancelled && cloud && Array.isArray(cloud)) setExpenses(cloud);
+        if (!cancelled) setExpenses(normalizeExpenses(cloud));
       } finally {
         if (!cancelled) cloudLoadCompleteRef.current = true;
       }
     })();
+    // Real-time cross-device sync: another device updates expenses_data.
+    const unsub = cloudStorageService.subscribe<unknown>(
+      CLOUD_KEY,
+      stationId,
+      (val) => {
+        setExpenses(normalizeExpenses(val));
+      },
+    );
     return () => {
       cancelled = true;
+      unsub();
     };
   }, [user, stationId]);
 
@@ -167,15 +216,19 @@ export default function ExpenseTracker() {
     setTimeout(() => setNotification(null), 3000);
   };
 
-  const filtered = expenses.filter((e) => {
+  const filtered = (expenses || []).filter((e) => {
     const matchesSearch =
-      e.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      e.reference.toLowerCase().includes(searchTerm.toLowerCase());
+      (e.description || "")
+        .toLowerCase()
+        .includes((searchTerm || "").toLowerCase()) ||
+      (e.reference || "")
+        .toLowerCase()
+        .includes((searchTerm || "").toLowerCase());
     const matchesCategory =
       categoryFilter === "all" || e.category === categoryFilter;
     const matchesStatus = statusFilter === "all" || e.status === statusFilter;
-    const matchesFrom = !dateRange.from || e.date >= dateRange.from;
-    const matchesTo = !dateRange.to || e.date <= dateRange.to;
+    const matchesFrom = !dateRange.from || (e.date || "") >= dateRange.from;
+    const matchesTo = !dateRange.to || (e.date || "") <= dateRange.to;
     return (
       matchesSearch &&
       matchesCategory &&
@@ -185,21 +238,22 @@ export default function ExpenseTracker() {
     );
   });
 
-  const totalExpenses = filtered.reduce((s, e) => s + e.amount, 0);
+  const totalExpenses = filtered.reduce((s, e) => s + (e.amount || 0), 0);
   const approvedTotal = filtered
     .filter((e) => e.status === "approved")
-    .reduce((s, e) => s + e.amount, 0);
+    .reduce((s, e) => s + (e.amount || 0), 0);
   const pendingTotal = filtered
     .filter((e) => e.status === "pending")
-    .reduce((s, e) => s + e.amount, 0);
+    .reduce((s, e) => s + (e.amount || 0), 0);
 
-  const byCategory = EXPENSE_CATEGORIES.map((cat) => ({
-    ...cat,
-    total: filtered
-      .filter((e) => e.category === cat.value)
-      .reduce((s, e) => s + e.amount, 0),
-    count: filtered.filter((e) => e.category === cat.value).length,
-  }))
+  const byCategory = (EXPENSE_CATEGORIES || [])
+    .map((cat) => ({
+      ...cat,
+      total: filtered
+        .filter((e) => e.category === cat.value)
+        .reduce((s, e) => s + (e.amount || 0), 0),
+      count: filtered.filter((e) => e.category === cat.value).length,
+    }))
     .filter((c) => c.total > 0)
     .sort((a, b) => b.total - a.total);
 
@@ -260,6 +314,8 @@ export default function ExpenseTracker() {
     approved: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
     rejected: "bg-red-500/10 text-red-600 dark:text-red-400",
   };
+  const DEFAULT_STATUS_COLOR =
+    "bg-gray-500/10 text-gray-600 dark:text-gray-400";
 
   const catColors: Record<string, string> = {
     fuel_purchase: "text-amber-500",
@@ -271,6 +327,7 @@ export default function ExpenseTracker() {
     taxes: "text-orange-500",
     other: "text-gray-400",
   };
+  const DEFAULT_CAT_COLOR = "text-gray-500";
 
   return (
     <div className="p-4 md:p-6 space-y-4">
@@ -321,7 +378,7 @@ export default function ExpenseTracker() {
             <span className="text-xs text-gray-500">Total Expenses</span>
           </div>
           <p className="text-xl font-bold text-gray-900 dark:text-white">
-            {getCurrencySymbol()} {totalExpenses.toLocaleString()}
+            {getCurrencySymbol()} {(totalExpenses || 0).toLocaleString()}
           </p>
         </div>
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
@@ -330,7 +387,7 @@ export default function ExpenseTracker() {
             <span className="text-xs text-gray-500">Approved</span>
           </div>
           <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400">
-            {getCurrencySymbol()} {approvedTotal.toLocaleString()}
+            {getCurrencySymbol()} {(approvedTotal || 0).toLocaleString()}
           </p>
         </div>
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
@@ -339,7 +396,7 @@ export default function ExpenseTracker() {
             <span className="text-xs text-gray-500">Pending</span>
           </div>
           <p className="text-xl font-bold text-amber-600 dark:text-amber-400">
-            {getCurrencySymbol()} {pendingTotal.toLocaleString()}
+            {getCurrencySymbol()} {(pendingTotal || 0).toLocaleString()}
           </p>
         </div>
       </div>
@@ -433,48 +490,54 @@ export default function ExpenseTracker() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((exp) => {
+                  {(filtered || []).map((exp) => {
                     const CatIcon =
-                      EXPENSE_CATEGORIES.find((c) => c.value === exp.category)
-                        ?.icon || FileText;
+                      (EXPENSE_CATEGORIES || []).find(
+                        (c) => c.value === exp.category,
+                      )?.icon || FileText;
                     return (
                       <tr
-                        key={exp.id}
+                        key={exp.id || `exp_${Math.random()}`}
                         className="border-b border-gray-100 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700/20"
                       >
                         <td className="px-4 py-3 text-gray-600 dark:text-gray-400">
-                          {new Date(exp.date).toLocaleDateString()}
+                          {(exp.date &&
+                            new Date(exp.date).toLocaleDateString()) ||
+                            "—"}
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-1.5">
                             <CatIcon
                               size={12}
                               className={
-                                catColors[exp.category] || "text-gray-500"
+                                catColors[exp.category] || DEFAULT_CAT_COLOR
                               }
                             />
                             <span className="text-gray-700 dark:text-gray-300">
-                              {EXPENSE_CATEGORIES.find(
+                              {(EXPENSE_CATEGORIES || []).find(
                                 (c) => c.value === exp.category,
-                              )?.label || exp.category}
+                              )?.label ||
+                                exp.category ||
+                                "Other"}
                             </span>
                           </div>
                         </td>
                         <td className="px-4 py-3 text-gray-900 dark:text-white max-w-[200px] truncate">
-                          {exp.description}
+                          {exp.description || ""}
                         </td>
                         <td className="px-4 py-3 text-right font-medium text-gray-900 dark:text-white">
-                          {getCurrencySymbol()} {exp.amount.toLocaleString()}
+                          {getCurrencySymbol()}{" "}
+                          {(exp.amount || 0).toLocaleString()}
                         </td>
                         <td className="px-4 py-3 text-center">
                           <span
-                            className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${statusColors[exp.status]}`}
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${statusColors[exp.status] || DEFAULT_STATUS_COLOR}`}
                           >
-                            {exp.status}
+                            {exp.status || "pending"}
                           </span>
                         </td>
                         <td className="px-4 py-3 text-xs text-gray-500 font-mono">
-                          {exp.reference}
+                          {exp.reference || ""}
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex justify-center gap-1">
@@ -525,7 +588,7 @@ export default function ExpenseTracker() {
               <PieChart size={14} className="text-amber-500" /> By Category
             </h3>
             <div className="space-y-3">
-              {byCategory.map((cat) => {
+              {(byCategory || []).map((cat) => {
                 const CatIcon = cat.icon;
                 const pct =
                   totalExpenses > 0 ? (cat.total / totalExpenses) * 100 : 0;
@@ -536,8 +599,9 @@ export default function ExpenseTracker() {
                         <CatIcon size={12} /> {cat.label}
                       </span>
                       <span className="text-gray-900 dark:text-white font-medium">
-                        {getCurrencySymbol()} {cat.total.toLocaleString()} (
-                        {pct.toFixed(1)}%)
+                        {getCurrencySymbol()}{" "}
+                        {(cat.total || 0).toLocaleString()} (
+                        {(pct || 0).toFixed(1)}%)
                       </span>
                     </div>
                     <div className="h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
@@ -570,13 +634,13 @@ export default function ExpenseTracker() {
               <div className="p-3 bg-emerald-50 dark:bg-emerald-500/10 rounded-lg">
                 <p className="text-xs text-gray-500">Approved</p>
                 <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
-                  {getCurrencySymbol()} {approvedTotal.toLocaleString()}
+                  {getCurrencySymbol()} {(approvedTotal || 0).toLocaleString()}
                 </p>
               </div>
               <div className="p-3 bg-amber-50 dark:bg-amber-500/10 rounded-lg">
                 <p className="text-xs text-gray-500">Pending Approval</p>
                 <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">
-                  {getCurrencySymbol()} {pendingTotal.toLocaleString()}
+                  {getCurrencySymbol()} {(pendingTotal || 0).toLocaleString()}
                 </p>
               </div>
               <div className="p-3 bg-red-50 dark:bg-red-500/10 rounded-lg">
@@ -585,7 +649,7 @@ export default function ExpenseTracker() {
                   {getCurrencySymbol()}{" "}
                   {filtered.length > 0
                     ? Math.round(
-                        totalExpenses / filtered.length,
+                        (totalExpenses || 0) / filtered.length,
                       ).toLocaleString()
                     : "0"}
                 </p>

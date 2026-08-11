@@ -88,6 +88,137 @@ interface ColumnNames {
   bankCode: string;
 }
 
+// Normalize a single raw cloud/local employee record into a fully-typed
+// Employee. Accepts both snake_case (cloud) and camelCase (legacy) keys and
+// fills every field with safe defaults so partial cloud data never crashes
+// the UI (e.g. `emp.idNo.includes(...)` when idNo is missing).
+function normalizeEmployee(
+  e: Partial<Record<string, unknown>> | null | undefined,
+  index = 0,
+): Employee {
+  const emp = (e ?? {}) as Record<string, any>;
+  const firstName = emp.first_name ?? emp.firstName ?? "";
+  const lastName = emp.last_name ?? emp.lastName ?? "";
+  const basicSalaryRaw = emp.basic_salary ?? emp.basicSalary;
+  const advanceRaw = emp.advance_amount ?? emp.advance;
+  const shaRaw = emp.sha_amount ?? emp.sha;
+  const nssfRaw = emp.nssf_amount ?? emp.nssf;
+  const netPayRaw = emp.net_pay ?? emp.netPay;
+  const basicSalary = typeof basicSalaryRaw === "number" ? basicSalaryRaw : 0;
+  const advance = typeof advanceRaw === "number" ? advanceRaw : 0;
+  const sha = typeof shaRaw === "number" ? shaRaw : 0;
+  const nssf = typeof nssfRaw === "number" ? nssfRaw : 0;
+  const netPay =
+    typeof netPayRaw === "number" ? netPayRaw : basicSalary - advance;
+  return {
+    id: typeof emp.id === "number" ? emp.id : index + 1,
+    no: emp.no ?? String(index + 1),
+    firstName,
+    lastName,
+    fullName:
+      emp.full_name ?? emp.fullName ?? `${firstName} ${lastName}`.trim(),
+    employeeId: emp.employee_id ?? emp.employeeId ?? "",
+    role: emp.role ?? "",
+    department: emp.department ?? "",
+    basicSalary,
+    sha,
+    nssf,
+    advance,
+    netPay,
+    bank: emp.bank_name ?? emp.bank ?? "",
+    bankCode: emp.bank_code ?? emp.bankCode ?? "",
+    idNo: emp.id_number ?? emp.idNo ?? "",
+    kraPin: emp.kra_pin ?? emp.kraPin ?? "",
+    shaNo: emp.sha_number ?? emp.shaNo ?? "",
+    nssfNo: emp.nssf_number ?? emp.nssfNo ?? "",
+    bankAccount: emp.bank_account ?? emp.bankAccount ?? "",
+    phone: emp.phone ?? "",
+    email: emp.email ?? "",
+    employmentDate: emp.employment_date ?? emp.employmentDate ?? "",
+    notes: emp.notes ?? "",
+  };
+}
+
+// Normalize an unknown payload into a safe Employee[] (returns [] for
+// non-array data so downstream `.map`/`.reduce` never crash).
+function normalizeEmployees(arr: unknown): Employee[] {
+  if (!Array.isArray(arr)) return [];
+  return arr.map((e, i) => normalizeEmployee(e as Record<string, any>, i));
+}
+
+// Normalize a raw cloud/local payroll_settings object into a fully-typed
+// PayrollSettings, falling back to `fallback` (typically the previous state)
+// for any missing/invalid field. Returns `fallback` unchanged when `raw` is
+// not a plain object (e.g. null/array from corrupt cloud data).
+function normalizePayrollSettings(
+  raw: unknown,
+  fallback: PayrollSettings,
+): PayrollSettings {
+  const isObj = raw !== null && typeof raw === "object" && !Array.isArray(raw);
+  if (!isObj) return fallback;
+  const s = raw as Record<string, any>;
+  const num = (v: any, d: number) => (typeof v === "number" ? v : d);
+  let customRoles: string[];
+  const cr = s.custom_roles ?? s.customRoles;
+  if (Array.isArray(cr)) {
+    customRoles = cr.filter((r: any) => typeof r === "string");
+  } else if (typeof cr === "string") {
+    customRoles = cr
+      .split(",")
+      .map((r) => r.trim())
+      .filter(Boolean);
+  } else {
+    customRoles = fallback.customRoles;
+  }
+  return {
+    organizationName:
+      s.organization_name ?? s.organizationName ?? fallback.organizationName,
+    organizationAddress:
+      s.organization_address ??
+      s.organizationAddress ??
+      fallback.organizationAddress,
+    organizationPhone:
+      s.organization_phone ?? s.organizationPhone ?? fallback.organizationPhone,
+    organizationEmail:
+      s.organization_email ?? s.organizationEmail ?? fallback.organizationEmail,
+    organizationLogo:
+      s.organization_logo ?? s.organizationLogo ?? fallback.organizationLogo,
+    payrollMonth: num(s.payroll_month ?? s.payrollMonth, fallback.payrollMonth),
+    payrollYear: num(s.payroll_year ?? s.payrollYear, fallback.payrollYear),
+    paymentMethod:
+      s.payment_method ?? s.paymentMethod ?? fallback.paymentMethod,
+    currency: s.currency ?? fallback.currency,
+    enableSha:
+      typeof (s.enable_sha ?? s.enableSha) === "boolean"
+        ? (s.enable_sha ?? s.enableSha)
+        : fallback.enableSha,
+    enableNssf:
+      typeof (s.enable_nssf ?? s.enableNssf) === "boolean"
+        ? (s.enable_nssf ?? s.enableNssf)
+        : fallback.enableNssf,
+    enableTax:
+      typeof (s.enable_tax ?? s.enableTax) === "boolean"
+        ? (s.enable_tax ?? s.enableTax)
+        : fallback.enableTax,
+    enableUnion:
+      typeof (s.enable_union ?? s.enableUnion) === "boolean"
+        ? (s.enable_union ?? s.enableUnion)
+        : fallback.enableUnion,
+    theme: s.theme ?? fallback.theme,
+    customRoles,
+    originatorAccount:
+      s.originator_account ?? s.originatorAccount ?? fallback.originatorAccount,
+    branchDao: s.branch_dao ?? s.branchDao ?? fallback.branchDao,
+    origCode: s.orig_code ?? s.origCode ?? fallback.origCode,
+    reference: s.reference_code ?? s.reference ?? fallback.reference,
+    shaPercentage: num(
+      s.sha_percentage ?? s.shaPercentage,
+      fallback.shaPercentage,
+    ),
+    nssfAmount: num(s.nssf_amount ?? s.nssfAmount, fallback.nssfAmount),
+  };
+}
+
 export default function PayrollSystem() {
   // Get auth context
   const { user } = useAuth();
@@ -196,44 +327,12 @@ export default function PayrollSystem() {
   // API calls
   const fetchEmployees = async () => {
     try {
-      const cloudData = await cloudStorageService.get<any[]>(
+      const cloudData = await cloudStorageService.get<unknown>(
         "payroll_employees",
         stationId,
       );
       if (cloudData && Array.isArray(cloudData)) {
-        const formattedEmployees = cloudData.map((emp: any, i: number) => ({
-          id: emp.id || i + 1,
-          no: String(i + 1),
-          firstName: emp.first_name || emp.firstName || "",
-          lastName: emp.last_name || emp.lastName || "",
-          fullName:
-            emp.full_name ||
-            `${emp.first_name || emp.firstName || ""} ${emp.last_name || emp.lastName || ""}`.trim(),
-          employeeId: emp.employee_id || emp.employeeId || "",
-          role: emp.role || "",
-          department: emp.department || "",
-          basicSalary: emp.basic_salary ?? emp.basicSalary ?? 0,
-          sha: emp.sha_amount ?? emp.sha ?? 0,
-          nssf: emp.nssf_amount ?? emp.nssf ?? 0,
-          advance: emp.advance_amount ?? emp.advance ?? 0,
-          netPay:
-            emp.net_pay ??
-            emp.netPay ??
-            (emp.basic_salary ?? emp.basicSalary ?? 0) -
-              (emp.advance_amount ?? emp.advance ?? 0),
-          bank: emp.bank_name ?? emp.bank ?? "",
-          bankCode: emp.bank_code ?? emp.bankCode ?? "",
-          idNo: emp.id_number ?? emp.idNo ?? "",
-          kraPin: emp.kra_pin ?? emp.kraPin ?? "",
-          shaNo: emp.sha_number ?? emp.shaNo ?? "",
-          nssfNo: emp.nssf_number ?? emp.nssfNo ?? "",
-          bankAccount: emp.bank_account ?? emp.bankAccount ?? "",
-          phone: emp.phone || "",
-          email: emp.email || "",
-          employmentDate: emp.employment_date ?? emp.employmentDate ?? "",
-          notes: emp.notes || "",
-        }));
-        setEmployees(formattedEmployees);
+        setEmployees(normalizeEmployees(cloudData));
         return;
       }
     } catch (error) {
@@ -244,39 +343,8 @@ export default function PayrollSystem() {
       const local = JSON.parse(
         localStorage.getItem("fuelpro_payroll_employees") || "[]",
       );
-      if (local.length > 0) {
-        setEmployees(
-          local.map((emp: any, i: number) => ({
-            id: emp.id || i,
-            no: String(i + 1),
-            firstName: emp.first_name || emp.firstName || "",
-            lastName: emp.last_name || emp.lastName || "",
-            fullName:
-              `${emp.first_name || emp.firstName || ""} ${emp.last_name || emp.lastName || ""}`.trim(),
-            employeeId: emp.employee_id || emp.employeeId || "",
-            role: emp.role || "",
-            department: emp.department || "",
-            basicSalary: emp.basic_salary ?? emp.basicSalary ?? 0,
-            sha: emp.sha || 0,
-            nssf: emp.nssf || 0,
-            advance: emp.advance || 0,
-            netPay:
-              emp.netPay ||
-              emp.net_pay ||
-              (emp.basic_salary || 0) - (emp.advance || 0),
-            bank: emp.bank_name || "",
-            bankCode: emp.bank_code || "",
-            idNo: emp.id_number || "",
-            kraPin: emp.kra_pin || "",
-            shaNo: emp.sha_number || "",
-            nssfNo: emp.nssf_number || "",
-            bankAccount: emp.bank_account || "",
-            phone: emp.phone || "",
-            email: emp.email || "",
-            employmentDate: emp.employment_date || "",
-            notes: emp.notes || "",
-          })),
-        );
+      if (Array.isArray(local) && local.length > 0) {
+        setEmployees(normalizeEmployees(local));
       }
     } catch {
       /* */
@@ -285,102 +353,27 @@ export default function PayrollSystem() {
 
   const fetchSettings = async () => {
     try {
-      const cloudSettings = await cloudStorageService.get<any>(
+      const cloudSettings = await cloudStorageService.get<unknown>(
         "payroll_settings",
         stationId,
       );
-      const backendSettings =
-        cloudSettings ||
-        JSON.parse(localStorage.getItem("fuelpro_payroll_settings") || "null");
-      if (backendSettings) {
-        setSettings((prev) => ({
-          ...prev,
-          organizationName:
-            backendSettings.organization_name ||
-            backendSettings.organizationName ||
-            prev.organizationName,
-          organizationAddress:
-            backendSettings.organization_address ||
-            backendSettings.organizationAddress ||
-            prev.organizationAddress,
-          organizationPhone:
-            backendSettings.organization_phone ||
-            backendSettings.organizationPhone ||
-            prev.organizationPhone,
-          organizationEmail:
-            backendSettings.organization_email ||
-            backendSettings.organizationEmail ||
-            prev.organizationEmail,
-          organizationLogo:
-            backendSettings.organization_logo ||
-            backendSettings.organizationLogo ||
-            prev.organizationLogo,
-          payrollMonth:
-            backendSettings.payroll_month ||
-            backendSettings.payrollMonth ||
-            prev.payrollMonth,
-          payrollYear:
-            backendSettings.payroll_year ||
-            backendSettings.payrollYear ||
-            prev.payrollYear,
-          paymentMethod:
-            backendSettings.payment_method ||
-            backendSettings.paymentMethod ||
-            prev.paymentMethod,
-          currency: backendSettings.currency || prev.currency,
-          enableSha:
-            backendSettings.enable_sha ??
-            backendSettings.enableSha ??
-            prev.enableSha,
-          enableNssf:
-            backendSettings.enable_nssf ??
-            backendSettings.enableNssf ??
-            prev.enableNssf,
-          enableTax:
-            backendSettings.enable_tax ??
-            backendSettings.enableTax ??
-            prev.enableTax,
-          shaPercentage:
-            backendSettings.sha_percentage ??
-            backendSettings.shaPercentage ??
-            prev.shaPercentage,
-          nssfAmount:
-            backendSettings.nssf_amount ??
-            backendSettings.nssfAmount ??
-            prev.nssfAmount,
-          originatorAccount:
-            backendSettings.originator_account ||
-            backendSettings.originatorAccount ||
-            prev.originatorAccount,
-          branchDao:
-            backendSettings.branch_dao ||
-            backendSettings.branchDao ||
-            prev.branchDao,
-          origCode:
-            backendSettings.orig_code ||
-            backendSettings.origCode ||
-            prev.origCode,
-          reference:
-            backendSettings.reference_code ||
-            backendSettings.reference ||
-            prev.reference,
-          customRoles: backendSettings.custom_roles
-            ? Array.isArray(backendSettings.custom_roles)
-              ? backendSettings.custom_roles
-              : backendSettings.custom_roles
-                  .split(",")
-                  .map((r: string) => r.trim())
-                  .filter((r: string) => r)
-            : prev.customRoles,
-        }));
-        setShaPercentage(
-          backendSettings.sha_percentage ??
-            backendSettings.shaPercentage ??
-            2.75,
-        );
-        setNssfAmount(
-          backendSettings.nssf_amount ?? backendSettings.nssfAmount ?? 480,
-        );
+      const localSettings = (() => {
+        try {
+          return JSON.parse(
+            localStorage.getItem("fuelpro_payroll_settings") || "null",
+          );
+        } catch {
+          return null;
+        }
+      })();
+      const raw = cloudSettings ?? localSettings;
+      if (raw !== null && typeof raw === "object" && !Array.isArray(raw)) {
+        setSettings((prev) => normalizePayrollSettings(raw, prev));
+        const s = raw as Record<string, any>;
+        const shaPct = s.sha_percentage ?? s.shaPercentage;
+        setShaPercentage(typeof shaPct === "number" ? shaPct : 2.75);
+        const nssfAmt = s.nssf_amount ?? s.nssfAmount;
+        setNssfAmount(typeof nssfAmt === "number" ? nssfAmt : 480);
       }
     } catch (error) {
       console.error("Error fetching settings:", error);
@@ -839,12 +832,12 @@ export default function PayrollSystem() {
   // Filter and pagination
   const filteredEmployees = employees.filter(
     (emp) =>
-      emp.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      emp.role.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      emp.department.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      emp.no.includes(searchTerm) ||
-      emp.idNo.includes(searchTerm) ||
-      emp.employeeId.includes(searchTerm),
+      (emp.fullName || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (emp.role || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (emp.department || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (emp.no || "").includes(searchTerm) ||
+      (emp.idNo || "").includes(searchTerm) ||
+      (emp.employeeId || "").includes(searchTerm),
   );
 
   const totalPages = Math.ceil(filteredEmployees.length / entriesPerPage);
@@ -925,18 +918,17 @@ export default function PayrollSystem() {
   const exportCombinedPayrollExcel = async () => {
     try {
       setSaving(true);
-      const cloudEmployees =
-        (await cloudStorageService.get<any[]>(
-          "payroll_employees",
-          stationId,
-        )) || [];
-      const cloudSettings = await cloudStorageService.get<any>(
+      const cloudEmployees = await cloudStorageService.get<unknown>(
+        "payroll_employees",
+        stationId,
+      );
+      const cloudSettings = await cloudStorageService.get<unknown>(
         "payroll_settings",
         stationId,
       );
       generateCombinedExcel({
-        employees: cloudEmployees,
-        settings: cloudSettings || settings,
+        employees: normalizeEmployees(cloudEmployees),
+        settings: normalizePayrollSettings(cloudSettings, settings),
       });
     } catch (error) {
       console.error("Error exporting combined payroll:", error);
@@ -949,18 +941,17 @@ export default function PayrollSystem() {
   const exportCPCCentralizedExcel = async () => {
     try {
       setSaving(true);
-      const cloudEmployees =
-        (await cloudStorageService.get<any[]>(
-          "payroll_employees",
-          stationId,
-        )) || [];
-      const cloudSettings = await cloudStorageService.get<any>(
+      const cloudEmployees = await cloudStorageService.get<unknown>(
+        "payroll_employees",
+        stationId,
+      );
+      const cloudSettings = await cloudStorageService.get<unknown>(
         "payroll_settings",
         stationId,
       );
       generateCPCExcel({
-        employees: cloudEmployees,
-        settings: cloudSettings || settings,
+        employees: normalizeEmployees(cloudEmployees),
+        settings: normalizePayrollSettings(cloudSettings, settings),
       });
     } catch (error) {
       console.error("Error exporting CPC centralized:", error);
@@ -970,21 +961,23 @@ export default function PayrollSystem() {
     }
   };
 
-  const generateCombinedExcel = (data: any) => {
+  const generateCombinedExcel = (data: {
+    employees: Employee[];
+    settings: PayrollSettings;
+  }) => {
     const wb = XLSX.utils.book_new();
-    const employees = data.employees;
+    const employees = data.employees || [];
     const settings = data.settings;
 
-    const monthName = new Date(2023, (settings.payroll_month || 1) - 1)
+    const monthName = new Date(2023, (settings.payrollMonth || 1) - 1)
       .toLocaleString("default", { month: "long" })
       .toUpperCase();
-    const year = settings.payroll_year || 2025;
+    const year = settings.payrollYear || 2025;
+    const orgName = (settings.organizationName || "ORGANIZATION").toUpperCase();
 
     // Sheet 1: Payroll Payment Summary
     const payrollData = [
-      [
-        `${(settings.organization_name || "ORGANIZATION").toUpperCase()} SALARY ${monthName} ${year} PAYMENT`,
-      ],
+      [`${orgName} SALARY ${monthName} ${year} PAYMENT`],
       [],
       [
         "S/NO.",
@@ -996,29 +989,26 @@ export default function PayrollSystem() {
         "ADVANCE",
         "NET TOTAL",
       ],
-      ...employees.map((emp: any, index: number) => [
+      ...employees.map((emp, index) => [
         index + 1,
-        emp.full_name.toUpperCase(),
-        emp.basic_salary,
-        emp.sha_amount,
-        emp.nssf_amount,
+        (emp.fullName || "").toUpperCase(),
+        emp.basicSalary,
+        emp.sha,
+        emp.nssf,
         0, // Bank charges
-        emp.advance_amount,
-        emp.net_pay,
+        emp.advance,
+        emp.netPay,
       ]),
       [],
       [
         "TOTALS",
         "",
-        employees.reduce((sum: number, emp: any) => sum + emp.basic_salary, 0),
-        employees.reduce((sum: number, emp: any) => sum + emp.sha_amount, 0),
-        employees.reduce((sum: number, emp: any) => sum + emp.nssf_amount, 0),
+        employees.reduce((sum, emp) => sum + emp.basicSalary, 0),
+        employees.reduce((sum, emp) => sum + emp.sha, 0),
+        employees.reduce((sum, emp) => sum + emp.nssf, 0),
         0,
-        employees.reduce(
-          (sum: number, emp: any) => sum + emp.advance_amount,
-          0,
-        ),
-        employees.reduce((sum: number, emp: any) => sum + emp.net_pay, 0),
+        employees.reduce((sum, emp) => sum + emp.advance, 0),
+        employees.reduce((sum, emp) => sum + emp.netPay, 0),
       ],
     ];
 
@@ -1037,18 +1027,16 @@ export default function PayrollSystem() {
 
     // Sheet 2: SHA List
     const shaData = [
-      [
-        `${(settings.organization_name || "ORGANIZATION").toUpperCase()} STAFF SHA LIST ${monthName} ${year}`,
-      ],
+      [`${orgName} STAFF SHA LIST ${monthName} ${year}`],
       [],
       ["S/NO.", "NAME", "ID NO.", "SHA NO.", "BASIC SALARY", "SHA AMOUNT"],
-      ...employees.map((emp: any, index: number) => [
+      ...employees.map((emp, index) => [
         index + 1,
-        emp.full_name.toUpperCase(),
-        emp.id_number,
-        emp.sha_number,
-        emp.basic_salary,
-        emp.sha_amount,
+        (emp.fullName || "").toUpperCase(),
+        emp.idNo,
+        emp.shaNo,
+        emp.basicSalary,
+        emp.sha,
       ]),
       [],
       [
@@ -1056,8 +1044,8 @@ export default function PayrollSystem() {
         "",
         "",
         "",
-        employees.reduce((sum: number, emp: any) => sum + emp.basic_salary, 0),
-        employees.reduce((sum: number, emp: any) => sum + emp.sha_amount, 0),
+        employees.reduce((sum, emp) => sum + emp.basicSalary, 0),
+        employees.reduce((sum, emp) => sum + emp.sha, 0),
       ],
     ];
 
@@ -1074,17 +1062,15 @@ export default function PayrollSystem() {
 
     // Sheet 3: NSSF List (with doubled amount as per requirement)
     const nssfData = [
-      [
-        `${(settings.organization_name || "ORGANIZATION").toUpperCase()} STAFF NSSF LIST ${monthName} ${year}`,
-      ],
+      [`${orgName} STAFF NSSF LIST ${monthName} ${year}`],
       [],
       ["S/NO.", "NAME", "ID NO.", "NSSF NO.", "AMOUNT"],
-      ...employees.map((emp: any, index: number) => [
+      ...employees.map((emp, index) => [
         index + 1,
-        emp.full_name.toUpperCase(),
-        emp.id_number,
-        emp.nssf_number,
-        emp.nssf_amount * 2, // Double the amount for NSSF list as per requirement
+        (emp.fullName || "").toUpperCase(),
+        emp.idNo,
+        emp.nssfNo,
+        emp.nssf * 2, // Double the amount for NSSF list as per requirement
       ]),
       [],
       [
@@ -1092,10 +1078,7 @@ export default function PayrollSystem() {
         "",
         "",
         "",
-        employees.reduce(
-          (sum: number, emp: any) => sum + emp.nssf_amount * 2,
-          0,
-        ),
+        employees.reduce((sum, emp) => sum + emp.nssf * 2, 0),
       ],
     ];
 
@@ -1125,18 +1108,17 @@ export default function PayrollSystem() {
         "BRANCH DAO",
         "ORIGINATOR ACCOUNT",
       ],
-      ...employees.map((emp: any, index: number) => [
+      ...employees.map((emp, index) => [
         index + 1,
-        emp.full_name.toUpperCase(),
-        emp.bank_account,
-        emp.bank_name.toUpperCase(),
-        emp.bank_code,
-        emp.net_pay,
-        settings.reference_code ||
-          (settings.organization_name || "ORGANIZATION").toUpperCase(),
-        settings.orig_code || emp.bank_code,
-        settings.branch_dao || "4021",
-        settings.originator_account || "1285241630",
+        (emp.fullName || "").toUpperCase(),
+        emp.bankAccount,
+        (emp.bank || "").toUpperCase(),
+        emp.bankCode,
+        emp.netPay,
+        settings.reference || orgName,
+        settings.origCode || emp.bankCode,
+        settings.branchDao || "4021",
+        settings.originatorAccount || "1285241630",
       ]),
       [],
       [
@@ -1145,7 +1127,7 @@ export default function PayrollSystem() {
         "",
         "",
         "",
-        employees.reduce((sum: number, emp: any) => sum + emp.net_pay, 0),
+        employees.reduce((sum, emp) => sum + emp.netPay, 0),
         "",
         "",
         "",
@@ -1171,19 +1153,23 @@ export default function PayrollSystem() {
     // Save the workbook
     XLSX.writeFile(
       wb,
-      `PAYROLL_${(settings.organization_name || "Organization").replace(/\s/g, "_")}_${monthName}_${year}.xlsx`,
+      `PAYROLL_${(settings.organizationName || "Organization").replace(/\s/g, "_")}_${monthName}_${year}.xlsx`,
     );
   };
 
-  const generateCPCExcel = (data: any) => {
+  const generateCPCExcel = (data: {
+    employees: Employee[];
+    settings: PayrollSettings;
+  }) => {
     const wb = XLSX.utils.book_new();
-    const employees = data.employees;
+    const employees = data.employees || [];
     const settings = data.settings;
 
-    const monthName = new Date(2023, (settings.payroll_month || 1) - 1)
+    const monthName = new Date(2023, (settings.payrollMonth || 1) - 1)
       .toLocaleString("default", { month: "long" })
       .toUpperCase();
-    const year = settings.payroll_year || 2025;
+    const year = settings.payrollYear || 2025;
+    const orgName = (settings.organizationName || "ORGANIZATION").toUpperCase();
 
     const cpcData = [
       [`CPC CENTRALIZED ${monthName} ${year} SALARY PROCESSING`],
@@ -1200,18 +1186,17 @@ export default function PayrollSystem() {
         "BRANCH DAO",
         "ORIGINATOR ACCOUNT",
       ],
-      ...employees.map((emp: any, index: number) => [
+      ...employees.map((emp, index) => [
         index + 1,
-        emp.full_name.toUpperCase(),
-        emp.bank_account,
-        emp.bank_name.toUpperCase(),
-        emp.bank_code,
-        emp.net_pay,
-        settings.reference_code ||
-          (settings.organization_name || "ORGANIZATION").toUpperCase(),
-        settings.orig_code || emp.bank_code,
-        settings.branch_dao || "4021",
-        settings.originator_account || "1285241630",
+        (emp.fullName || "").toUpperCase(),
+        emp.bankAccount,
+        (emp.bank || "").toUpperCase(),
+        emp.bankCode,
+        emp.netPay,
+        settings.reference || orgName,
+        settings.origCode || emp.bankCode,
+        settings.branchDao || "4021",
+        settings.originatorAccount || "1285241630",
       ]),
       [],
       [
@@ -1220,7 +1205,7 @@ export default function PayrollSystem() {
         "",
         "",
         "",
-        employees.reduce((sum: number, emp: any) => sum + emp.net_pay, 0),
+        employees.reduce((sum, emp) => sum + emp.netPay, 0),
         "",
         "",
         "",
@@ -1245,7 +1230,7 @@ export default function PayrollSystem() {
 
     XLSX.writeFile(
       wb,
-      `CPC_CENTRALIZED_SALARY_PROCESSING_${(settings.organization_name || "Organization").replace(/\s/g, "_")}_${monthName}_${year}.xlsx`,
+      `CPC_CENTRALIZED_SALARY_PROCESSING_${(settings.organizationName || "Organization").replace(/\s/g, "_")}_${monthName}_${year}.xlsx`,
     );
   };
 
@@ -1447,7 +1432,7 @@ export default function PayrollSystem() {
 
     // Save the PDF
     doc.save(
-      `Payslip_${employee.fullName.replace(/\s+/g, "_")}_${monthName}_${settings.payrollYear}.pdf`,
+      `Payslip_${(employee.fullName || "Employee").replace(/\s+/g, "_")}_${monthName}_${settings.payrollYear}.pdf`,
     );
   };
 
@@ -1769,7 +1754,7 @@ export default function PayrollSystem() {
       ["S/NO.", "NAME", "ID NO.", "SHA NO.", "BASIC SALARY", "SHA AMOUNT"],
       ...employees.map((emp, index) => [
         index + 1,
-        emp.fullName.toUpperCase(),
+        (emp.fullName || "").toUpperCase(),
         emp.idNo,
         emp.shaNo,
         emp.basicSalary,
@@ -1813,7 +1798,7 @@ export default function PayrollSystem() {
       ["S/NO.", "NAME", "ID NO.", "NSSF NO.", "AMOUNT"],
       ...employees.map((emp, index) => [
         index + 1,
-        emp.fullName.toUpperCase(),
+        (emp.fullName || "").toUpperCase(),
         emp.idNo,
         emp.nssfNo,
         emp.nssf * 2, // Double the amount for NSSF list as per requirement
@@ -1868,16 +1853,16 @@ export default function PayrollSystem() {
       ],
       ...employees.map((emp, index) => [
         index + 1,
-        emp.fullName.toUpperCase(),
+        (emp.fullName || "").toUpperCase(),
         emp.employeeId,
-        emp.role.toUpperCase(),
-        emp.department.toUpperCase(),
+        (emp.role || "").toUpperCase(),
+        (emp.department || "").toUpperCase(),
         emp.basicSalary,
         emp.sha,
         emp.nssf,
         emp.advance,
         emp.netPay,
-        emp.bank.toUpperCase(),
+        (emp.bank || "").toUpperCase(),
         emp.bankAccount,
       ]),
     ];
@@ -2535,12 +2520,15 @@ export default function PayrollSystem() {
             className="text-xs md:text-base px-2 md:px-3 py-1 md:py-2"
           />
           <p className="text-xs text-gray-500 mt-1">
-            Minimum contribution: {getCurrencySymbol()} 300 (enforced automatically)
+            Minimum contribution: {getCurrencySymbol()} 300 (enforced
+            automatically)
           </p>
         </div>
 
         <div className="form-group">
-          <label className="text-xs md:text-sm">NSSF Amount ({getCurrencySymbol()})</label>
+          <label className="text-xs md:text-sm">
+            NSSF Amount ({getCurrencySymbol()})
+          </label>
           <input
             type="number"
             step="0.01"
@@ -3027,7 +3015,10 @@ export default function PayrollSystem() {
                     type="text"
                     value={employeeForm.kraPin}
                     onChange={(e) =>
-                      setEmployeeForm({ ...employeeForm, kraPin: e.target.value })
+                      setEmployeeForm({
+                        ...employeeForm,
+                        kraPin: e.target.value,
+                      })
                     }
                   />
                 </div>
@@ -3226,8 +3217,8 @@ export default function PayrollSystem() {
                 step="0.01"
               />
               <p className="text-sm text-gray-500 mt-2">
-                Note: Minimum SHA contribution is {getCurrencySymbol()} 300 (automatically
-                enforced)
+                Note: Minimum SHA contribution is {getCurrencySymbol()} 300
+                (automatically enforced)
               </p>
             </div>
             <div className="flex gap-4 mt-6">

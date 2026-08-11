@@ -1428,7 +1428,21 @@ previously held stale legacy duplicates.
 - **AIChatbot**: AI context includes ALL active fuel types + live prices
   (allFuelTypes array), not just PMS/AGO.
 - **CustomerLoyalty**: preferred-fuel dropdown uses canonical labels.
+  Cloud-loaded `loyalty_customers` records are normalized via
+  `normalizeLoyaltyCustomer(s)`/`normalizeLoyaltyCustomers(arr)` (mirrors
+  SupplierManagement pattern) before setState, and all render-time `.map()`/
+  `.toLowerCase()`/`.includes()`/`formatNumber(...)` accesses are guarded with
+  `|| []`/`|| ""`/`|| 0`/`|| "Bronze"` defaults to prevent "Cannot read
+  properties of undefined" crashes on partial cloud records.
 - **CreditManagement**: removed dead useFuel/state import.
+- **FuelTypesManager**: hardened cloud-loaded `fuel_types_config` records.
+  Added `normalizeCustomFuelType(f)`/`normalizeCustomFuelTypes(arr)` (mirrors
+  SupplierManagement pattern: `?? ""` strings, `typeof === "number" ? : 0`,
+  `typeof === "boolean" ? : false`; non-array input → `[]`). The cloud
+  `get`/`subscribe` callbacks and the localStorage `loadFuelTypes()` now run
+  records through normalize before setState. Render-time `.map()`/`.filter()`/
+  `.reduce()`/`.some()`/`.toFixed()` accesses on `fuelTypes`/`ft.*` fields are
+  additionally guarded with `|| []`/`|| ""`/`|| 0` defense-in-depth.
 - **Deploy state**: Cloudflare Pages LIVE (https://6b023595.fuel-app-mobile.pages.dev).
   Vercel BLOCKED by api-deployments-free-per-day (100/day; GitHub integration
   auto-deploys when quota resets). All CI checks pass. No Supabase schema

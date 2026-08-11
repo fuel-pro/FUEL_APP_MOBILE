@@ -43,6 +43,83 @@ interface Employee {
   joinDate: string;
 }
 
+/**
+ * Normalize a shift from cloud/localStorage so it always has every field the
+ * UI expects. Cloud data may be partial (older app versions, API imports, or
+ * cross-device sync where the record was created with a subset of fields).
+ * Without this, rendering crashes with
+ * "Cannot read properties of undefined (reading '...')" etc.
+ */
+const VALID_SHIFT_TYPES = ["morning", "afternoon", "night", "custom"] as const;
+const VALID_SHIFT_STATUSES = [
+  "scheduled",
+  "active",
+  "completed",
+  "absent",
+] as const;
+const VALID_EMP_STATUSES = ["active", "on_leave", "suspended"] as const;
+
+function normalizeShift(s: Partial<Shift> | null | undefined): Shift {
+  const id =
+    s?.id || `shift_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const rawType = s?.shiftType;
+  const shiftType = (VALID_SHIFT_TYPES as readonly string[]).includes(
+    rawType as string,
+  )
+    ? (rawType as Shift["shiftType"])
+    : "custom";
+  const rawStatus = s?.status;
+  const status = (VALID_SHIFT_STATUSES as readonly string[]).includes(
+    rawStatus as string,
+  )
+    ? (rawStatus as Shift["status"])
+    : "scheduled";
+  return {
+    id,
+    employeeName: s?.employeeName ?? "",
+    role: s?.role ?? "",
+    date: s?.date ?? "",
+    startTime: s?.startTime ?? "",
+    endTime: s?.endTime ?? "",
+    shiftType,
+    pumpAssigned: s?.pumpAssigned ?? "",
+    status,
+    notes: s?.notes ?? "",
+    checkIn: s?.checkIn,
+    checkOut: s?.checkOut,
+  };
+}
+
+function normalizeEmployee(e: Partial<Employee> | null | undefined): Employee {
+  const id =
+    e?.id || `emp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const rawStatus = e?.status;
+  const status = (VALID_EMP_STATUSES as readonly string[]).includes(
+    rawStatus as string,
+  )
+    ? (rawStatus as Employee["status"])
+    : "active";
+  return {
+    id,
+    name: e?.name ?? "",
+    phone: e?.phone ?? "",
+    role: e?.role ?? "",
+    hourlyRate: typeof e?.hourlyRate === "number" ? e.hourlyRate : 0,
+    status,
+    joinDate: e?.joinDate ?? new Date().toISOString().split("T")[0],
+  };
+}
+
+function normalizeShifts(arr: unknown): Shift[] {
+  if (!Array.isArray(arr)) return [];
+  return arr.map((s) => normalizeShift(s as Partial<Shift>));
+}
+
+function normalizeEmployees(arr: unknown): Employee[] {
+  if (!Array.isArray(arr)) return [];
+  return arr.map((e) => normalizeEmployee(e as Partial<Employee>));
+}
+
 const SHIFT_TEMPLATES = [
   {
     type: "morning" as const,
@@ -78,14 +155,18 @@ export default function ShiftManagement() {
   const stationId = currentStation?.id;
   const [employees, setEmployees] = useState<Employee[]>(() => {
     try {
-      return JSON.parse(localStorage.getItem("fuelpro_employees") || "[]");
+      return normalizeEmployees(
+        JSON.parse(localStorage.getItem("fuelpro_employees") || "[]"),
+      );
     } catch {
       return defaultEmployees();
     }
   });
   const [shifts, setShifts] = useState<Shift[]>(() => {
     try {
-      return JSON.parse(localStorage.getItem("fuelpro_shifts") || "[]");
+      return normalizeShifts(
+        JSON.parse(localStorage.getItem("fuelpro_shifts") || "[]"),
+      );
     } catch {
       return [];
     }
@@ -124,35 +205,35 @@ export default function ShiftManagement() {
   useEffect(() => {
     if (!user) return;
     (async () => {
-      const cloudEmps = await cloudStorageService.get<Employee[]>(
+      const cloudEmps = await cloudStorageService.get<unknown>(
         "shift_employees",
         stationId,
       );
-      if (cloudEmps && Array.isArray(cloudEmps)) setEmployees(cloudEmps);
-      const cloudShifts = await cloudStorageService.get<Shift[]>(
+      if (Array.isArray(cloudEmps)) setEmployees(normalizeEmployees(cloudEmps));
+      const cloudShifts = await cloudStorageService.get<unknown>(
         "shift_data",
         stationId,
       );
-      if (cloudShifts && Array.isArray(cloudShifts)) setShifts(cloudShifts);
+      if (Array.isArray(cloudShifts)) setShifts(normalizeShifts(cloudShifts));
     })();
     // Real-time: when another device updates shifts/employees, update instantly
     const unsubs = [
-      cloudStorageService.subscribe<Employee[]>(
+      cloudStorageService.subscribe<unknown>(
         "shift_employees",
         stationId,
         (val) => {
-          if (val && Array.isArray(val)) setEmployees(val);
+          if (Array.isArray(val)) setEmployees(normalizeEmployees(val));
         },
       ),
-      cloudStorageService.subscribe<Shift[]>("shift_data", stationId, (val) => {
-        if (val && Array.isArray(val)) setShifts(val);
+      cloudStorageService.subscribe<unknown>("shift_data", stationId, (val) => {
+        if (Array.isArray(val)) setShifts(normalizeShifts(val));
       }),
     ];
     return () => unsubs.forEach((u) => u());
   }, [user, stationId]);
 
   const dayShifts = useMemo(
-    () => shifts.filter((s) => s.date === selectedDate),
+    () => (shifts || []).filter((s) => s.date === selectedDate),
     [shifts, selectedDate],
   );
   const activeNow = dayShifts.filter((s) => s.status === "active").length;
@@ -197,7 +278,7 @@ export default function ShiftManagement() {
 
   const toggleStatus = (id: string) => {
     saveShifts(
-      shifts.map((s) => {
+      (shifts || []).map((s) => {
         if (s.id !== id) return s;
         if (s.status === "scheduled")
           return {
@@ -216,10 +297,10 @@ export default function ShiftManagement() {
     );
   };
 
-  const filteredEmp = employees.filter(
+  const filteredEmp = (employees || []).filter(
     (e) =>
-      e.name.toLowerCase().includes(searchEmp.toLowerCase()) ||
-      e.role.toLowerCase().includes(searchEmp.toLowerCase()),
+      (e.name || "").toLowerCase().includes(searchEmp.toLowerCase()) ||
+      (e.role || "").toLowerCase().includes(searchEmp.toLowerCase()),
   );
 
   return (
@@ -302,7 +383,7 @@ export default function ShiftManagement() {
               className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
             >
               <option value="">Select Employee</option>
-              {employees
+              {(employees || [])
                 .filter((e) => e.status === "active")
                 .map((e) => (
                   <option key={e.id} value={e.id}>
@@ -406,9 +487,10 @@ export default function ShiftManagement() {
 
       {/* Shift Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {dayShifts.map((shift) => {
+        {(dayShifts || []).map((shift) => {
           const tmpl = SHIFT_TEMPLATES.find((t) => t.type === shift.shiftType);
           const Icon = tmpl?.icon || Clock;
+          const colorClass = (tmpl?.color || "text-gray-600").split(" ")[0];
           return (
             <div
               key={shift.id}
@@ -416,10 +498,7 @@ export default function ShiftManagement() {
             >
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
-                  <Icon
-                    size={16}
-                    className={tmpl?.color.split(" ")[0] || "text-gray-600"}
-                  />
+                  <Icon size={16} className={colorClass} />
                   <span className="text-sm font-semibold dark:text-white">
                     {shift.employeeName}
                   </span>
@@ -439,12 +518,12 @@ export default function ShiftManagement() {
               </p>
               {shift.checkIn && (
                 <p className="text-[10px] text-green-600">
-                  Checked in: {new Date(shift.checkIn).toLocaleTimeString()}
+                  Checked in: {safeLocaleTime(shift.checkIn)}
                 </p>
               )}
               {shift.checkOut && (
                 <p className="text-[10px] text-gray-500">
-                  Checked out: {new Date(shift.checkOut).toLocaleTimeString()}
+                  Checked out: {safeLocaleTime(shift.checkOut)}
                 </p>
               )}
               <button
@@ -462,9 +541,8 @@ export default function ShiftManagement() {
         })}
         {dayShifts.length === 0 && (
           <div className="col-span-full text-center py-8 text-gray-400 text-sm">
-            No shifts scheduled for{" "}
-            {new Date(selectedDate).toLocaleDateString()}. Click &quot;Schedule
-            Shift&quot; to add one.
+            No shifts scheduled for {safeLocaleDate(selectedDate)}. Click
+            &quot;Schedule Shift&quot; to add one.
           </div>
         )}
       </div>
@@ -500,7 +578,7 @@ export default function ShiftManagement() {
               </tr>
             </thead>
             <tbody>
-              {filteredEmp.map((e) => (
+              {(filteredEmp || []).map((e) => (
                 <tr
                   key={e.id}
                   className="border-b border-gray-100 dark:border-gray-700/50"
@@ -533,4 +611,24 @@ export default function ShiftManagement() {
 
 function defaultEmployees(): Employee[] {
   return [];
+}
+
+function safeLocaleTime(value: string | undefined): string {
+  try {
+    const d = new Date(value || "");
+    if (isNaN(d.getTime())) return "";
+    return d.toLocaleTimeString();
+  } catch {
+    return "";
+  }
+}
+
+function safeLocaleDate(value: string | undefined): string {
+  try {
+    const d = new Date(value || "");
+    if (isNaN(d.getTime())) return value || "";
+    return d.toLocaleDateString();
+  } catch {
+    return value || "";
+  }
 }

@@ -79,10 +79,73 @@ const FUEL_GRADES: Record<string, string[]> = {
   [CANONICAL_FUEL_TYPES.lpg.label]: ["3kg", "6kg", "13kg", "25kg"],
 };
 
+const VALID_FUEL_TYPES = new Set(Object.keys(FUEL_GRADES));
+
+/**
+ * Normalize a price entry from cloud/localStorage so it always has every
+ * field the UI expects. Cloud data may be partial (from older app versions,
+ * API imports, or cross-device sync where the record was created with a
+ * subset of fields). Without this, rendering crashes with
+ * "Cannot read properties of undefined (reading 'toFixed')" etc.
+ */
+function normalizePriceEntry(
+  p: Partial<PriceEntry> | null | undefined,
+): PriceEntry {
+  const id =
+    p?.id || `pb_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const fuelType =
+    p?.fuelType && VALID_FUEL_TYPES.has(p.fuelType)
+      ? p.fuelType
+      : CANONICAL_FUEL_TYPES.petrol.label;
+  const grades =
+    FUEL_GRADES[fuelType] || FUEL_GRADES[CANONICAL_FUEL_TYPES.petrol.label];
+  const grade =
+    p?.grade && grades.includes(p.grade) ? p.grade : grades[0] || "Regular";
+  return {
+    id,
+    fuelType,
+    grade,
+    price: typeof p?.price === "number" ? p.price : 0,
+    previousPrice: typeof p?.previousPrice === "number" ? p.previousPrice : 0,
+    currency: p?.currency ?? "",
+    displayOrder: typeof p?.displayOrder === "number" ? p.displayOrder : 0,
+    isActive: typeof p?.isActive === "boolean" ? p.isActive : false,
+    effectiveDate: p?.effectiveDate ?? "",
+    updatedBy: p?.updatedBy ?? "",
+    updatedAt: p?.updatedAt ?? "",
+  };
+}
+
+function normalizePriceHistory(
+  h: Partial<PriceHistory> | null | undefined,
+): PriceHistory {
+  const id =
+    h?.id || `ph_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  return {
+    id,
+    priceEntryId: h?.priceEntryId ?? "",
+    oldPrice: typeof h?.oldPrice === "number" ? h.oldPrice : 0,
+    newPrice: typeof h?.newPrice === "number" ? h.newPrice : 0,
+    changedBy: h?.changedBy ?? "",
+    reason: h?.reason ?? "",
+    changedAt: h?.changedAt ?? "",
+  };
+}
+
+function normalizePriceEntries(arr: unknown): PriceEntry[] {
+  if (!Array.isArray(arr)) return [];
+  return arr.map((p) => normalizePriceEntry(p as Partial<PriceEntry>));
+}
+
+function normalizePriceHistoryList(arr: unknown): PriceHistory[] {
+  if (!Array.isArray(arr)) return [];
+  return arr.map((h) => normalizePriceHistory(h as Partial<PriceHistory>));
+}
+
 function loadPrices(): PriceEntry[] {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) return JSON.parse(saved);
+    if (saved) return normalizePriceEntries(JSON.parse(saved));
   } catch {
     /* ignore */
   }
@@ -92,7 +155,7 @@ function loadPrices(): PriceEntry[] {
 function loadHistory(): PriceHistory[] {
   try {
     const saved = localStorage.getItem(HISTORY_KEY);
-    if (saved) return JSON.parse(saved);
+    if (saved) return normalizePriceHistoryList(JSON.parse(saved));
   } catch {
     /* ignore */
   }
@@ -311,14 +374,14 @@ export default function PriceBoard() {
           CLOUD_KEY,
           stationId,
         );
-        if (!cancelled && cloudPrices && Array.isArray(cloudPrices))
-          setPrices(cloudPrices);
+        if (!cancelled && cloudPrices)
+          setPrices(normalizePriceEntries(cloudPrices));
         const cloudHistory = await cloudStorageService.get<PriceHistory[]>(
           CLOUD_HISTORY_KEY,
           stationId,
         );
-        if (!cancelled && cloudHistory && Array.isArray(cloudHistory))
-          setHistory(cloudHistory);
+        if (!cancelled && cloudHistory)
+          setHistory(normalizePriceHistoryList(cloudHistory));
       } finally {
         if (!cancelled) cloudLoadCompleteRef.current = true;
       }
@@ -418,12 +481,14 @@ export default function PriceBoard() {
   };
 
   const sortedPrices = [...prices].sort(
-    (a, b) => a.displayOrder - b.displayOrder,
+    (a, b) => (a.displayOrder || 0) - (b.displayOrder || 0),
   );
 
   const priceChange = (current: number, previous: number) => {
-    const diff = current - previous;
-    const pct = previous > 0 ? (diff / previous) * 100 : 0;
+    const cur = typeof current === "number" ? current : 0;
+    const prev = typeof previous === "number" ? previous : 0;
+    const diff = cur - prev;
+    const pct = prev > 0 ? (diff / prev) * 100 : 0;
     return { diff, pct, up: diff >= 0 };
   };
 
@@ -564,7 +629,7 @@ export default function PriceBoard() {
                       {price.fuelType} {price.grade}
                     </p>
                     <p className="text-2xl font-bold text-white mt-1">
-                      {price.currency} {price.price.toFixed(2)}
+                      {price.currency || ""} {(price.price || 0).toFixed(2)}
                     </p>
                     <div
                       className={`flex items-center justify-center gap-1 mt-1 text-xs ${change.up ? "text-red-400" : "text-emerald-400"}`}
@@ -639,10 +704,11 @@ export default function PriceBoard() {
                       {price.grade}
                     </td>
                     <td className="px-4 py-3 text-right font-bold text-gray-900 dark:text-white">
-                      {price.currency} {price.price.toFixed(2)}
+                      {price.currency || ""} {(price.price || 0).toFixed(2)}
                     </td>
                     <td className="px-4 py-3 text-right text-gray-500">
-                      {price.currency} {price.previousPrice.toFixed(2)}
+                      {price.currency || ""}{" "}
+                      {(price.previousPrice || 0).toFixed(2)}
                     </td>
                     <td className="px-4 py-3 text-center">
                       <span
@@ -925,7 +991,9 @@ export default function PriceBoard() {
               <div className="space-y-2">
                 {history.map((h) => {
                   const entry = prices.find((p) => p.id === h.priceEntryId);
-                  const diff = h.newPrice - h.oldPrice;
+                  const oldPrice = h.oldPrice || 0;
+                  const newPrice = h.newPrice || 0;
+                  const diff = newPrice - oldPrice;
                   return (
                     <div
                       key={h.id}
@@ -942,11 +1010,11 @@ export default function PriceBoard() {
                       <div className="text-right">
                         <div className="flex items-center gap-2">
                           <span className="text-xs text-gray-500 line-through">
-                            {h.oldPrice.toFixed(2)}
+                            {oldPrice.toFixed(2)}
                           </span>
                           <ArrowUpRight size={12} className="text-gray-400" />
                           <span className="text-sm font-bold text-gray-900 dark:text-white">
-                            {h.newPrice.toFixed(2)}
+                            {newPrice.toFixed(2)}
                           </span>
                         </div>
                         <span
@@ -956,7 +1024,9 @@ export default function PriceBoard() {
                           {diff.toFixed(2)}
                         </span>
                         <p className="text-[10px] text-gray-400">
-                          {new Date(h.changedAt).toLocaleDateString()}
+                          {new Date(
+                            h.changedAt || Date.now(),
+                          ).toLocaleDateString()}
                         </p>
                       </div>
                     </div>

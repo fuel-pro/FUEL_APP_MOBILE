@@ -55,6 +55,81 @@ interface MessageTemplate {
   category: string;
 }
 
+/**
+ * Normalize a contact from cloud/localStorage so it always has every field
+ * the UI expects. Cloud data may be partial (from older app versions, API
+ * imports, or cross-device sync where the record was created with a subset of
+ * fields). Without this, rendering crashes with
+ * "Cannot read properties of undefined (reading 'map')" etc.
+ */
+function normalizeContact(c: Partial<Contact> | null | undefined): Contact {
+  const id =
+    c?.id || `ct_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  return {
+    id,
+    name: c?.name ?? "",
+    phone: c?.phone ?? "",
+    email: c?.email ?? "",
+    company: c?.company ?? "",
+    tags: Array.isArray(c?.tags) ? c.tags : [],
+    balance: typeof c?.balance === "number" ? c.balance : 0,
+    lastContact: c?.lastContact ?? "",
+    notes: c?.notes ?? "",
+    starred: typeof c?.starred === "boolean" ? c.starred : false,
+  };
+}
+
+function normalizeMessage(m: Partial<Message> | null | undefined): Message {
+  const id =
+    m?.id || `msg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  return {
+    id,
+    contactId: m?.contactId ?? "",
+    type: m?.type === "email" || m?.type === "call" ? m.type : "sms",
+    content: m?.content ?? "",
+    subject: m?.subject,
+    status:
+      m?.status === "sent" ||
+      m?.status === "delivered" ||
+      m?.status === "failed" ||
+      m?.status === "pending"
+        ? m.status
+        : "pending",
+    timestamp: m?.timestamp ?? "",
+    sentBy: m?.sentBy ?? "",
+  };
+}
+
+function normalizeTemplate(
+  t: Partial<MessageTemplate> | null | undefined,
+): MessageTemplate {
+  const id =
+    t?.id || `tpl_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  return {
+    id,
+    name: t?.name ?? "",
+    type: t?.type === "email" ? t.type : "sms",
+    subject: t?.subject,
+    content: t?.content ?? "",
+    category: t?.category ?? "general",
+  };
+}
+
+function normalizeContacts(arr: unknown): Contact[] {
+  if (!Array.isArray(arr)) return [];
+  return arr.map((c) => normalizeContact(c as Partial<Contact>));
+}
+
+function normalizeMessages(arr: unknown): Message[] {
+  if (!Array.isArray(arr)) return [];
+  return arr.map((m) => normalizeMessage(m as Partial<Message>));
+}
+
+function normalizeTemplates(arr: unknown): MessageTemplate[] {
+  if (!Array.isArray(arr)) return [];
+  return arr.map((t) => normalizeTemplate(t as Partial<MessageTemplate>));
+}
+
 export default function Communication() {
   const { user } = useAuth();
   const { currentStation } = useStations();
@@ -117,21 +192,21 @@ export default function Communication() {
         "comm_contacts",
         stationId,
         (val) => {
-          if (val && Array.isArray(val)) setContacts(val);
+          setContacts(normalizeContacts(val));
         },
       ),
       cloudStorageService.subscribe<Message[]>(
         "comm_messages",
         stationId,
         (val) => {
-          if (val && Array.isArray(val)) setMessages(val);
+          setMessages(normalizeMessages(val));
         },
       ),
       cloudStorageService.subscribe<MessageTemplate[]>(
         "comm_templates",
         stationId,
         (val) => {
-          if (val && Array.isArray(val)) setTemplates(val);
+          setTemplates(normalizeTemplates(val));
         },
       ),
     ];
@@ -155,7 +230,7 @@ export default function Communication() {
         "comm_contacts",
         stationId,
       );
-      setContacts(data || []);
+      setContacts(normalizeContacts(data));
     } catch (error) {
       console.error("Error loading contacts:", error);
     }
@@ -167,7 +242,7 @@ export default function Communication() {
         "comm_messages",
         stationId,
       );
-      setMessages(data || []);
+      setMessages(normalizeMessages(data));
     } catch (error) {
       console.error("Error loading messages:", error);
     }
@@ -179,7 +254,7 @@ export default function Communication() {
         "comm_templates",
         stationId,
       );
-      setTemplates(data || []);
+      setTemplates(normalizeTemplates(data));
     } catch (error) {
       console.error("Error loading templates:", error);
     }
@@ -187,11 +262,9 @@ export default function Communication() {
 
   const saveContact = async () => {
     try {
-      const existing =
-        (await cloudStorageService.get<Contact[]>(
-          "comm_contacts",
-          stationId,
-        )) || [];
+      const existing = normalizeContacts(
+        await cloudStorageService.get<Contact[]>("comm_contacts", stationId),
+      );
       const tags = contactForm.tags
         ? typeof contactForm.tags === "string"
           ? contactForm.tags
@@ -237,11 +310,9 @@ export default function Communication() {
     if (!confirm("Delete this contact?")) return;
 
     try {
-      const existing =
-        (await cloudStorageService.get<Contact[]>(
-          "comm_contacts",
-          stationId,
-        )) || [];
+      const existing = normalizeContacts(
+        await cloudStorageService.get<Contact[]>("comm_contacts", stationId),
+      );
       const updated = existing.filter((c) => c.id !== id);
       await cloudStorageService.set("comm_contacts", updated, stationId);
       setContacts(updated);
@@ -253,11 +324,9 @@ export default function Communication() {
 
   const sendMessage = async () => {
     try {
-      const existing =
-        (await cloudStorageService.get<Message[]>(
-          "comm_messages",
-          stationId,
-        )) || [];
+      const existing = normalizeMessages(
+        await cloudStorageService.get<Message[]>("comm_messages", stationId),
+      );
       const newMessage: Message = {
         id: `msg_${Date.now()}`,
         contactId: (selectedContacts[0] ||
@@ -289,11 +358,12 @@ export default function Communication() {
 
   const saveTemplate = async () => {
     try {
-      const existing =
-        (await cloudStorageService.get<MessageTemplate[]>(
+      const existing = normalizeTemplates(
+        await cloudStorageService.get<MessageTemplate[]>(
           "comm_templates",
           stationId,
-        )) || [];
+        ),
+      );
       const newTemplate: MessageTemplate = {
         id: `tpl_${Date.now()}`,
         name: templateForm.name || "",
@@ -317,11 +387,12 @@ export default function Communication() {
     if (!confirm("Delete this template?")) return;
 
     try {
-      const existing =
-        (await cloudStorageService.get<MessageTemplate[]>(
+      const existing = normalizeTemplates(
+        await cloudStorageService.get<MessageTemplate[]>(
           "comm_templates",
           stationId,
-        )) || [];
+        ),
+      );
       const updated = existing.filter((t) => t.id !== id);
       await cloudStorageService.set("comm_templates", updated, stationId);
       setTemplates(updated);
@@ -333,11 +404,9 @@ export default function Communication() {
 
   const toggleStarContact = async (contact: Contact) => {
     try {
-      const existing =
-        (await cloudStorageService.get<Contact[]>(
-          "comm_contacts",
-          stationId,
-        )) || [];
+      const existing = normalizeContacts(
+        await cloudStorageService.get<Contact[]>("comm_contacts", stationId),
+      );
       const updated = existing.map((c) =>
         c.id === contact.id ? { ...c, starred: !c.starred } : c,
       );
@@ -398,7 +467,7 @@ export default function Communication() {
       phone: contact.phone,
       email: contact.email,
       company: contact.company,
-      tags: contact.tags.join(", "),
+      tags: (contact.tags || []).join(", "),
       balance: contact.balance,
       notes: contact.notes,
     });
@@ -416,21 +485,21 @@ export default function Communication() {
   // Filter contacts
   const filteredContacts = contacts.filter((contact) => {
     const matchesSearch =
-      contact.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      contact.phone.includes(searchTerm) ||
-      contact.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      contact.company.toLowerCase().includes(searchTerm.toLowerCase());
+      (contact.name || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (contact.phone || "").includes(searchTerm) ||
+      (contact.email || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (contact.company || "").toLowerCase().includes(searchTerm.toLowerCase());
 
     const matchesTag =
       filterTag === "all" ||
       (filterTag === "starred" && contact.starred) ||
-      contact.tags.includes(filterTag);
+      (contact.tags || []).includes(filterTag);
 
     return matchesSearch && matchesTag;
   });
 
   // Get all unique tags
-  const allTags = Array.from(new Set(contacts.flatMap((c) => c.tags)));
+  const allTags = Array.from(new Set(contacts.flatMap((c) => c.tags || [])));
 
   // Get status icon
   const getStatusIcon = (status: string) => {
@@ -589,9 +658,9 @@ export default function Communication() {
               )}
             </div>
 
-            {contact.tags.length > 0 && (
+            {(contact.tags || []).length > 0 && (
               <div className="flex flex-wrap gap-1 mb-3">
-                {contact.tags.map((tag) => (
+                {(contact.tags || []).map((tag) => (
                   <span
                     key={tag}
                     className="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded text-xs"
@@ -607,7 +676,7 @@ export default function Communication() {
                 className={`text-sm font-medium mb-3 ${contact.balance > 0 ? "text-red-600" : "text-green-600"}`}
               >
                 Balance: {state.companyData.currency}{" "}
-                {Math.abs(contact.balance).toLocaleString()}
+                {Math.abs(contact.balance || 0).toLocaleString()}
                 {contact.balance > 0 ? " (Owed)" : " (Credit)"}
               </div>
             )}
@@ -693,7 +762,7 @@ export default function Communication() {
                 <div className="flex items-center gap-2">
                   {getStatusIcon(message.status)}
                   <span className="text-xs text-gray-500">
-                    {new Date(message.timestamp).toLocaleString()}
+                    {new Date(message.timestamp || "").toLocaleString()}
                   </span>
                 </div>
               </div>
@@ -745,7 +814,7 @@ export default function Communication() {
               <div>
                 <h4 className="font-semibold">{template.name}</h4>
                 <span className="text-xs px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded">
-                  {template.type.toUpperCase()}
+                  {(template.type || "").toUpperCase()}
                 </span>
                 <span className="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 rounded ml-2">
                   {template.category}
