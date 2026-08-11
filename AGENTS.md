@@ -1394,3 +1394,42 @@ A single source of truth for station fuel types + prices, kept in sync across ev
 - **LiveTransaction Add Payment Source**: explicit `kopo_kopo` source type + status-aware "Configure Kopo Kopo in Integration Hub" deep-link.
 - **CI fixes bundled**: added `account_reference?` to `UnifiedTransaction`; removed stale `debt: "credit"` from MobileBottomNav `flagMap`. NOTE: CI uses `tsc -b` (project refs) which is stricter than `tsc --noEmit` — always run `npx tsc -b` + `prettier --check "src/**/*.{ts,tsx}" "*.{json,md}"` before committing.
 - **Deploy state 2026-08-11**: PR #101 commit e362725, all CI pass. Cloudflare Pages LIVE (preview https://3e2a0a1a.fuel-app-mobile.pages.dev). Vercel BLOCKED by `api-deployments-free-per-day` (100/day exhausted); GitHub integration auto-deploys when quota resets.
+
+## Universal fuel-price propagation (ADDED 2026-08-11, commit 1ed2515)
+
+Wired EVERY part of the site that reads/displays/edits a fuel price or fuel
+type through the single canonical source (fuel_types_config + interlink bus)
+so a change anywhere propagates everywhere — including components that
+previously held stale legacy duplicates.
+
+- **FuelContext universal price-propagation effect**: new effect watches
+  state.pmsPrice/agoPrice/petrolPrice/dieselPrice and mirrors any change into
+  fuel_types_config + broadcasts on the interlink bus. This means
+  dispatch(SET_PRICES) from ANY component (DeliveryTracker, SetupWizard,
+  LOAD_FROM_STORAGE restore) now propagates to Dashboard/POS/Invoice/
+  PriceBoard/Reports/FuelPriceLocator etc. — previously only
+  syncPriceToFuelTypes() callers propagated. lastBroadcastPriceRef guards
+  against redundant emits; applyingFuelTypesRef guards against loops.
+- **PointOfSale BUG FIX**: addFuelToCart + live preview now read
+  fuelTypeApi.getPriceFor() instead of legacy state.petrolPrice/dieselPrice.
+  Previously the displayed per-litre price updated via the bus while the
+  charged cart total stayed stale (displayed 250/L but charged 220/L).
+- **useStationFuelTypes**: also subscribes to onFuelTypeChange (not just
+  onFuelPriceChange) so the fuel-type LIST stays fresh on add/edit/activate.
+- **SupplierManagement**: replaced hardcoded FUEL_TYPES with the station's
+  configured fuel types for both the supplier fuel-type checkboxes and the
+  purchase-order fuel dropdown.
+- **FuelOffloading**: fuel-type dropdown lists the station's active fuel
+  types (canonical labels + codes) instead of only PMS/AGO. 'Use [fuel] price'
+  quick-fill button on the rate field.
+- **DeliveryTracker**: updateCell resolves price via getPriceFor(); price
+  inputs dispatch BOTH petrolPrice+pmsPrice and dieselPrice+agoPrice so the
+  propagation effect picks them up.
+- **AIChatbot**: AI context includes ALL active fuel types + live prices
+  (allFuelTypes array), not just PMS/AGO.
+- **CustomerLoyalty**: preferred-fuel dropdown uses canonical labels.
+- **CreditManagement**: removed dead useFuel/state import.
+- **Deploy state**: Cloudflare Pages LIVE (https://6b023595.fuel-app-mobile.pages.dev).
+  Vercel BLOCKED by api-deployments-free-per-day (100/day; GitHub integration
+  auto-deploys when quota resets). All CI checks pass. No Supabase schema
+  changes (uses existing fuel_types_config cloud key).
