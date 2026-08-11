@@ -1059,18 +1059,21 @@ export default function Dashboard() {
                 </span>
               </div>
             )}
-            <div className="flex justify-between text-xs">
-              <span className="text-gray-600 dark:text-gray-400">
-                Excise Duty/L
-              </span>
-              <span className="font-semibold text-gray-800 dark:text-gray-200">
-                {currencySymbol}{" "}
-                {(taxRates
-                  ? taxRates.exciseDutyPerLiter
-                  : location.revenueAuthority.exciseDuty
-                ).toFixed(2)}
-              </span>
-            </div>
+            {(() => {
+              const exciseDuty = taxRates
+                ? taxRates.exciseDutyPerLiter
+                : location.revenueAuthority.exciseDuty;
+              return exciseDuty > 0 ? (
+                <div className="flex justify-between text-xs">
+                  <span className="text-gray-600 dark:text-gray-400">
+                    Excise Duty/L
+                  </span>
+                  <span className="font-semibold text-gray-800 dark:text-gray-200">
+                    {currencySymbol} {exciseDuty.toFixed(2)}
+                  </span>
+                </div>
+              ) : null;
+            })()}
             <div className="flex justify-between text-xs">
               <span className="text-gray-600 dark:text-gray-400">
                 Min. Wage (monthly)

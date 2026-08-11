@@ -6,8 +6,9 @@ import React, {
   useEffect,
   useRef,
 } from "react";
-import { getDetectedCurrency } from "@/react-app/lib/currency";
-import { currencySymbolFor } from "@/react-app/config/pricing";
+import { getDetectedCurrency, getDetectedCountryCode } from "@/react-app/lib/currency";
+import { currencySymbolFor, getVATRate } from "@/react-app/config/pricing";
+import { getRegionalConfig } from "@/react-app/config/regions";
 import { supabase, supabaseUrl, supabaseAnonKey } from "@/supabase/client";
 
 // Lazy API base URL getter using dynamic import to avoid circular deps
@@ -459,6 +460,28 @@ function stationRowToStation(
   dataBlob: any,
   cached?: Station,
 ): Station {
+  // Auto-correct stale Kenya defaults: if the station's country is known and
+  // not Kenya but the currency is still KES (a legacy Kenya-only default),
+  // upgrade it to the correct currency for the station's country. This is a
+  // world-wide fix — existing stations created before the multi-country
+  // deployment had KES/Africa/Nairobi hardcoded regardless of location.
+  const rawCountry = (row.country || "").toUpperCase();
+  const rawCurrency = (row.currency || "").toUpperCase();
+  let correctedCurrency = row.currency || "";
+  let correctedSymbol = row.currency_symbol || "";
+  let correctedTimezone = row.timezone || "";
+  if (rawCountry && rawCountry !== "KE" && rawCurrency === "KES") {
+    try {
+      const rc = getRegionalConfig(rawCountry);
+      correctedCurrency = rc?.currency || "USD";
+      correctedSymbol = currencySymbolFor(correctedCurrency);
+      correctedTimezone = row.timezone || rc?.timeZone || "UTC";
+    } catch {
+      correctedCurrency = "USD";
+      correctedSymbol = "$";
+    }
+  }
+
   return {
     id: row.id,
     name: row.name || "",
@@ -471,14 +494,51 @@ function stationRowToStation(
     taxRate:
       row.tax_rate !== null && row.tax_rate !== undefined
         ? Number(row.tax_rate)
-        : 16,
+        : (() => {
+            try {
+              const cc = row.country || getDetectedCountryCode();
+              return Math.round((getVATRate(cc) || 0) * 100);
+            } catch {
+              return 0;
+            }
+          })(),
     theme: row.theme || "dark",
     logo: row.logo || "",
     description: row.description || "",
-    country: row.country || "",
-    currency: row.currency || "",
-    currencySymbol: row.currency_symbol || currencySymbolFor(row.currency || "USD"),
-    timezone: row.timezone || "",
+    country: row.country || (() => {
+      try {
+        return getDetectedCountryCode() || "";
+      } catch {
+        return "";
+      }
+    })(),
+    currency: correctedCurrency || (() => {
+      try {
+        return getDetectedCurrency() || "USD";
+      } catch {
+        return "USD";
+      }
+    })(),
+    currencySymbol:
+      correctedSymbol ||
+      currencySymbolFor(
+        correctedCurrency ||
+          (() => {
+            try {
+              return getDetectedCurrency() || "USD";
+            } catch {
+              return "USD";
+            }
+          })(),
+      ),
+    timezone: correctedTimezone || (() => {
+      try {
+        const cc = row.country || getDetectedCountryCode();
+        return getRegionalConfig(cc)?.timeZone || "UTC";
+      } catch {
+        return "UTC";
+      }
+    })(),
     createdAt: row.created_at || new Date().toISOString(),
     updatedAt: row.updated_at || new Date().toISOString(),
     data: dataBlob !== undefined ? dataBlob : (cached?.data ?? {}),
@@ -1264,16 +1324,59 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
         email: stationData.email || "",
         kraPin: stationData.kraPin || "",
         etrSerial: stationData.etrSerial || "",
-        taxRate: stationData.taxRate || 16,
+        taxRate:
+          stationData.taxRate ??
+          (() => {
+            try {
+              const cc = stationData.country || getDetectedCountryCode();
+              return Math.round((getVATRate(cc) || 0) * 100);
+            } catch {
+              return 0;
+            }
+          })(),
         theme: stationData.theme || "dark",
         logo: stationData.logo || "",
         description: stationData.description || "",
-        country: stationData.country || "",
-        currency: stationData.currency || "",
+        country:
+          stationData.country ||
+          (() => {
+            try {
+              return getDetectedCountryCode() || "US";
+            } catch {
+              return "US";
+            }
+          })(),
+        currency:
+          stationData.currency ||
+          (() => {
+            try {
+              return getDetectedCurrency() || "USD";
+            } catch {
+              return "USD";
+            }
+          })(),
         currencySymbol:
           stationData.currencySymbol ||
-          currencySymbolFor(stationData.currency || getDetectedCurrency() || "USD"),
-        timezone: stationData.timezone || "",
+          currencySymbolFor(
+            stationData.currency ||
+              (() => {
+                try {
+                  return getDetectedCurrency() || "USD";
+                } catch {
+                  return "USD";
+                }
+              })(),
+          ),
+        timezone:
+          stationData.timezone ||
+          (() => {
+            try {
+              const cc = stationData.country || getDetectedCountryCode();
+              return getRegionalConfig(cc)?.timeZone || "UTC";
+            } catch {
+              return "UTC";
+            }
+          })(),
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         data: stationData.data || {},
