@@ -1318,3 +1318,87 @@ export): `Dashboard.tsx`, `PointOfSale.tsx`, `SalesTracking.tsx`,
 `lib/pos/printer-service.ts`, `context/FuelContext.tsx`,
 `components/SetupWizard.tsx`, `components/Documents.tsx`. Each should be
 migrated to `getCurrencySymbol(companyData.currency)` in a follow-up.
+
+## World-wide de-Kenyaification (DEPLOYED 2026-08-11, commit 676394f)
+
+Removed all Kenya-specific defaults so the app is truly world-wide (not
+Kenya-centric). The currency detection (`getDetectedCurrency()` /
+`getDetectedCountryCode()` in `lib/currency.ts`) already resolves the correct
+currency from station data, location cache, and browser timezone — the problem
+was hardcoded Kenya fallbacks shadowing that detection.
+
+### Changes (12 files)
+- **StationContext.tsx**: default admin currency fallback changed from `"KES"`
+  to `"USD"` (international default). The `getDetectedCurrency()` call still
+  resolves KES for Kenya, EUR for Germany, USD for US, etc. — the fallback only
+  fires when ALL detection fails. Station currency-symbol fallback now uses
+  `getDetectedCurrency()` instead of hardcoded `"KES"`.
+- **FuelContext.tsx**: default fuel prices now resolve from the detected
+  country via `getCountryPrice()` (was hardcoded Kenya EPRA prices
+  `KENYA_BASE_PRICES`). A German station now defaults to EUR prices; a US
+  station to USD prices. Integrations tab description changed from "Connect KRA,
+  ETR, POS..." to "Connect Tax Authority, POS...". KRA/ETR comment generalized.
+- **FounderAccess.tsx**: Revenue card + per-station revenue card now use
+  `getCurrencySymbol(getDetectedCurrency())` (was hardcoded `"KES"`).
+- **founder-sections/**: AnalyticsSection, SubscriptionDashboardSection,
+  PayoutSection, CouponSection, EmailTemplatesSection — all hardcoded `"KES"`
+  replaced with `CUR()` helper (= `getCurrencySymbol(getDetectedCurrency())`).
+  PaymentMethodsSection bank-account currency fallback uses
+  `getDetectedCurrency()`. ConfigSection site-config currency fallback uses
+  `getDetectedCurrency()`. SecuritySection recovery-phone placeholder changed
+  from `"+254700000000"` to `"+1 555 000 0000"`.
+- **SetupWizard.tsx**: ETR Serial Number label is now conditional
+  (`isKenya ? "ETR Serial Number" : "Tax Device Serial No."`). Contact/phone
+  placeholders changed from Kenya-specific (0712 345 678, info@station.co.ke,
+  Plot 123 Mombasa Road Nairobi) to international (+1 555 123 4567,
+  info@station.com, 123 Main Street City).
+
+### Verification — Phase 1 + Phase 2 cross-device sync (CONFIRMED)
+
+**Phase 1** (data entry on one device): worldwide test user
+`worldwide.fuelpro.test@gmail.com` (uid 70305cff) created a Berlin/Germany
+station "Global Energy Worldwide Station" with:
+- companyData.currency = **EUR** (European Euro, NOT Kenya KSh)
+- companyData.email = info@globalenergy.de (German email)
+- companyData.contacts = +49 30 12345678 (German phone)
+- 2 invoices (INV-2026-001 total €93, INV-2026-002 total €1,070) with € symbol
+- 1 credit account "Worldwide Credit Customer" (credit limit 5000)
+- 1 POS transaction
+All data persisted to Supabase `app_kv` (cloud, station-scoped
+`user_<uid>_<stationId>_compact__<uid>__<stationId>` + per-component keys).
+
+**Phase 2** (fresh session / new device): simulated a fresh device login by
+obtaining a NEW access token via the Supabase Auth API
+(`POST /auth/v1/token?grant_type=password` with email+password), then queried
+`app_kv` with that token (RLS: `owner_id = auth.uid()`). The fresh token
+returned ALL the worldwide data:
+- Station name "Global Energy Worldwide Station" ✅
+- Currency EUR ✅
+- Email info@globalenergy.de ✅
+- Phone +49 30 12345678 ✅
+- 2 invoices with € totals ✅
+- Credit account ✅
+- POS transaction ✅
+Cross-device sync **CONFIRMED** — cloud is the source of truth; any device
+logging in with this user receives the same worldwide data.
+
+### Deploy status 2026-08-11 (commit 676394f)
+- **GitHub**: pushed to `worldwide-features-sync-test` branch (commit 676394f).
+- **Cloudflare Pages**: LIVE at https://1cbf797a.fuel-app-mobile.pages.dev +
+  main alias fuel-app-mobile.pages.dev (bundle `index-BW9sHbHm.js`, 124
+  precache entries).
+- **Vercel production**: BLOCKED by `api-deployments-free-per-day` (100/100
+  used; quota resets 2026-08-12 12:19 UTC). All deploy paths blocked
+  (prebuilt, git-source API, redeploy). The project's GitHub integration will
+  auto-deploy the latest main once the quota resets. Until then Vercel
+  production serves the previous frontend; the Cloudflare mirror has the fixed
+  frontend NOW. /api/* endpoints (unchanged by this commit) remain correct on
+  Vercel.
+- **Supabase**: no schema changes in this commit (all fixes are frontend
+  code). DB unchanged.
+
+### Worldwide test credentials (2026-08-11)
+- Worldwide test user: worldwide.fuelpro.test@gmail.com (uid 70305cff).
+  Password reset to `WorldwideTest2026!` via admin API (email_confirm=true).
+  Station: "Global Energy Worldwide Station" (Berlin/Germany, EUR currency).
+  NOT a founder (regular user account).
