@@ -359,9 +359,7 @@ async function fetchFreeWebPrices(countryCode: string): Promise<string> {
 
 // Static reference: EPRA Kenya max retail prices (KES/litre) for the
 // July 15 – August 14, 2026 pricing cycle. These are REAL published town
-// prices (not estimates). The AI uses this table only to find an EXACT match
-// for the user's town; it must NOT interpolate between towns. Refreshed
-// monthly by cron.
+// prices (not estimates). Refreshed monthly by cron.
 const EPRA_KE_REFERENCE = [
   "EPRA Kenya published town prices (15 Jul – 14 Aug 2026, KES per litre):",
   "Mombasa: super_petrol=210.87, diesel=219.58, kerosene=188.09",
@@ -376,6 +374,47 @@ const EPRA_KE_REFERENCE = [
   "Eldas: super_petrol=231.45, diesel=241.57",
   "Elwak: super_petrol=230.94, diesel=241.02",
 ].join("\n");
+
+// Parsed structured form of EPRA_KE_REFERENCE for deterministic exact-match
+// lookups. This returns REAL published prices for a town without relying on
+// (unreliable) AI extraction. Only an EXACT, case-insensitive town-name
+// match returns prices — never interpolation or estimation.
+const EPRA_KE_REFERENCE_MAP: Record<string, FuelPriceSet> = (() => {
+  const map: Record<string, FuelPriceSet> = {};
+  const lineRe = /^([A-Za-z .'-]+):\s*([^]*)$/;
+  const fieldRe = /([a-z_]+)\s*=\s*([0-9.]+)/g;
+  for (const line of EPRA_KE_REFERENCE.split("\n")) {
+    const m = line.match(lineRe);
+    if (!m) continue;
+    const town = m[1].trim().toLowerCase();
+    const prices: FuelPriceSet = {};
+    let fm: RegExpExecArray | null;
+    while ((fm = fieldRe.exec(m[2])) !== null) {
+      const val = parseFloat(fm[2]);
+      if (Number.isFinite(val)) prices[fm[1] as keyof FuelPriceSet] = val;
+    }
+    if (
+      prices.super_petrol != null ||
+      prices.diesel != null ||
+      prices.kerosene != null
+    ) {
+      map[town] = prices;
+    }
+  }
+  return map;
+})();
+
+// Deterministic exact-match against the published EPRA reference table.
+// Returns REAL prices only when the town name matches exactly
+// (case-insensitive); null otherwise. Never estimates.
+function lookupExactReference(
+  townName: string,
+  countryCode: string,
+): FuelPriceSet | null {
+  if (countryCode.toUpperCase() !== "KE") return null;
+  const key = townName.trim().toLowerCase();
+  return EPRA_KE_REFERENCE_MAP[key] || null;
+}
 
 function extractPriceText(html: string): string {
   // Remove script/style/noscript blocks, then strip remaining tags.
@@ -636,11 +675,55 @@ export async function getLocalFuelPrices(
     }
   }
 
-  // C. Fetch fresh REAL data: web search → AI extraction (no estimation).
+  // C. Deterministic exact-match against the published EPRA reference table.
+  // These are REAL published prices for named towns — returned directly
+  // without (unreliable) AI extraction. No estimation, no interpolation;
+  // only an exact town-name match yields a price.
+  const refPrices = lookupExactReference(place.name, place.countryCode);
+  if (refPrices) {
+    const currency = currencyForCountry(place.countryCode);
+    const result: LocalFuelPrices = {
+      location: place.name,
+      country: place.country,
+      country_code: place.countryCode,
+      lat,
+      lon,
+      prices: refPrices,
+      currency: currency.code,
+      source: "Published Reference",
+      last_updated: new Date().toISOString(),
+    };
+    if (supabase) {
+      const { data: saved } = await supabase
+        .from("fuel_prices")
+        .upsert(
+          {
+            location_name: place.name,
+            country: place.country,
+            country_code: place.countryCode,
+            lat,
+            lon,
+            location: `POINT(${lon} ${lat})`,
+            prices: refPrices,
+            currency: currency.code,
+            source: "Published Reference",
+            last_updated: new Date().toISOString(),
+            query_count: 1,
+          },
+          { onConflict: "location_name,country" },
+        )
+        .select()
+        .single();
+      if (saved) return rowToPrices(saved as FuelPriceRow, lat, lon);
+    }
+    return result;
+  }
+
+  // D. Fetch fresh REAL data: web search → AI extraction (no estimation).
   // Prices come only from verbatim source data (search snippets / published
   // EPRA tables). If the exact location is not found in the sources, the AI
   // returns null and we fall through to the PostGIS nearest- REAL-price
-  // fallback (D). We never fabricate or interpolate a price.
+  // fallback (E). We never fabricate or interpolate a price.
   try {
     const currency = currencyForCountry(place.countryCode);
 
@@ -716,7 +799,7 @@ export async function getLocalFuelPrices(
       last_updated: new Date().toISOString(),
     };
   } catch (e) {
-    // D. Fallback: nearest cached town within radius (PostGIS).
+    // E. Fallback: nearest cached town within radius (PostGIS).
     if (supabase) {
       const { data: nearest } = await supabase.rpc("get_nearest_fuel", {
         user_lat: lat,
