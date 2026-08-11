@@ -22,7 +22,10 @@ import {
 } from "@/react-app/utils/exportUtils";
 import { formatNumber } from "@/react-app/utils/formatUtils";
 import { silentPrintService } from "@/react-app/lib/silent-print-service";
-import { getCurrencySymbol, getDetectedCurrency } from "@/react-app/lib/currency";
+import {
+  getCurrencySymbol,
+  getDetectedCurrency,
+} from "@/react-app/lib/currency";
 import SubTabBar from "@/react-app/components/SubTabBar";
 import SalesInvoices from "@/react-app/components/SalesInvoices";
 import {
@@ -671,7 +674,8 @@ export default function Invoice() {
                         )}
                       </td>
                       <td className="border border-gray-300 p-3 text-right font-medium">
-                        {currencySymbol}{formatNumber(item.total, 0)}
+                        {currencySymbol}
+                        {formatNumber(item.total, 0)}
                       </td>
                       <td className="border border-gray-300 p-3 text-center">
                         <div className="flex items-center justify-center gap-1">
@@ -709,7 +713,8 @@ export default function Invoice() {
 
                 <div className="text-right">
                   <div className="text-2xl font-bold text-blue-900">
-                    Total Due: {currencySymbol}{formatNumber(totalDue, 0)}
+                    Total Due: {currencySymbol}
+                    {formatNumber(totalDue, 0)}
                   </div>
                 </div>
               </div>
@@ -816,8 +821,8 @@ export default function Invoice() {
               </div>
               <div className="text-sm text-gray-600">
                 Send the invoice total ({formatNumber(totalDue, 0)}{" "}
-                {state.companyData?.currency || "KES"}) as an M-PESA STK Push to
-                the customer's phone via the Live Transaction Monitor.
+                {currencySymbol}) as an M-PESA STK Push to the customer's phone
+                via the Live Transaction Monitor.
               </div>
             </div>
 

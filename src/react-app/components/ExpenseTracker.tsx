@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 import { getCurrencySymbol } from "../lib/currency";
 import { useAuth } from "@/react-app/context/AuthContext";
@@ -93,6 +93,10 @@ export default function ExpenseTracker() {
   } | null>(null);
   const [activeView, setActiveView] = useState<"list" | "analytics">("list");
 
+  // Prevents the save effect from overwriting cloud data with default empty
+  // state before the initial cloud load completes (cross-device overwrite race).
+  const cloudLoadCompleteRef = useRef(false);
+
   const [formData, setFormData] = useState<Partial<Expense>>({
     date: new Date().toISOString().slice(0, 10),
     category: "fuel_purchase",
@@ -129,6 +133,7 @@ export default function ExpenseTracker() {
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(expenses));
+    if (!cloudLoadCompleteRef.current) return; // skip until cloud load done
     cloudStorageService.set(CLOUD_KEY, expenses, stationId).catch(() => {});
   }, [expenses, stationId]);
 
@@ -136,13 +141,22 @@ export default function ExpenseTracker() {
   // per-station sync). Each station has its own isolated expense set.
   useEffect(() => {
     if (!user) return;
+    cloudLoadCompleteRef.current = false;
+    let cancelled = false;
     (async () => {
-      const cloud = await cloudStorageService.get<Expense[]>(
-        CLOUD_KEY,
-        stationId,
-      );
-      if (cloud && Array.isArray(cloud)) setExpenses(cloud);
+      try {
+        const cloud = await cloudStorageService.get<Expense[]>(
+          CLOUD_KEY,
+          stationId,
+        );
+        if (!cancelled && cloud && Array.isArray(cloud)) setExpenses(cloud);
+      } finally {
+        if (!cancelled) cloudLoadCompleteRef.current = true;
+      }
     })();
+    return () => {
+      cancelled = true;
+    };
   }, [user, stationId]);
 
   const showNotification = (
@@ -522,7 +536,8 @@ export default function ExpenseTracker() {
                         <CatIcon size={12} /> {cat.label}
                       </span>
                       <span className="text-gray-900 dark:text-white font-medium">
-                        {getCurrencySymbol()} {cat.total.toLocaleString()} ({pct.toFixed(1)}%)
+                        {getCurrencySymbol()} {cat.total.toLocaleString()} (
+                        {pct.toFixed(1)}%)
                       </span>
                     </div>
                     <div className="h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">

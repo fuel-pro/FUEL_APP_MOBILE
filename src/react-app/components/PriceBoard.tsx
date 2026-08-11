@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 import { useAuth } from "@/react-app/context/AuthContext";
 import {
@@ -27,7 +27,11 @@ import {
 import { useAutoSync } from "@/react-app/hooks/useAutoSync";
 import { useLocation } from "@/react-app/context/LocationContext";
 import { useStations } from "@/react-app/context/StationContext";
-import { getCurrencySymbol, getDetectedCountryCode, isKenyaStation } from "@/react-app/lib/currency";
+import {
+  getCurrencySymbol,
+  getDetectedCountryCode,
+  isKenyaStation,
+} from "@/react-app/lib/currency";
 import { getCountryById } from "@/react-app/config/countries";
 import { useFuel } from "@/react-app/context/FuelContext";
 import {
@@ -123,12 +127,17 @@ export default function PriceBoard() {
     effectiveDate: new Date().toISOString().slice(0, 10),
   });
   const [changeReason, setChangeReason] = useState("");
+
+  // Prevents save effects from overwriting cloud data with default state
+  // before the initial cloud load completes (cross-device overwrite race).
+  const cloudLoadCompleteRef = useRef(false);
   const [showAutoUpdateNotice, setShowAutoUpdateNotice] = useState(false);
 
   const isKenya = isKenyaStation();
   const countryProfile = getCountryById(getDetectedCountryCode());
-  const regulatorName = countryProfile?.fuelRegulations?.priceSettingBody
-    || (isKenya ? "EPRA" : "fuel regulator");
+  const regulatorName =
+    countryProfile?.fuelRegulations?.priceSettingBody ||
+    (isKenya ? "EPRA" : "fuel regulator");
 
   // Update prices when fuelPrice syncs (daily EPRA prices)
   useEffect(() => {
@@ -245,6 +254,7 @@ export default function PriceBoard() {
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(prices));
+    if (!cloudLoadCompleteRef.current) return; // skip until cloud load done
     cloudStorageService.set(CLOUD_KEY, prices, stationId).catch(() => {});
     // Broadcast each active price on the interlink bus so FuelTypesManager,
     // Dashboard, POS, Invoice, Reports see PriceBoard edits instantly.
@@ -260,6 +270,7 @@ export default function PriceBoard() {
   }, [prices, stationId]);
   useEffect(() => {
     localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+    if (!cloudLoadCompleteRef.current) return; // skip until cloud load done
     cloudStorageService
       .set(CLOUD_HISTORY_KEY, history, stationId)
       .catch(() => {});
@@ -292,18 +303,29 @@ export default function PriceBoard() {
   // Load from cloud on mount (cross-device sync)
   useEffect(() => {
     if (!user) return;
+    cloudLoadCompleteRef.current = false;
+    let cancelled = false;
     (async () => {
-      const cloudPrices = await cloudStorageService.get<PriceEntry[]>(
-        CLOUD_KEY,
-        stationId,
-      );
-      if (cloudPrices && Array.isArray(cloudPrices)) setPrices(cloudPrices);
-      const cloudHistory = await cloudStorageService.get<PriceHistory[]>(
-        CLOUD_HISTORY_KEY,
-        stationId,
-      );
-      if (cloudHistory && Array.isArray(cloudHistory)) setHistory(cloudHistory);
+      try {
+        const cloudPrices = await cloudStorageService.get<PriceEntry[]>(
+          CLOUD_KEY,
+          stationId,
+        );
+        if (!cancelled && cloudPrices && Array.isArray(cloudPrices))
+          setPrices(cloudPrices);
+        const cloudHistory = await cloudStorageService.get<PriceHistory[]>(
+          CLOUD_HISTORY_KEY,
+          stationId,
+        );
+        if (!cancelled && cloudHistory && Array.isArray(cloudHistory))
+          setHistory(cloudHistory);
+      } finally {
+        if (!cancelled) cloudLoadCompleteRef.current = true;
+      }
     })();
+    return () => {
+      cancelled = true;
+    };
   }, [user, stationId]);
 
   const showNotification = (
@@ -432,7 +454,8 @@ export default function PriceBoard() {
           <p className="text-sm text-gray-500 mt-1">
             {fuelPrice ? (
               <>
-                {regulatorName} prices as of {fuelPrice.effectiveDate} • Auto-updates daily
+                {regulatorName} prices as of {fuelPrice.effectiveDate} •
+                Auto-updates daily
               </>
             ) : (
               <>Manage fuel prices displayed to customers</>
@@ -773,23 +796,51 @@ export default function PriceBoard() {
                       className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
                     >
                       {[
+                        "USD",
+                        "EUR",
+                        "GBP",
+                        "JPY",
+                        "CNY",
+                        "INR",
+                        "AUD",
+                        "CAD",
+                        "CHF",
+                        "SGD",
+                        "HKD",
+                        "NZD",
+                        "AED",
+                        "SAR",
+                        "ZAR",
+                        "BRL",
+                        "MXN",
+                        "RUB",
+                        "TRY",
+                        "KRW",
+                        "IDR",
+                        "MYR",
+                        "THB",
+                        "PHP",
+                        "VND",
+                        "EGP",
+                        "NGN",
                         "KES",
                         "UGX",
                         "TZS",
-                        "NGN",
-                        "ZAR",
                         "GHS",
                         "RWF",
                         "ETB",
-                        "USD",
-                        "GBP",
-                        "EUR",
-                        "INR",
-                        "BRL",
-                        "CNY",
-                        "JPY",
-                        "AUD",
-                        "CAD",
+                        "MAD",
+                        "DZD",
+                        "TND",
+                        "PKR",
+                        "BDT",
+                        "LKR",
+                        "NPR",
+                        "ARS",
+                        "CLP",
+                        "COP",
+                        "PEN",
+                        "UYU",
                       ].map((c) => (
                         <option key={c} value={c}>
                           {c}

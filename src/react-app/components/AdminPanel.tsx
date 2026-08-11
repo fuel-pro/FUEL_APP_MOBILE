@@ -389,6 +389,9 @@ export default function AdminPanel() {
     description: "",
   });
   const [customApis, setCustomApis] = useState<ApiKeyEntry[]>([]);
+  // Prevents save effects from overwriting cloud data with default state
+  // before the initial cloud load completes (cross-device overwrite race).
+  const cloudLoadCompleteRef = useRef(false);
   const [newModuleForm, setNewModuleForm] = useState({
     label: "",
     icon: "Puzzle",
@@ -425,12 +428,14 @@ export default function AdminPanel() {
   // Persist modules — localStorage (instant) + cloud (cross-device)
   useEffect(() => {
     saveAdminModules(modules);
+    if (!cloudLoadCompleteRef.current) return; // skip until cloud load done
     cloudStorageService
       .set("admin_modules", modules, undefined)
       .catch(() => {});
   }, [modules]);
   useEffect(() => {
     saveBatchUpdates(batchRecords);
+    if (!cloudLoadCompleteRef.current) return; // skip until cloud load done
     cloudStorageService
       .set("batch_updates", batchRecords.slice(0, 200), undefined)
       .catch(() => {});
@@ -440,26 +445,34 @@ export default function AdminPanel() {
   // and subscribe to real-time changes so another device's edits sync instantly.
   useEffect(() => {
     if (!adminUser) return;
+    cloudLoadCompleteRef.current = false;
+    let cancelled = false;
     (async () => {
-      const [cloudModules, cloudBatch, cloudApis] = await Promise.all([
-        cloudStorageService.get<AdminFeatureModule[]>(
-          "admin_modules",
-          undefined,
-        ),
-        cloudStorageService.get<BatchUpdateRecord[]>(
-          "batch_updates",
-          undefined,
-        ),
-        cloudStorageService.get<ApiKeyEntry[]>("custom_apis", undefined),
-      ]);
-      if (
-        cloudModules &&
-        Array.isArray(cloudModules) &&
-        cloudModules.length > 0
-      )
-        setModules(cloudModules);
-      if (cloudBatch && Array.isArray(cloudBatch)) setBatchRecords(cloudBatch);
-      if (cloudApis && Array.isArray(cloudApis)) setCustomApis(cloudApis);
+      try {
+        const [cloudModules, cloudBatch, cloudApis] = await Promise.all([
+          cloudStorageService.get<AdminFeatureModule[]>(
+            "admin_modules",
+            undefined,
+          ),
+          cloudStorageService.get<BatchUpdateRecord[]>(
+            "batch_updates",
+            undefined,
+          ),
+          cloudStorageService.get<ApiKeyEntry[]>("custom_apis", undefined),
+        ]);
+        if (cancelled) return;
+        if (
+          cloudModules &&
+          Array.isArray(cloudModules) &&
+          cloudModules.length > 0
+        )
+          setModules(cloudModules);
+        if (cloudBatch && Array.isArray(cloudBatch))
+          setBatchRecords(cloudBatch);
+        if (cloudApis && Array.isArray(cloudApis)) setCustomApis(cloudApis);
+      } finally {
+        if (!cancelled) cloudLoadCompleteRef.current = true;
+      }
     })();
 
     const unsubs = [
@@ -485,7 +498,10 @@ export default function AdminPanel() {
         },
       ),
     ];
-    return () => unsubs.forEach((u) => u());
+    return () => {
+      cancelled = true;
+      unsubs.forEach((u) => u());
+    };
   }, [adminUser]);
 
   // Security lockout

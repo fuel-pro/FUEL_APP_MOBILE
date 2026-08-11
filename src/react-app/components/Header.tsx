@@ -10,7 +10,10 @@ import RoleSelector from "@/react-app/components/RoleSelector";
 import { useNavigate } from "react-router";
 import { useState, useEffect, useRef } from "react";
 import { uploadStationLogo } from "@/react-app/lib/logo-storage-service";
-import { getDetectedCurrency, getCurrencySymbol } from "@/react-app/lib/currency";
+import {
+  getDetectedCurrency,
+  getCurrencySymbol,
+} from "@/react-app/lib/currency";
 import {
   Fuel,
   Sun,
@@ -205,10 +208,16 @@ export default function Header({
                   <span className="max-w-20 truncate">
                     {currentStation?.name}
                   </span>
-                  <ChevronDown size={10} className={`transition-transform duration-150 ${showStationMenu ? "rotate-180" : ""}`} />
+                  <ChevronDown
+                    size={10}
+                    className={`transition-transform duration-150 ${showStationMenu ? "rotate-180" : ""}`}
+                  />
                 </button>
                 {showStationMenu && (
-                  <div className="absolute top-full left-0 mt-1 w-52 bg-gray-800 rounded-xl shadow-xl border border-white/10 overflow-hidden z-50 transition-all duration-150 origin-top" role="listbox">
+                  <div
+                    className="absolute top-full left-0 mt-1 w-52 bg-gray-800 rounded-xl shadow-xl border border-white/10 overflow-hidden z-50 transition-all duration-150 origin-top"
+                    role="listbox"
+                  >
                     {stations.map((s) => (
                       <button
                         key={s.id}
@@ -596,7 +605,10 @@ export default function Header({
                   {/* Detected station currency — shown first so the default
                       selection reflects the station's locale rather than
                       Kenya. */}
-                  <option value={getCurrencySymbol(getDetectedCurrency())} className="bg-gray-800">
+                  <option
+                    value={getCurrencySymbol(getDetectedCurrency())}
+                    className="bg-gray-800"
+                  >
                     {getDetectedCurrency()} — Detected
                   </option>
                   <option value="BRL" className="bg-gray-800">
@@ -640,6 +652,84 @@ export default function Header({
                   </option>
                   <option value="ZAR" className="bg-gray-800">
                     ZAR — South African Rand
+                  </option>
+                  <option value="AUD" className="bg-gray-800">
+                    AUD — Australian Dollar
+                  </option>
+                  <option value="CAD" className="bg-gray-800">
+                    CAD — Canadian Dollar
+                  </option>
+                  <option value="CHF" className="bg-gray-800">
+                    CHF — Swiss Franc
+                  </option>
+                  <option value="CNY" className="bg-gray-800">
+                    CNY — Chinese Yuan
+                  </option>
+                  <option value="SGD" className="bg-gray-800">
+                    SGD — Singapore Dollar
+                  </option>
+                  <option value="HKD" className="bg-gray-800">
+                    HKD — Hong Kong Dollar
+                  </option>
+                  <option value="NZD" className="bg-gray-800">
+                    NZD — New Zealand Dollar
+                  </option>
+                  <option value="AED" className="bg-gray-800">
+                    AED — UAE Dirham
+                  </option>
+                  <option value="SAR" className="bg-gray-800">
+                    SAR — Saudi Riyal
+                  </option>
+                  <option value="BRL" className="bg-gray-800">
+                    BRL — Brazilian Real
+                  </option>
+                  <option value="MXN" className="bg-gray-800">
+                    MXN — Mexican Peso
+                  </option>
+                  <option value="RUB" className="bg-gray-800">
+                    RUB — Russian Ruble
+                  </option>
+                  <option value="TRY" className="bg-gray-800">
+                    TRY — Turkish Lira
+                  </option>
+                  <option value="KRW" className="bg-gray-800">
+                    KRW — South Korean Won
+                  </option>
+                  <option value="IDR" className="bg-gray-800">
+                    IDR — Indonesian Rupiah
+                  </option>
+                  <option value="MYR" className="bg-gray-800">
+                    MYR — Malaysian Ringgit
+                  </option>
+                  <option value="THB" className="bg-gray-800">
+                    THB — Thai Baht
+                  </option>
+                  <option value="PHP" className="bg-gray-800">
+                    PHP — Philippine Peso
+                  </option>
+                  <option value="VND" className="bg-gray-800">
+                    VND — Vietnamese Dong
+                  </option>
+                  <option value="EGP" className="bg-gray-800">
+                    EGP — Egyptian Pound
+                  </option>
+                  <option value="MAD" className="bg-gray-800">
+                    MAD — Moroccan Dirham
+                  </option>
+                  <option value="PKR" className="bg-gray-800">
+                    PKR — Pakistani Rupee
+                  </option>
+                  <option value="BDT" className="bg-gray-800">
+                    BDT — Bangladeshi Taka
+                  </option>
+                  <option value="ARS" className="bg-gray-800">
+                    ARS — Argentine Peso
+                  </option>
+                  <option value="CLP" className="bg-gray-800">
+                    CLP — Chilean Peso
+                  </option>
+                  <option value="COP" className="bg-gray-800">
+                    COP — Colombian Peso
                   </option>
                 </select>
               </div>

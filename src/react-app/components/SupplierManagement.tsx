@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useAuth } from "@/react-app/context/AuthContext";
 import { useStations } from "@/react-app/context/StationContext";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
@@ -155,14 +155,20 @@ export default function SupplierManagement() {
     notes: "",
   });
 
+  // Prevents save effects from overwriting cloud data with default state
+  // before the initial cloud load completes (cross-device overwrite race).
+  const cloudLoadCompleteRef = useRef(false);
+
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(suppliers));
+    if (!cloudLoadCompleteRef.current) return; // skip until cloud load done
     cloudStorageService
       .set("suppliers_data", suppliers, stationId)
       .catch(() => {});
   }, [suppliers, stationId]);
   useEffect(() => {
     localStorage.setItem(ORDERS_KEY, JSON.stringify(orders));
+    if (!cloudLoadCompleteRef.current) return; // skip until cloud load done
     cloudStorageService
       .set("purchase_orders", orders, stationId)
       .catch(() => {});
@@ -171,18 +177,25 @@ export default function SupplierManagement() {
   // Load from cloud on mount + real-time cross-device sync
   useEffect(() => {
     if (!user) return;
+    cloudLoadCompleteRef.current = false;
+    let cancelled = false;
     (async () => {
-      const cloudSuppliers = await cloudStorageService.get<Supplier[]>(
-        "suppliers_data",
-        stationId,
-      );
-      if (cloudSuppliers && Array.isArray(cloudSuppliers))
-        setSuppliers(cloudSuppliers);
-      const cloudOrders = await cloudStorageService.get<PurchaseOrder[]>(
-        "purchase_orders",
-        stationId,
-      );
-      if (cloudOrders && Array.isArray(cloudOrders)) setOrders(cloudOrders);
+      try {
+        const cloudSuppliers = await cloudStorageService.get<Supplier[]>(
+          "suppliers_data",
+          stationId,
+        );
+        if (!cancelled && cloudSuppliers && Array.isArray(cloudSuppliers))
+          setSuppliers(cloudSuppliers);
+        const cloudOrders = await cloudStorageService.get<PurchaseOrder[]>(
+          "purchase_orders",
+          stationId,
+        );
+        if (!cancelled && cloudOrders && Array.isArray(cloudOrders))
+          setOrders(cloudOrders);
+      } finally {
+        if (!cancelled) cloudLoadCompleteRef.current = true;
+      }
     })();
     // Real-time: when another device updates suppliers/orders, update instantly
     const unsubs = [
@@ -201,7 +214,10 @@ export default function SupplierManagement() {
         },
       ),
     ];
-    return () => unsubs.forEach((u) => u());
+    return () => {
+      cancelled = true;
+      unsubs.forEach((u) => u());
+    };
   }, [user, stationId]);
 
   const showNotification = (
@@ -601,9 +617,7 @@ export default function SupplierManagement() {
                         </div>
                       )}
                       <div>
-                        <span className="text-gray-500">
-                          Available Credit:
-                        </span>{" "}
+                        <span className="text-gray-500">Available Credit:</span>{" "}
                         {getCurrencySymbol()}{" "}
                         {(
                           supplier.creditLimit - supplier.currentBalance
@@ -1044,8 +1058,7 @@ export default function SupplierManagement() {
                   <div className="p-3 bg-amber-500/10 rounded-lg text-center">
                     <span className="text-sm text-gray-500">Total: </span>
                     <span className="text-lg font-bold text-amber-600 dark:text-amber-400">
-                      {getCurrencySymbol()}{" "}
-                      {orderForm.total.toLocaleString()}
+                      {getCurrencySymbol()} {orderForm.total.toLocaleString()}
                     </span>
                   </div>
                 )}

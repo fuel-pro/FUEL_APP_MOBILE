@@ -344,6 +344,9 @@ const PumpMappingV1: React.FC = () => {
   const skipChatRef = useRef(false);
   const skipRulesRef = useRef(false);
   const skipAnchorsRef = useRef(false);
+  // Prevents save effects from overwriting cloud data with default state
+  // before the initial cloud load completes (cross-device overwrite race).
+  const cloudLoadCompleteRef = useRef(false);
 
   // UI state
   const [showChat, setShowChat] = useState(false);
@@ -383,35 +386,43 @@ const PumpMappingV1: React.FC = () => {
   // persist cross-device and sync INSTANTLY when another device updates them.
   useEffect(() => {
     if (!user || !stationId) return;
-
+    cloudLoadCompleteRef.current = false;
     let cancelled = false;
     (async () => {
-      const [extracted, chat, rules, anchors] = await Promise.all([
-        cloudStorageService.get<ExtractedData | null>(
-          "pump_mapping_extracted",
-          stationId,
-        ),
-        cloudStorageService.get<ChatMessage[]>("pump_mapping_chat", stationId),
-        cloudStorageService.get<string>("pump_mapping_rules", stationId),
-        cloudStorageService.get<{
-          date: string;
-          shift: string;
-          time: string;
-          useCustom: boolean;
-          scheduled: string;
-        }>("pump_mapping_anchors", stationId),
-      ]);
-      if (cancelled) return;
-      if (extracted) setExtractedData(extracted);
-      if (chat && Array.isArray(chat) && chat.length > 0) setChatMessages(chat);
-      if (rules) setCustomRules(rules);
-      if (anchors) {
-        if (anchors.date) setAnchorDate(anchors.date);
-        if (anchors.shift) setAnchorShift(anchors.shift);
-        if (anchors.time) setAnchorTime(anchors.time);
-        if (typeof anchors.useCustom === "boolean")
-          setUseCustomSchedule(anchors.useCustom);
-        if (anchors.scheduled) setScheduledDateTime(anchors.scheduled);
+      try {
+        const [extracted, chat, rules, anchors] = await Promise.all([
+          cloudStorageService.get<ExtractedData | null>(
+            "pump_mapping_extracted",
+            stationId,
+          ),
+          cloudStorageService.get<ChatMessage[]>(
+            "pump_mapping_chat",
+            stationId,
+          ),
+          cloudStorageService.get<string>("pump_mapping_rules", stationId),
+          cloudStorageService.get<{
+            date: string;
+            shift: string;
+            time: string;
+            useCustom: boolean;
+            scheduled: string;
+          }>("pump_mapping_anchors", stationId),
+        ]);
+        if (cancelled) return;
+        if (extracted) setExtractedData(extracted);
+        if (chat && Array.isArray(chat) && chat.length > 0)
+          setChatMessages(chat);
+        if (rules) setCustomRules(rules);
+        if (anchors) {
+          if (anchors.date) setAnchorDate(anchors.date);
+          if (anchors.shift) setAnchorShift(anchors.shift);
+          if (anchors.time) setAnchorTime(anchors.time);
+          if (typeof anchors.useCustom === "boolean")
+            setUseCustomSchedule(anchors.useCustom);
+          if (anchors.scheduled) setScheduledDateTime(anchors.scheduled);
+        }
+      } finally {
+        if (!cancelled) cloudLoadCompleteRef.current = true;
       }
     })();
 
@@ -482,6 +493,7 @@ const PumpMappingV1: React.FC = () => {
   // Persist extractedData to cloud (with real-time echo skip)
   useEffect(() => {
     if (!user || !stationId || !extractedData) return;
+    if (!cloudLoadCompleteRef.current) return; // skip until cloud load done
     skipExtractedRef.current = true;
     cloudStorageService
       .set("pump_mapping_extracted", extractedData, stationId)
@@ -491,6 +503,7 @@ const PumpMappingV1: React.FC = () => {
   // Persist chatMessages to cloud
   useEffect(() => {
     if (!user || !stationId) return;
+    if (!cloudLoadCompleteRef.current) return; // skip until cloud load done
     skipChatRef.current = true;
     cloudStorageService
       .set("pump_mapping_chat", chatMessages, stationId)
@@ -500,6 +513,7 @@ const PumpMappingV1: React.FC = () => {
   // Persist customRules to cloud
   useEffect(() => {
     if (!user || !stationId) return;
+    if (!cloudLoadCompleteRef.current) return; // skip until cloud load done
     skipRulesRef.current = true;
     cloudStorageService
       .set("pump_mapping_rules", customRules, stationId)
@@ -509,6 +523,7 @@ const PumpMappingV1: React.FC = () => {
   // Persist anchor settings to cloud
   useEffect(() => {
     if (!user || !stationId) return;
+    if (!cloudLoadCompleteRef.current) return; // skip until cloud load done
     skipAnchorsRef.current = true;
     cloudStorageService
       .set(

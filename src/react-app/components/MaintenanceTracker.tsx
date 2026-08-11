@@ -1,7 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 import { useAuth } from "@/react-app/context/AuthContext";
 import { useStations } from "@/react-app/context/StationContext";
+import { getCurrencySymbol } from "../lib/currency";
 import {
   Wrench,
   Plus,
@@ -96,8 +97,13 @@ export default function MaintenanceTracker() {
     notes: "",
   });
 
+  // Prevents the save effect from overwriting cloud data with default state
+  // before the initial cloud load completes (cross-device overwrite race).
+  const cloudLoadCompleteRef = useRef(false);
+
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+    if (!cloudLoadCompleteRef.current) return; // skip until cloud load done
     cloudStorageService
       .set("maintenance_records", records, stationId)
       .catch(() => {});
@@ -106,12 +112,19 @@ export default function MaintenanceTracker() {
   // Load from cloud on mount + real-time cross-device sync
   useEffect(() => {
     if (!user) return;
+    cloudLoadCompleteRef.current = false;
+    let cancelled = false;
     (async () => {
-      const cloudData = await cloudStorageService.get<MaintenanceRecord[]>(
-        "maintenance_records",
-        stationId,
-      );
-      if (cloudData && Array.isArray(cloudData)) setRecords(cloudData);
+      try {
+        const cloudData = await cloudStorageService.get<MaintenanceRecord[]>(
+          "maintenance_records",
+          stationId,
+        );
+        if (!cancelled && cloudData && Array.isArray(cloudData))
+          setRecords(cloudData);
+      } finally {
+        if (!cancelled) cloudLoadCompleteRef.current = true;
+      }
     })();
     // Real-time: when another device updates records, update instantly
     const unsubs = [
@@ -123,7 +136,10 @@ export default function MaintenanceTracker() {
         },
       ),
     ];
-    return () => unsubs.forEach((u) => u());
+    return () => {
+      cancelled = true;
+      unsubs.forEach((u) => u());
+    };
   }, [user, stationId]);
 
   const showNotification = (
@@ -428,7 +444,7 @@ export default function MaintenanceTracker() {
                     Next: {new Date(record.nextDueDate).toLocaleDateString()}
                   </div>
                   <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
-                    KES {record.cost.toLocaleString()}
+                    {getCurrencySymbol()} {record.cost.toLocaleString()}
                   </div>
                 </div>
 
@@ -507,8 +523,8 @@ export default function MaintenanceTracker() {
                         {record.description}
                       </div>
                       <div>
-                        <span className="text-gray-500">Cost:</span> KES{" "}
-                        {record.cost.toLocaleString()}
+                        <span className="text-gray-500">Cost:</span>{" "}
+                        {getCurrencySymbol()} {record.cost.toLocaleString()}
                       </div>
                       {record.completedDate && (
                         <div>
@@ -657,7 +673,7 @@ export default function MaintenanceTracker() {
                   </div>
                   <div>
                     <label className="text-xs text-gray-500 mb-1 block">
-                      Cost (KES)
+                      Cost ({getCurrencySymbol()})
                     </label>
                     <input
                       type="number"
