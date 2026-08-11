@@ -681,6 +681,72 @@ falls back to static pricing table whose closest city was always Nairobi.
   fuel-app-mobile.vercel.app. Cloudflare mirror:
   https://f40cad3d.fuel-app-mobile.pages.dev.
 
+## Deterministic EPRA exact-match + plausibility guard (DEPLOYED LIVE 2026-08-10, commit 6628f10)
+
+**Symptom**: `/api/fuel-local` returned `success: false, error: "No fuel data
+for Nairobi: AI could not extract any prices"` after the stale-cache purge.
+The AI extraction path returned null prices even for towns explicitly
+listed in the EPRA reference table (e.g. Nairobi), because LLM extraction
+from reference text is unreliable. Separately, obscure villages (e.g.
+Nawoitorong near Lodwar) showed fabricated "AI-Estimated" prices, and even
+after removing estimation, the AI extracted implausible prices (e.g. 177.32
+for petrol in Kenya, below the EPRA minimum of 210.87) from non-current web
+data.
+
+**Fix (3 parts, all in `api/lib/fuel-engine.ts`)**:
+
+1. **Deterministic EPRA exact-match** (`lookupExactReference`): parses
+   `EPRA_KE_REFERENCE` into a structured `Record<town, FuelPriceSet>` map.
+   In `getLocalFuelPrices`, BEFORE the web-search→AI path (step D), an exact
+   case-insensitive town-name match returns REAL published EPRA prices
+   directly (`source: "Published Reference"`) — no AI dependency. Nairobi,
+   Mombasa, Kisumu, Mandera, etc. now return correct real prices instantly.
+   Only an exact match yields a price; never interpolation.
+
+2. **Kenya plausibility guard** (`isPlausibleKenyaPrice`): rejects
+   AI-extracted Kenya prices outside [85%, 115%] of the lowest EPRA reference
+   price for each product. EPRA sets MAXIMUM retail prices; a real pump price
+   won't be 15%+ below the cheapest regulated town. Rejected prices throw,
+   falling through to the PostGIS nearest REAL price (step E) or the
+   no-real-data response (step F). This is a data-quality guard, NOT
+   estimation — we never substitute a fabricated price.
+
+3. **Structured no-real-data response** (step F): when no EPRA match, AI
+   extraction rejected, AND no nearby cached real price, the engine RETURNS
+   `{success: true, prices: {super_petrol: null, ...}, source: "No
+   published price", no_real_data: true}` instead of throwing. This lets the
+   frontend show "N/A" rather than falling back to the client-side "EPRA
+   Estimate (offline)" estimation (which would violate "real prices only").
+
+   Frontend (`FuelPriceLocator.tsx`): detects `no_real_data` and renders N/A
+   with source "No published price" — never an estimate. `FuelTracker.tsx`
+   already rendered N/A for null prices; added `no_real_data` to its
+   interface.
+
+**Pipeline** (in `getLocalFuelPrices`): A) geocode → B) DB cache check
+(fresh < 14d) → C) EPRA exact-match (Published Reference) → D) web search →
+AI extraction (AI-Verified / Published Reference, with plausibility guard
+for KE) → E) PostGIS nearest cached real price (Approx.) → F) no-real-data
+(N/A). No fabrication or estimation at any step.
+
+**Verified live 2026-08-10** (fuel-app-mobile.vercel.app, dpl_7wedvmeVytCx4CA6jduM3azr5C6o):
+- Nairobi → Published Reference, 214.03/222.86/191.38 ✅
+- Mombasa → Published Reference, 210.87/219.58/188.09 ✅
+- Kisumu → Published Reference, 213.69/223.09/191.63 ✅
+- Mandera → Published Reference, 234.68/245.04/213.56 ✅
+- Nawoitorong → no_real_data=true, "No published price", all null ✅ (no
+  estimate)
+- Nakuru coords (resolves to "Kimathi") → no_real_data=true, N/A ✅
+- Cloudflare mirror: https://92928e59.fuel-app-mobile.pages.dev (SPA only;
+  /api/* works only on Vercel).
+
+**Known limitation**: Nominatim reverse-geocoding at zoom=14 sometimes
+resolves to sub-locations/neighborhoods ("Kipkenyo ward", "Kimathi")
+instead of the canonical town ("Eldoret", "Nakuru"), causing the EPRA
+exact-match to miss. This is a geocoder data-quality issue, not a price
+engine issue — the behavior remains correct (no fabrication). Enhancing the
+  geocoder to return the parent town name would improve exact-match coverage.
+
 ## Dashboard price card "Nairobi" label fix (DEPLOYED LIVE 2026-08-10, commit f49d376)
 
 **Symptom**: the Dashboard "Current Pump Prices" cards showed "Nairobi" as
