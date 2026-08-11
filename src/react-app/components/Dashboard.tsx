@@ -834,19 +834,19 @@ export default function Dashboard() {
                 <div>
                   <p className="text-[9px] text-gray-500">Landed Cost</p>
                   <p className="text-xs font-semibold text-gray-700 dark:text-gray-300">
-                    {currencySymbol} {fuelPrice.breakdown.landedCost.toFixed(2)}
+                    {currencySymbol} {effectiveFuelPrice.breakdown.landedCost.toFixed(2)}
                   </p>
                 </div>
                 <div>
                   <p className="text-[9px] text-gray-500">Taxes</p>
                   <p className="text-xs font-semibold text-gray-700 dark:text-gray-300">
-                    {currencySymbol} {fuelPrice.breakdown.taxes.toFixed(2)}
+                    {currencySymbol} {effectiveFuelPrice.breakdown.taxes.toFixed(2)}
                   </p>
                 </div>
                 <div>
                   <p className="text-[9px] text-gray-500">Margins</p>
                   <p className="text-xs font-semibold text-gray-700 dark:text-gray-300">
-                    {currencySymbol} {fuelPrice.breakdown.margins.toFixed(2)}
+                    {currencySymbol} {effectiveFuelPrice.breakdown.margins.toFixed(2)}
                   </p>
                 </div>
               </div>
@@ -857,12 +857,12 @@ export default function Dashboard() {
               <p className="text-[9px] text-gray-500 dark:text-gray-500">
                 Source:{" "}
                 <a
-                  href={fuelPrice.sourceUrl}
+                  href={effectiveFuelPrice.sourceUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-blue-500 hover:underline"
                 >
-                  {fuelPrice.sourceName}
+                  {effectiveFuelPrice.sourceName}
                 </a>
                 {isSyncing && (
                   <span className="ml-1 text-blue-400 animate-pulse">
@@ -879,8 +879,8 @@ export default function Dashboard() {
               </button>
             )}
             <p className="text-[9px] text-gray-400">
-              {fuelPrice
-                ? new Date(fuelPrice.lastUpdated).toLocaleDateString()
+              {effectiveFuelPrice
+                ? new Date(effectiveFuelPrice.lastUpdated).toLocaleDateString()
                 : "Not synced"}
             </p>
           </div>
@@ -1015,7 +1015,7 @@ export default function Dashboard() {
               <p className="font-semibold text-green-700 dark:text-green-300">
                 {currencySymbol} {displayPmsPrice}/L
               </p>
-              {fuelPrice && (
+              {effectiveFuelPrice && (
                 <p className="text-[9px] text-green-600 dark:text-green-400 mt-0.5 flex items-center justify-center gap-0.5">
                   <Globe size={8} /> Auto-synced
                 </p>
@@ -1030,7 +1030,7 @@ export default function Dashboard() {
               <p className="font-semibold text-amber-700 dark:text-amber-300">
                 {currencySymbol} {displayAgoPrice}/L
               </p>
-              {fuelPrice && (
+              {effectiveFuelPrice && (
                 <p className="text-[9px] text-amber-600 dark:text-amber-400 mt-0.5 flex items-center justify-center gap-0.5">
                   <Globe size={8} /> Auto-synced
                 </p>
