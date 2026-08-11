@@ -416,6 +416,53 @@ function lookupExactReference(
   return EPRA_KE_REFERENCE_MAP[key] || null;
 }
 
+// Plausibility check for Kenya AI-extracted prices. EPRA sets MAXIMUM retail
+// pump prices; real stations sell at or just below the cap. AI-extracted
+// prices far below the lowest published EPRA reference price are almost
+// certainly wrong (different country/cycle/wholesale/context) and are
+// rejected so the engine falls through to the nearest REAL cached price
+// instead of surfacing misleading data. This is a data-quality guard, NOT an
+// estimation: we never substitute a fabricated price — we only accept prices
+// that are consistent with the known real-price range.
+const EPRA_KE_MIN = (() => {
+  const vals = Object.values(EPRA_KE_REFERENCE_MAP);
+  const minOf = (k: keyof FuelPriceSet) =>
+    Math.min(
+      ...vals
+        .map((p) => p[k])
+        .filter(
+          (v): v is number => typeof v === "number" && Number.isFinite(v),
+        ),
+    );
+  return {
+    super_petrol: minOf("super_petrol"),
+    diesel: minOf("diesel"),
+    kerosene: minOf("kerosene"),
+  };
+})();
+
+function isPlausibleKenyaPrice(prices: FuelPriceSet): boolean {
+  // A price is plausible if every non-null value is within [85%, 115%] of the
+  // lowest EPRA reference price for that product. EPRA maxima vary by ~10%
+  // between towns; a real pump price will not be 15%+ below the cheapest
+  // regulated town, nor far above the dearest (which would be illegal).
+  const PLAUSIBLE_MIN = 0.85;
+  const PLAUSIBLE_MAX = 1.15;
+  const checks: Array<[number | null | undefined, number]> = [
+    [prices.super_petrol, EPRA_KE_MIN.super_petrol],
+    [prices.diesel, EPRA_KE_MIN.diesel],
+    [prices.kerosene, EPRA_KE_MIN.kerosene],
+  ];
+  let checkedAny = false;
+  for (const [val, refMin] of checks) {
+    if (val == null) continue;
+    checkedAny = true;
+    if (val < refMin * PLAUSIBLE_MIN || val > refMin * PLAUSIBLE_MAX)
+      return false;
+  }
+  return checkedAny;
+}
+
 function extractPriceText(html: string): string {
   // Remove script/style/noscript blocks, then strip remaining tags.
   const cleaned = html
@@ -751,6 +798,23 @@ export async function getLocalFuelPrices(
       prices.diesel != null ||
       prices.kerosene != null;
     if (!hasAny) throw new Error("AI could not extract any prices");
+
+    // Plausibility guard for Kenya: EPRA sets MAXIMUM retail prices, so a
+    // real pump price should be at or just below the published maximum.
+    // AI-extracted prices far below the lowest EPRA reference price are
+    // almost certainly wrong data (different country/cycle/wholesale) and
+    // would mislead users. Reject them so we fall through to the nearest
+    // REAL cached EPRA-town price (step E) instead of showing bad data.
+    if (
+      place.countryCode.toUpperCase() === "KE" &&
+      !isPlausibleKenyaPrice(prices)
+    ) {
+      console.warn(
+        `[fuel-engine] rejected implausible AI prices for ${place.name}:`,
+        prices,
+      );
+      throw new Error("AI-extracted prices implausible for Kenya");
+    }
 
     // Both paths (live search snippets AND free EPRA pages) extract REAL
     // verbatim prices — neither estimates. "AI-Verified" = parsed from live
