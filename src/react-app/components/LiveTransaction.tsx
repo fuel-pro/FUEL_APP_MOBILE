@@ -1270,6 +1270,9 @@ export default function LiveTransaction() {
                 >
                   <option value="mpesa_paybill">M-PESA Paybill</option>
                   <option value="mpesa_buygoods">M-PESA Buy Goods</option>
+                  <option value="kopo_kopo">
+                    Kopo Kopo (Till / Buy Goods)
+                  </option>
                   <option value="bank_account">Bank Account</option>
                   <option value="cash_register">Cash Register</option>
                 </select>
@@ -1344,9 +1347,44 @@ export default function LiveTransaction() {
                   </div>
                 </div>
               )}
+              {newSource.source_type === "kopo_kopo" && (
+                <div
+                  className={`rounded-lg p-3 border flex items-start gap-2 ${kopoConnected ? "bg-green-500/10 border-green-500/40" : "bg-amber-500/10 border-amber-500/40"}`}
+                >
+                  {kopoConnected ? (
+                    <Link2
+                      className="text-green-400 mt-0.5 flex-shrink-0"
+                      size={14}
+                    />
+                  ) : (
+                    <AlertTriangle
+                      className="text-amber-400 mt-0.5 flex-shrink-0"
+                      size={14}
+                    />
+                  )}
+                  <div className="flex-1">
+                    <p
+                      className={`text-xs ${kopoConnected ? "text-green-200" : "text-amber-200"}`}
+                    >
+                      {kopoConnected
+                        ? "Kopo Kopo is connected — automated till reconciliation & webhook ingestion are active."
+                        : "Kopo Kopo is not configured. Connect it to auto-ingest Buy Goods payments into this live feed."}
+                    </p>
+                    <button
+                      onClick={() => switchToTab("integration")}
+                      className="mt-1 text-xs text-blue-300 hover:text-blue-200 flex items-center gap-1"
+                    >
+                      <Settings size={11} /> Configure Kopo Kopo in Integration
+                      Hub
+                      <ExternalLink size={10} />
+                    </button>
+                  </div>
+                </div>
+              )}
               <div>
                 <label className="block text-sm text-gray-300 mb-1">
-                  {newSource.source_type.includes("mpesa")
+                  {newSource.source_type.includes("mpesa") ||
+                  newSource.source_type === "kopo_kopo"
                     ? "Shortcode/Till Number"
                     : newSource.source_type === "bank_account"
                       ? "Account Number"
@@ -1360,7 +1398,8 @@ export default function LiveTransaction() {
                   }
                   className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white"
                   placeholder={
-                    newSource.source_type.includes("mpesa")
+                    newSource.source_type.includes("mpesa") ||
+                    newSource.source_type === "kopo_kopo"
                       ? "589252"
                       : "Enter identifier"
                   }

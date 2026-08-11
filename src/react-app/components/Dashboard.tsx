@@ -37,6 +37,7 @@ import { CANONICAL_FUEL_TYPES } from "@/react-app/config/pricing";
 import {
   navigateToTab,
   type StkPushPrefill,
+  type FuelPricePrefill,
 } from "@/react-app/lib/mpesa-integration-service";
 import { useState, useEffect, useMemo, useCallback } from "react";
 
@@ -859,6 +860,40 @@ export default function Dashboard() {
                 </p>
               ) : null}
             </div>
+          </div>
+          {/* Fuel price interlinks — jump to the editor/finder/price-board so
+              a price change here is reflected everywhere, and vice-versa. */}
+          <div className="flex flex-wrap gap-1.5 mt-2">
+            <button
+              onClick={() =>
+                navigateToTab("fueltypes", {
+                  fuelType: CANONICAL_FUEL_TYPES.petrol.label,
+                  price: displayPmsPrice,
+                } as FuelPricePrefill)
+              }
+              className="text-[9px] px-2 py-1 rounded-lg bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-200 dark:hover:bg-indigo-800"
+              title="Edit fuel types & prices in Fuel Type Manager"
+            >
+              Edit Prices
+            </button>
+            <button
+              onClick={() =>
+                navigateToTab("fueltypes", {
+                  view: "priceboard",
+                } as FuelPricePrefill)
+              }
+              className="text-[9px] px-2 py-1 rounded-lg bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 hover:bg-purple-200"
+              title="Open Price Board"
+            >
+              Price Board
+            </button>
+            <button
+              onClick={() => navigateToTab("price-finder")}
+              className="text-[9px] px-2 py-1 rounded-lg bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300 hover:bg-teal-200"
+              title="Find nearby market fuel prices"
+            >
+              Find Prices
+            </button>
           </div>
           {fuelPrice?.breakdown && (
             <div className="mt-3 pt-3 border-t border-blue-200/50 dark:border-blue-800/30">

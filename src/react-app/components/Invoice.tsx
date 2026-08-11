@@ -3,6 +3,7 @@ import {
   Plus,
   Save,
   Trash2,
+  Edit3,
   MessageCircle,
   Bot,
   Send,
@@ -28,10 +29,15 @@ import {
   navigateToTab,
   type InvoicePrefill,
   type StkPushPrefill,
+  type FuelPricePrefill,
 } from "@/react-app/lib/mpesa-integration-service";
+import { useStationFuelTypes } from "@/react-app/hooks/useStationFuelTypes";
+import { useStations } from "@/react-app/context/StationContext";
 
 export default function Invoice() {
   const { state, dispatch } = useFuel();
+  const { currentStation } = useStations();
+  const fuelTypeApi = useStationFuelTypes(currentStation?.id);
   const [customerName, setCustomerName] = useState("");
   const [customerAddress, setCustomerAddress] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
@@ -609,6 +615,12 @@ export default function Invoice() {
                           className="w-full bg-transparent border-none outline-none"
                           placeholder="Item description"
                         />
+                        {fuelTypeApi.getPriceFor(item.desc) != null && (
+                          <span className="text-[9px] text-gray-400">
+                            Fuel price: Ksh{" "}
+                            {fuelTypeApi.getPriceFor(item.desc)?.toFixed(2)}/L
+                          </span>
+                        )}
                       </td>
                       <td className="border border-gray-300 p-3 text-center">
                         <input
@@ -634,18 +646,50 @@ export default function Invoice() {
                             min="0"
                           />
                         </div>
+                        {fuelTypeApi.getPriceFor(item.desc) != null && (
+                          <button
+                            onClick={() =>
+                              updateInvoiceItem(
+                                index,
+                                "price",
+                                String(
+                                  fuelTypeApi.getPriceFor(item.desc) ??
+                                    item.price,
+                                ),
+                              )
+                            }
+                            className="text-[9px] text-indigo-600 hover:underline mt-0.5"
+                            title="Use the station's configured fuel price"
+                          >
+                            use fuel price
+                          </button>
+                        )}
                       </td>
                       <td className="border border-gray-300 p-3 text-right font-medium">
                         Ksh{formatNumber(item.total, 0)}
                       </td>
                       <td className="border border-gray-300 p-3 text-center">
-                        <button
-                          onClick={() => deleteInvoiceItem(index)}
-                          className="text-red-600 hover:text-red-800 p-1"
-                          title="Delete item"
-                        >
-                          <Trash2 size={16} />
-                        </button>
+                        <div className="flex items-center justify-center gap-1">
+                          <button
+                            onClick={() =>
+                              navigateToTab("fueltypes", {
+                                fuelType: item.desc,
+                                price: Number(item.price) || undefined,
+                              } as FuelPricePrefill)
+                            }
+                            className="text-indigo-600 hover:text-indigo-800 p-1"
+                            title="Edit fuel type / price in Fuel Type Manager"
+                          >
+                            <Edit3 size={14} />
+                          </button>
+                          <button
+                            onClick={() => deleteInvoiceItem(index)}
+                            className="text-red-600 hover:text-red-800 p-1"
+                            title="Delete item"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}

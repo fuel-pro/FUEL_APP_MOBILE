@@ -10,9 +10,19 @@ import React, {
 import { useAuth } from "@/react-app/context/AuthContext";
 import { useStations } from "@/react-app/context/StationContext";
 // Unified pricing - single source of truth for all fuel prices
-import { KENYA_BASE_PRICES, DEFAULT_PRICES } from "@/react-app/config/pricing";
+import {
+  KENYA_BASE_PRICES,
+  DEFAULT_PRICES,
+  normalizeFuelType,
+} from "@/react-app/config/pricing";
 // Cross-device cloud storage (Supabase app_kv-backed) — replaces /api/user-data
 import { cloudStorageService } from "@/react-app/lib/cloud-storage-service";
+// Fuel interlink bus — in-device pub/sub for instant price/type propagation
+import {
+  emitFuelPriceChange,
+  onFuelPriceChange,
+} from "@/react-app/lib/fuel-interlink-bus";
+import type { CustomFuelType } from "@/react-app/components/FuelTypesManager";
 
 // Use unified pricing defaults (Kenya EPRA prices as default)
 const DEFAULT_PMS_PRICE = KENYA_BASE_PRICES.petrol; // 220.30 KES
@@ -1049,6 +1059,15 @@ interface FuelContextType {
   loadFromCloud: () => Promise<void>;
   isCloudSaving: boolean;
   lastCloudSave: Date | null;
+  /**
+   * Propagate a fuel-price change from FuelContext to the shared
+   * `fuel_types_config` cloud key (so FuelTypesManager / PriceBoard / POS /
+   * Invoice / Reports all see the new price), AND broadcast it on the
+   * in-device fuel-interlink bus for instant same-page updates. Call this
+   * alongside dispatch(SET_PRICES) from any component that edits a station
+   * pump price (PumpSettingsPanel, "Set as my price" actions, etc.).
+   */
+  syncPriceToFuelTypes: (raw: string, price: number) => void;
 }
 
 const FuelContext = createContext<FuelContextType | undefined>(undefined);
@@ -1096,6 +1115,24 @@ export function FuelProvider({ children }: { children: ReactNode }) {
   // Real-time echo guard: set before saveToCloud writes so the real-time
   // subscription knows to skip the echo of our own write.
   const skipRemoteUpdateRef = useRef(false);
+
+  // ============================================================
+  // FUEL TYPE / PRICE INTERLINK (FuelContext <-> fuel_types_config)
+  // ------------------------------------------------------------
+  // fuel_types_config (edited by FuelTypesManager) is the rich source of
+  // truth for the station's fuel types + their per-litre prices. FuelContext
+  // keeps legacy scalar pmsPrice/agoPrice for backwards compatibility. These
+  // two are kept in sync: when fuel_types_config loads (or changes via
+  // real-time), the active petrol/diesel entries drive pmsPrice/agoPrice; and
+  // syncPriceToFuelTypes() writes a FuelContext price change back into
+  // fuel_types_config + broadcasts on the interlink bus. This makes a price
+  // edited anywhere (Dashboard, PriceBoard, "Set as my price", PumpSettings)
+  // reflect everywhere instantly.
+  const fuelTypesRef = useRef<CustomFuelType[]>([]);
+  // Guard the FuelContext -> fuel_types_config derivation so we don't loop:
+  // while WE are applying a fuel_types_config change to pmsPrice/agoPrice, we
+  // must not re-broadcast it as a FuelContext change.
+  const applyingFuelTypesRef = useRef(false);
 
   const saveToStorage = useCallback(() => {
     try {
@@ -1771,6 +1808,168 @@ export function FuelProvider({ children }: { children: ReactNode }) {
     return () => unsub();
   }, [user, stationId]);
 
+  // ------------------------------------------------------------
+  // Load fuel_types_config on mount/station change, keep fuelTypesRef in
+  // sync, derive pmsPrice/agoPrice from the active petrol/diesel entries,
+  // and subscribe to real-time cloud updates so a price edit in
+  // FuelTypesManager on another device propagates here instantly.
+  useEffect(() => {
+    let cancelled = false;
+    const applyFuelTypes = (list: CustomFuelType[]) => {
+      if (cancelled) return;
+      fuelTypesRef.current = list;
+      const s = stateRef.current;
+      const petrol = list.find(
+        (ft) => ft.active && normalizeFuelType(ft.name) === "petrol",
+      );
+      const diesel = list.find(
+        (ft) => ft.active && normalizeFuelType(ft.name) === "diesel",
+      );
+      const updates: Partial<{ pmsPrice: number; agoPrice: number }> = {};
+      if (
+        petrol &&
+        typeof petrol.price === "number" &&
+        petrol.price > 0 &&
+        petrol.price !== s.pmsPrice
+      ) {
+        updates.pmsPrice = petrol.price;
+      }
+      if (
+        diesel &&
+        typeof diesel.price === "number" &&
+        diesel.price > 0 &&
+        diesel.price !== s.agoPrice
+      ) {
+        updates.agoPrice = diesel.price;
+      }
+      if (Object.keys(updates).length > 0) {
+        applyingFuelTypesRef.current = true;
+        dispatch({ type: "SET_PRICES", payload: updates });
+        // Broadcast so same-page consumers (Dashboard, PriceBoard) update.
+        if (updates.pmsPrice != null) {
+          emitFuelPriceChange({
+            fuelType: "Super Petrol",
+            canonical: "petrol",
+            price: updates.pmsPrice,
+            source: "FuelContext.fuelTypesSync",
+          });
+        }
+        if (updates.agoPrice != null) {
+          emitFuelPriceChange({
+            fuelType: "Diesel",
+            canonical: "diesel",
+            price: updates.agoPrice,
+            source: "FuelContext.fuelTypesSync",
+          });
+        }
+        applyingFuelTypesRef.current = false;
+      }
+    };
+
+    (async () => {
+      try {
+        const data = await cloudStorageService.get<CustomFuelType[]>(
+          "fuel_types_config",
+          stationId,
+        );
+        if (data && Array.isArray(data)) applyFuelTypes(data);
+      } catch {
+        /* ignore */
+      }
+    })();
+
+    const unsub = cloudStorageService.subscribe<CustomFuelType[]>(
+      "fuel_types_config",
+      stationId,
+      (val) => {
+        if (val && Array.isArray(val)) applyFuelTypes(val);
+      },
+    );
+    return () => {
+      cancelled = true;
+      unsub?.();
+    };
+  }, [stationId]);
+
+  // ------------------------------------------------------------
+  // syncPriceToFuelTypes: write a FuelContext price change back into
+  // fuel_types_config (so FuelTypesManager/PriceBoard/POS/Invoice/Reports see
+  // it) and broadcast on the interlink bus. Exposed via context for any
+  // component that edits a station pump price.
+  const syncPriceToFuelTypes = useCallback(
+    (raw: string, price: number) => {
+      if (typeof price !== "number" || !isFinite(price) || price <= 0) return;
+      const canonical = normalizeFuelType(raw);
+      if (!canonical) return;
+      // Update the matching fuel_types_config entry (if any) and persist.
+      const list = fuelTypesRef.current;
+      if (list.length > 0) {
+        const idx = list.findIndex(
+          (ft) => normalizeFuelType(ft.name) === canonical,
+        );
+        if (idx >= 0 && list[idx].price !== price) {
+          const next = list.slice();
+          next[idx] = { ...next[idx], price };
+          fuelTypesRef.current = next;
+          cloudStorageService
+            .set("fuel_types_config", next, stationIdRef.current)
+            .catch(() => {});
+        }
+      }
+      // Also keep the legacy FuelContext scalar fields in sync for petrol/diesel.
+      if (canonical === "petrol" || canonical === "diesel") {
+        dispatch({
+          type: "SET_PRICES",
+          payload:
+            canonical === "petrol" ? { pmsPrice: price } : { agoPrice: price },
+        });
+      }
+      // Broadcast for instant same-page updates (Dashboard, PriceBoard, …).
+      emitFuelPriceChange({
+        fuelType: raw,
+        canonical,
+        price,
+        source: "FuelContext.syncPriceToFuelTypes",
+      });
+    },
+    [],
+  );
+
+  // Listen for price changes broadcast by OTHER components on the bus (e.g.
+  // FuelPriceLocator "Set as my price") and mirror them into FuelContext +
+  // fuel_types_config, so those actions update the Dashboard/legacy fields too.
+  useEffect(() => {
+    const unsub = onFuelPriceChange((p) => {
+      if (applyingFuelTypesRef.current) return; // avoid loop with our own emit
+      const canonical = p.canonical ?? normalizeFuelType(p.fuelType);
+      if (!canonical) return;
+      const list = fuelTypesRef.current;
+      if (list.length > 0) {
+        const idx = list.findIndex(
+          (ft) => normalizeFuelType(ft.name) === canonical,
+        );
+        if (idx >= 0 && list[idx].price !== p.price) {
+          const next = list.slice();
+          next[idx] = { ...next[idx], price: p.price };
+          fuelTypesRef.current = next;
+          cloudStorageService
+            .set("fuel_types_config", next, stationIdRef.current)
+            .catch(() => {});
+        }
+      }
+      if (canonical === "petrol" || canonical === "diesel") {
+        dispatch({
+          type: "SET_PRICES",
+          payload:
+            canonical === "petrol"
+              ? { pmsPrice: p.price }
+              : { agoPrice: p.price },
+        });
+      }
+    });
+    return () => unsub();
+  }, []);
+
   // Apply theme to body - robust for all browsers
   useEffect(() => {
     try {
@@ -1809,6 +2008,7 @@ export function FuelProvider({ children }: { children: ReactNode }) {
         loadFromCloud,
         isCloudSaving,
         lastCloudSave,
+        syncPriceToFuelTypes,
       }}
     >
       {children}

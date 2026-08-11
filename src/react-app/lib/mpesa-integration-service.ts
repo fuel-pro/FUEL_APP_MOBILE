@@ -379,3 +379,7 @@ export interface ExpensePrefill {
   reference?: string;
   paymentMethod?: string;
 }
+
+// Re-export the fuel prefill shape so all cross-tab prefill types live in one
+// importable module for receivers that already import from here.
+export type { FuelPricePrefill } from "@/react-app/lib/fuel-interlink-bus";

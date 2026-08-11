@@ -3,6 +3,7 @@ import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 import { useAuth } from "@/react-app/context/AuthContext";
 import { useLocation } from "@/react-app/context/LocationContext";
 import { useStations } from "@/react-app/context/StationContext";
+import { useFuel } from "@/react-app/context/FuelContext";
 import { useFuelPrices } from "@/react-app/hooks/useFuelPrices";
 import {
   getClosestKenyaCityPrice,
@@ -97,6 +98,7 @@ export default function FuelPriceLocator() {
     currentCountry,
   } = useLocation();
   const { stations } = useStations();
+  const { syncPriceToFuelTypes } = useFuel();
   const {
     prices: unifiedPrices,
     refreshPrices,
@@ -105,6 +107,7 @@ export default function FuelPriceLocator() {
   } = useFuelPrices();
 
   const [loading, setLoading] = useState(false);
+  const [appliedLabel, setAppliedLabel] = useState<string | null>(null);
   const [nearbyResult, setNearbyResult] = useState<StationPriceInfo | null>(
     null,
   );
@@ -408,6 +411,17 @@ export default function FuelPriceLocator() {
               })}
             </div>
             <div className="text-xs text-slate-500">per litre</div>
+            <button
+              onClick={() => {
+                syncPriceToFuelTypes(label, val);
+                setAppliedLabel(label);
+                setTimeout(() => setAppliedLabel(null), 2000);
+              }}
+              className="mt-2 text-[10px] px-2 py-1 rounded-lg bg-emerald-600/20 text-emerald-300 hover:bg-emerald-600/40 transition-colors"
+              title={`Set ${label} market price as my station price`}
+            >
+              {appliedLabel === label ? "✓ Applied" : "Set as my price"}
+            </button>
           </div>
         ) : (
           <span className="text-lg font-bold text-slate-600">N/A</span>

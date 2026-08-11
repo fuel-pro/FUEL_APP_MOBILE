@@ -36,6 +36,16 @@ import { useStations } from "@/react-app/context/StationContext";
 import SubTabBar from "@/react-app/components/SubTabBar";
 import PriceBoard from "@/react-app/components/PriceBoard";
 import FuelQualityTesting from "@/react-app/components/FuelQualityTesting";
+import {
+  emitFuelTypeChange,
+  emitFuelPriceChange,
+  type FuelPricePrefill,
+} from "@/react-app/lib/fuel-interlink-bus";
+import {
+  onTabPayload,
+  navigateToTab,
+} from "@/react-app/lib/mpesa-integration-service";
+import { normalizeFuelType } from "@/react-app/config/pricing";
 
 // ============================================================
 // CUSTOM FUEL TYPE MANAGER
@@ -318,6 +328,24 @@ export default function FuelTypesManager() {
     cloudStorageService
       .set("fuel_types_config", types, stationId)
       .catch(() => {});
+    // Broadcast each active fuel's price on the interlink bus so same-page
+    // consumers (Dashboard, PriceBoard, POS, Invoice, Reports) update
+    // instantly without waiting for the cloud real-time round-trip.
+    for (const ft of types) {
+      if (!ft.active) continue;
+      emitFuelTypeChange({
+        id: ft.id,
+        fuelType: ft.name,
+        canonical: normalizeFuelType(ft.name),
+        source: "FuelTypesManager.persist",
+      });
+      emitFuelPriceChange({
+        fuelType: ft.name,
+        canonical: normalizeFuelType(ft.name),
+        price: ft.price,
+        source: "FuelTypesManager.persist",
+      });
+    }
   };
 
   // Load from cloud on mount + real-time cross-device sync
@@ -342,6 +370,50 @@ export default function FuelTypesManager() {
     ];
     return () => unsubs.forEach((u) => u());
   }, [user, stationId]);
+
+  // Interlink receiver: when another tab calls navigateToTab("fueltypes",
+  // <FuelPricePrefill>), open the add form pre-filled with the fuel type +
+  // price so the user can review and save (which then propagates everywhere
+  // via the bus + cloud real-time).
+  useEffect(() => {
+    return onTabPayload("fueltypes", (raw) => {
+      const p = (raw || {}) as FuelPricePrefill;
+      if (Object.keys(p).length === 0) return;
+      const validViews = [
+        "fueltypes",
+        "pumps",
+        "priceboard",
+        "quality",
+      ] as const;
+      const target =
+        p.view && (validViews as readonly string[]).includes(p.view)
+          ? (p.view as (typeof validViews)[number])
+          : "fueltypes";
+      setActiveView(target);
+      // Only open the add form when a fuel type / price is actually being
+      // pre-filled — a pure "show price board" navigation has no fuelType.
+      if (p.fuelType) {
+        setFormName(p.fuelType);
+        setFormLocalName(p.fuelType);
+        const canonical = normalizeFuelType(p.fuelType);
+        if (canonical) {
+          // Use the canonical code as the form code (PMS/AGO/IK/...).
+          const codeMap: Record<string, string> = {
+            petrol: "PMS",
+            diesel: "AGO",
+            kerosene: "IK",
+            vpower: "VPW",
+            premium_diesel: "PDS",
+            lpg: "LPG",
+            cng: "CNG",
+          };
+          setFormCode(codeMap[canonical] || "");
+        }
+      }
+      if (typeof p.price === "number" && p.price > 0) setFormPrice(p.price);
+      setShowAddForm(true);
+    });
+  }, []);
 
   const resetForm = () => {
     setFormCode("");

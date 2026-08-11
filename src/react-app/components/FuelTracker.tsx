@@ -15,6 +15,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { MapPin, RefreshCw, Navigation, AlertTriangle } from "lucide-react";
 import { useFuelPrices } from "@/react-app/hooks/useFuelPrices";
 import { CANONICAL_FUEL_TYPES } from "@/react-app/config/pricing";
+import { useFuel } from "@/react-app/context/FuelContext";
 
 interface LocalFuelResponse {
   success: boolean;
@@ -184,6 +185,8 @@ function ReadyView({ data }: { data: LocalFuelResponse }) {
   const prices = data.prices || {};
   const currency = data.currency || "";
   const isApprox = data.is_approximate;
+  const { syncPriceToFuelTypes } = useFuel();
+  const [appliedLabel, setAppliedLabel] = useState<string | null>(null);
 
   return (
     <div>
@@ -213,18 +216,57 @@ function ReadyView({ data }: { data: LocalFuelResponse }) {
           value={prices.super_petrol}
           currency={currency}
           color="from-green-500 to-emerald-600"
+          onSet={
+            prices.super_petrol != null
+              ? () => {
+                  syncPriceToFuelTypes(
+                    CANONICAL_FUEL_TYPES.petrol.label,
+                    prices.super_petrol as number,
+                  );
+                  setAppliedLabel(CANONICAL_FUEL_TYPES.petrol.label);
+                  setTimeout(() => setAppliedLabel(null), 2000);
+                }
+              : undefined
+          }
+          applied={appliedLabel === CANONICAL_FUEL_TYPES.petrol.label}
         />
         <PriceCard
           label={CANONICAL_FUEL_TYPES.diesel.label}
           value={prices.diesel}
           currency={currency}
           color="from-blue-500 to-indigo-600"
+          onSet={
+            prices.diesel != null
+              ? () => {
+                  syncPriceToFuelTypes(
+                    CANONICAL_FUEL_TYPES.diesel.label,
+                    prices.diesel as number,
+                  );
+                  setAppliedLabel(CANONICAL_FUEL_TYPES.diesel.label);
+                  setTimeout(() => setAppliedLabel(null), 2000);
+                }
+              : undefined
+          }
+          applied={appliedLabel === CANONICAL_FUEL_TYPES.diesel.label}
         />
         <PriceCard
           label={CANONICAL_FUEL_TYPES.kerosene.label}
           value={prices.kerosene}
           currency={currency}
           color="from-amber-500 to-orange-600"
+          onSet={
+            prices.kerosene != null
+              ? () => {
+                  syncPriceToFuelTypes(
+                    CANONICAL_FUEL_TYPES.kerosene.label,
+                    prices.kerosene as number,
+                  );
+                  setAppliedLabel(CANONICAL_FUEL_TYPES.kerosene.label);
+                  setTimeout(() => setAppliedLabel(null), 2000);
+                }
+              : undefined
+          }
+          applied={appliedLabel === CANONICAL_FUEL_TYPES.kerosene.label}
         />
       </div>
 
@@ -245,11 +287,15 @@ function PriceCard({
   value,
   currency,
   color,
+  onSet,
+  applied,
 }: {
   label: string;
   value?: number | null;
   currency: string;
   color: string;
+  onSet?: () => void;
+  applied?: boolean;
 }) {
   return (
     <div className={`bg-gradient-to-br ${color} rounded-xl p-4 text-white`}>
@@ -261,6 +307,15 @@ function PriceCard({
         {currency}
         {value != null ? " / litre" : ""}
       </div>
+      {onSet && (
+        <button
+          onClick={onSet}
+          className="mt-2 text-[10px] px-2 py-1 rounded-lg bg-white/20 hover:bg-white/40 transition-colors"
+          title={`Set ${label} market price as my station price`}
+        >
+          {applied ? "✓ Applied" : "Set as my price"}
+        </button>
+      )}
     </div>
   );
 }
