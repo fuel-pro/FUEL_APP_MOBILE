@@ -1254,3 +1254,67 @@ labels.
   once the quota resets. Until then Vercel production serves the previous
   frontend; the Cloudflare mirror has the fixed frontend NOW. /api/* endpoints
   (unchanged by this commit) remain correct on Vercel.
+
+## Worldwide currency fix — Invoice + all export utils (ADDED 2026-08-11, commit f8347e4)
+
+**Symptom**: the app was billed as "world-wide" but the Invoice component
+and ALL export functions (Invoice/Delivery/Debt/Sales — PDF/Excel/TXT)
+hardcoded the Kenyan `Ksh`/`KES` currency symbol. A German station
+configured with `currency: EUR` showed `Total Due: Ksh0` on the Invoice
+tab, and exported PDFs/Excel/TXT labeled every amount `Ksh` regardless of
+the station's country.
+
+**Fix**: every hardcoded display string now derives the symbol via
+`getCurrencySymbol(state.companyData?.currency)` (imported from
+`@/react-app/lib/currency`), so the correct symbol (€, $, KSh, £, ₹…)
+renders based on the station's configured currency.
+
+- `src/react-app/components/Invoice.tsx`: 8+ `"Ksh"` literals replaced
+  with `currencySymbol` (client name, total due, item table unit-price/total
+  cells, footer, etc.).
+- `src/react-app/utils/exportUtils.ts`: added the
+  `getCurrencySymbol` import and a `currencySymbol` const to ALL export
+  functions:
+  - `exportDeliveryPDF/Excel/TXT` (was `"Ksh "` and
+    `state.companyData.currency` — the latter showed the literal ISO code
+    "EUR" instead of the € symbol).
+  - `exportDebtPDF/Excel/TXT` (was `"KES"`/`"Ksh "`).
+  - `exportSalesPDF/Excel/TXT` (table header labels `"Opening (Ksh)"`
+    → `` `Opening (${currencySymbol})` ``, totals `"Total Revenue: Ksh "`
+    → `` `Total Revenue: ${currencySymbol} ` ``, per-pump/expenses lines).
+  - Invoice export functions (`exportInvoicePDF/Excel/TXT`) were already
+    fixed in a prior commit.
+- Object property names (`p.openingKsh`, `state.summary.totalPmsSalesKsh`)
+  are deliberately LEFT UNCHANGED — they are internal data field names
+  carried in the saved state blob, not display strings. Renaming them
+  would break backward compatibility with existing cloud blobs.
+
+**Verified end-to-end on Cloudflare preview c04d57d4**: logged in as
+German test user `worldwide.fuelpro.test@gmail.com` (uid 70305cff). The
+Invoice tab renders `Total Due: €0`, item rows show `€` in the
+Unit-Price and Total column headers, and the Save generated
+`INV-2026-001`. The cloud blob (`app_kv` scoped id
+`user_70305cff..._compact__70305cff...`) contains `companyData.currency
+= "EUR"`, `companyData.name = "Global Energy Worldwide Station"`, and 1
+invoice — confirming cross-device sync persists the EUR currency.
+
+**Deploy status 2026-08-11**:
+- GitHub main (branch `worldwide-features-sync-test`): commit f8347e4 pushed.
+- Cloudflare Pages: LIVE (preview https://c04d57d4.fuel-app-mobile.pages.dev +
+  main alias fuel-app-mobile.pages.dev, 124 precache entries).
+- Vercel production: BLOCKED by `api-deployments-free-per-day` (100/100 used;
+  resets ~2026-08-12 06:50 UTC). The project's GitHub integration will
+  auto-deploy the latest main once the quota resets. Until then Vercel
+  production serves the previous frontend; the Cloudflare mirror has the
+  fixed frontend NOW.
+
+**Remaining hardcoded `Ksh` in OTHER components** (NOT yet fixed — display
+strings only, lower priority since Invoice is the primary customer-facing
+export): `Dashboard.tsx`, `PointOfSale.tsx`, `SalesTracking.tsx`,
+`DeliveryTracker.tsx`, `DebtReminder.tsx`, `FuelTypesManager.tsx`,
+`CombinedStationsView.tsx`, `FuelSalesReport.tsx`, `ReportsCenter.tsx`,
+`MPESAAnalyzer.tsx`, `AIAssistant.tsx`, `AIChatbot.tsx`, `Header.tsx`,
+`Paywall.tsx`, `DataManager.tsx`, `pos/POSCheckout.tsx`,
+`lib/pos/printer-service.ts`, `context/FuelContext.tsx`,
+`components/SetupWizard.tsx`, `components/Documents.tsx`. Each should be
+migrated to `getCurrencySymbol(companyData.currency)` in a follow-up.
