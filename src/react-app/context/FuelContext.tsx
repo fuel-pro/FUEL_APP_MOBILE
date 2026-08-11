@@ -861,20 +861,33 @@ const initialState: FuelState = {
   dataBackups: [],
 };
 
-function fuelReducer(state: FuelState, action: FuelAction): FuelState {
-  // CRITICAL: Always load logo from storage during LOAD_FROM_STORAGE
-  if (action.type === "LOAD_FROM_STORAGE" && action.payload) {
-    // The logo is now loaded from both compact and individual companyData keys
-    // Just ensure companyData is properly merged
-    const incomingCompanyData = action.payload.companyData;
-    if (incomingCompanyData?.logo) {
-      // Logo is available - use it
-      console.log(
-        "Loading logo from storage:",
-        incomingCompanyData.logo.substring(0, 50) + "...",
-      );
+/**
+ * Merge two companyData objects so an incoming EMPTY string/zero value never
+ * overwrites a non-empty existing value. This prevents a stale cloud/local
+ * blob (e.g. one where `name: ""` because it was saved before the field
+ * existed) from clobbering a populated in-memory value on reload or station
+ * switch. For each field, the incoming value wins ONLY when it is truthy
+ * (non-empty/non-zero); otherwise the existing value is kept.
+ */
+function mergeCompanyData(
+  existing: CompanyData,
+  incoming?: Partial<CompanyData> | null,
+): CompanyData {
+  if (!incoming) return { ...existing };
+  const merged = { ...existing };
+  (Object.keys(incoming) as (keyof CompanyData)[]).forEach((key) => {
+    const inc = incoming[key];
+    // Always let falsy incoming values fall back to the existing value,
+    // EXCEPT `currency` (default "KSh") and `etrInvoicePrefix` (default
+    // "INV") which are legitimately short strings we still want to carry.
+    if (inc !== undefined && inc !== null && inc !== "") {
+      (merged as Record<keyof CompanyData, unknown>)[key] = inc;
     }
-  }
+  });
+  return merged;
+}
+
+function fuelReducer(state: FuelState, action: FuelAction): FuelState {
 
   switch (action.type) {
     case "SET_THEME":
@@ -949,11 +962,16 @@ function fuelReducer(state: FuelState, action: FuelAction): FuelState {
       // Deep-merge companyData so a logo-less/stale payload cannot clobber a
       // logo-bearing in-memory state (fixes logo disappearing after refresh
       // when localStorage wins the race over cloud with stale data).
+      // Additionally, an incoming EMPTY string must NOT overwrite a
+      // non-empty in-memory value — this is the root cause of companyData.name
+      // (and other text fields) being wiped after reload: a stale blob with
+      // name:"" was shallow-merging over a populated name. mergeCompanyData
+      // keeps the non-empty (existing OR incoming) value for each field.
       const incoming = action.payload;
       return {
         ...state,
         ...incoming,
-        companyData: { ...state.companyData, ...(incoming.companyData || {}) },
+        companyData: mergeCompanyData(state.companyData, incoming.companyData),
       };
     }
     // Station management
@@ -1034,7 +1052,7 @@ function fuelReducer(state: FuelState, action: FuelAction): FuelState {
           ...state,
           currentStationId: action.payload,
           stationData: savedStationData,
-          companyData: loadedStation.companyData || state.companyData,
+          companyData: mergeCompanyData(state.companyData, loadedStation.companyData),
           pmsPumps: loadedStation.pmsPumps || [],
           agoPumps: loadedStation.agoPumps || [],
           pmsTankOpening: loadedStation.pmsTankOpening || 0,

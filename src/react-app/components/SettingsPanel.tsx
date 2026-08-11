@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { useStations } from "@/react-app/context/StationContext";
 import { useAuth } from "@/react-app/context/AuthContext";
+import { useFuel } from "@/react-app/context/FuelContext";
 import { supabase } from "@/supabase/client";
 import UserProfileSettings from "./UserProfileSettings";
 import {
@@ -24,6 +25,7 @@ import {
 export default function SettingsPanel() {
   const { currentStation, updateStation } = useStations();
   const { user } = useAuth();
+  const { state, dispatch } = useFuel();
   const stationId = currentStation?.id;
   const [activeTab, setActiveTab] = useState<"business" | "profile">(
     "business",
@@ -60,6 +62,22 @@ export default function SettingsPanel() {
         ...currentStation,
         ...form,
         taxRate: parseFloat(form.taxRate) || 16,
+      });
+      // ALSO sync the company-info fields into FuelContext.companyData so
+      // invoices/reports (which read from companyData, NOT the station
+      // record) reflect the user's Settings edits. Without this, the KRA
+      // PIN / phone / email / company name entered here never reached the
+      // cloud blob that the invoice template reads from.
+      dispatch({
+        type: "SET_COMPANY_DATA",
+        payload: {
+          ...state.companyData,
+          name: form.name || state.companyData.name,
+          contacts: form.phone || state.companyData.contacts,
+          email: form.email || state.companyData.email,
+          kraPin: form.kraPin || state.companyData.kraPin,
+          physicalAddress: form.location || state.companyData.physicalAddress,
+        },
       });
       setNotice("Settings saved successfully");
       setTimeout(() => setNotice(null), 3000);
