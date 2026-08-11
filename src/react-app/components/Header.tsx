@@ -196,16 +196,18 @@ export default function Header({
               <div className="relative inline-block">
                 <button
                   onClick={() => setShowStationMenu(!showStationMenu)}
-                  className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 rounded-lg text-xs transition-colors border border-amber-500/30"
+                  aria-haspopup="listbox"
+                  aria-expanded={showStationMenu}
+                  className="flex h-10 items-center gap-1.5 px-2.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 rounded-lg text-xs transition-all duration-150 border border-amber-500/30 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
                 >
                   <Layers size={12} />
                   <span className="max-w-20 truncate">
                     {currentStation?.name}
                   </span>
-                  <ChevronDown size={10} />
+                  <ChevronDown size={10} className={`transition-transform duration-150 ${showStationMenu ? "rotate-180" : ""}`} />
                 </button>
                 {showStationMenu && (
-                  <div className="absolute top-full left-0 mt-1 w-52 bg-gray-800 rounded-xl shadow-xl border border-white/10 overflow-hidden z-50">
+                  <div className="absolute top-full left-0 mt-1 w-52 bg-gray-800 rounded-xl shadow-xl border border-white/10 overflow-hidden z-50 transition-all duration-150 origin-top" role="listbox">
                     {stations.map((s) => (
                       <button
                         key={s.id}
@@ -213,7 +215,7 @@ export default function Header({
                           switchStation(s.id);
                           setShowStationMenu(false);
                         }}
-                        className={`w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-white/5 transition-colors ${currentStation?.id === s.id ? "bg-amber-500/10" : ""}`}
+                        className={`w-full flex h-10 items-center gap-2.5 px-3 text-left hover:bg-white/5 transition-colors duration-150 ${currentStation?.id === s.id ? "bg-amber-500/10" : ""}`}
                       >
                         <div className="w-6 h-6 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-md flex items-center justify-center text-[10px] font-bold text-white">
                           {s.name.charAt(0).toUpperCase()}
