@@ -1557,3 +1557,69 @@ Applied site-wide to all 78 native `<select>` elements across 36 files:
 - Verified in production CSS bundle: `min-height:48px`, `appearance:none`,
   `.15s` transitions, `#6366f1` focus ring, `#1f2937` dark bg,
   `prefers-reduced-motion` — all present ✅
+
+## Cross-component wiring — co-relate everything (ADDED 2026-08-11, PR #103)
+
+**Goal**: wire everything together (hardcoded items, features, logic, buttons)
+so all parts of the site co-relate. Everything adjustable per user
+(current/previous/future inputs/preferences) in relation to changes anywhere.
+When a user changes fuel types, prices, or currency anywhere, every other
+component reflects the change instantly.
+
+### Changes by component
+
+- **SalesTracking.tsx**: `buildDefaultPumps()` uses `useStationFuelTypes`
+  activeFuelTypes (fallback 2 Petrol + 2 Diesel) instead of hardcoded PMS+AGO.
+  Price inputs + `clearSalesData` use station prices. UI labels use
+  `getFuelLabel()`.
+- **Dashboard.tsx**: added `useStationFuelTypes` hook; price display prefers
+  station-configured prices; live-updates via fuel-interlink-bus subscription
+  (when a price changes in PriceBoard/FuelTypesManager, Dashboard updates
+  instantly without reload).
+- **PointOfSale.tsx**: `syncFuelSalesToHistory` decrements tank levels
+  (SET_TANK_VALUES) and adds M-PESA transactions (SET_MPESA_TRANSACTIONS)
+  as side-effects of a POS sale.
+- **FuelSalesReport.tsx**: POS sales now factored into petrol/diesel totals
+  (P0 fix — previously POS sales were invisible in fuel sales reports).
+- **FuelTypesManager.tsx**: `PumpSettingsPanel` save handler persists to
+  `fuel_types_config` (cloud) + emits `emitFuelPriceChange` bus events so
+  sibling components update instantly. Fixes dual-source-of-truth bug.
+- **ReportsAnalytics.tsx**: removed hardcoded `formatMoney`; currency resolves
+  to station-configured ISO code via `useFuel`.
+- **PriceBoard.tsx**: `formData.currency` uses `stationCurrency`
+  (`state.companyData.currency || "KES"`) for both default + reset states.
+- **FuelOffloading.tsx**: replaced hardcoded `r.fuelType === "PMS"`/`"AGO"`
+  filters with `normalizeFuelType(r.fuelType) === "petrol"`/`"diesel"` so
+  records saved with any alias (PMS, Super Petrol, Petrol) group correctly.
+- **FuelPriceLocator.tsx**: added "Your Station Prices" comparison panel
+  wired to station-configured fuel types + currency; uses
+  `useStationFuelTypes` + `state.companyData.currency`.
+- **LiveTransaction.tsx**: added "Import M-PESA" and "Import Kopo Kopo"
+  quick-action buttons (`importFromIntegrationHub`) that pull the connected
+  Integration Hub configs (`mpesa_config`/`kopokopo_config`) and register
+  them as payment sources. Links Live Transaction Monitor to Integration Hub
+  (M-PESA Payment and Kopo Kopo Payment) as requested. De-dupes by identifier.
+
+### Tab merges (verified all 9 in place as sub-tabs)
+1. Integrations -> Integration Hub (Country-specific integrations for Kenya)
+2. Auto Fuel Price -> Fuel Price Finder (sub-tab via SubTabBar)
+3. Purchases & Suppliers -> Supplier Management (sub-tab)
+4. Sales Invoices -> Invoice (sub-tab)
+5. Shift Management -> Team Manager (sub-tab)
+6. Pump Settings -> Fuel Type Manager (sub-tab)
+7. Price Board -> Fuel Type Manager (sub-tab)
+8. Document Converter -> Document Center (sub-tab)
+9. Fuel Quality Testing -> Fuel Type Manager (sub-tab)
+
+### Verification
+- `npx tsc --noEmit` — 0 errors
+- `npm run build` — success (112 precache entries)
+- Cloudflare Pages: LIVE https://aceeb629.fuel-app-mobile.pages.dev
+  (verified: LiveTransaction chunk contains "Import M-PESA",
+  FuelPriceLocator chunk contains "Your Station Prices", HTTP 200)
+- Vercel production: BLOCKED by `api-deployments-free-per-day` (100/100
+  exhausted; resets ~24h). GitHub integration will auto-deploy PR #103 when
+  the quota resets. Cloudflare mirror has the fixed code NOW.
+- GitHub: PR #103 https://github.com/fuel-pro/FUEL_APP_MOBILE/pull/103
+  (branch `wire-components-cross-relate`)
+- Supabase: no schema changes needed (frontend-only)
