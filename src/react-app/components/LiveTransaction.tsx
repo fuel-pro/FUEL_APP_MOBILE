@@ -333,6 +333,68 @@ export default function LiveTransaction() {
     }
   };
 
+  // Import a payment source from the connected Integration Hub config
+  // (M-PESA Daraja or Kopo Kopo) — wires the Live Transaction tab to the
+  // Integration Hub so connected integrations are one-click usable here.
+  const importFromIntegrationHub = async (type: "mpesa" | "kopokopo") => {
+    try {
+      setIsLoading(true);
+      setError("");
+      const key = type === "mpesa" ? "mpesa_config" : "kopokopo_config";
+      const config =
+        (await cloudStorageService.get<any>(key, stationId)) || null;
+      if (!config || !config.enabled) {
+        const label = type === "mpesa" ? "M-PESA" : "Kopo Kopo";
+        alert(
+          `${label} is not configured yet.\n\nTap "Open Integration Hub" below to set it up, then come back to import it as a payment source.`,
+        );
+        switchToTab("integration");
+        return;
+      }
+      const existing =
+        (await cloudStorageService.get<PaymentSource[]>(
+          "payment_sources",
+          stationId,
+        )) || [];
+      const source_name =
+        config.name || (type === "mpesa" ? "M-PESA Daraja" : "Kopo Kopo");
+      // De-dupe by identifier
+      const identifier =
+        config.shortcode || config.till_number || config.name || "";
+      if (existing.some((s) => s.identifier === identifier && s.source_name === source_name)) {
+        setSuccess(`${source_name} is already a registered payment source`);
+        return;
+      }
+      const newRecord: PaymentSource = {
+        id: Date.now(),
+        source_type:
+          type === "mpesa" ? "mpesa_daraja" : "kopokopo_till",
+        source_name,
+        identifier,
+        account_info: JSON.stringify({
+          environment: config.environment || "sandbox",
+          type: config.type || (type === "mpesa" ? "Buy Goods" : "Till"),
+        }),
+        is_active: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      const updated = [...existing, newRecord];
+      await cloudStorageService.set<PaymentSource[]>(
+        "payment_sources",
+        updated,
+        stationId,
+      );
+      setPaymentSources(updated);
+      setSuccess(`${source_name} imported from Integration Hub`);
+    } catch (err) {
+      console.error("Error importing integration:", err);
+      setError("Failed to import integration. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const updatePaymentSource = async () => {
     if (
       !selectedSource ||
@@ -647,6 +709,22 @@ export default function LiveTransaction() {
           >
             <Plus size={16} />
             Add Source
+          </button>
+          <button
+            onClick={() => importFromIntegrationHub("mpesa")}
+            className="bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-2 rounded-lg flex items-center gap-2 text-xs border border-emerald-500/50"
+            title="Import M-PESA config from Integration Hub as a payment source"
+          >
+            <Smartphone size={14} />
+            Import M-PESA
+          </button>
+          <button
+            onClick={() => importFromIntegrationHub("kopokopo")}
+            className="bg-blue-700 hover:bg-blue-600 text-white px-3 py-2 rounded-lg flex items-center gap-2 text-xs border border-blue-500/50"
+            title="Import Kopo Kopo config from Integration Hub as a payment source"
+          >
+            <Wallet size={14} />
+            Import Kopo Kopo
           </button>
         </div>
       </div>

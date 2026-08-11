@@ -12,7 +12,7 @@ import {
 import ExportDropdown from "@/react-app/components/ExportDropdown";
 import { useFuel } from "@/react-app/context/FuelContext";
 import { useStationFuelTypes } from "@/react-app/hooks/useStationFuelTypes";
-import { getFuelLabel, getFuelCode } from "@/react-app/config/pricing";
+import { getFuelLabel, getFuelCode, normalizeFuelType } from "@/react-app/config/pricing";
 import type { OffloadingRecord } from "@/react-app/context/FuelContext";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -161,17 +161,18 @@ export default function FuelOffloading() {
       (sum, record) => sum + record.totalAmount,
       0,
     ),
+    // Wire: use canonical fuel types so records saved with any alias (PMS, Super Petrol, Petrol) group correctly
     pmsQuantity: state.offloadingRecords
-      .filter((r) => r.fuelType === "PMS")
+      .filter((r) => normalizeFuelType(r.fuelType) === "petrol")
       .reduce((sum, record) => sum + record.quantity, 0),
     agoQuantity: state.offloadingRecords
-      .filter((r) => r.fuelType === "AGO")
+      .filter((r) => normalizeFuelType(r.fuelType) === "diesel")
       .reduce((sum, record) => sum + record.quantity, 0),
     pmsAmount: state.offloadingRecords
-      .filter((r) => r.fuelType === "PMS")
+      .filter((r) => normalizeFuelType(r.fuelType) === "petrol")
       .reduce((sum, record) => sum + record.totalAmount, 0),
     agoAmount: state.offloadingRecords
-      .filter((r) => r.fuelType === "AGO")
+      .filter((r) => normalizeFuelType(r.fuelType) === "diesel")
       .reduce((sum, record) => sum + record.totalAmount, 0),
   };
 
@@ -482,7 +483,7 @@ export default function FuelOffloading() {
                       <td>
                         <span
                           className={`px-2 py-1 rounded text-xs font-medium ${
-                            record.fuelType === "PMS"
+                            normalizeFuelType(record.fuelType) === "petrol"
                               ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300"
                               : "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300"
                           }`}
