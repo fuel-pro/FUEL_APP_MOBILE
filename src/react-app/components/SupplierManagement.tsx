@@ -1,7 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useAuth } from "@/react-app/context/AuthContext";
 import { useStations } from "@/react-app/context/StationContext";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
+import { useStationFuelTypes } from "@/react-app/hooks/useStationFuelTypes";
+import { getFuelLabel } from "@/react-app/config/pricing";
 import {
   Truck,
   Plus,
@@ -24,7 +26,9 @@ import {
   Search,
   CheckCircle2,
   AlertTriangle,
+  ShoppingCart,
 } from "lucide-react";
+import PurchasesSuppliers from "@/react-app/components/PurchasesSuppliers";
 
 interface Supplier {
   id: string;
@@ -62,8 +66,6 @@ interface PurchaseOrder {
 const STORAGE_KEY = "fuelpro_suppliers_v2";
 const ORDERS_KEY = "fuelpro_purchase_orders_v2";
 
-const FUEL_TYPES = ["Petrol", "Diesel", "Premium", "Kerosene", "LPG"];
-
 function loadSuppliers(): Supplier[] {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
@@ -88,12 +90,34 @@ export default function SupplierManagement() {
   const { currentStation } = useStations();
   const stationId = currentStation?.id || "default";
   const { user } = useAuth();
+  // Unified station fuel types — so supplier fuel-type checkboxes & the
+  // purchase-order fuel dropdown reflect the station's actual configured fuels
+  // (from Fuel Type Manager) instead of a hardcoded list.
+  const fuelTypeApi = useStationFuelTypes(stationId);
+  const fuelTypeOptions = useMemo(() => {
+    const fromConfig = fuelTypeApi.activeFuelTypes.map((ft) =>
+      getFuelLabel(ft.name),
+    );
+    // Merge with legacy fallbacks so a station with no fuel_types_config still
+    // has options; dedupe case-insensitively.
+    const legacy = ["Petrol", "Diesel", "Premium", "Kerosene", "LPG"];
+    const seen = new Set<string>();
+    const merged: string[] = [];
+    for (const f of [...fromConfig, ...legacy]) {
+      const key = f.toLowerCase();
+      if (!seen.has(key)) {
+        seen.add(key);
+        merged.push(f);
+      }
+    }
+    return merged;
+  }, [fuelTypeApi.activeFuelTypes]);
 
   const [suppliers, setSuppliers] = useState<Supplier[]>(loadSuppliers);
   const [orders, setOrders] = useState<PurchaseOrder[]>(loadOrders);
-  const [activeView, setActiveView] = useState<"suppliers" | "orders">(
-    "suppliers",
-  );
+  const [activeView, setActiveView] = useState<
+    "suppliers" | "orders" | "purchases"
+  >("suppliers");
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [showForm, setShowForm] = useState(false);
@@ -363,10 +387,21 @@ export default function SupplierManagement() {
           >
             Purchase Orders
           </button>
+          <button
+            onClick={() => {
+              setActiveView("purchases");
+            }}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5 ${activeView === "purchases" ? "bg-amber-500 text-white shadow-lg" : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200"}`}
+          >
+            <ShoppingCart size={14} />
+            Purchases
+          </button>
         </div>
       </div>
 
-      {activeView === "suppliers" ? (
+      {activeView === "purchases" ? (
+        <PurchasesSuppliers />
+      ) : activeView === "suppliers" ? (
         <>
           {/* Toolbar */}
           <div className="flex flex-col md:flex-row gap-3">
@@ -828,7 +863,7 @@ export default function SupplierManagement() {
                     Fuel Types Supplied
                   </label>
                   <div className="flex flex-wrap gap-2">
-                    {FUEL_TYPES.map((ft) => (
+                    {fuelTypeOptions.map((ft) => (
                       <button
                         key={ft}
                         onClick={() =>
@@ -956,7 +991,7 @@ export default function SupplierManagement() {
                     }
                     className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
                   >
-                    {FUEL_TYPES.map((ft) => (
+                    {fuelTypeOptions.map((ft) => (
                       <option key={ft} value={ft}>
                         {ft}
                       </option>

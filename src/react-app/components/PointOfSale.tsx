@@ -17,6 +17,11 @@ import {
   Award,
 } from "lucide-react";
 import { useFuel } from "@/react-app/context/FuelContext";
+import {
+  navigateToTab,
+  type FuelPricePrefill,
+} from "@/react-app/lib/mpesa-integration-service";
+import { useStationFuelTypes } from "@/react-app/hooks/useStationFuelTypes";
 import { useLocation } from "@/react-app/context/LocationContext";
 import { useAuth } from "@/react-app/context/AuthContext";
 import { useStations } from "@/react-app/context/StationContext";
@@ -68,6 +73,7 @@ export default function PointOfSale() {
   const { user } = useAuth();
   const { currentStation } = useStations();
   const stationId = currentStation?.id;
+  const fuelTypeApi = useStationFuelTypes(stationId);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [paymentMethod, setPaymentMethod] = useState<
     "cash" | "mpesa" | "card" | "bank"
@@ -265,13 +271,18 @@ export default function PointOfSale() {
     const litres = parseFloat(quickSaleLitres) || 0;
     if (litres <= 0) return;
 
-    const price =
-      quickSaleType === "petrol" ? state.petrolPrice : state.dieselPrice;
-    const total = litres * price;
-    const fuelName =
+    const label =
       quickSaleType === "petrol"
         ? CANONICAL_FUEL_TYPES.petrol.label
         : CANONICAL_FUEL_TYPES.diesel.label;
+    // Use the unified bus-fresh price (falls back to legacy state field if the
+    // station has no matching fuel_types_config entry) so the charged total
+    // always matches the displayed per-litre price.
+    const price =
+      fuelTypeApi.getPriceFor(label) ??
+      (quickSaleType === "petrol" ? state.petrolPrice : state.dieselPrice);
+    const total = litres * price;
+    const fuelName = label;
 
     const newItem: CartItem = {
       id: `fuel-${Date.now()}`,
@@ -728,7 +739,10 @@ export default function PointOfSale() {
                       : "bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
                   }`}
                 >
-                  Petrol (Ksh {state.petrolPrice}/L)
+                  Petrol (Ksh{" "}
+                  {fuelTypeApi.getPriceFor(CANONICAL_FUEL_TYPES.petrol.label) ??
+                    state.petrolPrice}
+                  /L)
                 </button>
                 <button
                   onClick={() => setQuickSaleType("diesel")}
@@ -738,7 +752,21 @@ export default function PointOfSale() {
                       : "bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
                   }`}
                 >
-                  Diesel (Ksh {state.dieselPrice}/L)
+                  Diesel (Ksh{" "}
+                  {fuelTypeApi.getPriceFor(CANONICAL_FUEL_TYPES.diesel.label) ??
+                    state.dieselPrice}
+                  /L)
+                </button>
+                <button
+                  onClick={() =>
+                    navigateToTab("fueltypes", {
+                      view: "fueltypes",
+                    } as FuelPricePrefill)
+                  }
+                  className="px-3 py-2 rounded-lg font-medium bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-200 text-sm"
+                  title="Edit fuel types & prices in Fuel Type Manager"
+                >
+                  Edit Fuels
                 </button>
               </div>
               <div className="flex gap-2 items-center">
@@ -755,8 +783,12 @@ export default function PointOfSale() {
                   {formatNumber(
                     (parseFloat(quickSaleLitres) || 0) *
                       (quickSaleType === "petrol"
-                        ? state.petrolPrice
-                        : state.dieselPrice),
+                        ? (fuelTypeApi.getPriceFor(
+                            CANONICAL_FUEL_TYPES.petrol.label,
+                          ) ?? state.petrolPrice)
+                        : (fuelTypeApi.getPriceFor(
+                            CANONICAL_FUEL_TYPES.diesel.label,
+                          ) ?? state.dieselPrice)),
                   )}
                 </span>
                 <button onClick={addFuelToCart} className="btn btn-primary">

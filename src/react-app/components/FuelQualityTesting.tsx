@@ -16,6 +16,10 @@ import {
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 import { useAuth } from "@/react-app/context/AuthContext";
 import { useStations } from "@/react-app/context/StationContext";
+import {
+  navigateToTab,
+  type FuelPricePrefill,
+} from "@/react-app/lib/mpesa-integration-service";
 
 interface QualityTest {
   id: string;
@@ -224,6 +228,17 @@ export default function FuelQualityTesting() {
               <option value="AGO">AGO (Diesel)</option>
               <option value="Kerosene">Kerosene</option>
             </select>
+            <button
+              onClick={() =>
+                navigateToTab("fueltypes", {
+                  view: "fueltypes",
+                } as FuelPricePrefill)
+              }
+              className="text-[10px] text-indigo-600 dark:text-indigo-400 hover:underline"
+              title="Manage fuel types in Fuel Type Manager"
+            >
+              Edit fuel types
+            </button>
             <input
               placeholder="Batch Number *"
               value={newTest.batchNumber || ""}

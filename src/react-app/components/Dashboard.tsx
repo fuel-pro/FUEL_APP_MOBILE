@@ -28,9 +28,17 @@ import {
   TrendingUpIcon,
   FileText,
   Info,
+  Smartphone,
+  Truck,
+  Plug,
 } from "lucide-react";
 import { formatNumber } from "@/react-app/utils/formatUtils";
 import { CANONICAL_FUEL_TYPES } from "@/react-app/config/pricing";
+import {
+  navigateToTab,
+  type StkPushPrefill,
+  type FuelPricePrefill,
+} from "@/react-app/lib/mpesa-integration-service";
 import { useState, useEffect, useMemo, useCallback } from "react";
 
 // Lazy API base URL getter using dynamic import to avoid circular deps
@@ -392,7 +400,10 @@ export default function Dashboard() {
       ago = 1;
     } // default for empty state
     return {
-      labels: [CANONICAL_FUEL_TYPES.petrol.label, CANONICAL_FUEL_TYPES.diesel.label],
+      labels: [
+        CANONICAL_FUEL_TYPES.petrol.label,
+        CANONICAL_FUEL_TYPES.diesel.label,
+      ],
       datasets: [
         {
           data: [pms, ago],
@@ -556,10 +567,61 @@ export default function Dashboard() {
       color: "bg-rose-500 hover:bg-rose-600",
       desc: "View reports",
     },
+    {
+      label: "Credit",
+      icon: Wallet,
+      tab: "credit",
+      color: "bg-pink-500 hover:bg-pink-600",
+      desc: "Customer credit & debt reminders",
+    },
+    {
+      label: "STK Push",
+      icon: Smartphone,
+      tab: "livetransaction",
+      color: "bg-cyan-500 hover:bg-cyan-600",
+      desc: "Collect M-PESA payment",
+      payload: { openStkPush: true } as Partial<StkPushPrefill>,
+    },
+    {
+      label: "Expenses",
+      icon: Receipt,
+      tab: "expenses",
+      color: "bg-orange-500 hover:bg-orange-600",
+      desc: "Record an expense",
+    },
+    {
+      label: "Suppliers",
+      icon: Truck,
+      tab: "suppliers",
+      color: "bg-indigo-500 hover:bg-indigo-600",
+      desc: "Purchases & suppliers",
+    },
+    {
+      label: "Integration Hub",
+      icon: Plug,
+      tab: "integration",
+      color: "bg-teal-500 hover:bg-teal-600",
+      desc: "M-PESA / Kopo Kopo setup",
+    },
+    {
+      label: "Payroll",
+      icon: Users,
+      tab: "payroll",
+      color: "bg-fuchsia-500 hover:bg-fuchsia-600",
+      desc: "Employee payroll",
+    },
   ];
 
   const switchToTab = (tabId: string) => {
     window.dispatchEvent(new CustomEvent("changeTab", { detail: tabId }));
+  };
+
+  const launchAction = (action: (typeof quickActions)[number]) => {
+    if (action.payload) {
+      navigateToTab(action.tab, action.payload);
+    } else {
+      switchToTab(action.tab);
+    }
   };
 
   return (
@@ -799,6 +861,40 @@ export default function Dashboard() {
               ) : null}
             </div>
           </div>
+          {/* Fuel price interlinks — jump to the editor/finder/price-board so
+              a price change here is reflected everywhere, and vice-versa. */}
+          <div className="flex flex-wrap gap-1.5 mt-2">
+            <button
+              onClick={() =>
+                navigateToTab("fueltypes", {
+                  fuelType: CANONICAL_FUEL_TYPES.petrol.label,
+                  price: displayPmsPrice,
+                } as FuelPricePrefill)
+              }
+              className="text-[9px] px-2 py-1 rounded-lg bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-200 dark:hover:bg-indigo-800"
+              title="Edit fuel types & prices in Fuel Type Manager"
+            >
+              Edit Prices
+            </button>
+            <button
+              onClick={() =>
+                navigateToTab("fueltypes", {
+                  view: "priceboard",
+                } as FuelPricePrefill)
+              }
+              className="text-[9px] px-2 py-1 rounded-lg bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 hover:bg-purple-200"
+              title="Open Price Board"
+            >
+              Price Board
+            </button>
+            <button
+              onClick={() => navigateToTab("price-finder")}
+              className="text-[9px] px-2 py-1 rounded-lg bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300 hover:bg-teal-200"
+              title="Find nearby market fuel prices"
+            >
+              Find Prices
+            </button>
+          </div>
           {fuelPrice?.breakdown && (
             <div className="mt-3 pt-3 border-t border-blue-200/50 dark:border-blue-800/30">
               <div className="grid grid-cols-3 gap-2 text-center">
@@ -1034,7 +1130,7 @@ export default function Dashboard() {
             {quickActions.map((action) => (
               <button
                 key={action.label}
-                onClick={() => switchToTab(action.tab)}
+                onClick={() => launchAction(action)}
                 className={`${action.color} text-white rounded-xl p-4 text-left transition-all hover:scale-[1.02] active:scale-[0.98] shadow-sm`}
               >
                 <action.icon size={24} className="mb-2 opacity-90" />

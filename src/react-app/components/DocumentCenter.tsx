@@ -47,6 +47,8 @@ import {
 } from "@/react-app/lib/documentStore";
 import { useAuth } from "@/react-app/context/AuthContext";
 import { useStations } from "@/react-app/context/StationContext";
+import SubTabBar from "@/react-app/components/SubTabBar";
+import DocumentConverter from "@/react-app/components/DocumentConverter";
 
 const CATEGORY_COLORS: Record<string, string> = {
   "M-PESA Receipt": "#10b981",
@@ -155,6 +157,11 @@ export default function DocumentCenter() {
   const [folderActionMsg, setFolderActionMsg] = useState<string | null>(null);
   // Upload target folder (optional; empty = auto-sort)
   const [uploadTargetFolder, setUploadTargetFolder] = useState("");
+  // Inner sub-tab: "Documents" (this manager) vs "Converter" (the formerly-
+  // standalone DocumentConverter, now hosted here).
+  const [activeView, setActiveView] = useState<"documents" | "converter">(
+    "documents",
+  );
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
@@ -568,627 +575,661 @@ export default function DocumentCenter() {
         </p>
       </div>
 
-      {/* Stats bar */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
-          gap: 10,
-          marginBottom: 16,
-        }}
-      >
-        <StatCard
-          icon={<FileText size={16} />}
-          label="Documents"
-          value={String(stats.count)}
-          color="#3b82f6"
+      {/* Sub-tab switcher: Documents vs Document Converter */}
+      <div style={{ marginBottom: 20 }}>
+        <SubTabBar
+          tabs={[
+            { id: "documents", label: "Documents", icon: FolderOpen },
+            { id: "converter", label: "Document Converter", icon: FileText },
+          ]}
+          active={activeView}
+          onChange={(id) => setActiveView(id as "documents" | "converter")}
         />
-        <StatCard
-          icon={<HardDrive size={16} />}
-          label="Storage Used"
-          value={formatSize(stats.storage)}
-          color="#10b981"
-        />
-        <StatCard
-          icon={<CheckCircle2 size={16} />}
-          label="Uploaded"
-          value={String(doneUploads)}
-          color="#8b5cf6"
-        />
-        {errorUploads > 0 && (
-          <StatCard
-            icon={<AlertTriangle size={16} />}
-            label="Errors"
-            value={String(errorUploads)}
-            color="#ef4444"
-          />
-        )}
       </div>
 
-      {/* Upload zone */}
-      <div
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-        style={{
-          border: `2px dashed ${isDragOver ? "#f59e0b" : "#334155"}`,
-          borderRadius: 12,
-          padding: "28px 20px",
-          textAlign: "center",
-          background: isDragOver
-            ? "rgba(245,158,11,0.08)"
-            : "rgba(30,30,35,0.6)",
-          transition: "all 0.2s",
-          marginBottom: 16,
-        }}
-      >
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          onChange={handleFileSelect}
-          style={{ display: "none" }}
-          accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.jpg,.jpeg,.png,.gif,.webp,.zip,.mp3,.mp4,.mov,.avi"
-        />
-        <input
-          ref={folderInputRef}
-          type="file"
-          // @ts-expect-error - webkitdirectory/directory are not in React DOM TS types but work in browsers
-          webkitdirectory=""
-          directory=""
-          multiple
-          onChange={handleFolderSelect}
-          style={{ display: "none" }}
-        />
-        <FileUp
-          size={32}
-          style={{ color: isDragOver ? "#f59e0b" : "#475569", marginBottom: 8 }}
-        />
-        <p style={{ margin: "0 0 12px", fontSize: 14, color: "#94a3b8" }}>
-          {isDragOver
-            ? "Drop files or folders here"
-            : "Drag & drop files or folders here"}
-        </p>
-        <div
-          style={{
-            display: "flex",
-            gap: 10,
-            justifyContent: "center",
-            flexWrap: "wrap",
-          }}
-        >
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            style={{
-              padding: "10px 18px",
-              background: "#f59e0b",
-              color: "#000",
-              border: "none",
-              borderRadius: 8,
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-            }}
-          >
-            <Upload size={15} /> Select Files
-          </button>
-          <button
-            onClick={() => folderInputRef.current?.click()}
-            style={{
-              padding: "10px 18px",
-              background: "transparent",
-              color: "#f59e0b",
-              border: "1px solid #f59e0b",
-              borderRadius: 8,
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-            }}
-          >
-            <FolderUp size={15} /> Select Folder
-          </button>
-        </div>
-        <p style={{ margin: "8px 0 0", fontSize: 11, color: "#475569" }}>
-          Supports PDF, Word, Excel, Images, CSV, Text, ZIP — Max 100MB per file
-        </p>
-      </div>
-
-      {/* Upload queue */}
-      {uploads.length > 0 && (
-        <div
-          style={{
-            marginBottom: 16,
-            background: "rgba(30,30,35,0.6)",
-            borderRadius: 10,
-            padding: 12,
-            border: "1px solid #334155",
-          }}
-        >
+      {activeView === "converter" ? (
+        <DocumentConverter />
+      ) : (
+        <>
+          {/* Stats bar */}
           <div
             style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              marginBottom: 8,
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+              gap: 10,
+              marginBottom: 16,
             }}
           >
-            <span style={{ fontSize: 13, fontWeight: 600, color: "#e2e8f0" }}>
-              Upload Queue{" "}
-              {activeUploads > 0 && (
-                <span style={{ color: "#f59e0b" }}>
-                  ({activeUploads} active)
-                </span>
-              )}
-            </span>
-            <button
-              onClick={clearCompleted}
+            <StatCard
+              icon={<FileText size={16} />}
+              label="Documents"
+              value={String(stats.count)}
+              color="#3b82f6"
+            />
+            <StatCard
+              icon={<HardDrive size={16} />}
+              label="Storage Used"
+              value={formatSize(stats.storage)}
+              color="#10b981"
+            />
+            <StatCard
+              icon={<CheckCircle2 size={16} />}
+              label="Uploaded"
+              value={String(doneUploads)}
+              color="#8b5cf6"
+            />
+            {errorUploads > 0 && (
+              <StatCard
+                icon={<AlertTriangle size={16} />}
+                label="Errors"
+                value={String(errorUploads)}
+                color="#ef4444"
+              />
+            )}
+          </div>
+
+          {/* Upload zone */}
+          <div
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            style={{
+              border: `2px dashed ${isDragOver ? "#f59e0b" : "#334155"}`,
+              borderRadius: 12,
+              padding: "28px 20px",
+              textAlign: "center",
+              background: isDragOver
+                ? "rgba(245,158,11,0.08)"
+                : "rgba(30,30,35,0.6)",
+              transition: "all 0.2s",
+              marginBottom: 16,
+            }}
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              onChange={handleFileSelect}
+              style={{ display: "none" }}
+              accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.jpg,.jpeg,.png,.gif,.webp,.zip,.mp3,.mp4,.mov,.avi"
+            />
+            <input
+              ref={folderInputRef}
+              type="file"
+              // @ts-expect-error - webkitdirectory/directory are not in React DOM TS types but work in browsers
+              webkitdirectory=""
+              directory=""
+              multiple
+              onChange={handleFolderSelect}
+              style={{ display: "none" }}
+            />
+            <FileUp
+              size={32}
               style={{
-                fontSize: 11,
-                color: "#64748b",
-                background: "none",
-                border: "none",
-                cursor: "pointer",
+                color: isDragOver ? "#f59e0b" : "#475569",
+                marginBottom: 8,
+              }}
+            />
+            <p style={{ margin: "0 0 12px", fontSize: 14, color: "#94a3b8" }}>
+              {isDragOver
+                ? "Drop files or folders here"
+                : "Drag & drop files or folders here"}
+            </p>
+            <div
+              style={{
+                display: "flex",
+                gap: 10,
+                justifyContent: "center",
+                flexWrap: "wrap",
               }}
             >
-              Clear completed
-            </button>
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                style={{
+                  padding: "10px 18px",
+                  background: "#f59e0b",
+                  color: "#000",
+                  border: "none",
+                  borderRadius: 8,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                <Upload size={15} /> Select Files
+              </button>
+              <button
+                onClick={() => folderInputRef.current?.click()}
+                style={{
+                  padding: "10px 18px",
+                  background: "transparent",
+                  color: "#f59e0b",
+                  border: "1px solid #f59e0b",
+                  borderRadius: 8,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                <FolderUp size={15} /> Select Folder
+              </button>
+            </div>
+            <p style={{ margin: "8px 0 0", fontSize: 11, color: "#475569" }}>
+              Supports PDF, Word, Excel, Images, CSV, Text, ZIP — Max 100MB per
+              file
+            </p>
           </div>
-          <div
-            style={{
-              maxHeight: 160,
-              overflowY: "auto",
-              display: "flex",
-              flexDirection: "column",
-              gap: 4,
-            }}
-          >
-            {uploads.map((item) => (
+
+          {/* Upload queue */}
+          {uploads.length > 0 && (
+            <div
+              style={{
+                marginBottom: 16,
+                background: "rgba(30,30,35,0.6)",
+                borderRadius: 10,
+                padding: 12,
+                border: "1px solid #334155",
+              }}
+            >
               <div
-                key={item.id}
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  gap: 8,
-                  padding: "6px 10px",
-                  borderRadius: 6,
-                  background: "rgba(20,20,25,0.5)",
+                  justifyContent: "space-between",
+                  marginBottom: 8,
+                }}
+              >
+                <span
+                  style={{ fontSize: 13, fontWeight: 600, color: "#e2e8f0" }}
+                >
+                  Upload Queue{" "}
+                  {activeUploads > 0 && (
+                    <span style={{ color: "#f59e0b" }}>
+                      ({activeUploads} active)
+                    </span>
+                  )}
+                </span>
+                <button
+                  onClick={clearCompleted}
+                  style={{
+                    fontSize: 11,
+                    color: "#64748b",
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                  }}
+                >
+                  Clear completed
+                </button>
+              </div>
+              <div
+                style={{
+                  maxHeight: 160,
+                  overflowY: "auto",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 4,
+                }}
+              >
+                {uploads.map((item) => (
+                  <div
+                    key={item.id}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      padding: "6px 10px",
+                      borderRadius: 6,
+                      background: "rgba(20,20,25,0.5)",
+                      fontSize: 12,
+                    }}
+                  >
+                    {item.status === "queued" && (
+                      <span style={{ color: "#64748b", flexShrink: 0 }}>
+                        <Loader2 size={12} />
+                      </span>
+                    )}
+                    {item.status === "uploading" && (
+                      <span style={{ color: "#f59e0b", flexShrink: 0 }}>
+                        <Loader2 size={12} className="spin" />
+                      </span>
+                    )}
+                    {item.status === "done" && (
+                      <span style={{ color: "#10b981", flexShrink: 0 }}>
+                        <CheckCircle2 size={12} />
+                      </span>
+                    )}
+                    {item.status === "error" && (
+                      <span style={{ color: "#ef4444", flexShrink: 0 }}>
+                        <AlertTriangle size={12} />
+                      </span>
+                    )}
+                    <span
+                      style={{
+                        flex: 1,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                        color: "#cbd5e1",
+                      }}
+                    >
+                      {item.file.name}
+                    </span>
+                    <span style={{ color: "#475569", flexShrink: 0 }}>
+                      {formatSize(item.file.size)}
+                    </span>
+                    {item.folderPath && (
+                      <span
+                        style={{
+                          color: "#64748b",
+                          fontSize: 10,
+                          background: "#1e293b",
+                          padding: "2px 6px",
+                          borderRadius: 4,
+                          flexShrink: 0,
+                        }}
+                      >
+                        {item.folderPath}
+                      </span>
+                    )}
+                    {item.status === "error" && (
+                      <span
+                        style={{
+                          color: "#ef4444",
+                          fontSize: 10,
+                          flexShrink: 0,
+                        }}
+                      >
+                        {item.error}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Toolbar */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              marginBottom: 12,
+              flexWrap: "wrap",
+            }}
+          >
+            <div style={{ position: "relative", flex: 1, minWidth: 200 }}>
+              <Search
+                size={14}
+                style={{
+                  position: "absolute",
+                  left: 10,
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  color: "#475569",
+                }}
+              />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search documents..."
+                style={{
+                  width: "100%",
+                  padding: "8px 10px 8px 32px",
+                  background: "#1a1a1f",
+                  border: "1px solid #334155",
+                  borderRadius: 8,
+                  color: "#e2e8f0",
+                  fontSize: 13,
+                  outline: "none",
+                  boxSizing: "border-box",
+                }}
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery("")}
+                  style={{
+                    position: "absolute",
+                    right: 8,
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    background: "none",
+                    border: "none",
+                    color: "#475569",
+                    cursor: "pointer",
+                    padding: 2,
+                  }}
+                >
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              style={{
+                padding: 8,
+                background: "#1a1a1f",
+                border: "1px solid #334155",
+                borderRadius: 8,
+                color: "#94a3b8",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+              }}
+            >
+              <Filter size={14} />
+            </button>
+            <button
+              onClick={() => setViewMode(viewMode === "grid" ? "list" : "grid")}
+              style={{
+                padding: 8,
+                background: "#1a1a1f",
+                border: "1px solid #334155",
+                borderRadius: 8,
+                color: "#94a3b8",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+              }}
+            >
+              {viewMode === "grid" ? <List size={14} /> : <Grid size={14} />}
+            </button>
+            <div style={{ position: "relative" }}>
+              <button
+                onClick={() =>
+                  setSortDir((d) => (d === "asc" ? "desc" : "asc"))
+                }
+                style={{
+                  padding: "8px 12px",
+                  background: "#1a1a1f",
+                  border: "1px solid #334155",
+                  borderRadius: 8,
+                  color: "#94a3b8",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 4,
                   fontSize: 12,
                 }}
               >
-                {item.status === "queued" && (
-                  <span style={{ color: "#64748b", flexShrink: 0 }}>
-                    <Loader2 size={12} />
-                  </span>
-                )}
-                {item.status === "uploading" && (
-                  <span style={{ color: "#f59e0b", flexShrink: 0 }}>
-                    <Loader2 size={12} className="spin" />
-                  </span>
-                )}
-                {item.status === "done" && (
-                  <span style={{ color: "#10b981", flexShrink: 0 }}>
-                    <CheckCircle2 size={12} />
-                  </span>
-                )}
-                {item.status === "error" && (
-                  <span style={{ color: "#ef4444", flexShrink: 0 }}>
-                    <AlertTriangle size={12} />
-                  </span>
-                )}
-                <span
+                <SortAsc
+                  size={14}
                   style={{
-                    flex: 1,
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
+                    transform: sortDir === "desc" ? "rotate(180deg)" : "none",
+                    transition: "transform 0.2s",
+                  }}
+                />
+                {sortField}
+              </button>
+            </div>
+          </div>
+
+          {/* Category pills */}
+          <div
+            style={{
+              display: "flex",
+              gap: 6,
+              marginBottom: 12,
+              overflowX: "auto",
+              paddingBottom: 4,
+            }}
+          >
+            {CATEGORIES.map((cat) => {
+              const isActive = activeCategory === cat;
+              const count =
+                cat === "All" ? stats.count : categoryCounts[cat] || 0;
+              return (
+                <button
+                  key={cat}
+                  onClick={() => setActiveCategory(cat)}
+                  style={{
+                    padding: "5px 12px",
+                    borderRadius: 20,
+                    fontSize: 11,
+                    fontWeight: 600,
                     whiteSpace: "nowrap",
-                    color: "#cbd5e1",
+                    cursor: "pointer",
+                    border: "none",
+                    flexShrink: 0,
+                    background: isActive ? "#f59e0b" : "#1e293b",
+                    color: isActive ? "#000" : "#94a3b8",
                   }}
                 >
-                  {item.file.name}
-                </span>
-                <span style={{ color: "#475569", flexShrink: 0 }}>
-                  {formatSize(item.file.size)}
-                </span>
-                {item.folderPath && (
-                  <span
-                    style={{
-                      color: "#64748b",
-                      fontSize: 10,
-                      background: "#1e293b",
-                      padding: "2px 6px",
-                      borderRadius: 4,
-                      flexShrink: 0,
-                    }}
-                  >
-                    {item.folderPath}
-                  </span>
-                )}
-                {item.status === "error" && (
-                  <span
-                    style={{ color: "#ef4444", fontSize: 10, flexShrink: 0 }}
-                  >
-                    {item.error}
-                  </span>
-                )}
-              </div>
-            ))}
+                  {cat}{" "}
+                  {count > 0 && <span style={{ opacity: 0.7 }}>({count})</span>}
+                </button>
+              );
+            })}
           </div>
-        </div>
-      )}
 
-      {/* Toolbar */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          marginBottom: 12,
-          flexWrap: "wrap",
-        }}
-      >
-        <div style={{ position: "relative", flex: 1, minWidth: 200 }}>
-          <Search
-            size={14}
+          {/* Folder management bar */}
+          <div
             style={{
-              position: "absolute",
-              left: 10,
-              top: "50%",
-              transform: "translateY(-50%)",
-              color: "#475569",
-            }}
-          />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search documents..."
-            style={{
-              width: "100%",
-              padding: "8px 10px 8px 32px",
-              background: "#1a1a1f",
-              border: "1px solid #334155",
-              borderRadius: 8,
-              color: "#e2e8f0",
-              fontSize: 13,
-              outline: "none",
-              boxSizing: "border-box",
-            }}
-          />
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery("")}
-              style={{
-                position: "absolute",
-                right: 8,
-                top: "50%",
-                transform: "translateY(-50%)",
-                background: "none",
-                border: "none",
-                color: "#475569",
-                cursor: "pointer",
-                padding: 2,
-              }}
-            >
-              <X size={12} />
-            </button>
-          )}
-        </div>
-        <button
-          onClick={() => setShowFilters(!showFilters)}
-          style={{
-            padding: 8,
-            background: "#1a1a1f",
-            border: "1px solid #334155",
-            borderRadius: 8,
-            color: "#94a3b8",
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-          }}
-        >
-          <Filter size={14} />
-        </button>
-        <button
-          onClick={() => setViewMode(viewMode === "grid" ? "list" : "grid")}
-          style={{
-            padding: 8,
-            background: "#1a1a1f",
-            border: "1px solid #334155",
-            borderRadius: 8,
-            color: "#94a3b8",
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-          }}
-        >
-          {viewMode === "grid" ? <List size={14} /> : <Grid size={14} />}
-        </button>
-        <div style={{ position: "relative" }}>
-          <button
-            onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
-            style={{
-              padding: "8px 12px",
-              background: "#1a1a1f",
-              border: "1px solid #334155",
-              borderRadius: 8,
-              color: "#94a3b8",
-              cursor: "pointer",
               display: "flex",
               alignItems: "center",
-              gap: 4,
-              fontSize: 12,
+              gap: 8,
+              marginBottom: 12,
+              flexWrap: "wrap",
             }}
           >
-            <SortAsc
-              size={14}
-              style={{
-                transform: sortDir === "desc" ? "rotate(180deg)" : "none",
-                transition: "transform 0.2s",
-              }}
-            />
-            {sortField}
-          </button>
-        </div>
-      </div>
-
-      {/* Category pills */}
-      <div
-        style={{
-          display: "flex",
-          gap: 6,
-          marginBottom: 12,
-          overflowX: "auto",
-          paddingBottom: 4,
-        }}
-      >
-        {CATEGORIES.map((cat) => {
-          const isActive = activeCategory === cat;
-          const count = cat === "All" ? stats.count : categoryCounts[cat] || 0;
-          return (
+            <span style={{ fontSize: 12, color: "#64748b", fontWeight: 600 }}>
+              Folders:
+            </span>
             <button
-              key={cat}
-              onClick={() => setActiveCategory(cat)}
-              style={{
-                padding: "5px 12px",
-                borderRadius: 20,
-                fontSize: 11,
-                fontWeight: 600,
-                whiteSpace: "nowrap",
-                cursor: "pointer",
-                border: "none",
-                flexShrink: 0,
-                background: isActive ? "#f59e0b" : "#1e293b",
-                color: isActive ? "#000" : "#94a3b8",
-              }}
-            >
-              {cat}{" "}
-              {count > 0 && <span style={{ opacity: 0.7 }}>({count})</span>}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Folder management bar */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          marginBottom: 12,
-          flexWrap: "wrap",
-        }}
-      >
-        <span style={{ fontSize: 12, color: "#64748b", fontWeight: 600 }}>
-          Folders:
-        </span>
-        <button
-          onClick={() => setShowNewFolder((v) => !v)}
-          style={{
-            padding: "5px 10px",
-            background: "#1e293b",
-            border: "1px solid #334155",
-            borderRadius: 6,
-            color: "#f59e0b",
-            fontSize: 11,
-            fontWeight: 600,
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            gap: 4,
-          }}
-        >
-          <FolderPlus size={12} /> New Folder
-        </button>
-        {/* Upload target folder selector */}
-        <label
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 4,
-            fontSize: 11,
-            color: "#64748b",
-          }}
-        >
-          Upload to:
-          <select
-            value={uploadTargetFolder}
-            onChange={(e) => setUploadTargetFolder(e.target.value)}
-            style={{
-              padding: "4px 6px",
-              background: "#1a1a1f",
-              border: "1px solid #334155",
-              borderRadius: 6,
-              color: "#e2e8f0",
-              fontSize: 11,
-              outline: "none",
-            }}
-          >
-            <option value="">Auto-sort by content</option>
-            <option value={UNFILED}>Unfiled</option>
-            {folders.map((f) => (
-              <option key={f} value={f}>
-                {f}
-              </option>
-            ))}
-          </select>
-        </label>
-        {showNewFolder && (
-          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-            <input
-              type="text"
-              value={newFolderName}
-              autoFocus
-              onChange={(e) => setNewFolderName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleCreateFolder();
-                if (e.key === "Escape") setShowNewFolder(false);
-              }}
-              placeholder="Folder name"
-              style={{
-                padding: "5px 8px",
-                background: "#1a1a1f",
-                border: "1px solid #334155",
-                borderRadius: 6,
-                color: "#e2e8f0",
-                fontSize: 11,
-                outline: "none",
-                width: 150,
-              }}
-            />
-            <button
-              onClick={handleCreateFolder}
+              onClick={() => setShowNewFolder((v) => !v)}
               style={{
                 padding: "5px 10px",
-                background: "#f59e0b",
-                border: "none",
+                background: "#1e293b",
+                border: "1px solid #334155",
                 borderRadius: 6,
-                color: "#000",
+                color: "#f59e0b",
                 fontSize: 11,
                 fontWeight: 600,
                 cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: 4,
               }}
             >
-              Create
+              <FolderPlus size={12} /> New Folder
             </button>
+            {/* Upload target folder selector */}
+            <label
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 4,
+                fontSize: 11,
+                color: "#64748b",
+              }}
+            >
+              Upload to:
+              <select
+                value={uploadTargetFolder}
+                onChange={(e) => setUploadTargetFolder(e.target.value)}
+                style={{
+                  padding: "4px 6px",
+                  background: "#1a1a1f",
+                  border: "1px solid #334155",
+                  borderRadius: 6,
+                  color: "#e2e8f0",
+                  fontSize: 11,
+                  outline: "none",
+                }}
+              >
+                <option value="">Auto-sort by content</option>
+                <option value={UNFILED}>Unfiled</option>
+                {folders.map((f) => (
+                  <option key={f} value={f}>
+                    {f}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {showNewFolder && (
+              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                <input
+                  type="text"
+                  value={newFolderName}
+                  autoFocus
+                  onChange={(e) => setNewFolderName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleCreateFolder();
+                    if (e.key === "Escape") setShowNewFolder(false);
+                  }}
+                  placeholder="Folder name"
+                  style={{
+                    padding: "5px 8px",
+                    background: "#1a1a1f",
+                    border: "1px solid #334155",
+                    borderRadius: 6,
+                    color: "#e2e8f0",
+                    fontSize: 11,
+                    outline: "none",
+                    width: 150,
+                  }}
+                />
+                <button
+                  onClick={handleCreateFolder}
+                  style={{
+                    padding: "5px 10px",
+                    background: "#f59e0b",
+                    border: "none",
+                    borderRadius: 6,
+                    color: "#000",
+                    fontSize: 11,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  Create
+                </button>
+              </div>
+            )}
           </div>
-        )}
-      </div>
 
-      {folderActionMsg && (
-        <div
-          style={{
-            marginBottom: 10,
-            padding: "6px 10px",
-            background: "rgba(16,185,129,0.1)",
-            border: "1px solid rgba(16,185,129,0.3)",
-            borderRadius: 6,
-            fontSize: 11,
-            color: "#10b981",
-          }}
-        >
-          {folderActionMsg}
-        </div>
-      )}
+          {folderActionMsg && (
+            <div
+              style={{
+                marginBottom: 10,
+                padding: "6px 10px",
+                background: "rgba(16,185,129,0.1)",
+                border: "1px solid rgba(16,185,129,0.3)",
+                borderRadius: 6,
+                fontSize: 11,
+                color: "#10b981",
+              }}
+            >
+              {folderActionMsg}
+            </div>
+          )}
 
-      {/* Document list — grouped by folder, collapsible, paginated 10/page */}
-      {sortedDocs.length === 0 && folders.length === 0 ? (
-        <div
-          style={{
-            textAlign: "center",
-            padding: "40px 20px",
-            color: "#475569",
-          }}
-        >
-          <File size={40} style={{ marginBottom: 10, opacity: 0.3 }} />
-          <p style={{ fontSize: 14, margin: 0 }}>No documents found</p>
-          <p style={{ fontSize: 12, margin: "4px 0 0" }}>
-            Upload files to get started — they are auto-sorted into folders by
-            content, or pick a folder above.
-          </p>
-        </div>
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {grouped.ordered.map((folderName) => {
-            const docsInFolder = grouped.byFolder[folderName] || [];
-            const count = docsInFolder.length;
-            const expanded = expandedFolders.has(folderName);
-            // Only show a folder row if it has files OR is a user-created folder
-            // (folders list). Unfiled only shows if it has files.
-            if (
-              count === 0 &&
-              folderName !== UNFILED &&
-              !folders.includes(folderName)
-            )
-              return null;
-            if (count === 0 && folderName === UNFILED) return null;
-
-            const page = folderPages[folderName] || 0;
-            const totalPages = Math.max(1, Math.ceil(count / FILES_PER_PAGE));
-            const pageDocs = expanded
-              ? docsInFolder.slice(
-                  page * FILES_PER_PAGE,
-                  page * FILES_PER_PAGE + FILES_PER_PAGE,
+          {/* Document list — grouped by folder, collapsible, paginated 10/page */}
+          {sortedDocs.length === 0 && folders.length === 0 ? (
+            <div
+              style={{
+                textAlign: "center",
+                padding: "40px 20px",
+                color: "#475569",
+              }}
+            >
+              <File size={40} style={{ marginBottom: 10, opacity: 0.3 }} />
+              <p style={{ fontSize: 14, margin: 0 }}>No documents found</p>
+              <p style={{ fontSize: 12, margin: "4px 0 0" }}>
+                Upload files to get started — they are auto-sorted into folders
+                by content, or pick a folder above.
+              </p>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {grouped.ordered.map((folderName) => {
+                const docsInFolder = grouped.byFolder[folderName] || [];
+                const count = docsInFolder.length;
+                const expanded = expandedFolders.has(folderName);
+                // Only show a folder row if it has files OR is a user-created folder
+                // (folders list). Unfiled only shows if it has files.
+                if (
+                  count === 0 &&
+                  folderName !== UNFILED &&
+                  !folders.includes(folderName)
                 )
-              : [];
-            return (
-              <FolderGroup
-                key={folderName}
-                folderName={folderName}
-                count={count}
-                expanded={expanded}
-                onToggle={() => toggleFolder(folderName)}
-                isUnfiled={folderName === UNFILED}
-                renaming={renamingFolder === folderName}
-                renameValue={renameValue}
-                onStartRename={() => {
-                  setRenamingFolder(folderName);
-                  setRenameValue(folderName);
-                }}
-                onCancelRename={() => setRenamingFolder(null)}
-                onSubmitRename={() => handleRenameFolder(folderName)}
-                onRenameChange={setRenameValue}
-                deleting={deletingFolder === folderName}
-                onDelete={() => setDeletingFolder(folderName)}
-                onCancelDelete={() => setDeletingFolder(null)}
-                onConfirmDelete={() => {
-                  void handleDeleteFolder(folderName);
-                }}
-                viewMode={viewMode}
-                pageDocs={pageDocs}
-                page={page}
-                totalPages={totalPages}
-                onPageChange={(p) => setFolderPage(folderName, p)}
-                onSelect={setSelectedDoc}
-                onDeleteDoc={handleDelete}
-                onDownload={handleDownload}
-                allFolders={grouped.ordered.filter((f) => f !== UNFILED)}
-                onMoveDoc={handleMoveDoc}
-              />
-            );
-          })}
-        </div>
-      )}
+                  return null;
+                if (count === 0 && folderName === UNFILED) return null;
 
-      {/* Detail panel */}
-      {selectedDoc && (
-        <DocDetailPanel
-          doc={selectedDoc}
-          onClose={() => setSelectedDoc(null)}
-          onDelete={handleDelete}
-          onDownload={handleDownload}
-        />
-      )}
+                const page = folderPages[folderName] || 0;
+                const totalPages = Math.max(
+                  1,
+                  Math.ceil(count / FILES_PER_PAGE),
+                );
+                const pageDocs = expanded
+                  ? docsInFolder.slice(
+                      page * FILES_PER_PAGE,
+                      page * FILES_PER_PAGE + FILES_PER_PAGE,
+                    )
+                  : [];
+                return (
+                  <FolderGroup
+                    key={folderName}
+                    folderName={folderName}
+                    count={count}
+                    expanded={expanded}
+                    onToggle={() => toggleFolder(folderName)}
+                    isUnfiled={folderName === UNFILED}
+                    renaming={renamingFolder === folderName}
+                    renameValue={renameValue}
+                    onStartRename={() => {
+                      setRenamingFolder(folderName);
+                      setRenameValue(folderName);
+                    }}
+                    onCancelRename={() => setRenamingFolder(null)}
+                    onSubmitRename={() => handleRenameFolder(folderName)}
+                    onRenameChange={setRenameValue}
+                    deleting={deletingFolder === folderName}
+                    onDelete={() => setDeletingFolder(folderName)}
+                    onCancelDelete={() => setDeletingFolder(null)}
+                    onConfirmDelete={() => {
+                      void handleDeleteFolder(folderName);
+                    }}
+                    viewMode={viewMode}
+                    pageDocs={pageDocs}
+                    page={page}
+                    totalPages={totalPages}
+                    onPageChange={(p) => setFolderPage(folderName, p)}
+                    onSelect={setSelectedDoc}
+                    onDeleteDoc={handleDelete}
+                    onDownload={handleDownload}
+                    allFolders={grouped.ordered.filter((f) => f !== UNFILED)}
+                    onMoveDoc={handleMoveDoc}
+                  />
+                );
+              })}
+            </div>
+          )}
 
-      <style>{`
+          {/* Detail panel */}
+          {selectedDoc && (
+            <DocDetailPanel
+              doc={selectedDoc}
+              onClose={() => setSelectedDoc(null)}
+              onDelete={handleDelete}
+              onDownload={handleDownload}
+            />
+          )}
+
+          <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
         .spin { animation: spin 1s linear infinite; }
       `}</style>
+        </>
+      )}
     </div>
   );
 }

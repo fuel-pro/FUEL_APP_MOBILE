@@ -3,12 +3,15 @@ import {
   Plus,
   Save,
   Trash2,
+  Edit3,
   MessageCircle,
   Bot,
   Send,
   Building2,
   Printer,
   Loader2,
+  Receipt,
+  FileText,
 } from "lucide-react";
 import { useFuel } from "@/react-app/context/FuelContext";
 import ExportDropdown from "@/react-app/components/ExportDropdown";
@@ -19,9 +22,22 @@ import {
 } from "@/react-app/utils/exportUtils";
 import { formatNumber } from "@/react-app/utils/formatUtils";
 import { silentPrintService } from "@/react-app/lib/silent-print-service";
+import SubTabBar from "@/react-app/components/SubTabBar";
+import SalesInvoices from "@/react-app/components/SalesInvoices";
+import {
+  onTabPayload,
+  navigateToTab,
+  type InvoicePrefill,
+  type StkPushPrefill,
+  type FuelPricePrefill,
+} from "@/react-app/lib/mpesa-integration-service";
+import { useStationFuelTypes } from "@/react-app/hooks/useStationFuelTypes";
+import { useStations } from "@/react-app/context/StationContext";
 
 export default function Invoice() {
   const { state, dispatch } = useFuel();
+  const { currentStation } = useStations();
+  const fuelTypeApi = useStationFuelTypes(currentStation?.id);
   const [customerName, setCustomerName] = useState("");
   const [customerAddress, setCustomerAddress] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
@@ -30,6 +46,11 @@ export default function Invoice() {
   const [aiMessage, setAiMessage] = useState("");
   const [aiResponse, setAiResponse] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
+  // Inner sub-tab: "Invoice" (this generator) vs "Sales Invoices" (the
+  // formerly-standalone detailed sales-invoice module, now hosted here).
+  const [activeView, setActiveView] = useState<"invoice" | "sales-invoices">(
+    "invoice",
+  );
   const [quantityLabel, setQuantityLabel] = useState(
     state.invoiceSettings.quantityLabel,
   );
@@ -44,6 +65,31 @@ export default function Invoice() {
     const today = new Date().toISOString().split("T")[0];
     setInvoiceDate(today);
   }, []);
+
+  // Interlink receiver: Credit Management calls
+  // navigateToTab("invoice", <InvoicePrefill>) to start a new invoice for an
+  // outstanding credit balance — pre-fill the customer + a line item.
+  useEffect(() => {
+    return onTabPayload("invoice", (raw) => {
+      const p = (raw || {}) as InvoicePrefill;
+      if (Object.keys(p).length === 0) return;
+      setActiveView("invoice");
+      if (p.customerName) setCustomerName(p.customerName);
+      if (p.amount || p.description) {
+        dispatch({
+          type: "SET_INVOICE_ITEMS",
+          payload: [
+            {
+              desc: p.description || "Outstanding balance",
+              qty: 1,
+              price: p.amount ?? 0,
+              total: p.amount ?? 0,
+            },
+          ],
+        });
+      }
+    });
+  }, [dispatch]);
 
   useEffect(() => {
     // Only pull in the global value if it changed for a reason OTHER than
@@ -413,416 +459,514 @@ export default function Invoice() {
 
   return (
     <div className="p-6 space-y-3">
-      {/* Professional Invoice Preview */}
-      <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-8 max-w-4xl mx-auto">
-        {/* Logo and Company Header */}
-        <div className="flex justify-between items-start mb-8">
-          <div className="flex-1">
-            {state.companyData.logo && (
-              <img
-                src={state.companyData.logo}
-                alt="Logo"
-                className="h-16 w-auto mb-4"
-              />
-            )}
-            <div className="text-3xl font-bold text-blue-900 mb-2">INVOICE</div>
-            {state.companyData.name && (
-              <div className="text-xl font-semibold text-gray-800 mb-2">
-                {state.companyData.name}
-              </div>
-            )}
-            {(state.companyData.poBox || state.companyData.contacts) && (
-              <div className="text-sm text-gray-600 mb-1">
-                {state.companyData.poBox &&
-                  `P.O. Box: ${state.companyData.poBox}`}
-                {state.companyData.poBox && state.companyData.contacts && " "}
-                {state.companyData.contacts}
-              </div>
-            )}
-            {state.companyData.email && (
-              <div className="text-sm text-gray-600">
-                {state.companyData.email}
-              </div>
-            )}
-          </div>
-        </div>
+      {/* Sub-tab switcher: Invoice generator vs Sales Invoices module */}
+      <SubTabBar
+        tabs={[
+          { id: "invoice", label: "Invoice", icon: Receipt },
+          { id: "sales-invoices", label: "Sales Invoices", icon: FileText },
+        ]}
+        active={activeView}
+        onChange={(id) => setActiveView(id as "invoice" | "sales-invoices")}
+      />
 
-        {/* Invoice Details */}
-        <div className="grid grid-cols-2 gap-8 mb-8">
-          <div>
-            <div className="font-semibold text-gray-800 mb-4">Bill To:</div>
-            <div className="space-y-2">
-              <input
-                type="text"
-                value={customerName}
-                onChange={(e) => setCustomerName(e.target.value)}
-                placeholder="Client Name"
-                className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <input
-                type="text"
-                value={customerAddress}
-                onChange={(e) => setCustomerAddress(e.target.value)}
-                placeholder="Client Address"
-                className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <input
-                type="text"
-                value={customerPhone}
-                onChange={(e) => setCustomerPhone(e.target.value)}
-                placeholder="Phone Number"
-                className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
+      {activeView === "sales-invoices" ? (
+        <SalesInvoices />
+      ) : (
+        <>
+          {/* Professional Invoice Preview */}
+          <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-8 max-w-4xl mx-auto">
+            {/* Logo and Company Header */}
+            <div className="flex justify-between items-start mb-8">
+              <div className="flex-1">
+                {state.companyData.logo && (
+                  <img
+                    src={state.companyData.logo}
+                    alt="Logo"
+                    className="h-16 w-auto mb-4"
+                  />
+                )}
+                <div className="text-3xl font-bold text-blue-900 mb-2">
+                  INVOICE
+                </div>
+                {state.companyData.name && (
+                  <div className="text-xl font-semibold text-gray-800 mb-2">
+                    {state.companyData.name}
+                  </div>
+                )}
+                {(state.companyData.poBox || state.companyData.contacts) && (
+                  <div className="text-sm text-gray-600 mb-1">
+                    {state.companyData.poBox &&
+                      `P.O. Box: ${state.companyData.poBox}`}
+                    {state.companyData.poBox &&
+                      state.companyData.contacts &&
+                      " "}
+                    {state.companyData.contacts}
+                  </div>
+                )}
+                {state.companyData.email && (
+                  <div className="text-sm text-gray-600">
+                    {state.companyData.email}
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
 
-          <div className="text-right">
-            <div className="space-y-2">
-              <div className="flex justify-end">
-                <span className="font-semibold mr-4">Invoice #:</span>
-                <span className="bg-gray-100 px-3 py-1 rounded">
-                  {getInvoiceNumber()}
-                </span>
+            {/* Invoice Details */}
+            <div className="grid grid-cols-2 gap-8 mb-8">
+              <div>
+                <div className="font-semibold text-gray-800 mb-4">Bill To:</div>
+                <div className="space-y-2">
+                  <input
+                    type="text"
+                    value={customerName}
+                    onChange={(e) => setCustomerName(e.target.value)}
+                    placeholder="Client Name"
+                    className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <input
+                    type="text"
+                    value={customerAddress}
+                    onChange={(e) => setCustomerAddress(e.target.value)}
+                    placeholder="Client Address"
+                    className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <input
+                    type="text"
+                    value={customerPhone}
+                    onChange={(e) => setCustomerPhone(e.target.value)}
+                    placeholder="Phone Number"
+                    className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
               </div>
-              <div className="flex justify-end">
-                <span className="font-semibold mr-4">Date:</span>
+
+              <div className="text-right">
+                <div className="space-y-2">
+                  <div className="flex justify-end">
+                    <span className="font-semibold mr-4">Invoice #:</span>
+                    <span className="bg-gray-100 px-3 py-1 rounded">
+                      {getInvoiceNumber()}
+                    </span>
+                  </div>
+                  <div className="flex justify-end">
+                    <span className="font-semibold mr-4">Date:</span>
+                    <input
+                      type="date"
+                      value={invoiceDate}
+                      onChange={(e) => setInvoiceDate(e.target.value)}
+                      className="border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Quantity Label Customization */}
+            <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+              <div className="flex items-center gap-4">
+                <label className="text-sm font-medium text-blue-900 dark:text-blue-200 whitespace-nowrap">
+                  Quantity Column Label:
+                </label>
                 <input
-                  type="date"
-                  value={invoiceDate}
-                  onChange={(e) => setInvoiceDate(e.target.value)}
-                  className="border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  type="text"
+                  value={quantityLabel}
+                  onChange={(e) => updateQuantityLabel(e.target.value)}
+                  placeholder="e.g., Qty (DAYS), Litres, Units, Hours"
+                  className="flex-1 px-3 py-2 border border-blue-300 dark:border-blue-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                 />
+                <div className="text-xs text-blue-700 dark:text-blue-300">
+                  This label will appear in all exports (PDF, Excel, TXT)
+                </div>
               </div>
             </div>
-          </div>
-        </div>
 
-        {/* Quantity Label Customization */}
-        <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-          <div className="flex items-center gap-4">
-            <label className="text-sm font-medium text-blue-900 dark:text-blue-200 whitespace-nowrap">
-              Quantity Column Label:
-            </label>
-            <input
-              type="text"
-              value={quantityLabel}
-              onChange={(e) => updateQuantityLabel(e.target.value)}
-              placeholder="e.g., Qty (DAYS), Litres, Units, Hours"
-              className="flex-1 px-3 py-2 border border-blue-300 dark:border-blue-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-            />
-            <div className="text-xs text-blue-700 dark:text-blue-300">
-              This label will appear in all exports (PDF, Excel, TXT)
-            </div>
-          </div>
-        </div>
+            {/* Items Table */}
+            <div className="mb-8">
+              <table className="w-full border-collapse border border-gray-300">
+                <thead>
+                  <tr className="bg-gray-50">
+                    <th className="border border-gray-300 p-3 text-left font-semibold">
+                      Description
+                    </th>
+                    <th className="border border-gray-300 p-3 text-center font-semibold">
+                      {quantityLabel}
+                    </th>
+                    <th className="border border-gray-300 p-3 text-right font-semibold">
+                      Unit Price
+                    </th>
+                    <th className="border border-gray-300 p-3 text-right font-semibold">
+                      Total
+                    </th>
+                    <th className="border border-gray-300 p-3 text-center font-semibold w-20">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {state.invoiceItems.map((item, index) => (
+                    <tr key={index} className="hover:bg-gray-50">
+                      <td className="border border-gray-300 p-3">
+                        <input
+                          type="text"
+                          value={item.desc}
+                          onChange={(e) =>
+                            updateInvoiceItem(index, "desc", e.target.value)
+                          }
+                          className="w-full bg-transparent border-none outline-none"
+                          placeholder="Item description"
+                        />
+                        {fuelTypeApi.getPriceFor(item.desc) != null && (
+                          <span className="text-[9px] text-gray-400">
+                            Fuel price: Ksh{" "}
+                            {fuelTypeApi.getPriceFor(item.desc)?.toFixed(2)}/L
+                          </span>
+                        )}
+                      </td>
+                      <td className="border border-gray-300 p-3 text-center">
+                        <input
+                          type="number"
+                          value={item.qty}
+                          onChange={(e) =>
+                            updateInvoiceItem(index, "qty", e.target.value)
+                          }
+                          className="w-full bg-transparent border-none outline-none text-center"
+                          min="1"
+                        />
+                      </td>
+                      <td className="border border-gray-300 p-3 text-right">
+                        <div className="flex items-center justify-end">
+                          <span className="mr-1">Ksh</span>
+                          <input
+                            type="number"
+                            value={item.price}
+                            onChange={(e) =>
+                              updateInvoiceItem(index, "price", e.target.value)
+                            }
+                            className="w-24 bg-transparent border-none outline-none text-right"
+                            min="0"
+                          />
+                        </div>
+                        {fuelTypeApi.getPriceFor(item.desc) != null && (
+                          <button
+                            onClick={() =>
+                              updateInvoiceItem(
+                                index,
+                                "price",
+                                String(
+                                  fuelTypeApi.getPriceFor(item.desc) ??
+                                    item.price,
+                                ),
+                              )
+                            }
+                            className="text-[9px] text-indigo-600 hover:underline mt-0.5"
+                            title="Use the station's configured fuel price"
+                          >
+                            use fuel price
+                          </button>
+                        )}
+                      </td>
+                      <td className="border border-gray-300 p-3 text-right font-medium">
+                        Ksh{formatNumber(item.total, 0)}
+                      </td>
+                      <td className="border border-gray-300 p-3 text-center">
+                        <div className="flex items-center justify-center gap-1">
+                          <button
+                            onClick={() =>
+                              navigateToTab("fueltypes", {
+                                fuelType: item.desc,
+                                price: Number(item.price) || undefined,
+                              } as FuelPricePrefill)
+                            }
+                            className="text-indigo-600 hover:text-indigo-800 p-1"
+                            title="Edit fuel type / price in Fuel Type Manager"
+                          >
+                            <Edit3 size={14} />
+                          </button>
+                          <button
+                            onClick={() => deleteInvoiceItem(index)}
+                            className="text-red-600 hover:text-red-800 p-1"
+                            title="Delete item"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
 
-        {/* Items Table */}
-        <div className="mb-8">
-          <table className="w-full border-collapse border border-gray-300">
-            <thead>
-              <tr className="bg-gray-50">
-                <th className="border border-gray-300 p-3 text-left font-semibold">
-                  Description
-                </th>
-                <th className="border border-gray-300 p-3 text-center font-semibold">
-                  {quantityLabel}
-                </th>
-                <th className="border border-gray-300 p-3 text-right font-semibold">
-                  Unit Price
-                </th>
-                <th className="border border-gray-300 p-3 text-right font-semibold">
-                  Total
-                </th>
-                <th className="border border-gray-300 p-3 text-center font-semibold w-20">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {state.invoiceItems.map((item, index) => (
-                <tr key={index} className="hover:bg-gray-50">
-                  <td className="border border-gray-300 p-3">
-                    <input
-                      type="text"
-                      value={item.desc}
-                      onChange={(e) =>
-                        updateInvoiceItem(index, "desc", e.target.value)
-                      }
-                      className="w-full bg-transparent border-none outline-none"
-                      placeholder="Item description"
-                    />
-                  </td>
-                  <td className="border border-gray-300 p-3 text-center">
-                    <input
-                      type="number"
-                      value={item.qty}
-                      onChange={(e) =>
-                        updateInvoiceItem(index, "qty", e.target.value)
-                      }
-                      className="w-full bg-transparent border-none outline-none text-center"
-                      min="1"
-                    />
-                  </td>
-                  <td className="border border-gray-300 p-3 text-right">
-                    <div className="flex items-center justify-end">
-                      <span className="mr-1">Ksh</span>
-                      <input
-                        type="number"
-                        value={item.price}
-                        onChange={(e) =>
-                          updateInvoiceItem(index, "price", e.target.value)
-                        }
-                        className="w-24 bg-transparent border-none outline-none text-right"
-                        min="0"
-                      />
-                    </div>
-                  </td>
-                  <td className="border border-gray-300 p-3 text-right font-medium">
-                    Ksh{formatNumber(item.total, 0)}
-                  </td>
-                  <td className="border border-gray-300 p-3 text-center">
-                    <button
-                      onClick={() => deleteInvoiceItem(index)}
-                      className="text-red-600 hover:text-red-800 p-1"
-                      title="Delete item"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+              <div className="mt-4 flex justify-between items-center">
+                <button onClick={addInvoiceItem} className="btn btn-primary">
+                  <Plus size={16} />
+                  Add Item
+                </button>
 
-          <div className="mt-4 flex justify-between items-center">
-            <button onClick={addInvoiceItem} className="btn btn-primary">
-              <Plus size={16} />
-              Add Item
-            </button>
-
-            <div className="text-right">
-              <div className="text-2xl font-bold text-blue-900">
-                Total Due: Ksh{formatNumber(totalDue, 0)}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Payment Information */}
-        <div className="border-t border-gray-300 pt-6">
-          <div className="mb-4">
-            <div className="flex justify-between items-center mb-4">
-              <div className="font-semibold text-gray-800">
-                Payment Should Be Made Through
-              </div>
-              <button
-                onClick={editBankInfo}
-                className="btn btn-outline btn-sm"
-                title="Edit bank details"
-              >
-                <Building2 size={14} />
-                Edit Bank Details
-              </button>
-            </div>
-
-            {state.companyData.bankName ||
-            state.companyData.branchName ||
-            state.companyData.accountHolder ||
-            state.companyData.accountNumber ? (
-              <div className="space-y-1 text-sm text-gray-700">
-                {state.companyData.bankName && (
-                  <div>
-                    <strong>BANK:</strong> {state.companyData.bankName}
+                <div className="text-right">
+                  <div className="text-2xl font-bold text-blue-900">
+                    Total Due: Ksh{formatNumber(totalDue, 0)}
                   </div>
-                )}
-                {state.companyData.branchName && (
-                  <div>
-                    <strong>BRANCH:</strong> {state.companyData.branchName}
-                  </div>
-                )}
-                {state.companyData.accountHolder && (
-                  <div>{state.companyData.accountHolder}</div>
-                )}
-                {state.companyData.accountNumber && (
-                  <div>
-                    <strong>ACCOUNT NO:</strong>{" "}
-                    {state.companyData.accountNumber}
-                  </div>
-                )}
+                </div>
               </div>
-            ) : (
-              <div className="text-gray-500 text-sm italic">
-                Click "Edit Bank Details" to add payment information
-              </div>
-            )}
-          </div>
-
-          <div className="mt-8 pt-4">
-            <div className="text-sm text-gray-600">Signature:…………………………..</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Actions */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-        {/* Save Invoice */}
-        <div className="card">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-xl font-bold">Save Invoice</h3>
-            <button onClick={saveInvoice} className="btn btn-primary">
-              <Save size={16} />
-              Save
-            </button>
-          </div>
-          <div className="text-sm text-gray-600">
-            Save this invoice to your records and generate the invoice number.
-          </div>
-        </div>
-
-        {/* Silent Print */}
-        <div className="card">
-          <div className="mb-4">
-            <h3 className="text-xl font-bold mb-2 flex items-center gap-2">
-              <Printer size={20} className="text-blue-600" />
-              Silent Print
-            </h3>
-            <div className="text-sm text-gray-600 mb-4">
-              Print directly to connected printer (works offline)
             </div>
-          </div>
-          <button
-            onClick={handleSilentPrint}
-            disabled={
-              isPrinting || !customerName || state.invoiceItems.length === 0
-            }
-            className="btn btn-primary w-full flex items-center justify-center gap-2"
-          >
-            {isPrinting ? (
-              <>
-                <Loader2 size={16} className="animate-spin" />
-                Printing...
-              </>
-            ) : (
-              <>
-                <Printer size={16} />
-                Print Invoice
-              </>
-            )}
-          </button>
-          {printError && (
-            <div className="mt-2 text-sm text-red-600">{printError}</div>
-          )}
-        </div>
 
-        {/* Export Options */}
-        <div className="card">
-          <div className="mb-4">
-            <h3 className="text-xl font-bold mb-2">Export Invoice</h3>
-            <div className="text-sm text-gray-600 mb-4">
-              Export invoice in multiple formats for sharing and printing.
-            </div>
-          </div>
-          <ExportDropdown onExport={exportHandlers} title="Export Invoice" />
-        </div>
+            {/* Payment Information */}
+            <div className="border-t border-gray-300 pt-6">
+              <div className="mb-4">
+                <div className="flex justify-between items-center mb-4">
+                  <div className="font-semibold text-gray-800">
+                    Payment Should Be Made Through
+                  </div>
+                  <button
+                    onClick={editBankInfo}
+                    className="btn btn-outline btn-sm"
+                    title="Edit bank details"
+                  >
+                    <Building2 size={14} />
+                    Edit Bank Details
+                  </button>
+                </div>
 
-        {/* AI Assistant */}
-        <div className="card">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-xl font-bold flex items-center gap-2">
-              <Bot className="text-blue-600" size={20} />
-              AI Assistant
-            </h3>
-            <button
-              onClick={() => setShowAIAssistant(!showAIAssistant)}
-              className="btn btn-outline"
-            >
-              <MessageCircle size={16} />
-              {showAIAssistant ? "Hide" : "Show"}
-            </button>
-          </div>
-
-          {showAIAssistant && (
-            <div className="space-y-2">
-              <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg min-h-[120px]">
-                {aiResponse ? (
-                  <div className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
-                    {aiResponse}
+                {state.companyData.bankName ||
+                state.companyData.branchName ||
+                state.companyData.accountHolder ||
+                state.companyData.accountNumber ? (
+                  <div className="space-y-1 text-sm text-gray-700">
+                    {state.companyData.bankName && (
+                      <div>
+                        <strong>BANK:</strong> {state.companyData.bankName}
+                      </div>
+                    )}
+                    {state.companyData.branchName && (
+                      <div>
+                        <strong>BRANCH:</strong> {state.companyData.branchName}
+                      </div>
+                    )}
+                    {state.companyData.accountHolder && (
+                      <div>{state.companyData.accountHolder}</div>
+                    )}
+                    {state.companyData.accountNumber && (
+                      <div>
+                        <strong>ACCOUNT NO:</strong>{" "}
+                        {state.companyData.accountNumber}
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="text-gray-500 text-sm italic">
-                    Ask FuelPro AI about this invoice - analysis, calculations,
-                    payment terms, or business insights...
+                    Click "Edit Bank Details" to add payment information
                   </div>
                 )}
               </div>
 
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={aiMessage}
-                  onChange={(e) => setAiMessage(e.target.value)}
-                  placeholder="Ask FuelPro AI about this invoice..."
-                  className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                  onKeyPress={(e) => e.key === "Enter" && sendAIMessage()}
-                  disabled={aiLoading}
-                />
+              <div className="mt-8 pt-4">
+                <div className="text-sm text-gray-600">
+                  Signature:…………………………..
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+            {/* Save Invoice */}
+            <div className="card">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-xl font-bold">Save Invoice</h3>
+                <button onClick={saveInvoice} className="btn btn-primary">
+                  <Save size={16} />
+                  Save
+                </button>
+              </div>
+              <div className="text-sm text-gray-600">
+                Save this invoice to your records and generate the invoice
+                number.
+              </div>
+            </div>
+
+            {/* Collect Payment — interlinks with the Live Transaction Monitor.
+                Sends the customer + invoice total to the M-PESA STK Push flow. */}
+            <div className="card">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-xl font-bold flex items-center gap-2">
+                  <FileText size={20} className="text-emerald-600" />
+                  Collect Payment
+                </h3>
                 <button
-                  onClick={sendAIMessage}
-                  disabled={aiLoading || !aiMessage.trim()}
-                  className="btn btn-primary px-4"
+                  onClick={() =>
+                    navigateToTab("livetransaction", {
+                      phone: customerPhone || "",
+                      amount: totalDue,
+                      account_reference: customerName || getInvoiceNumber(),
+                      transaction_desc: `Invoice ${getInvoiceNumber()} payment`,
+                      openStkPush: true,
+                    } satisfies StkPushPrefill)
+                  }
+                  disabled={totalDue <= 0}
+                  className="btn btn-primary flex items-center gap-2 disabled:opacity-50"
+                  title="Collect this invoice via M-PESA STK Push"
                 >
-                  {aiLoading ? (
-                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
-                  ) : (
-                    <Send size={16} />
-                  )}
+                  Collect via M-PESA
+                </button>
+              </div>
+              <div className="text-sm text-gray-600">
+                Send the invoice total ({formatNumber(totalDue, 0)}{" "}
+                {state.companyData?.currency || "KES"}) as an M-PESA STK Push to
+                the customer's phone via the Live Transaction Monitor.
+              </div>
+            </div>
+
+            {/* Silent Print */}
+            <div className="card">
+              <div className="mb-4">
+                <h3 className="text-xl font-bold mb-2 flex items-center gap-2">
+                  <Printer size={20} className="text-blue-600" />
+                  Silent Print
+                </h3>
+                <div className="text-sm text-gray-600 mb-4">
+                  Print directly to connected printer (works offline)
+                </div>
+              </div>
+              <button
+                onClick={handleSilentPrint}
+                disabled={
+                  isPrinting || !customerName || state.invoiceItems.length === 0
+                }
+                className="btn btn-primary w-full flex items-center justify-center gap-2"
+              >
+                {isPrinting ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin" />
+                    Printing...
+                  </>
+                ) : (
+                  <>
+                    <Printer size={16} />
+                    Print Invoice
+                  </>
+                )}
+              </button>
+              {printError && (
+                <div className="mt-2 text-sm text-red-600">{printError}</div>
+              )}
+            </div>
+
+            {/* Export Options */}
+            <div className="card">
+              <div className="mb-4">
+                <h3 className="text-xl font-bold mb-2">Export Invoice</h3>
+                <div className="text-sm text-gray-600 mb-4">
+                  Export invoice in multiple formats for sharing and printing.
+                </div>
+              </div>
+              <ExportDropdown
+                onExport={exportHandlers}
+                title="Export Invoice"
+              />
+            </div>
+
+            {/* AI Assistant */}
+            <div className="card">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xl font-bold flex items-center gap-2">
+                  <Bot className="text-blue-600" size={20} />
+                  AI Assistant
+                </h3>
+                <button
+                  onClick={() => setShowAIAssistant(!showAIAssistant)}
+                  className="btn btn-outline"
+                >
+                  <MessageCircle size={16} />
+                  {showAIAssistant ? "Hide" : "Show"}
                 </button>
               </div>
 
-              <div className="text-xs text-gray-500">
-                FuelPro AI powered by Google Gemini AI - Invoice analysis,
-                payment insights, and business recommendations.
+              {showAIAssistant && (
+                <div className="space-y-2">
+                  <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg min-h-[120px]">
+                    {aiResponse ? (
+                      <div className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+                        {aiResponse}
+                      </div>
+                    ) : (
+                      <div className="text-gray-500 text-sm italic">
+                        Ask FuelPro AI about this invoice - analysis,
+                        calculations, payment terms, or business insights...
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={aiMessage}
+                      onChange={(e) => setAiMessage(e.target.value)}
+                      placeholder="Ask FuelPro AI about this invoice..."
+                      className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                      onKeyPress={(e) => e.key === "Enter" && sendAIMessage()}
+                      disabled={aiLoading}
+                    />
+                    <button
+                      onClick={sendAIMessage}
+                      disabled={aiLoading || !aiMessage.trim()}
+                      className="btn btn-primary px-4"
+                    >
+                      {aiLoading ? (
+                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                      ) : (
+                        <Send size={16} />
+                      )}
+                    </button>
+                  </div>
+
+                  <div className="text-xs text-gray-500">
+                    FuelPro AI powered by Google Gemini AI - Invoice analysis,
+                    payment insights, and business recommendations.
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Saved Invoices */}
+          {Object.keys(state.invoices).length > 0 && (
+            <div className="card">
+              <h3 className="text-xl font-bold mb-4">Saved Invoices</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {Object.keys(state.invoices).map((key) => (
+                  <div
+                    key={key}
+                    className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50"
+                  >
+                    <div className="font-semibold text-blue-900 mb-2">
+                      {key}
+                    </div>
+                    <div className="text-sm text-gray-600 mb-2">
+                      Customer: {state.invoices[key].customer?.name || "N/A"}
+                    </div>
+                    <div className="text-sm font-medium text-green-600 mb-3">
+                      {state.invoices[key].total || "Ksh0"}
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => loadInvoice(key)}
+                        className="btn btn-sm btn-outline flex-1"
+                      >
+                        Load
+                      </button>
+                      <button
+                        onClick={() => deleteInvoice(key)}
+                        className="btn btn-sm btn-outline text-red-600 hover:bg-red-50"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           )}
-        </div>
-      </div>
-
-      {/* Saved Invoices */}
-      {Object.keys(state.invoices).length > 0 && (
-        <div className="card">
-          <h3 className="text-xl font-bold mb-4">Saved Invoices</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {Object.keys(state.invoices).map((key) => (
-              <div
-                key={key}
-                className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50"
-              >
-                <div className="font-semibold text-blue-900 mb-2">{key}</div>
-                <div className="text-sm text-gray-600 mb-2">
-                  Customer: {state.invoices[key].customer?.name || "N/A"}
-                </div>
-                <div className="text-sm font-medium text-green-600 mb-3">
-                  {state.invoices[key].total || "Ksh0"}
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => loadInvoice(key)}
-                    className="btn btn-sm btn-outline flex-1"
-                  >
-                    Load
-                  </button>
-                  <button
-                    onClick={() => deleteInvoice(key)}
-                    className="btn btn-sm btn-outline text-red-600 hover:bg-red-50"
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+        </>
       )}
     </div>
   );
