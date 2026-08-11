@@ -2,7 +2,7 @@
  * SettingsPanel.tsx
  * Business settings: station info, tax rates, integrations, user profile.
  */
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Save,
   Loader2,
@@ -12,11 +12,19 @@ import {
   User,
 } from "lucide-react";
 import { useStations } from "@/react-app/context/StationContext";
+import { useAuth } from "@/react-app/context/AuthContext";
 import { supabase } from "@/supabase/client";
 import UserProfileSettings from "./UserProfileSettings";
+import {
+  getMpesaConfig,
+  getKopokopoConfig,
+  switchToTab,
+} from "@/react-app/lib/mpesa-integration-service";
 
 export default function SettingsPanel() {
   const { currentStation, updateStation } = useStations();
+  const { user } = useAuth();
+  const stationId = currentStation?.id;
   const [activeTab, setActiveTab] = useState<"business" | "profile">(
     "business",
   );
@@ -30,6 +38,19 @@ export default function SettingsPanel() {
     kraPin: currentStation?.kraPin || "",
     taxRate: String(currentStation?.taxRate ?? 16),
   });
+  const [mpesaConnected, setMpesaConnected] = useState(false);
+  const [kopoConnected, setKopoConnected] = useState(false);
+
+  // Load real integration connection status from cloud config
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      const m = await getMpesaConfig(stationId);
+      setMpesaConnected(m.enabled && !!m.consumerKey);
+      const k = await getKopokopoConfig(stationId);
+      setKopoConnected(k.enabled && !!k.clientId);
+    })();
+  }, [user, stationId]);
 
   const handleSave = async () => {
     if (!currentStation?.id) return;
@@ -175,7 +196,10 @@ export default function SettingsPanel() {
               <Smartphone size={20} className="text-blue-400" /> Integrations
             </h3>
             <div className="space-y-4">
-              <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl">
+              <button
+                onClick={() => switchToTab("integrations-settings")}
+                className="w-full flex items-center justify-between p-4 bg-white/5 hover:bg-white/10 rounded-xl transition-colors text-left"
+              >
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-emerald-500/20 rounded-lg flex items-center justify-center">
                     <span className="text-emerald-400 font-bold text-sm">
@@ -189,11 +213,20 @@ export default function SettingsPanel() {
                     </p>
                   </div>
                 </div>
-                <span className="text-xs px-2 py-1 bg-gray-500/20 text-gray-400 rounded-full">
-                  Not Connected
+                <span
+                  className={`text-xs px-2 py-1 rounded-full ${
+                    mpesaConnected
+                      ? "bg-green-500/20 text-green-400"
+                      : "bg-gray-500/20 text-gray-400"
+                  }`}
+                >
+                  {mpesaConnected ? "Connected" : "Not Connected"}
                 </span>
-              </div>
-              <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl">
+              </button>
+              <button
+                onClick={() => switchToTab("integrations-settings")}
+                className="w-full flex items-center justify-between p-4 bg-white/5 hover:bg-white/10 rounded-xl transition-colors text-left"
+              >
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-blue-500/20 rounded-lg flex items-center justify-center">
                     <span className="text-blue-400 font-bold text-sm">KK</span>
@@ -203,10 +236,16 @@ export default function SettingsPanel() {
                     <p className="text-gray-500 text-xs">Payment gateway</p>
                   </div>
                 </div>
-                <span className="text-xs px-2 py-1 bg-gray-500/20 text-gray-400 rounded-full">
-                  Not Connected
+                <span
+                  className={`text-xs px-2 py-1 rounded-full ${
+                    kopoConnected
+                      ? "bg-green-500/20 text-green-400"
+                      : "bg-gray-500/20 text-gray-400"
+                  }`}
+                >
+                  {kopoConnected ? "Connected" : "Not Connected"}
                 </span>
-              </div>
+              </button>
             </div>
           </div>
 

@@ -14,11 +14,26 @@ import {
   Loader2,
   CheckCircle,
   XCircle,
+  BarChart3,
+  ArrowRight,
+  TrendingUp,
+  Users,
+  FileText,
 } from "lucide-react";
 import { useFuel } from "@/react-app/context/FuelContext";
 import { useAuth } from "@/react-app/context/AuthContext";
 import { useStations } from "@/react-app/context/StationContext";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
+import {
+  getTransactions,
+  addTransaction,
+  subscribeToTransactions,
+  calculateSummary,
+  switchToTab,
+  type UnifiedTransaction,
+  type TransactionSummary,
+} from "@/react-app/lib/mpesa-integration-service";
+import { formatNumber } from "@/react-app/utils/formatUtils";
 
 interface PaymentSource {
   id: number;
@@ -109,6 +124,10 @@ export default function LiveTransaction() {
     error: "",
   });
 
+  // Shared unified transactions (interlinked with M-PESA Analyzer)
+  const [sharedTxns, setSharedTxns] = useState<UnifiedTransaction[]>([]);
+  const [summary, setSummary] = useState<TransactionSummary | null>(null);
+
   // Load data on component mount
   useEffect(() => {
     if (user) {
@@ -122,6 +141,29 @@ export default function LiveTransaction() {
 
       return () => clearInterval(interval);
     }
+  }, [user, stationId]);
+
+  // Load + subscribe to shared transactions (interlinked with M-PESA Analyzer)
+  useEffect(() => {
+    if (!user) return;
+    let mounted = true;
+    (async () => {
+      const txns = await getTransactions(stationId);
+      if (mounted) {
+        setSharedTxns(txns);
+        setSummary(calculateSummary(txns));
+      }
+    })();
+    const unsub = subscribeToTransactions(stationId, (txns) => {
+      if (!mounted) return;
+      const data = txns || [];
+      setSharedTxns(data);
+      setSummary(calculateSummary(data));
+    });
+    return () => {
+      mounted = false;
+      unsub();
+    };
   }, [user, stationId]);
 
   // Filter transactions when search parameters change
@@ -347,6 +389,24 @@ export default function LiveTransaction() {
           checkout_request_id: data.checkout_request_id,
         });
 
+        // Write the STK Push request to the shared unified transaction store
+        // so it appears in the M-PESA Analyzer as well.
+        await addTransaction(
+          {
+            transaction_ref: data.checkout_request_id || `STK${Date.now()}`,
+            origin: "stk_push",
+            transaction_type: "STK Push",
+            amount: stkPushData.amount,
+            currency: state.companyData.currency || "KES",
+            sender_info: stkPushData.phone_number,
+            description: stkPushData.transaction_desc || "STK Push payment",
+            status: "pending",
+            payment_method: "M-PESA STK Push",
+            transaction_time: new Date().toISOString(),
+          },
+          stationId,
+        ).catch(() => {});
+
         // Reset form
         setStkPushData({
           phone_number: "",
@@ -529,6 +589,85 @@ export default function LiveTransaction() {
         <div className="bg-red-500/20 border border-red-500 rounded-lg p-3 flex items-center gap-2">
           <XCircle className="text-red-400" size={20} />
           <span className="text-red-200">{error}</span>
+        </div>
+      )}
+
+      {/* Interlinked Analytics Summary (shared with M-PESA Analyzer) */}
+      {summary && summary.totalCount > 0 && (
+        <div className="bg-gradient-to-r from-green-900/30 to-blue-900/30 border border-green-600/50 rounded-lg p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-semibold text-white flex items-center gap-2">
+              <BarChart3 size={18} className="text-green-400" />
+              Shared Analytics
+              <span className="text-xs text-gray-400 font-normal">
+                (interlinked with M-PESA Analyzer)
+              </span>
+            </h3>
+            <button
+              onClick={() => switchToTab("mpesa")}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs"
+            >
+              <FileText size={14} /> View in Analyzer
+              <ArrowRight size={14} />
+            </button>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <SummaryCard
+              icon={<TrendingUp size={14} className="text-green-400" />}
+              label="Total Revenue"
+              value={`${state.companyData.currency || "KSH"} ${formatNumber(summary.total, 0)}`}
+            />
+            <SummaryCard
+              icon={<FileText size={14} className="text-blue-400" />}
+              label="Total Transactions"
+              value={summary.totalCount.toLocaleString()}
+            />
+            <SummaryCard
+              icon={<Users size={14} className="text-purple-400" />}
+              label="Unique Senders"
+              value={summary.uniqueSenders.toLocaleString()}
+            />
+            <SummaryCard
+              icon={<TrendingUp size={14} className="text-amber-400" />}
+              label="Top Sender"
+              value={summary.topSender.name || "N/A"}
+              subValue={
+                summary.topSender.name
+                  ? `${state.companyData.currency || "KSH"} ${formatNumber(summary.topSender.amount, 0)}`
+                  : undefined
+              }
+            />
+          </div>
+          {summary.byOrigin.statement.count > 0 && (
+            <div className="mt-3 pt-3 border-t border-green-600/30 flex items-center gap-4 text-xs">
+              <span className="text-gray-300">
+                <span className="text-green-400 font-semibold">
+                  {summary.byOrigin.stk_push.count}
+                </span>{" "}
+                STK Push
+              </span>
+              <span className="text-gray-300">
+                <span className="text-blue-400 font-semibold">
+                  {summary.byOrigin.statement.count}
+                </span>{" "}
+                from Statements
+              </span>
+              <span className="text-gray-300">
+                <span className="text-amber-400 font-semibold">
+                  {summary.completed}
+                </span>{" "}
+                completed
+              </span>
+              {summary.pending > 0 && (
+                <span className="text-gray-300">
+                  <span className="text-yellow-400 font-semibold">
+                    {summary.pending}
+                  </span>{" "}
+                  pending
+                </span>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -1179,6 +1318,108 @@ export default function LiveTransaction() {
           </div>
         </div>
       )}
+
+      {/* Shared Transactions from M-PESA Analyzer (interlinked) */}
+      {sharedTxns.length > 0 && (
+        <div className="bg-gray-800 p-4 rounded-lg">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-semibold text-white flex items-center gap-2">
+              <FileText size={18} className="text-blue-400" />
+              Shared Transaction Records
+              <span className="text-xs text-gray-400 font-normal">
+                (from M-PESA Analyzer + STK Push)
+              </span>
+            </h3>
+            <button
+              onClick={() => switchToTab("mpesa")}
+              className="text-blue-400 hover:text-blue-300 flex items-center gap-1 text-sm"
+            >
+              Open Analyzer <ArrowRight size={14} />
+            </button>
+          </div>
+          <div className="space-y-2 max-h-64 overflow-y-auto">
+            {sharedTxns.slice(0, 20).map((tx) => (
+              <div
+                key={tx.id}
+                className={`p-3 rounded border-l-4 ${
+                  tx.origin === "stk_push"
+                    ? "border-green-500 bg-green-900/20"
+                    : tx.origin === "statement"
+                      ? "border-blue-500 bg-blue-900/20"
+                      : "border-yellow-500 bg-yellow-900/20"
+                }`}
+              >
+                <div className="flex justify-between items-start mb-1">
+                  <div className="font-semibold text-white text-sm">
+                    {formatCurrency(tx.amount)}
+                    <span
+                      className={`ml-2 text-[10px] px-2 py-0.5 rounded ${
+                        tx.status === "completed"
+                          ? "bg-green-600"
+                          : tx.status === "pending"
+                            ? "bg-yellow-600"
+                            : "bg-red-600"
+                      }`}
+                    >
+                      {tx.status.toUpperCase()}
+                    </span>
+                    <span className="ml-2 text-[10px] px-2 py-0.5 rounded bg-gray-700 text-gray-300">
+                      {tx.origin === "stk_push"
+                        ? "STK Push"
+                        : tx.origin === "statement"
+                          ? "Statement"
+                          : tx.origin}
+                    </span>
+                  </div>
+                  <div className="text-xs text-gray-400">
+                    {new Date(tx.transaction_time).toLocaleString()}
+                  </div>
+                </div>
+                <div className="text-xs text-gray-300">
+                  {tx.transaction_type} • Ref: {tx.transaction_ref}
+                </div>
+                {tx.sender_info && (
+                  <div className="text-xs text-green-400">
+                    From: {tx.sender_info}
+                  </div>
+                )}
+              </div>
+            ))}
+            {sharedTxns.length > 20 && (
+              <div className="text-center text-xs text-gray-400 py-2">
+                Showing 20 of {sharedTxns.length} — open M-PESA Analyzer for
+                full view
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Summary card for the analytics panel
+function SummaryCard({
+  icon,
+  label,
+  value,
+  subValue,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  subValue?: string;
+}) {
+  return (
+    <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-700/50">
+      <div className="flex items-center gap-1.5 mb-1">
+        {icon}
+        <span className="text-[10px] text-gray-400 uppercase tracking-wide">
+          {label}
+        </span>
+      </div>
+      <p className="text-sm font-bold text-white truncate">{value}</p>
+      {subValue && <p className="text-xs text-gray-400 truncate">{subValue}</p>}
     </div>
   );
 }

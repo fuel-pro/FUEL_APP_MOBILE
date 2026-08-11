@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import {
   Upload,
   FileText,
@@ -18,9 +18,24 @@ import {
   Wallet,
   ClipboardPaste,
   Bug,
+  CreditCard,
+  ArrowRight,
+  Radio,
+  Link2,
+  Save,
+  Database,
 } from "lucide-react";
 import { formatNumber } from "@/react-app/utils/formatUtils";
 import { getGeminiUrl } from "@/utils/apiConfig";
+import {
+  addBatchTransactions,
+  getTransactions,
+  subscribeToTransactions,
+  switchToTab,
+  type UnifiedTransaction,
+} from "@/react-app/lib/mpesa-integration-service";
+import { useAuth } from "@/react-app/context/AuthContext";
+import { useStations } from "@/react-app/context/StationContext";
 
 // ============================================================
 // M-PESA Inflow Analyzer v5 - RESTRUCTURED
@@ -93,6 +108,10 @@ const SKIP_KEYWORDS = [
 ];
 
 export default function MPESAAnalyzer() {
+  const { user } = useAuth();
+  const { currentStation } = useStations();
+  const stationId = currentStation?.id;
+
   // Input state
   const [inputMethod, setInputMethod] = useState<InputMethod>("pdf");
   const [pdfFiles, setPdfFiles] = useState<File[]>([]);
@@ -118,6 +137,31 @@ export default function MPESAAnalyzer() {
   const [rangeFilterTotal, setRangeFilterTotal] = useState<number | null>(null);
   const [rangeFilterCount, setRangeFilterCount] = useState(0);
   const [showRangeFilter, setShowRangeFilter] = useState(false);
+
+  // Interlinked state — shared transactions with Live Transaction tab
+  const [sharedTxns, setSharedTxns] = useState<UnifiedTransaction[]>([]);
+  const [savedToShared, setSavedToShared] = useState<{
+    added: number;
+    skipped: number;
+  } | null>(null);
+  const [showLiveFeed, setShowLiveFeed] = useState(false);
+
+  // Load + subscribe to shared transactions (interlinked with Live Transaction)
+  useEffect(() => {
+    if (!user) return;
+    let mounted = true;
+    (async () => {
+      const txns = await getTransactions(stationId);
+      if (mounted) setSharedTxns(txns);
+    })();
+    const unsub = subscribeToTransactions(stationId, (txns) => {
+      if (mounted) setSharedTxns(txns || []);
+    });
+    return () => {
+      mounted = false;
+      unsub();
+    };
+  }, [user, stationId]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const addProgress = useCallback((msg: string) => {
@@ -651,6 +695,9 @@ export default function MPESAAnalyzer() {
     setValidationWarning(
       `Validated: ${records.length} inflows | Ksh ${formatNumber(st.totalAmount, 2)} | ${excluded.length} excluded (loans/charges)`,
     );
+
+    // Save to shared unified store (interlinked with Live Transaction)
+    await saveToSharedStore(records);
   };
 
   const processWithAI = async (text: string) => {
@@ -663,6 +710,48 @@ export default function MPESAAnalyzer() {
     setInflowData(records);
     setStats(st);
     addProgress(`AI complete! ${records.length} inflows found`);
+
+    // Save to shared unified store (interlinked with Live Transaction)
+    await saveToSharedStore(records);
+  };
+
+  /**
+   * Persist extracted inflows to the shared `mpesa_transactions` cloud store
+   * so they appear in the Live Transaction tab's feed. De-duplicates by
+   * receipt number to avoid double-imports.
+   */
+  const saveToSharedStore = async (records: InflowRecord[]) => {
+    if (!user || records.length === 0) {
+      setSavedToShared(null);
+      return;
+    }
+    try {
+      const txns = records.map((r) => ({
+        transaction_ref: r.receipt || `STMT${r.date}${r.time}`,
+        origin: "statement" as const,
+        transaction_type: "Merchant Payment",
+        amount: r.paidIn,
+        currency: "KES",
+        sender_info: r.details,
+        description: r.details,
+        status: "completed" as const,
+        payment_method: r.isOnline ? "M-PESA Online" : "M-PESA",
+        transaction_time: `${r.date}T${r.time || "00:00:00"}`,
+        receipt: r.receipt,
+        balance: r.balance,
+        is_online: r.isOnline,
+        date: r.date,
+        time: r.time,
+      }));
+      const result = await addBatchTransactions(txns, stationId);
+      setSavedToShared(result);
+      addProgress(
+        `Shared store: ${result.added} added, ${result.skipped} duplicates skipped`,
+      );
+    } catch (err) {
+      console.error("Failed to save to shared store:", err);
+      setSavedToShared(null);
+    }
   };
 
   // ===== FILE HANDLING =====
@@ -714,7 +803,7 @@ export default function MPESAAnalyzer() {
         <div className="p-2.5 bg-green-100 dark:bg-green-900/30 rounded-xl">
           <FileText size={24} className="text-green-600 dark:text-green-400" />
         </div>
-        <div>
+        <div className="flex-1">
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
             M-PESA Inflow Analyzer
           </h2>
@@ -723,7 +812,40 @@ export default function MPESAAnalyzer() {
             <strong>Balance</strong> from M-PESA statements
           </p>
         </div>
+        {/* Cross-tab navigation to Live Transaction */}
+        <button
+          onClick={() => switchToTab("livetransaction")}
+          className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-medium transition-colors"
+        >
+          <Radio size={16} className="animate-pulse" />
+          Live Transaction
+          <ArrowRight size={14} />
+        </button>
       </div>
+
+      {/* Interlinked banner */}
+      <div className="flex items-center gap-2 px-4 py-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl">
+        <Link2 size={16} className="text-blue-500 flex-shrink-0" />
+        <p className="text-xs text-blue-700 dark:text-blue-300">
+          <strong>Interlinked with Live Transaction:</strong> Extracted inflows
+          are saved to a shared cloud store and appear in the Live Transaction
+          feed. Real-time STK Push transactions appear below in the shared feed.
+        </p>
+      </div>
+
+      {/* Saved-to-shared indicator */}
+      {savedToShared && (
+        <div className="flex items-center gap-2 px-4 py-3 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl">
+          <Database size={16} className="text-emerald-500 flex-shrink-0" />
+          <p className="text-xs text-emerald-700 dark:text-emerald-300">
+            <strong>{savedToShared.added}</strong> transaction
+            {savedToShared.added !== 1 ? "s" : ""} saved to shared store →
+            visible in Live Transaction tab
+            {savedToShared.skipped > 0 &&
+              ` (${savedToShared.skipped} duplicate${savedToShared.skipped !== 1 ? "s" : ""} skipped)`}
+          </p>
+        </div>
+      )}
 
       {/* Input Method Tabs */}
       <div className="flex gap-2">
@@ -1517,6 +1639,89 @@ export default function MPESAAnalyzer() {
             )}
           </div>
         </>
+      )}
+
+      {/* ===== Shared Live Feed (interlinked with Live Transaction) ===== */}
+      {sharedTxns.length > 0 && (
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/10 dark:to-indigo-900/10 rounded-2xl border border-blue-200 dark:border-blue-800 p-4">
+          <button
+            onClick={() => setShowLiveFeed(!showLiveFeed)}
+            className="flex items-center justify-between w-full text-sm font-semibold text-blue-700 dark:text-blue-300 mb-2"
+          >
+            <span className="flex items-center gap-2">
+              <CreditCard size={16} />
+              Shared Transaction Feed
+              <span className="text-xs text-blue-500 font-normal">
+                (interlinked with Live Transaction — {sharedTxns.length} total)
+              </span>
+            </span>
+            <span className="text-xs text-blue-500">
+              {showLiveFeed ? "(hide)" : "(show)"}
+            </span>
+          </button>
+          {showLiveFeed && (
+            <div className="space-y-2 max-h-[400px] overflow-y-auto">
+              {sharedTxns.slice(0, 50).map((tx) => (
+                <div
+                  key={tx.id}
+                  className={`flex items-center justify-between p-3 rounded-lg border-l-4 ${
+                    tx.origin === "stk_push"
+                      ? "border-green-500 bg-green-50 dark:bg-green-900/20"
+                      : tx.origin === "statement"
+                        ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
+                        : "border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20"
+                  }`}
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-semibold text-gray-900 dark:text-white">
+                        Ksh {formatNumber(tx.amount, 2)}
+                      </span>
+                      <span
+                        className={`text-[10px] px-2 py-0.5 rounded ${
+                          tx.status === "completed"
+                            ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                            : tx.status === "pending"
+                              ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
+                              : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+                        }`}
+                      >
+                        {tx.status}
+                      </span>
+                      <span className="text-[10px] px-2 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
+                        {tx.origin === "stk_push"
+                          ? "STK Push"
+                          : tx.origin === "statement"
+                            ? "Statement"
+                            : tx.origin}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">
+                      {tx.sender_info || tx.description} • Ref:{" "}
+                      {tx.transaction_ref}
+                    </p>
+                  </div>
+                  <div className="text-xs text-gray-400 whitespace-nowrap ml-3">
+                    {new Date(tx.transaction_time).toLocaleString()}
+                  </div>
+                </div>
+              ))}
+              {sharedTxns.length > 50 && (
+                <p className="text-center text-xs text-gray-400 py-2">
+                  Showing 50 of {sharedTxns.length} — open Live Transaction tab
+                  for full feed
+                </p>
+              )}
+              <button
+                onClick={() => switchToTab("livetransaction")}
+                className="w-full mt-2 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium flex items-center justify-center gap-2"
+              >
+                <Radio size={14} /> Open Live Transaction Tab
+                <ArrowRight size={14} />
+              </button>
+            </div>
+          )}
+        </div>
       )}
     </div>
   );

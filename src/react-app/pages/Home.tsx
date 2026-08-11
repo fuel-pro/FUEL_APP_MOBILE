@@ -79,6 +79,9 @@ const AdvancedAnalytics = lazy(
 const IntegrationHub = lazy(
   () => import("@/react-app/components/IntegrationHub"),
 );
+const IntegrationsSettings = lazy(
+  () => import("@/react-app/components/IntegrationsSettings"),
+);
 const Compliance = lazy(() => import("@/react-app/components/Compliance"));
 const DocumentConverter = lazy(
   () => import("@/react-app/components/DocumentConverter"),
@@ -395,6 +398,8 @@ function HomeContent() {
         return <AdvancedAnalytics />;
       case "integration":
         return <IntegrationHub />;
+      case "integrations-settings":
+        return <IntegrationsSettings />;
       case "regional":
         return <Compliance />;
       case "docconverter":
