@@ -64,12 +64,6 @@ const CustomerLoyalty = lazy(
   () => import("@/react-app/components/CustomerLoyalty"),
 );
 const AuditTrail = lazy(() => import("@/react-app/components/AuditTrail"));
-const ShiftManagement = lazy(
-  () => import("@/react-app/components/ShiftManagement"),
-);
-const FuelQualityTesting = lazy(
-  () => import("@/react-app/components/FuelQualityTesting"),
-);
 const CreditManagement = lazy(
   () => import("@/react-app/components/CreditManagement"),
 );
@@ -79,13 +73,7 @@ const AdvancedAnalytics = lazy(
 const IntegrationHub = lazy(
   () => import("@/react-app/components/IntegrationHub"),
 );
-const IntegrationsSettings = lazy(
-  () => import("@/react-app/components/IntegrationsSettings"),
-);
 const Compliance = lazy(() => import("@/react-app/components/Compliance"));
-const DocumentConverter = lazy(
-  () => import("@/react-app/components/DocumentConverter"),
-);
 const FuelTypesManager = lazy(
   () => import("@/react-app/components/FuelTypesManager"),
 );
@@ -102,8 +90,6 @@ const MaintenanceTracker = lazy(
 const ExpenseTracker = lazy(
   () => import("@/react-app/components/ExpenseTracker"),
 );
-const PriceBoard = lazy(() => import("@/react-app/components/PriceBoard"));
-const FuelTracker = lazy(() => import("@/react-app/components/FuelTracker"));
 const PumpMappingV1 = lazy(
   () => import("@/react-app/components/PumpMappingV1"),
 );
@@ -117,17 +103,8 @@ const FuelPriceLocator = lazy(
 // provide genuinely new capability not already covered by a FuelPro tab are
 // wired in here; modules that duplicate an existing FuelPro tab reuse the
 // FuelPro component instead.
-const EnhancedDashboard = lazy(
-  () => import("@/react-app/components/EnhancedDashboard"),
-);
 const ProductsManagement = lazy(
   () => import("@/react-app/components/ProductsManagement"),
-);
-const SalesInvoices = lazy(
-  () => import("@/react-app/components/SalesInvoices"),
-);
-const PurchasesSuppliers = lazy(
-  () => import("@/react-app/components/PurchasesSuppliers"),
 );
 const TerminalSessions = lazy(
   () => import("@/react-app/components/TerminalSessions"),
@@ -388,22 +365,14 @@ function HomeContent() {
         return <CustomerLoyalty />;
       case "audit":
         return <AuditTrail {...commonProps} />;
-      case "shifts":
-        return <ShiftManagement />;
-      case "quality":
-        return <FuelQualityTesting />;
       case "credit":
         return <CreditManagement />;
       case "analytics":
         return <AdvancedAnalytics />;
       case "integration":
         return <IntegrationHub />;
-      case "integrations-settings":
-        return <IntegrationsSettings />;
       case "regional":
         return <Compliance />;
-      case "docconverter":
-        return <DocumentConverter />;
       case "fueltypes":
         return <FuelTypesManager />;
       case "team":
@@ -416,10 +385,6 @@ function HomeContent() {
         return <MaintenanceTracker />;
       case "expenses":
         return <ExpenseTracker />;
-      case "priceboard":
-        return <PriceBoard />;
-      case "fueltracker":
-        return <FuelTracker />;
       case "pumpmapping":
         return <PumpMappingV1 />;
       // ─── SalesZote-style additive modules ───
@@ -427,10 +392,6 @@ function HomeContent() {
       // duplicates a FuelPro tab, the FuelPro component is reused above.
       case "products":
         return <ProductsManagement />;
-      case "sales-invoices":
-        return <SalesInvoices />;
-      case "purchases":
-        return <PurchasesSuppliers />;
       case "terminal":
         return <TerminalSessions />;
       case "price-finder":

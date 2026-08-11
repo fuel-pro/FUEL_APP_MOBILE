@@ -19,6 +19,9 @@ import {
   TrendingUp,
   Users,
   FileText,
+  Plug,
+  Smartphone,
+  Wallet,
 } from "lucide-react";
 import { useFuel } from "@/react-app/context/FuelContext";
 import { useAuth } from "@/react-app/context/AuthContext";
@@ -734,6 +737,61 @@ export default function LiveTransaction() {
               </div>
             ))
           )}
+        </div>
+
+        {/* Integration Hub quick-connect — links M-PESA + Kopo Kopo setup */}
+        <div className="mt-4 pt-4 border-t border-gray-700">
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="text-sm font-semibold text-gray-200 flex items-center gap-2">
+              <Plug size={14} className="text-indigo-400" />
+              Live Payment Integrations
+            </h4>
+            <button
+              onClick={() => switchToTab("integration")}
+              className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1"
+            >
+              Open Integration Hub <ArrowRight size={12} />
+            </button>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <button
+              onClick={() => switchToTab("integration")}
+              className="flex items-center gap-3 p-3 bg-emerald-900/30 hover:bg-emerald-900/50 border border-emerald-700/50 rounded-lg transition-colors text-left"
+            >
+              <div className="w-9 h-9 bg-emerald-500/20 rounded-lg flex items-center justify-center">
+                <Smartphone size={16} className="text-emerald-400" />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-medium text-white">M-PESA Payment</p>
+                <p className="text-[11px] text-gray-400">
+                  Daraja STK Push, Paybill & Buy Goods
+                </p>
+              </div>
+              <ArrowRight size={14} className="text-emerald-400" />
+            </button>
+            <button
+              onClick={() => switchToTab("integration")}
+              className="flex items-center gap-3 p-3 bg-blue-900/30 hover:bg-blue-900/50 border border-blue-700/50 rounded-lg transition-colors text-left"
+            >
+              <div className="w-9 h-9 bg-blue-500/20 rounded-lg flex items-center justify-center">
+                <Wallet size={16} className="text-blue-400" />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-medium text-white">
+                  Kopo Kopo Payment
+                </p>
+                <p className="text-[11px] text-gray-400">
+                  Till number & webhook transactions
+                </p>
+              </div>
+              <ArrowRight size={14} className="text-blue-400" />
+            </button>
+          </div>
+          <p className="mt-2 text-[11px] text-gray-500">
+            Tip: configure M-PESA Daraja or Kopo Kopo in the Integration Hub
+            (Payment Setup) to enable live STK Push and automatic transaction
+            import here.
+          </p>
         </div>
       </div>
 

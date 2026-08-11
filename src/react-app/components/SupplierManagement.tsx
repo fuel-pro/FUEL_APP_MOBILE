@@ -24,7 +24,9 @@ import {
   Search,
   CheckCircle2,
   AlertTriangle,
+  ShoppingCart,
 } from "lucide-react";
+import PurchasesSuppliers from "@/react-app/components/PurchasesSuppliers";
 
 interface Supplier {
   id: string;
@@ -91,9 +93,9 @@ export default function SupplierManagement() {
 
   const [suppliers, setSuppliers] = useState<Supplier[]>(loadSuppliers);
   const [orders, setOrders] = useState<PurchaseOrder[]>(loadOrders);
-  const [activeView, setActiveView] = useState<"suppliers" | "orders">(
-    "suppliers",
-  );
+  const [activeView, setActiveView] = useState<
+    "suppliers" | "orders" | "purchases"
+  >("suppliers");
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [showForm, setShowForm] = useState(false);
@@ -363,10 +365,21 @@ export default function SupplierManagement() {
           >
             Purchase Orders
           </button>
+          <button
+            onClick={() => {
+              setActiveView("purchases");
+            }}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5 ${activeView === "purchases" ? "bg-amber-500 text-white shadow-lg" : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200"}`}
+          >
+            <ShoppingCart size={14} />
+            Purchases
+          </button>
         </div>
       </div>
 
-      {activeView === "suppliers" ? (
+      {activeView === "purchases" ? (
+        <PurchasesSuppliers />
+      ) : activeView === "suppliers" ? (
         <>
           {/* Toolbar */}
           <div className="flex flex-col md:flex-row gap-3">

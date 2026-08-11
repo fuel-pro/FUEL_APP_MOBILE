@@ -16,8 +16,6 @@ import {
   Bell,
   Package,
   Award,
-  Calendar,
-  FlaskConical,
   Wallet,
   LineChart,
   ClipboardList,
@@ -26,9 +24,6 @@ import {
   Wrench,
   Monitor,
   Receipt,
-  Settings,
-  HelpCircle,
-  FileUp,
 } from "lucide-react";
 import { useState } from "react";
 import { usePermissions } from "@/react-app/context/PermissionContext";
@@ -123,15 +118,8 @@ export default function MobileBottomNav({
     { id: "credit", label: "Credit", icon: Wallet, color: "text-pink-500" },
     { id: "debt", label: "Debts", icon: Bell, color: "text-red-400" },
     { id: "payroll", label: "Payroll", icon: Users, color: "text-pink-500" },
-    { id: "shifts", label: "Shifts", icon: Calendar, color: "text-cyan-500" },
     { id: "team", label: "Team", icon: Users, color: "text-purple-500" },
     { id: "customers", label: "Loyalty", icon: Award, color: "text-amber-500" },
-    {
-      id: "quality",
-      label: "Quality",
-      icon: FlaskConical,
-      color: "text-teal-500",
-    },
     {
       id: "analytics",
       label: "Analytics",
@@ -177,37 +165,13 @@ export default function MobileBottomNav({
       icon: Wrench,
       color: "text-gray-400",
     },
-    {
-      id: "priceboard",
-      label: "Prices",
-      icon: Monitor,
-      color: "text-cyan-500",
-    },
     { id: "expenses", label: "Expenses", icon: Receipt, color: "text-red-400" },
-    {
-      id: "docconverter",
-      label: "Convert",
-      icon: FileUp,
-      color: "text-amber-500",
-    },
     // SalesZote-style additive modules
     {
       id: "products",
       label: "Products",
       icon: Package,
       color: "text-indigo-400",
-    },
-    {
-      id: "sales-invoices",
-      label: "Invoices",
-      icon: FileText,
-      color: "text-sky-400",
-    },
-    {
-      id: "purchases",
-      label: "Purchases",
-      icon: ShoppingCart,
-      color: "text-emerald-400",
     },
     {
       id: "terminal",

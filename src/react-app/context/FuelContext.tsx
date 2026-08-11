@@ -576,7 +576,7 @@ const initialState: FuelState = {
       id: "invoice",
       label: "Invoice",
       originalLabel: "Invoice",
-      description: "Generate and manage customer invoices",
+      description: "Generate & manage customer invoices and sales invoices",
       order: 7,
       visible: true,
     },
@@ -613,27 +613,11 @@ const initialState: FuelState = {
       visible: true,
     },
     {
-      id: "shifts",
-      label: "Shifts",
-      originalLabel: "Shifts",
-      description: "Employee shift scheduling & attendance",
-      order: 12,
-      visible: true,
-    },
-    {
       id: "customers",
       label: "Customers",
       originalLabel: "Customers",
       description: "Customer loyalty & rewards program",
       order: 13,
-      visible: true,
-    },
-    {
-      id: "quality",
-      label: "Fuel Quality",
-      originalLabel: "Fuel Quality",
-      description: "Test & certify fuel quality standards",
-      order: 14,
       visible: true,
     },
     {
@@ -694,9 +678,10 @@ const initialState: FuelState = {
     },
     {
       id: "integration",
-      label: "Integrations",
-      originalLabel: "Integrations",
-      description: "Connect KRA, ETR, POS, Payroll, Banks & more",
+      label: "Integration Hub",
+      originalLabel: "Integration Hub",
+      description:
+        "Country-specific integrations & payment setup (M-PESA, Kopo Kopo, KRA, banks)",
       order: 22,
       visible: true,
     },
@@ -710,42 +695,35 @@ const initialState: FuelState = {
       visible: true,
     },
     {
-      id: "docconverter",
-      label: "Doc Converter",
-      originalLabel: "Doc Converter",
-      description: "Zero-rejection document upload & format conversion",
-      order: 31,
-      visible: true,
-    },
-    {
       id: "fueltypes",
-      label: "Fuel Types",
-      originalLabel: "Fuel Types",
-      description: "Add and manage custom fuel products",
+      label: "Fuel Type Manager",
+      originalLabel: "Fuel Type Manager",
+      description:
+        "Manage fuel products, pump settings, price board & quality testing",
       order: 24,
       visible: true,
     },
     {
       id: "team",
-      label: "Team",
-      originalLabel: "Team",
-      description: "Invite and manage team access",
+      label: "Team Manager",
+      originalLabel: "Team Manager",
+      description: "Invite & manage team access and shift scheduling",
       order: 25,
       visible: true,
     },
     {
       id: "documents",
-      label: "Documents",
-      originalLabel: "Documents",
-      description: "Smart document management",
+      label: "Document Center",
+      originalLabel: "Document Center",
+      description: "Smart document management & format conversion",
       order: 26,
       visible: true,
     },
     {
       id: "suppliers",
-      label: "Suppliers",
-      originalLabel: "Suppliers",
-      description: "Manage fuel suppliers & purchase orders",
+      label: "Supplier Management",
+      originalLabel: "Supplier Management",
+      description: "Manage fuel suppliers, purchase orders & purchases",
       order: 27,
       visible: true,
     },
@@ -766,28 +744,11 @@ const initialState: FuelState = {
       visible: true,
     },
     {
-      id: "priceboard",
-      label: "Price Board",
-      originalLabel: "Price Board",
-      description: "Digital price board management",
-      order: 30,
-      visible: true,
-    },
-    {
       id: "pumpmapping",
       label: "Pump Mapping V1",
       originalLabel: "Pump Mapping V1",
       description: "AI-powered pump ledger parsing & extraction",
       order: 31,
-      visible: true,
-    },
-    {
-      id: "fueltracker",
-      label: "Auto Fuel Price",
-      originalLabel: "Auto Fuel Price",
-      description:
-        "GPS-detected hyper-local fuel prices (AI-parsed, PostGIS cached)",
-      order: 32,
       visible: true,
     },
     // ─── SalesZote-style additive POS modules ───
@@ -804,22 +765,6 @@ const initialState: FuelState = {
       visible: true,
     },
     {
-      id: "sales-invoices",
-      label: "Sales Invoices",
-      originalLabel: "Sales Invoices",
-      description: "Issue and track detailed sales invoices",
-      order: 34,
-      visible: true,
-    },
-    {
-      id: "purchases",
-      label: "Purchases & Suppliers",
-      originalLabel: "Purchases & Suppliers",
-      description: "Purchase orders and supplier management",
-      order: 35,
-      visible: true,
-    },
-    {
       id: "terminal",
       label: "Terminal Sessions",
       originalLabel: "Terminal Sessions",
@@ -831,16 +776,9 @@ const initialState: FuelState = {
       id: "price-finder",
       label: "Fuel Price Finder",
       originalLabel: "Fuel Price Finder",
-      description: "GPS-based nearby fuel price locator & comparison",
+      description:
+        "GPS-based nearby fuel price locator & auto fuel price comparison",
       order: 37,
-      visible: true,
-    },
-    {
-      id: "integrations-settings",
-      label: "Integrations",
-      originalLabel: "Integrations",
-      description: "M-PESA & Kopo Kopo payment integration setup",
-      order: 38,
       visible: true,
     },
   ],
@@ -896,11 +834,12 @@ function mergeCompanyData(
  */
 function itemsHaveContent(items?: InvoiceItem[] | null): number {
   if (!items || !Array.isArray(items)) return 0;
-  return items.filter((it) => (it.desc && it.desc.trim() !== "") || it.price > 0).length;
+  return items.filter(
+    (it) => (it.desc && it.desc.trim() !== "") || it.price > 0,
+  ).length;
 }
 
 function fuelReducer(state: FuelState, action: FuelAction): FuelState {
-
   switch (action.type) {
     case "SET_THEME":
       return { ...state, theme: action.payload };
@@ -988,7 +927,8 @@ function fuelReducer(state: FuelState, action: FuelAction): FuelState {
       const incomingItems = incoming.invoiceItems;
       const currentItems = state.invoiceItems;
       const invoiceItems =
-        incomingItems && itemsHaveContent(incomingItems) >= itemsHaveContent(currentItems)
+        incomingItems &&
+        itemsHaveContent(incomingItems) >= itemsHaveContent(currentItems)
           ? incomingItems
           : currentItems;
       return {
@@ -1076,7 +1016,10 @@ function fuelReducer(state: FuelState, action: FuelAction): FuelState {
           ...state,
           currentStationId: action.payload,
           stationData: savedStationData,
-          companyData: mergeCompanyData(state.companyData, loadedStation.companyData),
+          companyData: mergeCompanyData(
+            state.companyData,
+            loadedStation.companyData,
+          ),
           pmsPumps: loadedStation.pmsPumps || [],
           agoPumps: loadedStation.agoPumps || [],
           pmsTankOpening: loadedStation.pmsTankOpening || 0,

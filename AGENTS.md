@@ -1254,3 +1254,24 @@ labels.
   once the quota resets. Until then Vercel production serves the previous
   frontend; the Cloudflare mirror has the fixed frontend NOW. /api/* endpoints
   (unchanged by this commit) remain correct on Vercel.
+
+## Tab consolidation — merged standalone tabs into host components (2026-08-11)
+
+Reduced top-level navigation clutter by merging 9 formerly-standalone tabs into existing host components as inner sub-tabs (using the new reusable `src/react-app/components/SubTabBar.tsx`). Each source tab's configuration was removed from `FuelContext.tsx` tabConfigurations, its switch case + lazy import removed from `Home.tsx`, and dead entries cleaned from `MobileBottomNav.tsx`. `PermissionContext.roleTabGrants` still lists the old ids harmlessly (they no longer match any tab, so they have no effect).
+
+Merges:
+1. **IntegrationsSettings** ("integrations-settings") -> **IntegrationHub** ("integration") as a "Payment Setup" sub-tab (M-PESA Daraja + Kopo Kopo config forms). SettingsPanel M-PESA/Kopo Kopo cards now switch to "integration" (was "integrations-settings").
+2. **FuelTracker / Auto Fuel Price** ("fueltracker") -> **FuelPriceLocator** ("price-finder") as an "Auto Fuel Price" sub-tab.
+3. **PurchasesSuppliers** ("purchases") -> **SupplierManagement** ("suppliers") as a "Purchases" sub-tab alongside Suppliers + Purchase Orders.
+4. **SalesInvoices** ("sales-invoices") -> **Invoice** ("invoice") as a "Sales Invoices" sub-tab.
+5. **ShiftManagement** ("shifts") -> **TeamManager** ("team") as a "Shifts" sub-tab.
+6. **Pump Settings** (was a sub-tab of DataManager "data") -> **FuelTypesManager** ("fueltypes") as a "Pump Settings" sub-tab. The inline DataManager pump-settings JSX was extracted into a self-contained `PumpSettingsPanel` component inside FuelTypesManager.tsx (reads FuelContext state + PermissionContext, dispatches SET_PRICES / SET_PMS_PUMPS / SET_AGO_PUMPS). DataManager's "pumps" tab nav entry + render block + now-unused pump state/imports were removed.
+7. **PriceBoard** ("priceboard") -> **FuelTypesManager** ("fueltypes") as a "Price Board" sub-tab.
+8. **DocumentConverter** ("docconverter") -> **DocumentCenter** ("documents") as a "Document Converter" sub-tab.
+9. **FuelQualityTesting** ("quality") -> **FuelTypesManager** ("fueltypes") as a "Fuel Quality" sub-tab.
+
+FuelTypesManager now hosts 4 inner sub-tabs: Fuel Types / Pump Settings / Price Board / Fuel Quality.
+
+**Live Transaction Monitor -> Integration Hub link**: LiveTransaction.tsx "Payment Sources" card now has a "Live Payment Integrations" panel with M-PESA Payment + Kopo Kopo Payment buttons that switch to the "integration" tab (Integration Hub -> Payment Setup), plus an "Open Integration Hub" link. This wires the "Add Payment Source" flow to the real M-PESA Daraja / Kopo Kopo configuration in the Integration Hub.
+
+Verified: `npx tsc --noEmit` (0 errors), `npm run build` (115 precache, success), `eslint` (0 errors, warnings only), `prettier --check` (all pass).

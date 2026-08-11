@@ -215,7 +215,7 @@ export default function SettingsPanel() {
             </h3>
             <div className="space-y-4">
               <button
-                onClick={() => switchToTab("integrations-settings")}
+                onClick={() => switchToTab("integration")}
                 className="w-full flex items-center justify-between p-4 bg-white/5 hover:bg-white/10 rounded-xl transition-colors text-left"
               >
                 <div className="flex items-center gap-3">
@@ -242,7 +242,7 @@ export default function SettingsPanel() {
                 </span>
               </button>
               <button
-                onClick={() => switchToTab("integrations-settings")}
+                onClick={() => switchToTab("integration")}
                 className="w-full flex items-center justify-between p-4 bg-white/5 hover:bg-white/10 rounded-xl transition-colors text-left"
               >
                 <div className="flex items-center gap-3">

@@ -40,6 +40,7 @@ import {
   Settings,
   FileText,
   ArrowRight,
+  Smartphone,
 } from "lucide-react";
 import { WORLD_PAYMENT_CONFIGS } from "@/react-app/config/worldPaymentConfigs";
 import {
@@ -47,6 +48,7 @@ import {
   getCountryGateways,
 } from "@/react-app/lib/world-country-utils";
 import SearchableCountryDropdown from "@/react-app/components/SearchableCountryDropdown";
+import IntegrationsSettings from "@/react-app/components/IntegrationsSettings";
 
 // ============================================================
 // COUNTRY-SPECIFIC CONNECTOR CONFIGURATIONS
@@ -1681,7 +1683,7 @@ export default function IntegrationHub() {
   const [webhooks, setWebhooks] = useState<WebhookEndpoint[]>([]);
   const [apiKeys, setApiKeys] = useState<APIKey[]>([]);
   const [activeTab, setActiveTab] = useState<
-    "connectors" | "webhooks" | "apikeys" | "logs"
+    "connectors" | "webhooks" | "apikeys" | "logs" | "payment-setup"
   >("connectors");
   const [expandedConnector, setExpandedConnector] = useState<string | null>(
     null,
@@ -2039,6 +2041,11 @@ export default function IntegrationHub() {
           { id: "webhooks" as const, label: "Webhooks", icon: Globe },
           { id: "apikeys" as const, label: "API Keys", icon: Lock },
           { id: "logs" as const, label: "Logs", icon: FileText },
+          {
+            id: "payment-setup" as const,
+            label: "Payment Setup",
+            icon: Smartphone,
+          },
         ].map((t) => (
           <button
             key={t.id}
@@ -2649,6 +2656,17 @@ export default function IntegrationHub() {
               </p>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* ===== PAYMENT SETUP TAB ===== */}
+      {/* Hosts the M-PESA (Daraja) and Kopo Kopo integration configuration that
+          was previously a standalone top-level "Integrations" tab. Keeping it
+          inside the Integration Hub makes all payment-processor setup reachable
+          from one place. */}
+      {activeTab === "payment-setup" && (
+        <div className="space-y-4">
+          <IntegrationsSettings />
         </div>
       )}
     </div>
