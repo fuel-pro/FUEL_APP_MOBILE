@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from "react";
-import { KENYA_BASE_PRICES } from "@/react-app/config/pricing";
+import { KENYA_BASE_PRICES, getFuelLabel, normalizeFuelType } from "@/react-app/config/pricing";
 import {
   Plus,
   Save,
@@ -19,6 +19,7 @@ import {
   Tag,
 } from "lucide-react";
 import { useFuel } from "@/react-app/context/FuelContext";
+import { useStationFuelTypes } from "@/react-app/hooks/useStationFuelTypes";
 import ExportDropdown from "@/react-app/components/ExportDropdown";
 import {
   exportSalesPDF,
@@ -60,6 +61,12 @@ type ScanStep = "idle" | "uploading" | "analyzing" | "review" | "error";
 
 export default function SalesTracking() {
   const { state, dispatch } = useFuel();
+  const fuelTypeApi = useStationFuelTypes();
+  // Wire fuel prices from the station's configured fuel types (fuel_types_config)
+  // Falls back to the legacy state.pmsPrice/agoPrice or KENYA_BASE_PRICES
+  const stationPetrolPrice = fuelTypeApi.getPriceFor("Petrol") ?? state.pmsPrice ?? KENYA_BASE_PRICES.petrol;
+  const stationDieselPrice = fuelTypeApi.getPriceFor("Diesel") ?? state.agoPrice ?? KENYA_BASE_PRICES.diesel;
+  const stationCurrency = state.companyData.currency || "KSh";
   const [scanStep, setScanStep] = useState<ScanStep>("idle");
   const [scanResult, setScanResult] = useState<ScanResultData | null>(null);
   const [editableResult, setEditableResult] = useState<ScanResultData | null>(
@@ -114,6 +121,36 @@ export default function SalesTracking() {
     }
   }, []);
 
+  // Build default pump list from the station's configured fuel types.
+  // Falls back to 2 Petrol + 2 Diesel (legacy) if no fuel types configured.
+  const buildDefaultPumps = () => {
+    const active = fuelTypeApi.activeFuelTypes;
+    if (active.length > 0) {
+      const pumps: ExtractedPump[] = [];
+      for (const ft of active) {
+        const pumpCount = ft.pumpCount || 1;
+        const code = ft.code || (normalizeFuelType(ft.localName) || "").toUpperCase();
+        for (let i = 1; i <= pumpCount; i++) {
+          pumps.push({
+            name: `${code}-${i}`,
+            fuelType: getFuelLabel(ft.localName),
+            openingReading: 0,
+            closingReading: 0,
+            salesAmount: 0,
+          });
+        }
+      }
+      return pumps;
+    }
+    // Legacy fallback
+    return [
+      { name: "PMS-1", fuelType: "Petrol", openingReading: 0, closingReading: 0, salesAmount: 0 },
+      { name: "PMS-2", fuelType: "Petrol", openingReading: 0, closingReading: 0, salesAmount: 0 },
+      { name: "AGO-1", fuelType: "Diesel", openingReading: 0, closingReading: 0, salesAmount: 0 },
+      { name: "AGO-2", fuelType: "Diesel", openingReading: 0, closingReading: 0, salesAmount: 0 },
+    ];
+  };
+
   // Local AI extraction simulation - works without server
   const simulateAIExtraction = (fileName: string): ScanResultData => {
     // Generate placeholder data - user needs to enter actual values
@@ -124,36 +161,7 @@ export default function SalesTracking() {
     return {
       date: today,
       shift: new Date().getHours() < 14 ? "Day" : "Night",
-      pumps: [
-        {
-          name: "PMS-1",
-          fuelType: "Petrol",
-          openingReading: 0,
-          closingReading: 0,
-          salesAmount: 0,
-        },
-        {
-          name: "PMS-2",
-          fuelType: "Petrol",
-          openingReading: 0,
-          closingReading: 0,
-          salesAmount: 0,
-        },
-        {
-          name: "AGO-1",
-          fuelType: "Diesel",
-          openingReading: 0,
-          closingReading: 0,
-          salesAmount: 0,
-        },
-        {
-          name: "AGO-2",
-          fuelType: "Diesel",
-          openingReading: 0,
-          closingReading: 0,
-          salesAmount: 0,
-        },
-      ],
+      pumps: buildDefaultPumps(),
       expenses: [],
       tillAmount: 0,
       cashAmount: 0,
@@ -481,8 +489,8 @@ export default function SalesTracking() {
       dispatch({
         type: "SET_PRICES",
         payload: {
-          pmsPrice: KENYA_BASE_PRICES.petrol,
-          agoPrice: KENYA_BASE_PRICES.diesel,
+          pmsPrice: stationPetrolPrice,
+          agoPrice: stationDieselPrice,
         },
       });
       dispatch({
@@ -1188,10 +1196,10 @@ export default function SalesTracking() {
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="form-group">
-              <label>Petrol (PMS) Price ({state.companyData.currency}/L)</label>
+              <label>{getFuelLabel("Petrol")} Price ({stationCurrency}/L)</label>
               <input
                 type="number"
-                value={state.pmsPrice}
+                value={stationPetrolPrice}
                 onChange={(e) =>
                   dispatch({
                     type: "SET_PRICES",
@@ -1202,10 +1210,10 @@ export default function SalesTracking() {
               />
             </div>
             <div className="form-group">
-              <label>Diesel (AGO) Price ({state.companyData.currency}/L)</label>
+              <label>{getFuelLabel("Diesel")} Price ({stationCurrency}/L)</label>
               <input
                 type="number"
-                value={state.agoPrice}
+                value={stationDieselPrice}
                 onChange={(e) =>
                   dispatch({
                     type: "SET_PRICES",
@@ -1216,15 +1224,20 @@ export default function SalesTracking() {
               />
             </div>
           </div>
+          {fuelTypeApi.activeFuelTypes.length > 2 && (
+            <p className="text-xs text-gray-500 mt-2">
+              Additional fuel types ({fuelTypeApi.activeFuelTypes.filter(ft => !["pms","ago"].includes(ft.id)).map(ft => getFuelLabel(ft.localName)).join(", ")}) are tracked in the Fuel Type Manager and Point of Sale.
+            </p>
+          )}
         </div>
 
-        {/* PMS Pumps */}
+        {/* Petrol Pumps */}
         <div className="mb-6">
           <div className="flex justify-between items-center mb-3">
-            <h3 className="text-lg font-semibold">Petrol (PMS) Pumps</h3>
+            <h3 className="text-lg font-semibold">{getFuelLabel("Petrol")} Pumps</h3>
             <button onClick={() => addPump("pms")} className="btn btn-primary">
               <Plus size={16} />
-              Add Petrol Pump
+              Add {getFuelLabel("Petrol")} Pump
             </button>
           </div>
 
@@ -1330,10 +1343,10 @@ export default function SalesTracking() {
         {/* AGO Pumps */}
         <div className="mb-6">
           <div className="flex justify-between items-center mb-3">
-            <h3 className="text-lg font-semibold">Diesel (AGO) Pumps</h3>
+            <h3 className="text-lg font-semibold">{getFuelLabel("Diesel")} Pumps</h3>
             <button onClick={() => addPump("ago")} className="btn btn-primary">
               <Plus size={16} />
-              Add Diesel Pump
+              Add {getFuelLabel("Diesel")} Pump
             </button>
           </div>
 

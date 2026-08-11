@@ -78,24 +78,24 @@ export default function FuelSalesReport() {
             salesDate.getMonth() + 1 === selectedMonth &&
             salesDate.getFullYear() === selectedYear
           ) {
-            // Only process if we have actual sales data
-            if (salesData && (salesData.pmsPumps || salesData.agoPumps)) {
+            // Only process if we have actual sales data (pumps or POS sales)
+            if (salesData && (salesData.pmsPumps || salesData.agoPumps || salesData.posSales)) {
               // Calculate petrol sales from all PMS pumps (with rounding for safety)
               const petrolSales =
                 Math.round(
-                  (salesData.pmsPumps || []).reduce(
+                  ((salesData.pmsPumps || []).reduce(
                     (sum: number, pump: any) => sum + (pump.salesKsh || 0),
                     0,
-                  ) * 100,
+                  ) + (salesData.posSales?.pmsAmount || 0)) * 100,
                 ) / 100;
 
               // Calculate diesel sales from all AGO pumps (with rounding for safety)
               const dieselSales =
                 Math.round(
-                  (salesData.agoPumps || []).reduce(
+                  ((salesData.agoPumps || []).reduce(
                     (sum: number, pump: any) => sum + (pump.salesKsh || 0),
                     0,
-                  ) * 100,
+                  ) + (salesData.posSales?.agoAmount || 0)) * 100,
                 ) / 100;
 
               // Format date as DD/MM/YYYY(SHIFT)

@@ -4,6 +4,7 @@ import { useAuth } from "@/react-app/context/AuthContext";
 import { useLocation } from "@/react-app/context/LocationContext";
 import { useStations } from "@/react-app/context/StationContext";
 import { useFuel } from "@/react-app/context/FuelContext";
+import { useStationFuelTypes } from "@/react-app/hooks/useStationFuelTypes";
 import { useFuelPrices } from "@/react-app/hooks/useFuelPrices";
 import {
   getClosestKenyaCityPrice,
@@ -98,7 +99,8 @@ export default function FuelPriceLocator() {
     currentCountry,
   } = useLocation();
   const { stations } = useStations();
-  const { syncPriceToFuelTypes } = useFuel();
+  const { syncPriceToFuelTypes, state } = useFuel();
+  const fuelTypeApi = useStationFuelTypes();
   const {
     prices: unifiedPrices,
     refreshPrices,
@@ -487,6 +489,26 @@ export default function FuelPriceLocator() {
               Update Location
             </button>
           </div>
+
+          {/* Your Station Prices — wire to the station's configured fuel types */}
+          {fuelTypeApi.activeFuelTypes.length > 0 && (
+            <div className="p-3 bg-emerald-900/20 rounded-xl border border-emerald-700/50">
+              <div className="flex items-center gap-2 mb-2">
+                <Fuel className="w-4 h-4 text-emerald-400" />
+                <span className="text-sm font-medium text-emerald-300">Your Station Prices</span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {fuelTypeApi.activeFuelTypes.map((ft) => (
+                  <div key={ft.id} className="bg-slate-800/40 rounded-lg p-2 border border-slate-700/40">
+                    <div className="text-[10px] text-slate-400 uppercase tracking-wide">{ft.localName}</div>
+                    <div className="text-sm font-bold text-white">
+                      {ft.price > 0 ? `${state.companyData.currency || "KSh"} ${ft.price.toFixed(2)}` : "Not set"}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Action button */}
           <button

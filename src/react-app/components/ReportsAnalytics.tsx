@@ -12,18 +12,12 @@ import {
   BarChart3,
 } from "lucide-react";
 import { useStations } from "@/react-app/context/StationContext";
+import { useFuel } from "@/react-app/context/FuelContext";
 import {
   fetchSalesReport,
   fetchExpensesReport,
   fetchInventoryValuation,
 } from "@/react-app/lib/pos-service";
-
-const formatMoney = (amount: number) =>
-  new Intl.NumberFormat("en-KE", {
-    style: "currency",
-    currency: "KES",
-    minimumFractionDigits: 0,
-  }).format(amount);
 
 const DATE_PRESETS = [
   { label: "Today", days: 0 },
@@ -34,6 +28,19 @@ const DATE_PRESETS = [
 
 export default function ReportsAnalytics() {
   const { currentStation } = useStations();
+  const { state } = useFuel();
+  // Wire: use station-configured currency instead of hardcoded "KES"
+  const stationCurrency = state.companyData.currency || "KSh";
+  const stationCurrencyCode =
+    stationCurrency === "KSh" || stationCurrency === "KES" ? "KES" :
+    stationCurrency === "$" || stationCurrency === "USD" ? "USD" : "KES";
+
+const formatMoney = (amount: number) =>
+  new Intl.NumberFormat("en-KE", {
+    style: "currency",
+    currency: stationCurrencyCode,
+    minimumFractionDigits: 0,
+  }).format(amount);
   const [loading, setLoading] = useState(true);
   const [datePreset, setDatePreset] = useState("month");
   const [reportData, setReportData] = useState<any>({
