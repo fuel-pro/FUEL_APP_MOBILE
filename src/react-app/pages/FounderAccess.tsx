@@ -398,6 +398,7 @@ export default function FounderAccess() {
   }, [checkCloudStatus]);
 
   /* ─── Password check on mount ─── */
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     try {
       const sessionStr = localStorage.getItem(FOUNDER_SESSION_KEY);
@@ -417,7 +418,9 @@ export default function FounderAccess() {
       // Handle corrupted localStorage data gracefully
       localStorage.removeItem(FOUNDER_SESSION_KEY);
     }
-  }, [logAudit]);
+    // Run ONCE on mount only — logAudit is stable but listing it causes a
+    // re-fire loop (Session Resumed → mutate → logAudit identity change).
+  }, []);
 
   /* ─── Load real users and stations from backend when authenticated ─── */
   useEffect(() => {
@@ -1257,17 +1260,15 @@ export default function FounderAccess() {
     },
   ];
 
-  const NavItem = ({
-    id,
-    label,
-    icon: Icon,
-    count,
-  }: {
-    id: SectionId;
-    label: string;
-    icon: React.ElementType;
-    count?: number;
-  }) => (
+  // Render function (NOT a component) so React doesn't remount the nav tree
+  // on every render — defining a component inside render causes full subtree
+  // remounts which can swallow click events during periodic re-renders.
+  const renderNavItem = (
+    id: SectionId,
+    label: string,
+    Icon: React.ElementType,
+    count?: number,
+  ) => (
     <button
       onClick={() => setActiveSection(id)}
       className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-left transition-all ${
@@ -1311,13 +1312,9 @@ export default function FounderAccess() {
                 {g.label}
               </p>
               {g.items.map((item) => (
-                <NavItem
-                  key={item.id}
-                  id={item.id}
-                  label={item.label}
-                  icon={item.icon}
-                  count={item.count}
-                />
+                <div key={item.id}>
+                  {renderNavItem(item.id, item.label, item.icon, item.count)}
+                </div>
               ))}
             </div>
           ))}
