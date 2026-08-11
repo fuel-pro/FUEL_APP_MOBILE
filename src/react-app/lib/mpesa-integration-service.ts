@@ -42,6 +42,7 @@ export interface UnifiedTransaction {
   is_online?: boolean;
   date?: string;
   time?: string;
+  account_reference?: string;
 }
 
 export interface MpesaIntegrationConfig {

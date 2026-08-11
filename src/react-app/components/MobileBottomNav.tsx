@@ -64,7 +64,6 @@ export default function MobileBottomNav({
       suppliers: "suppliers",
       documents: "documents",
       invoice: "pos",
-      debt: "credit",
       communication: "email",
       audit: "audit",
       regional: "compliance",

@@ -254,6 +254,7 @@ field with a default value (currency, invoice label, etc.). Fix applied:
 - Vercel token in `$VERCEL`. GitHub token in `$GITHUB_TOKEN`.
 
 ## CRITICAL — Cross-user station + data leak via overly-permissive RLS (FIXED 2026-08-09, commit fb9eb29)
+
 **Symptom**: any logged-in user received the GLOBAL station list — including
 every other user's stations — via the cloud sync query. On a fresh device
 (cleared localStorage), the app defaulted to another user's station
@@ -264,21 +265,23 @@ just `stations` but also `users`, `inventory`, `sales`, `audit_logs`, and
 
 **Root cause**: the tables had three broad RLS policies shadowing the proper
 owner-scoped ones:
+
 - `authenticated_select`: `(auth.role() = 'authenticated')` → ANY
   authenticated user can SELECT ALL rows.
 - `authenticated_update`: same → ANY user can UPDATE ALL rows.
 - `authenticated_insert`: `(auth.role() = 'authenticated')` WITH CHECK →
   ANY user can INSERT as anyone.
-Because Postgres RLS policies are OR'd, the broad policy made the
-owner-scoped `(auth.uid() = owner_id)` policy irrelevant — every row was
-visible to every authenticated user.
+  Because Postgres RLS policies are OR'd, the broad policy made the
+  owner-scoped `(auth.uid() = owner_id)` policy irrelevant — every row was
+  visible to every authenticated user.
 
 **Fix** (migration `009_stations_rls_crossuser_fix.sql`, applied live via
 Management API):
+
 - Dropped `authenticated_select/update/insert` on `stations`, `users`,
   `inventory`, `sales`, `audit_logs`, `config`. Only owner-scoped policies
   remain (verified: `SELECT tablename, policyname FROM pg_policies WHERE
-  policyname LIKE 'authenticated_%'` returns empty).
+policyname LIKE 'authenticated_%'` returns empty).
 - `StationContext.syncStationsWithSupabase` adds `.eq('owner_id', userId)`
   to ALL station SELECT queries + direct-fetch fallbacks as
   defense-in-depth (so a future misconfigured RLS policy can never leak
@@ -758,7 +761,7 @@ data.
 3. **Structured no-real-data response** (step F): when no EPRA match, AI
    extraction rejected, AND no nearby cached real price, the engine RETURNS
    `{success: true, prices: {super_petrol: null, ...}, source: "No
-   published price", no_real_data: true}` instead of throwing. This lets the
+published price", no_real_data: true}` instead of throwing. This lets the
    frontend show "N/A" rather than falling back to the client-side "EPRA
    Estimate (offline)" estimation (which would violate "real prices only").
 
@@ -774,6 +777,7 @@ for KE) → E) PostGIS nearest cached real price (Approx.) → F) no-real-data
 (N/A). No fabrication or estimation at any step.
 
 **Verified live 2026-08-10** (fuel-app-mobile.vercel.app, dpl_7wedvmeVytCx4CA6jduM3azr5C6o):
+
 - Nairobi → Published Reference, 214.03/222.86/191.38 ✅
 - Mombasa → Published Reference, 210.87/219.58/188.09 ✅
 - Kisumu → Published Reference, 213.69/223.09/191.63 ✅
@@ -789,7 +793,7 @@ resolves to sub-locations/neighborhoods ("Kipkenyo ward", "Kimathi")
 instead of the canonical town ("Eldoret", "Nakuru"), causing the EPRA
 exact-match to miss. This is a geocoder data-quality issue, not a price
 engine issue — the behavior remains correct (no fabrication). Enhancing the
-  geocoder to return the parent town name would improve exact-match coverage.
+geocoder to return the parent town name would improve exact-match coverage.
 
 ## Live Transaction ↔ M-PESA Analyzer interlink (ADDED 2026-08-10, commit 278a686)
 
@@ -797,6 +801,7 @@ The Live Transaction tab and M-PESA Analyzer tab now share/interlink data,
 records, and analytics through a unified cloud-backed transaction store.
 
 ### Shared service (`src/react-app/lib/mpesa-integration-service.ts`)
+
 - **Unified transaction store** (cloud key `mpesa_transactions`,
   station-scoped): both tabs read from and write to the same
   `UnifiedTransaction[]` in `app_kv` via `cloudStorageService`. Real-time
@@ -818,6 +823,7 @@ records, and analytics through a unified cloud-backed transaction store.
   CustomEvent that Home.tsx listens for.
 
 ### LiveTransaction.tsx changes
+
 - Writes STK Push requests to the shared store (origin `stk_push`,
   status `pending`) so they appear in the M-PESA Analyzer.
 - Shows a "Shared Analytics" panel (total revenue, transaction count,
@@ -828,6 +834,7 @@ records, and analytics through a unified cloud-backed transaction store.
 - Subscribes to real-time updates via `subscribeToTransactions`.
 
 ### MPESAAnalyzer.tsx changes
+
 - After extraction (pattern or AI), persists inflows to the shared store
   (origin `statement`, status `completed`) via `addBatchTransactions`
   (de-dup by receipt number to avoid double-imports).
@@ -838,8 +845,10 @@ records, and analytics through a unified cloud-backed transaction store.
 - Subscribes to real-time updates via `subscribeToTransactions`.
 
 ### IntegrationsSettings.tsx (new, tab `integrations-settings` order 38)
+
 Based on the 3 spec files (`Integrations.txt`, `M-PESA Integration.txt`,
 `Kopo Kopo Integration.txt`):
+
 - **Catalog view**: M-PESA + Kopo Kopo cards with "Connected"/"Setup"
   status and "Setup"/"Configure" buttons.
 - **M-PESA setup form**: integration name, type (Buy Goods/Paybill),
@@ -851,11 +860,13 @@ Based on the 3 spec files (`Integrations.txt`, `M-PESA Integration.txt`,
   search window (6h–7d), enable toggle. Persists via `saveKopokopoConfig`.
 
 ### SettingsPanel.tsx changes
+
 - M-PESA and Kopo Kopo integration cards now show real "Connected"/"Not
   Connected" status from the cloud config (not static labels).
 - Cards are now buttons → `switchToTab("integrations-settings")`.
 
 ### Deployment
+
 - **Cloudflare Pages**: LIVE at https://c699b3ac.fuel-app-mobile.pages.dev
   (all lazy chunks verified HTTP 200: IntegrationsSettings, LiveTransaction,
   MPESAAnalyzer, mpesa-integration-service).
@@ -1007,6 +1018,7 @@ show ONLY real/actual prices — no estimates or generalizations of national
 prices to a village.
 
 **What was removed (the estimation that violated the requirement)**:
+
 - `api/lib/fuel-engine.ts`: deleted `estimateKenyaPrices()` + `EPRA_KE_PRICES`
   (town→price map) + `KE_REMOTENESS` (county→factor map). These fabricated
   prices for unlisted Kenyan towns by interpolating between Nairobi (baseline)
@@ -1017,6 +1029,7 @@ prices to a village.
   was configured (also labelled "AI-Estimated").
 
 **What stays (all REAL data, no fabrication)**:
+
 - `EPRA_KE_REFERENCE` (`fuel-engine.ts`): a pure real-price table of 11 EPRA
   towns for the current cycle. Used ONLY for an exact town-name match — the AI
   is told NOT to interpolate between towns.
@@ -1025,7 +1038,7 @@ prices to a village.
   interpolate, or generalize. Returns `null` for any price not explicitly
   stated for the exact location.
 - Source labels: `AI-Verified` (live SerpApi/Serper snippets) and `Published
-  Reference` (official EPRA pages / reference table) — both real data. The
+Reference` (official EPRA pages / reference table) — both real data. The
   `AI-Estimated` label is GONE from the server path.
 - The ONLY fallback: PostGIS `get_nearest_fuel` nearest-neighbour returns a
   REAL nearby price tagged `Approx. (nearest: <town>, X km)` with
@@ -1034,6 +1047,7 @@ prices to a village.
   the frontend shows "N/A".
 
 **Village-level geocoding** (both impls):
+
 - `fuel-engine.ts` `getPlaceName()` + `_lib/geocoding.ts` `getExactLocation()`:
   Nominatim zoom=14 (village/suburb detail) with zoom=18 fallback when zoom=14
   only yields a state/county. Priority order: village > hamlet > town > city >
@@ -1046,12 +1060,14 @@ prices to a village.
   for the best available name and uses real prices (no fabrication).
 
 **Bug fixes bundled in**:
+
 - `hybrid-fetcher.ts` RPC name `get_nearest_fuel_prices` → `get_nearest_fuel`
   (the variant in migration 012; the old name returned PGRST202/no result).
 - `hybrid-fetcher.ts` reads both `super_petrol` and `petrol` price keys so
   cached rows written by either engine are interchangeable.
 
 **Frontend**:
+
 - `api/fuel-local.ts`: exposes the resolved village name under both
   `locationName` and `location` for the client.
 - `FuelPriceLocator.tsx`: shows the resolved village name for exact matches
@@ -1062,6 +1078,7 @@ prices to a village.
   clearly labeled "offline". It is NOT the server engine path.
 
 **Deploy status 2026-08-10**:
+
 - GitHub main: commit `ea0bb41` (PR #100 merged). All GitHub Actions CI pass
   (Build, Lint, TypeCheck, Unit/E2E, CodeQL, Analyze).
 - Cloudflare Pages: LIVE (preview https://2f29f346.fuel-app-mobile.pages.dev +
@@ -1071,7 +1088,7 @@ prices to a village.
   (repo FUEL_APP_MOBILE, prodBranch main, buildCommand
   `npm install --legacy-peer-deps && npm run build`) so it will auto-deploy the
   merged main once the quota resets, OR a manual `vercel deploy --prebuilt
-  --prod` / git-source API deploy can be triggered then. Until then Vercel
+--prod` / git-source API deploy can be triggered then. Until then Vercel
   production still serves the OLD commit 2edda45 (with "AI-Estimated" prices).
   The Cloudflare mirror has the fixed code NOW but serves ONLY the SPA — the
   /api/fuel-local endpoint works ONLY on Vercel.
@@ -1079,6 +1096,7 @@ prices to a village.
 ## Session 2026-08-09 (continued): invoice fix + Fuel Price Smart-Cache completion
 
 ### Invoice line-items fix (VERIFIED LIVE)
+
 `Invoice.tsx` `updateInvoiceItem` deep-clones item objects
 (`{ ...updatedItems[index] }` before mutation). `FuelContext.tsx` adds
 `itemsHaveContent()` helper (~line 890) so LOAD_FROM_STORAGE won't replace
@@ -1088,6 +1106,7 @@ end-to-end on Cloudflare deploy: added line item (Petrol PMS, qty 50, price
 the line items intact.
 
 ### Company profile persistence fix (VERIFIED LIVE)
+
 `FuelContext.tsx` `mergeCompanyData()` (~line 856) prevents empty-string
 overwrites during LOAD_FROM_STORAGE. `SettingsPanel.tsx` now dispatches
 SET_COMPANY_DATA to FuelContext on save (bridges station info -> companyData so
@@ -1098,6 +1117,7 @@ the Invoice tab (has Bank Details). There is NO KRA PIN field in that modal;
 only). Verified: name/phone/email/VAT/PO Box persist after reload + reach invoice.
 
 ### FREE AUTO FUEL PRICE Smart-Cache (COMPLETED + VERIFIED LIVE)
+
 **The spec is implemented.** Architecture: PostGIS spatial Smart-Cache +
 SerpApi/Groq live search fallback. Prior session built the infra (fuel_prices
 table, get_nearest_fuel RPC, api/lib/fuel-engine.ts serverless engine,
@@ -1107,6 +1127,7 @@ column was NULL for ALL seeded/inserted rows (no trigger populated it), so the
 PostGIS ST_DWithin nearest-town query always returned empty -> every remote
 lookup fell through to SerpApi/Groq (or "no published price"). Fixed in commit
 35add94 (migration 010_fuel_prices_smartcache.sql):
+
 - `set_fuel_location_geog()` trigger auto-populates `location` geography from
   lat/lon on insert/update (the old code referenced a non-existent
   `location_geog` column, so the trigger silently failed).
@@ -1114,21 +1135,22 @@ lookup fell through to SerpApi/Groq (or "no published price"). Fixed in commit
 - Seeded 15 additional Kenya EPRA town prices (Nakuru, Eldoret, Kakamega,
   Kitale, Bungoma, Lodwar, Garissa, Kericho, etc.) -- cache now covers Kenya.
 - Public-read RLS so the client can query with only the publishable key.
-Verified live: remote point (0.6, 34.7 -- Sitikho ward) now resolves to Bungoma
-(15.9km) via PostGIS fallback, returns real prices, source "Approx. (nearest:
-Bungoma)". Nairobi exact match -> source "Published Reference". The
-/api/fuel-local endpoint on Vercel works cross-origin (CORS headers set); the
-FuelPriceLocator calls it with a CORS-proxy fallback for Cloudflare->Vercel.
-**AI keys**: SERPAPI_KEY + OPENROUTER_API_KEY are SET on Vercel (production).
-GROQ_API_KEY is NOT set (no Groq key available). For genuinely remote areas
-with no cached town within radius AND no web-search result, the engine returns
-`no_real_data: true` ("No published price") -- the correct honest answer, NOT
-a fake estimate. Schema notes: fuel_prices uses `lat`/`lon` (NOT
-latitude/longitude), `location` geography, `prices` jsonb
-{super_petrol,diesel,kerosene}, `country_code`, `source`. get_nearest_fuel RPC
-(default radius_km=50) has PostGIS + haversine fallback, SECURITY DEFINER.
+  Verified live: remote point (0.6, 34.7 -- Sitikho ward) now resolves to Bungoma
+  (15.9km) via PostGIS fallback, returns real prices, source "Approx. (nearest:
+  Bungoma)". Nairobi exact match -> source "Published Reference". The
+  /api/fuel-local endpoint on Vercel works cross-origin (CORS headers set); the
+  FuelPriceLocator calls it with a CORS-proxy fallback for Cloudflare->Vercel.
+  **AI keys**: SERPAPI_KEY + OPENROUTER_API_KEY are SET on Vercel (production).
+  GROQ_API_KEY is NOT set (no Groq key available). For genuinely remote areas
+  with no cached town within radius AND no web-search result, the engine returns
+  `no_real_data: true` ("No published price") -- the correct honest answer, NOT
+  a fake estimate. Schema notes: fuel_prices uses `lat`/`lon` (NOT
+  latitude/longitude), `location` geography, `prices` jsonb
+  {super_petrol,diesel,kerosene}, `country_code`, `source`. get_nearest_fuel RPC
+  (default radius_km=50) has PostGIS + haversine fallback, SECURITY DEFINER.
 
 ### Founder 2FA / security (IMPLEMENTED by prior session, columns LIVE)
+
 Migration 013_founder_2fa_profiles.sql applied live: profiles has
 two_factor_secret, two_factor_enabled, recovery_codes, unique_id (8-hex-FPR,
 unique index), last_password_change. UI: FounderAccess.tsx renders
@@ -1137,6 +1159,7 @@ password change tracking. founderAccessApi.ts + useFounderBackend.ts hook.
 These are cross-device (stored in profiles table, not localStorage).
 
 ### Deploy status 2026-08-09 (this session)
+
 - GitHub main: commit 35add94 (invoice fix aebbe2a + Smart-Cache 35add94 pushed).
 - Cloudflare Pages: LIVE https://3e0915ed.fuel-app-mobile.pages.dev
   (bundle index-DXiGs6ze.js, 124 precache).
@@ -1169,6 +1192,7 @@ caught it → triggered `window.location.reload()` → on reload the same storm
 recurred → refresh loop.
 
 **Fix** (`src/react-app/context/LocationContext.tsx`):
+
 - The context `value` is now `useMemo`'d with a dependency array of the actual
   consumed primitives/functions, so consumers only re-render when something
   actually changes.
@@ -1177,11 +1201,13 @@ recurred → refresh loop.
   re-mount/re-render.
 
 **Fix** (`src/react-app/components/WeatherWidget.tsx`):
+
 - The weather effect now depends on the primitive fields
   (`preciseLocation?.lat`, `?.lng`, `?.address`) instead of the whole object,
   so it only refetches when the coordinates actually change.
 
 **Fix** (`src/react-app/components/FuelPriceLocator.tsx`):
+
 - The auto-detect-location effect is ref-guarded (once-only) to prevent the
   same re-detect storm from that consumer.
 
@@ -1202,7 +1228,7 @@ auto-sync and cross-component comparisons silently missed entries.
 **Fix** (`src/react-app/config/pricing.ts`): added a single source of truth:
 
 - `CanonicalFuelType` union: `petrol | diesel | kerosene | vpower |
-  premium_diesel | lpg | cng`.
+premium_diesel | lpg | cng`.
 - `CANONICAL_FUEL_TYPES` registry: maps each canonical type to a uniform
   display `label` (e.g. petrol→"Super Petrol", diesel→"Diesel",
   kerosene→"Kerosene", lpg→"LPG") and an industry `code` (PMS/AGO/IK/VPW/PDS).
@@ -1220,6 +1246,7 @@ auto-sync and cross-component comparisons silently missed entries.
 
 **Applied across the UI** (all display labels now sourced from
 `CANONICAL_FUEL_TYPES`):
+
 - `Dashboard.tsx`: chart dataset labels, price-card captions ("Super Petrol
   Price"/"Diesel Price" instead of "PMS Price"/"AGO Price"), tank labels
   ("Super Petrol Tank"/"Diesel Tank" instead of "Petrol (PMS) Tank"/"Diesel
@@ -1244,6 +1271,7 @@ not user-facing labels, and the frontend already maps them to canonical
 labels.
 
 **Deploy status 2026-08-10 (commit f26f921)**:
+
 - GitHub main: pushed (f26f921).
 - Cloudflare Pages: LIVE (preview https://08f3841b.fuel-app-mobile.pages.dev +
   main alias fuel-app-mobile.pages.dev).
@@ -1260,6 +1288,7 @@ labels.
 Reduced top-level navigation clutter by merging 9 formerly-standalone tabs into existing host components as inner sub-tabs (using the new reusable `src/react-app/components/SubTabBar.tsx`). Each source tab's configuration was removed from `FuelContext.tsx` tabConfigurations, its switch case + lazy import removed from `Home.tsx`, and dead entries cleaned from `MobileBottomNav.tsx`. `PermissionContext.roleTabGrants` still lists the old ids harmlessly (they no longer match any tab, so they have no effect).
 
 Merges:
+
 1. **IntegrationsSettings** ("integrations-settings") -> **IntegrationHub** ("integration") as a "Payment Setup" sub-tab (M-PESA Daraja + Kopo Kopo config forms). SettingsPanel M-PESA/Kopo Kopo cards now switch to "integration" (was "integrations-settings").
 2. **FuelTracker / Auto Fuel Price** ("fueltracker") -> **FuelPriceLocator** ("price-finder") as an "Auto Fuel Price" sub-tab.
 3. **PurchasesSuppliers** ("purchases") -> **SupplierManagement** ("suppliers") as a "Purchases" sub-tab alongside Suppliers + Purchase Orders.
@@ -1279,6 +1308,7 @@ Verified: `npx tsc --noEmit` (0 errors), `npm run build` (115 precache, success)
 ## Debt Reminder -> Credit Management merge + cross-tab interlink framework (ADDED 2026-08-11)
 
 ### Debt Payment Reminder -> Credit Management (sub-tab merge)
+
 `DebtReminder.tsx` is no longer a standalone top-level tab. It is now embedded
 inside `CreditManagement.tsx` as a "Reminders" inner sub-tab (alongside the
 "Accounts" view) via `SubTabBar`. Overdue credit accounts show a "Send
@@ -1290,6 +1320,7 @@ itself is unchanged (still rendered as an embedded component, no longer
 lazy-loaded via Home).
 
 ### Cross-tab interlink framework (`mpesa-integration-service.ts`)
+
 Added a payload-carrying cross-tab navigation layer on top of `switchToTab`:
 
 - `navigateToTab(tabId, payload?)` — dispatches `changeTab` (tab switch) then a
@@ -1302,6 +1333,7 @@ Added a payload-carrying cross-tab navigation layer on top of `switchToTab`:
   `ExpensePrefill` (all in `mpesa-integration-service.ts`).
 
 ### Live Transaction Monitor <-> Integration Hub (real config status)
+
 `LiveTransaction.tsx` now loads the real M-PESA Daraja (`mpesa_config`) and
 Kopo Kopo (`kopokopo_config`) configs from cloud on mount and reflects their
 connection status:
@@ -1317,10 +1349,11 @@ connection status:
   from the cloud config (previously static labels).
 
 ### Interlinked cross-tab flows (built on the framework)
+
 - **Credit Management -> Live Transaction**: each credit account with an
   outstanding balance has a "Collect via M-PESA" button that calls
   `navigateToTab("livetransaction", {phone, amount, account_reference,
-  transaction_desc, openStkPush:true})` — opens the STK Push modal pre-filled.
+transaction_desc, openStkPush:true})` — opens the STK Push modal pre-filled.
 - **Credit Management -> Invoice**: each account has a "Create Invoice" button
   that calls `navigateToTab("invoice", {customerName, amount, description})`.
 - **Invoice -> Live Transaction**: the Invoice form has a "Collect Payment"
@@ -1328,14 +1361,14 @@ connection status:
   customer phone/reference to the STK Push modal.
 - **Live Transaction -> Credit Management**: each completed shared transaction
   has an "Apply to Credit Account" button that calls `navigateToTab("credit",
-  {customerName, amount})` — opens the new-credit-account form pre-filled.
+{customerName, amount})` — opens the new-credit-account form pre-filled.
 - **Payroll System -> Expense Tracker**: the Payroll bulk-actions bar has a
   "RECORD EXPENSE" button that calls `navigateToTab("expenses", {category:
-  "salaries", amount: totalNet, description, reference})` — opens the
+"salaries", amount: totalNet, description, reference})` — opens the
   new-expense form pre-filled.
 - **Maintenance Tracker -> Expense Tracker**: each maintenance record has a
   "Record Expense" (Receipt icon) button that calls `navigateToTab("expenses",
-  {category: "maintenance", amount: record.cost, description, reference})`.
+{category: "maintenance", amount: record.cost, description, reference})`.
 - **Dashboard Quick Actions**: expanded from 6 to 12 deep-link actions (added
   Credit, STK Push [opens STK Push modal via payload], Expenses, Suppliers,
   Integration Hub, Payroll). Actions with a payload use `navigateToTab`, plain

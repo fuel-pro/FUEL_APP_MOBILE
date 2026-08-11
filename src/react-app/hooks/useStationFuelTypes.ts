@@ -138,10 +138,7 @@ export function useStationFuelTypes(
     [findFuelType, fallbackToStatic],
   );
 
-  const canonicalOf = useCallback(
-    (raw: string) => normalizeFuelType(raw),
-    [],
-  );
+  const canonicalOf = useCallback((raw: string) => normalizeFuelType(raw), []);
 
   const labelOf = useCallback((raw: string) => getFuelLabel(raw), []);
 

@@ -1896,44 +1896,41 @@ export function FuelProvider({ children }: { children: ReactNode }) {
   // fuel_types_config (so FuelTypesManager/PriceBoard/POS/Invoice/Reports see
   // it) and broadcast on the interlink bus. Exposed via context for any
   // component that edits a station pump price.
-  const syncPriceToFuelTypes = useCallback(
-    (raw: string, price: number) => {
-      if (typeof price !== "number" || !isFinite(price) || price <= 0) return;
-      const canonical = normalizeFuelType(raw);
-      if (!canonical) return;
-      // Update the matching fuel_types_config entry (if any) and persist.
-      const list = fuelTypesRef.current;
-      if (list.length > 0) {
-        const idx = list.findIndex(
-          (ft) => normalizeFuelType(ft.name) === canonical,
-        );
-        if (idx >= 0 && list[idx].price !== price) {
-          const next = list.slice();
-          next[idx] = { ...next[idx], price };
-          fuelTypesRef.current = next;
-          cloudStorageService
-            .set("fuel_types_config", next, stationIdRef.current)
-            .catch(() => {});
-        }
+  const syncPriceToFuelTypes = useCallback((raw: string, price: number) => {
+    if (typeof price !== "number" || !isFinite(price) || price <= 0) return;
+    const canonical = normalizeFuelType(raw);
+    if (!canonical) return;
+    // Update the matching fuel_types_config entry (if any) and persist.
+    const list = fuelTypesRef.current;
+    if (list.length > 0) {
+      const idx = list.findIndex(
+        (ft) => normalizeFuelType(ft.name) === canonical,
+      );
+      if (idx >= 0 && list[idx].price !== price) {
+        const next = list.slice();
+        next[idx] = { ...next[idx], price };
+        fuelTypesRef.current = next;
+        cloudStorageService
+          .set("fuel_types_config", next, stationIdRef.current)
+          .catch(() => {});
       }
-      // Also keep the legacy FuelContext scalar fields in sync for petrol/diesel.
-      if (canonical === "petrol" || canonical === "diesel") {
-        dispatch({
-          type: "SET_PRICES",
-          payload:
-            canonical === "petrol" ? { pmsPrice: price } : { agoPrice: price },
-        });
-      }
-      // Broadcast for instant same-page updates (Dashboard, PriceBoard, …).
-      emitFuelPriceChange({
-        fuelType: raw,
-        canonical,
-        price,
-        source: "FuelContext.syncPriceToFuelTypes",
+    }
+    // Also keep the legacy FuelContext scalar fields in sync for petrol/diesel.
+    if (canonical === "petrol" || canonical === "diesel") {
+      dispatch({
+        type: "SET_PRICES",
+        payload:
+          canonical === "petrol" ? { pmsPrice: price } : { agoPrice: price },
       });
-    },
-    [],
-  );
+    }
+    // Broadcast for instant same-page updates (Dashboard, PriceBoard, …).
+    emitFuelPriceChange({
+      fuelType: raw,
+      canonical,
+      price,
+      source: "FuelContext.syncPriceToFuelTypes",
+    });
+  }, []);
 
   // Listen for price changes broadcast by OTHER components on the bus (e.g.
   // FuelPriceLocator "Set as my price") and mirror them into FuelContext +
