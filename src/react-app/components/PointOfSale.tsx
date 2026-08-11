@@ -26,8 +26,12 @@ import { useLocation } from "@/react-app/context/LocationContext";
 import { useAuth } from "@/react-app/context/AuthContext";
 import { useStations } from "@/react-app/context/StationContext";
 import { formatNumber } from "@/react-app/utils/formatUtils";
-import { CANONICAL_FUEL_TYPES } from "@/react-app/config/pricing";
-import { getCurrencySymbol, isKenyaStation } from "@/react-app/lib/currency";
+import { CANONICAL_FUEL_TYPES, getVATRate } from "@/react-app/config/pricing";
+import {
+  getCurrencySymbol,
+  getDetectedCountryCode,
+  isKenyaStation,
+} from "@/react-app/lib/currency";
 import QRCode from "qrcode";
 import { useLoyalty } from "@/react-app/lib/useLoyalty";
 import { LoyaltyCustomer, TIER_COLORS } from "@/react-app/lib/loyaltyProgram";
@@ -41,7 +45,7 @@ interface CartItem {
   total: number;
   fuelType?: "PMS" | "AGO";
   litres?: number;
-  vatCategory: "A" | "B" | "E"; // A=16%, B=0%, E=Exempt
+  vatCategory: "A" | "B" | "E"; // A=standard-rated, B=0%, E=Exempt
   hsCode?: string;
 }
 
@@ -49,7 +53,7 @@ interface POSTransaction {
   id: string;
   items: CartItem[];
   subtotal: number;
-  vatA: number; // 16% VAT
+  vatA: number; // Standard-rate VAT
   vatB: number; // 0% VAT
   vatE: number; // Exempt
   totalVat: number;
@@ -196,7 +200,13 @@ export default function PointOfSale() {
     email: state.companyData.email || "",
   };
 
-  const VAT_RATE = 0.16; // 16% VAT in Kenya
+  // Country-aware VAT rate: resolve the station's ISO country code (from the
+  // current station, falling back to location/timezone detection) and look it
+  // up in the unified TAX_RATES table. Defaults to 16% only when the country
+  // is genuinely unknown.
+  const countryCode =
+    currentStation?.country || getDetectedCountryCode() || "KE";
+  const VAT_RATE = getVATRate(countryCode);
 
   // Generate unique invoice number in KRA format
   const generateInvoiceNumber = () => {
@@ -295,7 +305,7 @@ export default function PointOfSale() {
       total: total,
       fuelType: quickSaleType === "petrol" ? "PMS" : "AGO",
       litres: litres,
-      vatCategory: "A", // Fuel is VAT-able at 16%
+      vatCategory: "A", // Fuel is standard-rated (VAT-able)
       hsCode: quickSaleType === "petrol" ? "2710.12.10" : "2710.19.20",
     };
 
@@ -313,7 +323,7 @@ export default function PointOfSale() {
       quantity: 1,
       unitPrice: price,
       total: price,
-      vatCategory: "A", // Default to 16% VAT
+      vatCategory: "A", // Default to standard-rate VAT
     };
 
     setCart([...cart, newItem]);
@@ -1022,11 +1032,11 @@ export default function PointOfSale() {
             {/* VAT Breakdown */}
             <div className="space-y-1 mb-4 text-sm">
               <div className="flex justify-between text-gray-600 dark:text-gray-400">
-                <span>Taxable (A-16%):</span>
+                <span>Taxable (A-{(VAT_RATE * 100).toFixed(0)}%):</span>
                 <span>{currencySymbol} {formatNumber(taxableA)}</span>
               </div>
               <div className="flex justify-between text-gray-600 dark:text-gray-400">
-                <span>VAT (16%):</span>
+                <span>VAT ({(VAT_RATE * 100).toFixed(0)}%):</span>
                 <span>{currencySymbol} {formatNumber(vatA)}</span>
               </div>
               {taxableB > 0 && (

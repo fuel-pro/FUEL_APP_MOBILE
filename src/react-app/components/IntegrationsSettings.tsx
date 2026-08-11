@@ -28,6 +28,7 @@ import {
   Lock,
   Zap,
 } from "lucide-react";
+import { isKenyaStation } from "@/react-app/lib/currency";
 
 type View = "catalog" | "mpesa" | "kopokopo";
 
@@ -35,6 +36,7 @@ export default function IntegrationsSettings() {
   const { user } = useAuth();
   const { currentStation } = useStations();
   const stationId = currentStation?.id;
+  const isKenya = isKenyaStation();
 
   const [view, setView] = useState<View>("catalog");
   const [mpesaConnected, setMpesaConnected] = useState(false);
@@ -52,12 +54,20 @@ export default function IntegrationsSettings() {
 
   if (view === "mpesa") {
     return (
-      <MpesaSetup onBack={() => setView("catalog")} stationId={stationId} />
+      <MpesaSetup
+        onBack={() => setView("catalog")}
+        stationId={stationId}
+        isKenya={isKenya}
+      />
     );
   }
   if (view === "kopokopo") {
     return (
-      <KopokopoSetup onBack={() => setView("catalog")} stationId={stationId} />
+      <KopokopoSetup
+        onBack={() => setView("catalog")}
+        stationId={stationId}
+        isKenya={isKenya}
+      />
     );
   }
 
@@ -80,26 +90,48 @@ export default function IntegrationsSettings() {
           Available Integrations
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* M-PESA */}
-          <IntegrationCard
-            icon={<Smartphone className="text-green-600 dark:text-green-400" />}
-            iconBg="bg-green-100 dark:bg-green-900/30"
-            name="M-PESA"
-            category="Payment"
-            description="Accept mobile money payments from customers using Safaricom M-PESA. Supports STK Push for instant payment requests, C2B payments, and real-time transaction verification."
-            connected={mpesaConnected}
-            onSetup={() => setView("mpesa")}
-          />
-          {/* Kopo Kopo */}
-          <IntegrationCard
-            icon={<Building2 className="text-blue-600 dark:text-blue-400" />}
-            iconBg="bg-blue-100 dark:bg-blue-900/30"
-            name="Kopo Kopo"
-            category="Payment"
-            description="Accept mobile money payments via Kopo Kopo. Supports M-PESA STK Push through your Kopo Kopo till, with real-time payment notifications via webhooks."
-            connected={kopoConnected}
-            onSetup={() => setView("kopokopo")}
-          />
+          {isKenya ? (
+            <>
+              {/* M-PESA */}
+              <IntegrationCard
+                icon={<Smartphone className="text-green-600 dark:text-green-400" />}
+                iconBg="bg-green-100 dark:bg-green-900/30"
+                name="M-PESA"
+                category="Payment"
+                description="Accept mobile money payments from customers using Safaricom M-PESA. Supports STK Push for instant payment requests, C2B payments, and real-time transaction verification."
+                connected={mpesaConnected}
+                onSetup={() => setView("mpesa")}
+              />
+              {/* Kopo Kopo */}
+              <IntegrationCard
+                icon={<Building2 className="text-blue-600 dark:text-blue-400" />}
+                iconBg="bg-blue-100 dark:bg-blue-900/30"
+                name="Kopo Kopo"
+                category="Payment"
+                description="Accept mobile money payments via Kopo Kopo. Supports M-PESA STK Push through your Kopo Kopo till, with real-time payment notifications via webhooks."
+                connected={kopoConnected}
+                onSetup={() => setView("kopokopo")}
+              />
+            </>
+          ) : (
+            <div className="md:col-span-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/40 rounded-2xl p-6 flex items-start gap-3">
+              <AlertTriangle
+                size={22}
+                className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5"
+              />
+              <div>
+                <h4 className="font-semibold text-amber-800 dark:text-amber-300">
+                  M-PESA is available in Kenya only
+                </h4>
+                <p className="text-sm text-amber-700 dark:text-amber-400/80 mt-1">
+                  Safaricom M-PESA and Kopo Kopo integrations are Kenya-specific
+                  mobile money payment methods. They are not available for the
+                  detected station country. Switch your station to Kenya to
+                  configure these integrations.
+                </p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -176,9 +208,11 @@ function IntegrationCard({
 function MpesaSetup({
   onBack,
   stationId,
+  isKenya,
 }: {
   onBack: () => void;
   stationId: string | undefined;
+  isKenya: boolean;
 }) {
   const [config, setConfig] =
     useState<MpesaIntegrationConfig>(DEFAULT_MPESA_CONFIG);
@@ -254,7 +288,27 @@ function MpesaSetup({
         </div>
       </div>
 
-      {/* Integration Details */}
+      {!isKenya && (
+        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/40 rounded-xl p-6 flex items-start gap-3">
+          <AlertTriangle
+            size={22}
+            className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5"
+          />
+          <div>
+            <h3 className="font-semibold text-amber-800 dark:text-amber-300">
+              M-PESA is available in Kenya only
+            </h3>
+            <p className="text-sm text-amber-700 dark:text-amber-400/80 mt-1">
+              Safaricom M-PESA is a Kenya-specific payment method and cannot be
+              configured for the detected station country. Switch your station
+              to Kenya to configure M-PESA.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {isKenya && (
+      <>
       <Section
         title="Integration Details"
         subtitle="Basic information about this integration"
@@ -460,6 +514,8 @@ function MpesaSetup({
           </>
         )}
       </button>
+      </>
+      )}
     </div>
   );
 }
@@ -471,9 +527,11 @@ function MpesaSetup({
 function KopokopoSetup({
   onBack,
   stationId,
+  isKenya,
 }: {
   onBack: () => void;
   stationId: string | undefined;
+  isKenya: boolean;
 }) {
   const [config, setConfig] = useState<KopokopoIntegrationConfig>(
     DEFAULT_KOPOKOPO_CONFIG,
@@ -546,6 +604,27 @@ function KopokopoSetup({
         </div>
       </div>
 
+      {!isKenya && (
+        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/40 rounded-xl p-6 flex items-start gap-3">
+          <AlertTriangle
+            size={22}
+            className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5"
+          />
+          <div>
+            <h3 className="font-semibold text-amber-800 dark:text-amber-300">
+              Kopo Kopo is available in Kenya only
+            </h3>
+            <p className="text-sm text-amber-700 dark:text-amber-400/80 mt-1">
+              Kopo Kopo is a Kenya-specific mobile money payment method and
+              cannot be configured for the detected station country. Switch
+              your station to Kenya to configure Kopo Kopo.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {isKenya && (
+      <>
       {/* Integration Details */}
       <Section
         title="Integration Details"
@@ -715,6 +794,8 @@ function KopokopoSetup({
           </>
         )}
       </button>
+      </>
+      )}
     </div>
   );
 }

@@ -27,7 +27,8 @@ import {
 import { useAutoSync } from "@/react-app/hooks/useAutoSync";
 import { useLocation } from "@/react-app/context/LocationContext";
 import { useStations } from "@/react-app/context/StationContext";
-import { getCurrencySymbol } from "@/react-app/lib/currency";
+import { getCurrencySymbol, getDetectedCountryCode, isKenyaStation } from "@/react-app/lib/currency";
+import { getCountryById } from "@/react-app/config/countries";
 import { useFuel } from "@/react-app/context/FuelContext";
 import {
   emitFuelPriceChange,
@@ -123,6 +124,11 @@ export default function PriceBoard() {
   const [changeReason, setChangeReason] = useState("");
   const [showAutoUpdateNotice, setShowAutoUpdateNotice] = useState(false);
 
+  const isKenya = isKenyaStation();
+  const countryProfile = getCountryById(getDetectedCountryCode());
+  const regulatorName = countryProfile?.fuelRegulations?.priceSettingBody
+    || (isKenya ? "EPRA" : "fuel regulator");
+
   // Update prices when fuelPrice syncs (daily EPRA prices)
   useEffect(() => {
     if (!fuelPrice) return;
@@ -157,8 +163,8 @@ export default function PriceBoard() {
             priceEntryId: petrolEntry.id,
             oldPrice: petrolEntry.price,
             newPrice: fuelPrice.petrolPrice,
-            changedBy: "System (EPRA Auto-Sync)",
-            reason: `Auto-updated from EPRA Kenya - ${fuelPrice.sourceName}`,
+            changedBy: `System (${regulatorName} Auto-Sync)`,
+            reason: `Auto-updated from ${regulatorName} - ${fuelPrice.sourceName}`,
             changedAt: new Date().toISOString(),
           };
           setHistory((prev) => [...prev, historyEntry]);
@@ -185,8 +191,8 @@ export default function PriceBoard() {
             priceEntryId: dieselEntry.id,
             oldPrice: dieselEntry.price,
             newPrice: fuelPrice.dieselPrice,
-            changedBy: "System (EPRA Auto-Sync)",
-            reason: `Auto-updated from EPRA Kenya - ${fuelPrice.sourceName}`,
+            changedBy: `System (${regulatorName} Auto-Sync)`,
+            reason: `Auto-updated from ${regulatorName} - ${fuelPrice.sourceName}`,
             changedAt: new Date().toISOString(),
           };
           setHistory((prev) => [...prev, historyEntry]);
@@ -213,8 +219,8 @@ export default function PriceBoard() {
             priceEntryId: keroseneEntry.id,
             oldPrice: keroseneEntry.price,
             newPrice: fuelPrice.kerosenePrice!,
-            changedBy: "System (EPRA Auto-Sync)",
-            reason: `Auto-updated from EPRA Kenya - ${fuelPrice.sourceName}`,
+            changedBy: `System (${regulatorName} Auto-Sync)`,
+            reason: `Auto-updated from ${regulatorName} - ${fuelPrice.sourceName}`,
             changedAt: new Date().toISOString(),
           };
           setHistory((prev) => [...prev, historyEntry]);
@@ -407,7 +413,7 @@ export default function PriceBoard() {
           <p className="text-sm text-gray-500 mt-1">
             {fuelPrice ? (
               <>
-                EPRA prices as of {fuelPrice.effectiveDate} • Auto-updates daily
+                {regulatorName} prices as of {fuelPrice.effectiveDate} • Auto-updates daily
               </>
             ) : (
               <>Manage fuel prices displayed to customers</>
@@ -479,7 +485,7 @@ export default function PriceBoard() {
           <CheckCircle2 size={20} className="text-green-500" />
           <div>
             <p className="text-sm font-medium text-green-400">
-              Prices Auto-Updated from EPRA
+              Prices Auto-Updated from {regulatorName}
             </p>
             <p className="text-xs text-green-400/70">
               Fuel prices have been synced with the latest government rates

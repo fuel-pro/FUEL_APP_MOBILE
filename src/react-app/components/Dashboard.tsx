@@ -129,8 +129,16 @@ export default function Dashboard() {
   const [hasBackendData, setHasBackendData] = useState(false);
   // Production mode - use real data
 
+  // Resolve the station's own country profile (authoritative) for fuel-
+  // regulation labels and the default city, falling back to the GPS-detected
+  // profile so the UI always has a valid object even before the station loads
+  // from cloud. Declared before stationCity so the capital fallback is in
+  // scope.
+  const stationCountryProfile =
+    getCountryById(stationCountry.toUpperCase()) || location.currentCountry;
+
   // Use precise location-based fuel prices (auto-synced with GPS)
-  const stationCity = currentStation?.location || "Nairobi";
+  const stationCity = currentStation?.location || stationCountryProfile?.capital || "—";
   // The useAutoSync hook's `fuelPrice` state can lag the synced cache during a
   // country switch (the station loads from cloud AFTER the hook's initial KE
   // sync). Read the persisted synced price for the STATION's country directly
@@ -162,11 +170,6 @@ export default function Dashboard() {
     currentStation?.currencySymbol ||
     currencySymbolFor(currentStation?.currency || "") ||
     location.currencySymbol;
-  // Resolve the station's own country profile (authoritative) for fuel-
-  // regulation labels, falling back to the GPS-detected profile so the UI
-  // always has a valid object even before the station loads from cloud.
-  const stationCountryProfile =
-    getCountryById(stationCountry.toUpperCase()) || location.currentCountry;
   const [animatedValues, setAnimatedValues] = useState({
     revenue: 0,
     profit: 0,

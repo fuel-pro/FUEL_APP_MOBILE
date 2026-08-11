@@ -21,6 +21,7 @@ import {
   getKopokopoConfig,
   switchToTab,
 } from "@/react-app/lib/mpesa-integration-service";
+import { isKenyaStation } from "@/react-app/lib/currency";
 
 export default function SettingsPanel() {
   const { currentStation, updateStation } = useStations();
@@ -42,6 +43,7 @@ export default function SettingsPanel() {
   });
   const [mpesaConnected, setMpesaConnected] = useState(false);
   const [kopoConnected, setKopoConnected] = useState(false);
+  const isKenya = isKenyaStation();
 
   // Load real integration connection status from cloud config
   useEffect(() => {
@@ -179,17 +181,21 @@ export default function SettingsPanel() {
                   />
                 </div>
               </div>
-              <div>
-                <label className="text-gray-400 text-xs mb-2 block">
-                  KRA PIN
-                </label>
-                <input
-                  type="text"
-                  value={form.kraPin}
-                  onChange={(e) => setForm({ ...form, kraPin: e.target.value })}
-                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white"
-                />
-              </div>
+              {isKenya && (
+                <div>
+                  <label className="text-gray-400 text-xs mb-2 block">
+                    KRA PIN
+                  </label>
+                  <input
+                    type="text"
+                    value={form.kraPin}
+                    onChange={(e) =>
+                      setForm({ ...form, kraPin: e.target.value })
+                    }
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white"
+                  />
+                </div>
+              )}
               <div>
                 <label className="text-gray-400 text-xs mb-2 block">
                   Default Tax Rate (%)
@@ -214,11 +220,36 @@ export default function SettingsPanel() {
               <Smartphone size={20} className="text-blue-400" /> Integrations
             </h3>
             <div className="space-y-4">
-              <button
-                onClick={() => switchToTab("integration")}
-                className="w-full flex items-center justify-between p-4 bg-white/5 hover:bg-white/10 rounded-xl transition-colors text-left"
-              >
-                <div className="flex items-center gap-3">
+              {isKenya ? (
+                <button
+                  onClick={() => switchToTab("integration")}
+                  className="w-full flex items-center justify-between p-4 bg-white/5 hover:bg-white/10 rounded-xl transition-colors text-left"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-emerald-500/20 rounded-lg flex items-center justify-center">
+                      <span className="text-emerald-400 font-bold text-sm">
+                        MP
+                      </span>
+                    </div>
+                    <div>
+                      <p className="text-white font-medium">M-PESA</p>
+                      <p className="text-gray-500 text-xs">
+                        Mobile money payments
+                      </p>
+                    </div>
+                  </div>
+                  <span
+                    className={`text-xs px-2 py-1 rounded-full ${
+                      mpesaConnected
+                        ? "bg-green-500/20 text-green-400"
+                        : "bg-gray-500/20 text-gray-400"
+                    }`}
+                  >
+                    {mpesaConnected ? "Connected" : "Not Connected"}
+                  </span>
+                </button>
+              ) : (
+                <div className="w-full flex items-center gap-3 p-4 bg-white/5 rounded-xl opacity-70">
                   <div className="w-10 h-10 bg-emerald-500/20 rounded-lg flex items-center justify-center">
                     <span className="text-emerald-400 font-bold text-sm">
                       MP
@@ -227,43 +258,50 @@ export default function SettingsPanel() {
                   <div>
                     <p className="text-white font-medium">M-PESA</p>
                     <p className="text-gray-500 text-xs">
-                      Mobile money payments
+                      M-PESA is available in Kenya only
                     </p>
                   </div>
                 </div>
-                <span
-                  className={`text-xs px-2 py-1 rounded-full ${
-                    mpesaConnected
-                      ? "bg-green-500/20 text-green-400"
-                      : "bg-gray-500/20 text-gray-400"
-                  }`}
+              )}
+              {isKenya ? (
+                <button
+                  onClick={() => switchToTab("integration")}
+                  className="w-full flex items-center justify-between p-4 bg-white/5 hover:bg-white/10 rounded-xl transition-colors text-left"
                 >
-                  {mpesaConnected ? "Connected" : "Not Connected"}
-                </span>
-              </button>
-              <button
-                onClick={() => switchToTab("integration")}
-                className="w-full flex items-center justify-between p-4 bg-white/5 hover:bg-white/10 rounded-xl transition-colors text-left"
-              >
-                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-blue-500/20 rounded-lg flex items-center justify-center">
+                      <span className="text-blue-400 font-bold text-sm">
+                        KK
+                      </span>
+                    </div>
+                    <div>
+                      <p className="text-white font-medium">Kopo Kopo</p>
+                      <p className="text-gray-500 text-xs">Payment gateway</p>
+                    </div>
+                  </div>
+                  <span
+                    className={`text-xs px-2 py-1 rounded-full ${
+                      kopoConnected
+                        ? "bg-green-500/20 text-green-400"
+                        : "bg-gray-500/20 text-gray-400"
+                    }`}
+                  >
+                    {kopoConnected ? "Connected" : "Not Connected"}
+                  </span>
+                </button>
+              ) : (
+                <div className="w-full flex items-center gap-3 p-4 bg-white/5 rounded-xl opacity-70">
                   <div className="w-10 h-10 bg-blue-500/20 rounded-lg flex items-center justify-center">
                     <span className="text-blue-400 font-bold text-sm">KK</span>
                   </div>
                   <div>
                     <p className="text-white font-medium">Kopo Kopo</p>
-                    <p className="text-gray-500 text-xs">Payment gateway</p>
+                    <p className="text-gray-500 text-xs">
+                      Kopo Kopo is available in Kenya only
+                    </p>
                   </div>
                 </div>
-                <span
-                  className={`text-xs px-2 py-1 rounded-full ${
-                    kopoConnected
-                      ? "bg-green-500/20 text-green-400"
-                      : "bg-gray-500/20 text-gray-400"
-                  }`}
-                >
-                  {kopoConnected ? "Connected" : "Not Connected"}
-                </span>
-              </button>
+              )}
             </div>
           </div>
 

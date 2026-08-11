@@ -138,6 +138,7 @@ export interface CountryProfile {
     qualityStandardsBody: string;
   };
   timezone: string;
+  capital: string; // capital city, used as default station city fallback
 }
 
 // ============== KENYA ==============
@@ -383,6 +384,7 @@ const kenya: CountryProfile = {
     environmentalLevy: 0.5,
     qualityStandardsBody: "KEBS (Kenya Bureau of Standards)",
   },
+  capital: "Nairobi",
   timezone: "Africa/Nairobi",
 };
 
@@ -596,6 +598,7 @@ const uganda: CountryProfile = {
     qualityStandardsBody: "UNBS (Uganda National Bureau of Standards)",
   },
   timezone: "Africa/Kampala",
+  capital: "Kampala",
 };
 
 // ============== TANZANIA ==============
@@ -821,6 +824,7 @@ const tanzania: CountryProfile = {
     qualityStandardsBody: "TBS (Tanzania Bureau of Standards)",
   },
   timezone: "Africa/Dar_es_Salaam",
+  capital: "Dar es Salaam",
 };
 
 // ============== NIGERIA ==============
@@ -1059,6 +1063,7 @@ const nigeria: CountryProfile = {
     qualityStandardsBody: "SON (Standards Organisation of Nigeria)",
   },
   timezone: "Africa/Lagos",
+  capital: "Lagos",
 };
 
 // ============== SOUTH AFRICA ==============
@@ -1277,6 +1282,7 @@ const southAfrica: CountryProfile = {
     qualityStandardsBody: "SABS (South African Bureau of Standards)",
   },
   timezone: "Africa/Johannesburg",
+  capital: "Johannesburg",
 };
 
 // ============== ETHIOPIA ==============
@@ -1477,6 +1483,7 @@ const ethiopia: CountryProfile = {
     qualityStandardsBody: "ESA (Ethiopian Standards Agency)",
   },
   timezone: "Africa/Addis_Ababa",
+  capital: "Addis Ababa",
 };
 
 // ============== RWANDA ==============
@@ -1688,6 +1695,7 @@ const rwanda: CountryProfile = {
     qualityStandardsBody: "RSB (Rwanda Standards Board)",
   },
   timezone: "Africa/Kigali",
+  capital: "Kigali",
 };
 
 // ============== GHANA ==============
@@ -1908,6 +1916,7 @@ const ghana: CountryProfile = {
     qualityStandardsBody: "Ghana Standards Authority (GSA)",
   },
   timezone: "Africa/Accra",
+  capital: "Accra",
 };
 
 import { WORLD_PAYMENT_CONFIGS } from "./worldPaymentConfigs";
@@ -2112,6 +2121,7 @@ function generateCountryProfile(
       exchangeRateToUSD: 1,
     },
     timezone: TIMEZONES[code.toUpperCase()] || "UTC",
+    capital: CAPITALS[code.toUpperCase()] || name,
     dateFormat: "DD/MM/YYYY",
     timeFormat: "24h",
     numberFormat: "1,000.00",
@@ -2195,6 +2205,79 @@ const TIMEZONES: Record<string, string> = {
   GH: "Africa/Accra",
   RW: "Africa/Kigali",
   ET: "Africa/Addis_Ababa",
+};
+
+// Capital city fallback used by generateCountryProfile for the 250+ world
+// countries that lack a hand-authored CountryProfile. Falls back to the
+// country name when no capital is listed.
+const CAPITALS: Record<string, string> = {
+  KE: "Nairobi",
+  UG: "Kampala",
+  TZ: "Dodoma",
+  NG: "Abuja",
+  ZA: "Pretoria",
+  GH: "Accra",
+  RW: "Kigali",
+  ET: "Addis Ababa",
+  DE: "Berlin",
+  FR: "Paris",
+  GB: "London",
+  US: "Washington, D.C.",
+  CN: "Beijing",
+  JP: "Tokyo",
+  IN: "New Delhi",
+  BR: "Brasília",
+  AU: "Canberra",
+  CA: "Ottawa",
+  IT: "Rome",
+  ES: "Madrid",
+  NL: "Amsterdam",
+  SE: "Stockholm",
+  NO: "Oslo",
+  CH: "Bern",
+  AE: "Abu Dhabi",
+  SA: "Riyadh",
+  EG: "Cairo",
+  MA: "Rabat",
+  TH: "Bangkok",
+  ID: "Jakarta",
+  MY: "Kuala Lumpur",
+  SG: "Singapore",
+  KR: "Seoul",
+  MX: "Mexico City",
+  AR: "Buenos Aires",
+  TR: "Ankara",
+  PL: "Warsaw",
+  BE: "Brussels",
+  AT: "Vienna",
+  PT: "Lisbon",
+  IE: "Dublin",
+  DK: "Copenhagen",
+  FI: "Helsinki",
+  NZ: "Wellington",
+  ZW: "Harare",
+  MZ: "Maputo",
+  AO: "Luanda",
+  DZ: "Algiers",
+  TN: "Tunis",
+  LY: "Tripoli",
+  SD: "Khartoum",
+  IQ: "Baghdad",
+  IR: "Tehran",
+  PK: "Islamabad",
+  BD: "Dhaka",
+  PH: "Manila",
+  VN: "Hanoi",
+  CO: "Bogotá",
+  CL: "Santiago",
+  PE: "Lima",
+  VE: "Caracas",
+  RO: "Bucharest",
+  CZ: "Prague",
+  HU: "Budapest",
+  GR: "Athens",
+  RU: "Moscow",
+  UA: "Kyiv",
 };
 
 // Tax rates

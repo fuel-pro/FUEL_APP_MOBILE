@@ -30,7 +30,7 @@ import {
   openTerminalSession,
 } from "@/react-app/lib/pos-service";
 import type { POSItem, POSCart } from "@/react-app/lib/pos-service";
-import { getCurrencySymbol, getDetectedCurrency } from "@/react-app/lib/currency";
+import { getCurrencySymbol, getDetectedCurrency, isKenyaStation } from "@/react-app/lib/currency";
 
 // Format currency
 const formatMoney = (amount: number) => {
@@ -43,11 +43,14 @@ const formatMoney = (amount: number) => {
 };
 
 // Payment methods
-const PAYMENT_METHODS = [
+const ALL_PAYMENT_METHODS = [
   { id: "cash", label: "Cash", icon: Banknote },
   { id: "mpesa", label: "M-PESA", icon: Smartphone },
   { id: "card", label: "Card", icon: CreditCard },
 ];
+const PAYMENT_METHODS = ALL_PAYMENT_METHODS.filter((m) =>
+  m.id === "mpesa" ? isKenyaStation() : true,
+);
 
 // Module-scoped subcomponents (UPDATE-4 rule)
 const ProductCard = ({
@@ -343,7 +346,7 @@ const CheckoutModal = ({
               type="text"
               value={reference}
               onChange={(e) => setReference(e.target.value)}
-              placeholder="07XX XXX XXX"
+              placeholder="Enter phone number"
               className="w-full px-4 py-3 bg-white/10 border border-white/10 rounded-xl text-white"
             />
           </div>

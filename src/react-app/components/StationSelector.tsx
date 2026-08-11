@@ -318,7 +318,7 @@ export default function StationSelector({
                     onChange={(e) =>
                       setNewStation({ ...newStation, location: e.target.value })
                     }
-                    placeholder="Location (e.g., Nairobi CBD)"
+                    placeholder="Location (e.g., City Center)"
                     className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg mb-3 dark:bg-gray-700 dark:border-gray-600 focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
                   />
                   <div className="flex gap-2">

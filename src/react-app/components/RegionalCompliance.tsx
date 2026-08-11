@@ -16,10 +16,18 @@ import {
 import { getRegionalConfig, getAllCountries } from "@/react-app/config/regions";
 import type { RegionalConfig } from "@/react-app/config/regions";
 import SearchableCountryDropdown from "@/react-app/components/SearchableCountryDropdown";
+import { getDetectedCountryCode } from "@/react-app/lib/currency";
 
 export default function RegionalCompliance() {
-  const [selectedCountryKey, setSelectedCountryKey] = useState("kenya");
-  const [selectedCountryCode, setSelectedCountryCode] = useState("KE");
+  // Default to the detected station country instead of hardcoding Kenya, so a
+  // non-Kenya station does not open on Kenya's KRA eTIMS compliance view.
+  const detectedCode = getDetectedCountryCode();
+  const detectedKey = (() => {
+    const lower = detectedCode.toLowerCase();
+    return getAllCountries().find((c) => c.key === lower)?.key || "kenya";
+  })();
+  const [selectedCountryKey, setSelectedCountryKey] = useState(detectedKey);
+  const [selectedCountryCode, setSelectedCountryCode] = useState(detectedCode);
   const [expandedSection, setExpandedSection] = useState<string | null>("tax");
 
   const config = getRegionalConfig(selectedCountryKey);

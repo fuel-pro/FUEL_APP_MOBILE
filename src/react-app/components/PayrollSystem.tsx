@@ -27,7 +27,7 @@ import {
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import { getCurrencySymbol } from "../lib/currency";
+import { getCurrencySymbol, isKenyaStation } from "../lib/currency";
 
 interface Employee {
   id?: number;
@@ -94,6 +94,7 @@ export default function PayrollSystem() {
   const { currentStation } = useStations();
   const stationId = currentStation?.id;
   const { state: fuelState } = useFuel();
+  const isKenya = isKenyaStation();
 
   // State
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -1419,7 +1420,9 @@ export default function PayrollSystem() {
     doc.text(`SHA No: ${employee.shaNo || "N/A"}`, 15, y);
     doc.text(`NSSF No: ${employee.nssfNo || "N/A"}`, 100, y);
     y += 6;
-    doc.text(`KRA PIN: ${employee.kraPin || "N/A"}`, 15, y);
+    if (isKenya) {
+      doc.text(`KRA PIN: ${employee.kraPin || "N/A"}`, 15, y);
+    }
 
     // Footer
     y = doc.internal.pageSize.height - 30;
@@ -3017,16 +3020,18 @@ export default function PayrollSystem() {
                 />
               </div>
 
-              <div className="form-group">
-                <label>KRA PIN</label>
-                <input
-                  type="text"
-                  value={employeeForm.kraPin}
-                  onChange={(e) =>
-                    setEmployeeForm({ ...employeeForm, kraPin: e.target.value })
-                  }
-                />
-              </div>
+              {isKenya && (
+                <div className="form-group">
+                  <label>KRA PIN</label>
+                  <input
+                    type="text"
+                    value={employeeForm.kraPin}
+                    onChange={(e) =>
+                      setEmployeeForm({ ...employeeForm, kraPin: e.target.value })
+                    }
+                  />
+                </div>
+              )}
 
               <div className="form-group">
                 <label>SHA Number</label>

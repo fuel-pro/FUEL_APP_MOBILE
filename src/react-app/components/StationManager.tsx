@@ -378,7 +378,7 @@ function StationFormModal({
               onChange={(e) =>
                 setForm((p) => ({ ...p, location: e.target.value }))
               }
-              placeholder="e.g., Downtown, Nairobi"
+              placeholder="e.g., Downtown, [Your City]"
               className="w-full px-4 py-2.5 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-400"
             />
           </div>

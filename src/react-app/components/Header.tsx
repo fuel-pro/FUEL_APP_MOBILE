@@ -10,6 +10,7 @@ import RoleSelector from "@/react-app/components/RoleSelector";
 import { useNavigate } from "react-router";
 import { useState, useEffect, useRef } from "react";
 import { uploadStationLogo } from "@/react-app/lib/logo-storage-service";
+import { getDetectedCurrency, getCurrencySymbol } from "@/react-app/lib/currency";
 import {
   Fuel,
   Sun,
@@ -592,38 +593,11 @@ export default function Header({
                   onChange={(e) => updateEdit({ currency: e.target.value })}
                   className="w-full px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-white text-sm focus:outline-none focus:ring-1 focus:ring-amber-400"
                 >
-                  <option value="KSh" className="bg-gray-800">
-                    Ksh — Kenyan Shilling
-                  </option>
-                  <option value="UGX" className="bg-gray-800">
-                    UGX — Uganda Shilling
-                  </option>
-                  <option value="TZS" className="bg-gray-800">
-                    TZS — Tanzania Shilling
-                  </option>
-                  <option value="NGN" className="bg-gray-800">
-                    NGN — Nigerian Naira
-                  </option>
-                  <option value="ZAR" className="bg-gray-800">
-                    ZAR — South African Rand
-                  </option>
-                  <option value="GHS" className="bg-gray-800">
-                    GHS — Ghana Cedi
-                  </option>
-                  <option value="RWF" className="bg-gray-800">
-                    RWF — Rwanda Franc
-                  </option>
-                  <option value="USD" className="bg-gray-800">
-                    USD — US Dollar
-                  </option>
-                  <option value="GBP" className="bg-gray-800">
-                    GBP — British Pound
-                  </option>
-                  <option value="EUR" className="bg-gray-800">
-                    EUR — Euro
-                  </option>
-                  <option value="INR" className="bg-gray-800">
-                    INR — Indian Rupee
+                  {/* Detected station currency — shown first so the default
+                      selection reflects the station's locale rather than
+                      Kenya. */}
+                  <option value={getCurrencySymbol(getDetectedCurrency())} className="bg-gray-800">
+                    {getDetectedCurrency()} — Detected
                   </option>
                   <option value="BRL" className="bg-gray-800">
                     BRL — Brazilian Real
@@ -631,8 +605,41 @@ export default function Header({
                   <option value="CNY" className="bg-gray-800">
                     CNY — Chinese Yuan
                   </option>
+                  <option value="EUR" className="bg-gray-800">
+                    EUR — Euro
+                  </option>
+                  <option value="GBP" className="bg-gray-800">
+                    GBP — British Pound
+                  </option>
+                  <option value="GHS" className="bg-gray-800">
+                    GHS — Ghana Cedi
+                  </option>
+                  <option value="INR" className="bg-gray-800">
+                    INR — Indian Rupee
+                  </option>
                   <option value="JPY" className="bg-gray-800">
                     JPY — Japanese Yen
+                  </option>
+                  <option value="KSh" className="bg-gray-800">
+                    KES — Kenyan Shilling
+                  </option>
+                  <option value="NGN" className="bg-gray-800">
+                    NGN — Nigerian Naira
+                  </option>
+                  <option value="RWF" className="bg-gray-800">
+                    RWF — Rwanda Franc
+                  </option>
+                  <option value="TZS" className="bg-gray-800">
+                    TZS — Tanzania Shilling
+                  </option>
+                  <option value="UGX" className="bg-gray-800">
+                    UGX — Uganda Shilling
+                  </option>
+                  <option value="USD" className="bg-gray-800">
+                    USD — US Dollar
+                  </option>
+                  <option value="ZAR" className="bg-gray-800">
+                    ZAR — South African Rand
                   </option>
                 </select>
               </div>

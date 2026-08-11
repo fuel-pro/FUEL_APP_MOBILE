@@ -14,17 +14,16 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   KENYA_BASE_PRICES,
+  KENYA_SPECIALTY_PRICES,
   REGIONAL_PRICES,
-  DEFAULT_PRICES,
   getClosestKenyaCityPrice,
   getBasePrice,
-  getCountryPrice,
+  getWorldFuelPrices,
   formatPrice,
-  KenyaCityPrice,
 } from "@/react-app/config/pricing";
 import { useFuel } from "@/react-app/context/FuelContext";
 import { useLocation } from "@/react-app/context/LocationContext";
-import { getCurrencySymbol } from "../lib/currency";
+import { getCurrencySymbol, getDetectedCountryCode } from "../lib/currency";
 
 // Storage keys
 const PRICE_CACHE_KEY = "fuelpro_unified_prices";
@@ -127,6 +126,71 @@ export function clearPriceOverride(): void {
 }
 
 /**
+ * Resolve an OFFLINE price baseline (petrol/diesel/kerosene + currency/symbol
+ * + specialty prices) for the given country code. A non-Kenya station NEVER
+ * gets Kenyan prices: it receives its own country's regional/world prices,
+ * or a neutral empty (0) baseline when no data exists. Kenya keeps the EPRA
+ * regulated table (and its specialty fuels).
+ */
+function getCountryBaseline(countryCode: string): {
+  petrol: number;
+  diesel: number;
+  kerosene: number;
+  vPower?: number;
+  premiumDiesel?: number;
+  lpg?: number;
+  cng?: number;
+  currency: string;
+  currencySymbol: string;
+} {
+  if (countryCode === "KE") {
+    return {
+      petrol: KENYA_BASE_PRICES.petrol,
+      diesel: KENYA_BASE_PRICES.diesel,
+      kerosene: KENYA_BASE_PRICES.kerosene,
+      vPower: KENYA_SPECIALTY_PRICES.vPower,
+      premiumDiesel: KENYA_SPECIALTY_PRICES.premiumDiesel,
+      lpg: KENYA_SPECIALTY_PRICES.lpg,
+      cng: KENYA_SPECIALTY_PRICES.cng,
+      currency: "KES",
+      currencySymbol: "KSh",
+    };
+  }
+
+  const regional = REGIONAL_PRICES[countryCode];
+  if (regional) {
+    return {
+      petrol: regional.petrol,
+      diesel: regional.diesel,
+      kerosene: regional.kerosene,
+      currency: regional.currency,
+      currencySymbol: regional.currencySymbol,
+    };
+  }
+
+  const world = getWorldFuelPrices()[countryCode.toUpperCase()];
+  if (world) {
+    return {
+      petrol: world.petrol,
+      diesel: world.diesel,
+      kerosene: world.kerosene,
+      currency: world.currency,
+      currencySymbol: world.currencySymbol,
+    };
+  }
+
+  // Truly unknown country: return an empty/neutral baseline in USD instead
+  // of fabricating Kenyan prices.
+  return {
+    petrol: 0,
+    diesel: 0,
+    kerosene: 0,
+    currency: "USD",
+    currencySymbol: "$",
+  };
+}
+
+/**
  * Main hook for accessing unified fuel prices
  */
 export function useFuelPrices() {
@@ -140,17 +204,21 @@ export function useFuelPrices() {
     const cached = loadCachedPrices();
     if (cached) return cached;
 
-    // Default to Kenya base prices
+    // Default to the detected country's own baseline (NOT Kenya's prices for
+    // a non-Kenya station). When no country data exists, fall back to a
+    // neutral empty USD baseline rather than Kenyan shillings.
+    const detectedCountry = currentCountry?.id || getDetectedCountryCode();
+    const baseline = getCountryBaseline(detectedCountry);
     return {
-      petrol: KENYA_BASE_PRICES.petrol,
-      diesel: KENYA_BASE_PRICES.diesel,
-      kerosene: KENYA_BASE_PRICES.kerosene,
-      vPower: 214.35,
-      premiumDiesel: 213.72,
-      lpg: 120.0,
-      cng: 80.0,
-      currency: getCurrencySymbol(),
-      currencySymbol: getCurrencySymbol(),
+      petrol: baseline.petrol,
+      diesel: baseline.diesel,
+      kerosene: baseline.kerosene,
+      vPower: baseline.vPower,
+      premiumDiesel: baseline.premiumDiesel,
+      lpg: baseline.lpg,
+      cng: baseline.cng,
+      currency: baseline.currency,
+      currencySymbol: baseline.currencySymbol,
       source: "Default",
       location: "",
       lastUpdated: new Date().toISOString(),
@@ -173,10 +241,13 @@ export function useFuelPrices() {
     // Check for manual override first
     const override = loadPriceOverride();
     if (override && override.enabled) {
+      // An override with missing fields must fall back to the station's OWN
+      // country baseline — never Kenya's prices for a non-Kenya station.
+      const baseline = getCountryBaseline(countryCode || "");
       return {
-        petrol: override.petrol || KENYA_BASE_PRICES.petrol,
-        diesel: override.diesel || KENYA_BASE_PRICES.diesel,
-        kerosene: override.kerosene || KENYA_BASE_PRICES.kerosene,
+        petrol: override.petrol ?? baseline.petrol,
+        diesel: override.diesel ?? baseline.diesel,
+        kerosene: override.kerosene ?? baseline.kerosene,
         currency,
         currencySymbol: symbol,
         source: "Manual Override",
@@ -223,13 +294,12 @@ export function useFuelPrices() {
       };
     }
 
-    // Default fallback
+    // Default fallback: the detected country's own baseline. A non-Kenya
+    // station gets its own country's prices (or a neutral empty baseline for
+    // an unknown country) — never Kenya's KSh prices.
+    const baseline = getCountryBaseline(countryCode || "");
     return {
-      ...DEFAULT_PRICES,
-      vPower: 214.35,
-      premiumDiesel: 213.72,
-      lpg: 120.0,
-      cng: 80.0,
+      ...baseline,
       source: "Default",
       location: "Unknown",
       lastUpdated: new Date().toISOString(),

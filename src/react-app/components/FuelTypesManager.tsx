@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
 import {
-  KENYA_BASE_PRICES,
   KENYA_SPECIALTY_PRICES,
   CANONICAL_FUEL_TYPES,
+  getCountryPrice,
 } from "@/react-app/config/pricing";
 import {
   Fuel,
@@ -31,7 +31,7 @@ import {
 import { useFuel } from "@/react-app/context/FuelContext";
 import { usePermissions } from "@/react-app/context/PermissionContext";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
-import { getCurrencySymbol } from "@/react-app/lib/currency";
+import { getCurrencySymbol, getDetectedCountryCode } from "@/react-app/lib/currency";
 import { useAuth } from "@/react-app/context/AuthContext";
 import { useStations } from "@/react-app/context/StationContext";
 import SubTabBar from "@/react-app/components/SubTabBar";
@@ -68,39 +68,6 @@ export interface CustomFuelType {
   active: boolean;
   description: string;
 }
-
-const DEFAULT_FUEL_TYPES: CustomFuelType[] = [
-  {
-    id: "pms",
-    code: CANONICAL_FUEL_TYPES.petrol.code,
-    name: "Premium Motor Spirit",
-    localName: CANONICAL_FUEL_TYPES.petrol.label,
-    price: KENYA_BASE_PRICES.petrol,
-    costPrice: 190.0,
-    taxRate: 16,
-    levyRate: 0,
-    color: "red",
-    icon: "flame",
-    pumpCount: 2,
-    active: true,
-    description: "Standard petrol for vehicles",
-  },
-  {
-    id: "ago",
-    code: CANONICAL_FUEL_TYPES.diesel.code,
-    name: "Automotive Gas Oil",
-    localName: CANONICAL_FUEL_TYPES.diesel.label,
-    price: KENYA_BASE_PRICES.diesel,
-    costPrice: 189.5,
-    taxRate: 16,
-    levyRate: 0,
-    color: "blue",
-    icon: "droplet",
-    pumpCount: 2,
-    active: true,
-    description: "Standard diesel for vehicles",
-  },
-];
 
 const PRESET_FUELS: CustomFuelType[] = [
   {
@@ -853,11 +820,25 @@ export default function FuelTypesManager() {
 function PumpSettingsPanel() {
   const { state, dispatch } = useFuel();
   const { hasPermission, isOwner } = usePermissions();
+  // Resolve the detected country's own petrol/diesel prices so a non-Kenya
+  // station never falls back to Kenyan KSh prices when FuelContext has none.
+  const detectedCountry = (() => {
+    try {
+      return getDetectedCountryCode();
+    } catch {
+      return "";
+    }
+  })();
+  const detectedPetrol =
+    detectedCountry && getCountryPrice(detectedCountry, "petrol").price;
+  const detectedDiesel =
+    detectedCountry && getCountryPrice(detectedCountry, "diesel").price;
+  const currencySymbol = getCurrencySymbol();
   const [pmsPrice, setPmsPrice] = useState(
-    state.pmsPrice || KENYA_BASE_PRICES.petrol,
+    state.pmsPrice || detectedPetrol || 0,
   );
   const [agoPrice, setAgoPrice] = useState(
-    state.agoPrice || KENYA_BASE_PRICES.diesel,
+    state.agoPrice || detectedDiesel || 0,
   );
   const [pmsPumpCount, setPmsPumpCount] = useState(state.pmsPumps?.length || 1);
   const [agoPumpCount, setAgoPumpCount] = useState(state.agoPumps?.length || 1);

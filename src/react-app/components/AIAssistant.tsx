@@ -14,6 +14,7 @@ import {
   Lightbulb,
 } from "lucide-react";
 import { getGeminiUrl } from "@/utils/apiConfig";
+import { getCurrencySymbol, getDetectedCurrency } from "@/react-app/lib/currency";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -77,7 +78,8 @@ export default function AIAssistant() {
 
   const sendToAI = async (userMessage: string) => {
     setIsLoading(true);
-    const systemPrompt = `You are FuelPro AI, a specialized assistant for fuel station management in Africa. You help with sales analysis, fuel pricing, inventory management, tax compliance (KRA/URA/TRA), and operational efficiency. Be concise, practical, and data-driven. Use local currency (Ksh) where relevant.`;
+    const currencySymbol = getCurrencySymbol(getDetectedCurrency());
+    const systemPrompt = `You are FuelPro AI, a specialized assistant for fuel station management in Africa. You help with sales analysis, fuel pricing, inventory management, tax compliance (KRA/URA/TRA), and operational efficiency. Be concise, practical, and data-driven. Use local currency (${currencySymbol}) where relevant.`;
 
     const geminiUrl = getGeminiUrl();
     if (!geminiUrl) {

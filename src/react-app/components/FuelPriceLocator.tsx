@@ -23,7 +23,8 @@ import {
   Loader2,
   Droplet,
 } from "lucide-react";
-import { getCurrencySymbol } from "../lib/currency";
+import { getCurrencySymbol, isKenyaStation, getDetectedCountryCode } from "../lib/currency";
+import { getCountryById } from "@/react-app/config/countries";
 import SubTabBar from "@/react-app/components/SubTabBar";
 import FuelTracker from "@/react-app/components/FuelTracker";
 
@@ -121,6 +122,11 @@ export default function FuelPriceLocator() {
   // Inner sub-tab: "Price Finder" (this component) vs "Auto Fuel Price"
   // (the formerly-standalone FuelTracker GPS engine, now hosted here).
   const [activeView, setActiveView] = useState<"finder" | "auto">("finder");
+
+  const countryProfile = getCountryById(getDetectedCountryCode());
+  const regulatorFullName =
+    countryProfile?.fuelRegulations?.priceSettingBody ?? "Fuel Price Regulator";
+  const regulatorShortName = isKenyaStation() ? "EPRA" : "Regulator";
 
   // Load cached result from cloud on mount
   useEffect(() => {
@@ -365,7 +371,7 @@ export default function FuelPriceLocator() {
       currency,
       currencySymbol: symbol,
       unit: "litre",
-      source: preciseLocation ? "EPRA Estimate (offline)" : unifiedSource,
+      source: preciseLocation ? `${regulatorShortName} Estimate (offline)` : unifiedSource,
       location,
     };
 
@@ -536,7 +542,7 @@ export default function FuelPriceLocator() {
                   Current Pump Prices
                 </h3>
                 <p className="text-sm text-orange-200 mt-0.5">
-                  Energy and Petroleum Regulatory Authority (EPRA)
+                  {regulatorFullName}
                 </p>
                 {preciseLocation && (
                   <div className="mt-2 space-y-0.5">

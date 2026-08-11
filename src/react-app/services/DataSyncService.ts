@@ -9,10 +9,25 @@ import {
 // ============================================================
 
 import { getCountryById } from "@/react-app/config/countries";
-import { getCurrencySymbol } from "../lib/currency";
+import { getCurrencySymbol, getDetectedCountryCode } from "../lib/currency";
 
 // Use BASE_CITIES from pricing config
 const KENYA_CITIES = BASE_CITIES;
+
+/**
+ * Baseline KES/USD exchange rate derived from the country profile rather than
+ * hardcoded. Falls back to the Kenya profile (130 KES/USD) when the detected
+ * country has no rate. Note: `currency.exchangeRateToUSD` is USD-per-unit-local,
+ * so KES-per-USD is its reciprocal.
+ */
+function getBaselineExchangeRate(): number {
+  const countryId = getDetectedCountryCode();
+  const profile =
+    getCountryById(countryId) || getCountryById("KE");
+  const usdPerLocal = profile?.currency?.exchangeRateToUSD;
+  if (!usdPerLocal || usdPerLocal <= 0) return 130;
+  return 1 / usdPerLocal;
+}
 
 // --- AI-POWERED PRICE ESTIMATION ---
 // Since direct API access to EPRA is limited, we use AI estimation
@@ -53,8 +68,10 @@ async function estimateKenyaFuelPrices(): Promise<{
   source: string;
 }> {
   try {
-    // Try to get exchange rate
-    let exchangeRate = 130; // Default KES/USD estimate
+    // Try to get exchange rate. Derive the baseline KES/USD rate from the
+    // detected country profile instead of hardcoding a value.
+    const baselineRate = getBaselineExchangeRate();
+    let exchangeRate = baselineRate;
     try {
       const cachedRates = localStorage.getItem("fuelpro_exchange_rates");
       if (cachedRates) {
@@ -74,8 +91,8 @@ async function estimateKenyaFuelPrices(): Promise<{
 
     // Estimate price change based on:
     // 1. Time elapsed (monthly changes compound)
-    // 2. Exchange rate changes from baseline (130 KES/USD)
-    const exchangeRateChange = (exchangeRate - 130) / 130; // % change from baseline
+    // 2. Exchange rate changes from the country-profile baseline rate
+    const exchangeRateChange = (exchangeRate - baselineRate) / baselineRate; // % change from baseline
     const exchangeRateAdjustment =
       exchangeRateChange *
       PRICE_ESTIMATION_CONFIG.adjustmentFactors.exchangeRateImpact *

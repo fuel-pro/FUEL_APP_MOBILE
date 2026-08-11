@@ -924,20 +924,91 @@ export const TAX_RATES: Record<
   GH: { vatRate: 0.15, description: "Ghana - VAT 15%" },
   RW: { vatRate: 0.18, description: "Rwanda - VAT 18%" },
   ET: { vatRate: 0.15, description: "Ethiopia - VAT 15%" },
+  // Worldwide coverage
+  US: { vatRate: 0, description: "United States - Sales tax varies by state (0-10.25%)" },
+  GB: { vatRate: 0.2, description: "United Kingdom - VAT 20%" },
+  DE: { vatRate: 0.19, description: "Germany - VAT 19%" },
+  FR: { vatRate: 0.2, description: "France - VAT 20%" },
+  IT: { vatRate: 0.22, description: "Italy - VAT 22%" },
+  ES: { vatRate: 0.21, description: "Spain - VAT 21%" },
+  NL: { vatRate: 0.21, description: "Netherlands - VAT 21%" },
+  BE: { vatRate: 0.21, description: "Belgium - VAT 21%" },
+  CH: { vatRate: 0.081, description: "Switzerland - VAT 8.1%" },
+  AT: { vatRate: 0.2, description: "Austria - VAT 20%" },
+  IE: { vatRate: 0.23, description: "Ireland - VAT 23%" },
+  PT: { vatRate: 0.23, description: "Portugal - VAT 23%" },
+  GR: { vatRate: 0.24, description: "Greece - VAT 24%" },
+  PL: { vatRate: 0.23, description: "Poland - VAT 23%" },
+  SE: { vatRate: 0.25, description: "Sweden - VAT 25%" },
+  DK: { vatRate: 0.25, description: "Denmark - VAT 25%" },
+  NO: { vatRate: 0.25, description: "Norway - VAT 25%" },
+  FI: { vatRate: 0.255, description: "Finland - VAT 25.5%" },
+  CZ: { vatRate: 0.21, description: "Czech Republic - VAT 21%" },
+  HU: { vatRate: 0.27, description: "Hungary - VAT 27%" },
+  RO: { vatRate: 0.19, description: "Romania - VAT 19%" },
+  BG: { vatRate: 0.2, description: "Bulgaria - VAT 20%" },
+  HR: { vatRate: 0.25, description: "Croatia - VAT 25%" },
+  SK: { vatRate: 0.2, description: "Slovakia - VAT 20%" },
+  SI: { vatRate: 0.22, description: "Slovenia - VAT 22%" },
+  LT: { vatRate: 0.21, description: "Lithuania - VAT 21%" },
+  LV: { vatRate: 0.21, description: "Latvia - VAT 21%" },
+  EE: { vatRate: 0.22, description: "Estonia - VAT 22%" },
+  IS: { vatRate: 0.24, description: "Iceland - VAT 24%" },
+  LU: { vatRate: 0.17, description: "Luxembourg - VAT 17%" },
+  MT: { vatRate: 0.18, description: "Malta - VAT 18%" },
+  CY: { vatRate: 0.19, description: "Cyprus - VAT 19%" },
+  CA: { vatRate: 0.05, description: "Canada - GST 5% (provincial tax varies)" },
+  AU: { vatRate: 0.1, description: "Australia - GST 10%" },
+  NZ: { vatRate: 0.15, description: "New Zealand - GST 15%" },
+  JP: { vatRate: 0.1, description: "Japan - Consumption Tax 10%" },
+  KR: { vatRate: 0.1, description: "South Korea - VAT 10%" },
+  CN: { vatRate: 0.13, description: "China - VAT 13%" },
+  IN: { vatRate: 0.18, description: "India - GST 18%" },
+  SG: { vatRate: 0.09, description: "Singapore - GST 9%" },
+  MY: { vatRate: 0.06, description: "Malaysia - SST 6%" },
+  TH: { vatRate: 0.07, description: "Thailand - VAT 7%" },
+  ID: { vatRate: 0.11, description: "Indonesia - VAT 11%" },
+  PH: { vatRate: 0.12, description: "Philippines - VAT 12%" },
+  VN: { vatRate: 0.1, description: "Vietnam - VAT 10%" },
+  AE: { vatRate: 0.05, description: "UAE - VAT 5%" },
+  SA: { vatRate: 0.15, description: "Saudi Arabia - VAT 15%" },
+  QA: { vatRate: 0, description: "Qatar - No VAT" },
+  KW: { vatRate: 0, description: "Kuwait - No VAT" },
+  BH: { vatRate: 0.1, description: "Bahrain - VAT 10%" },
+  OM: { vatRate: 0.05, description: "Oman - VAT 5%" },
+  EG: { vatRate: 0.14, description: "Egypt - VAT 14%" },
+  MA: { vatRate: 0.2, description: "Morocco - VAT 20%" },
+  TN: { vatRate: 0.19, description: "Tunisia - VAT 19%" },
+  BR: { vatRate: 0.17, description: "Brazil - ICMS ~17% (varies by state)" },
+  MX: { vatRate: 0.16, description: "Mexico - IVA 16%" },
+  AR: { vatRate: 0.21, description: "Argentina - VAT 21%" },
+  CL: { vatRate: 0.19, description: "Chile - IVA 19%" },
+  CO: { vatRate: 0.19, description: "Colombia - IVA 19%" },
+  PE: { vatRate: 0.18, description: "Peru - IGV 18%" },
+  TR: { vatRate: 0.2, description: "Turkey - VAT 20%" },
+  IL: { vatRate: 0.17, description: "Israel - VAT 17%" },
+  PK: { vatRate: 0.17, description: "Pakistan - GST 17%" },
+  BD: { vatRate: 0.15, description: "Bangladesh - VAT 15%" },
+  LK: { vatRate: 0.15, description: "Sri Lanka - VAT 15%" },
 };
 
 /**
  * Get VAT rate for a country
  */
 export function getVATRate(countryCode: string): number {
-  return TAX_RATES[countryCode]?.vatRate || 0.16; // Default to 16%
+  return TAX_RATES[countryCode]?.vatRate ?? 0; // Default to 0% (no VAT) for unknown countries
 }
 
 /**
  * Get all tax rates for a country
  */
 export function getTaxRates(countryCode: string) {
-  return TAX_RATES[countryCode] || TAX_RATES.KE;
+  return (
+    TAX_RATES[countryCode] || {
+      vatRate: 0,
+      description: `${countryCode} - No tax data (VAT 0%)`,
+    }
+  );
 }
 
 /**
