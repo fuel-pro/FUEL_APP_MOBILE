@@ -1433,3 +1433,46 @@ previously held stale legacy duplicates.
   Vercel BLOCKED by api-deployments-free-per-day (100/day; GitHub integration
   auto-deploys when quota resets). All CI checks pass. No Supabase schema
   changes (uses existing fuel_types_config cloud key).
+
+## Service Worker auto-reload fix (DEPLOYED LIVE 2026-08-11, commit f90b895)
+
+**Symptom**: after deploying new code, users kept seeing STALE cached JS
+bundles — the app didn't reflect the latest fixes even after hard reload.
+Root cause: the inline SW registration script in `index.html` only called
+`navigator.serviceWorker.register("/sw.js")` with NO update lifecycle
+handling. The workbox-generated `sw.js` calls `self.skipWaiting()` on
+install, but the page never reloaded to pick up the new controller → users
+were stuck on old cached bundles until they manually unregistered the SW.
+
+**Fix** (`index.html` inline script): added full update lifecycle:
+1. `controllerchange` listener → `window.location.reload()` (auto-reload
+   when a new SW takes control).
+2. `updatefound` listener → track `reg.installing` state → when
+   `state === "installed" && navigator.serviceWorker.controller`, post
+   `SKIP_WAITING` message to the new worker.
+3. `window.load` handler calls `reg.update()` proactively on every page
+   load to check for a new SW version immediately.
+4. `vite.config.ts`: `injectRegister: false` to prevent vite-plugin-pwa
+   from auto-injecting its own minimal `registerSW.js` (which doesn't
+   handle updates). The index.html inline script is the single
+   authoritative SW registration.
+
+Verified in built `dist/index.html`: `controllerchange`, `updatefound`,
+`SKIP_WAITING` all present. No `registerSW.js` generated.
+
+**Deploy state**: Cloudflare Pages LIVE
+(https://2b69be55.fuel-app-mobile.pages.dev + main alias
+https://fuel-app-mobile.pages.dev). Vercel BLOCKED by
+`api-deployments-free-per-day` (100/100; resets ~24h; GitHub integration
+auto-deploys commit f90b895 when quota resets). All merges verified live
+on Cloudflare:
+- Credit tab → sub-tabs: Credit Accounts + Debt Payment Reminders ✅
+- Fuel Type Manager → sub-tabs: Fuel Types + Pump Settings + Price Board
+  + Fuel Quality ✅
+- Supplier Management → sub-tabs: Suppliers + Purchase Orders + Purchases ✅
+- Invoice → sub-tabs: Invoice + Sales Invoices ✅
+- Integration Hub → sub-tabs: Connectors + Webhooks + API Keys + Logs +
+  Payment Setup (hosts merged "Integrations" tab content) ✅
+- Live Transaction → "Open Integration Hub" button links to Integration Hub ✅
+- Top nav bar: no standalone Debt Reminder/Purchases/Price Board/Auto Fuel
+  Price/Sales Invoices/Shift Management/Integrations tabs (all merged) ✅
