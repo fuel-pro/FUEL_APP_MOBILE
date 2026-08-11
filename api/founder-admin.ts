@@ -1,16 +1,16 @@
 /**
- * /api/founder-grant-access
+ * /api/founder-admin?action=grant|setpw|lookup
  *
- * Server-side endpoint that grants Founder Access to an email:
- *   1. If the email already has a Supabase auth account, use its uid.
- *      Otherwise, create a new auth user with the given password (email_confirm=true).
- *   2. Set the user's role to 'founder' in the `users` table (upsert).
- *   3. Ensure a `profiles` row exists with the unique_id + username.
+ * Consolidated server-side endpoint for Founder Access administration:
+ *   ?action=grant   — create/resolve auth user, set password, set founder
+ *                     role, upsert profile (grant Founder Access to email)
+ *   ?action=setpw   — set password for a uid
+ *   ?action=lookup  — resolve email -> uid
  *
- * Security: the caller must be an authenticated founder.
+ * Security: the caller must be an authenticated founder (Bearer token
+ * verified against Supabase Auth + users table role check).
  *
- * POST body: { email: string, password: string, uniqueId?: string, username?: string }
- * Response: { success: boolean, uid?: string, error?: string }
+ * POST body depends on action (see below).
  */
 
 const SUPABASE_URL = "https://ojjscjwatikixlpshmub.supabase.co";
@@ -102,7 +102,6 @@ async function createAuthUser(email: string, password: string): Promise<string |
 }
 
 async function setFounderRole(uid: string, email: string): Promise<boolean> {
-  // Upsert into the users table with role=founder
   const res = await fetch(`${SUPABASE_URL}/rest/v1/users`, {
     method: "POST",
     headers: {
@@ -127,8 +126,6 @@ async function upsertProfile(
   uniqueId: string | null,
   username: string | null,
 ): Promise<void> {
-  // Ensure a profiles row exists; the table has a trigger or the app may
-  // have already created it. We upsert with the unique_id + username.
   await fetch(`${SUPABASE_URL}/rest/v1/profiles`, {
     method: "POST",
     headers: {
@@ -155,75 +152,110 @@ export async function POST(request: Request): Promise<Response> {
       return json({ success: false, error: "Unauthorized" }, 401);
     }
 
-    const body = (await request.json()) as {
-      email?: string;
-      password?: string;
-      uniqueId?: string | null;
-      username?: string | null;
-    };
-    if (!body.email || !body.password) {
-      return json(
-        { success: false, error: "email and password required" },
-        400,
-      );
-    }
-    if (body.password.length < 8) {
-      return json(
-        { success: false, error: "Password must be at least 8 characters" },
-        400,
-      );
+    const url = new URL(request.url);
+    const action = url.searchParams.get("action") || "";
+    const body = (await request.json()) as Record<string, string | null>;
+
+    if (action === "lookup") {
+      const email = body.email;
+      if (!email) return json({ uid: null, error: "email required" }, 400);
+      const uid = await lookupUidByEmail(email);
+      return json({ uid });
     }
 
-    // 1. Find or create the auth user
-    let uid = await lookupUidByEmail(body.email);
-    let created = false;
-    if (!uid) {
-      uid = await createAuthUser(body.email, body.password);
-      created = !!uid;
-    } else {
-      // Update the password on the existing account
-      await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${uid}`, {
+    if (action === "setpw") {
+      const uid = body.uid;
+      const password = body.password;
+      if (!uid || !password) {
+        return json({ success: false, error: "uid and password required" }, 400);
+      }
+      if (password.length < 8) {
+        return json(
+          { success: false, error: "Password must be at least 8 characters" },
+          400,
+        );
+      }
+      const res = await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${uid}`, {
         method: "PUT",
         headers: {
           apikey: SERVICE_ROLE,
           Authorization: `Bearer ${SERVICE_ROLE}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          password: body.password,
-          email_confirm: true,
-        }),
+        body: JSON.stringify({ password, email_confirm: true }),
       });
-    }
-    if (!uid) {
-      return json({
-        success: false,
-        error: "Could not find or create the auth account",
-      });
-    }
-
-    // 2. Set the role to founder
-    const roleOk = await setFounderRole(uid, body.email);
-    if (!roleOk) {
-      return json({
-        success: false,
-        error: "Account ready but could not set founder role",
-        uid,
-      });
+      if (!res.ok) {
+        const err = (await res.json()) as { message?: string; msg?: string };
+        return json({
+          success: false,
+          error: err.message || err.msg || "Failed to set password",
+        });
+      }
+      return json({ success: true });
     }
 
-    // 3. Ensure profiles row
-    await upsertProfile(uid, body.email, body.uniqueId ?? null, body.username ?? null);
+    if (action === "grant") {
+      const email = body.email;
+      const password = body.password;
+      const uniqueId = body.uniqueId ?? null;
+      const username = body.username ?? null;
+      if (!email || !password) {
+        return json(
+          { success: false, error: "email and password required" },
+          400,
+        );
+      }
+      if (password.length < 8) {
+        return json(
+          { success: false, error: "Password must be at least 8 characters" },
+          400,
+        );
+      }
 
-    return json({
-      success: true,
-      uid,
-      created,
-    });
+      let uid = await lookupUidByEmail(email);
+      let created = false;
+      if (!uid) {
+        uid = await createAuthUser(email, password);
+        created = !!uid;
+      } else {
+        await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${uid}`, {
+          method: "PUT",
+          headers: {
+            apikey: SERVICE_ROLE,
+            Authorization: `Bearer ${SERVICE_ROLE}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ password, email_confirm: true }),
+        });
+      }
+      if (!uid) {
+        return json({
+          success: false,
+          error: "Could not find or create the auth account",
+        });
+      }
+
+      const roleOk = await setFounderRole(uid, email);
+      if (!roleOk) {
+        return json({
+          success: false,
+          error: "Account ready but could not set founder role",
+          uid,
+        });
+      }
+
+      await upsertProfile(uid, email, uniqueId, username);
+      return json({ success: true, uid, created });
+    }
+
+    return json({ success: false, error: "Unknown action" }, 400);
   } catch (err) {
-    return json({
-      success: false,
-      error: err instanceof Error ? err.message : "Server error",
-    }, 500);
+    return json(
+      {
+        success: false,
+        error: err instanceof Error ? err.message : "Server error",
+      },
+      500,
+    );
   }
 }

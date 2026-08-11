@@ -455,7 +455,7 @@ export async function deleteFounderCredential(
 
 /** Set a password for a founder auth account by uid (admin operation).
  *  Uses the Supabase Auth admin API via the service_role key — this runs
- *  server-side only (api/founder-set-password endpoint). The founder can
+ *  server-side only (api/founder-admin?action=setpw endpoint). The founder can
  *  change their own password via changeFounderPassword (client-side
  *  auth.updateUser); this function is for setting the password of a
  *  DIFFERENT founder account (grant access flow). */
@@ -467,9 +467,13 @@ export async function setFounderPasswordForUid(
     return { success: false, error: "Password must be at least 8 characters" };
   }
   try {
-    const res = await fetch("/api/founder-set-password", {
+    const token = getAuthToken();
+    const res = await fetch("/api/founder-admin?action=setpw", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
       body: JSON.stringify({ uid, password: newPassword }),
     });
     const data = await res.json();
@@ -489,9 +493,13 @@ export async function getAuthUidByEmail(
   email: string,
 ): Promise<{ uid: string | null; error?: string }> {
   try {
-    const res = await fetch("/api/founder-lookup-uid", {
+    const token = getAuthToken();
+    const res = await fetch("/api/founder-admin?action=lookup", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
       body: JSON.stringify({ email }),
     });
     const data = await res.json();
@@ -520,7 +528,7 @@ export async function grantFounderAccess(input: {
       return { success: false, error: "Password must be at least 8 characters" };
     }
     const token = getAuthToken();
-    const res = await fetch("/api/founder-grant-access", {
+    const res = await fetch("/api/founder-admin?action=grant", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
