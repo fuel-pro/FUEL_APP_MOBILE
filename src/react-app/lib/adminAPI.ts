@@ -1,3 +1,5 @@
+import { getCurrencySymbol, getDetectedCountryCode } from "./currency";
+import { getCountryPrice } from "@/react-app/config/pricing";
 /**
  * FuelPro Admin API Client
  * Frontend API client for secure backend communication
@@ -594,25 +596,41 @@ export class AdminAPI {
         "[AdminAPI] Error fetching settings, using defaults:",
         error,
       );
+      // Country-aware defaults: derive currency/timezone/symbol/prices from
+      // the detected station country so a non-Kenya station never inherits
+      // Kenyan KSh defaults (Nairobi timezone, mpesa, KSh prices, "FuelPro
+      // Kenya").
+      const country = getDetectedCountryCode();
+      const symbol = getCurrencySymbol();
+      const pms = getCountryPrice(country, "petrol");
+      const ago = getCountryPrice(country, "diesel");
+      const kerosene = getCountryPrice(country, "kerosene");
+      const timezone =
+        Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+      const isKenya = country === "KE";
       // Return default settings
       return {
         company: {
-          name: "FuelPro Kenya",
-          address: "123 Business Park, Nairobi",
-          phone: "+254700123456",
+          name: isKenya ? "FuelPro Kenya" : "FuelPro",
+          address: isKenya ? "123 Business Park, Nairobi" : "",
+          phone: "+1 555 000 1234",
           email: "info@fuelpro.app",
         },
         localization: {
-          currency: "KES",
-          currencySymbol: "KSh",
-          timezone: "Africa/Nairobi",
+          currency: pms.currency,
+          currencySymbol: symbol,
+          timezone,
           dateFormat: "DD/MM/YYYY",
           language: "en",
         },
         business: {
           fuelTypes: ["PMS", "AGO", "Kerosene"],
-          defaultPrices: { PMS: 183.5, AGO: 168.3, Kerosene: 103.5 },
-          taxRate: 0.16,
+          defaultPrices: {
+            PMS: pms.price,
+            AGO: ago.price,
+            Kerosene: kerosene.price,
+          },
+          taxRate: isKenya ? 0.16 : 0,
         },
         security: {
           sessionTimeout: 3600,
@@ -620,7 +638,8 @@ export class AdminAPI {
           mfaRequired: false,
         },
         integrations: {
-          mpesa: { enabled: true, environment: "production" },
+          // mpesa is Kenya-specific; disable it for non-Kenya stations.
+          mpesa: { enabled: isKenya, environment: "production" },
           firebase: { enabled: true },
           supabase: { enabled: false },
           seafile: { enabled: false },

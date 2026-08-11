@@ -1,7 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 import { useAuth } from "@/react-app/context/AuthContext";
 import { useStations } from "@/react-app/context/StationContext";
+import { getCurrencySymbol } from "../lib/currency";
 import {
   Wrench,
   Plus,
@@ -49,6 +50,67 @@ interface MaintenanceRecord {
 
 const STORAGE_KEY = "fuelpro_maintenance_v2";
 
+const VALID_EQUIPMENT_TYPES = [
+  "pump",
+  "tank",
+  "dispenser",
+  "generator",
+  "compressor",
+  "other",
+] as const;
+const VALID_PRIORITIES = ["low", "medium", "high", "critical"] as const;
+const VALID_STATUSES = [
+  "scheduled",
+  "in_progress",
+  "completed",
+  "overdue",
+] as const;
+
+function normalizeMaintenanceRecord(
+  r: Partial<MaintenanceRecord> | null | undefined,
+): MaintenanceRecord {
+  const id =
+    r?.id || `mt_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const equipmentType = (VALID_EQUIPMENT_TYPES as readonly string[]).includes(
+    r?.equipmentType as string,
+  )
+    ? (r!.equipmentType as MaintenanceRecord["equipmentType"])
+    : "other";
+  const priority = (VALID_PRIORITIES as readonly string[]).includes(
+    r?.priority as string,
+  )
+    ? (r!.priority as MaintenanceRecord["priority"])
+    : "medium";
+  const status = (VALID_STATUSES as readonly string[]).includes(
+    r?.status as string,
+  )
+    ? (r!.status as MaintenanceRecord["status"])
+    : "scheduled";
+  return {
+    id,
+    equipmentName: r?.equipmentName ?? "",
+    equipmentType,
+    stationId: r?.stationId ?? "default",
+    description: r?.description ?? "",
+    priority,
+    status,
+    assignedTo: r?.assignedTo ?? "",
+    cost: typeof r?.cost === "number" ? r.cost : 0,
+    scheduledDate: r?.scheduledDate ?? "",
+    completedDate: r?.completedDate,
+    nextDueDate: r?.nextDueDate ?? "",
+    notes: r?.notes ?? "",
+    createdAt: r?.createdAt ?? new Date().toISOString(),
+  };
+}
+
+function normalizeMaintenanceRecords(arr: unknown): MaintenanceRecord[] {
+  if (!Array.isArray(arr)) return [];
+  return arr.map((r) =>
+    normalizeMaintenanceRecord(r as Partial<MaintenanceRecord>),
+  );
+}
+
 const EQUIPMENT_TYPES = [
   { value: "pump", label: "Fuel Pump", icon: Fuel },
   { value: "tank", label: "Storage Tank", icon: Droplets },
@@ -61,7 +123,7 @@ const EQUIPMENT_TYPES = [
 function loadRecords(): MaintenanceRecord[] {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) return JSON.parse(saved);
+    if (saved) return normalizeMaintenanceRecords(JSON.parse(saved));
   } catch {
     /* ignore */
   }
@@ -96,8 +158,13 @@ export default function MaintenanceTracker() {
     notes: "",
   });
 
+  // Prevents the save effect from overwriting cloud data with default state
+  // before the initial cloud load completes (cross-device overwrite race).
+  const cloudLoadCompleteRef = useRef(false);
+
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+    if (!cloudLoadCompleteRef.current) return; // skip until cloud load done
     cloudStorageService
       .set("maintenance_records", records, stationId)
       .catch(() => {});
@@ -106,12 +173,19 @@ export default function MaintenanceTracker() {
   // Load from cloud on mount + real-time cross-device sync
   useEffect(() => {
     if (!user) return;
+    cloudLoadCompleteRef.current = false;
+    let cancelled = false;
     (async () => {
-      const cloudData = await cloudStorageService.get<MaintenanceRecord[]>(
-        "maintenance_records",
-        stationId,
-      );
-      if (cloudData && Array.isArray(cloudData)) setRecords(cloudData);
+      try {
+        const cloudData = await cloudStorageService.get<MaintenanceRecord[]>(
+          "maintenance_records",
+          stationId,
+        );
+        if (!cancelled && cloudData)
+          setRecords(normalizeMaintenanceRecords(cloudData));
+      } finally {
+        if (!cancelled) cloudLoadCompleteRef.current = true;
+      }
     })();
     // Real-time: when another device updates records, update instantly
     const unsubs = [
@@ -119,11 +193,14 @@ export default function MaintenanceTracker() {
         "maintenance_records",
         stationId,
         (val) => {
-          if (val && Array.isArray(val)) setRecords(val);
+          if (val) setRecords(normalizeMaintenanceRecords(val));
         },
       ),
     ];
-    return () => unsubs.forEach((u) => u());
+    return () => {
+      cancelled = true;
+      unsubs.forEach((u) => u());
+    };
   }, [user, stationId]);
 
   const showNotification = (
@@ -135,10 +212,11 @@ export default function MaintenanceTracker() {
   };
 
   const filtered = records.filter((r) => {
+    const term = searchTerm.toLowerCase();
     const matchesSearch =
-      r.equipmentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      r.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      r.assignedTo.toLowerCase().includes(searchTerm.toLowerCase());
+      (r.equipmentName || "").toLowerCase().includes(term) ||
+      (r.description || "").toLowerCase().includes(term) ||
+      (r.assignedTo || "").toLowerCase().includes(term);
     const matchesStatus = statusFilter === "all" || r.status === statusFilter;
     const matchesPriority =
       priorityFilter === "all" || r.priority === priorityFilter;
@@ -397,38 +475,44 @@ export default function MaintenanceTracker() {
                         {record.equipmentName}
                       </h3>
                       <p className="text-xs text-gray-500">
-                        {record.description.slice(0, 60)}
-                        {record.description.length > 60 ? "..." : ""}
+                        {(record.description || "").slice(0, 60)}
+                        {(record.description || "").length > 60 ? "..." : ""}
                       </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <span
-                      className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${statusColors[record.status]}`}
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${statusColors[record.status] || statusColors.scheduled}`}
                     >
-                      {record.status.replace("_", " ")}
+                      {(record.status || "scheduled").replace("_", " ")}
                     </span>
                     <span
-                      className={`text-xs font-bold ${priorityColors[record.priority]}`}
+                      className={`text-xs font-bold ${priorityColors[record.priority] || priorityColors.medium}`}
                     >
-                      {priorityIcons[record.priority]} {record.priority}
+                      {priorityIcons[record.priority] || priorityIcons.medium}{" "}
+                      {record.priority || "medium"}
                     </span>
                   </div>
                 </div>
 
                 <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
                   <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
-                    <Clock size={12} /> {record.assignedTo}
+                    <Clock size={12} /> {record.assignedTo || ""}
                   </div>
                   <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
                     <Calendar size={12} />{" "}
-                    {new Date(record.scheduledDate).toLocaleDateString()}
+                    {new Date(
+                      record.scheduledDate || Date.now(),
+                    ).toLocaleDateString()}
                   </div>
                   <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
-                    Next: {new Date(record.nextDueDate).toLocaleDateString()}
+                    Next:{" "}
+                    {new Date(
+                      record.nextDueDate || Date.now(),
+                    ).toLocaleDateString()}
                   </div>
                   <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
-                    KES {record.cost.toLocaleString()}
+                    {getCurrencySymbol()} {(record.cost || 0).toLocaleString()}
                   </div>
                 </div>
 
@@ -504,21 +588,26 @@ export default function MaintenanceTracker() {
                     <div className="grid grid-cols-2 gap-3 text-xs text-gray-600 dark:text-gray-400">
                       <div>
                         <span className="text-gray-500">Full Description:</span>{" "}
-                        {record.description}
+                        {record.description || ""}
                       </div>
                       <div>
-                        <span className="text-gray-500">Cost:</span> KES{" "}
-                        {record.cost.toLocaleString()}
+                        <span className="text-gray-500">Cost:</span>{" "}
+                        {getCurrencySymbol()}{" "}
+                        {(record.cost || 0).toLocaleString()}
                       </div>
                       {record.completedDate && (
                         <div>
                           <span className="text-gray-500">Completed:</span>{" "}
-                          {new Date(record.completedDate).toLocaleDateString()}
+                          {new Date(
+                            record.completedDate || Date.now(),
+                          ).toLocaleDateString()}
                         </div>
                       )}
                       <div>
                         <span className="text-gray-500">Next Service:</span>{" "}
-                        {new Date(record.nextDueDate).toLocaleDateString()}
+                        {new Date(
+                          record.nextDueDate || Date.now(),
+                        ).toLocaleDateString()}
                       </div>
                       {record.notes && (
                         <div className="col-span-2">
@@ -657,7 +746,7 @@ export default function MaintenanceTracker() {
                   </div>
                   <div>
                     <label className="text-xs text-gray-500 mb-1 block">
-                      Cost (KES)
+                      Cost ({getCurrencySymbol()})
                     </label>
                     <input
                       type="number"

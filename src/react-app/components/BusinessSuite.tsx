@@ -39,6 +39,7 @@ import ExpensesManagement from "./ExpensesManagement";
 import ReportsAnalytics from "./ReportsAnalytics";
 import TerminalSessions from "./TerminalSessions";
 import SettingsPanel from "./SettingsPanel";
+import { isKenyaStation } from "@/react-app/lib/currency";
 
 type MenuSection = {
   title: string;
@@ -238,33 +239,47 @@ const renderModule = (view: ActiveView) => {
       return <ReportsAnalytics />;
     case "settings":
       return <SettingsPanel />;
-    case "settings-integrations":
+    case "settings-integrations": {
+      const isKenya = isKenyaStation();
       return (
         <div className="p-6">
           <h1 className="text-2xl font-bold text-white mb-2">Integrations</h1>
           <p className="text-gray-400 mb-6">
             Connect your business with payment processors.
           </p>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <IntegrationCard
-              icon={Fuel}
-              name="M-PESA"
-              type="Payment"
-              description="Accept mobile money payments via Safaricom M-PESA."
-              status="disconnected"
-              onSetup={() => {}}
-            />
-            <IntegrationCard
-              icon={Fuel}
-              name="Kopo Kopo"
-              type="Payment"
-              description="Accept payments via Kopo Kopo till."
-              status="disconnected"
-              onSetup={() => {}}
-            />
-          </div>
+          {isKenya ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <IntegrationCard
+                icon={Fuel}
+                name="M-PESA"
+                type="Payment"
+                description="Accept mobile money payments via Safaricom M-PESA."
+                status="disconnected"
+                onSetup={() => {}}
+              />
+              <IntegrationCard
+                icon={Fuel}
+                name="Kopo Kopo"
+                type="Payment"
+                description="Accept payments via Kopo Kopo till."
+                status="disconnected"
+                onSetup={() => {}}
+              />
+            </div>
+          ) : (
+            <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-6 text-amber-200">
+              <p className="font-semibold">
+                M-PESA is available in Kenya only
+              </p>
+              <p className="text-sm text-amber-300/80 mt-1">
+                Safaricom M-PESA and Kopo Kopo are Kenya-specific mobile money
+                integrations. Switch your station to Kenya to configure them.
+              </p>
+            </div>
+          )}
         </div>
       );
+    }
     default:
       return <EnhancedDashboard />;
   }

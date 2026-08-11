@@ -19,12 +19,13 @@ import {
 } from "lucide-react";
 import { useStations } from "@/react-app/context/StationContext";
 import { supabase } from "@/supabase/client";
+import { getCurrencySymbol, getDetectedCurrency } from "@/react-app/lib/currency";
 
 // Format currency
 const formatMoney = (amount: number) => {
   return new Intl.NumberFormat("en-KE", {
     style: "currency",
-    currency: "KES",
+    currency: getDetectedCurrency(),
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(amount);

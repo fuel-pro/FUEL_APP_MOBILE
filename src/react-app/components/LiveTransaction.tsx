@@ -30,6 +30,7 @@ import { useFuel } from "@/react-app/context/FuelContext";
 import { useAuth } from "@/react-app/context/AuthContext";
 import { useStations } from "@/react-app/context/StationContext";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
+import { getCurrencySymbol, getDetectedCurrency } from "@/react-app/lib/currency";
 import {
   getTransactions,
   addTransaction,
@@ -471,7 +472,7 @@ export default function LiveTransaction() {
             origin: "stk_push",
             transaction_type: "STK Push",
             amount: stkPushData.amount,
-            currency: state.companyData.currency || "KES",
+            currency: state.companyData.currency || getDetectedCurrency(),
             sender_info: stkPushData.phone_number,
             description: stkPushData.transaction_desc || "STK Push payment",
             status: "pending",
@@ -546,7 +547,7 @@ export default function LiveTransaction() {
   };
 
   const formatCurrency = (amount: number) =>
-    `${state.companyData.currency || "KSH"} ${amount.toLocaleString()}`;
+    `${state.companyData.currency || getCurrencySymbol(getDetectedCurrency())} ${amount.toLocaleString()}`;
 
   const startTransactionPolling = async (checkoutRequestId: string) => {
     let attempts = 0;
@@ -689,7 +690,7 @@ export default function LiveTransaction() {
             <SummaryCard
               icon={<TrendingUp size={14} className="text-green-400" />}
               label="Total Revenue"
-              value={`${state.companyData.currency || "KSH"} ${formatNumber(summary.total, 0)}`}
+              value={`${state.companyData.currency || getCurrencySymbol(getDetectedCurrency())} ${formatNumber(summary.total, 0)}`}
             />
             <SummaryCard
               icon={<FileText size={14} className="text-blue-400" />}
@@ -707,7 +708,7 @@ export default function LiveTransaction() {
               value={summary.topSender.name || "N/A"}
               subValue={
                 summary.topSender.name
-                  ? `${state.companyData.currency || "KSH"} ${formatNumber(summary.topSender.amount, 0)}`
+                  ? `${state.companyData.currency || getCurrencySymbol(getDetectedCurrency())} ${formatNumber(summary.topSender.amount, 0)}`
                   : undefined
               }
             />
@@ -1137,14 +1138,14 @@ export default function LiveTransaction() {
                         phone_number: formatPhoneNumber(e.target.value),
                       })
                     }
-                    placeholder="254712345678"
+                    placeholder="Enter phone number"
                     className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white"
                   />
                 </div>
 
                 <div>
                   <label className="block text-sm text-gray-300 mb-1">
-                    Amount (KSH) *
+                    Amount ({getCurrencySymbol(state.companyData.currency || getDetectedCurrency())}) *
                   </label>
                   <input
                     type="number"

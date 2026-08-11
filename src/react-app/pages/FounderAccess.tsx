@@ -90,6 +90,7 @@ import {
 } from "@/react-app/hooks/useCloudSync";
 import { checkApiStatus } from "@/react-app/lib/restApiSync";
 import { getBackendUrl } from "@/utils/apiConfig";
+import { getDetectedCurrency, getCurrencySymbol } from "@/react-app/lib/currency";
 
 /* ─── Types ─── */
 interface AppUser {
@@ -1421,7 +1422,7 @@ export default function FounderAccess() {
                   },
                   {
                     label: "Revenue",
-                    value: `KES ${effectiveRevenue.toLocaleString()}`,
+                    value: `${getCurrencySymbol(getDetectedCurrency())} ${effectiveRevenue.toLocaleString()}`,
                     icon: DollarSign,
                     color: "text-amber-400",
                   },
@@ -1711,7 +1712,7 @@ export default function FounderAccess() {
                         { label: "Members", value: s.members },
                         {
                           label: "Revenue",
-                          value: `KES ${(s.revenue / 1000).toFixed(0)}K`,
+                          value: `${getCurrencySymbol(getDetectedCurrency())} ${(s.revenue / 1000).toFixed(0)}K`,
                         },
                         {
                           label: "Status",

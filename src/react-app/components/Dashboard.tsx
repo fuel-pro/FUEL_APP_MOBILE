@@ -2,7 +2,10 @@ import { useFuel } from "@/react-app/context/FuelContext";
 import { useLocation } from "@/react-app/context/LocationContext";
 import { useStations } from "@/react-app/context/StationContext";
 import { useAutoSync } from "@/react-app/hooks/useAutoSync";
-import { getPriceForCity } from "@/react-app/services/DataSyncService";
+import {
+  getSyncedFuelPrice,
+  getPriceForCity,
+} from "@/react-app/services/DataSyncService";
 import RegulatoryAlerts from "@/react-app/components/RegulatoryAlerts";
 import SyncStatusIndicator from "@/react-app/components/SyncStatusIndicator";
 import WeatherWidget from "@/react-app/components/WeatherWidget";
@@ -33,13 +36,18 @@ import {
   Plug,
 } from "lucide-react";
 import { formatNumber } from "@/react-app/utils/formatUtils";
-import { CANONICAL_FUEL_TYPES } from "@/react-app/config/pricing";
+import {
+  CANONICAL_FUEL_TYPES,
+  currencySymbolFor,
+} from "@/react-app/config/pricing";
+import { getCountryById } from "@/react-app/config/countries";
 import {
   navigateToTab,
   type StkPushPrefill,
   type FuelPricePrefill,
 } from "@/react-app/lib/mpesa-integration-service";
 import { useState, useEffect, useMemo, useCallback } from "react";
+import { on } from "@/react-app/lib/automation-engine";
 
 // Lazy API base URL getter using dynamic import to avoid circular deps
 let _apiBase: string | null = null;
@@ -92,6 +100,11 @@ export default function Dashboard() {
   const { state } = useFuel();
   const location = useLocation();
   const { currentStation } = useStations();
+  // The station's country is the authoritative source for pricing/tax/currency
+  // — NOT the GPS-detected country (which may be a VPN/tourist location and
+  // would otherwise show foreign prices on a station's dashboard). Fall back to
+  // the detected country only until the station has been loaded from cloud.
+  const stationCountry = currentStation?.country || location.currentCountry.id;
   const {
     fuelPrice,
     taxRates,
@@ -103,7 +116,7 @@ export default function Dashboard() {
     currentLocation,
     refreshLocation,
     refreshPrices,
-  } = useAutoSync(location.currentCountry.id);
+  } = useAutoSync(stationCountry);
   const [currentTime, setCurrentTime] = useState(new Date());
 
   // Backend data state
@@ -117,27 +130,47 @@ export default function Dashboard() {
   const [hasBackendData, setHasBackendData] = useState(false);
   // Production mode - use real data
 
+  // Resolve the station's own country profile (authoritative) for fuel-
+  // regulation labels and the default city, falling back to the GPS-detected
+  // profile so the UI always has a valid object even before the station loads
+  // from cloud. Declared before stationCity so the capital fallback is in
+  // scope.
+  const stationCountryProfile =
+    getCountryById(stationCountry.toUpperCase()) || location.currentCountry;
+
   // Use precise location-based fuel prices (auto-synced with GPS)
-  const stationCity = currentStation?.location || "Nairobi";
-  const regionalPrice = getPriceForCity(fuelPrice, stationCity);
+  const stationCity = currentStation?.location || stationCountryProfile?.capital || "—";
+  // The useAutoSync hook's `fuelPrice` state can lag the synced cache during a
+  // country switch (the station loads from cloud AFTER the hook's initial KE
+  // sync). Read the persisted synced price for the STATION's country directly
+  // so a German station shows €1.85 immediately instead of the Kenya default
+  // (state.pmsPrice = 214.03) until the hook catches up.
+  const effectiveFuelPrice = fuelPrice ?? getSyncedFuelPrice(stationCountry);
+  const regionalPrice = getPriceForCity(effectiveFuelPrice, stationCity);
   // Prefer location-based price from GPS, then fall back to regional, then national, then default
   const displayPmsPrice =
     locationPrice?.petrolPrice ??
     (regionalPrice.isRegional ? regionalPrice.petrol : null) ??
-    fuelPrice?.petrolPrice ??
+    effectiveFuelPrice?.petrolPrice ??
     state.pmsPrice;
   const displayAgoPrice =
     locationPrice?.dieselPrice ??
     (regionalPrice.isRegional ? regionalPrice.diesel : null) ??
-    fuelPrice?.dieselPrice ??
+    effectiveFuelPrice?.dieselPrice ??
     state.agoPrice;
   const displayKerosenePrice =
-    locationPrice?.kerosenePrice ?? fuelPrice?.kerosenePrice ?? 0; // Kerosene price not in base state
+    locationPrice?.kerosenePrice ?? effectiveFuelPrice?.kerosenePrice ?? 0;
   // Show the detected city for location-based pricing
   const priceCityName =
-    locationPrice?.cityName || regionalPrice.cityName || "Nairobi";
+    locationPrice?.cityName || regionalPrice.cityName || stationCity;
   const isLocationBased = !!locationPrice;
-  const currencySymbol = location.currencySymbol;
+  // Currency symbol must match the STATION's currency (e.g. "€" for a German
+  // station), never the GPS/browser-detected currency. Fall back to the
+  // location-derived symbol only if the station has no currency set.
+  const currencySymbol =
+    currentStation?.currencySymbol ||
+    currencySymbolFor(currentStation?.currency || "") ||
+    location.currencySymbol;
   const [animatedValues, setAnimatedValues] = useState({
     revenue: 0,
     profit: 0,
@@ -188,6 +221,29 @@ export default function Dashboard() {
     const interval = setInterval(fetchBackendStats, 60000); // Refresh every minute
     return () => clearInterval(interval);
   }, [fetchBackendStats]);
+
+  // Re-fetch dashboard data when the automation engine signals a refresh
+  // (e.g. a sale completed or a price changed elsewhere in the app).
+  useEffect(() => {
+    const unsubSale = on("sale:completed", () => {
+      fetchBackendStats();
+    });
+    const unsubPrice = on("price:changed", () => {
+      refreshPrices();
+      fetchBackendStats();
+    });
+    const onRefresh = () => {
+      fetchBackendStats();
+    };
+    window.addEventListener("automation:refresh-dashboard", onRefresh);
+    window.addEventListener("automation:refresh-prices", onRefresh);
+    return () => {
+      unsubSale();
+      unsubPrice();
+      window.removeEventListener("automation:refresh-dashboard", onRefresh);
+      window.removeEventListener("automation:refresh-prices", onRefresh);
+    };
+  }, [fetchBackendStats, refreshPrices]);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -434,7 +490,7 @@ export default function Dashboard() {
       labels,
       datasets: [
         {
-          label: "Amount (Ksh)",
+          label: `Amount (${currencySymbol})`,
           data,
           backgroundColor: [
             "rgba(59, 130, 246, 0.8)",
@@ -638,7 +694,7 @@ export default function Dashboard() {
         </div>
         <div className="flex items-center gap-3">
           <SyncStatusIndicator
-            countryCode={location.currentCountry.id}
+            countryCode={stationCountry}
             compact
           />
           <div className="flex items-center gap-3 bg-white dark:bg-gray-800 rounded-xl px-4 py-2.5 shadow-sm border border-gray-200 dark:border-gray-700">
@@ -673,13 +729,13 @@ export default function Dashboard() {
             </div>
           </div>
           <p className="text-2xl font-bold text-gray-900 dark:text-white">
-            Ksh {formatNumber(animatedValues.revenue, 0)}
+            {currencySymbol} {formatNumber(animatedValues.revenue, 0)}
           </p>
           <div className="flex items-center gap-1 mt-2">
             <ArrowUpRight size={14} className="text-green-500" />
             <span className="text-xs text-green-600 dark:text-green-400">
               {todaySales > 0
-                ? `Ksh ${formatNumber(todaySales)} today`
+                ? `${currencySymbol} ${formatNumber(todaySales)} today`
                 : "No sales today"}
             </span>
           </div>
@@ -709,7 +765,7 @@ export default function Dashboard() {
           <p
             className={`text-2xl font-bold ${netProfit >= 0 ? "text-gray-900 dark:text-white" : "text-red-600 dark:text-red-400"}`}
           >
-            Ksh {formatNumber(animatedValues.profit, 0)}
+            {currencySymbol} {formatNumber(animatedValues.profit, 0)}
           </p>
           <div className="flex items-center gap-1 mt-2">
             {netProfit >= 0 ? (
@@ -719,7 +775,7 @@ export default function Dashboard() {
             )}
             <span className="text-xs text-gray-500 dark:text-gray-400">
               {totalExpenses > 0
-                ? `Ksh ${formatNumber(totalExpenses)} expenses`
+                ? `${currencySymbol} ${formatNumber(totalExpenses)} expenses`
                 : "No expenses recorded"}
             </span>
           </div>
@@ -773,7 +829,7 @@ export default function Dashboard() {
           <p
             className={`text-2xl font-bold ${totalDebt > 0 ? "text-red-600 dark:text-red-400" : "text-gray-900 dark:text-white"}`}
           >
-            Ksh {formatNumber(animatedValues.debt, 0)}
+            {currencySymbol} {formatNumber(animatedValues.debt, 0)}
           </p>
           <div className="flex items-center gap-1 mt-2">
             <Users size={14} className="text-gray-500" />
@@ -788,7 +844,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         {/* Current Pump Prices */}
         <div
-          className={`rounded-xl p-3 border shadow-sm ${fuelPrice ? "bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/10 border-blue-200 dark:border-blue-800" : "bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700"}`}
+          className={`rounded-xl p-3 border shadow-sm ${effectiveFuelPrice ? "bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/10 border-blue-200 dark:border-blue-800" : "bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700"}`}
         >
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-200 flex items-center gap-2">
@@ -801,8 +857,8 @@ export default function Dashboard() {
               Current Pump Prices
             </h3>
             <span className="text-[9px] bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full font-medium">
-              {fuelPrice?.priceSettingBody ||
-                location.currentCountry.fuelRegulations.priceSettingBody}
+              {effectiveFuelPrice?.priceSettingBody ||
+                stationCountryProfile.fuelRegulations.priceSettingBody}
             </span>
           </div>
           {/* Location-based price indicator */}
@@ -819,7 +875,7 @@ export default function Dashboard() {
               {isLocationBased
                 ? `📍 GPS: ${priceCityName} (${locationPrice.transportSurcharge >= 0 ? "+" : ""}${locationPrice.transportSurcharge.toFixed(2)})`
                 : regionalPrice.isRegional
-                  ? `EPRA ${regionalPrice.cityName} Price`
+                  ? `${stationCountryProfile.fuelRegulations.priceSettingBody} ${regionalPrice.cityName} Price`
                   : `${stationCity} - National Average`}
             </span>
           </div>
@@ -895,41 +951,41 @@ export default function Dashboard() {
               Find Prices
             </button>
           </div>
-          {fuelPrice?.breakdown && (
+          {effectiveFuelPrice?.breakdown && (
             <div className="mt-3 pt-3 border-t border-blue-200/50 dark:border-blue-800/30">
               <div className="grid grid-cols-3 gap-2 text-center">
                 <div>
                   <p className="text-[9px] text-gray-500">Landed Cost</p>
                   <p className="text-xs font-semibold text-gray-700 dark:text-gray-300">
-                    {currencySymbol} {fuelPrice.breakdown.landedCost.toFixed(2)}
+                    {currencySymbol} {effectiveFuelPrice.breakdown.landedCost.toFixed(2)}
                   </p>
                 </div>
                 <div>
                   <p className="text-[9px] text-gray-500">Taxes</p>
                   <p className="text-xs font-semibold text-gray-700 dark:text-gray-300">
-                    {currencySymbol} {fuelPrice.breakdown.taxes.toFixed(2)}
+                    {currencySymbol} {effectiveFuelPrice.breakdown.taxes.toFixed(2)}
                   </p>
                 </div>
                 <div>
                   <p className="text-[9px] text-gray-500">Margins</p>
                   <p className="text-xs font-semibold text-gray-700 dark:text-gray-300">
-                    {currencySymbol} {fuelPrice.breakdown.margins.toFixed(2)}
+                    {currencySymbol} {effectiveFuelPrice.breakdown.margins.toFixed(2)}
                   </p>
                 </div>
               </div>
             </div>
           )}
           <div className="flex items-center justify-between mt-3">
-            {fuelPrice ? (
+            {effectiveFuelPrice ? (
               <p className="text-[9px] text-gray-500 dark:text-gray-500">
                 Source:{" "}
                 <a
-                  href={fuelPrice.sourceUrl}
+                  href={effectiveFuelPrice.sourceUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-blue-500 hover:underline"
                 >
-                  {fuelPrice.sourceName}
+                  {effectiveFuelPrice.sourceName}
                 </a>
                 {isSyncing && (
                   <span className="ml-1 text-blue-400 animate-pulse">
@@ -946,8 +1002,8 @@ export default function Dashboard() {
               </button>
             )}
             <p className="text-[9px] text-gray-400">
-              {fuelPrice
-                ? new Date(fuelPrice.lastUpdated).toLocaleDateString()
+              {effectiveFuelPrice
+                ? new Date(effectiveFuelPrice.lastUpdated).toLocaleDateString()
                 : "Not synced"}
             </p>
           </div>
@@ -1003,18 +1059,21 @@ export default function Dashboard() {
                 </span>
               </div>
             )}
-            <div className="flex justify-between text-xs">
-              <span className="text-gray-600 dark:text-gray-400">
-                Excise Duty/L
-              </span>
-              <span className="font-semibold text-gray-800 dark:text-gray-200">
-                {currencySymbol}{" "}
-                {(taxRates
-                  ? taxRates.exciseDutyPerLiter
-                  : location.revenueAuthority.exciseDuty
-                ).toFixed(2)}
-              </span>
-            </div>
+            {(() => {
+              const exciseDuty = taxRates
+                ? taxRates.exciseDutyPerLiter
+                : location.revenueAuthority.exciseDuty;
+              return exciseDuty > 0 ? (
+                <div className="flex justify-between text-xs">
+                  <span className="text-gray-600 dark:text-gray-400">
+                    Excise Duty/L
+                  </span>
+                  <span className="font-semibold text-gray-800 dark:text-gray-200">
+                    {currencySymbol} {exciseDuty.toFixed(2)}
+                  </span>
+                </div>
+              ) : null;
+            })()}
             <div className="flex justify-between text-xs">
               <span className="text-gray-600 dark:text-gray-400">
                 Min. Wage (monthly)
@@ -1041,7 +1100,7 @@ export default function Dashboard() {
 
         {/* Regulatory Alerts */}
         <div className="bg-white dark:bg-gray-800 rounded-xl p-3 border border-gray-200 dark:border-gray-700 shadow-sm">
-          <RegulatoryAlerts countryCode={location.currentCountry.id} />
+          <RegulatoryAlerts countryCode={stationCountry} />
         </div>
       </div>
 
@@ -1055,7 +1114,7 @@ export default function Dashboard() {
               Sales Trend (Last 7 Days)
             </h3>
             <span className="text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
-              Ksh
+              {currencySymbol}
             </span>
           </div>
           <div className="h-64">
@@ -1074,7 +1133,7 @@ export default function Dashboard() {
           </div>
           <div className="mt-4 grid grid-cols-2 gap-2 text-center">
             <div
-              className={`rounded-lg p-2 ${fuelPrice ? "bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800" : "bg-gray-50 dark:bg-gray-700/30"}`}
+              className={`rounded-lg p-2 ${effectiveFuelPrice ? "bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800" : "bg-gray-50 dark:bg-gray-700/30"}`}
             >
               <p className="text-xs text-gray-500 dark:text-gray-400">
                 {CANONICAL_FUEL_TYPES.petrol.label} Price
@@ -1082,14 +1141,14 @@ export default function Dashboard() {
               <p className="font-semibold text-green-700 dark:text-green-300">
                 {currencySymbol} {displayPmsPrice}/L
               </p>
-              {fuelPrice && (
+              {effectiveFuelPrice && (
                 <p className="text-[9px] text-green-600 dark:text-green-400 mt-0.5 flex items-center justify-center gap-0.5">
                   <Globe size={8} /> Auto-synced
                 </p>
               )}
             </div>
             <div
-              className={`rounded-lg p-2 ${fuelPrice ? "bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800" : "bg-gray-50 dark:bg-gray-700/30"}`}
+              className={`rounded-lg p-2 ${effectiveFuelPrice ? "bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800" : "bg-gray-50 dark:bg-gray-700/30"}`}
             >
               <p className="text-xs text-gray-500 dark:text-gray-400">
                 {CANONICAL_FUEL_TYPES.diesel.label} Price
@@ -1097,7 +1156,7 @@ export default function Dashboard() {
               <p className="font-semibold text-amber-700 dark:text-amber-300">
                 {currencySymbol} {displayAgoPrice}/L
               </p>
-              {fuelPrice && (
+              {effectiveFuelPrice && (
                 <p className="text-[9px] text-amber-600 dark:text-amber-400 mt-0.5 flex items-center justify-center gap-0.5">
                   <Globe size={8} /> Auto-synced
                 </p>

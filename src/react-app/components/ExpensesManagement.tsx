@@ -18,11 +18,12 @@ import {
   fetchExpenses,
   fetchExpenseCategories,
 } from "@/react-app/lib/pos-service";
+import { getCurrencySymbol, getDetectedCurrency, isKenyaStation } from "@/react-app/lib/currency";
 
 const formatMoney = (amount: number) =>
   new Intl.NumberFormat("en-KE", {
     style: "currency",
-    currency: "KES",
+    currency: getDetectedCurrency(),
     minimumFractionDigits: 0,
   }).format(amount);
 
@@ -365,7 +366,7 @@ function ExpenseModal({
               className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white"
             >
               <option value="cash">Cash</option>
-              <option value="mpesa">M-PESA</option>
+              {isKenyaStation() && <option value="mpesa">M-PESA</option>}
               <option value="card">Card</option>
             </select>
           </div>

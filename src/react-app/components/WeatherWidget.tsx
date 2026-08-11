@@ -14,6 +14,8 @@ import {
 } from "lucide-react";
 import { useLocation } from "@/react-app/context/LocationContext";
 import { useStations } from "@/react-app/context/StationContext";
+import { getCountryById } from "@/react-app/config/countries";
+import { getDetectedCountryCode } from "@/react-app/lib/currency";
 
 interface WeatherData {
   temp: number;
@@ -119,9 +121,11 @@ export default function WeatherWidget() {
       lastFetchedKeyRef.current = key;
       fetchWeather(lat, lng, addr);
     } else if (!preciseLocationLoading) {
+      const detectedCountry = getCountryById(getDetectedCountryCode());
+      const fallbackCity = detectedCountry?.capital || "Your location";
       const fallback = stationLoc
         ? { lat: -1.2921, lng: 36.8219, name: stationLoc }
-        : { lat: -1.2921, lng: 36.8219, name: "Nairobi, Kenya" };
+        : { lat: -1.2921, lng: 36.8219, name: fallbackCity };
       const key = `f:${fallback.lat},${fallback.lng}`;
       if (key === lastFetchedKeyRef.current) return;
       lastFetchedKeyRef.current = key;

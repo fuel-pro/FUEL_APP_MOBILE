@@ -12,6 +12,7 @@ import {
   BarChart3,
 } from "lucide-react";
 import { useStations } from "@/react-app/context/StationContext";
+import { getCurrencySymbol, getDetectedCurrency } from "../lib/currency";
 import {
   fetchSalesReport,
   fetchExpensesReport,
@@ -21,7 +22,7 @@ import {
 const formatMoney = (amount: number) =>
   new Intl.NumberFormat("en-KE", {
     style: "currency",
-    currency: "KES",
+    currency: getDetectedCurrency(),
     minimumFractionDigits: 0,
   }).format(amount);
 

@@ -15,6 +15,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { useFuel } from "@/react-app/context/FuelContext";
+import { getCurrencySymbol, isKenyaStation } from "@/react-app/lib/currency";
 import { useStationFuelTypes } from "@/react-app/hooks/useStationFuelTypes";
 
 // Declare Speech Recognition types
@@ -56,6 +57,7 @@ export default function AIChatbot() {
   // Unified fuel types so the AI assistant knows about ALL the station's
   // configured fuels (and their live prices), not just petrol/diesel.
   const fuelTypeApi = useStationFuelTypes();
+  const mobilePayTerm = isKenyaStation() ? "M-PESA" : "digital payments";
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
@@ -63,7 +65,7 @@ export default function AIChatbot() {
       id: "1",
       type: "assistant",
       content:
-        "Hello! I'm your FuelPro AI Assistant powered by Google Gemini. I have access to all your business data - sales, deliveries, invoices, M-PESA transactions, payroll, and more. Ask me anything about your fuel station operations!",
+        `Hello! I'm your FuelPro AI Assistant powered by Google Gemini. I have access to all your business data - sales, deliveries, invoices, ${mobilePayTerm} transactions, payroll, and more. Ask me anything about your fuel station operations!`,
       timestamp: new Date(),
     },
   ]);
@@ -89,7 +91,7 @@ export default function AIChatbot() {
     const context: any = {
       timestamp: new Date().toISOString(),
       businessName: state.companyData.name || "Fuel Station",
-      currency: state.companyData.currency || "KSh",
+      currency: state.companyData.currency || getCurrencySymbol(),
       theme: state.theme,
       currentDate: state.salesDate,
       currentShift: state.shift,
@@ -423,7 +425,7 @@ export default function AIChatbot() {
   // Local AI response generator - analyzes business data and generates intelligent responses
   const generateLocalResponse = (message: string, context: any): string => {
     const lowerMsg = message.toLowerCase();
-    const currency = context.currency || "KSh";
+    const currency = context.currency || getCurrencySymbol();
     const {
       todaySales,
       deliveryTracker,
@@ -775,7 +777,7 @@ export default function AIChatbot() {
                   id: "1",
                   type: "assistant",
                   content:
-                    "Hello! I'm your FuelPro AI Assistant powered by Google Gemini. I have access to all your business data - sales, deliveries, invoices, M-PESA transactions, payroll, and more. Ask me anything about your fuel station operations!",
+                    `Hello! I'm your FuelPro AI Assistant powered by Google Gemini. I have access to all your business data - sales, deliveries, invoices, ${mobilePayTerm} transactions, payroll, and more. Ask me anything about your fuel station operations!`,
                   timestamp: new Date(),
                 },
               ]);
@@ -955,7 +957,7 @@ export default function AIChatbot() {
                   type="text"
                   value={inputMessage}
                   onChange={(e) => setInputMessage(e.target.value)}
-                  placeholder="Ask about sales, debts, M-PESA, payroll..."
+                  placeholder={`Ask about sales, debts, ${mobilePayTerm.toLowerCase()}, payroll...`}
                   className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 text-sm"
                   disabled={isLoading}
                 />

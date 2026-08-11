@@ -428,6 +428,7 @@ export function LocationProvider({
   children,
   stationId,
   stationLocation,
+  stationCountry,
 }: {
   children: React.ReactNode;
   stationId?: string;
@@ -436,6 +437,12 @@ export function LocationProvider({
   // so IP/CDN geolocation (which often returns the server's country, e.g. US)
   // does not override the station's real location.
   stationLocation?: string;
+  // The active station's explicitly selected ISO country code (e.g. "DE").
+  // This is the authoritative source of the station's country — it comes from
+  // the SetupWizard selection (persisted on the Station + Supabase) and takes
+  // precedence over GPS/timezone so the app is genuinely world-wide and the
+  // user's choice survives across devices/browsers.
+  stationCountry?: string;
 }) {
   const [stationCountries, setStationCountries] =
     useState<Record<string, StationLocation>>(loadStationCountries);
@@ -452,6 +459,13 @@ export function LocationProvider({
   const currentLocation = stationId ? stationCountries[stationId] : null;
 
   const currentCountry = React.useMemo(() => {
+    // The station's explicitly selected country (from the SetupWizard, persisted
+    // on the Station record + Supabase) is the authoritative source. It must
+    // take precedence over GPS/timezone so a German station stays German on
+    // every device, a US station stays US, etc.
+    if (stationCountry) {
+      return getCountryById(stationCountry) || getUniversalFallback();
+    }
     if (currentLocation?.countryCode) {
       return (
         getCountryById(currentLocation.countryCode) || getUniversalFallback()
@@ -469,7 +483,7 @@ export function LocationProvider({
     // Auto-detect from browser timezone or resolved country
     const resolved = resolveUserCountry();
     return getCountryById(resolved) || getUniversalFallback();
-  }, [currentLocation, stationLocation]);
+  }, [stationCountry, currentLocation, stationLocation]);
 
   // Persist changes
   useEffect(() => {
@@ -493,6 +507,13 @@ export function LocationProvider({
 
   const getStationCountry = useCallback(
     (sid: string) => {
+      // The station's explicitly selected country (persisted on the Station
+      // record) is authoritative for the ACTIVE station — prefer it over the
+      // localStorage stationCountries map so cross-device sync reflects the
+      // user's wizard choice, not a stale browser-local entry.
+      if (stationCountry && sid === stationId) {
+        return getCountryById(stationCountry) || getUniversalFallback();
+      }
       const loc = stationCountries[sid];
       if (loc?.countryCode)
         return getCountryById(loc.countryCode) || getUniversalFallback();
@@ -501,7 +522,7 @@ export function LocationProvider({
       // keeps the header selector in sync with the station's real country.
       return currentCountry;
     },
-    [stationCountries, currentCountry],
+    [stationCountry, stationId, stationCountries, currentCountry],
   );
 
   const fmtCurrency = useCallback(

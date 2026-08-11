@@ -6,6 +6,7 @@ import {
 } from "@/react-app/lib/pos/printer-service";
 import { paymentService } from "@/react-app/lib/pos/payment-service";
 import { silentPrintService } from "@/react-app/lib/silent-print-service";
+import { getCurrencySymbol, getDetectedCurrency } from "@/react-app/lib/currency";
 import {
   CreditCard,
   Banknote,
@@ -61,6 +62,8 @@ export default function POSCheckout({
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>("idle");
   const [errorMessage, setErrorMessage] = useState("");
   const [transactionRef, setTransactionRef] = useState("");
+
+  const currencySymbol = getCurrencySymbol(getDetectedCurrency());
 
   const change = amountPaid ? parseFloat(amountPaid) - sale.total : 0;
 
@@ -153,7 +156,7 @@ export default function POSCheckout({
       // Process card payment
       const result = await paymentService.processPayment({
         amount: sale.total,
-        currency: "KES",
+        currency: getCurrencySymbol(),
         type: "sale",
         reference: `CARD-${Date.now()}`,
       });
@@ -253,14 +256,14 @@ export default function POSCheckout({
               <span>
                 {item.name} x{item.quantity}
               </span>
-              <span>Ksh {item.total.toLocaleString()}</span>
+              <span>{currencySymbol} {item.total.toLocaleString()}</span>
             </div>
           ))}
         </div>
         <div className="border-t mt-2 pt-2">
           <div className="flex justify-between font-bold">
             <span>Total</span>
-            <span>Ksh {sale.total.toLocaleString()}</span>
+            <span>{currencySymbol} {sale.total.toLocaleString()}</span>
           </div>
         </div>
       </div>
@@ -322,7 +325,7 @@ export default function POSCheckout({
           />
           {change >= 0 && amountPaid && (
             <p className="mt-2 text-green-600 font-medium">
-              Change: Ksh {change.toFixed(2)}
+              Change: {currencySymbol} {change.toFixed(2)}
             </p>
           )}
         </div>

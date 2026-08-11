@@ -623,7 +623,7 @@ export default function AuthLogin() {
                     type="tel"
                     value={regPhone}
                     onChange={(e) => setRegPhone(e.target.value)}
-                    placeholder="+254..."
+                    placeholder="+1 555 000 0000"
                     autoComplete="tel"
                     className="w-full px-4 py-2.5 bg-white/5 border border-white/20 rounded-xl text-white text-sm placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
                   />
@@ -666,7 +666,7 @@ export default function AuthLogin() {
                     type="text"
                     value={taxId}
                     onChange={(e) => setTaxId(e.target.value)}
-                    placeholder="Tax ID / KRA PIN"
+                    placeholder="Tax ID"
                     className="w-full px-4 py-2 bg-white/5 border border-white/20 rounded-xl text-white text-xs placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 outline-none"
                   />
                 </div>

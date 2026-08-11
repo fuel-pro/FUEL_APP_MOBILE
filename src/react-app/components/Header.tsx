@@ -11,6 +11,10 @@ import { useNavigate } from "react-router";
 import { useState, useEffect, useRef } from "react";
 import { uploadStationLogo } from "@/react-app/lib/logo-storage-service";
 import {
+  getDetectedCurrency,
+  getCurrencySymbol,
+} from "@/react-app/lib/currency";
+import {
   Fuel,
   Sun,
   Moon,
@@ -204,10 +208,16 @@ export default function Header({
                   <span className="max-w-20 truncate">
                     {currentStation?.name}
                   </span>
-                  <ChevronDown size={10} className={`transition-transform duration-150 ${showStationMenu ? "rotate-180" : ""}`} />
+                  <ChevronDown
+                    size={10}
+                    className={`transition-transform duration-150 ${showStationMenu ? "rotate-180" : ""}`}
+                  />
                 </button>
                 {showStationMenu && (
-                  <div className="absolute top-full left-0 mt-1 w-52 bg-gray-800 rounded-xl shadow-xl border border-white/10 overflow-hidden z-50 transition-all duration-150 origin-top" role="listbox">
+                  <div
+                    className="absolute top-full left-0 mt-1 w-52 bg-gray-800 rounded-xl shadow-xl border border-white/10 overflow-hidden z-50 transition-all duration-150 origin-top"
+                    role="listbox"
+                  >
                     {stations.map((s) => (
                       <button
                         key={s.id}
@@ -560,12 +570,12 @@ export default function Header({
               </div>
               <div>
                 <label className="block text-[10px] text-gray-400 mb-0.5">
-                  Contacts (e.g. +254...)
+                  Contacts (phone)
                 </label>
                 <input
                   value={editData.contacts}
                   onChange={(e) => updateEdit({ contacts: e.target.value })}
-                  placeholder="+254 700 000 000"
+                  placeholder="+1 555 000 0000"
                   className="w-full px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400"
                 />
               </div>
@@ -578,7 +588,7 @@ export default function Header({
                 <input
                   value={editData.email}
                   onChange={(e) => updateEdit({ email: e.target.value })}
-                  placeholder="info@company.co.ke"
+                  placeholder="info@company.com"
                   type="email"
                   className="w-full px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400"
                 />
@@ -592,38 +602,14 @@ export default function Header({
                   onChange={(e) => updateEdit({ currency: e.target.value })}
                   className="w-full px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-white text-sm focus:outline-none focus:ring-1 focus:ring-amber-400"
                 >
-                  <option value="KSh" className="bg-gray-800">
-                    Ksh — Kenyan Shilling
-                  </option>
-                  <option value="UGX" className="bg-gray-800">
-                    UGX — Uganda Shilling
-                  </option>
-                  <option value="TZS" className="bg-gray-800">
-                    TZS — Tanzania Shilling
-                  </option>
-                  <option value="NGN" className="bg-gray-800">
-                    NGN — Nigerian Naira
-                  </option>
-                  <option value="ZAR" className="bg-gray-800">
-                    ZAR — South African Rand
-                  </option>
-                  <option value="GHS" className="bg-gray-800">
-                    GHS — Ghana Cedi
-                  </option>
-                  <option value="RWF" className="bg-gray-800">
-                    RWF — Rwanda Franc
-                  </option>
-                  <option value="USD" className="bg-gray-800">
-                    USD — US Dollar
-                  </option>
-                  <option value="GBP" className="bg-gray-800">
-                    GBP — British Pound
-                  </option>
-                  <option value="EUR" className="bg-gray-800">
-                    EUR — Euro
-                  </option>
-                  <option value="INR" className="bg-gray-800">
-                    INR — Indian Rupee
+                  {/* Detected station currency — shown first so the default
+                      selection reflects the station's locale rather than
+                      Kenya. */}
+                  <option
+                    value={getCurrencySymbol(getDetectedCurrency())}
+                    className="bg-gray-800"
+                  >
+                    {getDetectedCurrency()} — Detected
                   </option>
                   <option value="BRL" className="bg-gray-800">
                     BRL — Brazilian Real
@@ -631,8 +617,119 @@ export default function Header({
                   <option value="CNY" className="bg-gray-800">
                     CNY — Chinese Yuan
                   </option>
+                  <option value="EUR" className="bg-gray-800">
+                    EUR — Euro
+                  </option>
+                  <option value="GBP" className="bg-gray-800">
+                    GBP — British Pound
+                  </option>
+                  <option value="GHS" className="bg-gray-800">
+                    GHS — Ghana Cedi
+                  </option>
+                  <option value="INR" className="bg-gray-800">
+                    INR — Indian Rupee
+                  </option>
                   <option value="JPY" className="bg-gray-800">
                     JPY — Japanese Yen
+                  </option>
+                  <option value="KSh" className="bg-gray-800">
+                    KES — Kenyan Shilling
+                  </option>
+                  <option value="NGN" className="bg-gray-800">
+                    NGN — Nigerian Naira
+                  </option>
+                  <option value="RWF" className="bg-gray-800">
+                    RWF — Rwanda Franc
+                  </option>
+                  <option value="TZS" className="bg-gray-800">
+                    TZS — Tanzania Shilling
+                  </option>
+                  <option value="UGX" className="bg-gray-800">
+                    UGX — Uganda Shilling
+                  </option>
+                  <option value="USD" className="bg-gray-800">
+                    USD — US Dollar
+                  </option>
+                  <option value="ZAR" className="bg-gray-800">
+                    ZAR — South African Rand
+                  </option>
+                  <option value="AUD" className="bg-gray-800">
+                    AUD — Australian Dollar
+                  </option>
+                  <option value="CAD" className="bg-gray-800">
+                    CAD — Canadian Dollar
+                  </option>
+                  <option value="CHF" className="bg-gray-800">
+                    CHF — Swiss Franc
+                  </option>
+                  <option value="CNY" className="bg-gray-800">
+                    CNY — Chinese Yuan
+                  </option>
+                  <option value="SGD" className="bg-gray-800">
+                    SGD — Singapore Dollar
+                  </option>
+                  <option value="HKD" className="bg-gray-800">
+                    HKD — Hong Kong Dollar
+                  </option>
+                  <option value="NZD" className="bg-gray-800">
+                    NZD — New Zealand Dollar
+                  </option>
+                  <option value="AED" className="bg-gray-800">
+                    AED — UAE Dirham
+                  </option>
+                  <option value="SAR" className="bg-gray-800">
+                    SAR — Saudi Riyal
+                  </option>
+                  <option value="BRL" className="bg-gray-800">
+                    BRL — Brazilian Real
+                  </option>
+                  <option value="MXN" className="bg-gray-800">
+                    MXN — Mexican Peso
+                  </option>
+                  <option value="RUB" className="bg-gray-800">
+                    RUB — Russian Ruble
+                  </option>
+                  <option value="TRY" className="bg-gray-800">
+                    TRY — Turkish Lira
+                  </option>
+                  <option value="KRW" className="bg-gray-800">
+                    KRW — South Korean Won
+                  </option>
+                  <option value="IDR" className="bg-gray-800">
+                    IDR — Indonesian Rupiah
+                  </option>
+                  <option value="MYR" className="bg-gray-800">
+                    MYR — Malaysian Ringgit
+                  </option>
+                  <option value="THB" className="bg-gray-800">
+                    THB — Thai Baht
+                  </option>
+                  <option value="PHP" className="bg-gray-800">
+                    PHP — Philippine Peso
+                  </option>
+                  <option value="VND" className="bg-gray-800">
+                    VND — Vietnamese Dong
+                  </option>
+                  <option value="EGP" className="bg-gray-800">
+                    EGP — Egyptian Pound
+                  </option>
+                  <option value="MAD" className="bg-gray-800">
+                    MAD — Moroccan Dirham
+                  </option>
+                  <option value="PKR" className="bg-gray-800">
+                    PKR — Pakistani Rupee
+                  </option>
+                  <option value="BDT" className="bg-gray-800">
+                    BDT — Bangladeshi Taka
+                  </option>
+                  <option value="ARS" className="bg-gray-800">
+                    ARS — Argentine Peso
+                  </option>
+                  <option value="CLP" className="bg-gray-800">
+                    CLP — Chilean Peso
+                  </option>
+                  <option value="COP" className="bg-gray-800">
+                    COP — Colombian Peso
                   </option>
                 </select>
               </div>

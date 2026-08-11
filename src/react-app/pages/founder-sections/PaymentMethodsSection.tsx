@@ -21,6 +21,8 @@ import {
   Phone,
   Check,
 } from "lucide-react";
+import { getDetectedCurrency, getCurrencySymbol } from "@/react-app/lib/currency";
+const CUR = () => getCurrencySymbol(getDetectedCurrency());
 import {
   COUNTRY_CONFIGS,
   SORTED_COUNTRY_CODES,
@@ -256,7 +258,7 @@ export default function PaymentMethodsSection({ logAudit }: Props) {
       id: genId("bank"),
       countryCode: selectedCountry,
       ...bankForm,
-      currency: cc?.currency || "KES",
+      currency: cc?.currency || getDetectedCurrency(),
       isActive: true,
       createdAt: new Date().toISOString(),
     };

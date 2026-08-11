@@ -12,9 +12,11 @@ import {
   parseNumberFromFormatted,
   formatNumber,
 } from "@/react-app/utils/formatUtils";
+import { getCurrencySymbol } from "@/react-app/lib/currency";
 
 export default function DebtReminder() {
   const { state, dispatch } = useFuel();
+  const currencySymbol = getCurrencySymbol(state.companyData?.currency);
   const [debtCustomerName, setDebtCustomerName] = useState("");
   const [debtAmount, setDebtAmount] = useState("");
   const [buyGoodsNo, setBuyGoodsNo] = useState("");
@@ -110,7 +112,7 @@ export default function DebtReminder() {
 
   const sendWhatsApp = () => {
     const data = getDebtData();
-    const msg = `Dear ${data.name},%0A%0AThis is a gentle reminder that KES ${data.amount} for fuel supplied remains unpaid.%0A%0AKindly settle the amount via Till:%0ABuy Goods: ${data.till}%0A%0AFor bank transfer:%0ABank: ${data.bank}%0AA/C Name: ${data.acName}%0AA/C No.: ${data.acNo}%0A%0AAfter payment, share the confirmation with us via ${data.method}: ${data.contact}%0A%0AThank you.%0A%0ABest regards,%0A${data.manager}%0AManager%0A${state.companyData.name}%0A%0AP.O. Box: ${state.companyData.poBox || "N/A"}%0ACONTACTS: ${state.companyData.contacts || "N/A"}%0AEMAIL: ${state.companyData.email || "N/A"}`;
+    const msg = `Dear ${data.name},%0A%0AThis is a gentle reminder that ${currencySymbol} ${data.amount} for fuel supplied remains unpaid.%0A%0AKindly settle the amount via Till:%0ABuy Goods: ${data.till}%0A%0AFor bank transfer:%0ABank: ${data.bank}%0AA/C Name: ${data.acName}%0AA/C No.: ${data.acNo}%0A%0AAfter payment, share the confirmation with us via ${data.method}: ${data.contact}%0A%0AThank you.%0A%0ABest regards,%0A${data.manager}%0AManager%0A${state.companyData.name}%0A%0AP.O. Box: ${state.companyData.poBox || "N/A"}%0ACONTACTS: ${state.companyData.contacts || "N/A"}%0AEMAIL: ${state.companyData.email || "N/A"}`;
     const url = `https://wa.me/${data.contact.replace(/\D/g, "")}?text=${msg}`;
     window.open(url, "_blank");
   };
@@ -118,7 +120,7 @@ export default function DebtReminder() {
   const sendEmail = () => {
     const data = getDebtData();
     const subject = `Fuel Debt Reminder - ${data.amount}`;
-    const body = `Dear ${data.name},\n\nThis is a gentle reminder that KES ${data.amount} for fuel supplied remains unpaid.\n\nKindly settle the amount via Till:\nBuy Goods: ${data.till}\n\nFor bank transfer:\nBank: ${data.bank}\nA/C Name: ${data.acName}\nA/C No.: ${data.acNo}\n\nAfter payment, share the confirmation with us via ${data.method}: ${data.contact}\n\nThank you.\n\nBest regards,\n${data.manager}\nManager\n${state.companyData.name}\n\nP.O. Box: ${state.companyData.poBox || "N/A"}\nCONTACTS: ${state.companyData.contacts || "N/A"}\nEMAIL: ${state.companyData.email || "N/A"}`;
+    const body = `Dear ${data.name},\n\nThis is a gentle reminder that ${currencySymbol} ${data.amount} for fuel supplied remains unpaid.\n\nKindly settle the amount via Till:\nBuy Goods: ${data.till}\n\nFor bank transfer:\nBank: ${data.bank}\nA/C Name: ${data.acName}\nA/C No.: ${data.acNo}\n\nAfter payment, share the confirmation with us via ${data.method}: ${data.contact}\n\nThank you.\n\nBest regards,\n${data.manager}\nManager\n${state.companyData.name}\n\nP.O. Box: ${state.companyData.poBox || "N/A"}\nCONTACTS: ${state.companyData.contacts || "N/A"}\nEMAIL: ${state.companyData.email || "N/A"}`;
     window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   };
 
@@ -140,14 +142,14 @@ export default function DebtReminder() {
       }),
     whatsapp: () => {
       const data = getDebtData();
-      const msg = `*${state.companyData.name}*\n\n*Fuel Debt Payment Reminder*\n\nDear ${data.name},\n\nThis is a gentle reminder that KES ${data.amount} for fuel supplied remains unpaid.\n\nKindly settle the amount via Till:\nBuy Goods: ${data.till}\n\nFor bank transfer:\nBank: ${data.bank}\nA/C Name: ${data.acName}\nA/C No.: ${data.acNo}\n\nAfter payment, share the confirmation with us via ${data.method}: ${data.contact}\n\nThank you.\n\nBest regards,\n${data.manager}\nManager\n${state.companyData.name}\n\n*P.O. Box:* ${state.companyData.poBox || "N/A"}\n*CONTACTS:* ${state.companyData.contacts || "N/A"}\n*EMAIL:* ${state.companyData.email || "N/A"}`;
+      const msg = `*${state.companyData.name}*\n\n*Fuel Debt Payment Reminder*\n\nDear ${data.name},\n\nThis is a gentle reminder that ${currencySymbol} ${data.amount} for fuel supplied remains unpaid.\n\nKindly settle the amount via Till:\nBuy Goods: ${data.till}\n\nFor bank transfer:\nBank: ${data.bank}\nA/C Name: ${data.acName}\nA/C No.: ${data.acNo}\n\nAfter payment, share the confirmation with us via ${data.method}: ${data.contact}\n\nThank you.\n\nBest regards,\n${data.manager}\nManager\n${state.companyData.name}\n\n*P.O. Box:* ${state.companyData.poBox || "N/A"}\n*CONTACTS:* ${state.companyData.contacts || "N/A"}\n*EMAIL:* ${state.companyData.email || "N/A"}`;
       const url = `https://wa.me/?text=${encodeURIComponent(msg)}`;
       window.open(url, "_blank");
     },
     email: () => {
       const data = getDebtData();
       const subject = `Fuel Debt Payment Reminder - ${data.amount}`;
-      const body = `${state.companyData.name}\n\nFuel Debt Payment Reminder\n\nDear ${data.name},\n\nThis is a gentle reminder that KES ${data.amount} for fuel supplied remains unpaid.\n\nKindly settle the amount via Till:\nBuy Goods: ${data.till}\n\nFor bank transfer:\nBank: ${data.bank}\nA/C Name: ${data.acName}\nA/C No.: ${data.acNo}\n\nAfter payment, share the confirmation with us via ${data.method}: ${data.contact}\n\nThank you.\n\nBest regards,\n${data.manager}\nManager\n${state.companyData.name}\n\nP.O. Box: ${state.companyData.poBox || "N/A"}\nCONTACTS: ${state.companyData.contacts || "N/A"}\nEMAIL: ${state.companyData.email || "N/A"}`;
+      const body = `${state.companyData.name}\n\nFuel Debt Payment Reminder\n\nDear ${data.name},\n\nThis is a gentle reminder that ${currencySymbol} ${data.amount} for fuel supplied remains unpaid.\n\nKindly settle the amount via Till:\nBuy Goods: ${data.till}\n\nFor bank transfer:\nBank: ${data.bank}\nA/C Name: ${data.acName}\nA/C No.: ${data.acNo}\n\nAfter payment, share the confirmation with us via ${data.method}: ${data.contact}\n\nThank you.\n\nBest regards,\n${data.manager}\nManager\n${state.companyData.name}\n\nP.O. Box: ${state.companyData.poBox || "N/A"}\nCONTACTS: ${state.companyData.contacts || "N/A"}\nEMAIL: ${state.companyData.email || "N/A"}`;
       window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
     },
   };
@@ -184,7 +186,7 @@ export default function DebtReminder() {
             />
           </div>
           <div className="form-group">
-            <label>Amount (KES)</label>
+            <label>{`Amount (${currencySymbol})`}</label>
             <input
               type="text"
               value={debtAmount}
@@ -234,7 +236,7 @@ export default function DebtReminder() {
               type="text"
               value={whatsappNo}
               onChange={(e) => setWhatsappNo(e.target.value)}
-              placeholder="+254..."
+              placeholder="+1 555 000 0000"
             />
           </div>
           <div className="form-group">
@@ -276,7 +278,7 @@ export default function DebtReminder() {
               return (
                 <div key={key} className="history-item">
                   <span>
-                    {item.name} - Ksh {item.amount}
+                    {item.name} - {currencySymbol} {item.amount}
                   </span>
                   <div className="flex gap-2">
                     <button onClick={() => loadDebt(key)} className="text-xs">

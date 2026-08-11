@@ -1428,7 +1428,21 @@ previously held stale legacy duplicates.
 - **AIChatbot**: AI context includes ALL active fuel types + live prices
   (allFuelTypes array), not just PMS/AGO.
 - **CustomerLoyalty**: preferred-fuel dropdown uses canonical labels.
+  Cloud-loaded `loyalty_customers` records are normalized via
+  `normalizeLoyaltyCustomer(s)`/`normalizeLoyaltyCustomers(arr)` (mirrors
+  SupplierManagement pattern) before setState, and all render-time `.map()`/
+  `.toLowerCase()`/`.includes()`/`formatNumber(...)` accesses are guarded with
+  `|| []`/`|| ""`/`|| 0`/`|| "Bronze"` defaults to prevent "Cannot read
+  properties of undefined" crashes on partial cloud records.
 - **CreditManagement**: removed dead useFuel/state import.
+- **FuelTypesManager**: hardened cloud-loaded `fuel_types_config` records.
+  Added `normalizeCustomFuelType(f)`/`normalizeCustomFuelTypes(arr)` (mirrors
+  SupplierManagement pattern: `?? ""` strings, `typeof === "number" ? : 0`,
+  `typeof === "boolean" ? : false`; non-array input → `[]`). The cloud
+  `get`/`subscribe` callbacks and the localStorage `loadFuelTypes()` now run
+  records through normalize before setState. Render-time `.map()`/`.filter()`/
+  `.reduce()`/`.some()`/`.toFixed()` accesses on `fuelTypes`/`ft.*` fields are
+  additionally guarded with `|| []`/`|| ""`/`|| 0` defense-in-depth.
 - **Deploy state**: Cloudflare Pages LIVE (https://6b023595.fuel-app-mobile.pages.dev).
   Vercel BLOCKED by api-deployments-free-per-day (100/day; GitHub integration
   auto-deploys when quota resets). All CI checks pass. No Supabase schema
@@ -1557,3 +1571,20 @@ Applied site-wide to all 78 native `<select>` elements across 36 files:
 - Verified in production CSS bundle: `min-height:48px`, `appearance:none`,
   `.15s` transitions, `#6366f1` focus ring, `#1f2937` dark bg,
   `prefers-reduced-motion` — all present ✅
+
+## Automation engine + Products->Stock Management merge (ADDED 2026-08-11, commit afadee0)
+
+### Products tab merged into Stock Management
+The standalone "Products Catalog" top-level tab has been REMOVED. Its full CRUD is now a "Products" sub-tab inside InventoryManagement.tsx (label "Stock Management"). 7 sub-tabs: Products, Adjustments, Transfers, Counts, Wastage, Auto-Reorders, History.
+
+### Automation engine (NEW)
+`src/react-app/lib/automation-engine.ts`: cloud-backed domain-event bus + automation reaction system. Initialized on app boot. Auto-reorder, auto-record-stock, auto-refresh, cloud-backed prefs + log. AutomationPanel.tsx (tab "automation" order 35): Settings/Reorders/Log.
+
+### Cross-component wiring
+PointOfSale emits sale:completed. PriceBoard emits price:changed. ExpenseTracker emits expense:created. Dashboard + InventoryManagement listen + auto-refresh.
+
+### User-adjustable preferences (NEW, cloud-backed)
+`src/react-app/lib/user-preferences.ts`: everything previously hardcoded is per-user + cloud-synced. Currency, VAT label/rate (65+ countries), categories, units, fuel types, payment methods, receipt footer, invoice prefix. SettingsPanel.tsx new "Site Preferences" card.
+
+### Deploy 2026-08-11
+GitHub: pushed (afadee0). Cloudflare: LIVE 841189f4.fuel-app-mobile.pages.dev. Vercel: BLOCKED (quota resets 2026-08-12 19:44 UTC).

@@ -477,7 +477,7 @@ class SilentPrintService {
         <div style="text-align: center; margin-bottom: 5mm;">
           <strong style="font-size: 14pt;">${receipt.stationName}</strong><br/>
           ${receipt.stationLocation}<br/>
-          Tel: +254-700-000-000
+          Tel: +1-555-000-0000
         </div>
         <div style="border-top: 1px dashed #000; border-bottom: 1px dashed #000; padding: 3mm 0; margin: 3mm 0;">
           Receipt #: ${receipt.receiptNumber}<br/>
@@ -495,24 +495,24 @@ class SilentPrintService {
               (item) => `
             <div style="display: flex; justify-content: space-between; padding: 1mm 0;">
               <span>${item.name} x${item.quantity}</span>
-              <span>${getCurrencySymbol(receipt.currencyCode) || "KSh"} ${item.total.toLocaleString()}</span>
+              <span>${getCurrencySymbol(receipt.currencyCode) || getCurrencySymbol()} ${item.total.toLocaleString()}</span>
             </div>
           `,
             )
             .join("")}
         </div>
         <div style="border-top: 1px dashed #000; padding-top: 3mm; margin-top: 3mm;">
-          <div style="display: flex; justify-content: space-between;">Subtotal: <span>${getCurrencySymbol(receipt.currencyCode) || "KSh"} ${receipt.subtotal.toLocaleString()}</span></div>
-          ${receipt.discount > 0 ? `<div style="display: flex; justify-content: space-between;">Discount: <span>-${getCurrencySymbol(receipt.currencyCode) || "KSh"} ${receipt.discount.toLocaleString()}</span></div>` : ""}
-          ${receipt.tax > 0 ? `<div style="display: flex; justify-content: space-between;">Tax (VAT): <span>${getCurrencySymbol(receipt.currencyCode) || "KSh"} ${receipt.tax.toLocaleString()}</span></div>` : ""}
+          <div style="display: flex; justify-content: space-between;">Subtotal: <span>${getCurrencySymbol(receipt.currencyCode) || getCurrencySymbol()} ${receipt.subtotal.toLocaleString()}</span></div>
+          ${receipt.discount > 0 ? `<div style="display: flex; justify-content: space-between;">Discount: <span>-${getCurrencySymbol(receipt.currencyCode) || getCurrencySymbol()} ${receipt.discount.toLocaleString()}</span></div>` : ""}
+          ${receipt.tax > 0 ? `<div style="display: flex; justify-content: space-between;">Tax (VAT): <span>${getCurrencySymbol(receipt.currencyCode) || getCurrencySymbol()} ${receipt.tax.toLocaleString()}</span></div>` : ""}
           <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: 12pt; margin-top: 2mm;">
-            <span>TOTAL:</span><span>${getCurrencySymbol(receipt.currencyCode) || "KSh"} ${receipt.total.toLocaleString()}</span>
+            <span>TOTAL:</span><span>${getCurrencySymbol(receipt.currencyCode) || getCurrencySymbol()} ${receipt.total.toLocaleString()}</span>
           </div>
         </div>
         <div style="border-top: 1px dashed #000; padding-top: 3mm; margin-top: 3mm;">
           <div style="display: flex; justify-content: space-between;">Payment: <span>${receipt.paymentMethod?.toUpperCase()}</span></div>
-          <div style="display: flex; justify-content: space-between;">Paid: <span>${getCurrencySymbol(receipt.currencyCode) || "KSh"} ${receipt.amountPaid.toLocaleString()}</span></div>
-          ${receipt.change > 0 ? `<div style="display: flex; justify-content: space-between; font-weight: bold;">CHANGE: <span>${getCurrencySymbol(receipt.currencyCode) || "KSh"} ${receipt.change.toLocaleString()}</span></div>` : ""}
+          <div style="display: flex; justify-content: space-between;">Paid: <span>${getCurrencySymbol(receipt.currencyCode) || getCurrencySymbol()} ${receipt.amountPaid.toLocaleString()}</span></div>
+          ${receipt.change > 0 ? `<div style="display: flex; justify-content: space-between; font-weight: bold;">CHANGE: <span>${getCurrencySymbol(receipt.currencyCode) || getCurrencySymbol()} ${receipt.change.toLocaleString()}</span></div>` : ""}
         </div>
         <div style="text-align: center; margin-top: 5mm; font-size: 8pt;">
           ${receipt.footerMessage || "E&OE. Prices include VAT where applicable."}<br/>
@@ -595,8 +595,8 @@ class SilentPrintService {
               <tr>
                 <td style="border: 1px solid #ddd; padding: 8px;">${item.desc || item.name || ""}</td>
                 <td style="border: 1px solid #ddd; padding: 8px;">${item.qty || 1}</td>
-                <td style="border: 1px solid #ddd; padding: 8px;">${getCurrencySymbol(invoiceData.currencyCode || invoiceData.currency) || "KSh"} ${(item.price || 0).toLocaleString()}</td>
-                <td style="border: 1px solid #ddd; padding: 8px;">${getCurrencySymbol(invoiceData.currencyCode || invoiceData.currency) || "KSh"} ${(item.total || item.qty * item.price || 0).toLocaleString()}</td>
+                <td style="border: 1px solid #ddd; padding: 8px;">${getCurrencySymbol(invoiceData.currencyCode || invoiceData.currency) || getCurrencySymbol()} ${(item.price || 0).toLocaleString()}</td>
+                <td style="border: 1px solid #ddd; padding: 8px;">${getCurrencySymbol(invoiceData.currencyCode || invoiceData.currency) || getCurrencySymbol()} ${(item.total || item.qty * item.price || 0).toLocaleString()}</td>
               </tr>
             `,
               )
@@ -604,9 +604,9 @@ class SilentPrintService {
           </tbody>
         </table>
         <div style="text-align: right;">
-          <p><strong>Subtotal:</strong> ${getCurrencySymbol(invoiceData.currencyCode || invoiceData.currency) || "KSh"} ${(invoiceData.subtotal || 0).toLocaleString()}</p>
-          ${invoiceData.tax > 0 ? `<p><strong>Tax:</strong> ${getCurrencySymbol(invoiceData.currencyCode || invoiceData.currency) || "KSh"} ${invoiceData.tax.toLocaleString()}</p>` : ""}
-          <p style="font-size: 16pt;"><strong>Total Due:</strong> ${getCurrencySymbol(invoiceData.currencyCode || invoiceData.currency) || "KSh"} ${(invoiceData.total || invoiceData.totalDue || 0).toLocaleString()}</p>
+          <p><strong>Subtotal:</strong> ${getCurrencySymbol(invoiceData.currencyCode || invoiceData.currency) || getCurrencySymbol()} ${(invoiceData.subtotal || 0).toLocaleString()}</p>
+          ${invoiceData.tax > 0 ? `<p><strong>Tax:</strong> ${getCurrencySymbol(invoiceData.currencyCode || invoiceData.currency) || getCurrencySymbol()} ${invoiceData.tax.toLocaleString()}</p>` : ""}
+          <p style="font-size: 16pt;"><strong>Total Due:</strong> ${getCurrencySymbol(invoiceData.currencyCode || invoiceData.currency) || getCurrencySymbol()} ${(invoiceData.total || invoiceData.totalDue || 0).toLocaleString()}</p>
         </div>
       </div>
     `;
@@ -648,9 +648,9 @@ class SilentPrintService {
                 (entry: any) => `
               <tr>
                 <td style="border: 1px solid #ddd; padding: 8px;">${entry.date}</td>
-                <td style="border: 1px solid #ddd; padding: 8px;">${reportData.currency || "KSh"} ${(entry.petrolSales || 0).toLocaleString()}</td>
-                <td style="border: 1px solid #ddd; padding: 8px;">${reportData.currency || "KSh"} ${(entry.dieselSales || 0).toLocaleString()}</td>
-                <td style="border: 1px solid #ddd; padding: 8px;">${reportData.currency || "KSh"} ${(entry.totalSales || 0).toLocaleString()}</td>
+                <td style="border: 1px solid #ddd; padding: 8px;">${reportData.currency || getCurrencySymbol()} ${(entry.petrolSales || 0).toLocaleString()}</td>
+                <td style="border: 1px solid #ddd; padding: 8px;">${reportData.currency || getCurrencySymbol()} ${(entry.dieselSales || 0).toLocaleString()}</td>
+                <td style="border: 1px solid #ddd; padding: 8px;">${reportData.currency || getCurrencySymbol()} ${(entry.totalSales || 0).toLocaleString()}</td>
               </tr>
             `,
               )
@@ -659,9 +659,9 @@ class SilentPrintService {
           <tfoot>
             <tr style="font-weight: bold; background: #e0e0e0;">
               <td style="border: 1px solid #ddd; padding: 8px;">TOTAL</td>
-              <td style="border: 1px solid #ddd; padding: 8px;">${reportData.currency || "KSh"} ${(reportData.totals?.petrol || 0).toLocaleString()}</td>
-              <td style="border: 1px solid #ddd; padding: 8px;">${reportData.currency || "KSh"} ${(reportData.totals?.diesel || 0).toLocaleString()}</td>
-              <td style="border: 1px solid #ddd; padding: 8px;">${reportData.currency || "KSh"} ${(reportData.totals?.total || 0).toLocaleString()}</td>
+              <td style="border: 1px solid #ddd; padding: 8px;">${reportData.currency || getCurrencySymbol()} ${(reportData.totals?.petrol || 0).toLocaleString()}</td>
+              <td style="border: 1px solid #ddd; padding: 8px;">${reportData.currency || getCurrencySymbol()} ${(reportData.totals?.diesel || 0).toLocaleString()}</td>
+              <td style="border: 1px solid #ddd; padding: 8px;">${reportData.currency || getCurrencySymbol()} ${(reportData.totals?.total || 0).toLocaleString()}</td>
             </tr>
           </tfoot>
         </table>

@@ -1,7 +1,8 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useAuth } from "@/react-app/context/AuthContext";
 import { useStations } from "@/react-app/context/StationContext";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
+import { getCurrencySymbol } from "../lib/currency";
 import { useStationFuelTypes } from "@/react-app/hooks/useStationFuelTypes";
 import { getFuelLabel } from "@/react-app/config/pricing";
 import {
@@ -66,10 +67,71 @@ interface PurchaseOrder {
 const STORAGE_KEY = "fuelpro_suppliers_v2";
 const ORDERS_KEY = "fuelpro_purchase_orders_v2";
 
+/**
+ * Normalize a supplier from cloud/localStorage so it always has every field
+ * the UI expects. Cloud data may be partial (from older app versions, API
+ * imports, or cross-device sync where the record was created with a subset of
+ * fields). Without this, rendering crashes with
+ * "Cannot read properties of undefined (reading 'map')" etc.
+ */
+function normalizeSupplier(s: Partial<Supplier> | null | undefined): Supplier {
+  const id =
+    s?.id || `sup_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  return {
+    id,
+    name: s?.name ?? "",
+    contactPerson: s?.contactPerson ?? "",
+    phone: s?.phone ?? "",
+    email: s?.email ?? "",
+    address: s?.address ?? "",
+    fuelTypes: Array.isArray(s?.fuelTypes) ? s.fuelTypes : [],
+    rating: typeof s?.rating === "number" ? s.rating : 3,
+    status: s?.status ?? "active",
+    creditLimit: typeof s?.creditLimit === "number" ? s.creditLimit : 0,
+    currentBalance:
+      typeof s?.currentBalance === "number" ? s.currentBalance : 0,
+    deliveryDays: s?.deliveryDays ?? "",
+    notes: s?.notes ?? "",
+    createdAt: s?.createdAt ?? new Date().toISOString(),
+    lastOrderAt: s?.lastOrderAt,
+  };
+}
+
+function normalizePurchaseOrder(
+  o: Partial<PurchaseOrder> | null | undefined,
+): PurchaseOrder {
+  const id =
+    o?.id || `po_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  return {
+    id,
+    supplierId: o?.supplierId ?? "",
+    supplierName: o?.supplierName ?? "",
+    fuelType: o?.fuelType ?? "",
+    liters: typeof o?.liters === "number" ? o.liters : 0,
+    pricePerLiter: typeof o?.pricePerLiter === "number" ? o.pricePerLiter : 0,
+    total: typeof o?.total === "number" ? o.total : 0,
+    status: o?.status ?? "pending",
+    orderDate: o?.orderDate ?? new Date().toISOString(),
+    expectedDate: o?.expectedDate ?? "",
+    actualDate: o?.actualDate,
+    notes: o?.notes ?? "",
+  };
+}
+
+function normalizeSuppliers(arr: unknown): Supplier[] {
+  if (!Array.isArray(arr)) return [];
+  return arr.map((s) => normalizeSupplier(s as Partial<Supplier>));
+}
+
+function normalizeOrders(arr: unknown): PurchaseOrder[] {
+  if (!Array.isArray(arr)) return [];
+  return arr.map((o) => normalizePurchaseOrder(o as Partial<PurchaseOrder>));
+}
+
 function loadSuppliers(): Supplier[] {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) return JSON.parse(saved);
+    if (saved) return normalizeSuppliers(JSON.parse(saved));
   } catch {
     /* ignore */
   }
@@ -79,7 +141,7 @@ function loadSuppliers(): Supplier[] {
 function loadOrders(): PurchaseOrder[] {
   try {
     const saved = localStorage.getItem(ORDERS_KEY);
-    if (saved) return JSON.parse(saved);
+    if (saved) return normalizeOrders(JSON.parse(saved));
   } catch {
     /* ignore */
   }
@@ -154,14 +216,20 @@ export default function SupplierManagement() {
     notes: "",
   });
 
+  // Prevents save effects from overwriting cloud data with default state
+  // before the initial cloud load completes (cross-device overwrite race).
+  const cloudLoadCompleteRef = useRef(false);
+
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(suppliers));
+    if (!cloudLoadCompleteRef.current) return; // skip until cloud load done
     cloudStorageService
       .set("suppliers_data", suppliers, stationId)
       .catch(() => {});
   }, [suppliers, stationId]);
   useEffect(() => {
     localStorage.setItem(ORDERS_KEY, JSON.stringify(orders));
+    if (!cloudLoadCompleteRef.current) return; // skip until cloud load done
     cloudStorageService
       .set("purchase_orders", orders, stationId)
       .catch(() => {});
@@ -170,37 +238,45 @@ export default function SupplierManagement() {
   // Load from cloud on mount + real-time cross-device sync
   useEffect(() => {
     if (!user) return;
+    cloudLoadCompleteRef.current = false;
+    let cancelled = false;
     (async () => {
-      const cloudSuppliers = await cloudStorageService.get<Supplier[]>(
-        "suppliers_data",
-        stationId,
-      );
-      if (cloudSuppliers && Array.isArray(cloudSuppliers))
-        setSuppliers(cloudSuppliers);
-      const cloudOrders = await cloudStorageService.get<PurchaseOrder[]>(
-        "purchase_orders",
-        stationId,
-      );
-      if (cloudOrders && Array.isArray(cloudOrders)) setOrders(cloudOrders);
+      try {
+        const cloudSuppliers = await cloudStorageService.get<unknown>(
+          "suppliers_data",
+          stationId,
+        );
+        if (!cancelled) setSuppliers(normalizeSuppliers(cloudSuppliers));
+        const cloudOrders = await cloudStorageService.get<unknown>(
+          "purchase_orders",
+          stationId,
+        );
+        if (!cancelled) setOrders(normalizeOrders(cloudOrders));
+      } finally {
+        if (!cancelled) cloudLoadCompleteRef.current = true;
+      }
     })();
     // Real-time: when another device updates suppliers/orders, update instantly
     const unsubs = [
-      cloudStorageService.subscribe<Supplier[]>(
+      cloudStorageService.subscribe<unknown>(
         "suppliers_data",
         stationId,
         (val) => {
-          if (val && Array.isArray(val)) setSuppliers(val);
+          setSuppliers(normalizeSuppliers(val));
         },
       ),
-      cloudStorageService.subscribe<PurchaseOrder[]>(
+      cloudStorageService.subscribe<unknown>(
         "purchase_orders",
         stationId,
         (val) => {
-          if (val && Array.isArray(val)) setOrders(val);
+          setOrders(normalizeOrders(val));
         },
       ),
     ];
-    return () => unsubs.forEach((u) => u());
+    return () => {
+      cancelled = true;
+      unsubs.forEach((u) => u());
+    };
   }, [user, stationId]);
 
   const showNotification = (
@@ -212,10 +288,13 @@ export default function SupplierManagement() {
   };
 
   const filteredSuppliers = suppliers.filter((s) => {
+    const name = (s.name || "").toLowerCase();
+    const contact = (s.contactPerson || "").toLowerCase();
+    const phone = s.phone || "";
     const matchesSearch =
-      s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      s.contactPerson.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      s.phone.includes(searchTerm);
+      name.includes(searchTerm.toLowerCase()) ||
+      contact.includes(searchTerm.toLowerCase()) ||
+      phone.includes(searchTerm);
     const matchesStatus = statusFilter === "all" || s.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
@@ -475,7 +554,7 @@ export default function SupplierManagement() {
                       </div>
                     </div>
                     <span
-                      className={`px-2 py-0.5 rounded-full text-[10px] font-medium border ${statusColors[supplier.status]}`}
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-medium border ${statusColors[supplier.status] || statusColors.inactive}`}
                     >
                       {supplier.status}
                     </span>
@@ -497,7 +576,7 @@ export default function SupplierManagement() {
                   </div>
 
                   <div className="mt-3 flex flex-wrap gap-1">
-                    {supplier.fuelTypes.map((ft) => (
+                    {(supplier.fuelTypes || []).map((ft) => (
                       <span
                         key={ft}
                         className="px-2 py-0.5 bg-amber-500/10 text-amber-600 dark:text-amber-400 rounded-md text-[10px] font-medium flex items-center gap-1"
@@ -511,17 +590,19 @@ export default function SupplierManagement() {
                   <div className="mt-3 p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
                     <div className="flex justify-between text-xs">
                       <span className="text-gray-500">
-                        Credit: KES {supplier.creditLimit.toLocaleString()}
+                        Credit: {getCurrencySymbol()}{" "}
+                        {(supplier.creditLimit || 0).toLocaleString()}
                       </span>
                       <span className="text-gray-500">
-                        Balance: KES {supplier.currentBalance.toLocaleString()}
+                        Balance: {getCurrencySymbol()}{" "}
+                        {(supplier.currentBalance || 0).toLocaleString()}
                       </span>
                     </div>
                     <div className="mt-1 h-1.5 bg-gray-200 dark:bg-gray-600 rounded-full overflow-hidden">
                       <div
                         className="h-full bg-amber-500 rounded-full"
                         style={{
-                          width: `${Math.min((supplier.currentBalance / Math.max(supplier.creditLimit, 1)) * 100, 100)}%`,
+                          width: `${Math.min(((supplier.currentBalance || 0) / Math.max(supplier.creditLimit || 0, 1)) * 100, 100)}%`,
                         }}
                       />
                     </div>
@@ -582,14 +663,16 @@ export default function SupplierManagement() {
                       <div>
                         <span className="text-gray-500">Rating:</span>{" "}
                         <span className="text-amber-500">
-                          {"★".repeat(Math.round(supplier.rating))}
-                          {"☆".repeat(5 - Math.round(supplier.rating))}
+                          {"★".repeat(Math.round(supplier.rating || 0))}
+                          {"☆".repeat(5 - Math.round(supplier.rating || 0))}
                         </span>{" "}
-                        ({supplier.rating})
+                        ({supplier.rating || 0})
                       </div>
                       <div>
                         <span className="text-gray-500">Created:</span>{" "}
-                        {new Date(supplier.createdAt).toLocaleDateString()}
+                        {supplier.createdAt
+                          ? new Date(supplier.createdAt).toLocaleDateString()
+                          : "—"}
                       </div>
                       {supplier.lastOrderAt && (
                         <div>
@@ -599,7 +682,7 @@ export default function SupplierManagement() {
                       )}
                       <div>
                         <span className="text-gray-500">Available Credit:</span>{" "}
-                        KES{" "}
+                        {getCurrencySymbol()}{" "}
                         {(
                           supplier.creditLimit - supplier.currentBalance
                         ).toLocaleString()}
@@ -697,11 +780,11 @@ export default function SupplierManagement() {
                         {order.liters.toLocaleString()}
                       </td>
                       <td className="px-4 py-3 text-right font-medium text-gray-900 dark:text-white">
-                        KES {order.total.toLocaleString()}
+                        {getCurrencySymbol()} {order.total.toLocaleString()}
                       </td>
                       <td className="px-4 py-3 text-center">
                         <span
-                          className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${statusColors[order.status]}`}
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${statusColors[order.status] || statusColors.pending}`}
                         >
                           {order.status}
                         </span>
@@ -974,7 +1057,7 @@ export default function SupplierManagement() {
                       .filter((s) => s.status === "active")
                       .map((s) => (
                         <option key={s.id} value={s.id}>
-                          {s.name} (Credit: KES{" "}
+                          {s.name} (Credit: {getCurrencySymbol()}{" "}
                           {(s.creditLimit - s.currentBalance).toLocaleString()})
                         </option>
                       ))}
@@ -1019,7 +1102,7 @@ export default function SupplierManagement() {
                   </div>
                   <div>
                     <label className="text-xs text-gray-500 mb-1 block">
-                      Price/Liter (KES)
+                      Price/Liter ({getCurrencySymbol()})
                     </label>
                     <input
                       type="number"
@@ -1039,7 +1122,7 @@ export default function SupplierManagement() {
                   <div className="p-3 bg-amber-500/10 rounded-lg text-center">
                     <span className="text-sm text-gray-500">Total: </span>
                     <span className="text-lg font-bold text-amber-600 dark:text-amber-400">
-                      KES {orderForm.total.toLocaleString()}
+                      {getCurrencySymbol()} {orderForm.total.toLocaleString()}
                     </span>
                   </div>
                 )}

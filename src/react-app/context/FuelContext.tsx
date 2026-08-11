@@ -13,10 +13,12 @@ import { useStations } from "@/react-app/context/StationContext";
 import {
   KENYA_BASE_PRICES,
   DEFAULT_PRICES,
+  getCountryPrice,
   normalizeFuelType,
 } from "@/react-app/config/pricing";
 // Cross-device cloud storage (Supabase app_kv-backed) — replaces /api/user-data
 import { cloudStorageService } from "@/react-app/lib/cloud-storage-service";
+import { getDetectedCountryCode, getCurrencySymbol } from "@/react-app/lib/currency";
 // Fuel interlink bus — in-device pub/sub for instant price/type propagation
 import {
   emitFuelPriceChange,
@@ -24,9 +26,21 @@ import {
 } from "@/react-app/lib/fuel-interlink-bus";
 import type { CustomFuelType } from "@/react-app/components/FuelTypesManager";
 
-// Use unified pricing defaults (Kenya EPRA prices as default)
-const DEFAULT_PMS_PRICE = KENYA_BASE_PRICES.petrol; // 220.30 KES
-const DEFAULTAGO_PRICE = KENYA_BASE_PRICES.diesel; // 250.01 KES
+// Resolve default prices from the detected country (world-wide, not Kenya-only)
+const _detectedCC = (() => {
+  try {
+    return getDetectedCountryCode();
+  } catch {
+    return "";
+  }
+})();
+const _detectedPrices = _detectedCC
+  ? getCountryPrice(_detectedCC, "petrol")
+  : null;
+const DEFAULT_PMS_PRICE = _detectedPrices?.price ?? KENYA_BASE_PRICES.petrol;
+const DEFAULTAGO_PRICE = _detectedCC
+  ? getCountryPrice(_detectedCC, "diesel").price
+  : KENYA_BASE_PRICES.diesel;
 
 /**
  * Build the station-scoped compact-blob cloud key. Each station gets its own
@@ -62,7 +76,7 @@ export interface CompanyData {
   branchName: string;
   accountHolder: string;
   accountNumber: string;
-  // KRA eTIMS/ETR Configuration
+  // Tax compliance configuration (KRA eTIMS/ETR in Kenya, VAT/Tax ID elsewhere)
   kraPin: string;
   vatRegNo: string;
   physicalAddress: string;
@@ -419,7 +433,7 @@ const initialState: FuelState = {
     language: "en",
     dateFormat: "DD/MM/YYYY",
     timeFormat: "24h",
-    currency: "KSh",
+    currency: getCurrencySymbol(),
     notifications: {
       email: true,
       push: true,
@@ -445,7 +459,7 @@ const initialState: FuelState = {
     contacts: "",
     email: "",
     logo: "",
-    currency: "KSh",
+    currency: getCurrencySymbol(),
     bankName: "",
     branchName: "",
     accountHolder: "",
@@ -469,9 +483,9 @@ const initialState: FuelState = {
       { key: "reg", label: "Reg No", editable: true },
       { key: "fuel", label: "Fuel Type", editable: true },
       { key: "litres", label: "Litres", editable: true },
-      { key: "amount", label: "Amount (Ksh)", editable: true },
+      { key: "amount", label: `Amount (${getCurrencySymbol()})`, editable: true },
       { key: "name", label: "Name", editable: true },
-      { key: "debt", label: "Balance/Debt (Ksh)", editable: true },
+      { key: "debt", label: `Balance/Debt (${getCurrencySymbol()})`, editable: true },
     ],
     rows: [],
     totals: {
@@ -499,8 +513,8 @@ const initialState: FuelState = {
   pmsTankClosing: 0,
   agoTankOpening: 0,
   agoTankClosing: 0,
-  pmsPrice: DEFAULT_PMS_PRICE, // 220.30 KES (Kenya EPRA)
-  agoPrice: DEFAULTAGO_PRICE, // 250.01 KES (Kenya EPRA)
+  pmsPrice: DEFAULT_PMS_PRICE,
+  agoPrice: DEFAULTAGO_PRICE,
   petrolPrice: DEFAULT_PMS_PRICE,
   dieselPrice: DEFAULTAGO_PRICE,
   deliveredTo: "",
@@ -560,9 +574,10 @@ const initialState: FuelState = {
     },
     {
       id: "inventory",
-      label: "Inventory",
+      label: "Stock Management",
       originalLabel: "Inventory",
-      description: "Track stock levels, manage products",
+      description:
+        "Products catalog, stock adjustments, transfers, counts, wastage & auto-reorders",
       order: 4,
       visible: true,
     },
@@ -759,13 +774,15 @@ const initialState: FuelState = {
     // New capabilities layered onto the FuelPro tab system (not a replica of
     // app.saleszote.com). Tabs that already exist in FuelPro (POS, Inventory,
     // Customers, Expenses, Reports) are NOT duplicated here.
+    // NOTE: "Products" was merged into the "inventory" (Stock Management) tab
+    // as a sub-tab — it is no longer a standalone top-level tab.
     {
-      id: "products",
-      label: "Products Catalog",
-      originalLabel: "Products Catalog",
+      id: "automation",
+      label: "Automation Engine",
+      originalLabel: "Automation Engine",
       description:
-        "Manage non-fuel products, prices & categories (POS catalog)",
-      order: 33,
+        "The site's brain — auto-reorder, auto-sync, auto-refresh, activity log",
+      order: 35,
       visible: true,
     },
     {
@@ -1099,6 +1116,42 @@ export function FuelProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     stationIdRef.current = stationId;
   }, [stationId]);
+
+  // WORLDWIDE: reconcile companyData.currency with the STATION's currency.
+  // companyData.currency defaults to "KSh" (Kenya) and is persisted to the
+  // cloud blob that way — so a German (EUR) or US (USD) station ended up with
+  // companyData.currency = "KSh", leaking Kenya currency into invoices and
+  // reports. When the current station has an explicit currency, ensure
+  // companyData.currency (and userPreferences.currency) matches it. This is a
+  // one-way reconcile (station is the source of truth for currency); it only
+  // fires when they actually differ to avoid a save loop.
+  const stationCurrency = currentStation?.currency;
+  useEffect(() => {
+    if (!stationCurrency) return;
+    const cur = stateRef.current;
+    const companyMismatch = cur.companyData?.currency !== stationCurrency;
+    const prefsMismatch = cur.userPreferences?.currency !== stationCurrency;
+    if (companyMismatch || prefsMismatch) {
+      if (companyMismatch) {
+        dispatch({
+          type: "SET_COMPANY_DATA",
+          payload: {
+            ...cur.companyData,
+            currency: stationCurrency,
+          },
+        });
+      }
+      if (prefsMismatch) {
+        dispatch({
+          type: "SET_USER_PREFERENCES",
+          payload: {
+            ...cur.userPreferences,
+            currency: stationCurrency,
+          },
+        });
+      }
+    }
+  }, [stationCurrency]);
 
   // CRITICAL: Guards the cross-device cloud-sync race. On login, the
   // aggressive auto-save effect (1500ms) can fire BEFORE loadFromCloud has

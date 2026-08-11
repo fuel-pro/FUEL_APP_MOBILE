@@ -3,9 +3,13 @@ import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
 import { formatNumber } from "./formatUtils";
+import { getCurrencySymbol } from "@/react-app/lib/currency";
 
 export function exportDeliveryPDF(state: any) {
   const doc = new jsPDF();
+
+  // WORLDWIDE: derive the currency symbol from the company/station currency.
+  const currencySymbol = getCurrencySymbol(state.companyData?.currency);
 
   let y = 20;
   if (state.companyData.logo) {
@@ -40,17 +44,17 @@ export function exportDeliveryPDF(state: any) {
   y += 8;
   doc.text(`YEAR: ${state.deliveryYear || "2025"}`, 14, y);
   y += 8;
-  doc.text(`Petrol Price: Ksh ${state.petrolPrice || "180"} /L`, 14, y);
+  doc.text(`Petrol Price: ${currencySymbol} ${state.petrolPrice || "180"} /L`, 14, y);
   y += 8;
-  doc.text(`Diesel Price: Ksh ${state.dieselPrice || "170"} /L`, 14, y);
+  doc.text(`Diesel Price: ${currencySymbol} ${state.dieselPrice || "170"} /L`, 14, y);
   y += 8;
 
   // Create table data
   const headers = state.deliveryData.columns.map((col: any) => col.label);
   const data = state.deliveryData.rows.map((r: any) =>
     state.deliveryData.columns.map((col: any) => {
-      if (col.key === "amount") return "Ksh " + formatNumber(r.amount);
-      if (col.key === "debt") return "Ksh " + formatNumber(r.debt);
+      if (col.key === "amount") return `${currencySymbol} ${formatNumber(r.amount)}`;
+      if (col.key === "debt") return `${currencySymbol} ${formatNumber(r.debt)}`;
       return r[col.key] || "";
     }),
   );
@@ -72,12 +76,12 @@ export function exportDeliveryPDF(state: any) {
     finalY,
   );
   doc.text(
-    `Total Payments: ${state.companyData.currency} ${formatNumber(state.deliveryData.totals.totalPayments)}`,
+    `Total Payments: ${currencySymbol} ${formatNumber(state.deliveryData.totals.totalPayments)}`,
     70,
     finalY,
   );
   doc.text(
-    `Balance Due: ${state.companyData.currency} ${formatNumber(state.deliveryData.totals.balanceDue, 2)}`,
+    `Balance Due: ${currencySymbol} ${formatNumber(state.deliveryData.totals.balanceDue, 2)}`,
     130,
     finalY,
   );
@@ -97,6 +101,8 @@ export function exportDeliveryPDF(state: any) {
 
 export function exportDeliveryExcel(state: any) {
   const wb = XLSX.utils.book_new();
+  // WORLDWIDE: derive the currency symbol from the company/station currency.
+  const currencySymbol = getCurrencySymbol(state.companyData?.currency);
 
   const ws_data = [
     [state.companyData.name || "Company Name"],
@@ -105,16 +111,16 @@ export function exportDeliveryExcel(state: any) {
     [`FUEL DELIVERED TO: ${state.deliveredTo || "Client"}`],
     [`TOTAL ORDER: ${state.totalOrder || "N/A"} Litres`],
     [`YEAR: ${state.deliveryYear || "2025"}`],
-    [`Petrol Price: Ksh ${state.petrolPrice || "180"} /L`],
-    [`Diesel Price: Ksh ${state.dieselPrice || "170"} /L`],
+    [`Petrol Price: ${currencySymbol} ${state.petrolPrice || "180"} /L`],
+    [`Diesel Price: ${currencySymbol} ${state.dieselPrice || "170"} /L`],
     [],
     state.deliveryData.columns.map((col: any) => col.label),
     ...state.deliveryData.rows.map((r: any) =>
       state.deliveryData.columns.map((col: any) => {
         if (col.key === "amount")
-          return state.companyData.currency + " " + formatNumber(r.amount);
+          return `${currencySymbol} ${formatNumber(r.amount)}`;
         if (col.key === "debt")
-          return state.companyData.currency + " " + formatNumber(r.debt);
+          return `${currencySymbol} ${formatNumber(r.debt)}`;
         return r[col.key] || "";
       }),
     ),
@@ -123,10 +129,10 @@ export function exportDeliveryExcel(state: any) {
       `Total Supplied: ${formatNumber(state.deliveryData.totals.totalSupplied)} L`,
     ],
     [
-      `Total Payments: Ksh ${formatNumber(state.deliveryData.totals.totalPayments)}`,
+      `Total Payments: ${currencySymbol} ${formatNumber(state.deliveryData.totals.totalPayments)}`,
     ],
     [
-      `Balance Due: Ksh ${formatNumber(state.deliveryData.totals.balanceDue, 2)}`,
+      `Balance Due: ${currencySymbol} ${formatNumber(state.deliveryData.totals.balanceDue, 2)}`,
     ],
     [],
     [`P.O. Box: ${state.companyData.poBox || "N/A"}`],
@@ -140,21 +146,23 @@ export function exportDeliveryExcel(state: any) {
 }
 
 export function exportDeliveryTXT(state: any) {
+  // WORLDWIDE: derive the currency symbol from the company/station currency.
+  const currencySymbol = getCurrencySymbol(state.companyData?.currency);
   let txt = `=== ${state.companyData.name || "Company Name"} ===\nFuel Delivery Report\n\n`;
   txt += `FUEL DELIVERED TO: ${state.deliveredTo || "Client"}\n`;
   txt += `TOTAL ORDER: ${state.totalOrder || "N/A"} Litres\n`;
   txt += `YEAR: ${state.deliveryYear || "2025"}\n`;
-  txt += `Petrol Price: ${state.companyData.currency} ${state.petrolPrice || "180"} /L\n`;
-  txt += `Diesel Price: ${state.companyData.currency} ${state.dieselPrice || "170"} /L\n\n`;
+  txt += `Petrol Price: ${currencySymbol} ${state.petrolPrice || "180"} /L\n`;
+  txt += `Diesel Price: ${currencySymbol} ${state.dieselPrice || "170"} /L\n\n`;
 
   txt += state.deliveryData.rows
     .map((r: any) =>
       state.deliveryData.columns
         .map((col: any) => {
           if (col.key === "amount")
-            return `${col.label}: ${state.companyData.currency}${formatNumber(r.amount)}`;
+            return `${col.label}: ${currencySymbol}${formatNumber(r.amount)}`;
           if (col.key === "debt")
-            return `${col.label}: ${state.companyData.currency}${formatNumber(r.debt)}`;
+            return `${col.label}: ${currencySymbol}${formatNumber(r.debt)}`;
           return `${col.label}: ${r[col.key] || ""}`;
         })
         .join(" | "),
@@ -163,8 +171,8 @@ export function exportDeliveryTXT(state: any) {
 
   txt += `\n\n`;
   txt += `Total Supplied: ${formatNumber(state.deliveryData.totals.totalSupplied)} L\n`;
-  txt += `Total Payments: ${state.companyData.currency} ${formatNumber(state.deliveryData.totals.totalPayments)}\n`;
-  txt += `Balance Due: ${state.companyData.currency} ${formatNumber(state.deliveryData.totals.balanceDue, 2)}\n\n`;
+  txt += `Total Payments: ${currencySymbol} ${formatNumber(state.deliveryData.totals.totalPayments)}\n`;
+  txt += `Balance Due: ${currencySymbol} ${formatNumber(state.deliveryData.totals.balanceDue, 2)}\n\n`;
   txt += `P.O. Box: ${state.companyData.poBox || "N/A"}\n`;
   txt += `CONTACTS: ${state.companyData.contacts || "N/A"}\n`;
   txt += `EMAIL: ${state.companyData.email || "N/A"}`;
@@ -176,6 +184,9 @@ export function exportDeliveryTXT(state: any) {
 export function exportDebtPDF(state: any) {
   const data = state.debtData;
   const doc = new jsPDF();
+
+  // WORLDWIDE: derive the currency symbol from the company/station currency.
+  const currencySymbol = getCurrencySymbol(state.companyData?.currency);
 
   let y = 20;
   if (state.companyData.logo) {
@@ -204,7 +215,7 @@ export function exportDebtPDF(state: any) {
   const lines = [
     `Dear ${data.name},`,
     ``,
-    `This is a gentle reminder that KES ${data.amount} for fuel supplied remains unpaid.`,
+    `This is a gentle reminder that ${currencySymbol} ${data.amount} for fuel supplied remains unpaid.`,
     ``,
     `Kindly settle the amount via Till:`,
     `Buy Goods: ${data.till}`,
@@ -235,13 +246,15 @@ export function exportDebtPDF(state: any) {
 export function exportDebtExcel(state: any) {
   const data = state.debtData;
   const wb = XLSX.utils.book_new();
+  // WORLDWIDE: derive the currency symbol from the company/station currency.
+  const currencySymbol = getCurrencySymbol(state.companyData?.currency);
   const ws_data = [
     ["Fuel Debt Payment Reminder"],
     [],
     [`Dear ${data.name},`],
     [],
     [
-      `This is a gentle reminder that KES ${data.amount} for fuel supplied remains unpaid.`,
+      `This is a gentle reminder that ${currencySymbol} ${data.amount} for fuel supplied remains unpaid.`,
     ],
     [],
     ["Kindly settle the amount via Till:"],
@@ -275,13 +288,18 @@ export function exportDebtExcel(state: any) {
 export function exportDebtTXT(state: any) {
   const data = state.debtData;
   const companyName = state.companyData.name || "Company Name";
-  const txt = `=== ${companyName} ===\nFuel Debt Payment Reminder\n\nDear ${data.name},\n\nThis is a gentle reminder that KES ${data.amount} for fuel supplied remains unpaid.\n\nKindly settle the amount via Till:\nBuy Goods: ${data.till}\n\nFor bank transfer:\nBank: ${data.bank}\nA/C Name: ${data.acName}\nA/C No.: ${data.acNo}\n\nAfter payment, share the confirmation with us via ${data.method}: ${data.contact}\n\nThank you.\n\nBest regards,\n${data.manager}\nManager\n${companyName}\n\nP.O. Box: ${state.companyData.poBox || "N/A"}\nCONTACTS: ${state.companyData.contacts || "N/A"}\nEMAIL: ${state.companyData.email || "N/A"}`;
+  // WORLDWIDE: derive the currency symbol from the company/station currency.
+  const currencySymbol = getCurrencySymbol(state.companyData?.currency);
+  const txt = `=== ${companyName} ===\nFuel Debt Payment Reminder\n\nDear ${data.name},\n\nThis is a gentle reminder that ${currencySymbol} ${data.amount} for fuel supplied remains unpaid.\n\nKindly settle the amount via Till:\nBuy Goods: ${data.till}\n\nFor bank transfer:\nBank: ${data.bank}\nA/C Name: ${data.acName}\nA/C No.: ${data.acNo}\n\nAfter payment, share the confirmation with us via ${data.method}: ${data.contact}\n\nThank you.\n\nBest regards,\n${data.manager}\nManager\n${companyName}\n\nP.O. Box: ${state.companyData.poBox || "N/A"}\nCONTACTS: ${state.companyData.contacts || "N/A"}\nEMAIL: ${state.companyData.email || "N/A"}`;
   const blob = new Blob([txt], { type: "text/plain" });
   saveAs(blob, `Fuel_Debt_Reminder_${data.name}.txt`);
 }
 
 export function exportSalesPDF(state: any) {
   const doc = new jsPDF();
+
+  // WORLDWIDE: derive the currency symbol from the company/station currency.
+  const currencySymbol = getCurrencySymbol(state.companyData?.currency);
 
   let y = 20;
   if (state.companyData.logo) {
@@ -319,12 +337,12 @@ export function exportSalesPDF(state: any) {
 
     const pmsHeaders = [
       "Pump ID",
-      "Opening (Ksh)",
-      "Closing (Ksh)",
+      `Opening (${currencySymbol})`,
+      `Closing (${currencySymbol})`,
       "Opening (L)",
       "Closing (L)",
       "Sales (L)",
-      "Sales (Ksh)",
+      `Sales (${currencySymbol})`,
     ];
     const pmsData = state.pmsPumps.map((p: any) => [
       p.id,
@@ -355,12 +373,12 @@ export function exportSalesPDF(state: any) {
 
     const agoHeaders = [
       "Pump ID",
-      "Opening (Ksh)",
-      "Closing (Ksh)",
+      `Opening (${currencySymbol})`,
+      `Closing (${currencySymbol})`,
       "Opening (L)",
       "Closing (L)",
       "Sales (L)",
-      "Sales (Ksh)",
+      `Sales (${currencySymbol})`,
     ];
     const agoData = state.agoPumps.map((p: any) => [
       p.id,
@@ -390,31 +408,31 @@ export function exportSalesPDF(state: any) {
     y += 10;
     doc.setFont("helvetica", "normal");
     doc.text(
-      `Total Petrol Sales: Ksh ${formatNumber(state.summary.totalPmsSalesKsh, 2)}`,
+      `Total Petrol Sales: ${currencySymbol} ${formatNumber(state.summary.totalPmsSalesKsh, 2)}`,
       15,
       y,
     );
     y += 8;
     doc.text(
-      `Total Diesel Sales: Ksh ${formatNumber(state.summary.totalAgoSalesKsh, 2)}`,
+      `Total Diesel Sales: ${currencySymbol} ${formatNumber(state.summary.totalAgoSalesKsh, 2)}`,
       15,
       y,
     );
     y += 8;
     doc.text(
-      `Total Revenue: Ksh ${formatNumber(state.summary.totalRevenue, 2)}`,
+      `Total Revenue: ${currencySymbol} ${formatNumber(state.summary.totalRevenue, 2)}`,
       15,
       y,
     );
     y += 8;
     doc.text(
-      `Cash In Hand: Ksh ${formatNumber(state.summary.cashInHand, 2)}`,
+      `Cash In Hand: ${currencySymbol} ${formatNumber(state.summary.cashInHand, 2)}`,
       15,
       y,
     );
     y += 8;
     doc.text(
-      `Net Income: Ksh ${formatNumber(state.summary.netIncome, 2)}`,
+      `Net Income: ${currencySymbol} ${formatNumber(state.summary.netIncome, 2)}`,
       15,
       y,
     );
@@ -425,18 +443,20 @@ export function exportSalesPDF(state: any) {
 
 export function exportSalesExcel(state: any) {
   const wb = XLSX.utils.book_new();
+  // WORLDWIDE: derive the currency symbol from the company/station currency.
+  const currencySymbol = getCurrencySymbol(state.companyData?.currency);
 
   // PMS Pumps sheet
   if (state.pmsPumps && state.pmsPumps.length > 0) {
     const pmsData = [
       [
         "Pump ID",
-        "Opening (Ksh)",
-        "Closing (Ksh)",
+        `Opening (${currencySymbol})`,
+        `Closing (${currencySymbol})`,
         "Opening (L)",
         "Closing (L)",
         "Sales (L)",
-        "Sales (Ksh)",
+        `Sales (${currencySymbol})`,
       ],
       ...state.pmsPumps.map((p: any) => [
         p.id,
@@ -457,12 +477,12 @@ export function exportSalesExcel(state: any) {
     const agoData = [
       [
         "Pump ID",
-        "Opening (Ksh)",
-        "Closing (Ksh)",
+        `Opening (${currencySymbol})`,
+        `Closing (${currencySymbol})`,
         "Opening (L)",
         "Closing (L)",
         "Sales (L)",
-        "Sales (Ksh)",
+        `Sales (${currencySymbol})`,
       ],
       ...state.agoPumps.map((p: any) => [
         p.id,
@@ -492,6 +512,8 @@ export function exportSalesExcel(state: any) {
 }
 
 export function exportSalesTXT(state: any) {
+  // WORLDWIDE: derive the currency symbol from the company/station currency.
+  const currencySymbol = getCurrencySymbol(state.companyData?.currency);
   let txt = `=== ${state.companyData.name || "Company Name"} ===\nFuel Sales Report\n\n`;
   txt += `Date: ${state.salesDate}\nShift: ${state.shift}\n\n`;
 
@@ -501,15 +523,15 @@ export function exportSalesTXT(state: any) {
   txt += `Diesel (AGO) Tank: Opening: ${formatNumber(state.agoTankOpening)} L, Closing: ${formatNumber(state.agoTankClosing)} L\n\n`;
 
   txt += `Fuel Pricing:\n`;
-  txt += `Petrol (PMS): Ksh ${state.pmsPrice}/L\n`;
-  txt += `Diesel (AGO): Ksh ${state.agoPrice}/L\n\n`;
+  txt += `Petrol (PMS): ${currencySymbol} ${state.pmsPrice}/L\n`;
+  txt += `Diesel (AGO): ${currencySymbol} ${state.agoPrice}/L\n\n`;
 
   if (state.pmsPumps && state.pmsPumps.length > 0) {
     txt += `Petrol (PMS) Pumps:\n`;
     txt += state.pmsPumps
       .map(
         (p: any) =>
-          `${p.id}: Sales: ${formatNumber(p.salesL)} L, ${formatNumber(p.salesKsh)} Ksh`,
+          `${p.id}: Sales: ${formatNumber(p.salesL)} L, ${currencySymbol} ${formatNumber(p.salesKsh)}`,
       )
       .join("\n");
     txt += "\n\n";
@@ -520,7 +542,7 @@ export function exportSalesTXT(state: any) {
     txt += state.agoPumps
       .map(
         (p: any) =>
-          `${p.id}: Sales: ${formatNumber(p.salesL)} L, ${formatNumber(p.salesKsh)} Ksh`,
+          `${p.id}: Sales: ${formatNumber(p.salesL)} L, ${currencySymbol} ${formatNumber(p.salesKsh)}`,
       )
       .join("\n");
     txt += "\n\n";
@@ -529,22 +551,22 @@ export function exportSalesTXT(state: any) {
   if (state.expenses && state.expenses.length > 0) {
     txt += `Daily Expenses:\n`;
     txt += state.expenses
-      .map((e: any) => `${e.desc}: ${formatNumber(e.amount)} Ksh`)
+      .map((e: any) => `${e.desc}: ${currencySymbol} ${formatNumber(e.amount)}`)
       .join("\n");
     txt += "\n\n";
   }
 
-  txt += `Till/Mobile Payment: ${formatNumber(state.tillPayment)} Ksh\n\n`;
+  txt += `Till/Mobile Payment: ${currencySymbol} ${formatNumber(state.tillPayment)}\n\n`;
 
   if (state.summary) {
     txt += `Daily Summary:\n`;
-    txt += `Total Petrol Sales: Ksh ${formatNumber(state.summary.totalPmsSalesKsh, 2)}\n`;
-    txt += `Total Diesel Sales: Ksh ${formatNumber(state.summary.totalAgoSalesKsh, 2)}\n`;
-    txt += `Total Revenue: Ksh ${formatNumber(state.summary.totalRevenue, 2)}\n`;
-    txt += `Till/Mobile Payment: Ksh ${formatNumber(state.tillPayment, 2)}\n`;
-    txt += `Cash In Hand: Ksh ${formatNumber(state.summary.cashInHand, 2)}\n`;
-    txt += `Total Expenses: Ksh ${formatNumber(state.summary.totalExpenses, 2)}\n`;
-    txt += `Net Income: Ksh ${formatNumber(state.summary.netIncome, 2)}`;
+    txt += `Total Petrol Sales: ${currencySymbol} ${formatNumber(state.summary.totalPmsSalesKsh, 2)}\n`;
+    txt += `Total Diesel Sales: ${currencySymbol} ${formatNumber(state.summary.totalAgoSalesKsh, 2)}\n`;
+    txt += `Total Revenue: ${currencySymbol} ${formatNumber(state.summary.totalRevenue, 2)}\n`;
+    txt += `Till/Mobile Payment: ${currencySymbol} ${formatNumber(state.tillPayment, 2)}\n`;
+    txt += `Cash In Hand: ${currencySymbol} ${formatNumber(state.summary.cashInHand, 2)}\n`;
+    txt += `Total Expenses: ${currencySymbol} ${formatNumber(state.summary.totalExpenses, 2)}\n`;
+    txt += `Net Income: ${currencySymbol} ${formatNumber(state.summary.netIncome, 2)}`;
   }
 
   const blob = new Blob([txt], { type: "text/plain" });
@@ -556,6 +578,12 @@ export function exportInvoicePDF(invoiceData: any) {
   const doc = new jsPDF();
 
   let y = 20;
+
+  // WORLDWIDE: derive the currency symbol (€/$/KSh/…) from the company/station
+  // currency instead of the previously hardcoded "Ksh".
+  const currencySymbol = getCurrencySymbol(
+    invoiceData.companyData?.currency || invoiceData.currency,
+  );
 
   // Company logo at the very top (max 150px wide) - Enhanced loading
   if (invoiceData.companyData?.logo) {
@@ -655,8 +683,8 @@ export function exportInvoicePDF(invoiceData: any) {
     const data = invoiceData.invoiceItems.map((item: any) => [
       item.desc || "",
       item.qty || 0,
-      `Ksh${formatNumber(item.price, 0)}`,
-      `Ksh${formatNumber(item.total, 0)}`,
+      `${currencySymbol}${formatNumber(item.price, 0)}`,
+      `${currencySymbol}${formatNumber(item.total, 0)}`,
     ]);
 
     autoTable(doc, {
@@ -692,7 +720,7 @@ export function exportInvoicePDF(invoiceData: any) {
   doc.setFont("helvetica", "bold");
   doc.setFontSize(12);
   doc.text(
-    ` Total Due: Ksh${formatNumber(invoiceData.totalDue || 0, 0)}`,
+    ` Total Due: ${currencySymbol}${formatNumber(invoiceData.totalDue || 0, 0)}`,
     120,
     y,
   );
@@ -735,6 +763,11 @@ export function exportInvoicePDF(invoiceData: any) {
 export function exportInvoiceExcel(invoiceData: any) {
   const wb = XLSX.utils.book_new();
 
+  // WORLDWIDE: derive the currency symbol from the company/station currency.
+  const currencySymbol = getCurrencySymbol(
+    invoiceData.companyData?.currency || invoiceData.currency,
+  );
+
   // Invoice header data matching exact format
   const headerData = [["INVOICE"], []];
 
@@ -775,8 +808,8 @@ export function exportInvoiceExcel(invoiceData: any) {
           ...invoiceData.invoiceItems.map((item: any) => [
             item.desc || "",
             item.qty || 0,
-            `Ksh${formatNumber(item.price, 0)}`,
-            `Ksh${formatNumber(item.total, 0)}`,
+            `${currencySymbol}${formatNumber(item.price, 0)}`,
+            `${currencySymbol}${formatNumber(item.total, 0)}`,
           ]),
         ]
       : [["No items added"]];
@@ -784,7 +817,7 @@ export function exportInvoiceExcel(invoiceData: any) {
   // Totals data
   const totalsData = [
     [],
-    [` Total Due: Ksh${formatNumber(invoiceData.totalDue || 0, 0)}`],
+    [` Total Due: ${currencySymbol}${formatNumber(invoiceData.totalDue || 0, 0)}`],
     [],
     ["Payment Should Be Made Through"],
   ];
@@ -829,6 +862,11 @@ export function exportInvoiceExcel(invoiceData: any) {
 export function exportInvoiceTXT(invoiceData: any) {
   let txt = "";
 
+  // WORLDWIDE: derive the currency symbol from the company/station currency.
+  const currencySymbol = getCurrencySymbol(
+    invoiceData.companyData?.currency || invoiceData.currency,
+  );
+
   // INVOICE header
   txt += "INVOICE\n";
 
@@ -870,8 +908,8 @@ export function exportInvoiceTXT(invoiceData: any) {
     invoiceData.invoiceItems.forEach((item: any) => {
       const desc = (item.desc || "").padEnd(40);
       const qty = (item.qty || 0).toString().padEnd(12);
-      const price = `Ksh${formatNumber(item.price, 0)}`.padEnd(15);
-      const total = `Ksh${formatNumber(item.total, 0)}`.padEnd(15);
+      const price = `${currencySymbol}${formatNumber(item.price, 0)}`.padEnd(15);
+      const total = `${currencySymbol}${formatNumber(item.total, 0)}`.padEnd(15);
       txt += `${desc} ${qty} ${price} ${total}\n`;
     });
   } else {
@@ -881,7 +919,7 @@ export function exportInvoiceTXT(invoiceData: any) {
   txt += `\n`;
 
   // Total with leading space
-  txt += ` Total Due: Ksh${formatNumber(invoiceData.totalDue || 0, 0)}\n\n`;
+  txt += ` Total Due: ${currencySymbol}${formatNumber(invoiceData.totalDue || 0, 0)}\n\n`;
 
   // Payment information
   txt += `Payment Should Be Made Through\n`;

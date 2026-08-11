@@ -57,6 +57,83 @@ interface CreditTransaction {
   recordedBy: string;
 }
 
+/**
+ * Cloud-loaded records (credit_accounts / credit_transactions) may be partial
+ * or malformed, which previously crashed the UI ("Cannot read properties of
+ * undefined" on .toLowerCase()/.includes()/.map()). These normalizers fill
+ * every field with safe defaults so render-time access never throws.
+ */
+function normalizeCreditAccount(
+  a: Partial<CreditAccount> | null | undefined,
+): CreditAccount {
+  const id =
+    a?.id || `ca_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  return {
+    id,
+    customerName: a?.customerName ?? "",
+    phone: a?.phone ?? "",
+    vehicleReg: a?.vehicleReg ?? "",
+    creditLimit: typeof a?.creditLimit === "number" ? a.creditLimit : 0,
+    balanceUsed: typeof a?.balanceUsed === "number" ? a.balanceUsed : 0,
+    status: a?.status ?? "active",
+    paymentTerms: typeof a?.paymentTerms === "number" ? a.paymentTerms : 0,
+    lastPayment: a?.lastPayment ?? "",
+    totalPayments: typeof a?.totalPayments === "number" ? a.totalPayments : 0,
+    totalPurchases:
+      typeof a?.totalPurchases === "number" ? a.totalPurchases : 0,
+    notes: a?.notes ?? "",
+    createdDate: a?.createdDate ?? new Date().toISOString().split("T")[0],
+  };
+}
+
+function normalizeCreditTransaction(
+  t: Partial<CreditTransaction> | null | undefined,
+): CreditTransaction {
+  const id =
+    t?.id || `ctx_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  return {
+    id,
+    accountId: t?.accountId ?? "",
+    type: t?.type === "purchase" || t?.type === "payment" ? t.type : "payment",
+    amount: typeof t?.amount === "number" ? t.amount : 0,
+    description: t?.description ?? "",
+    date: t?.date ?? new Date().toISOString(),
+    recordedBy: t?.recordedBy ?? "",
+  };
+}
+
+function normalizeCreditAccounts(arr: unknown): CreditAccount[] {
+  if (!Array.isArray(arr)) return [];
+  return arr.map((a) => normalizeCreditAccount(a as Partial<CreditAccount>));
+}
+
+function normalizeCreditTransactions(arr: unknown): CreditTransaction[] {
+  if (!Array.isArray(arr)) return [];
+  return arr.map((t) =>
+    normalizeCreditTransaction(t as Partial<CreditTransaction>),
+  );
+}
+
+function loadAccounts(): CreditAccount[] {
+  try {
+    const saved = localStorage.getItem("fuelpro_credit_accounts");
+    if (saved) return normalizeCreditAccounts(JSON.parse(saved));
+  } catch {
+    /* ignore */
+  }
+  return defaultAccounts();
+}
+
+function loadTransactions(): CreditTransaction[] {
+  try {
+    const saved = localStorage.getItem("fuelpro_credit_tx");
+    if (saved) return normalizeCreditTransactions(JSON.parse(saved));
+  } catch {
+    /* ignore */
+  }
+  return [];
+}
+
 export default function CreditManagement() {
   const location = useLocation();
   const currencySymbol = location.currencySymbol;
@@ -68,22 +145,12 @@ export default function CreditManagement() {
   const [activeView, setActiveView] = useState<"accounts" | "reminders">(
     "accounts",
   );
-  const [accounts, setAccounts] = useState<CreditAccount[]>(() => {
-    try {
-      return JSON.parse(
-        localStorage.getItem("fuelpro_credit_accounts") || "[]",
-      );
-    } catch {
-      return defaultAccounts();
-    }
-  });
-  const [transactions, setTransactions] = useState<CreditTransaction[]>(() => {
-    try {
-      return JSON.parse(localStorage.getItem("fuelpro_credit_tx") || "[]");
-    } catch {
-      return [];
-    }
-  });
+  const [accounts, setAccounts] = useState<CreditAccount[]>(() =>
+    loadAccounts(),
+  );
+  const [transactions, setTransactions] = useState<CreditTransaction[]>(() =>
+    loadTransactions(),
+  );
   const [search, setSearch] = useState("");
   const [showAdd, setShowAdd] = useState(false);
   const [showPay, setShowPay] = useState<string | null>(null);
@@ -138,18 +205,20 @@ export default function CreditManagement() {
   // Load from cloud on mount + real-time cross-device sync
   useEffect(() => {
     if (!user) return;
+    let cancelled = false;
     (async () => {
       const cloudAccounts = await cloudStorageService.get<CreditAccount[]>(
         "credit_accounts",
         stationId,
       );
-      if (cloudAccounts && Array.isArray(cloudAccounts))
-        setAccounts(cloudAccounts);
+      if (!cancelled && cloudAccounts)
+        setAccounts(normalizeCreditAccounts(cloudAccounts));
       const cloudTx = await cloudStorageService.get<CreditTransaction[]>(
         "credit_transactions",
         stationId,
       );
-      if (cloudTx && Array.isArray(cloudTx)) setTransactions(cloudTx);
+      if (!cancelled && cloudTx)
+        setTransactions(normalizeCreditTransactions(cloudTx));
     })();
     // Real-time: when another device updates accounts/transactions, update instantly
     const unsubs = [
@@ -157,38 +226,50 @@ export default function CreditManagement() {
         "credit_accounts",
         stationId,
         (val) => {
-          if (val && Array.isArray(val)) setAccounts(val);
+          if (val) setAccounts(normalizeCreditAccounts(val));
         },
       ),
       cloudStorageService.subscribe<CreditTransaction[]>(
         "credit_transactions",
         stationId,
         (val) => {
-          if (val && Array.isArray(val)) setTransactions(val);
+          if (val) setTransactions(normalizeCreditTransactions(val));
         },
       ),
     ];
-    return () => unsubs.forEach((u) => u());
+    return () => {
+      cancelled = true;
+      unsubs.forEach((u) => u());
+    };
   }, [user, stationId]);
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
     return accounts.filter(
       (a) =>
-        a.customerName.toLowerCase().includes(q) ||
-        a.phone.includes(q) ||
-        a.vehicleReg.toLowerCase().includes(q),
+        (a.customerName || "").toLowerCase().includes(q) ||
+        (a.phone || "").includes(q) ||
+        (a.vehicleReg || "").toLowerCase().includes(q),
     );
   }, [accounts, search]);
 
-  const totalCredit = accounts.reduce((s, a) => s + a.creditLimit, 0);
-  const totalUsed = accounts.reduce((s, a) => s + a.balanceUsed, 0);
-  const overdue = accounts.filter(
-    (a) =>
-      a.balanceUsed > 0 &&
-      new Date().getTime() - new Date(a.lastPayment).getTime() >
-        a.paymentTerms * 86400000,
+  const totalCredit = accounts.reduce(
+    (s, a) => s + (typeof a.creditLimit === "number" ? a.creditLimit : 0),
+    0,
   );
+  const totalUsed = accounts.reduce(
+    (s, a) => s + (typeof a.balanceUsed === "number" ? a.balanceUsed : 0),
+    0,
+  );
+  const overdue = accounts.filter((a) => {
+    const balanceUsed = typeof a.balanceUsed === "number" ? a.balanceUsed : 0;
+    if (balanceUsed <= 0) return false;
+    const lp = a.lastPayment || "";
+    const lpTime = lp ? new Date(lp).getTime() : 0;
+    if (isNaN(lpTime)) return false;
+    const terms = typeof a.paymentTerms === "number" ? a.paymentTerms : 0;
+    return new Date().getTime() - lpTime > terms * 86400000;
+  });
 
   const addAccount = () => {
     if (!newAcc.customerName) return;
@@ -227,16 +308,20 @@ export default function CreditManagement() {
     };
     saveTx([tx, ...transactions]);
     saveAcc(
-      accounts.map((a) =>
-        a.id === accountId
+      accounts.map((a) => {
+        const curBalance =
+          typeof a.balanceUsed === "number" ? a.balanceUsed : 0;
+        const curPayments =
+          typeof a.totalPayments === "number" ? a.totalPayments : 0;
+        return a.id === accountId
           ? {
               ...a,
-              balanceUsed: Math.max(0, a.balanceUsed - payForm.amount),
-              totalPayments: a.totalPayments + payForm.amount,
+              balanceUsed: Math.max(0, curBalance - payForm.amount),
+              totalPayments: curPayments + payForm.amount,
               lastPayment: new Date().toISOString().split("T")[0],
             }
-          : a,
-      ),
+          : a;
+      }),
     );
     setShowPay(null);
     setPayForm({ amount: 0, description: "" });
@@ -254,15 +339,19 @@ export default function CreditManagement() {
     };
     saveTx([tx, ...transactions]);
     saveAcc(
-      accounts.map((a) =>
-        a.id === accountId
+      accounts.map((a) => {
+        const curBalance =
+          typeof a.balanceUsed === "number" ? a.balanceUsed : 0;
+        const curPurchases =
+          typeof a.totalPurchases === "number" ? a.totalPurchases : 0;
+        return a.id === accountId
           ? {
               ...a,
-              balanceUsed: a.balanceUsed + amount,
-              totalPurchases: a.totalPurchases + amount,
+              balanceUsed: curBalance + amount,
+              totalPurchases: curPurchases + amount,
             }
-          : a,
-      ),
+          : a;
+      }),
     );
   };
 
@@ -423,12 +512,21 @@ export default function CreditManagement() {
           {/* Accounts */}
           <div className="space-y-3">
             {filtered.map((acc) => {
-              const pct = (acc.balanceUsed / acc.creditLimit) * 100;
+              const balanceUsed =
+                typeof acc.balanceUsed === "number" ? acc.balanceUsed : 0;
+              const creditLimit =
+                typeof acc.creditLimit === "number" ? acc.creditLimit : 0;
+              const pct =
+                creditLimit > 0 ? (balanceUsed / creditLimit) * 100 : 0;
               const isOver = pct > 90;
+              const lp = acc.lastPayment || "";
+              const lpTime = lp ? new Date(lp).getTime() : 0;
+              const terms =
+                typeof acc.paymentTerms === "number" ? acc.paymentTerms : 0;
               const isDue =
-                acc.balanceUsed > 0 &&
-                new Date().getTime() - new Date(acc.lastPayment).getTime() >
-                  acc.paymentTerms * 86400000;
+                balanceUsed > 0 &&
+                !isNaN(lpTime) &&
+                new Date().getTime() - lpTime > terms * 86400000;
               return (
                 <div
                   key={acc.id}
@@ -438,12 +536,12 @@ export default function CreditManagement() {
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
                         <h3 className="font-semibold dark:text-white">
-                          {acc.customerName}
+                          {acc.customerName || ""}
                         </h3>
                         <span
                           className={`text-[10px] px-2 py-0.5 rounded-full ${acc.status === "active" ? "bg-green-100 text-green-700" : acc.status === "suspended" ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-700"}`}
                         >
-                          {acc.status}
+                          {acc.status || "active"}
                         </span>
                         {isDue && (
                           <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-100 text-red-700 flex items-center gap-1">
@@ -452,17 +550,17 @@ export default function CreditManagement() {
                         )}
                       </div>
                       <p className="text-xs text-gray-500">
-                        {acc.phone} {acc.vehicleReg}
+                        {acc.phone || ""} {acc.vehicleReg || ""}
                       </p>
                       <div className="mt-2">
                         <div className="flex justify-between text-xs mb-1">
                           <span className="text-gray-500">
                             Used: {currencySymbol}
-                            {formatNumber(acc.balanceUsed)}
+                            {formatNumber(balanceUsed)}
                           </span>
                           <span className="text-gray-500">
                             Limit: {currencySymbol}
-                            {formatNumber(acc.creditLimit)}
+                            {formatNumber(creditLimit)}
                           </span>
                         </div>
                         <div className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-full">
@@ -499,14 +597,14 @@ export default function CreditManagement() {
                           <BellRing size={12} /> Send Reminder
                         </button>
                       )}
-                      {acc.balanceUsed > 0 && (
+                      {balanceUsed > 0 && (
                         <button
                           onClick={() =>
                             navigateToTab("livetransaction", {
-                              phone: acc.phone,
-                              amount: acc.balanceUsed,
-                              account_reference: acc.customerName,
-                              transaction_desc: `Credit payment — ${acc.customerName}`,
+                              phone: acc.phone || "",
+                              amount: balanceUsed,
+                              account_reference: acc.customerName || "",
+                              transaction_desc: `Credit payment — ${acc.customerName || ""}`,
                               openStkPush: true,
                             } satisfies StkPushPrefill)
                           }
@@ -516,12 +614,12 @@ export default function CreditManagement() {
                           <Smartphone size={12} /> Collect via M-PESA
                         </button>
                       )}
-                      {acc.balanceUsed > 0 && (
+                      {balanceUsed > 0 && (
                         <button
                           onClick={() =>
                             navigateToTab("invoice", {
-                              customerName: acc.customerName,
-                              amount: acc.balanceUsed,
+                              customerName: acc.customerName || "",
+                              amount: balanceUsed,
                               description: `Outstanding credit balance`,
                             } satisfies InvoicePrefill)
                           }

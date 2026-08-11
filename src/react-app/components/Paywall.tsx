@@ -28,6 +28,7 @@ import {
   setSubscription,
   logSubscriptionAction,
 } from "@/react-app/lib/subscriptionStore";
+import { isKenyaStation } from "@/react-app/lib/currency";
 
 interface PaywallProps {
   onClose: () => void;
@@ -58,6 +59,7 @@ export default function Paywall({ onClose }: PaywallProps) {
   const [error, setError] = useState("");
   const [sub, setSub] = useState<SubscriptionState>(getSubscription());
   const modalRef = useRef<HTMLDivElement>(null);
+  const isKenya = isKenyaStation();
 
   useEffect(() => {
     setSub(getSubscription());
@@ -429,7 +431,7 @@ export default function Paywall({ onClose }: PaywallProps) {
                 >
                   Continue with Free Trial
                 </button>
-              ) : (
+              ) : isKenya ? (
                 <>
                   <button
                     onClick={() => handleSelectTier(selectedTier)}
@@ -470,6 +472,27 @@ export default function Paywall({ onClose }: PaywallProps) {
                     <CreditCard size={15} /> Card
                   </button>
                 </>
+              ) : (
+                <button
+                  onClick={() => setStep("payment")}
+                  style={{
+                    flex: 1,
+                    padding: 12,
+                    background: "#f59e0b",
+                    color: "#000",
+                    border: "none",
+                    borderRadius: 10,
+                    fontSize: 14,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 6,
+                  }}
+                >
+                  <CreditCard size={15} /> Pay with Card <ArrowRight size={15} />
+                </button>
               )}
             </div>
           </div>
@@ -530,141 +553,182 @@ export default function Paywall({ onClose }: PaywallProps) {
               </div>
             </div>
 
-            {/* M-PESA form */}
-            <div style={{ marginBottom: 16 }}>
-              <label
-                style={{
-                  fontSize: 12,
-                  fontWeight: 600,
-                  color: "#e5e7eb",
-                  marginBottom: 6,
-                  display: "block",
-                }}
-              >
-                <Smartphone
-                  size={12}
-                  style={{ display: "inline", marginRight: 4 }}
-                />{" "}
-                M-PESA Phone Number
-              </label>
-              <input
-                type="tel"
-                value={phone}
-                onChange={(e) => {
-                  setPhone(e.target.value);
-                  setError("");
-                }}
-                placeholder="07XX XXX XXX or 2547XXXXXXXX"
-                autoFocus
-                style={{
-                  width: "100%",
-                  padding: "10px 14px",
-                  background: "#0f1117",
-                  border: `1px solid ${error ? "#ef4444" : "#374151"}`,
-                  borderRadius: 10,
-                  color: "#fff",
-                  fontSize: 14,
-                  outline: "none",
-                  boxSizing: "border-box",
-                }}
-              />
-              <span
-                style={{
-                  fontSize: 10,
-                  color: "#4b5563",
-                  marginTop: 4,
-                  display: "block",
-                }}
-              >
-                Format: 0712345678 or 254712345678
-              </span>
-            </div>
+            {/* M-PESA form — Kenya only */}
+            {isKenya ? (
+              <>
+                <div style={{ marginBottom: 16 }}>
+                  <label
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: "#e5e7eb",
+                      marginBottom: 6,
+                      display: "block",
+                    }}
+                  >
+                    <Smartphone
+                      size={12}
+                      style={{ display: "inline", marginRight: 4 }}
+                    />{" "}
+                    M-PESA Phone Number
+                  </label>
+                  <input
+                    type="tel"
+                    value={phone}
+                    onChange={(e) => {
+                      setPhone(e.target.value);
+                      setError("");
+                    }}
+                    placeholder="Enter phone number"
+                    autoFocus
+                    style={{
+                      width: "100%",
+                      padding: "10px 14px",
+                      background: "#0f1117",
+                      border: `1px solid ${error ? "#ef4444" : "#374151"}`,
+                      borderRadius: 10,
+                      color: "#fff",
+                      fontSize: 14,
+                      outline: "none",
+                      boxSizing: "border-box",
+                    }}
+                  />
+                  <span
+                    style={{
+                      fontSize: 10,
+                      color: "#4b5563",
+                      marginTop: 4,
+                      display: "block",
+                    }}
+                  >
+                    Format: Enter your phone number in your country's format
+                  </span>
+                </div>
 
-            {/* Agreement */}
-            <label
-              style={{
-                display: "flex",
-                alignItems: "flex-start",
-                gap: 8,
-                marginBottom: 16,
-                cursor: "pointer",
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={agreed}
-                onChange={(e) => {
-                  setAgreed(e.target.checked);
-                  setError("");
-                }}
-                style={{ marginTop: 2 }}
-              />
-              <span style={{ fontSize: 11, color: "#9ca3af", lineHeight: 1.4 }}>
-                I agree to the{" "}
-                <a href="#/terms" style={{ color: "#f59e0b" }}>
-                  Terms of Service
-                </a>{" "}
-                and authorize Ksh {selectedTierData.priceKES.toLocaleString()}{" "}
-                charge via M-PESA
-              </span>
-            </label>
+                {/* Agreement */}
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems: "flex-start",
+                    gap: 8,
+                    marginBottom: 16,
+                    cursor: "pointer",
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={agreed}
+                    onChange={(e) => {
+                      setAgreed(e.target.checked);
+                      setError("");
+                    }}
+                    style={{ marginTop: 2 }}
+                  />
+                  <span
+                    style={{ fontSize: 11, color: "#9ca3af", lineHeight: 1.4 }}
+                  >
+                    I agree to the{" "}
+                    <a href="#/terms" style={{ color: "#f59e0b" }}>
+                      Terms of Service
+                    </a>{" "}
+                    and authorize Ksh{" "}
+                    {selectedTierData.priceKES.toLocaleString()} charge via
+                    M-PESA
+                  </span>
+                </label>
 
-            {error && (
+                {error && (
+                  <div
+                    style={{
+                      padding: 10,
+                      background: "rgba(239,68,68,0.1)",
+                      borderRadius: 8,
+                      marginBottom: 12,
+                      fontSize: 12,
+                      color: "#f87171",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                    }}
+                  >
+                    <AlertTriangle size={14} /> {error}
+                  </div>
+                )}
+
+                <button
+                  onClick={handleMpesaPayment}
+                  disabled={!phone || !agreed}
+                  style={{
+                    width: "100%",
+                    padding: 14,
+                    background: !phone || !agreed ? "#374151" : "#48bb78",
+                    color: "#fff",
+                    border: "none",
+                    borderRadius: 10,
+                    fontSize: 15,
+                    fontWeight: 700,
+                    cursor: !phone || !agreed ? "not-allowed" : "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 8,
+                  }}
+                >
+                  <Zap size={18} /> Pay Ksh{" "}
+                  {selectedTierData.priceKES.toLocaleString()} via M-PESA
+                </button>
+
+                <p
+                  style={{
+                    fontSize: 10,
+                    color: "#4b5563",
+                    textAlign: "center",
+                    marginTop: 12,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 4,
+                  }}
+                >
+                  <Lock size={10} /> Secured by Safaricom M-PESA. Kenya Data
+                  Protection Act 2019 compliant.
+                </p>
+              </>
+            ) : (
               <div
                 style={{
-                  padding: 10,
-                  background: "rgba(239,68,68,0.1)",
-                  borderRadius: 8,
-                  marginBottom: 12,
-                  fontSize: 12,
-                  color: "#f87171",
+                  padding: 16,
+                  background: "rgba(245,158,11,0.1)",
+                  border: "1px solid rgba(245,158,11,0.3)",
+                  borderRadius: 10,
                   display: "flex",
-                  alignItems: "center",
-                  gap: 6,
+                  alignItems: "flex-start",
+                  gap: 10,
                 }}
               >
-                <AlertTriangle size={14} /> {error}
+                <AlertTriangle
+                  size={18}
+                  style={{ color: "#f59e0b", marginTop: 1, flexShrink: 0 }}
+                />
+                <div>
+                  <p style={{ fontSize: 13, fontWeight: 700, color: "#fbbf24" }}>
+                    M-PESA is available in Kenya only
+                  </p>
+                  <p
+                    style={{
+                      fontSize: 11,
+                      color: "#fcd34d",
+                      marginTop: 4,
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    Safaricom M-PESA is a Kenya-specific payment method and
+                    cannot be used for the detected station country. Please use
+                    card payment instead.
+                  </p>
+                </div>
               </div>
             )}
-
-            <button
-              onClick={handleMpesaPayment}
-              disabled={!phone || !agreed}
-              style={{
-                width: "100%",
-                padding: 14,
-                background: !phone || !agreed ? "#374151" : "#48bb78",
-                color: "#fff",
-                border: "none",
-                borderRadius: 10,
-                fontSize: 15,
-                fontWeight: 700,
-                cursor: !phone || !agreed ? "not-allowed" : "pointer",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 8,
-              }}
-            >
-              <Zap size={18} /> Pay Ksh{" "}
-              {selectedTierData.priceKES.toLocaleString()} via M-PESA
-            </button>
-
-            <p
-              style={{
-                fontSize: 10,
-                color: "#4b5563",
-                textAlign: "center",
-                marginTop: 12,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 4,
-              }}
-            >
-              <Lock size={10} /> Secured by Safaricom M-PESA. Kenya Data
-              Protection Act 2019 compliant.
-            </p>
           </div>
         )}
 

@@ -324,7 +324,7 @@ export default function UserProfileSettings() {
                 setProfileForm({ ...profileForm, phone: e.target.value })
               }
               className={inputClass}
-              placeholder="+254700000000"
+              placeholder="+1 555 000 0000"
             />
           </div>
         </div>

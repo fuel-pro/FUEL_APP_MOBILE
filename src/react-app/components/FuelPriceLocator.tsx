@@ -10,6 +10,7 @@ import {
   KENYA_BASE_PRICES,
   REGIONAL_PRICES,
   CANONICAL_FUEL_TYPES,
+  getWorldFuelPrices,
 } from "@/react-app/config/pricing";
 import {
   MapPin,
@@ -22,6 +23,8 @@ import {
   Loader2,
   Droplet,
 } from "lucide-react";
+import { getCurrencySymbol, isKenyaStation, getDetectedCountryCode } from "../lib/currency";
+import { getCountryById } from "@/react-app/config/countries";
 import SubTabBar from "@/react-app/components/SubTabBar";
 import FuelTracker from "@/react-app/components/FuelTracker";
 
@@ -50,6 +53,8 @@ interface NearbyPriceResult {
   locationName?: string;
   location?: string;
   country?: string;
+  country_code?: string;
+  countryCode?: string;
   stationName?: string;
   currency?: string;
   currencySymbol?: string;
@@ -117,6 +122,11 @@ export default function FuelPriceLocator() {
   // Inner sub-tab: "Price Finder" (this component) vs "Auto Fuel Price"
   // (the formerly-standalone FuelTracker GPS engine, now hosted here).
   const [activeView, setActiveView] = useState<"finder" | "auto">("finder");
+
+  const countryProfile = getCountryById(getDetectedCountryCode());
+  const regulatorFullName =
+    countryProfile?.fuelRegulations?.priceSettingBody ?? "Fuel Price Regulator";
+  const regulatorShortName = isKenyaStation() ? "EPRA" : "Regulator";
 
   // Load cached result from cloud on mount
   useEffect(() => {
@@ -246,6 +256,10 @@ export default function FuelPriceLocator() {
           // a client-side estimate, which would violate the "real prices
           // only" requirement.
           if (data.no_real_data) {
+            // Resolve the currency symbol for the user's country so we never
+            // show "KSh" to a US/Germany/India user with no published price.
+            const cc = (data.country_code || "").toUpperCase();
+            const worldPrice = getWorldFuelPrices()[cc];
             const result: StationPriceInfo = {
               stationName:
                 data.locationName ||
@@ -256,8 +270,11 @@ export default function FuelPriceLocator() {
               diesel: null,
               premium: null,
               kerosene: null,
-              currency: data.currency || "KES",
-              currencySymbol: "KSh",
+              currency: data.currency || worldPrice?.currency || "USD",
+              currencySymbol:
+                data.currencySymbol ||
+                worldPrice?.currencySymbol ||
+                "$",
               unit: "litre",
               source: "No published price",
               location: data.locationName || data.location || locName || "",
@@ -290,8 +307,8 @@ export default function FuelPriceLocator() {
               premium: toNum(data.prices.premium),
               kerosene:
                 toNum(data.prices.kerosene) ?? data.kerosenePrice ?? null,
-              currency: data.currency || "KES",
-              currencySymbol: data.currencySymbol || "KSh",
+              currency: data.currency || getCurrencySymbol(),
+              currencySymbol: data.currencySymbol || getCurrencySymbol(),
               unit: data.unit || "litre",
               source: data.source || "Live API",
               location:
@@ -318,8 +335,8 @@ export default function FuelPriceLocator() {
     // This integrates with the existing LocationContext + pricing.ts config.
     // Only reached when the Vercel API is unreachable (e.g. offline).
     const countryCode = currentCountry?.id || "KE";
-    const currency = currentCountry?.currency?.code || "KES";
-    const symbol = currentCountry?.currency?.symbol || "KSh";
+    const currency = currentCountry?.currency?.code || getCurrencySymbol();
+    const symbol = currentCountry?.currency?.symbol || getCurrencySymbol();
 
     let petrol = unifiedPrices.petrol;
     let diesel = unifiedPrices.diesel;
@@ -354,7 +371,7 @@ export default function FuelPriceLocator() {
       currency,
       currencySymbol: symbol,
       unit: "litre",
-      source: preciseLocation ? "EPRA Estimate (offline)" : unifiedSource,
+      source: preciseLocation ? `${regulatorShortName} Estimate (offline)` : unifiedSource,
       location,
     };
 
@@ -392,7 +409,7 @@ export default function FuelPriceLocator() {
     icon: React.ReactNode,
     colorClass: string,
   ) => {
-    const symbol = nearbyResult?.currencySymbol || "KSh";
+    const symbol = nearbyResult?.currencySymbol || getCurrencySymbol();
     return (
       <div className="p-4 bg-slate-800/50 rounded-xl border border-slate-700/50 hover:border-slate-600 transition-colors">
         <div className="flex items-center gap-2 mb-1">
@@ -525,7 +542,7 @@ export default function FuelPriceLocator() {
                   Current Pump Prices
                 </h3>
                 <p className="text-sm text-orange-200 mt-0.5">
-                  Energy and Petroleum Regulatory Authority (EPRA)
+                  {regulatorFullName}
                 </p>
                 {preciseLocation && (
                   <div className="mt-2 space-y-0.5">
@@ -568,7 +585,7 @@ export default function FuelPriceLocator() {
               {(() => {
                 const breakdown = costBreakdown(nearbyResult.gasoline);
                 if (!breakdown) return null;
-                const symbol = nearbyResult?.currencySymbol || "KSh";
+                const symbol = nearbyResult?.currencySymbol || getCurrencySymbol();
                 const fmt = (n: number) =>
                   `${symbol} ${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
                 return (
@@ -653,7 +670,7 @@ export default function FuelPriceLocator() {
                               {CANONICAL_FUEL_TYPES.petrol.label}
                             </span>
                             <span className="font-medium text-emerald-400">
-                              {unifiedPrices.currencySymbol || "KSh"}{" "}
+                              {unifiedPrices.currencySymbol || getCurrencySymbol()}{" "}
                               {stationPetrol.toLocaleString()}
                             </span>
                           </div>
@@ -664,7 +681,7 @@ export default function FuelPriceLocator() {
                               {CANONICAL_FUEL_TYPES.diesel.label}
                             </span>
                             <span className="font-medium text-amber-400">
-                              {unifiedPrices.currencySymbol || "KSh"}{" "}
+                              {unifiedPrices.currencySymbol || getCurrencySymbol()}{" "}
                               {stationDiesel.toLocaleString()}
                             </span>
                           </div>

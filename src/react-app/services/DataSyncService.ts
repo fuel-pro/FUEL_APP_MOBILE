@@ -9,9 +9,25 @@ import {
 // ============================================================
 
 import { getCountryById } from "@/react-app/config/countries";
+import { getCurrencySymbol, getDetectedCountryCode } from "../lib/currency";
 
 // Use BASE_CITIES from pricing config
 const KENYA_CITIES = BASE_CITIES;
+
+/**
+ * Baseline KES/USD exchange rate derived from the country profile rather than
+ * hardcoded. Falls back to the Kenya profile (130 KES/USD) when the detected
+ * country has no rate. Note: `currency.exchangeRateToUSD` is USD-per-unit-local,
+ * so KES-per-USD is its reciprocal.
+ */
+function getBaselineExchangeRate(): number {
+  const countryId = getDetectedCountryCode();
+  const profile =
+    getCountryById(countryId) || getCountryById("KE");
+  const usdPerLocal = profile?.currency?.exchangeRateToUSD;
+  if (!usdPerLocal || usdPerLocal <= 0) return 130;
+  return 1 / usdPerLocal;
+}
 
 // --- AI-POWERED PRICE ESTIMATION ---
 // Since direct API access to EPRA is limited, we use AI estimation
@@ -52,8 +68,10 @@ async function estimateKenyaFuelPrices(): Promise<{
   source: string;
 }> {
   try {
-    // Try to get exchange rate
-    let exchangeRate = 130; // Default KES/USD estimate
+    // Try to get exchange rate. Derive the baseline KES/USD rate from the
+    // detected country profile instead of hardcoding a value.
+    const baselineRate = getBaselineExchangeRate();
+    let exchangeRate = baselineRate;
     try {
       const cachedRates = localStorage.getItem("fuelpro_exchange_rates");
       if (cachedRates) {
@@ -73,8 +91,8 @@ async function estimateKenyaFuelPrices(): Promise<{
 
     // Estimate price change based on:
     // 1. Time elapsed (monthly changes compound)
-    // 2. Exchange rate changes from baseline (130 KES/USD)
-    const exchangeRateChange = (exchangeRate - 130) / 130; // % change from baseline
+    // 2. Exchange rate changes from the country-profile baseline rate
+    const exchangeRateChange = (exchangeRate - baselineRate) / baselineRate; // % change from baseline
     const exchangeRateAdjustment =
       exchangeRateChange *
       PRICE_ESTIMATION_CONFIG.adjustmentFactors.exchangeRateImpact *
@@ -266,15 +284,21 @@ export async function getPriceForLocation(
   transportSurcharge: number;
   source: string;
 }> {
-  // Default Nairobi prices
+  // Country-appropriate default prices. Previously this returned Nairobi
+  // prices (193.43 KES) for EVERY non-Kenya country, leaking Kenya fuel
+  // prices into German/US/etc. stations whenever GPS coords were present.
+  // Now resolve the country's own regional estimate (in its own currency)
+  // and only fall back to Nairobi for Kenya itself.
+  const regionalEstimate = getRegionalPriceEstimates(countryCode, "");
   const defaultPrices = {
-    petrolPrice: 193.43,
-    dieselPrice: 178.56,
-    kerosenePrice: 170.22,
+    petrolPrice: regionalEstimate.petrol,
+    dieselPrice: regionalEstimate.diesel,
+    kerosenePrice: regionalEstimate.kerosene,
     isRegional: false,
-    cityName: "Nairobi",
+    cityName:
+      countryCode === "KE" ? "Nairobi" : `${countryCode} National Average`,
     transportSurcharge: 0,
-    source: "EPRA Default",
+    source: countryCode === "KE" ? "EPRA Default" : "Regional Estimate",
   };
 
   if (countryCode !== "KE" || lat === undefined || lng === undefined) {
@@ -387,15 +411,21 @@ export function getPriceForLocationSync(
   transportSurcharge: number;
   source: string;
 } {
-  // Default Nairobi prices
+  // Country-appropriate default prices. Previously this returned Nairobi
+  // prices (193.43 KES) for EVERY non-Kenya country, leaking Kenya fuel
+  // prices into German/US/etc. stations whenever GPS coords were present.
+  // Now resolve the country's own regional estimate (in its own currency)
+  // and only fall back to Nairobi for Kenya itself.
+  const regionalEstimate = getRegionalPriceEstimates(countryCode, "");
   const defaultPrices = {
-    petrolPrice: 193.43,
-    dieselPrice: 178.56,
-    kerosenePrice: 170.22,
+    petrolPrice: regionalEstimate.petrol,
+    dieselPrice: regionalEstimate.diesel,
+    kerosenePrice: regionalEstimate.kerosene,
     isRegional: false,
-    cityName: "Nairobi",
+    cityName:
+      countryCode === "KE" ? "Nairobi" : `${countryCode} National Average`,
     transportSurcharge: 0,
-    source: "EPRA Default",
+    source: countryCode === "KE" ? "EPRA Default" : "Regional Estimate",
   };
 
   if (countryCode !== "KE" || lat === undefined || lng === undefined) {
@@ -1528,7 +1558,7 @@ async function fetchKenyaFuelPrices(): Promise<FuelPriceData | null> {
       petrolPrice,
       dieselPrice,
       kerosenePrice,
-      currency: "KES",
+      currency: getCurrencySymbol(),
       effectiveDate: new Date().toISOString().split("T")[0],
       priceSettingBody: "Energy and Petroleum Regulatory Authority (EPRA)",
       sourceUrl: "https://www.epra.go.ke",
@@ -2139,11 +2169,13 @@ export async function syncRegulatoryUpdates(
 
     // Add tax compliance reminders
     const revenueAuth = country.revenueAuthority;
+    const taxSystem =
+      getCountryTabFeatures(countryCode).taxInvoiceSystem || "Standard VAT";
     updates.push({
       id: `${countryCode}_tax_monthly_${today.toISOString().slice(0, 7)}`,
       countryCode,
       title: `Monthly Tax Return Due`,
-      summary: `Your monthly tax return to ${revenueAuth.name} (${revenueAuth.shortName}) is due by the ${revenueAuth.monthlyReturnDue}. Ensure all eTIMS invoices are uploaded.`,
+      summary: `Your monthly tax return to ${revenueAuth.name} (${revenueAuth.shortName}) is due by the ${revenueAuth.monthlyReturnDue}. Ensure all ${taxSystem} invoices are uploaded.`,
       effectiveDate: today.toISOString().split("T")[0],
       source: revenueAuth.name,
       sourceUrl: revenueAuth.eFilingPortal,

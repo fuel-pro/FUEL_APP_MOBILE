@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { FileText, Printer, TrendingUp, Download, Loader2 } from "lucide-react";
 import { useFuel } from "@/react-app/context/FuelContext";
+import { getCurrencySymbol } from "@/react-app/lib/currency";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import { silentPrintService } from "@/react-app/lib/silent-print-service";
@@ -252,7 +253,7 @@ export default function FuelSalesReport() {
         stationName: state.companyData.name || "FuelPro Station",
         monthYear: `${months[selectedMonth - 1]} ${selectedYear}`,
         period: `${months[selectedMonth - 1]} ${selectedYear}`,
-        currency: state.companyData.currency || "KSh",
+        currency: getCurrencySymbol(state.companyData.currency),
         entries: reportData.map((entry) => ({
           date: entry.date,
           petrolSales: entry.petrolSales,
@@ -396,7 +397,7 @@ export default function FuelSalesReport() {
     }
   };
 
-  const currency = state.companyData.currency || "KSh";
+  const currency = getCurrencySymbol(state.companyData.currency);
 
   return (
     <div className="p-4 md:p-6 space-y-6 text-white min-h-screen">

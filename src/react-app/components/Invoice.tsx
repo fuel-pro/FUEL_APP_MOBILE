@@ -22,6 +22,10 @@ import {
 } from "@/react-app/utils/exportUtils";
 import { formatNumber } from "@/react-app/utils/formatUtils";
 import { silentPrintService } from "@/react-app/lib/silent-print-service";
+import {
+  getCurrencySymbol,
+  getDetectedCurrency,
+} from "@/react-app/lib/currency";
 import SubTabBar from "@/react-app/components/SubTabBar";
 import SalesInvoices from "@/react-app/components/SalesInvoices";
 import {
@@ -110,6 +114,10 @@ export default function Invoice() {
     });
   };
 
+  // WORLDWIDE: derive the display currency symbol from the station's/company
+  // currency instead of the previously hardcoded "Ksh".
+  const currencySymbol = getCurrencySymbol(state.companyData?.currency);
+
   const getInvoiceNumber = () => {
     const num = String(state.invoiceCounter).padStart(3, "0");
     return `INV-${new Date().getFullYear()}-${num}`;
@@ -177,7 +185,7 @@ export default function Invoice() {
       date: invoiceDate,
       items: [...state.invoiceItems],
       quantityLabel: quantityLabel,
-      total: `Ksh${formatNumber(totalDue, 0)}`,
+      total: `${currencySymbol}${formatNumber(totalDue, 0)}`,
       totalAmount: totalDue,
     };
 
@@ -230,7 +238,7 @@ export default function Invoice() {
         tax: 0,
         discount: 0,
         totalDue: totalDue,
-        currency: state.companyData.currency || "KSh",
+        currency: state.companyData.currency || getDetectedCurrency(),
         attendantName: "System",
         footerMessage: "Thank you for your business",
       };
@@ -327,11 +335,11 @@ export default function Invoice() {
       const itemSummary = items
         .map(
           (item: any, i: number) =>
-            `${i + 1}. ${item.name}: ${item.qty} x Ksh ${item.price?.toLocaleString()} = Ksh ${(item.qty * item.price)?.toLocaleString()}`,
+            `${i + 1}. ${item.name}: ${item.qty} x ${currencySymbol} ${item.price?.toLocaleString()} = ${currencySymbol} ${(item.qty * item.price)?.toLocaleString()}`,
         )
         .join("\n");
       const vatTotal = items.reduce((s: number, i: any) => s + (i.vat || 0), 0);
-      const localResponse = `**Invoice Analysis**\n\n**Invoice #${getInvoiceNumber()}**\n**Customer:** ${customerName || "Walk-in"}\n**Date:** ${invoiceDate}\n\n**Items (${items.length}):**\n${itemSummary}\n\n**Totals:**\n• Subtotal: Ksh ${(totalDue - vatTotal)?.toLocaleString()}\n• VAT: Ksh ${vatTotal?.toLocaleString()}\n• **Total Due: Ksh ${totalDue?.toLocaleString()}**\n\n💡 *Add more items or proceed to save this invoice.*`;
+      const localResponse = `**Invoice Analysis**\n\n**Invoice #${getInvoiceNumber()}**\n**Customer:** ${customerName || "Walk-in"}\n**Date:** ${invoiceDate}\n\n**Items (${items.length}):**\n${itemSummary}\n\n**Totals:**\n• Subtotal: ${currencySymbol} ${(totalDue - vatTotal)?.toLocaleString()}\n• VAT: ${currencySymbol} ${vatTotal?.toLocaleString()}\n• **Total Due: ${currencySymbol} ${totalDue?.toLocaleString()}**\n\n💡 *Add more items or proceed to save this invoice.*`;
       setAiResponse(localResponse);
       /*
       const response = await fetch('/api/chat', {
@@ -450,11 +458,11 @@ export default function Invoice() {
     const itemsList = state.invoiceItems
       .map(
         (i) =>
-          `${i.desc} | ${i.qty} ${quantityLabel.replace("Qty ", "").replace("(", "").replace(")", "")} | Ksh${formatNumber(i.price, 0)} | Ksh${formatNumber(i.total, 0)}`,
+          `${i.desc} | ${i.qty} ${quantityLabel.replace("Qty ", "").replace("(", "").replace(")", "")} | ${currencySymbol}${formatNumber(i.price, 0)} | ${currencySymbol}${formatNumber(i.total, 0)}`,
       )
       .join("\n");
 
-    return `Bill To: ${customerName}\nInvoice #: ${getInvoiceNumber()}\nDate: ${invoiceDate}\n\nDescription | ${quantityLabel} | Unit Price | Total\n${itemsList}\n\n Total Due: Ksh${formatNumber(totalDue, 0)}`;
+    return `Bill To: ${customerName}\nInvoice #: ${getInvoiceNumber()}\nDate: ${invoiceDate}\n\nDescription | ${quantityLabel} | Unit Price | Total\n${itemsList}\n\n Total Due: ${currencySymbol}${formatNumber(totalDue, 0)}`;
   };
 
   return (
@@ -617,7 +625,7 @@ export default function Invoice() {
                         />
                         {fuelTypeApi.getPriceFor(item.desc) != null && (
                           <span className="text-[9px] text-gray-400">
-                            Fuel price: Ksh{" "}
+                            Fuel price: {currencySymbol}{" "}
                             {fuelTypeApi.getPriceFor(item.desc)?.toFixed(2)}/L
                           </span>
                         )}
@@ -635,7 +643,7 @@ export default function Invoice() {
                       </td>
                       <td className="border border-gray-300 p-3 text-right">
                         <div className="flex items-center justify-end">
-                          <span className="mr-1">Ksh</span>
+                          <span className="mr-1">{currencySymbol}</span>
                           <input
                             type="number"
                             value={item.price}
@@ -666,7 +674,8 @@ export default function Invoice() {
                         )}
                       </td>
                       <td className="border border-gray-300 p-3 text-right font-medium">
-                        Ksh{formatNumber(item.total, 0)}
+                        {currencySymbol}
+                        {formatNumber(item.total, 0)}
                       </td>
                       <td className="border border-gray-300 p-3 text-center">
                         <div className="flex items-center justify-center gap-1">
@@ -704,7 +713,8 @@ export default function Invoice() {
 
                 <div className="text-right">
                   <div className="text-2xl font-bold text-blue-900">
-                    Total Due: Ksh{formatNumber(totalDue, 0)}
+                    Total Due: {currencySymbol}
+                    {formatNumber(totalDue, 0)}
                   </div>
                 </div>
               </div>
@@ -811,8 +821,8 @@ export default function Invoice() {
               </div>
               <div className="text-sm text-gray-600">
                 Send the invoice total ({formatNumber(totalDue, 0)}{" "}
-                {state.companyData?.currency || "KES"}) as an M-PESA STK Push to
-                the customer's phone via the Live Transaction Monitor.
+                {currencySymbol}) as an M-PESA STK Push to the customer's phone
+                via the Live Transaction Monitor.
               </div>
             </div>
 
@@ -945,7 +955,7 @@ export default function Invoice() {
                       Customer: {state.invoices[key].customer?.name || "N/A"}
                     </div>
                     <div className="text-sm font-medium text-green-600 mb-3">
-                      {state.invoices[key].total || "Ksh0"}
+                      {state.invoices[key].total || `${currencySymbol}0`}
                     </div>
                     <div className="flex gap-2">
                       <button

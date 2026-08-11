@@ -27,8 +27,19 @@ import {
 } from "../services/FuelPriceService";
 import { getCountryFromLocation } from "../lib/world-country-utils";
 import { getCurrencySymbol as getCurrencySymbolForCode } from "../lib/currency";
+import { getCountryPrice, getVATRate, currencySymbolFor } from "../config/pricing";
+import { getRegionalConfig } from "../config/regions";
+import SearchableCountryDropdown from "./SearchableCountryDropdown";
+import { resolveCountryFromBrowser } from "../lib/geo-utils";
 
-const DEFAULT_CURRENCY = "KSh ";
+const DEFAULT_CURRENCY = "$ ";
+
+/** Resolve the currency symbol for a country code using the world-wide
+ * pricing table (covers all 250+ countries, never defaults to "KSh"). */
+function getCountrySymbol(countryCode: string): string {
+  const p = getCountryPrice(countryCode, "petrol");
+  return p.symbol;
+}
 
 interface WizardData {
   // Step 1: Station Info
@@ -36,6 +47,7 @@ interface WizardData {
   location: string;
   contacts: string;
   email: string;
+  countryCode: string;
   // Step 2: Tanks
   pmsTankCapacity: number;
   agoTankCapacity: number;
@@ -47,7 +59,7 @@ interface WizardData {
   // Step 4: Pricing
   pmsPrice: number;
   agoPrice: number;
-  // Step 5: KRA (optional)
+  // Step 5: Tax / Compliance (optional, country-aware)
   kraPin: string;
   vatRegNo: string;
   physicalAddress: string;
@@ -59,7 +71,7 @@ const STEPS = [
   { id: 2, title: "Fuel Tanks", icon: Fuel },
   { id: 3, title: "Pumps", icon: Gauge },
   { id: 4, title: "Pricing", icon: DollarSign },
-  { id: 5, title: "KRA Setup", icon: FileCheck },
+  { id: 5, title: "Tax & Compliance", icon: FileCheck },
 ];
 
 interface SetupWizardProps {
@@ -85,19 +97,28 @@ export default function SetupWizard({
   // Get default prices - try to auto-detect on mount
   const getDefaultPrices = () => {
     const displayPrices = getDisplayPrices();
+    // Pre-select the browser-detected country so the wizard is world-wide
+    // from the first render (no Kenya assumption). resolveCountryFromBrowser
+    // maps 250+ timezones, falling back to a neutral "US" default rather
+    // than Kenya.
+    const detectedCc = resolveCountryFromBrowser();
+    const cc = detectedCc || "US";
+    const countryPrice = getCountryPrice(cc, "petrol");
+    const dieselPrice = getCountryPrice(cc, "diesel");
     return {
       stationName: "",
       location: "Auto-detected",
       contacts: "",
       email: "",
+      countryCode: cc,
       pmsTankCapacity: 20000,
       agoTankCapacity: 20000,
       pmsTankOpening: 0,
       agoTankOpening: 0,
       pmsCount: 2,
       agoCount: 2,
-      pmsPrice: displayPrices.pmsPrice,
-      agoPrice: displayPrices.agoPrice,
+      pmsPrice: displayPrices.pmsPrice || countryPrice.price,
+      agoPrice: displayPrices.agoPrice || dieselPrice.price,
       kraPin: "",
       vatRegNo: "",
       physicalAddress: "Auto-detected location",
@@ -106,6 +127,21 @@ export default function SetupWizard({
   };
 
   const [data, setData] = useState<WizardData>(getDefaultPrices);
+
+  // When the user picks a country, re-seed the default prices and tax rate for
+  // that country so the wizard reflects the correct currency / fuel price.
+  const handleCountryChange = (cc: string) => {
+    setData((prev) => {
+      const countryPrice = getCountryPrice(cc, "petrol");
+      const dieselPrice = getCountryPrice(cc, "diesel");
+      return {
+        ...prev,
+        countryCode: cc,
+        pmsPrice: countryPrice.price,
+        agoPrice: dieselPrice.price,
+      };
+    });
+  };
 
   // Auto-detect fuel prices on component mount (runs once per day)
   useEffect(() => {
@@ -245,6 +281,15 @@ export default function SetupWizard({
     // Mark setup as complete
     localStorage.setItem("fuelpro_setup_complete", "true");
 
+    // Derive country-aware settings (currency, timezone, tax rate) from the
+    // user's selected country so the station is genuinely world-wide — never
+    // hardcoded to Kenya/Nairobi/16%.
+    const regionalConfig = getRegionalConfig(data.countryCode || "US");
+    const countryTaxRate = Math.round(
+      (regionalConfig.vatRate || getVATRate(data.countryCode || "US")) * 100,
+    );
+    const countryTimezone = regionalConfig.timeZone || "UTC";
+
     // Create the station in StationContext so it's registered and loaded
     let newStationId = "";
     try {
@@ -259,7 +304,15 @@ export default function SetupWizard({
         email: data.email || "",
         kraPin: data.kraPin || "",
         etrSerial: data.etrSerialNo || "",
-        taxRate: 16,
+        taxRate: countryTaxRate,
+        // Persist the selected country + derived currency/timezone on the
+        // station itself so the entire app (Dashboard, LocationSelector,
+        // pricing, tax) is world-wide and reflects the user's choice on
+        // every device — never silently overridden by GPS/timezone defaults.
+        country: data.countryCode || "US",
+        currency: regionalConfig.currency || "USD",
+        currencySymbol: currencySymbolFor(regionalConfig.currency || "USD"),
+        timezone: countryTimezone,
       });
       if (newStation && newStation.id) {
         newStationId = newStation.id;
@@ -294,12 +347,12 @@ export default function SetupWizard({
         logo: "",
         licenseNumber: "",
         city: "",
-        countryCode: "KE",
-        timezone: "Africa/Nairobi",
+        countryCode: data.countryCode || "US",
+        timezone: countryTimezone,
         coordinates: null,
         managerPhone: "",
-        etrSerial: "",
-        taxRate: 16,
+        etrSerial: data.etrSerialNo || "",
+        taxRate: countryTaxRate,
         access: [
           {
             username: (data.stationName || "station")
@@ -365,7 +418,13 @@ export default function SetupWizard({
   const renderStepContent = () => {
     switch (currentStep) {
       case 1:
-        return <StationInfoStep data={data} updateField={updateField} />;
+        return (
+          <StationInfoStep
+            data={data}
+            updateField={updateField}
+            onCountryChange={handleCountryChange}
+          />
+        );
       case 2:
         return <TanksStep data={data} updateField={updateField} />;
       case 3:
@@ -515,7 +574,11 @@ interface StepProps {
   updateField: (field: keyof WizardData, value: string | number) => void;
 }
 
-function StationInfoStep({ data, updateField }: StepProps) {
+function StationInfoStep({
+  data,
+  updateField,
+  onCountryChange,
+}: StepProps & { onCountryChange?: (cc: string) => void }) {
   return (
     <div className="space-y-5">
       <div>
@@ -536,6 +599,18 @@ function StationInfoStep({ data, updateField }: StepProps) {
 
       <div>
         <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+          Country / Region *
+        </label>
+        <SearchableCountryDropdown
+          value={data.countryCode}
+          onChange={(cc) => onCountryChange?.(cc)}
+          label=""
+          placeholder="Search your country…"
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
           Location
         </label>
         <div className="relative">
@@ -544,7 +619,7 @@ function StationInfoStep({ data, updateField }: StepProps) {
             type="text"
             value={data.location}
             onChange={(e) => updateField("location", e.target.value)}
-            placeholder="e.g., Mombasa Road, Nairobi"
+            placeholder="e.g., 123 Main Street, City"
             className="w-full pl-10 pr-4 py-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none transition-all text-slate-900 dark:text-white"
           />
         </div>
@@ -561,7 +636,7 @@ function StationInfoStep({ data, updateField }: StepProps) {
               type="tel"
               value={data.contacts}
               onChange={(e) => updateField("contacts", e.target.value)}
-              placeholder="e.g., 0712 345 678"
+              placeholder="e.g., +1 555 123 4567"
               className="w-full pl-10 pr-4 py-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none transition-all text-slate-900 dark:text-white"
             />
           </div>
@@ -576,7 +651,7 @@ function StationInfoStep({ data, updateField }: StepProps) {
               type="email"
               value={data.email}
               onChange={(e) => updateField("email", e.target.value)}
-              placeholder="e.g., info@station.co.ke"
+              placeholder="e.g., info@station.com"
               className="w-full pl-10 pr-4 py-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none transition-all text-slate-900 dark:text-white"
             />
           </div>
@@ -752,11 +827,15 @@ function PricingStep({
   onRefreshPrices?: () => void;
   priceDetectionError?: string | null;
 }) {
-  // Determine currency symbol. The station's entered location takes priority
-  // over auto-detected prices because IP geolocation frequently returns the
-  // server/CDN location (e.g. a US Vercel edge) instead of the user's real
-  // country, which would wrongly show "$" for a Kenyan station.
+  // Determine currency symbol. The selected country takes priority (it's the
+  // authoritative source of the station's currency), then the entered
+  // location, then auto-detected prices. Never default to Kenyan "KSh" for a
+  // non-Kenyan station.
   const getCurrencySymbol = () => {
+    if (data.countryCode) {
+      const sym = getCountrySymbol(data.countryCode);
+      if (sym) return sym + " ";
+    }
     if (data.location) {
       const country = getCountryFromLocation(data.location);
       if (country?.currency) {
@@ -767,7 +846,7 @@ function PricingStep({
     if (autoDetectedPrices?.currencySymbol) {
       return autoDetectedPrices.currencySymbol + " ";
     }
-    return DEFAULT_CURRENCY;
+    return "$ ";
   };
 
   return (
@@ -891,19 +970,30 @@ function PricingStep({
 }
 
 function KRAStep({ data, updateField }: StepProps) {
+  // Derive the tax authority name + VAT rate for the selected country so this
+  // step is world-wide (not Kenya-only "KRA"). For Kenya it shows "KRA PIN";
+  // for other countries it shows the local tax authority.
+  const regionalConfig = getRegionalConfig(data.countryCode || "US");
+  const taxAuthorityName =
+    regionalConfig.taxAuthorityShort ||
+    regionalConfig.taxAuthority ||
+    `${regionalConfig.country} Tax Authority`;
+  const vatName = regionalConfig.vatName || "VAT";
+  const vatPct = Math.round((regionalConfig.vatRate || 0) * 100);
+  const isKenya = (data.countryCode || "").toUpperCase() === "KE";
   return (
     <div className="space-y-5">
       <div className="p-4 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800 mb-6">
         <p className="text-sm text-amber-700 dark:text-amber-300">
-          This section is optional. You can configure KRA eTIMS compliance later
-          from Settings.
+          This section is optional. You can configure {taxAuthorityName} tax
+          compliance ({vatName} {vatPct}%) later from Settings.
         </p>
       </div>
 
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-            KRA PIN
+            {isKenya ? "KRA PIN" : `${taxAuthorityName} Tax ID`}
           </label>
           <input
             type="text"
@@ -911,7 +1001,7 @@ function KRAStep({ data, updateField }: StepProps) {
             onChange={(e) =>
               updateField("kraPin", e.target.value.toUpperCase())
             }
-            placeholder="e.g., P001234567X"
+            placeholder={isKenya ? "e.g., P001234567X" : "Your tax ID"}
             className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none transition-all text-slate-900 dark:text-white"
           />
         </div>
@@ -937,20 +1027,20 @@ function KRAStep({ data, updateField }: StepProps) {
           type="text"
           value={data.physicalAddress}
           onChange={(e) => updateField("physicalAddress", e.target.value)}
-          placeholder="e.g., Plot 123, Mombasa Road, Nairobi"
+          placeholder="e.g., 123 Main Street, City"
           className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none transition-all text-slate-900 dark:text-white"
         />
       </div>
 
       <div>
         <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-          ETR Serial Number
+          {isKenya ? "ETR Serial Number" : "Tax Device Serial No."}
         </label>
         <input
           type="text"
           value={data.etrSerialNo}
           onChange={(e) => updateField("etrSerialNo", e.target.value)}
-          placeholder="Optional - from your ETR device"
+          placeholder="Optional - from your tax receipting device"
           className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none transition-all text-slate-900 dark:text-white"
         />
       </div>

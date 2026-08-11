@@ -128,6 +128,89 @@ export function getDetectedCurrency(): string {
   return "USD";
 }
 
+/**
+ * Resolve the station/user's ISO country code (e.g. "KE", "DE", "US").
+ * Mirrors getDetectedCurrency() but returns the country code so components
+ * can gate country-specific features (e.g. KRA eTIMS for Kenya only).
+ */
+const COUNTRY_CACHE: Record<string, string> = {};
+export function getDetectedCountryCode(): string {
+  const cacheKey = "_default";
+  if (COUNTRY_CACHE[cacheKey]) return COUNTRY_CACHE[cacheKey];
+
+  // 1. Station data
+  try {
+    const stationsJson = localStorage.getItem("fuelpro_stations_v3");
+    const currentStationId =
+      localStorage.getItem("fuelpro_current_station_v3") ||
+      localStorage.getItem("fuelpro_current_station");
+    if (stationsJson && currentStationId) {
+      const parsed = JSON.parse(stationsJson);
+      const stationList = Array.isArray(parsed) ? parsed : parsed?.stations;
+      const current = stationList?.find((s: any) => s.id === currentStationId);
+      if (current) {
+        const cc = current.country || current.countryCode;
+        if (cc) {
+          COUNTRY_CACHE[cacheKey] = cc.toUpperCase();
+          return cc.toUpperCase();
+        }
+        if (current.location) {
+          const country = getCountryFromLocation(current.location);
+          if (country?.code) {
+            COUNTRY_CACHE[cacheKey] = country.code.toUpperCase();
+            return country.code.toUpperCase();
+          }
+        }
+      }
+    }
+  } catch {
+    /* */
+  }
+
+  // 2. Location country detection
+  try {
+    for (const key of ["fuelpro_user_location", "fuelpro_location_country"]) {
+      const saved = localStorage.getItem(key);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        const cc =
+          parsed.countryCode || parsed.currentCountry || parsed.country;
+        if (cc) {
+          COUNTRY_CACHE[cacheKey] = cc.toUpperCase();
+          return cc.toUpperCase();
+        }
+      }
+    }
+  } catch {
+    /* */
+  }
+
+  // 3. Timezone fallback
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const tzMap: Record<string, string> = {
+    Nairobi: "KE", Kampala: "UG", "Dar_es_Salaam": "TZ", Kigali: "RW",
+    Lagos: "NG", Accra: "GH", Johannesburg: "ZA", London: "GB",
+    Berlin: "DE", Paris: "FR", Rome: "IT", Madrid: "ES",
+    "New_York": "US", Chicago: "US", "Los_Angeles": "US",
+    Tokyo: "JP", Shanghai: "CN", Kolkata: "IN", Mumbai: "IN",
+    Sao_Paulo: "BR", Sydney: "AU",
+  };
+  for (const [frag, cc] of Object.entries(tzMap)) {
+    if (tz.includes(frag)) {
+      COUNTRY_CACHE[cacheKey] = cc;
+      return cc;
+    }
+  }
+
+  COUNTRY_CACHE[cacheKey] = "US";
+  return "US";
+}
+
+/** Whether the current station/user is in Kenya (KRA eTIMS applies). */
+export function isKenyaStation(): boolean {
+  return getDetectedCountryCode() === "KE";
+}
+
 /** Get currency symbol for display - uses unified symbols from pricing config */
 export function getCurrencySymbol(currency?: string): string {
   const c = currency || getDetectedCurrency();

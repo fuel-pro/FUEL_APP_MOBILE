@@ -14,6 +14,7 @@ import {
   AlertTriangle,
   Shield,
 } from "lucide-react";
+import { isKenyaStation } from "@/react-app/lib/currency";
 
 interface MpesaConfig {
   mode: "production" | "sandbox";
@@ -35,6 +36,7 @@ export default function MPesaConfig() {
   const { user } = useAuth();
   const { currentStation } = useStations();
   const stationId = currentStation?.id;
+  const isKenya = isKenyaStation();
   const [config, setConfig] = useState<MpesaConfig>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -151,6 +153,25 @@ export default function MPesaConfig() {
         </div>
       </div>
 
+      {!isKenya ? (
+        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/40 rounded-xl p-6 flex items-start gap-3">
+          <AlertTriangle
+            size={22}
+            className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5"
+          />
+          <div>
+            <h3 className="font-semibold text-amber-800 dark:text-amber-300">
+              M-PESA is available in Kenya only
+            </h3>
+            <p className="text-sm text-amber-700 dark:text-amber-400/80 mt-1">
+              Safaricom M-PESA integration is a Kenya-specific payment method.
+              It is not available for the detected station country. Switch your
+              station to Kenya to configure M-PESA.
+            </p>
+          </div>
+        </div>
+      ) : (
+        <>
       {/* Mode Toggle */}
       <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -372,6 +393,8 @@ export default function MPesaConfig() {
           </button>
         </div>
       </div>
+      </>
+      )}
     </div>
   );
 }

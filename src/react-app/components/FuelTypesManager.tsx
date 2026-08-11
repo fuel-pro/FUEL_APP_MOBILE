@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
 import {
-  KENYA_BASE_PRICES,
   KENYA_SPECIALTY_PRICES,
   CANONICAL_FUEL_TYPES,
+  getCountryPrice,
 } from "@/react-app/config/pricing";
 import {
   Fuel,
@@ -31,6 +31,10 @@ import {
 import { useFuel } from "@/react-app/context/FuelContext";
 import { usePermissions } from "@/react-app/context/PermissionContext";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
+import {
+  getCurrencySymbol,
+  getDetectedCountryCode,
+} from "@/react-app/lib/currency";
 import { useAuth } from "@/react-app/context/AuthContext";
 import { useStations } from "@/react-app/context/StationContext";
 import SubTabBar from "@/react-app/components/SubTabBar";
@@ -68,38 +72,45 @@ export interface CustomFuelType {
   description: string;
 }
 
-const DEFAULT_FUEL_TYPES: CustomFuelType[] = [
-  {
-    id: "pms",
-    code: CANONICAL_FUEL_TYPES.petrol.code,
-    name: "Premium Motor Spirit",
-    localName: CANONICAL_FUEL_TYPES.petrol.label,
-    price: KENYA_BASE_PRICES.petrol,
-    costPrice: 190.0,
-    taxRate: 16,
-    levyRate: 0,
-    color: "red",
-    icon: "flame",
-    pumpCount: 2,
-    active: true,
-    description: "Standard petrol for vehicles",
-  },
-  {
-    id: "ago",
-    code: CANONICAL_FUEL_TYPES.diesel.code,
-    name: "Automotive Gas Oil",
-    localName: CANONICAL_FUEL_TYPES.diesel.label,
-    price: KENYA_BASE_PRICES.diesel,
-    costPrice: 189.5,
-    taxRate: 16,
-    levyRate: 0,
-    color: "blue",
-    icon: "droplet",
-    pumpCount: 2,
-    active: true,
-    description: "Standard diesel for vehicles",
-  },
-];
+// Cloud key under which the custom fuel-type catalog is persisted/synced.
+const FUEL_TYPES_CLOUD_KEY = "fuel_types_config";
+
+/**
+ * Hardens a single fuel-type record loaded from cloud/localStorage into a fully
+ * valid CustomFuelType so render-time access (.map, .toFixed, .toLowerCase...)
+ * can never throw "Cannot read properties of undefined". Mirrors the
+ * SupplierManagement.tsx normalize pattern.
+ */
+function normalizeCustomFuelType(
+  f: Partial<CustomFuelType> | null | undefined,
+): CustomFuelType {
+  const id =
+    f?.id || `fuel_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  return {
+    id,
+    code: f?.code ?? "",
+    name: f?.name ?? "",
+    localName: f?.localName ?? "",
+    price: typeof f?.price === "number" ? f.price : 0,
+    costPrice: typeof f?.costPrice === "number" ? f.costPrice : 0,
+    taxRate: typeof f?.taxRate === "number" ? f.taxRate : 0,
+    levyRate: typeof f?.levyRate === "number" ? f.levyRate : 0,
+    color: f?.color ?? "",
+    icon: f?.icon ?? "",
+    pumpCount: typeof f?.pumpCount === "number" ? f.pumpCount : 0,
+    active: typeof f?.active === "boolean" ? f.active : false,
+    description: f?.description ?? "",
+  };
+}
+
+/**
+ * Hardens an array of cloud/localStorage fuel-type records. Non-array input
+ * (null, undefined, partial object, etc.) collapses to [].
+ */
+function normalizeCustomFuelTypes(arr: unknown): CustomFuelType[] {
+  if (!Array.isArray(arr)) return [];
+  return arr.map((f) => normalizeCustomFuelType(f as Partial<CustomFuelType>));
+}
 
 const PRESET_FUELS: CustomFuelType[] = [
   {
@@ -286,7 +297,7 @@ const ICON_OPTIONS = [
 function loadFuelTypes(): CustomFuelType[] {
   try {
     const saved = localStorage.getItem("fuelpro_custom_fuel_types");
-    if (saved) return JSON.parse(saved);
+    if (saved) return normalizeCustomFuelTypes(JSON.parse(saved));
   } catch {}
   return [];
 }
@@ -298,6 +309,8 @@ function saveFuelTypes(types: CustomFuelType[]) {
 export default function FuelTypesManager() {
   const { user } = useAuth();
   const { currentStation } = useStations();
+  const { state } = useFuel();
+  const currencySymbol = getCurrencySymbol(state.companyData?.currency);
   const stationId = currentStation?.id;
   const [fuelTypes, setFuelTypes] = useState<CustomFuelType[]>(loadFuelTypes);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -326,7 +339,7 @@ export default function FuelTypesManager() {
     setFuelTypes(types);
     saveFuelTypes(types);
     cloudStorageService
-      .set("fuel_types_config", types, stationId)
+      .set(FUEL_TYPES_CLOUD_KEY, types, stationId)
       .catch(() => {});
     // Broadcast each active fuel's price on the interlink bus so same-page
     // consumers (Dashboard, PriceBoard, POS, Invoice, Reports) update
@@ -353,18 +366,18 @@ export default function FuelTypesManager() {
     if (!user) return;
     (async () => {
       const cloudData = await cloudStorageService.get<CustomFuelType[]>(
-        "fuel_types_config",
+        FUEL_TYPES_CLOUD_KEY,
         stationId,
       );
-      if (cloudData && Array.isArray(cloudData)) setFuelTypes(cloudData);
+      if (cloudData) setFuelTypes(normalizeCustomFuelTypes(cloudData));
     })();
     // Real-time: when another device updates fuel types, update instantly
     const unsubs = [
       cloudStorageService.subscribe<CustomFuelType[]>(
-        "fuel_types_config",
+        FUEL_TYPES_CLOUD_KEY,
         stationId,
         (val) => {
-          if (val && Array.isArray(val)) setFuelTypes(val);
+          if (val) setFuelTypes(normalizeCustomFuelTypes(val));
         },
       ),
     ];
@@ -516,19 +529,19 @@ export default function FuelTypesManager() {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 text-center">
               <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">
-                {fuelTypes.length}
+                {(fuelTypes || []).length}
               </p>
               <p className="text-[10px] text-gray-500">Fuel Types</p>
             </div>
             <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 text-center">
               <p className="text-2xl font-bold text-green-600 dark:text-green-400">
-                {fuelTypes.filter((f) => f.active).length}
+                {(fuelTypes || []).filter((f) => f.active).length}
               </p>
               <p className="text-[10px] text-gray-500">Active</p>
             </div>
             <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 text-center">
               <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                {fuelTypes.reduce((s, f) => s + f.pumpCount, 0)}
+                {(fuelTypes || []).reduce((s, f) => s + (f.pumpCount || 0), 0)}
               </p>
               <p className="text-[10px] text-gray-500">Total Pumps</p>
             </div>
@@ -610,7 +623,7 @@ export default function FuelTypesManager() {
                 </div>
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">
-                    Selling Price (Ksh/L)
+                    Selling Price ({currencySymbol}/L)
                   </label>
                   <input
                     type="number"
@@ -624,7 +637,7 @@ export default function FuelTypesManager() {
                 </div>
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">
-                    Cost Price (Ksh/L)
+                    Cost Price ({currencySymbol}/L)
                   </label>
                   <input
                     type="number"
@@ -719,7 +732,8 @@ export default function FuelTypesManager() {
                             {preset.name}
                           </p>
                           <p className="text-[10px] text-gray-500">
-                            {preset.code} | Ksh {preset.price.toFixed(2)}/L
+                            {preset.code} | {currencySymbol}{" "}
+                            {preset.price.toFixed(2)}/L
                           </p>
                         </div>
                       </div>
@@ -744,9 +758,9 @@ export default function FuelTypesManager() {
 
           {/* Fuel Types List */}
           <div className="space-y-3">
-            {fuelTypes.map((ft) => {
+            {(fuelTypes || []).map((ft) => {
               const isExpanded = expandedId === ft.id;
-              const colorClass = FUEL_COLORS[ft.color] || FUEL_COLORS.red;
+              const colorClass = FUEL_COLORS[ft.color || ""] || FUEL_COLORS.red;
               return (
                 <div
                   key={ft.id}
@@ -762,10 +776,10 @@ export default function FuelTypesManager() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
-                          {ft.name}
+                          {ft.name || ""}
                         </h3>
                         <span className="text-[10px] px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-600 rounded-full">
-                          {ft.code}
+                          {ft.code || ""}
                         </span>
                         {!ft.active && (
                           <span className="text-[10px] px-2 py-0.5 bg-gray-100 text-gray-400 rounded-full">
@@ -774,8 +788,9 @@ export default function FuelTypesManager() {
                         )}
                       </div>
                       <p className="text-xs text-gray-500 dark:text-gray-400">
-                        {ft.localName} | Ksh {ft.price.toFixed(2)}/L |{" "}
-                        {ft.pumpCount} pump{ft.pumpCount !== 1 ? "s" : ""}
+                        {ft.localName || ""} | {currencySymbol}{" "}
+                        {(ft.price || 0).toFixed(2)}/L | {ft.pumpCount || 0}{" "}
+                        pump{(ft.pumpCount || 0) !== 1 ? "s" : ""}
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
@@ -810,19 +825,25 @@ export default function FuelTypesManager() {
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
                         <InfoBox
                           label="Selling Price"
-                          value={`Ksh ${ft.price.toFixed(2)}`}
+                          value={`${currencySymbol} ${(ft.price || 0).toFixed(2)}`}
                         />
                         <InfoBox
                           label="Cost Price"
-                          value={`Ksh ${ft.costPrice.toFixed(2)}`}
+                          value={`${currencySymbol} ${(ft.costPrice || 0).toFixed(2)}`}
                         />
                         <InfoBox
                           label="Margin"
-                          value={`${marginPercent(ft.price, ft.costPrice)}%`}
+                          value={`${marginPercent(ft.price || 0, ft.costPrice || 0)}%`}
                         />
-                        <InfoBox label="VAT Rate" value={`${ft.taxRate}%`} />
-                        <InfoBox label="Pumps" value={`${ft.pumpCount}`} />
-                        <InfoBox label="Levy Rate" value={`${ft.levyRate}%`} />
+                        <InfoBox
+                          label="VAT Rate"
+                          value={`${ft.taxRate || 0}%`}
+                        />
+                        <InfoBox label="Pumps" value={`${ft.pumpCount || 0}`} />
+                        <InfoBox
+                          label="Levy Rate"
+                          value={`${ft.levyRate || 0}%`}
+                        />
                       </div>
                       {ft.description && (
                         <p className="text-xs text-gray-500 dark:text-gray-400 italic">
@@ -850,11 +871,25 @@ export default function FuelTypesManager() {
 function PumpSettingsPanel() {
   const { state, dispatch } = useFuel();
   const { hasPermission, isOwner } = usePermissions();
+  // Resolve the detected country's own petrol/diesel prices so a non-Kenya
+  // station never falls back to Kenyan KSh prices when FuelContext has none.
+  const detectedCountry = (() => {
+    try {
+      return getDetectedCountryCode();
+    } catch {
+      return "";
+    }
+  })();
+  const detectedPetrol =
+    detectedCountry && getCountryPrice(detectedCountry, "petrol").price;
+  const detectedDiesel =
+    detectedCountry && getCountryPrice(detectedCountry, "diesel").price;
+  const currencySymbol = getCurrencySymbol();
   const [pmsPrice, setPmsPrice] = useState(
-    state.pmsPrice || KENYA_BASE_PRICES.petrol,
+    state.pmsPrice || detectedPetrol || 0,
   );
   const [agoPrice, setAgoPrice] = useState(
-    state.agoPrice || KENYA_BASE_PRICES.diesel,
+    state.agoPrice || detectedDiesel || 0,
   );
   const [pmsPumpCount, setPmsPumpCount] = useState(state.pmsPumps?.length || 1);
   const [agoPumpCount, setAgoPumpCount] = useState(state.agoPumps?.length || 1);
@@ -900,7 +935,7 @@ function PumpSettingsPanel() {
                 {fuel.label}
               </label>
               <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-500">Ksh</span>
+                <span className="text-sm text-gray-500">{currencySymbol}</span>
                 <input
                   type="number"
                   step="0.01"
@@ -916,7 +951,7 @@ function PumpSettingsPanel() {
           onClick={() => {
             dispatch({ type: "SET_PRICES", payload: { pmsPrice, agoPrice } });
             alert(
-              `Pump prices updated:\nPMS: Ksh ${pmsPrice.toFixed(2)}\nAGO: Ksh ${agoPrice.toFixed(2)}`,
+              `Pump prices updated:\nPMS: ${currencySymbol} ${pmsPrice.toFixed(2)}\nAGO: ${currencySymbol} ${agoPrice.toFixed(2)}`,
             );
           }}
           className="mt-4 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium flex items-center gap-2 transition-colors"

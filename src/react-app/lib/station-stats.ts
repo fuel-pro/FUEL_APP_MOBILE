@@ -2,6 +2,8 @@
 // Station analytics helpers: revenue, counts, currency, relative time.
 // Defensive by design — station.data is a free-form blob and must never crash the UI.
 
+import { getCurrencySymbol as resolveCurrencySymbol } from "./currency";
+
 export type StationStatus = "active" | "inactive" | "maintenance";
 
 const CURRENCY_BY_COUNTRY: Record<string, string> = {
@@ -13,6 +15,15 @@ const CURRENCY_BY_COUNTRY: Record<string, string> = {
   GH: "GH₵",
   RW: "RF",
   ET: "Br",
+  US: "$",
+  GB: "£",
+  EU: "€",
+  IN: "₹",
+  JP: "¥",
+  CN: "¥",
+  BR: "R$",
+  AU: "$",
+  CA: "$",
 };
 
 export function getCurrencySymbol(): string {
@@ -35,7 +46,7 @@ export function getCurrencySymbol(): string {
   } catch {
     /* ignore */
   }
-  return "KSh"; // default market
+  return resolveCurrencySymbol();
 }
 
 export function formatMoney(amount: number): string {

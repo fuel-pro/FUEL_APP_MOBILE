@@ -14,9 +14,15 @@ import {
 } from "lucide-react";
 import { useFuel } from "@/react-app/context/FuelContext";
 import {
+  getCurrencySymbol,
+  getDetectedCountryCode,
+  isKenyaStation,
+} from "@/react-app/lib/currency";
+import {
   navigateToTab,
   type FuelPricePrefill,
 } from "@/react-app/lib/mpesa-integration-service";
+import { getVATRate } from "@/react-app/config/pricing";
 import { formatNumber } from "@/react-app/utils/formatUtils";
 import ExportDropdown from "@/react-app/components/ExportDropdown";
 import jsPDF from "jspdf";
@@ -35,6 +41,7 @@ type ReportPeriod = "daily" | "weekly" | "monthly" | "yearly";
 
 export default function ReportsCenter() {
   const { state } = useFuel();
+  const currencySymbol = getCurrencySymbol(state.companyData?.currency);
   const [activeReport, setActiveReport] = useState<ReportType>("overall");
   const [reportPeriod, setReportPeriod] = useState<ReportPeriod>("daily");
   const [startDate, setStartDate] = useState(
@@ -96,8 +103,9 @@ export default function ReportsCenter() {
     return Math.ceil((pastDaysOfYear + firstDayOfYear.getDay() + 1) / 7);
   };
 
-  // VAT Rate for Kenya (16%)
-  const VAT_RATE = 0.16;
+  // Country-aware VAT rate
+  const VAT_RATE = getVATRate(getDetectedCountryCode());
+  const isKenya = isKenyaStation();
 
   // Calculate VAT from inclusive amount
   const calculateVAT = (inclusiveAmount: number) => {
@@ -175,7 +183,7 @@ export default function ReportsCenter() {
                 grossAmount: pump.salesKsh,
                 vatAmount: vat.vatAmount,
                 netAmount: vat.netAmount,
-                vatRate: "16%",
+                vatRate: `${(VAT_RATE * 100).toFixed(0)}%`,
               });
             }
           });
@@ -194,7 +202,7 @@ export default function ReportsCenter() {
                 grossAmount: pump.salesKsh,
                 vatAmount: vat.vatAmount,
                 netAmount: vat.netAmount,
-                vatRate: "16%",
+                vatRate: `${(VAT_RATE * 100).toFixed(0)}%`,
               });
             }
           });
@@ -216,7 +224,7 @@ export default function ReportsCenter() {
                 grossAmount: sale.posSales.pmsAmount,
                 vatAmount: vat.vatAmount,
                 netAmount: vat.netAmount,
-                vatRate: "16%",
+                vatRate: `${(VAT_RATE * 100).toFixed(0)}%`,
               });
             }
             if (sale.posSales.agoAmount > 0) {
@@ -234,7 +242,7 @@ export default function ReportsCenter() {
                 grossAmount: sale.posSales.agoAmount,
                 vatAmount: vat.vatAmount,
                 netAmount: vat.netAmount,
-                vatRate: "16%",
+                vatRate: `${(VAT_RATE * 100).toFixed(0)}%`,
               });
             }
           }
@@ -517,7 +525,7 @@ export default function ReportsCenter() {
     const doc = new jsPDF();
     const reportTitle = getReportTitle();
     const pageWidth = doc.internal.pageSize.getWidth();
-    const currency = state.companyData.currency || "KSh";
+    const currency = getCurrencySymbol(state.companyData.currency);
 
     // Professional Header with KRA Compliance
     const addProfessionalHeader = (y: number) => {
@@ -565,26 +573,28 @@ export default function ReportsCenter() {
         y += 4;
       }
 
-      // KRA Info Box
-      y += 4;
-      doc.setFillColor(245, 247, 250);
-      doc.roundedRect(15, y, pageWidth - 30, 18, 2, 2, "F");
+      // KRA Info Box (Kenya only)
+      if (isKenya) {
+        y += 4;
+        doc.setFillColor(245, 247, 250);
+        doc.roundedRect(15, y, pageWidth - 30, 18, 2, 2, "F");
 
-      doc.setFontSize(8);
-      doc.setTextColor(60);
-      doc.setFont("helvetica", "bold");
-      doc.text("KRA PIN:", 20, y + 6);
-      doc.text("VAT REG:", 70, y + 6);
-      doc.text("ETR S/N:", 120, y + 6);
-      doc.text("CU S/N:", 160, y + 6);
+        doc.setFontSize(8);
+        doc.setTextColor(60);
+        doc.setFont("helvetica", "bold");
+        doc.text("KRA PIN:", 20, y + 6);
+        doc.text("VAT REG:", 70, y + 6);
+        doc.text("ETR S/N:", 120, y + 6);
+        doc.text("CU S/N:", 160, y + 6);
 
-      doc.setFont("helvetica", "normal");
-      doc.text(state.companyData.kraPin || "N/A", 20, y + 12);
-      doc.text(state.companyData.vatRegNo || "N/A", 70, y + 12);
-      doc.text(state.companyData.etrSerialNo || "N/A", 120, y + 12);
-      doc.text(state.companyData.cuSerialNo || "N/A", 160, y + 12);
+        doc.setFont("helvetica", "normal");
+        doc.text(state.companyData.kraPin || "N/A", 20, y + 12);
+        doc.text(state.companyData.vatRegNo || "N/A", 70, y + 12);
+        doc.text(state.companyData.etrSerialNo || "N/A", 120, y + 12);
+        doc.text(state.companyData.cuSerialNo || "N/A", 160, y + 12);
 
-      y += 24;
+        y += 24;
+      }
 
       // Report Title
       doc.setFontSize(14);
@@ -617,7 +627,9 @@ export default function ReportsCenter() {
       doc.setFontSize(7);
       doc.setTextColor(120);
       doc.text(
-        "This is a computer-generated document. KRA eTIMS Compliant.",
+        isKenya
+          ? "This is a computer-generated document. KRA eTIMS Compliant."
+          : "This is a computer-generated document.",
         pageWidth / 2,
         pageHeight - 15,
         { align: "center" },
@@ -758,7 +770,11 @@ export default function ReportsCenter() {
       doc.setFont("helvetica", "bold");
       doc.setTextColor(60);
       doc.text(
-        isRefund ? "VAT REFUNDABLE:" : "VAT PAYABLE TO KRA:",
+        isRefund
+          ? "VAT REFUNDABLE:"
+          : isKenya
+            ? "VAT PAYABLE TO KRA:"
+            : "VAT PAYABLE:",
         25,
         y + 13,
       );
@@ -975,9 +991,11 @@ export default function ReportsCenter() {
     const ws_data: any[][] = [
       [reportTitle],
       [state.companyData.name],
-      [
-        `KRA PIN: ${state.companyData.kraPin || "N/A"} | VAT Reg: ${state.companyData.vatRegNo || "N/A"}`,
-      ],
+      isKenya
+        ? [
+            `KRA PIN: ${state.companyData.kraPin || "N/A"} | VAT Reg: ${state.companyData.vatRegNo || "N/A"}`,
+          ]
+        : [`VAT Reg: ${state.companyData.vatRegNo || "N/A"}`],
       [`Period: ${startDate} to ${endDate}`],
       [`Generated: ${new Date().toLocaleString("en-KE")}`],
       [],
@@ -1126,17 +1144,21 @@ export default function ReportsCenter() {
 
   const exportToTXT = () => {
     const reportTitle = getReportTitle();
-    const currency = state.companyData.currency || "KSh";
+    const currency = getCurrencySymbol(state.companyData.currency);
     let txt = `${"=".repeat(60)}\n`;
     txt += `${state.companyData.name}\n`;
     txt += `${"=".repeat(60)}\n\n`;
     txt += `${reportTitle}\n`;
     txt += `Period: ${startDate} to ${endDate}\n`;
     txt += `Generated: ${new Date().toLocaleString("en-KE")}\n\n`;
-    txt += `KRA PIN: ${state.companyData.kraPin || "N/A"}\n`;
+    if (isKenya) {
+      txt += `KRA PIN: ${state.companyData.kraPin || "N/A"}\n`;
+    }
     txt += `VAT Reg: ${state.companyData.vatRegNo || "N/A"}\n`;
-    txt += `ETR S/N: ${state.companyData.etrSerialNo || "N/A"}\n\n`;
-    txt += `${"-".repeat(60)}\n\n`;
+    if (isKenya) {
+      txt += `ETR S/N: ${state.companyData.etrSerialNo || "N/A"}\n`;
+    }
+    txt += `\n${"-".repeat(60)}\n\n`;
 
     if (activeReport === "overall") {
       const data = calculateOverallReport();
@@ -1180,7 +1202,9 @@ export default function ReportsCenter() {
     }
 
     txt += `\n${"-".repeat(60)}\n`;
-    txt += `This is a computer-generated document. KRA eTIMS Compliant.\n`;
+    txt += isKenya
+      ? `This is a computer-generated document. KRA eTIMS Compliant.\n`
+      : `This is a computer-generated document.\n`;
 
     const blob = new Blob([txt], { type: "text/plain" });
     saveAs(
@@ -1195,9 +1219,12 @@ export default function ReportsCenter() {
     txt: exportToTXT,
     whatsapp: () => {
       const reportTitle = getReportTitle();
-      const currency = state.companyData.currency || "KSh";
+      const currency = getCurrencySymbol(state.companyData.currency);
       let msg = `*${state.companyData.name}*\n`;
-      msg += `KRA PIN: ${state.companyData.kraPin || "N/A"}\n\n`;
+      if (isKenya) {
+        msg += `KRA PIN: ${state.companyData.kraPin || "N/A"}\n`;
+      }
+      msg += `\n`;
       msg += `*${reportTitle}*\n`;
       msg += `Period: ${startDate} to ${endDate}\n\n`;
 
@@ -1219,10 +1246,13 @@ export default function ReportsCenter() {
     },
     email: () => {
       const reportTitle = getReportTitle();
-      const currency = state.companyData.currency || "KSh";
+      const currency = getCurrencySymbol(state.companyData.currency);
       const subject = `${reportTitle} - ${state.companyData.name}`;
       let body = `${state.companyData.name}\n`;
-      body += `KRA PIN: ${state.companyData.kraPin || "N/A"}\n\n`;
+      if (isKenya) {
+        body += `KRA PIN: ${state.companyData.kraPin || "N/A"}\n`;
+      }
+      body += `\n`;
       body += `${reportTitle}\n`;
       body += `Period: ${startDate} to ${endDate}\n\n`;
 
@@ -1249,7 +1279,7 @@ export default function ReportsCenter() {
             className="bg-red-50 dark:bg-red-900/20 p-6 rounded-lg border border-red-200 dark:border-red-700"
           >
             <h4 className="text-lg font-semibold text-red-800 dark:text-red-200 mb-4">
-              {periodData.period} - Total Expenses: {state.companyData.currency}{" "}
+              {periodData.period} - Total Expenses: {currencySymbol}{" "}
               {formatNumber(periodData.totalExpenses)}
             </h4>
 
@@ -1265,7 +1295,7 @@ export default function ReportsCenter() {
                       >
                         <span className="text-sm">{desc}</span>
                         <span className="font-medium">
-                          {state.companyData.currency} {formatNumber(amount)}
+                          {currencySymbol} {formatNumber(amount)}
                         </span>
                       </div>
                     ),
@@ -1275,7 +1305,7 @@ export default function ReportsCenter() {
 
               <div className="text-center">
                 <div className="text-3xl font-bold text-red-600">
-                  {state.companyData.currency}{" "}
+                  {currencySymbol}{" "}
                   {formatNumber(periodData.totalExpenses)}
                 </div>
                 <div className="text-sm text-gray-600 dark:text-gray-400">
@@ -1310,7 +1340,7 @@ export default function ReportsCenter() {
                   : "text-red-800 dark:text-red-200"
               }`}
             >
-              {periodData.period} - Net Profit: {state.companyData.currency}{" "}
+              {periodData.period} - Net Profit: {currencySymbol}{" "}
               {formatNumber(periodData.netProfit)}
             </h4>
 
@@ -1320,7 +1350,7 @@ export default function ReportsCenter() {
                   Revenue
                 </h6>
                 <div className="text-2xl font-bold text-green-600">
-                  {state.companyData.currency}{" "}
+                  {currencySymbol}{" "}
                   {formatNumber(periodData.totalRevenue)}
                 </div>
               </div>
@@ -1330,7 +1360,7 @@ export default function ReportsCenter() {
                   Expenses
                 </h6>
                 <div className="text-2xl font-bold text-red-600">
-                  {state.companyData.currency}{" "}
+                  {currencySymbol}{" "}
                   {formatNumber(periodData.totalExpenses)}
                 </div>
               </div>
@@ -1348,7 +1378,7 @@ export default function ReportsCenter() {
             </div>
 
             <div className="mt-4 text-sm text-gray-600 dark:text-gray-400">
-              Till Payments: {state.companyData.currency}{" "}
+              Till Payments: {currencySymbol}{" "}
               {formatNumber(periodData.tillPayments)}
             </div>
           </div>
@@ -1369,7 +1399,7 @@ export default function ReportsCenter() {
               Gross Revenue
             </h6>
             <div className="text-2xl font-bold text-blue-600">
-              {state.companyData.currency} {formatNumber(data.grossRevenue)}
+              {currencySymbol} {formatNumber(data.grossRevenue)}
             </div>
           </div>
 
@@ -1380,7 +1410,7 @@ export default function ReportsCenter() {
             <div
               className={`text-2xl font-bold ${data.netProfit >= 0 ? "text-green-600" : "text-red-600"}`}
             >
-              {state.companyData.currency} {formatNumber(data.netProfit)}
+              {currencySymbol} {formatNumber(data.netProfit)}
             </div>
           </div>
 
@@ -1417,7 +1447,7 @@ export default function ReportsCenter() {
               <div className="flex justify-between items-center">
                 <span>Sales Revenue</span>
                 <span className="font-medium">
-                  {state.companyData.currency}{" "}
+                  {currencySymbol}{" "}
                   {formatNumber(data.totalSalesRevenue)}
                 </span>
               </div>
@@ -1425,7 +1455,7 @@ export default function ReportsCenter() {
                 <div className="flex justify-between items-center text-sm text-gray-500 dark:text-gray-400 pl-4">
                   <span>↳ POS Transactions</span>
                   <span>
-                    {state.companyData.currency}{" "}
+                    {currencySymbol}{" "}
                     {formatNumber(data.totalPOSRevenue)}
                   </span>
                 </div>
@@ -1433,14 +1463,14 @@ export default function ReportsCenter() {
               <div className="flex justify-between items-center">
                 <span>Delivery Revenue</span>
                 <span className="font-medium">
-                  {state.companyData.currency}{" "}
+                  {currencySymbol}{" "}
                   {formatNumber(data.totalDeliveryRevenue)}
                 </span>
               </div>
               <div className="flex justify-between items-center border-t pt-2">
                 <span className="font-semibold">Total Revenue</span>
                 <span className="font-bold text-green-600">
-                  {state.companyData.currency} {formatNumber(data.grossRevenue)}
+                  {currencySymbol} {formatNumber(data.grossRevenue)}
                 </span>
               </div>
             </div>
@@ -1456,21 +1486,21 @@ export default function ReportsCenter() {
               <div className="flex justify-between items-center">
                 <span>Operating Expenses</span>
                 <span className="font-medium">
-                  {state.companyData.currency}{" "}
+                  {currencySymbol}{" "}
                   {formatNumber(data.totalExpenses)}
                 </span>
               </div>
               <div className="flex justify-between items-center">
                 <span>Fuel Purchase Costs</span>
                 <span className="font-medium">
-                  {state.companyData.currency}{" "}
+                  {currencySymbol}{" "}
                   {formatNumber(data.totalOffloadingCosts)}
                 </span>
               </div>
               <div className="flex justify-between items-center border-t pt-2">
                 <span className="font-semibold">Total Costs</span>
                 <span className="font-bold text-red-600">
-                  {state.companyData.currency} {formatNumber(data.totalCosts)}
+                  {currencySymbol} {formatNumber(data.totalCosts)}
                 </span>
               </div>
             </div>
@@ -1510,7 +1540,7 @@ export default function ReportsCenter() {
             <div className="flex justify-between items-center">
               <span>Till/Mobile Payments</span>
               <span className="font-bold text-blue-600">
-                {state.companyData.currency}{" "}
+                {currencySymbol}{" "}
                 {formatNumber(data.totalTillPayments)}
               </span>
             </div>
@@ -1535,39 +1565,41 @@ export default function ReportsCenter() {
 
     return (
       <div className="space-y-6">
-        {/* KRA Info Banner */}
-        <div className="bg-gradient-to-r from-green-600 to-green-700 text-white p-4 rounded-lg">
-          <div className="flex items-center gap-3 mb-2">
-            <Building2 size={24} />
-            <span className="font-bold text-lg">
-              Kenya Revenue Authority - VAT Return
-            </span>
+        {/* KRA Info Banner (Kenya only) */}
+        {isKenya && (
+          <div className="bg-gradient-to-r from-green-600 to-green-700 text-white p-4 rounded-lg">
+            <div className="flex items-center gap-3 mb-2">
+              <Building2 size={24} />
+              <span className="font-bold text-lg">
+                Kenya Revenue Authority - VAT Return
+              </span>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+              <div>
+                <span className="opacity-75">KRA PIN:</span>{" "}
+                <span className="font-medium">
+                  {state.companyData.kraPin || "Not Set"}
+                </span>
+              </div>
+              <div>
+                <span className="opacity-75">VAT Reg:</span>{" "}
+                <span className="font-medium">
+                  {state.companyData.vatRegNo || "Not Set"}
+                </span>
+              </div>
+              <div>
+                <span className="opacity-75">Period:</span>{" "}
+                <span className="font-medium">
+                  {startDate} to {endDate}
+                </span>
+              </div>
+              <div>
+                <span className="opacity-75">Transactions:</span>{" "}
+                <span className="font-medium">{data.transactionCount}</span>
+              </div>
+            </div>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-            <div>
-              <span className="opacity-75">KRA PIN:</span>{" "}
-              <span className="font-medium">
-                {state.companyData.kraPin || "Not Set"}
-              </span>
-            </div>
-            <div>
-              <span className="opacity-75">VAT Reg:</span>{" "}
-              <span className="font-medium">
-                {state.companyData.vatRegNo || "Not Set"}
-              </span>
-            </div>
-            <div>
-              <span className="opacity-75">Period:</span>{" "}
-              <span className="font-medium">
-                {startDate} to {endDate}
-              </span>
-            </div>
-            <div>
-              <span className="opacity-75">Transactions:</span>{" "}
-              <span className="font-medium">{data.transactionCount}</span>
-            </div>
-          </div>
-        </div>
+        )}
 
         {/* VAT Breakdown */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1581,21 +1613,21 @@ export default function ReportsCenter() {
               <div className="flex justify-between items-center">
                 <span>Gross Sales (VAT Inclusive)</span>
                 <span className="font-medium">
-                  {state.companyData.currency}{" "}
+                  {currencySymbol}{" "}
                   {formatNumber(data.outputVAT.inclusiveAmount)}
                 </span>
               </div>
               <div className="flex justify-between items-center">
                 <span>Net Sales</span>
                 <span className="font-medium">
-                  {state.companyData.currency}{" "}
+                  {currencySymbol}{" "}
                   {formatNumber(data.outputVAT.netAmount)}
                 </span>
               </div>
               <div className="flex justify-between items-center border-t pt-2 bg-blue-50 dark:bg-blue-900/30 -mx-2 px-2 py-2 rounded">
                 <span className="font-semibold">VAT Collected (16%)</span>
                 <span className="font-bold text-blue-600 text-lg">
-                  {state.companyData.currency}{" "}
+                  {currencySymbol}{" "}
                   {formatNumber(data.outputVAT.vatAmount)}
                 </span>
               </div>
@@ -1612,21 +1644,21 @@ export default function ReportsCenter() {
               <div className="flex justify-between items-center">
                 <span>Gross Purchases (VAT Inclusive)</span>
                 <span className="font-medium">
-                  {state.companyData.currency}{" "}
+                  {currencySymbol}{" "}
                   {formatNumber(data.inputVAT.inclusiveAmount)}
                 </span>
               </div>
               <div className="flex justify-between items-center">
                 <span>Net Purchases</span>
                 <span className="font-medium">
-                  {state.companyData.currency}{" "}
+                  {currencySymbol}{" "}
                   {formatNumber(data.inputVAT.netAmount)}
                 </span>
               </div>
               <div className="flex justify-between items-center border-t pt-2 bg-orange-50 dark:bg-orange-900/30 -mx-2 px-2 py-2 rounded">
                 <span className="font-semibold">VAT Paid (16%)</span>
                 <span className="font-bold text-orange-600 text-lg">
-                  {state.companyData.currency}{" "}
+                  {currencySymbol}{" "}
                   {formatNumber(data.inputVAT.vatAmount)}
                 </span>
               </div>
@@ -1642,8 +1674,12 @@ export default function ReportsCenter() {
             <div>
               <h5 className="text-xl font-bold mb-1">
                 {data.netVATPayable >= 0
-                  ? "VAT Payable to KRA"
-                  : "VAT Refundable from KRA"}
+                  ? isKenya
+                    ? "VAT Payable to KRA"
+                    : "VAT Payable"
+                  : isKenya
+                    ? "VAT Refundable from KRA"
+                    : "VAT Refundable"}
               </h5>
               <p className="text-sm text-gray-600 dark:text-gray-400">
                 Output VAT - Input VAT = Net VAT
@@ -1652,7 +1688,7 @@ export default function ReportsCenter() {
             <div
               className={`text-3xl font-bold ${data.netVATPayable >= 0 ? "text-red-600" : "text-green-600"}`}
             >
-              {state.companyData.currency}{" "}
+              {currencySymbol}{" "}
               {formatNumber(Math.abs(data.netVATPayable))}
             </div>
           </div>
@@ -1683,22 +1719,24 @@ export default function ReportsCenter() {
 
     return (
       <div className="space-y-6">
-        {/* KRA Compliance Badge */}
-        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-4 rounded-lg flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <FileText size={24} />
-            <div>
-              <span className="font-bold text-lg">Daily Sales Register</span>
-              <p className="text-sm opacity-90">KRA eTIMS Compliant Format</p>
+        {/* KRA Compliance Badge (Kenya only) */}
+        {isKenya && (
+          <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-4 rounded-lg flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <FileText size={24} />
+              <div>
+                <span className="font-bold text-lg">Daily Sales Register</span>
+                <p className="text-sm opacity-90">KRA eTIMS Compliant Format</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <CheckCircle2 size={20} />
+              <span className="text-sm">
+                ETR: {state.companyData.etrSerialNo || "Not Set"}
+              </span>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <CheckCircle2 size={20} />
-            <span className="text-sm">
-              ETR: {state.companyData.etrSerialNo || "Not Set"}
-            </span>
-          </div>
-        </div>
+        )}
 
         {dailyData.length === 0 ? (
           <div className="text-center py-12 text-gray-500">
@@ -1723,7 +1761,7 @@ export default function ReportsCenter() {
                 <div className="text-right">
                   <span className="text-sm text-gray-500">Day Total:</span>
                   <span className="font-bold ml-2">
-                    {state.companyData.currency}{" "}
+                    {currencySymbol}{" "}
                     {formatNumber(day.totals.grossAmount)}
                   </span>
                 </div>
@@ -1896,7 +1934,7 @@ export default function ReportsCenter() {
               Gross Sales
             </div>
             <div className="text-2xl font-bold text-green-600">
-              {state.companyData.currency}{" "}
+              {currencySymbol}{" "}
               {formatNumber(data.summary.totalGross)}
             </div>
           </div>
@@ -1905,7 +1943,7 @@ export default function ReportsCenter() {
               VAT Collected
             </div>
             <div className="text-2xl font-bold text-orange-600">
-              {state.companyData.currency} {formatNumber(data.summary.totalVAT)}
+              {currencySymbol} {formatNumber(data.summary.totalVAT)}
             </div>
           </div>
         </div>
@@ -1919,14 +1957,14 @@ export default function ReportsCenter() {
             <div className="flex justify-between items-center py-2">
               <span>Output VAT (Sales @ 16%)</span>
               <span className="font-medium text-blue-600">
-                {state.companyData.currency}{" "}
+                {currencySymbol}{" "}
                 {formatNumber(data.summary.totalVAT)}
               </span>
             </div>
             <div className="flex justify-between items-center py-2">
               <span>Less: Input VAT (Purchases @ 16%)</span>
               <span className="font-medium text-orange-600">
-                ({state.companyData.currency}{" "}
+                ({currencySymbol}{" "}
                 {formatNumber(data.summary.inputVAT)})
               </span>
             </div>
@@ -1935,7 +1973,7 @@ export default function ReportsCenter() {
               <span
                 className={`font-bold text-xl ${data.summary.netVATPayable >= 0 ? "text-red-600" : "text-green-600"}`}
               >
-                {state.companyData.currency}{" "}
+                {currencySymbol}{" "}
                 {formatNumber(data.summary.netVATPayable)}
               </span>
             </div>
@@ -1949,14 +1987,14 @@ export default function ReportsCenter() {
             <div>
               <div className="text-sm text-gray-500 mb-1">Gross Revenue</div>
               <div className="text-xl font-bold">
-                {state.companyData.currency}{" "}
+                {currencySymbol}{" "}
                 {formatNumber(data.profitLoss.grossRevenue)}
               </div>
             </div>
             <div>
               <div className="text-sm text-gray-500 mb-1">Total Costs</div>
               <div className="text-xl font-bold text-red-600">
-                {state.companyData.currency}{" "}
+                {currencySymbol}{" "}
                 {formatNumber(data.profitLoss.totalCosts)}
               </div>
             </div>
@@ -1965,7 +2003,7 @@ export default function ReportsCenter() {
               <div
                 className={`text-xl font-bold ${data.profitLoss.netProfit >= 0 ? "text-green-600" : "text-red-600"}`}
               >
-                {state.companyData.currency}{" "}
+                {currencySymbol}{" "}
                 {formatNumber(data.profitLoss.netProfit)}
               </div>
             </div>
@@ -2019,10 +2057,12 @@ export default function ReportsCenter() {
             { id: "expenses", label: "Expenses Report", icon: TrendingDown },
             { id: "vat-return", label: "VAT Return", icon: Receipt },
             { id: "daily-sales", label: "Daily Sales", icon: FileText },
-            { id: "kra-summary", label: "KRA Summary", icon: Building2 },
+            ...(isKenya
+              ? [{ id: "kra-summary", label: "KRA Summary", icon: Building2 }]
+              : []),
           ].map((report) => {
             const Icon = report.icon;
-            const isKRA = ["vat-return", "daily-sales", "kra-summary"].includes(
+            const isKRA = isKenya && ["vat-return", "daily-sales", "kra-summary"].includes(
               report.id,
             );
             return (
@@ -2094,7 +2134,7 @@ export default function ReportsCenter() {
           <div className="form-group">
             <label>Currency</label>
             <div className="bg-gray-100 dark:bg-gray-700 px-3 py-2 rounded-lg font-medium">
-              {state.companyData.currency}
+              {currencySymbol}
             </div>
           </div>
         </div>

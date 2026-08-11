@@ -75,7 +75,7 @@ export const TIERS: SubscriptionTier[] = [
       "Audit trail access",
       "Debt management",
       "Invoice generation",
-      "KRA compliance tools",
+      "Tax compliance tools",
       "Priority support",
     ],
     maxUploads: 500,
@@ -92,7 +92,7 @@ export const TIERS: SubscriptionTier[] = [
     features: [
       "All Manager features",
       "Cross-station compliance reports",
-      "KRA tax reconciliation tools",
+      "Tax reconciliation tools",
       "Data export for ODPC audits",
       "API access",
       "Advanced analytics",

@@ -26,11 +26,17 @@ import { useLocation } from "@/react-app/context/LocationContext";
 import { useAuth } from "@/react-app/context/AuthContext";
 import { useStations } from "@/react-app/context/StationContext";
 import { formatNumber } from "@/react-app/utils/formatUtils";
-import { CANONICAL_FUEL_TYPES } from "@/react-app/config/pricing";
+import { CANONICAL_FUEL_TYPES, getVATRate } from "@/react-app/config/pricing";
+import {
+  getCurrencySymbol,
+  getDetectedCountryCode,
+  isKenyaStation,
+} from "@/react-app/lib/currency";
 import QRCode from "qrcode";
 import { useLoyalty } from "@/react-app/lib/useLoyalty";
 import { LoyaltyCustomer, TIER_COLORS } from "@/react-app/lib/loyaltyProgram";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
+import { emit } from "@/react-app/lib/automation-engine";
 
 interface CartItem {
   id: string;
@@ -40,7 +46,7 @@ interface CartItem {
   total: number;
   fuelType?: "PMS" | "AGO";
   litres?: number;
-  vatCategory: "A" | "B" | "E"; // A=16%, B=0%, E=Exempt
+  vatCategory: "A" | "B" | "E"; // A=standard-rated, B=0%, E=Exempt
   hsCode?: string;
 }
 
@@ -48,7 +54,7 @@ interface POSTransaction {
   id: string;
   items: CartItem[];
   subtotal: number;
-  vatA: number; // 16% VAT
+  vatA: number; // Standard-rate VAT
   vatB: number; // 0% VAT
   vatE: number; // Exempt
   totalVat: number;
@@ -73,6 +79,8 @@ export default function PointOfSale() {
   const { user } = useAuth();
   const { currentStation } = useStations();
   const stationId = currentStation?.id;
+  const currencySymbol = getCurrencySymbol(state.companyData?.currency);
+  const kenyaStation = isKenyaStation();
   const fuelTypeApi = useStationFuelTypes(stationId);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [paymentMethod, setPaymentMethod] = useState<
@@ -193,7 +201,13 @@ export default function PointOfSale() {
     email: state.companyData.email || "",
   };
 
-  const VAT_RATE = 0.16; // 16% VAT in Kenya
+  // Country-aware VAT rate: resolve the station's ISO country code (from the
+  // current station, falling back to location/timezone detection) and look it
+  // up in the unified TAX_RATES table. Defaults to 16% only when the country
+  // is genuinely unknown.
+  const countryCode =
+    currentStation?.country || getDetectedCountryCode() || "KE";
+  const VAT_RATE = getVATRate(countryCode);
 
   // Generate unique invoice number in KRA format
   const generateInvoiceNumber = () => {
@@ -292,7 +306,7 @@ export default function PointOfSale() {
       total: total,
       fuelType: quickSaleType === "petrol" ? "PMS" : "AGO",
       litres: litres,
-      vatCategory: "A", // Fuel is VAT-able at 16%
+      vatCategory: "A", // Fuel is standard-rated (VAT-able)
       hsCode: quickSaleType === "petrol" ? "2710.12.10" : "2710.19.20",
     };
 
@@ -310,7 +324,7 @@ export default function PointOfSale() {
       quantity: 1,
       unitPrice: price,
       total: price,
-      vatCategory: "A", // Default to 16% VAT
+      vatCategory: "A", // Default to standard-rate VAT
     };
 
     setCart([...cart, newItem]);
@@ -445,6 +459,16 @@ export default function PointOfSale() {
       cloudStorageService
         .set("pos_transactions", trimmed, stationId)
         .catch(() => {});
+
+      // Sale is now persisted locally — notify the automation engine so
+      // downstream reactions (stock adjustment, dashboard refresh, reorder
+      // checks) fire. Emitted here, after the successful save above.
+      emit({
+        type: "sale:completed",
+        stationId: currentStation?.id || "",
+        total,
+        items: cart,
+      });
     } catch (error) {
       console.error("Failed to save POS transaction locally:", error);
     }
@@ -692,7 +716,7 @@ export default function PointOfSale() {
             className="btn btn-outline btn-sm flex items-center gap-1"
           >
             <Settings size={16} />
-            KRA Settings
+            {kenyaStation ? "KRA Settings" : "Tax Settings"}
           </button>
           <div className="text-sm text-gray-500 dark:text-gray-400">
             Fiscal #{fiscalCounter} | Today: {transactions.length}
@@ -700,24 +724,36 @@ export default function PointOfSale() {
         </div>
       </div>
 
-      {/* KRA Compliance Banner */}
-      {!etrConfig.kraPin || etrConfig.kraPin === "P000000000X" ? (
-        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-300 dark:border-yellow-700 rounded-lg p-3">
-          <p className="text-sm text-yellow-800 dark:text-yellow-200 flex items-center gap-2">
-            <QrCode size={16} />
-            <span>
-              <strong>KRA eTIMS Setup Required:</strong> Configure your KRA PIN
-              and ETR details in Settings for tax-compliant receipts.
-            </span>
-          </p>
-        </div>
+      {/* KRA / Tax Compliance Banner */}
+      {kenyaStation ? (
+        !etrConfig.kraPin || etrConfig.kraPin === "P000000000X" ? (
+          <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-300 dark:border-yellow-700 rounded-lg p-3">
+            <p className="text-sm text-yellow-800 dark:text-yellow-200 flex items-center gap-2">
+              <QrCode size={16} />
+              <span>
+                <strong>KRA eTIMS Setup Required:</strong> Configure your KRA PIN
+                and ETR details in Settings for tax-compliant receipts.
+              </span>
+            </p>
+          </div>
+        ) : (
+          <div className="bg-green-50 dark:bg-green-900/20 border border-green-300 dark:border-green-700 rounded-lg p-2">
+            <p className="text-sm text-green-800 dark:text-green-200 flex items-center gap-2">
+              <Check size={16} />
+              <span>
+                <strong>KRA eTIMS Ready:</strong> PIN: {etrConfig.kraPin} | ETR:{" "}
+                {etrConfig.etrSerialNo}
+              </span>
+            </p>
+          </div>
+        )
       ) : (
-        <div className="bg-green-50 dark:bg-green-900/20 border border-green-300 dark:border-green-700 rounded-lg p-2">
-          <p className="text-sm text-green-800 dark:text-green-200 flex items-center gap-2">
-            <Check size={16} />
+        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-300 dark:border-blue-700 rounded-lg p-3">
+          <p className="text-sm text-blue-800 dark:text-blue-200 flex items-center gap-2">
+            <Settings size={16} />
             <span>
-              <strong>KRA eTIMS Ready:</strong> PIN: {etrConfig.kraPin} | ETR:{" "}
-              {etrConfig.etrSerialNo}
+              <strong>Tax Settings:</strong> Configure your VAT/tax registration
+              in Settings for compliant receipts.
             </span>
           </p>
         </div>
@@ -739,7 +775,7 @@ export default function PointOfSale() {
                       : "bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
                   }`}
                 >
-                  Petrol (Ksh{" "}
+                  Petrol ({currencySymbol}{" "}
                   {fuelTypeApi.getPriceFor(CANONICAL_FUEL_TYPES.petrol.label) ??
                     state.petrolPrice}
                   /L)
@@ -752,7 +788,7 @@ export default function PointOfSale() {
                       : "bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
                   }`}
                 >
-                  Diesel (Ksh{" "}
+                  Diesel ({currencySymbol}{" "}
                   {fuelTypeApi.getPriceFor(CANONICAL_FUEL_TYPES.diesel.label) ??
                     state.dieselPrice}
                   /L)
@@ -779,7 +815,7 @@ export default function PointOfSale() {
                   step="0.1"
                 />
                 <span className="text-gray-500">
-                  = Ksh{" "}
+                  = {currencySymbol}{" "}
                   {formatNumber(
                     (parseFloat(quickSaleLitres) || 0) *
                       (quickSaleType === "petrol"
@@ -813,7 +849,7 @@ export default function PointOfSale() {
                 type="number"
                 value={customItemPrice}
                 onChange={(e) => setCustomItemPrice(e.target.value)}
-                placeholder="Price (Ksh)"
+                placeholder={`Price (${currencySymbol})`}
                 className="w-32 px-3 py-2 rounded-lg border dark:bg-gray-800 dark:border-gray-600"
               />
               <button onClick={addCustomItem} className="btn btn-outline">
@@ -881,7 +917,7 @@ export default function PointOfSale() {
                         </div>
                       )}
                       <span className="font-semibold w-24 text-right">
-                        Ksh {formatNumber(item.total)}
+                        {currencySymbol} {formatNumber(item.total)}
                       </span>
                       <button
                         onClick={() => removeItem(item.id)}
@@ -995,7 +1031,7 @@ export default function PointOfSale() {
                 type="text"
                 value={customerPin}
                 onChange={(e) => setCustomerPin(e.target.value.toUpperCase())}
-                placeholder="Customer KRA PIN (for B2B)"
+                placeholder={kenyaStation ? "Customer KRA PIN (for B2B)" : "Customer Tax ID (for B2B)"}
                 className="w-full px-3 py-2 text-sm rounded-lg border dark:bg-gray-800 dark:border-gray-600"
               />
             </div>
@@ -1007,28 +1043,28 @@ export default function PointOfSale() {
             {/* VAT Breakdown */}
             <div className="space-y-1 mb-4 text-sm">
               <div className="flex justify-between text-gray-600 dark:text-gray-400">
-                <span>Taxable (A-16%):</span>
-                <span>Ksh {formatNumber(taxableA)}</span>
+                <span>Taxable (A-{(VAT_RATE * 100).toFixed(0)}%):</span>
+                <span>{currencySymbol} {formatNumber(taxableA)}</span>
               </div>
               <div className="flex justify-between text-gray-600 dark:text-gray-400">
-                <span>VAT (16%):</span>
-                <span>Ksh {formatNumber(vatA)}</span>
+                <span>VAT ({(VAT_RATE * 100).toFixed(0)}%):</span>
+                <span>{currencySymbol} {formatNumber(vatA)}</span>
               </div>
               {taxableB > 0 && (
                 <div className="flex justify-between text-gray-600 dark:text-gray-400">
                   <span>Zero-rated (B-0%):</span>
-                  <span>Ksh {formatNumber(taxableB)}</span>
+                  <span>{currencySymbol} {formatNumber(taxableB)}</span>
                 </div>
               )}
               {exemptE > 0 && (
                 <div className="flex justify-between text-gray-600 dark:text-gray-400">
                   <span>Exempt (E):</span>
-                  <span>Ksh {formatNumber(exemptE)}</span>
+                  <span>{currencySymbol} {formatNumber(exemptE)}</span>
                 </div>
               )}
               <div className="flex justify-between text-xl font-bold border-t pt-2">
                 <span>Total:</span>
-                <span>Ksh {formatNumber(total)}</span>
+                <span>{currencySymbol} {formatNumber(total)}</span>
               </div>
             </div>
 
@@ -1149,7 +1185,7 @@ export default function PointOfSale() {
                         {txn.invoiceNumber}
                       </span>
                       <span className="font-semibold">
-                        Ksh {formatNumber(txn.total)}
+                        {currencySymbol} {formatNumber(txn.total)}
                       </span>
                     </div>
                     <div className="flex justify-between text-xs text-gray-500">
@@ -1164,12 +1200,12 @@ export default function PointOfSale() {
         </div>
       </div>
 
-      {/* KRA Settings Modal */}
+      {/* Tax/KRA Settings Modal */}
       {showSettings && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-900 rounded-lg max-w-lg w-full max-h-[90vh] overflow-y-auto">
             <div className="p-4 border-b dark:border-gray-700 flex justify-between items-center">
-              <h3 className="font-semibold">KRA eTIMS / ETR Configuration</h3>
+              <h3 className="font-semibold">{kenyaStation ? "KRA eTIMS / ETR Configuration" : "Tax / VAT Configuration"}</h3>
               <button
                 onClick={() => setShowSettings(false)}
                 className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded"
@@ -1208,7 +1244,7 @@ export default function PointOfSale() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1">
-                    KRA PIN *
+                    {kenyaStation ? "KRA PIN" : "Tax ID / VAT No"} *
                   </label>
                   <input
                     type="text"
@@ -1457,12 +1493,12 @@ export default function PointOfSale() {
                   <div key={idx}>
                     <div className="flex justify-between text-xs">
                       <span className="font-medium">{item.name}</span>
-                      <span>Ksh {formatNumber(item.total)}</span>
+                      <span>{currencySymbol} {formatNumber(item.total)}</span>
                     </div>
                     <div className="text-[10px] text-gray-600 ml-2">
                       {item.litres
                         ? `${item.litres} L`
-                        : `${item.quantity} x Ksh ${formatNumber(item.unitPrice)}`}
+                        : `${item.quantity} x ${currencySymbol} ${formatNumber(item.unitPrice)}`}
                       {" | VAT-"}
                       {item.vatCategory}
                       {item.hsCode && ` | HS:${item.hsCode}`}
@@ -1510,7 +1546,7 @@ export default function PointOfSale() {
                 <div className="flex justify-between">
                   <span>Subtotal (Excl. VAT):</span>
                   <span>
-                    Ksh{" "}
+                    {currencySymbol}{" "}
                     {formatNumber(
                       currentTransaction.subtotal - currentTransaction.totalVat,
                     )}
@@ -1518,13 +1554,13 @@ export default function PointOfSale() {
                 </div>
                 <div className="flex justify-between">
                   <span>Total VAT:</span>
-                  <span>Ksh {formatNumber(currentTransaction.totalVat)}</span>
+                  <span>{currencySymbol} {formatNumber(currentTransaction.totalVat)}</span>
                 </div>
               </div>
 
               <div className="flex justify-between text-lg font-bold border-t-2 border-b-2 border-black py-2 my-3">
                 <span>TOTAL:</span>
-                <span>Ksh {formatNumber(currentTransaction.total)}</span>
+                <span>{currencySymbol} {formatNumber(currentTransaction.total)}</span>
               </div>
 
               {/* ETR/KRA Section */}
@@ -1560,9 +1596,9 @@ export default function PointOfSale() {
                 )}
 
                 <p className="mt-2 text-[9px] font-bold">
-                  *KRA eTIMS COMPLIANT INVOICE*
+                  {kenyaStation ? "*KRA eTIMS COMPLIANT INVOICE*" : "*TAX COMPLIANT INVOICE*"}
                 </p>
-                <p className="text-[8px]">Powered by TIMS</p>
+                <p className="text-[8px]">{kenyaStation ? "Powered by TIMS" : "Powered by FuelPro"}</p>
               </div>
 
               {/* Footer */}
