@@ -305,6 +305,13 @@ export default function SetupWizard({
         kraPin: data.kraPin || "",
         etrSerial: data.etrSerialNo || "",
         taxRate: countryTaxRate,
+        // Persist the selected country + derived currency/timezone on the
+        // station itself so the entire app (Dashboard, LocationSelector,
+        // pricing, tax) is world-wide and reflects the user's choice on
+        // every device — never silently overridden by GPS/timezone defaults.
+        country: data.countryCode || "US",
+        currency: regionalConfig.currency || "USD",
+        timezone: countryTimezone,
       });
       if (newStation && newStation.id) {
         newStationId = newStation.id;

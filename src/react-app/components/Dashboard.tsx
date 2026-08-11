@@ -423,7 +423,7 @@ export default function Dashboard() {
       labels,
       datasets: [
         {
-          label: "Amount (Ksh)",
+          label: `Amount (${currencySymbol})`,
           data,
           backgroundColor: [
             "rgba(59, 130, 246, 0.8)",
@@ -611,13 +611,13 @@ export default function Dashboard() {
             </div>
           </div>
           <p className="text-2xl font-bold text-gray-900 dark:text-white">
-            Ksh {formatNumber(animatedValues.revenue, 0)}
+            {currencySymbol} {formatNumber(animatedValues.revenue, 0)}
           </p>
           <div className="flex items-center gap-1 mt-2">
             <ArrowUpRight size={14} className="text-green-500" />
             <span className="text-xs text-green-600 dark:text-green-400">
               {todaySales > 0
-                ? `Ksh ${formatNumber(todaySales)} today`
+                ? `${currencySymbol} ${formatNumber(todaySales)} today`
                 : "No sales today"}
             </span>
           </div>
@@ -647,7 +647,7 @@ export default function Dashboard() {
           <p
             className={`text-2xl font-bold ${netProfit >= 0 ? "text-gray-900 dark:text-white" : "text-red-600 dark:text-red-400"}`}
           >
-            Ksh {formatNumber(animatedValues.profit, 0)}
+            {currencySymbol} {formatNumber(animatedValues.profit, 0)}
           </p>
           <div className="flex items-center gap-1 mt-2">
             {netProfit >= 0 ? (
@@ -657,7 +657,7 @@ export default function Dashboard() {
             )}
             <span className="text-xs text-gray-500 dark:text-gray-400">
               {totalExpenses > 0
-                ? `Ksh ${formatNumber(totalExpenses)} expenses`
+                ? `${currencySymbol} ${formatNumber(totalExpenses)} expenses`
                 : "No expenses recorded"}
             </span>
           </div>
@@ -711,7 +711,7 @@ export default function Dashboard() {
           <p
             className={`text-2xl font-bold ${totalDebt > 0 ? "text-red-600 dark:text-red-400" : "text-gray-900 dark:text-white"}`}
           >
-            Ksh {formatNumber(animatedValues.debt, 0)}
+            {currencySymbol} {formatNumber(animatedValues.debt, 0)}
           </p>
           <div className="flex items-center gap-1 mt-2">
             <Users size={14} className="text-gray-500" />
@@ -757,7 +757,7 @@ export default function Dashboard() {
               {isLocationBased
                 ? `📍 GPS: ${priceCityName} (${locationPrice.transportSurcharge >= 0 ? "+" : ""}${locationPrice.transportSurcharge.toFixed(2)})`
                 : regionalPrice.isRegional
-                  ? `EPRA ${regionalPrice.cityName} Price`
+                  ? `${location.currentCountry.fuelRegulations.priceSettingBody} ${regionalPrice.cityName} Price`
                   : `${stationCity} - National Average`}
             </span>
           </div>
@@ -959,7 +959,7 @@ export default function Dashboard() {
               Sales Trend (Last 7 Days)
             </h3>
             <span className="text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
-              Ksh
+              {currencySymbol}
             </span>
           </div>
           <div className="h-64">

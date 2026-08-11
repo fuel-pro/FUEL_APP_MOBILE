@@ -2139,11 +2139,13 @@ export async function syncRegulatoryUpdates(
 
     // Add tax compliance reminders
     const revenueAuth = country.revenueAuthority;
+    const taxSystem =
+      getCountryTabFeatures(countryCode).taxInvoiceSystem || "Standard VAT";
     updates.push({
       id: `${countryCode}_tax_monthly_${today.toISOString().slice(0, 7)}`,
       countryCode,
       title: `Monthly Tax Return Due`,
-      summary: `Your monthly tax return to ${revenueAuth.name} (${revenueAuth.shortName}) is due by the ${revenueAuth.monthlyReturnDue}. Ensure all eTIMS invoices are uploaded.`,
+      summary: `Your monthly tax return to ${revenueAuth.name} (${revenueAuth.shortName}) is due by the ${revenueAuth.monthlyReturnDue}. Ensure all ${taxSystem} invoices are uploaded.`,
       effectiveDate: today.toISOString().split("T")[0],
       source: revenueAuth.name,
       sourceUrl: revenueAuth.eFilingPortal,

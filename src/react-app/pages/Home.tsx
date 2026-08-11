@@ -660,6 +660,7 @@ export default function Home() {
     <LocationProvider
       stationId={stationId}
       stationLocation={currentStation?.location}
+      stationCountry={currentStation?.country}
     >
       <HomeContent />
     </LocationProvider>

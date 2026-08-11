@@ -1925,6 +1925,47 @@ const CORE_COUNTRIES: Record<string, CountryProfile> = {
 };
 
 // Generate lightweight profiles for ALL other 240+ countries
+function regionForCode(code: string): string {
+  const c = code.toUpperCase();
+  // Map ISO-2 country codes to a broad region. This is intentionally
+  // lightweight (continent-level) so generated profiles aren't all mislabeled
+  // "Africa" — the core countries have hand-authored region labels.
+  const africa = new Set([
+    "DZ","AO","BJ","BW","BF","BI","CM","CV","CF","TD","KM","CG","CD","CI","DJ",
+    "EG","GQ","ER","SZ","ET","GA","GM","GH","GN","GW","KE","LS","LR","LY","MG",
+    "MW","ML","MR","MU","MA","MZ","NA","NE","NG","RW","ST","SN","SC","SL","SO",
+    "ZA","SS","SD","TZ","TG","TN","UG","EH","ZM","ZW",
+  ]);
+  const europe = new Set([
+    "AL","AD","AT","BY","BE","BA","BG","HR","CY","CZ","DK","EE","FI","FR","DE",
+    "GR","HU","IS","IE","IT","XK","LV","LI","LT","LU","MT","MD","MC","ME","NL",
+    "MK","NO","PL","PT","RO","RU","SM","RS","SK","SI","ES","SE","CH","TR","UA",
+    "GB","VA",
+  ]);
+  const asia = new Set([
+    "AF","AM","AZ","BH","BD","BT","BN","KH","CN","GE","HK","IN","ID","IR","IQ",
+    "IL","JP","JO","KZ","KW","KG","LA","LB","MO","MY","MV","MN","MM","NP","KP",
+    "OM","PK","PS","PH","QA","SA","SG","KR","LK","SY","TW","TJ","TH","TL","AE",
+    "UZ","VN","YE",
+  ]);
+  const americas = new Set([
+    "AI","AG","AR","AW","BS","BB","BZ","BM","BO","BR","VG","CA","KY","CL","CO",
+    "CR","CU","CW","DM","DO","EC","SV","FK","GF","GL","GD","GP","GT","GY","HT",
+    "HN","JM","MQ","MX","MS","NI","PA","PY","PE","PR","BL","KN","LC","MF","PM",
+    "VC","SR","TT","TC","VI","US","UY","VE",
+  ]);
+  const oceania = new Set([
+    "AS","AU","CK","FJ","PF","GU","KI","MH","FM","NR","NC","NZ","NU","NF","MP",
+    "PW","PG","PN","WS","SB","TK","TO","TV","VU","WF",
+  ]);
+  if (africa.has(c)) return "Africa";
+  if (europe.has(c)) return "Europe";
+  if (asia.has(c)) return "Asia";
+  if (americas.has(c)) return "Americas";
+  if (oceania.has(c)) return "Oceania";
+  return "Global";
+}
+
 function generateCountryProfile(
   code: string,
   name: string,
@@ -1935,7 +1976,7 @@ function generateCountryProfile(
     name,
     shortName: code.toUpperCase(),
     flag: getFlagEmoji(code),
-    region: "Africa",
+    region: regionForCode(code),
     languages: ["en"],
     defaultLanguage: "en",
     currency: {
@@ -1983,11 +2024,11 @@ function generateCountryProfile(
         { from: 800001, to: Infinity, rate: 0.35 },
       ],
       nssfRequired: true,
-      nssfLabel: "NSSF",
+      nssfLabel: "Social Security",
       nssfEmployeeRate: 0.06,
       nssfEmployerRate: 0.06,
       nhifRequired: true,
-      nhifLabel: "NHIF",
+      nhifLabel: "Health Insurance",
       nhifRates: [
         { minSalary: 0, maxSalary: 5999, amount: 150 },
         { minSalary: 6000, maxSalary: 7999, amount: 300 },

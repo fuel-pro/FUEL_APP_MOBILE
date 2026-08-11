@@ -116,6 +116,9 @@ export interface Station {
   theme: string;
   logo: string;
   description: string;
+  country: string; // ISO country code (e.g. "DE", "US", "KE") — drives currency/tax/fuel prices
+  currency: string; // ISO currency code (e.g. "EUR", "USD", "KES")
+  timezone: string; // IANA timezone (e.g. "Europe/Berlin")
   createdAt: string;
   updatedAt: string;
   data: any; // station-specific fuel data
@@ -469,6 +472,9 @@ function stationRowToStation(
     theme: row.theme || "dark",
     logo: row.logo || "",
     description: row.description || "",
+    country: row.country || "",
+    currency: row.currency || "",
+    timezone: row.timezone || "",
     createdAt: row.created_at || new Date().toISOString(),
     updatedAt: row.updated_at || new Date().toISOString(),
     data: dataBlob !== undefined ? dataBlob : (cached?.data ?? {}),
@@ -493,6 +499,9 @@ function stationToRowFields(s: Partial<Station>) {
   if (s.theme !== undefined) fields.theme = s.theme;
   if (s.logo !== undefined) fields.logo = s.logo;
   if (s.description !== undefined) fields.description = s.description;
+  if (s.country !== undefined) fields.country = s.country;
+  if (s.currency !== undefined) fields.currency = s.currency;
+  if (s.timezone !== undefined) fields.timezone = s.timezone;
   return fields;
 }
 
@@ -1247,6 +1256,9 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
         theme: stationData.theme || "dark",
         logo: stationData.logo || "",
         description: stationData.description || "",
+        country: stationData.country || "",
+        currency: stationData.currency || "",
+        timezone: stationData.timezone || "",
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         data: stationData.data || {},
