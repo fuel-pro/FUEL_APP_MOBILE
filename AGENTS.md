@@ -1158,6 +1158,36 @@ SecuritySection.tsx (line 2337) with 2FA setup, recovery codes, unique id,
 password change tracking. founderAccessApi.ts + useFounderBackend.ts hook.
 These are cross-device (stored in profiles table, not localStorage).
 
+## FounderAccess render loop + section switching (FIXED 2026-08-11, commit 420d8f2)
+
+**Symptom**: the Founder Console nav buttons didn't switch sections when
+clicked, and the Audit Log grew to 1000 entries within seconds of login.
+
+**Root cause** (two compounding issues in `FounderAccess.tsx`):
+1. The mount `useEffect` had `[logAudit]` in its deps. `logAudit` is recreated
+   whenever the `auditLog` state array changes (it closes over it). Each mount
+   effect run calls `logAudit("Session Resumed")` → `setAuditLog` → `logAudit`
+   identity changes → mount effect re-fires → infinite loop. The
+   `setInterval(checkCloudStatus, 30000)` polling also triggered state updates
+   that cascaded through the same chain.
+2. `NavItem` was defined as an inner React component INSIDE the render
+   function (`const NavItem = ({...}) => (...)`). Each render produced a NEW
+   component type → React unmounted and remounted the entire nav subtree on
+   every re-render → click events were swallowed mid-remount.
+
+**Fix**:
+- Mount `useEffect` deps changed to `[]` (mount-only) with
+  `eslint-disable-next-line react-hooks/exhaustive-deps`.
+- `NavItem` converted from inner component to a `renderNavItem()` render
+  function. All `<NavItem .../>` JSX usages changed to
+  `{renderNavItem(...)}` function calls.
+
+**Verified live** on Cloudflare preview 584f8c07: FOUNDER/Fuelpro@2026 login
+works; Security & 2FA section renders with full credential management UI
+(Grant/Add, change password, 2FA, contact verification); Audit Log shows 1
+entry (was 1000); section switching works for all sections; nav button
+indices stable (22574xxx, not growing to 10M+).
+
 ### Deploy status 2026-08-09 (this session)
 
 - GitHub main: commit 35add94 (invoice fix aebbe2a + Smart-Cache 35add94 pushed).
