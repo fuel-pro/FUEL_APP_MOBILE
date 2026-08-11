@@ -203,6 +203,23 @@ try {
   // BroadcastChannel not supported
 }
 
+// Translate raw Supabase auth-email rate-limit / throttling errors into a
+// clear, actionable user message. Supabase returns these when the caller
+// exceeds the per-email send limit (~3-4/hour) or resends too quickly.
+function friendlyAuthEmailError(message: string): string {
+  const m = message.toLowerCase();
+  if (
+    m.includes("email rate limit") ||
+    m.includes("rate limit exceeded") ||
+    m.includes("for security purposes, you can only request") ||
+    m.includes("you can only request this after") ||
+    m.includes("429")
+  ) {
+    return "Too many emails sent. For security, Supabase limits reset emails to a few per hour. Please wait a few minutes before trying again.";
+  }
+  return message;
+}
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -217,6 +234,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
   const handleLogoutRef = useRef<(() => void) | null>(null);
   const refreshAuthRef = useRef<(() => Promise<boolean>) | null>(null);
+
+  // Cooldown tracking for auth-email operations (password reset, signup) to
+  // prevent hitting Supabase's "email rate limit exceeded" (429). Supabase
+  // limits auth emails to ~3-4 per hour per address; rapid retries (double
+  // clicks, page re-renders) exhaust this almost instantly. We enforce a
+  // client-side cooldown so the user can't fire a second request until it
+  // has elapsed, and translate the rate-limit error into a friendly message.
+  const RESET_COOLDOWN_MS = 60_000; // 60 seconds between reset emails
+  const lastResetRequestRef = useRef<Record<string, number>>({});
 
   // Initialize - listen to Supabase auth state
   useEffect(() => {
@@ -391,7 +417,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             "[AuthContext] Supabase registration error:",
             supabaseError.message,
           );
-          setError(supabaseError.message);
+          const friendly = friendlyAuthEmailError(supabaseError.message);
+          setError(friendly);
           setIsPending(false);
           return false;
         }
@@ -781,6 +808,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (
       email: string,
     ): Promise<{ success: boolean; code?: string; message: string }> => {
+      // Client-side cooldown: prevent rapid retries that exhaust Supabase's
+      // email rate limit. If a request was made for this email within the
+      // cooldown window, return a friendly message instead of hitting the API.
+      const key = email.trim().toLowerCase();
+      const now = Date.now();
+      const lastReq = lastResetRequestRef.current[key] || 0;
+      const elapsed = now - lastReq;
+      if (elapsed < RESET_COOLDOWN_MS) {
+        const waitSec = Math.ceil((RESET_COOLDOWN_MS - elapsed) / 1000);
+        const msg = `Please wait ${waitSec}s before requesting another reset email.`;
+        return { success: false, message: msg };
+      }
+
       setIsPending(true);
       setError(null);
 
@@ -790,14 +830,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             redirectTo: `${window.location.origin}/reset-password`,
           });
 
+        // Record the attempt time regardless of outcome so a failed request
+        // also counts toward the cooldown (prevents immediate retry storms).
+        lastResetRequestRef.current[key] = Date.now();
+
         if (supabaseError) {
           console.error(
             "[AuthContext] Password reset error:",
             supabaseError.message,
           );
-          setError(supabaseError.message);
+          const friendly = friendlyAuthEmailError(supabaseError.message);
+          setError(friendly);
           setIsPending(false);
-          return { success: false, message: supabaseError.message };
+          return { success: false, message: friendly };
         }
 
         console.log("[Password Reset] Reset email sent to:", email);
@@ -807,12 +852,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           message: "Password reset email sent. Check your inbox.",
         };
       } catch (err: any) {
+        lastResetRequestRef.current[key] = Date.now();
         console.error("[AuthContext] Password reset error:", err.message);
-        setError(err.message || "Failed to send reset email.");
+        const friendly = friendlyAuthEmailError(
+          err.message || "Failed to send reset email.",
+        );
+        setError(friendly);
         setIsPending(false);
         return {
           success: false,
-          message: err.message || "Failed to send reset email.",
+          message: friendly,
         };
       }
     },

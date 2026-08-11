@@ -10,6 +10,22 @@ import { getSupabaseClient } from "@/supabase/client";
 const TOKEN_KEY = "fuelpro_founder_token";
 const SESSION_META_KEY = "fuelpro_founder_session_meta";
 
+// Translate Supabase auth-email rate-limit errors into a friendly message.
+// Kept in sync with AuthContext's friendlyAuthEmailError.
+function friendlyAuthEmailError(message: string): string {
+  const m = message.toLowerCase();
+  if (
+    m.includes("email rate limit") ||
+    m.includes("rate limit exceeded") ||
+    m.includes("for security purposes, you can only request") ||
+    m.includes("you can only request this after") ||
+    m.includes("429")
+  ) {
+    return "Too many emails sent. For security, Supabase limits reset emails to a few per hour. Please wait a few minutes before trying again.";
+  }
+  return message;
+}
+
 export interface FounderLoginResult {
   success: boolean;
   error?: string;
@@ -108,13 +124,15 @@ export async function requestPasswordReset(
       redirectTo: `${window.location.origin}/#/reset-password`,
     });
     if (error) {
-      return { success: false, error: error.message };
+      return { success: false, error: friendlyAuthEmailError(error.message) };
     }
     return { success: true };
   } catch (err) {
     return {
       success: false,
-      error: err instanceof Error ? err.message : "Unable to send reset email",
+      error: friendlyAuthEmailError(
+        err instanceof Error ? err.message : "Unable to send reset email",
+      ),
     };
   }
 }

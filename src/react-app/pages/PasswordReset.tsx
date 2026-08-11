@@ -30,6 +30,7 @@ export default function PasswordReset() {
   const [localError, setLocalError] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
   const [resetPending, setResetPending] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0); // seconds remaining
 
   // Detect Supabase recovery redirect — when a user clicks the email link,
   // Supabase exchanges the token in the URL and fires a PASSWORD_RECOVERY event.
@@ -72,6 +73,16 @@ export default function PasswordReset() {
     };
   }, []);
 
+  // Countdown timer for the resend cooldown. Ticks down every second and
+  // clears at zero, re-enabling the Resend button.
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setInterval(() => {
+      setResendCooldown((s) => (s <= 1 ? 0 : s - 1));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [resendCooldown > 0]);
+
   const handleRequestCode = async () => {
     clearError();
     setLocalError("");
@@ -82,6 +93,11 @@ export default function PasswordReset() {
     const result = await requestPasswordReset(email.trim().toLowerCase());
     if (result.success) {
       setStep("sent");
+      // Start a 60s cooldown after a successful send so the user can't
+      // immediately resend and trip Supabase's email rate limit.
+      setResendCooldown(60);
+    } else {
+      setLocalError(result.message);
     }
   };
 
@@ -119,6 +135,7 @@ export default function PasswordReset() {
   };
 
   const handleResendCode = async () => {
+    if (resendCooldown > 0) return; // safety: don't fire during cooldown
     clearError();
     setLocalError("");
     const result = await requestPasswordReset(email);
@@ -126,6 +143,9 @@ export default function PasswordReset() {
       setLocalError("");
       setSuccessMsg("Reset email resent. Check your inbox.");
       setTimeout(() => setSuccessMsg(""), 5000);
+      setResendCooldown(60); // restart cooldown after a successful resend
+    } else {
+      setLocalError(result.message);
     }
   };
 
@@ -232,12 +252,16 @@ export default function PasswordReset() {
               </div>
               <button
                 onClick={handleResendCode}
-                disabled={isPending}
-                className="w-full py-3 bg-white/5 border border-white/10 hover:bg-white/10 text-white font-semibold rounded-xl transition-all flex items-center justify-center gap-2 mb-3"
+                disabled={isPending || resendCooldown > 0}
+                className="w-full py-3 bg-white/5 border border-white/10 hover:bg-white/10 text-white font-semibold rounded-xl transition-all flex items-center justify-center gap-2 mb-3 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isPending ? (
                   <>
                     <RefreshCw size={16} className="animate-spin" /> Sending...
+                  </>
+                ) : resendCooldown > 0 ? (
+                  <>
+                    <Mail size={16} /> Resend available in {resendCooldown}s
                   </>
                 ) : (
                   <>
