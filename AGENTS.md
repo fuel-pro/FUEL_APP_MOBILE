@@ -1075,3 +1075,74 @@ prices to a village.
   production still serves the OLD commit 2edda45 (with "AI-Estimated" prices).
   The Cloudflare mirror has the fixed code NOW but serves ONLY the SPA — the
   /api/fuel-local endpoint works ONLY on Vercel.
+
+## Session 2026-08-09 (continued): invoice fix + Fuel Price Smart-Cache completion
+
+### Invoice line-items fix (VERIFIED LIVE)
+`Invoice.tsx` `updateInvoiceItem` deep-clones item objects
+(`{ ...updatedItems[index] }` before mutation). `FuelContext.tsx` adds
+`itemsHaveContent()` helper (~line 890) so LOAD_FROM_STORAGE won't replace
+in-progress invoice edits with a stale all-empty-items cloud blob. Verified
+end-to-end on Cloudflare deploy: added line item (Petrol PMS, qty 50, price
+180, total Ksh 9,000), reloaded -> items persisted, saved as INV-2026-002 with
+the line items intact.
+
+### Company profile persistence fix (VERIFIED LIVE)
+`FuelContext.tsx` `mergeCompanyData()` (~line 856) prevents empty-string
+overwrites during LOAD_FROM_STORAGE. `SettingsPanel.tsx` now dispatches
+SET_COMPANY_DATA to FuelContext on save (bridges station info -> companyData so
+invoices/reports read correct company info). NOTE: the company-profile editor
+reachable by non-founder users is the "Edit Info" -> "Company Profile" modal on
+the Invoice tab (has Bank Details). There is NO KRA PIN field in that modal;
+`companyData.kraPin` stays "" unless written via the Admin/Settings gate (founder
+only). Verified: name/phone/email/VAT/PO Box persist after reload + reach invoice.
+
+### FREE AUTO FUEL PRICE Smart-Cache (COMPLETED + VERIFIED LIVE)
+**The spec is implemented.** Architecture: PostGIS spatial Smart-Cache +
+SerpApi/Groq live search fallback. Prior session built the infra (fuel_prices
+table, get_nearest_fuel RPC, api/lib/fuel-engine.ts serverless engine,
+api/fuel-local.ts endpoint, FuelPriceLocator.tsx UI tab "price-finder",
+vercel.json cron). BUT the Smart-Cache was BROKEN: the `location` geography
+column was NULL for ALL seeded/inserted rows (no trigger populated it), so the
+PostGIS ST_DWithin nearest-town query always returned empty -> every remote
+lookup fell through to SerpApi/Groq (or "no published price"). Fixed in commit
+35add94 (migration 010_fuel_prices_smartcache.sql):
+- `set_fuel_location_geog()` trigger auto-populates `location` geography from
+  lat/lon on insert/update (the old code referenced a non-existent
+  `location_geog` column, so the trigger silently failed).
+- Backfilled all 20 existing rows where location was NULL.
+- Seeded 15 additional Kenya EPRA town prices (Nakuru, Eldoret, Kakamega,
+  Kitale, Bungoma, Lodwar, Garissa, Kericho, etc.) -- cache now covers Kenya.
+- Public-read RLS so the client can query with only the publishable key.
+Verified live: remote point (0.6, 34.7 -- Sitikho ward) now resolves to Bungoma
+(15.9km) via PostGIS fallback, returns real prices, source "Approx. (nearest:
+Bungoma)". Nairobi exact match -> source "Published Reference". The
+/api/fuel-local endpoint on Vercel works cross-origin (CORS headers set); the
+FuelPriceLocator calls it with a CORS-proxy fallback for Cloudflare->Vercel.
+**AI keys**: SERPAPI_KEY + OPENROUTER_API_KEY are SET on Vercel (production).
+GROQ_API_KEY is NOT set (no Groq key available). For genuinely remote areas
+with no cached town within radius AND no web-search result, the engine returns
+`no_real_data: true` ("No published price") -- the correct honest answer, NOT
+a fake estimate. Schema notes: fuel_prices uses `lat`/`lon` (NOT
+latitude/longitude), `location` geography, `prices` jsonb
+{super_petrol,diesel,kerosene}, `country_code`, `source`. get_nearest_fuel RPC
+(default radius_km=50) has PostGIS + haversine fallback, SECURITY DEFINER.
+
+### Founder 2FA / security (IMPLEMENTED by prior session, columns LIVE)
+Migration 013_founder_2fa_profiles.sql applied live: profiles has
+two_factor_secret, two_factor_enabled, recovery_codes, unique_id (8-hex-FPR,
+unique index), last_password_change. UI: FounderAccess.tsx renders
+SecuritySection.tsx (line 2337) with 2FA setup, recovery codes, unique id,
+password change tracking. founderAccessApi.ts + useFounderBackend.ts hook.
+These are cross-device (stored in profiles table, not localStorage).
+
+### Deploy status 2026-08-09 (this session)
+- GitHub main: commit 35add94 (invoice fix aebbe2a + Smart-Cache 35add94 pushed).
+- Cloudflare Pages: LIVE https://3e0915ed.fuel-app-mobile.pages.dev
+  (bundle index-DXiGs6ze.js, 124 precache).
+- Vercel production: STILL rate-limited (api-deployments-free-per-day 100/day
+  exhausted; resets ~24h). The /api/fuel-local serverless function on the
+  EXISTING Vercel deployment already works with the now-seeded live DB cache
+  (no redeploy needed -- the DB migration is what fixed the Smart-Cache, and
+  that's applied directly to the live Supabase project). The frontend on
+  Vercel production still serves an older bundle until the quota resets.
