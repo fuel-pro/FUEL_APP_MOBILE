@@ -1476,3 +1476,84 @@ on Cloudflare:
 - Live Transaction → "Open Integration Hub" button links to Integration Hub ✅
 - Top nav bar: no standalone Debt Reminder/Purchases/Price Board/Auto Fuel
   Price/Sales Invoices/Shift Management/Integrations tabs (all merged) ✅
+
+## Dropdown UX Optimization — CLICKING.txt 5 rules (DEPLOYED LIVE 2026-08-11, commit 270ff2f)
+
+Implemented all 5 dropdown UX rules from `CLICKING.txt` across the entire site:
+
+### Universal `Select` component (`src/react-app/components/ui/Select.tsx`)
+A reusable, accessible dropdown implementing ALL 5 rules:
+- **Rule 1 (Make it Clickable)**: 48px `h-12` touch target, hover border
+  highlight, clear ChevronDown caret icon with 150ms rotate animation,
+  focus ring (`focus:ring-2 focus:ring-indigo-500`).
+- **Rule 2 (Flip on Edge)**: `getBoundingClientRect()` viewport detection
+  on open + scroll; if `spaceBelow < menuHeight && rect.top > menuHeight`,
+  flips menu to `bottom-full` (opens upward) instead of `top-full`.
+- **Rule 3 (Keyboard Always)**: full ARIA combobox semantics
+  (`aria-haspopup`, `aria-expanded`, `aria-controls`, `aria-activedescendant`,
+  `role="listbox"`, `role="option"`, `aria-selected`); ArrowDown/ArrowUp
+  (with wrap-around + skip-disabled), Enter/Space to select, Escape to
+  close + refocus trigger, Tab to close.
+- **Rule 4 (10+ Items = Search)**: auto-enables a search input when
+  `options.length >= searchThreshold` (default 10); live filtering with
+  "No results found" empty state; auto-focuses search on open.
+- **Rule 5 (Hit 150ms)**: menu enter/exit animation at `duration-150`
+  (opacity + scale + translate); chevron rotate at `duration-150`;
+  `prefers-reduced-motion` support via global CSS.
+
+### Global CSS for ALL native `<select>` elements (`index.css`)
+Applied site-wide to all 78 native `<select>` elements across 36 files:
+- `min-height: 48px` (Rule 1 touch target)
+- `appearance: none` + custom SVG caret icon (consistent across browsers)
+- `background-position: right 12px center` (caret placement)
+- `padding-right: 40px !important` (room for caret)
+- `select:hover` → border highlight (Rule 1 feedback)
+- `select:focus` → indigo ring (`#6366f1` light / `#818cf8` dark)
+  (Rule 1 focus feedback)
+- `html.dark select` → dark bg `#1f2937`, dark border `#4b5563`, light text
+  `#f3f4f6`, dark option backgrounds (consistent dark mode)
+- `transition: .15s ease` (Rule 5 — minified from `150ms`)
+- `@media (prefers-reduced-motion: reduce)` → disables all transitions
+  (Rule 5 accessibility)
+
+### Enhanced existing custom dropdowns
+
+1. **SearchableCountryDropdown** (`SearchableCountryDropdown.tsx`):
+   - Edge-flip via `getBoundingClientRect()` (Rule 2)
+   - ARIA `role="listbox"` on list container, `role="option"` +
+     `aria-selected` on each country button (Rule 3)
+   - `aria-haspopup="listbox"` + `aria-expanded` on trigger (Rule 3)
+   - 48px trigger (`h-12`), 40px list items (`h-10`) (Rule 1 touch targets)
+   - 150ms transitions on trigger + chevron + list items (Rule 5)
+
+2. **ExportDropdown** (`ExportDropdown.tsx`):
+   - ARIA `aria-haspopup="listbox"` + `aria-expanded` (Rule 3)
+   - Edge-flip via `getBoundingClientRect()` (Rule 2)
+   - Keyboard: Escape closes + refocuses, ArrowDown/Enter/Space opens (Rule 3)
+   - 48px trigger (`h-12`) (Rule 1)
+   - 150ms animation preserved (was already the best example) (Rule 5)
+
+3. **StationSelector** (`StationSelector.tsx`):
+   - Keyboard nav: Escape closes (cancels add/edit), ArrowDown/Enter/Space
+     opens (Rule 3)
+   - ARIA `aria-haspopup="listbox"` + `aria-expanded` (Rule 3)
+   - Edge-flip via `getBoundingClientRect()` (Rule 2)
+   - 48px trigger (`h-12`) (Rule 1)
+   - 150ms animation on menu + chevron (Rule 5)
+
+4. **Header station menu** (`Header.tsx`):
+   - ARIA `aria-haspopup="listbox"` + `aria-expanded` (Rule 3)
+   - 40px touch targets on each station button (`h-10`) (Rule 1)
+   - 150ms transitions + chevron rotate (Rule 5)
+   - `role="listbox"` on menu container (Rule 3)
+
+### Deploy state 2026-08-11 (commit 270ff2f)
+- GitHub: pushed ✅
+- Cloudflare Pages: LIVE (https://44d99f82.fuel-app-mobile.pages.dev +
+  main alias https://fuel-app-mobile.pages.dev) ✅
+- Vercel: BLOCKED by `api-deployments-free-per-day` (100/100; GitHub
+  integration auto-deploys when quota resets ~24h) ⏳
+- Supabase: no schema changes needed (frontend-only) ✅
+- Verified in production CSS bundle: `min-height:48px`, `appearance:none`,
+  `.15s` transitions, `#6366f1` focus ring, `#1f2937` dark bg,
+  `prefers-reduced-motion` — all present ✅
