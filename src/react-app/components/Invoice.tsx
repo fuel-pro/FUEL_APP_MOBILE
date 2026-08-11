@@ -39,11 +39,6 @@ export default function Invoice() {
   const { state, dispatch } = useFuel();
   const { currentStation } = useStations();
   const fuelTypeApi = useStationFuelTypes(currentStation?.id);
-  // WORLDWIDE: derive the display currency symbol from the station's/company
-  // currency (€ for Germany, $ for US, KSh for Kenya, etc.) instead of the
-  // previously hardcoded "Ksh" which leaked Kenya currency into every invoice
-  // regardless of the station's country.
-  const currencySymbol = getCurrencySymbol(state.companyData?.currency);
   const [customerName, setCustomerName] = useState("");
   const [customerAddress, setCustomerAddress] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
@@ -115,6 +110,10 @@ export default function Invoice() {
       payload: { quantityLabel: newLabel },
     });
   };
+
+  // WORLDWIDE: derive the display currency symbol from the station's/company
+  // currency instead of the previously hardcoded "Ksh".
+  const currencySymbol = getCurrencySymbol(state.companyData?.currency);
 
   const getInvoiceNumber = () => {
     const num = String(state.invoiceCounter).padStart(3, "0");
@@ -641,7 +640,7 @@ export default function Invoice() {
                       </td>
                       <td className="border border-gray-300 p-3 text-right">
                         <div className="flex items-center justify-end">
-                          <span className="mr-1">Ksh</span>
+                          <span className="mr-1">{currencySymbol}</span>
                           <input
                             type="number"
                             value={item.price}
@@ -702,123 +701,15 @@ export default function Invoice() {
                 </tbody>
               </table>
 
-        {/* Items Table */}
-        <div className="mb-8">
-          <table className="w-full border-collapse border border-gray-300">
-            <thead>
-              <tr className="bg-gray-50">
-                <th className="border border-gray-300 p-3 text-left font-semibold">
-                  Description
-                </th>
-                <th className="border border-gray-300 p-3 text-center font-semibold">
-                  {quantityLabel}
-                </th>
-                <th className="border border-gray-300 p-3 text-right font-semibold">
-                  Unit Price
-                </th>
-                <th className="border border-gray-300 p-3 text-right font-semibold">
-                  Total
-                </th>
-                <th className="border border-gray-300 p-3 text-center font-semibold w-20">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {state.invoiceItems.map((item, index) => (
-                <tr key={index} className="hover:bg-gray-50">
-                  <td className="border border-gray-300 p-3">
-                    <input
-                      type="text"
-                      value={item.desc}
-                      onChange={(e) =>
-                        updateInvoiceItem(index, "desc", e.target.value)
-                      }
-                      className="w-full bg-transparent border-none outline-none"
-                      placeholder="Item description"
-                    />
-                  </td>
-                  <td className="border border-gray-300 p-3 text-center">
-                    <input
-                      type="number"
-                      value={item.qty}
-                      onChange={(e) =>
-                        updateInvoiceItem(index, "qty", e.target.value)
-                      }
-                      className="w-full bg-transparent border-none outline-none text-center"
-                      min="1"
-                    />
-                  </td>
-                  <td className="border border-gray-300 p-3 text-right">
-                    <div className="flex items-center justify-end">
-                      <span className="mr-1">{currencySymbol}</span>
-                      <input
-                        type="number"
-                        value={item.price}
-                        onChange={(e) =>
-                          updateInvoiceItem(index, "price", e.target.value)
-                        }
-                        className="w-24 bg-transparent border-none outline-none text-right"
-                        min="0"
-                      />
-                    </div>
-                  </td>
-                  <td className="border border-gray-300 p-3 text-right font-medium">
-                    {currencySymbol}{formatNumber(item.total, 0)}
-                  </td>
-                  <td className="border border-gray-300 p-3 text-center">
-                    <button
-                      onClick={() => deleteInvoiceItem(index)}
-                      className="text-red-600 hover:text-red-800 p-1"
-                      title="Delete item"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+              <div className="mt-4 flex justify-between items-center">
+                <button onClick={addInvoiceItem} className="btn btn-primary">
+                  <Plus size={16} />
+                  Add Item
+                </button>
 
-          <div className="mt-4 flex justify-between items-center">
-            <button onClick={addInvoiceItem} className="btn btn-primary">
-              <Plus size={16} />
-              Add Item
-            </button>
-
-            <div className="text-right">
-              <div className="text-2xl font-bold text-blue-900">
-                Total Due: {currencySymbol}{formatNumber(totalDue, 0)}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Payment Information */}
-        <div className="border-t border-gray-300 pt-6">
-          <div className="mb-4">
-            <div className="flex justify-between items-center mb-4">
-              <div className="font-semibold text-gray-800">
-                Payment Should Be Made Through
-              </div>
-              <button
-                onClick={editBankInfo}
-                className="btn btn-outline btn-sm"
-                title="Edit bank details"
-              >
-                <Building2 size={14} />
-                Edit Bank Details
-              </button>
-            </div>
-
-            {state.companyData.bankName ||
-            state.companyData.branchName ||
-            state.companyData.accountHolder ||
-            state.companyData.accountNumber ? (
-              <div className="space-y-1 text-sm text-gray-700">
-                {state.companyData.bankName && (
-                  <div>
-                    <strong>BANK:</strong> {state.companyData.bankName}
+                <div className="text-right">
+                  <div className="text-2xl font-bold text-blue-900">
+                    Total Due: {currencySymbol}{formatNumber(totalDue, 0)}
                   </div>
                 </div>
               </div>
