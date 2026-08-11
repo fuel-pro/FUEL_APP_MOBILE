@@ -2,7 +2,10 @@ import { useFuel } from "@/react-app/context/FuelContext";
 import { useLocation } from "@/react-app/context/LocationContext";
 import { useStations } from "@/react-app/context/StationContext";
 import { useAutoSync } from "@/react-app/hooks/useAutoSync";
-import { getPriceForCity } from "@/react-app/services/DataSyncService";
+import {
+  getSyncedFuelPrice,
+  getPriceForCity,
+} from "@/react-app/services/DataSyncService";
 import RegulatoryAlerts from "@/react-app/components/RegulatoryAlerts";
 import SyncStatusIndicator from "@/react-app/components/SyncStatusIndicator";
 import WeatherWidget from "@/react-app/components/WeatherWidget";
@@ -120,20 +123,26 @@ export default function Dashboard() {
 
   // Use precise location-based fuel prices (auto-synced with GPS)
   const stationCity = currentStation?.location || "Nairobi";
-  const regionalPrice = getPriceForCity(fuelPrice, stationCity);
+  // The useAutoSync hook's `fuelPrice` state can lag the synced cache during a
+  // country switch (the station loads from cloud AFTER the hook's initial KE
+  // sync). Read the persisted synced price for the STATION's country directly
+  // so a German station shows €1.85 immediately instead of the Kenya default
+  // (state.pmsPrice = 214.03) until the hook catches up.
+  const effectiveFuelPrice = fuelPrice ?? getSyncedFuelPrice(stationCountry);
+  const regionalPrice = getPriceForCity(effectiveFuelPrice, stationCity);
   // Prefer location-based price from GPS, then fall back to regional, then national, then default
   const displayPmsPrice =
     locationPrice?.petrolPrice ??
     (regionalPrice.isRegional ? regionalPrice.petrol : null) ??
-    fuelPrice?.petrolPrice ??
+    effectiveFuelPrice?.petrolPrice ??
     state.pmsPrice;
   const displayAgoPrice =
     locationPrice?.dieselPrice ??
     (regionalPrice.isRegional ? regionalPrice.diesel : null) ??
-    fuelPrice?.dieselPrice ??
+    effectiveFuelPrice?.dieselPrice ??
     state.agoPrice;
   const displayKerosenePrice =
-    locationPrice?.kerosenePrice ?? fuelPrice?.kerosenePrice ?? 0; // Kerosene price not in base state
+    locationPrice?.kerosenePrice ?? effectiveFuelPrice?.kerosenePrice ?? 0;
   // Show the detected city for location-based pricing
   const priceCityName =
     locationPrice?.cityName || regionalPrice.cityName || stationCity;
@@ -746,7 +755,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         {/* Current Pump Prices */}
         <div
-          className={`rounded-xl p-3 border shadow-sm ${fuelPrice ? "bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/10 border-blue-200 dark:border-blue-800" : "bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700"}`}
+          className={`rounded-xl p-3 border shadow-sm ${effectiveFuelPrice ? "bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/10 border-blue-200 dark:border-blue-800" : "bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700"}`}
         >
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-200 flex items-center gap-2">
@@ -759,7 +768,7 @@ export default function Dashboard() {
               Current Pump Prices
             </h3>
             <span className="text-[9px] bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full font-medium">
-              {fuelPrice?.priceSettingBody ||
+              {effectiveFuelPrice?.priceSettingBody ||
                 stationCountryProfile.fuelRegulations.priceSettingBody}
             </span>
           </div>
@@ -819,7 +828,7 @@ export default function Dashboard() {
               ) : null}
             </div>
           </div>
-          {fuelPrice?.breakdown && (
+          {effectiveFuelPrice?.breakdown && (
             <div className="mt-3 pt-3 border-t border-blue-200/50 dark:border-blue-800/30">
               <div className="grid grid-cols-3 gap-2 text-center">
                 <div>
@@ -844,7 +853,7 @@ export default function Dashboard() {
             </div>
           )}
           <div className="flex items-center justify-between mt-3">
-            {fuelPrice ? (
+            {effectiveFuelPrice ? (
               <p className="text-[9px] text-gray-500 dark:text-gray-500">
                 Source:{" "}
                 <a
@@ -998,7 +1007,7 @@ export default function Dashboard() {
           </div>
           <div className="mt-4 grid grid-cols-2 gap-2 text-center">
             <div
-              className={`rounded-lg p-2 ${fuelPrice ? "bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800" : "bg-gray-50 dark:bg-gray-700/30"}`}
+              className={`rounded-lg p-2 ${effectiveFuelPrice ? "bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800" : "bg-gray-50 dark:bg-gray-700/30"}`}
             >
               <p className="text-xs text-gray-500 dark:text-gray-400">
                 {CANONICAL_FUEL_TYPES.petrol.label} Price
@@ -1013,7 +1022,7 @@ export default function Dashboard() {
               )}
             </div>
             <div
-              className={`rounded-lg p-2 ${fuelPrice ? "bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800" : "bg-gray-50 dark:bg-gray-700/30"}`}
+              className={`rounded-lg p-2 ${effectiveFuelPrice ? "bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800" : "bg-gray-50 dark:bg-gray-700/30"}`}
             >
               <p className="text-xs text-gray-500 dark:text-gray-400">
                 {CANONICAL_FUEL_TYPES.diesel.label} Price

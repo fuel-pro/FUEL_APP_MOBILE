@@ -1144,6 +1144,42 @@ export function FuelProvider({ children }: { children: ReactNode }) {
     stationIdRef.current = stationId;
   }, [stationId]);
 
+  // WORLDWIDE: reconcile companyData.currency with the STATION's currency.
+  // companyData.currency defaults to "KSh" (Kenya) and is persisted to the
+  // cloud blob that way — so a German (EUR) or US (USD) station ended up with
+  // companyData.currency = "KSh", leaking Kenya currency into invoices and
+  // reports. When the current station has an explicit currency, ensure
+  // companyData.currency (and userPreferences.currency) matches it. This is a
+  // one-way reconcile (station is the source of truth for currency); it only
+  // fires when they actually differ to avoid a save loop.
+  const stationCurrency = currentStation?.currency;
+  useEffect(() => {
+    if (!stationCurrency) return;
+    const cur = stateRef.current;
+    const companyMismatch = cur.companyData?.currency !== stationCurrency;
+    const prefsMismatch = cur.userPreferences?.currency !== stationCurrency;
+    if (companyMismatch || prefsMismatch) {
+      if (companyMismatch) {
+        dispatch({
+          type: "SET_COMPANY_DATA",
+          payload: {
+            ...cur.companyData,
+            currency: stationCurrency,
+          },
+        });
+      }
+      if (prefsMismatch) {
+        dispatch({
+          type: "SET_USER_PREFERENCES",
+          payload: {
+            ...cur.userPreferences,
+            currency: stationCurrency,
+          },
+        });
+      }
+    }
+  }, [stationCurrency]);
+
   // CRITICAL: Guards the cross-device cloud-sync race. On login, the
   // aggressive auto-save effect (1500ms) can fire BEFORE loadFromCloud has
   // finished hydrating state from Supabase app_kv. When that happens,

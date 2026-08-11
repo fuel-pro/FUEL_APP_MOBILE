@@ -266,15 +266,21 @@ export async function getPriceForLocation(
   transportSurcharge: number;
   source: string;
 }> {
-  // Default Nairobi prices
+  // Country-appropriate default prices. Previously this returned Nairobi
+  // prices (193.43 KES) for EVERY non-Kenya country, leaking Kenya fuel
+  // prices into German/US/etc. stations whenever GPS coords were present.
+  // Now resolve the country's own regional estimate (in its own currency)
+  // and only fall back to Nairobi for Kenya itself.
+  const regionalEstimate = getRegionalPriceEstimates(countryCode, "");
   const defaultPrices = {
-    petrolPrice: 193.43,
-    dieselPrice: 178.56,
-    kerosenePrice: 170.22,
+    petrolPrice: regionalEstimate.petrol,
+    dieselPrice: regionalEstimate.diesel,
+    kerosenePrice: regionalEstimate.kerosene,
     isRegional: false,
-    cityName: "Nairobi",
+    cityName:
+      countryCode === "KE" ? "Nairobi" : `${countryCode} National Average`,
     transportSurcharge: 0,
-    source: "EPRA Default",
+    source: countryCode === "KE" ? "EPRA Default" : "Regional Estimate",
   };
 
   if (countryCode !== "KE" || lat === undefined || lng === undefined) {
@@ -387,15 +393,21 @@ export function getPriceForLocationSync(
   transportSurcharge: number;
   source: string;
 } {
-  // Default Nairobi prices
+  // Country-appropriate default prices. Previously this returned Nairobi
+  // prices (193.43 KES) for EVERY non-Kenya country, leaking Kenya fuel
+  // prices into German/US/etc. stations whenever GPS coords were present.
+  // Now resolve the country's own regional estimate (in its own currency)
+  // and only fall back to Nairobi for Kenya itself.
+  const regionalEstimate = getRegionalPriceEstimates(countryCode, "");
   const defaultPrices = {
-    petrolPrice: 193.43,
-    dieselPrice: 178.56,
-    kerosenePrice: 170.22,
+    petrolPrice: regionalEstimate.petrol,
+    dieselPrice: regionalEstimate.diesel,
+    kerosenePrice: regionalEstimate.kerosene,
     isRegional: false,
-    cityName: "Nairobi",
+    cityName:
+      countryCode === "KE" ? "Nairobi" : `${countryCode} National Average`,
     transportSurcharge: 0,
-    source: "EPRA Default",
+    source: countryCode === "KE" ? "EPRA Default" : "Regional Estimate",
   };
 
   if (countryCode !== "KE" || lat === undefined || lng === undefined) {
