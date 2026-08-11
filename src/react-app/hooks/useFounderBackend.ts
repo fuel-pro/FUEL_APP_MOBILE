@@ -284,6 +284,8 @@ export function useFounderBackend() {
 
   useEffect(() => {
     let cancelled = false;
+    let unsubscribe: (() => void) | undefined;
+
     async function loadStats() {
       try {
         const { getSupabaseClient } = await import("@/supabase/client");
@@ -316,9 +318,32 @@ export function useFounderBackend() {
         if (!cancelled) setStatsLoading(false);
       }
     }
+
+    // Attempt immediately (covers the case where a session already exists).
     loadStats();
+
+    // The hook mounts BEFORE the founder logs in (the auth gate is rendered
+    // by the same component), so getSession() returns null on the first run.
+    // Subscribe to auth state changes so the fetch re-fires the moment the
+    // founder signs in (signInWithPassword emits SIGNED_IN / TOKEN_REFRESHED).
+    (async () => {
+      try {
+        const { getSupabaseClient } = await import("@/supabase/client");
+        const client = getSupabaseClient();
+        const { data: sub } = client.auth.onAuthStateChange((event) => {
+          if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
+            loadStats();
+          }
+        });
+        unsubscribe = () => sub.subscription.unsubscribe();
+      } catch {
+        /* ignore */
+      }
+    })();
+
     return () => {
       cancelled = true;
+      unsubscribe?.();
     };
   }, []);
 
