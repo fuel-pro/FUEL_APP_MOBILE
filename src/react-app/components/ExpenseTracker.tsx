@@ -7,6 +7,7 @@ import {
   onTabPayload,
   type ExpensePrefill,
 } from "@/react-app/lib/mpesa-integration-service";
+import { emit } from "@/react-app/lib/automation-engine";
 import {
   Receipt,
   Plus,
@@ -210,6 +211,16 @@ export default function ExpenseTracker() {
         },
         ...prev,
       ]);
+      // Notify the automation engine that a new expense was recorded so it
+      // can react (e.g. refresh dashboards, log shift totals). Emitted here
+      // because the cloud sync below is fire-and-forget and we already have
+      // the values locally — no need to await the storage write.
+      emit({
+        type: "expense:created",
+        stationId: currentStation?.id || "",
+        amount: Number(formData.amount) || 0,
+        category: formData.category || "",
+      });
       showNotification("Expense added");
     }
     setShowForm(false);

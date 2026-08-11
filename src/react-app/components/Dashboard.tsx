@@ -47,6 +47,7 @@ import {
   type FuelPricePrefill,
 } from "@/react-app/lib/mpesa-integration-service";
 import { useState, useEffect, useMemo, useCallback } from "react";
+import { on } from "@/react-app/lib/automation-engine";
 
 // Lazy API base URL getter using dynamic import to avoid circular deps
 let _apiBase: string | null = null;
@@ -220,6 +221,29 @@ export default function Dashboard() {
     const interval = setInterval(fetchBackendStats, 60000); // Refresh every minute
     return () => clearInterval(interval);
   }, [fetchBackendStats]);
+
+  // Re-fetch dashboard data when the automation engine signals a refresh
+  // (e.g. a sale completed or a price changed elsewhere in the app).
+  useEffect(() => {
+    const unsubSale = on("sale:completed", () => {
+      fetchBackendStats();
+    });
+    const unsubPrice = on("price:changed", () => {
+      refreshPrices();
+      fetchBackendStats();
+    });
+    const onRefresh = () => {
+      fetchBackendStats();
+    };
+    window.addEventListener("automation:refresh-dashboard", onRefresh);
+    window.addEventListener("automation:refresh-prices", onRefresh);
+    return () => {
+      unsubSale();
+      unsubPrice();
+      window.removeEventListener("automation:refresh-dashboard", onRefresh);
+      window.removeEventListener("automation:refresh-prices", onRefresh);
+    };
+  }, [fetchBackendStats, refreshPrices]);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);

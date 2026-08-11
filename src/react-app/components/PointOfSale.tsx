@@ -36,6 +36,7 @@ import QRCode from "qrcode";
 import { useLoyalty } from "@/react-app/lib/useLoyalty";
 import { LoyaltyCustomer, TIER_COLORS } from "@/react-app/lib/loyaltyProgram";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
+import { emit } from "@/react-app/lib/automation-engine";
 
 interface CartItem {
   id: string;
@@ -458,6 +459,16 @@ export default function PointOfSale() {
       cloudStorageService
         .set("pos_transactions", trimmed, stationId)
         .catch(() => {});
+
+      // Sale is now persisted locally — notify the automation engine so
+      // downstream reactions (stock adjustment, dashboard refresh, reorder
+      // checks) fire. Emitted here, after the successful save above.
+      emit({
+        type: "sale:completed",
+        stationId: currentStation?.id || "",
+        total,
+        items: cart,
+      });
     } catch (error) {
       console.error("Failed to save POS transaction locally:", error);
     }

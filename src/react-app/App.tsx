@@ -144,6 +144,21 @@ function MainAppLoader() {
   // Supabase is configured - primary auth and database
   const isSupabaseConfigured = supabaseConfigured;
 
+  // ── Automation engine: initialize once the user is logged in ──────────
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { initAutomationEngine } = await import("@/react-app/lib/automation-engine");
+        if (!cancelled) await initAutomationEngine(null);
+      } catch (err) {
+        console.warn("[automation] failed to init:", err);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [user]);
+
   // Add loading timeout - show error after 15 seconds
   const [loadTimeout, setLoadTimeout] = useState(false);
   useEffect(() => {

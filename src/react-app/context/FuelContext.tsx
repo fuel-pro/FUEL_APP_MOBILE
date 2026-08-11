@@ -574,9 +574,10 @@ const initialState: FuelState = {
     },
     {
       id: "inventory",
-      label: "Inventory",
+      label: "Stock Management",
       originalLabel: "Inventory",
-      description: "Track stock levels, manage products",
+      description:
+        "Products catalog, stock adjustments, transfers, counts, wastage & auto-reorders",
       order: 4,
       visible: true,
     },
@@ -773,13 +774,15 @@ const initialState: FuelState = {
     // New capabilities layered onto the FuelPro tab system (not a replica of
     // app.saleszote.com). Tabs that already exist in FuelPro (POS, Inventory,
     // Customers, Expenses, Reports) are NOT duplicated here.
+    // NOTE: "Products" was merged into the "inventory" (Stock Management) tab
+    // as a sub-tab — it is no longer a standalone top-level tab.
     {
-      id: "products",
-      label: "Products Catalog",
-      originalLabel: "Products Catalog",
+      id: "automation",
+      label: "Automation Engine",
+      originalLabel: "Automation Engine",
       description:
-        "Manage non-fuel products, prices & categories (POS catalog)",
-      order: 33,
+        "The site's brain — auto-reorder, auto-sync, auto-refresh, activity log",
+      order: 35,
       visible: true,
     },
     {

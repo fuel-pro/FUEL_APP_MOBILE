@@ -103,11 +103,13 @@ const FuelPriceLocator = lazy(
 // provide genuinely new capability not already covered by a FuelPro tab are
 // wired in here; modules that duplicate an existing FuelPro tab reuse the
 // FuelPro component instead.
-const ProductsManagement = lazy(
-  () => import("@/react-app/components/ProductsManagement"),
-);
+// NOTE: ProductsManagement was merged into InventoryManagement (Stock
+// Management) as a "Products" sub-tab — no longer a standalone top-level tab.
 const TerminalSessions = lazy(
   () => import("@/react-app/components/TerminalSessions"),
+);
+const AutomationPanel = lazy(
+  () => import("@/react-app/components/AutomationPanel"),
 );
 
 // ─── Cross-Tab Data Sync ───
@@ -186,6 +188,10 @@ function HomeContent() {
   const [showStationManager, setShowStationManager] = useState(false);
   const [showCombined, setShowCombined] = useState(false);
   const [lastSaleTime, setLastSaleTime] = useState(Date.now());
+  const [automationNotice, setAutomationNotice] = useState<{
+    title: string;
+    message: string;
+  } | null>(null);
 
   // Auto-login to role
   useEffect(() => {
@@ -259,6 +265,21 @@ function HomeContent() {
     window.addEventListener("changeTab", handleChangeTab);
     return () => window.removeEventListener("changeTab", handleChangeTab);
   }, [broadcast]);
+
+  // Automation notification toast — listens for `automation:notify`
+  // CustomEvents fired by the automation engine (e.g. auto-reorder created)
+  // and surfaces them as a transient toast near the bottom of the page.
+  useEffect(() => {
+    const onNotify = (e: Event) => {
+      const detail = (e as CustomEvent).detail || {};
+      const title = detail.title || "Automation";
+      const message = detail.message || "";
+      setAutomationNotice({ title, message });
+      setTimeout(() => setAutomationNotice(null), 5000);
+    };
+    window.addEventListener("automation:notify", onNotify);
+    return () => window.removeEventListener("automation:notify", onNotify);
+  }, []);
 
   // Validate tab access - redirect if current tab is restricted by feature flag
   const { canAccessTab } = usePermissions();
@@ -388,10 +409,11 @@ function HomeContent() {
       // ─── SalesZote-style additive modules ───
       // Each maps to a genuinely-new capability. Where a SalesZote module
       // duplicates a FuelPro tab, the FuelPro component is reused above.
-      case "products":
-        return <ProductsManagement />;
+      // "products" was merged into "inventory" (Stock Management) as a sub-tab.
       case "terminal":
         return <TerminalSessions />;
+      case "automation":
+        return <AutomationPanel />;
       case "price-finder":
         return <FuelPriceLocator />;
       default:
@@ -585,6 +607,14 @@ function HomeContent() {
 
       {/* Cloud Sync Indicator */}
       <CloudSyncIndicator />
+
+      {/* Automation notification toast */}
+      {automationNotice && (
+        <div className="fixed bottom-20 right-4 z-50 bg-amber-500/95 text-white rounded-xl shadow-lg p-4 max-w-sm">
+          <p className="font-semibold text-sm">{automationNotice.title}</p>
+          <p className="text-white/80 text-xs mt-1">{automationNotice.message}</p>
+        </div>
+      )}
     </div>
   );
 }

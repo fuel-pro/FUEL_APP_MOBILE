@@ -35,6 +35,7 @@ import {
   onFuelPriceChange,
 } from "@/react-app/lib/fuel-interlink-bus";
 import { normalizeFuelType } from "@/react-app/config/pricing";
+import { emit } from "@/react-app/lib/automation-engine";
 
 interface PriceEntry {
   id: string;
@@ -345,6 +346,16 @@ export default function PriceBoard() {
           changedAt: new Date().toISOString(),
         };
         setHistory((prev) => [newHistory, ...prev]);
+
+        // Notify the automation engine that a fuel price was updated. Emitted
+        // after the new price is applied so downstream reactions (price sync
+        // across tabs, dashboard refresh) use the saved value.
+        emit({
+          type: "price:changed",
+          stationId: currentStation?.id || "",
+          fuelType: formData.fuelType,
+          newPrice: formData.price!,
+        });
       }
       showNotification("Price updated");
     } else {
@@ -356,6 +367,14 @@ export default function PriceBoard() {
         updatedAt: new Date().toISOString(),
       };
       setPrices((prev) => [...prev, newEntry]);
+
+      // Notify the automation engine of the newly added fuel price.
+      emit({
+        type: "price:changed",
+        stationId: currentStation?.id || "",
+        fuelType: formData.fuelType,
+        newPrice: formData.price!,
+      });
       showNotification("Price entry added");
     }
     setShowForm(false);

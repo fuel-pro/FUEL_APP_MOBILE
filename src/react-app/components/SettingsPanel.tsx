@@ -10,6 +10,8 @@ import {
   Fuel,
   Smartphone,
   User,
+  Settings,
+  Zap,
 } from "lucide-react";
 import { useStations } from "@/react-app/context/StationContext";
 import { useAuth } from "@/react-app/context/AuthContext";
@@ -21,7 +23,8 @@ import {
   getKopokopoConfig,
   switchToTab,
 } from "@/react-app/lib/mpesa-integration-service";
-import { isKenyaStation } from "@/react-app/lib/currency";
+import { isKenyaStation, getCurrencySymbol } from "@/react-app/lib/currency";
+import { useUserPrefs } from "@/react-app/lib/user-preferences";
 
 export default function SettingsPanel() {
   const { currentStation, updateStation } = useStations();
@@ -44,6 +47,15 @@ export default function SettingsPanel() {
   const [mpesaConnected, setMpesaConnected] = useState(false);
   const [kopoConnected, setKopoConnected] = useState(false);
   const isKenya = isKenyaStation();
+
+  // Cloud-backed user/site preferences (currency, tax label, categories, etc.)
+  const { prefs, update } = useUserPrefs();
+  const [categoriesDraft, setCategoriesDraft] = useState(
+    prefs.defaultCategories.join(", "),
+  );
+  useEffect(() => {
+    setCategoriesDraft(prefs.defaultCategories.join(", "));
+  }, [prefs.defaultCategories]);
 
   // Load real integration connection status from cloud config
   useEffect(() => {
@@ -302,6 +314,157 @@ export default function SettingsPanel() {
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+
+          {/* Site Preferences (cloud-backed user preferences) */}
+          <div className="bg-white/5 border border-white/10 rounded-xl p-6 mb-6">
+            <h3 className="text-white font-semibold mb-4 flex items-center gap-2">
+              <Settings size={20} className="text-amber-400" /> Site Preferences
+            </h3>
+            <div className="space-y-4">
+              {/* Currency */}
+              <div>
+                <label className="text-gray-400 text-xs mb-2 block">
+                  Currency
+                </label>
+                <select
+                  value={prefs.currency}
+                  onChange={(e) =>
+                    update({
+                      currency: e.target.value,
+                      currencySymbol: getCurrencySymbol(e.target.value),
+                    })
+                  }
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white"
+                >
+                  {[
+                    "USD",
+                    "EUR",
+                    "GBP",
+                    "KES",
+                    "NGN",
+                    "GHS",
+                    "UGX",
+                    "TZS",
+                    "ZAR",
+                    "INR",
+                    "AED",
+                    "SAR",
+                    "CAD",
+                    "AUD",
+                    "JPY",
+                    "CNY",
+                  ].map((c) => (
+                    <option key={c} value={c} className="bg-gray-800">
+                      {c} ({getCurrencySymbol(c)})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* VAT / Tax label */}
+              <div>
+                <label className="text-gray-400 text-xs mb-2 block">
+                  VAT / Tax Label
+                </label>
+                <input
+                  type="text"
+                  value={prefs.vatLabel}
+                  onChange={(e) => update({ vatLabel: e.target.value })}
+                  placeholder="e.g. VAT, GST, Sales Tax"
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white"
+                />
+              </div>
+
+              {/* VAT rate override */}
+              <div>
+                <label className="text-gray-400 text-xs mb-2 block">
+                  VAT Rate Override (%)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.1"
+                  value={prefs.vatRate || 0}
+                  onChange={(e) =>
+                    update({ vatRate: parseFloat(e.target.value) || 0 })
+                  }
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white"
+                />
+                <p className="text-gray-500 text-xs mt-1">
+                  Leave 0 to use country default.
+                </p>
+              </div>
+
+              {/* Default categories */}
+              <div>
+                <label className="text-gray-400 text-xs mb-2 block">
+                  Default Categories (comma-separated)
+                </label>
+                <input
+                  type="text"
+                  value={categoriesDraft}
+                  onChange={(e) => setCategoriesDraft(e.target.value)}
+                  onBlur={() =>
+                    update({
+                      defaultCategories: categoriesDraft
+                        .split(",")
+                        .map((c) => c.trim())
+                        .filter(Boolean),
+                    })
+                  }
+                  placeholder="Fuel, Lubricants, Accessories, Services, Other"
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white"
+                />
+              </div>
+
+              {/* Receipt footer */}
+              <div>
+                <label className="text-gray-400 text-xs mb-2 block">
+                  Receipt Footer
+                </label>
+                <input
+                  type="text"
+                  value={prefs.receiptFooter}
+                  onChange={(e) => update({ receiptFooter: e.target.value })}
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white"
+                />
+              </div>
+
+              {/* Invoice prefix */}
+              <div>
+                <label className="text-gray-400 text-xs mb-2 block">
+                  Invoice Prefix
+                </label>
+                <input
+                  type="text"
+                  value={prefs.invoicePrefix}
+                  onChange={(e) => update({ invoicePrefix: e.target.value })}
+                  placeholder="INV"
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white"
+                />
+              </div>
+
+              {/* Configure Automation */}
+              <button
+                onClick={() => switchToTab("automation")}
+                className="w-full flex items-center justify-between p-4 bg-white/5 hover:bg-white/10 rounded-xl transition-colors text-left"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-amber-500/20 rounded-lg flex items-center justify-center">
+                    <Zap size={18} className="text-amber-400" />
+                  </div>
+                  <div>
+                    <p className="text-white font-medium">Configure Automation</p>
+                    <p className="text-gray-500 text-xs">
+                      Auto-reorder, stock edits, dashboards & more
+                    </p>
+                  </div>
+                </div>
+                <span className="text-xs text-amber-400">Open →</span>
+              </button>
             </div>
           </div>
 
