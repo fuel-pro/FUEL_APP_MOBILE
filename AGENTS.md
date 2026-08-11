@@ -791,6 +791,45 @@ exact-match to miss. This is a geocoder data-quality issue, not a price
 engine issue — the behavior remains correct (no fabrication). Enhancing the
   geocoder to return the parent town name would improve exact-match coverage.
 
+## Email rate-limit fix (DEPLOYED LIVE 2026-08-10, commit f40f552)
+
+**Symptom**: Users hit Supabase's "email rate limit exceeded" error on the
+password-reset flow. Supabase Auth limits auth emails to ~3-4 per hour per
+address. The `PasswordReset.tsx` "Resend Reset Link" button had no cooldown,
+so rapid clicks or re-renders exhausted the limit instantly — and the raw
+Supabase error surfaced verbatim to the user.
+
+**Fix (3 layers)**:
+
+1. **Client-side cooldown** (`AuthContext.requestPasswordReset`): tracks
+   last-request time per email in `lastResetRequestRef`. A second request
+   within 60s returns a friendly "Please wait Ns before requesting another
+   reset email" message WITHOUT calling the Supabase API. The attempt is
+   recorded even on failure, preventing retry storms. A `RESET_COOLDOWN_MS`
+   constant (60000) controls the window.
+
+2. **Resend countdown UI** (`PasswordReset.tsx`): after a successful
+   send/resend, the Resend button is disabled with a live 60s countdown
+   ("Resend available in 60s"). A `useEffect` ticks the countdown every
+   second and re-enables the button at zero. `handleRequestCode` starts the
+   cooldown on success; `handleResendCode` restarts it on each successful
+   resend.
+
+3. **Friendly error translation** (`friendlyAuthEmailError`, shared by
+   `AuthContext` + `founder-auth`): if Supabase DOES return a rate-limit
+   error (HTTP 429 / "email rate limit" / "rate limit exceeded" / "for
+   security purposes, you can only request"), it is translated to "Too many
+   emails sent. For security, Supabase limits reset emails to a few per
+   hour. Please wait a few minutes before trying again." Applied to both
+   `resetPasswordForEmail` and `signUp` error paths.
+
+**Verified in production bundle** (Cloudflare Pages 25ca3d0e): the
+`founder-CphfW80Z.js` and `reports-sdD_z_K0.js` chunks contain "Too many
+emails sent"; the main `index-QYMzwXye.js` chunk contains "Resend available
+in". Vercel production deploy blocked by `api-deployments-free-per-day`
+quota (100/day exhausted, resets ~24h) — the GitHub integration will
+auto-deploy commit f40f552 when the quota resets.
+
 ## Dashboard price card "Nairobi" label fix (DEPLOYED LIVE 2026-08-10, commit f49d376)
 
 **Symptom**: the Dashboard "Current Pump Prices" cards showed "Nairobi" as
