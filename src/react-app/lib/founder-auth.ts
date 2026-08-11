@@ -47,9 +47,30 @@ export async function loginFounder(
   try {
     const client = getSupabaseClient();
 
-    // Sign in with Supabase Auth
+    // Resolve username -> real auth email via the profiles table.
+    // The auth user's email is the real Supabase Auth email (e.g.
+    // founder.qa.fuelpro@gmail.com), NOT a constructed `${username}@fuelpro.local`.
+    // Without this lookup, username-based login always fails because the
+    // fabricated local email matches no auth user.
+    let authEmail = username;
+    if (!username.includes("@")) {
+      const { data: profile } = await client
+        .from("profiles")
+        .select("email")
+        .eq("username", username)
+        .maybeSingle();
+      if (!profile?.email) {
+        return {
+          success: false,
+          error: "Invalid credentials",
+        };
+      }
+      authEmail = profile.email;
+    }
+
+    // Sign in with Supabase Auth using the resolved real email
     const { data, error } = await client.auth.signInWithPassword({
-      email: username.includes("@") ? username : `${username}@fuelpro.local`,
+      email: authEmail,
       password,
     });
 
@@ -117,9 +138,19 @@ export async function requestPasswordReset(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const client = getSupabaseClient();
-    const email = emailOrUsername.includes("@")
-      ? emailOrUsername
-      : `${emailOrUsername}@fuelpro.local`;
+    // Resolve username -> real auth email via profiles (same fix as loginFounder).
+    let email = emailOrUsername;
+    if (!emailOrUsername.includes("@")) {
+      const { data: profile } = await client
+        .from("profiles")
+        .select("email")
+        .eq("username", emailOrUsername)
+        .maybeSingle();
+      if (!profile?.email) {
+        return { success: false, error: "Username not found" };
+      }
+      email = profile.email;
+    }
     const { error } = await client.auth.resetPasswordForEmail(email, {
       redirectTo: `${window.location.origin}/#/reset-password`,
     });

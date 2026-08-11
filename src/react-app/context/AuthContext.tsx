@@ -450,10 +450,61 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             );
           }
         } else if (data.user && !data.session) {
-          // Email confirmation required
+          // Supabase may return a user without a session even when
+          // autoconfirm is enabled (it doesn't always embed the session in
+          // the signup response). Since email confirmation is now automatic,
+          // the credentials are valid immediately — sign in explicitly so the
+          // user is logged in right away instead of being stranded on the
+          // register screen with a "Logging you in..." message that never
+          // completes.
           console.info(
-            "[AuthContext] Registration successful, email confirmation required",
+            "[AuthContext] Registration succeeded without session; signing in automatically",
           );
+          const { data: signInData, error: signInError } =
+            await supabase.auth.signInWithPassword({ email, password });
+
+          if (signInError) {
+            console.error(
+              "[AuthContext] Auto sign-in after registration failed:",
+              signInError.message,
+            );
+            setError(
+              "Account created, but automatic sign-in failed. Please sign in with your credentials.",
+            );
+            setIsPending(false);
+            return true;
+          }
+
+          if (signInData.user && signInData.session) {
+            const newUser = await supabaseUserToIdentityEnriched(
+              signInData.user,
+              signInData.session,
+            );
+            setUser(newUser);
+            setToken(signInData.session.access_token);
+            localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(newUser));
+            localStorage.setItem(
+              TOKEN_STORAGE_KEY,
+              signInData.session.access_token,
+            );
+            broadcastAuthUpdate(newUser, signInData.session.access_token);
+
+            try {
+              await supabase.from("profiles").upsert(
+                {
+                  id: signInData.user.id,
+                  email: email,
+                  name: name,
+                },
+                { onConflict: "id" },
+              );
+            } catch (profileErr) {
+              console.warn(
+                "[AuthContext] profiles upsert failed (post auto-signin):",
+                profileErr,
+              );
+            }
+          }
         }
 
         setIsPending(false);
