@@ -1146,3 +1146,111 @@ These are cross-device (stored in profiles table, not localStorage).
   (no redeploy needed -- the DB migration is what fixed the Smart-Cache, and
   that's applied directly to the live Supabase project). The frontend on
   Vercel production still serves an older bundle until the quota resets.
+
+## LocationContext re-render storm / refresh loop (FIXED 2026-08-10, commit f26f921)
+
+**Symptom**: the app entered a browser refresh loop, and the "Location Logo"
+(weather widget location label) repeated/flashed on every render. Root cause:
+a GPS-state-churn re-render storm in `LocationContext.tsx`:
+
+1. `detectPreciseLocation` auto-ran on EVERY provider mount/re-mount. When
+   `StationContext` synced (e.g. `currentStation` got a new object identity),
+   `LocationProvider` re-rendered → the auto-detect effect re-fired →
+   `setPreciseLocation` → re-render → cascade.
+2. The context `value` object was created fresh on every render (NOT memoized),
+   so every consumer (`WeatherWidget`, `FuelPriceLocator`, `Dashboard`, etc.)
+   re-rendered on every LocationProvider render even when nothing changed.
+3. `WeatherWidget`'s weather-fetch effect depended on the whole
+   `preciseLocation` object (new reference every set), so it refetched weather
+   on every coordinate update.
+
+The infinite re-render exceeded React's max-update-depth → the `ErrorBoundary`
+caught it → triggered `window.location.reload()` → on reload the same storm
+recurred → refresh loop.
+
+**Fix** (`src/react-app/context/LocationContext.tsx`):
+- The context `value` is now `useMemo`'d with a dependency array of the actual
+  consumed primitives/functions, so consumers only re-render when something
+  actually changes.
+- The auto-detect effect is ref-guarded (`hasAutoDetectedRef`): it runs
+  `detectPreciseLocation()` exactly ONCE per provider lifecycle, not on every
+  re-mount/re-render.
+
+**Fix** (`src/react-app/components/WeatherWidget.tsx`):
+- The weather effect now depends on the primitive fields
+  (`preciseLocation?.lat`, `?.lng`, `?.address`) instead of the whole object,
+  so it only refetches when the coordinates actually change.
+
+**Fix** (`src/react-app/components/FuelPriceLocator.tsx`):
+- The auto-detect-location effect is ref-guarded (once-only) to prevent the
+  same re-detect storm from that consumer.
+
+Verified: `npx tsc --noEmit` (0 errors), `npm run build` (124 precache
+entries).
+
+## Canonical fuel-type normalization (ADDED 2026-08-10, commit f26f921)
+
+**Problem**: the same fuel appeared under many different names across the site
+— "Super Petrol" (Dashboard card), "Petrol (PMS)" (Dashboard chart/tank),
+"PMS Price" (Dashboard), "Petrol" (PriceBoard, FuelPriceLocator),
+"Petrol (PMS)" (PointOfSale), "Premium Motor Spirit"/"Petrol" (FuelTypesManager),
+"Super Petrol" (FuelTracker), plus "Diesel"/"AGO"/"Automotive Gas Oil",
+"Kerosene"/"IK"/"Illuminating Kerosene"/"DPK", "Cooking Gas"/"LPG", etc. These
+were treated as DIFFERENT fuels by price-matching/grouping logic, so EPRA
+auto-sync and cross-component comparisons silently missed entries.
+
+**Fix** (`src/react-app/config/pricing.ts`): added a single source of truth:
+
+- `CanonicalFuelType` union: `petrol | diesel | kerosene | vpower |
+  premium_diesel | lpg | cng`.
+- `CANONICAL_FUEL_TYPES` registry: maps each canonical type to a uniform
+  display `label` (e.g. petrol→"Super Petrol", diesel→"Diesel",
+  kerosene→"Kerosene", lpg→"LPG") and an industry `code` (PMS/AGO/IK/VPW/PDS).
+- `FUEL_ALIAS_MAP`: case-insensitive map of EVERY known spelling/abbreviation
+  (Super Petrol, Petrol, PMS, Premium Motor Spirit, Gasoline, Unleaded,
+  Regular, AGO, Automotive Gas Oil, Gas Oil, DERV, DPK, IK, Illuminating
+  Kerosene, V-Power, Premium Petrol, Premium Diesel, LPG, Cooking Gas, CNG…)
+  to its canonical type. Add new aliases here as discovered — nothing else
+  changes.
+- `normalizeFuelType(raw)` → canonical key | null.
+- `getFuelLabel(raw)` → canonical display label (falls back to trimmed raw).
+- `getFuelCode(raw)` → canonical short code.
+- `isSameFuelType(a, b)` → true if two raw strings refer to the same fuel
+  (alias-aware; falls back to case-insensitive compare for unknown types).
+
+**Applied across the UI** (all display labels now sourced from
+`CANONICAL_FUEL_TYPES`):
+- `Dashboard.tsx`: chart dataset labels, price-card captions ("Super Petrol
+  Price"/"Diesel Price" instead of "PMS Price"/"AGO Price"), tank labels
+  ("Super Petrol Tank"/"Diesel Tank" instead of "Petrol (PMS) Tank"/"Diesel
+  (AGO) Tank").
+- `PriceBoard.tsx`: `FUEL_GRADES` keys + default `fuelType` use canonical
+  labels; the EPRA auto-sync `.find()` now uses `isSameFuelType()` so BOTH
+  legacy entries ("Petrol") and canonical entries ("Super Petrol") match.
+- `FuelPriceLocator.tsx`: station price-card labels.
+- `FuelTracker.tsx`: `PriceCard` labels.
+- `PointOfSale.tsx`: quick-sale fuel name.
+- `FuelTypesManager.tsx`: `DEFAULT_FUEL_TYPES` + `PRESET_FUELS` `localName` and
+  `code` fields.
+
+**Pricing helpers updated**: `getBasePrice`, `getCountryPrice`, and
+`getKenyaFuelTypes` now resolve through `normalizeFuelType()` first (with a
+legacy fallback for any unknown raw string), so prices look up correctly
+regardless of which spelling a component/feed uses.
+
+The `/api/*` serverless fuel endpoints keep their wire-format field names
+(`super_petrol`, `diesel`, `kerosene`) — these are an internal API contract,
+not user-facing labels, and the frontend already maps them to canonical
+labels.
+
+**Deploy status 2026-08-10 (commit f26f921)**:
+- GitHub main: pushed (f26f921).
+- Cloudflare Pages: LIVE (preview https://08f3841b.fuel-app-mobile.pages.dev +
+  main alias fuel-app-mobile.pages.dev).
+- Vercel production: BLOCKED by `api-deployments-free-per-day` (100/100 used;
+  resets ~2026-08-12 06:50 UTC). ALL deploy paths are blocked (prebuilt,
+  git-source API, redeploy) — the quota now also blocks git-webhook-triggered
+  builds. The project's GitHub integration will auto-deploy the latest main
+  once the quota resets. Until then Vercel production serves the previous
+  frontend; the Cloudflare mirror has the fixed frontend NOW. /api/* endpoints
+  (unchanged by this commit) remain correct on Vercel.
