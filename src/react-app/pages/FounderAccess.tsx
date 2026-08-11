@@ -449,7 +449,7 @@ export default function FounderAccess() {
           name: s.name || "Unnamed Station",
           location: s.location || "Unknown",
           ownerId: String(s.ownerId || 0),
-          ownerName: "Owner",
+          ownerName: s.ownerName || "Owner",
           members: s.members || 0,
           createdAt: s.createdAt
             ? new Date(s.createdAt).toLocaleString()
@@ -862,8 +862,17 @@ export default function FounderAccess() {
       s.location.toLowerCase().includes(searchQuery.toLowerCase()),
   );
   const totalRevenue = stations.reduce((sum, s) => sum + s.revenue, 0);
+  // The Founder Console should show the REAL cross-owner counts from
+  // /api/founder-stats (allBackendStations), NOT the owner-scoped
+  // trpc.station.list count (backendStationCount) which only reflects the
+  // current founder's own stations. Fall back to the owner-scoped/local count
+  // only when the cross-owner fetch hasn't resolved yet.
   const effectiveStationCount =
-    backendStationCount > 0 ? backendStationCount : stations.length;
+    allBackendStations && allBackendStations.length > 0
+      ? allBackendStations.length
+      : backendStationCount > 0
+        ? backendStationCount
+        : stations.length;
   const effectiveRevenue = salesAnalytics?.totalRevenue
     ? Number(salesAnalytics.totalRevenue)
     : totalRevenue;
@@ -1139,7 +1148,12 @@ export default function FounderAccess() {
           id: "users" as SectionId,
           label: "All Users",
           icon: Users,
-          count: users.length,
+          // Prefer the cross-owner count from /api/founder-stats; fall back to
+          // the local-state (localStorage scan) count until it resolves.
+          count:
+            allBackendUsers && allBackendUsers.length > 0
+              ? allBackendUsers.length
+              : users.length,
         },
         {
           id: "stations" as SectionId,
@@ -1392,7 +1406,10 @@ export default function FounderAccess() {
                 {[
                   {
                     label: "Users",
-                    value: users.length,
+                    value:
+                      allBackendUsers && allBackendUsers.length > 0
+                        ? allBackendUsers.length
+                        : users.length,
                     icon: Users,
                     color: "text-blue-400",
                   },
