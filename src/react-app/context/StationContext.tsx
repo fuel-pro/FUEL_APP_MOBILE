@@ -692,10 +692,14 @@ async function syncStationsWithSupabase(
     }
   }
 
-  // Fetch everything now owned by this user (RLS already scopes this to them)
+  // Fetch everything now owned by this user. RLS scopes this to the user's
+  // own stations, but we ALSO filter by owner_id client-side as
+  // defense-in-depth so a misconfigured/loosened RLS policy can never leak
+  // other users' stations into this account.
   const { data, error } = await supabase
     .from("stations")
     .select("*")
+    .eq("owner_id", userId)
     .order("created_at", { ascending: true });
   let rows = data;
 
@@ -704,7 +708,7 @@ async function syncStationsWithSupabase(
   // PostgREST fetch using the token from localStorage.
   if ((!rows || rows.length === 0) && !error) {
     const directRows = await directFetch(
-      "stations?order=created_at.asc&select=*",
+      `stations?owner_id=eq.${userId}&order=created_at.asc&select=*`,
     );
     if (directRows && directRows.length > 0) {
       console.log(
@@ -802,15 +806,16 @@ async function syncStationsWithSupabase(
             console.warn("[StationContext] Cross-device migration error:", err);
           }
         }
-        // Re-fetch to get the freshly inserted rows
+        // Re-fetch to get the freshly inserted rows (scoped to this user)
         const { data: refetched } = await supabase
           .from("stations")
           .select("*")
+          .eq("owner_id", userId)
           .order("created_at", { ascending: true });
         effectiveRows = refetched || [];
         if (effectiveRows.length === 0) {
           const directRefetched = await directFetch(
-            "stations?order=created_at.asc&select=*",
+            `stations?owner_id=eq.${userId}&order=created_at.asc&select=*`,
           );
           if (directRefetched) effectiveRows = directRefetched;
         }
