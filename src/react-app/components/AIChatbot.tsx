@@ -15,6 +15,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { useFuel } from "@/react-app/context/FuelContext";
+import { getCurrencySymbol } from "@/react-app/lib/currency";
 
 // Declare Speech Recognition types
 declare global {
@@ -85,7 +86,7 @@ export default function AIChatbot() {
     const context: any = {
       timestamp: new Date().toISOString(),
       businessName: state.companyData.name || "Fuel Station",
-      currency: state.companyData.currency || "KSh",
+      currency: state.companyData.currency || getCurrencySymbol(),
       theme: state.theme,
       currentDate: state.salesDate,
       currentShift: state.shift,
@@ -413,7 +414,7 @@ export default function AIChatbot() {
   // Local AI response generator - analyzes business data and generates intelligent responses
   const generateLocalResponse = (message: string, context: any): string => {
     const lowerMsg = message.toLowerCase();
-    const currency = context.currency || "KSh";
+    const currency = context.currency || getCurrencySymbol();
     const {
       todaySales,
       deliveryTracker,

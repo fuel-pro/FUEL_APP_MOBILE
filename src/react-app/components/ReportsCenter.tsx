@@ -13,6 +13,7 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import { useFuel } from "@/react-app/context/FuelContext";
+import { getCurrencySymbol } from "@/react-app/lib/currency";
 import { formatNumber } from "@/react-app/utils/formatUtils";
 import ExportDropdown from "@/react-app/components/ExportDropdown";
 import jsPDF from "jspdf";
@@ -31,6 +32,7 @@ type ReportPeriod = "daily" | "weekly" | "monthly" | "yearly";
 
 export default function ReportsCenter() {
   const { state } = useFuel();
+  const currencySymbol = getCurrencySymbol(state.companyData?.currency);
   const [activeReport, setActiveReport] = useState<ReportType>("overall");
   const [reportPeriod, setReportPeriod] = useState<ReportPeriod>("daily");
   const [startDate, setStartDate] = useState(
@@ -513,7 +515,7 @@ export default function ReportsCenter() {
     const doc = new jsPDF();
     const reportTitle = getReportTitle();
     const pageWidth = doc.internal.pageSize.getWidth();
-    const currency = state.companyData.currency || "KSh";
+    const currency = getCurrencySymbol(state.companyData.currency);
 
     // Professional Header with KRA Compliance
     const addProfessionalHeader = (y: number) => {
@@ -1122,7 +1124,7 @@ export default function ReportsCenter() {
 
   const exportToTXT = () => {
     const reportTitle = getReportTitle();
-    const currency = state.companyData.currency || "KSh";
+    const currency = getCurrencySymbol(state.companyData.currency);
     let txt = `${"=".repeat(60)}\n`;
     txt += `${state.companyData.name}\n`;
     txt += `${"=".repeat(60)}\n\n`;
@@ -1191,7 +1193,7 @@ export default function ReportsCenter() {
     txt: exportToTXT,
     whatsapp: () => {
       const reportTitle = getReportTitle();
-      const currency = state.companyData.currency || "KSh";
+      const currency = getCurrencySymbol(state.companyData.currency);
       let msg = `*${state.companyData.name}*\n`;
       msg += `KRA PIN: ${state.companyData.kraPin || "N/A"}\n\n`;
       msg += `*${reportTitle}*\n`;
@@ -1215,7 +1217,7 @@ export default function ReportsCenter() {
     },
     email: () => {
       const reportTitle = getReportTitle();
-      const currency = state.companyData.currency || "KSh";
+      const currency = getCurrencySymbol(state.companyData.currency);
       const subject = `${reportTitle} - ${state.companyData.name}`;
       let body = `${state.companyData.name}\n`;
       body += `KRA PIN: ${state.companyData.kraPin || "N/A"}\n\n`;
@@ -1245,7 +1247,7 @@ export default function ReportsCenter() {
             className="bg-red-50 dark:bg-red-900/20 p-6 rounded-lg border border-red-200 dark:border-red-700"
           >
             <h4 className="text-lg font-semibold text-red-800 dark:text-red-200 mb-4">
-              {periodData.period} - Total Expenses: {state.companyData.currency}{" "}
+              {periodData.period} - Total Expenses: {currencySymbol}{" "}
               {formatNumber(periodData.totalExpenses)}
             </h4>
 
@@ -1261,7 +1263,7 @@ export default function ReportsCenter() {
                       >
                         <span className="text-sm">{desc}</span>
                         <span className="font-medium">
-                          {state.companyData.currency} {formatNumber(amount)}
+                          {currencySymbol} {formatNumber(amount)}
                         </span>
                       </div>
                     ),
@@ -1271,7 +1273,7 @@ export default function ReportsCenter() {
 
               <div className="text-center">
                 <div className="text-3xl font-bold text-red-600">
-                  {state.companyData.currency}{" "}
+                  {currencySymbol}{" "}
                   {formatNumber(periodData.totalExpenses)}
                 </div>
                 <div className="text-sm text-gray-600 dark:text-gray-400">
@@ -1306,7 +1308,7 @@ export default function ReportsCenter() {
                   : "text-red-800 dark:text-red-200"
               }`}
             >
-              {periodData.period} - Net Profit: {state.companyData.currency}{" "}
+              {periodData.period} - Net Profit: {currencySymbol}{" "}
               {formatNumber(periodData.netProfit)}
             </h4>
 
@@ -1316,7 +1318,7 @@ export default function ReportsCenter() {
                   Revenue
                 </h6>
                 <div className="text-2xl font-bold text-green-600">
-                  {state.companyData.currency}{" "}
+                  {currencySymbol}{" "}
                   {formatNumber(periodData.totalRevenue)}
                 </div>
               </div>
@@ -1326,7 +1328,7 @@ export default function ReportsCenter() {
                   Expenses
                 </h6>
                 <div className="text-2xl font-bold text-red-600">
-                  {state.companyData.currency}{" "}
+                  {currencySymbol}{" "}
                   {formatNumber(periodData.totalExpenses)}
                 </div>
               </div>
@@ -1344,7 +1346,7 @@ export default function ReportsCenter() {
             </div>
 
             <div className="mt-4 text-sm text-gray-600 dark:text-gray-400">
-              Till Payments: {state.companyData.currency}{" "}
+              Till Payments: {currencySymbol}{" "}
               {formatNumber(periodData.tillPayments)}
             </div>
           </div>
@@ -1365,7 +1367,7 @@ export default function ReportsCenter() {
               Gross Revenue
             </h6>
             <div className="text-2xl font-bold text-blue-600">
-              {state.companyData.currency} {formatNumber(data.grossRevenue)}
+              {currencySymbol} {formatNumber(data.grossRevenue)}
             </div>
           </div>
 
@@ -1376,7 +1378,7 @@ export default function ReportsCenter() {
             <div
               className={`text-2xl font-bold ${data.netProfit >= 0 ? "text-green-600" : "text-red-600"}`}
             >
-              {state.companyData.currency} {formatNumber(data.netProfit)}
+              {currencySymbol} {formatNumber(data.netProfit)}
             </div>
           </div>
 
@@ -1413,7 +1415,7 @@ export default function ReportsCenter() {
               <div className="flex justify-between items-center">
                 <span>Sales Revenue</span>
                 <span className="font-medium">
-                  {state.companyData.currency}{" "}
+                  {currencySymbol}{" "}
                   {formatNumber(data.totalSalesRevenue)}
                 </span>
               </div>
@@ -1421,7 +1423,7 @@ export default function ReportsCenter() {
                 <div className="flex justify-between items-center text-sm text-gray-500 dark:text-gray-400 pl-4">
                   <span>↳ POS Transactions</span>
                   <span>
-                    {state.companyData.currency}{" "}
+                    {currencySymbol}{" "}
                     {formatNumber(data.totalPOSRevenue)}
                   </span>
                 </div>
@@ -1429,14 +1431,14 @@ export default function ReportsCenter() {
               <div className="flex justify-between items-center">
                 <span>Delivery Revenue</span>
                 <span className="font-medium">
-                  {state.companyData.currency}{" "}
+                  {currencySymbol}{" "}
                   {formatNumber(data.totalDeliveryRevenue)}
                 </span>
               </div>
               <div className="flex justify-between items-center border-t pt-2">
                 <span className="font-semibold">Total Revenue</span>
                 <span className="font-bold text-green-600">
-                  {state.companyData.currency} {formatNumber(data.grossRevenue)}
+                  {currencySymbol} {formatNumber(data.grossRevenue)}
                 </span>
               </div>
             </div>
@@ -1452,21 +1454,21 @@ export default function ReportsCenter() {
               <div className="flex justify-between items-center">
                 <span>Operating Expenses</span>
                 <span className="font-medium">
-                  {state.companyData.currency}{" "}
+                  {currencySymbol}{" "}
                   {formatNumber(data.totalExpenses)}
                 </span>
               </div>
               <div className="flex justify-between items-center">
                 <span>Fuel Purchase Costs</span>
                 <span className="font-medium">
-                  {state.companyData.currency}{" "}
+                  {currencySymbol}{" "}
                   {formatNumber(data.totalOffloadingCosts)}
                 </span>
               </div>
               <div className="flex justify-between items-center border-t pt-2">
                 <span className="font-semibold">Total Costs</span>
                 <span className="font-bold text-red-600">
-                  {state.companyData.currency} {formatNumber(data.totalCosts)}
+                  {currencySymbol} {formatNumber(data.totalCosts)}
                 </span>
               </div>
             </div>
@@ -1506,7 +1508,7 @@ export default function ReportsCenter() {
             <div className="flex justify-between items-center">
               <span>Till/Mobile Payments</span>
               <span className="font-bold text-blue-600">
-                {state.companyData.currency}{" "}
+                {currencySymbol}{" "}
                 {formatNumber(data.totalTillPayments)}
               </span>
             </div>
@@ -1577,21 +1579,21 @@ export default function ReportsCenter() {
               <div className="flex justify-between items-center">
                 <span>Gross Sales (VAT Inclusive)</span>
                 <span className="font-medium">
-                  {state.companyData.currency}{" "}
+                  {currencySymbol}{" "}
                   {formatNumber(data.outputVAT.inclusiveAmount)}
                 </span>
               </div>
               <div className="flex justify-between items-center">
                 <span>Net Sales</span>
                 <span className="font-medium">
-                  {state.companyData.currency}{" "}
+                  {currencySymbol}{" "}
                   {formatNumber(data.outputVAT.netAmount)}
                 </span>
               </div>
               <div className="flex justify-between items-center border-t pt-2 bg-blue-50 dark:bg-blue-900/30 -mx-2 px-2 py-2 rounded">
                 <span className="font-semibold">VAT Collected (16%)</span>
                 <span className="font-bold text-blue-600 text-lg">
-                  {state.companyData.currency}{" "}
+                  {currencySymbol}{" "}
                   {formatNumber(data.outputVAT.vatAmount)}
                 </span>
               </div>
@@ -1608,21 +1610,21 @@ export default function ReportsCenter() {
               <div className="flex justify-between items-center">
                 <span>Gross Purchases (VAT Inclusive)</span>
                 <span className="font-medium">
-                  {state.companyData.currency}{" "}
+                  {currencySymbol}{" "}
                   {formatNumber(data.inputVAT.inclusiveAmount)}
                 </span>
               </div>
               <div className="flex justify-between items-center">
                 <span>Net Purchases</span>
                 <span className="font-medium">
-                  {state.companyData.currency}{" "}
+                  {currencySymbol}{" "}
                   {formatNumber(data.inputVAT.netAmount)}
                 </span>
               </div>
               <div className="flex justify-between items-center border-t pt-2 bg-orange-50 dark:bg-orange-900/30 -mx-2 px-2 py-2 rounded">
                 <span className="font-semibold">VAT Paid (16%)</span>
                 <span className="font-bold text-orange-600 text-lg">
-                  {state.companyData.currency}{" "}
+                  {currencySymbol}{" "}
                   {formatNumber(data.inputVAT.vatAmount)}
                 </span>
               </div>
@@ -1648,7 +1650,7 @@ export default function ReportsCenter() {
             <div
               className={`text-3xl font-bold ${data.netVATPayable >= 0 ? "text-red-600" : "text-green-600"}`}
             >
-              {state.companyData.currency}{" "}
+              {currencySymbol}{" "}
               {formatNumber(Math.abs(data.netVATPayable))}
             </div>
           </div>
@@ -1719,7 +1721,7 @@ export default function ReportsCenter() {
                 <div className="text-right">
                   <span className="text-sm text-gray-500">Day Total:</span>
                   <span className="font-bold ml-2">
-                    {state.companyData.currency}{" "}
+                    {currencySymbol}{" "}
                     {formatNumber(day.totals.grossAmount)}
                   </span>
                 </div>
@@ -1878,7 +1880,7 @@ export default function ReportsCenter() {
               Gross Sales
             </div>
             <div className="text-2xl font-bold text-green-600">
-              {state.companyData.currency}{" "}
+              {currencySymbol}{" "}
               {formatNumber(data.summary.totalGross)}
             </div>
           </div>
@@ -1887,7 +1889,7 @@ export default function ReportsCenter() {
               VAT Collected
             </div>
             <div className="text-2xl font-bold text-orange-600">
-              {state.companyData.currency} {formatNumber(data.summary.totalVAT)}
+              {currencySymbol} {formatNumber(data.summary.totalVAT)}
             </div>
           </div>
         </div>
@@ -1901,14 +1903,14 @@ export default function ReportsCenter() {
             <div className="flex justify-between items-center py-2">
               <span>Output VAT (Sales @ 16%)</span>
               <span className="font-medium text-blue-600">
-                {state.companyData.currency}{" "}
+                {currencySymbol}{" "}
                 {formatNumber(data.summary.totalVAT)}
               </span>
             </div>
             <div className="flex justify-between items-center py-2">
               <span>Less: Input VAT (Purchases @ 16%)</span>
               <span className="font-medium text-orange-600">
-                ({state.companyData.currency}{" "}
+                ({currencySymbol}{" "}
                 {formatNumber(data.summary.inputVAT)})
               </span>
             </div>
@@ -1917,7 +1919,7 @@ export default function ReportsCenter() {
               <span
                 className={`font-bold text-xl ${data.summary.netVATPayable >= 0 ? "text-red-600" : "text-green-600"}`}
               >
-                {state.companyData.currency}{" "}
+                {currencySymbol}{" "}
                 {formatNumber(data.summary.netVATPayable)}
               </span>
             </div>
@@ -1931,14 +1933,14 @@ export default function ReportsCenter() {
             <div>
               <div className="text-sm text-gray-500 mb-1">Gross Revenue</div>
               <div className="text-xl font-bold">
-                {state.companyData.currency}{" "}
+                {currencySymbol}{" "}
                 {formatNumber(data.profitLoss.grossRevenue)}
               </div>
             </div>
             <div>
               <div className="text-sm text-gray-500 mb-1">Total Costs</div>
               <div className="text-xl font-bold text-red-600">
-                {state.companyData.currency}{" "}
+                {currencySymbol}{" "}
                 {formatNumber(data.profitLoss.totalCosts)}
               </div>
             </div>
@@ -1947,7 +1949,7 @@ export default function ReportsCenter() {
               <div
                 className={`text-xl font-bold ${data.profitLoss.netProfit >= 0 ? "text-green-600" : "text-red-600"}`}
               >
-                {state.companyData.currency}{" "}
+                {currencySymbol}{" "}
                 {formatNumber(data.profitLoss.netProfit)}
               </div>
             </div>
@@ -2076,7 +2078,7 @@ export default function ReportsCenter() {
           <div className="form-group">
             <label>Currency</label>
             <div className="bg-gray-100 dark:bg-gray-700 px-3 py-2 rounded-lg font-medium">
-              {state.companyData.currency}
+              {currencySymbol}
             </div>
           </div>
         </div>

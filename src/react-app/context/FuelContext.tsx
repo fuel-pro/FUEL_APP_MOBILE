@@ -12,7 +12,7 @@ import { useStations } from "@/react-app/context/StationContext";
 import { KENYA_BASE_PRICES, DEFAULT_PRICES, getCountryPrice } from "@/react-app/config/pricing";
 // Cross-device cloud storage (Supabase app_kv-backed) — replaces /api/user-data
 import { cloudStorageService } from "@/react-app/lib/cloud-storage-service";
-import { getDetectedCountryCode } from "@/react-app/lib/currency";
+import { getDetectedCountryCode, getCurrencySymbol } from "@/react-app/lib/currency";
 
 // Resolve default prices from the detected country (world-wide, not Kenya-only)
 const _detectedCC = (() => {
@@ -421,7 +421,7 @@ const initialState: FuelState = {
     language: "en",
     dateFormat: "DD/MM/YYYY",
     timeFormat: "24h",
-    currency: "KSh",
+    currency: getCurrencySymbol(),
     notifications: {
       email: true,
       push: true,
@@ -447,7 +447,7 @@ const initialState: FuelState = {
     contacts: "",
     email: "",
     logo: "",
-    currency: "KSh",
+    currency: getCurrencySymbol(),
     bankName: "",
     branchName: "",
     accountHolder: "",
@@ -471,9 +471,9 @@ const initialState: FuelState = {
       { key: "reg", label: "Reg No", editable: true },
       { key: "fuel", label: "Fuel Type", editable: true },
       { key: "litres", label: "Litres", editable: true },
-      { key: "amount", label: "Amount (Ksh)", editable: true },
+      { key: "amount", label: `Amount (${getCurrencySymbol()})`, editable: true },
       { key: "name", label: "Name", editable: true },
-      { key: "debt", label: "Balance/Debt (Ksh)", editable: true },
+      { key: "debt", label: `Balance/Debt (${getCurrencySymbol()})`, editable: true },
     ],
     rows: [],
     totals: {

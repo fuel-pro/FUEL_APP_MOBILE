@@ -23,6 +23,7 @@ import React, { useState, useCallback, useRef, useEffect, memo } from "react";
 import { useAuth } from "@/react-app/context/AuthContext";
 import { useStations } from "@/react-app/context/StationContext";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
+import { getCurrencySymbol } from "@/react-app/lib/currency";
 import {
   Upload,
   MessageSquare,
@@ -216,7 +217,7 @@ const SHARE_METHODS: ShareMethod[] = [
     id: "whatsapp",
     name: "WhatsApp",
     icon: <MessageSquare size={18} />,
-    placeholder: "+254712345678",
+    placeholder: "+1 555 000 0000",
   },
   {
     id: "telegram",
@@ -228,7 +229,7 @@ const SHARE_METHODS: ShareMethod[] = [
     id: "sms",
     name: "SMS",
     icon: <MessageSquare size={18} />,
-    placeholder: "+254712345678",
+    placeholder: "+1 555 000 0000",
   },
   { id: "copy", name: "Copy Link", icon: <Copy size={18} />, placeholder: "" },
   { id: "print", name: "Print", icon: <Printer size={18} />, placeholder: "" },
@@ -703,7 +704,7 @@ const PumpMappingV1: React.FC = () => {
       ) {
         updatedRules = customRules.replace(
           /"currencyDetection": "auto"/,
-          '"currencyDetection": "KES"',
+          `"currencyDetection": "${getCurrencySymbol()}"`,
         );
         response = "✅ Currency detection set to Kenyan Shilling (KSh).";
       } else if (

@@ -53,8 +53,8 @@ function getDetectedCurrencyForReceipt(): string {
     }
   } catch {}
 
-  // Fallback to Kenya
-  return "KES";
+  // Fallback to detected currency
+  return getCurrencySymbol();
 }
 
 export interface ReceiptItem {
@@ -157,7 +157,7 @@ class PrinterService {
   }
 
   private formatCurrency(amount: number): string {
-    return `Ksh ${amount.toLocaleString("en-KE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    return `${getCurrencySymbol()} ${amount.toLocaleString("en-KE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   }
 
   private formatLine(left: string, right: string, width: number = 42): string {
@@ -185,7 +185,7 @@ class PrinterService {
     commands.push(this.cmdBold(false));
     commands.push(this.textToBytes(receipt.stationLocation));
     commands.push(this.newline());
-    commands.push(this.textToBytes("Tel: +254-700-000-000"));
+    commands.push(this.textToBytes("Tel: +1-555-000-0000"));
     commands.push(this.newline());
 
     // Divider

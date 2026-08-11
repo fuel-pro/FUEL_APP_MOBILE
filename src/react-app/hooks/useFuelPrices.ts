@@ -24,6 +24,7 @@ import {
 } from "@/react-app/config/pricing";
 import { useFuel } from "@/react-app/context/FuelContext";
 import { useLocation } from "@/react-app/context/LocationContext";
+import { getCurrencySymbol } from "../lib/currency";
 
 // Storage keys
 const PRICE_CACHE_KEY = "fuelpro_unified_prices";
@@ -148,10 +149,10 @@ export function useFuelPrices() {
       premiumDiesel: 213.72,
       lpg: 120.0,
       cng: 80.0,
-      currency: "KES",
-      currencySymbol: "KSh",
-      source: "Default (Kenya EPRA)",
-      location: "Kenya",
+      currency: getCurrencySymbol(),
+      currencySymbol: getCurrencySymbol(),
+      source: "Default",
+      location: "",
       lastUpdated: new Date().toISOString(),
       isOverride: false,
     };
@@ -165,9 +166,9 @@ export function useFuelPrices() {
 
   // Get location-based prices for Kenya
   const getLocationBasedPrices = useCallback((): FuelPricesWithMeta => {
-    const countryCode = currentCountry?.id || "KE";
-    const currency = currentCountry?.currency?.code || "KES";
-    const symbol = currentCountry?.currency?.symbol || "KSh";
+    const countryCode = currentCountry?.id || "";
+    const currency = currentCountry?.currency?.code || getCurrencySymbol();
+    const symbol = currentCountry?.currency?.symbol || getCurrencySymbol();
 
     // Check for manual override first
     const override = loadPriceOverride();
@@ -196,10 +197,10 @@ export function useFuelPrices() {
         petrol: cityPrices.petrolPrice,
         diesel: cityPrices.dieselPrice,
         kerosene: cityPrices.kerosenePrice,
-        currency: "KES",
-        currencySymbol: "KSh",
+        currency: getCurrencySymbol(),
+        currencySymbol: getCurrencySymbol(),
         source: `EPRA - ${cityPrices.transportSurcharge >= 0 ? "+" : ""}${cityPrices.transportSurcharge.toFixed(2)} transport`,
-        location: `Kenya - ${cityPrices.name}`,
+        location: cityPrices.name,
         cityName: cityPrices.name,
         lastUpdated: new Date().toISOString(),
         isOverride: false,

@@ -6,6 +6,7 @@ import {
 } from "@/react-app/lib/pos/printer-service";
 import { paymentService } from "@/react-app/lib/pos/payment-service";
 import { silentPrintService } from "@/react-app/lib/silent-print-service";
+import { getCurrencySymbol } from "@/react-app/lib/currency";
 import {
   CreditCard,
   Banknote,
@@ -153,7 +154,7 @@ export default function POSCheckout({
       // Process card payment
       const result = await paymentService.processPayment({
         amount: sale.total,
-        currency: "KES",
+        currency: getCurrencySymbol(),
         type: "sale",
         reference: `CARD-${Date.now()}`,
       });

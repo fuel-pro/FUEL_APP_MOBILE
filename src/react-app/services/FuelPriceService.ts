@@ -15,6 +15,7 @@ import {
   getWorldFuelPrices,
 } from "../config/pricing";
 import { getCountryFromLocation } from "../lib/world-country-utils";
+import { getCurrencySymbol } from "../lib/currency";
 
 // Storage keys
 const PRICES_CACHE_KEY = "fuelpro_daily_prices";
@@ -237,8 +238,8 @@ async function scrapeFuelPrices(location: LocationData): Promise<FuelPrices> {
           return {
             petrolPrice: live.petrolPrice,
             dieselPrice: live.dieselPrice,
-            currency: "KES",
-            currencySymbol: "KSh",
+            currency: getCurrencySymbol(),
+            currencySymbol: getCurrencySymbol(),
             location: `${location.city}, ${location.country}`,
             countryCode: "KE",
             fetchedAt: live.fetchedAt || new Date().toISOString(),
@@ -253,8 +254,8 @@ async function scrapeFuelPrices(location: LocationData): Promise<FuelPrices> {
     return {
       petrolPrice: KENYA_PETROL_PRICE,
       dieselPrice: KENYA_DIESEL_PRICE,
-      currency: "KES",
-      currencySymbol: "KSh",
+      currency: getCurrencySymbol(),
+      currencySymbol: getCurrencySymbol(),
       location: `${location.city}, ${location.country}`,
       countryCode: "KE",
       fetchedAt: new Date().toISOString(),
@@ -361,8 +362,8 @@ export async function getFuelPrices(
           ) {
             const countryCode = local.country_code || "KE";
             const cur = currencyMap[countryCode] || {
-              currency: local.currency || "KES",
-              symbol: "KSh",
+              currency: local.currency || getCurrencySymbol(),
+              symbol: getCurrencySymbol(),
             };
             const prices: FuelPrices = {
               petrolPrice: local.prices.super_petrol ?? KENYA_PETROL_PRICE,

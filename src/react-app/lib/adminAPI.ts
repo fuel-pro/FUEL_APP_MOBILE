@@ -1,3 +1,4 @@
+import { getCurrencySymbol } from "./currency";
 /**
  * FuelPro Admin API Client
  * Frontend API client for secure backend communication
@@ -599,12 +600,12 @@ export class AdminAPI {
         company: {
           name: "FuelPro Kenya",
           address: "123 Business Park, Nairobi",
-          phone: "+254700123456",
+          phone: "+1 555 000 1234",
           email: "info@fuelpro.app",
         },
         localization: {
-          currency: "KES",
-          currencySymbol: "KSh",
+          currency: getCurrencySymbol(),
+          currencySymbol: getCurrencySymbol(),
           timezone: "Africa/Nairobi",
           dateFormat: "DD/MM/YYYY",
           language: "en",

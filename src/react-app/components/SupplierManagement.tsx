@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useAuth } from "@/react-app/context/AuthContext";
 import { useStations } from "@/react-app/context/StationContext";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
+import { getCurrencySymbol } from "../lib/currency";
 import {
   Truck,
   Plus,
@@ -476,10 +477,12 @@ export default function SupplierManagement() {
                   <div className="mt-3 p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
                     <div className="flex justify-between text-xs">
                       <span className="text-gray-500">
-                        Credit: KES {supplier.creditLimit.toLocaleString()}
+                        Credit: {getCurrencySymbol()}{" "}
+                        {supplier.creditLimit.toLocaleString()}
                       </span>
                       <span className="text-gray-500">
-                        Balance: KES {supplier.currentBalance.toLocaleString()}
+                        Balance: {getCurrencySymbol()}{" "}
+                        {supplier.currentBalance.toLocaleString()}
                       </span>
                     </div>
                     <div className="mt-1 h-1.5 bg-gray-200 dark:bg-gray-600 rounded-full overflow-hidden">
@@ -563,8 +566,10 @@ export default function SupplierManagement() {
                         </div>
                       )}
                       <div>
-                        <span className="text-gray-500">Available Credit:</span>{" "}
-                        KES{" "}
+                        <span className="text-gray-500">
+                          Available Credit:
+                        </span>{" "}
+                        {getCurrencySymbol()}{" "}
                         {(
                           supplier.creditLimit - supplier.currentBalance
                         ).toLocaleString()}
@@ -662,7 +667,7 @@ export default function SupplierManagement() {
                         {order.liters.toLocaleString()}
                       </td>
                       <td className="px-4 py-3 text-right font-medium text-gray-900 dark:text-white">
-                        KES {order.total.toLocaleString()}
+                        {getCurrencySymbol()} {order.total.toLocaleString()}
                       </td>
                       <td className="px-4 py-3 text-center">
                         <span
@@ -939,7 +944,7 @@ export default function SupplierManagement() {
                       .filter((s) => s.status === "active")
                       .map((s) => (
                         <option key={s.id} value={s.id}>
-                          {s.name} (Credit: KES{" "}
+                          {s.name} (Credit: {getCurrencySymbol()}{" "}
                           {(s.creditLimit - s.currentBalance).toLocaleString()})
                         </option>
                       ))}
@@ -984,7 +989,7 @@ export default function SupplierManagement() {
                   </div>
                   <div>
                     <label className="text-xs text-gray-500 mb-1 block">
-                      Price/Liter (KES)
+                      Price/Liter ({getCurrencySymbol()})
                     </label>
                     <input
                       type="number"
@@ -1004,7 +1009,8 @@ export default function SupplierManagement() {
                   <div className="p-3 bg-amber-500/10 rounded-lg text-center">
                     <span className="text-sm text-gray-500">Total: </span>
                     <span className="text-lg font-bold text-amber-600 dark:text-amber-400">
-                      KES {orderForm.total.toLocaleString()}
+                      {getCurrencySymbol()}{" "}
+                      {orderForm.total.toLocaleString()}
                     </span>
                   </div>
                 )}

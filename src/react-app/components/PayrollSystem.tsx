@@ -22,6 +22,7 @@ import { useStations } from "@/react-app/context/StationContext";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import { getCurrencySymbol } from "../lib/currency";
 
 interface Employee {
   id?: number;
@@ -100,7 +101,7 @@ export default function PayrollSystem() {
     payrollMonth: new Date().getMonth() + 1,
     payrollYear: new Date().getFullYear(),
     paymentMethod: "bank",
-    currency: "KES",
+    currency: getCurrencySymbol(),
     enableSha: true,
     enableNssf: true,
     enableTax: true,
@@ -2507,12 +2508,12 @@ export default function PayrollSystem() {
             className="text-xs md:text-base px-2 md:px-3 py-1 md:py-2"
           />
           <p className="text-xs text-gray-500 mt-1">
-            Minimum contribution: KSh 300 (enforced automatically)
+            Minimum contribution: {getCurrencySymbol()} 300 (enforced automatically)
           </p>
         </div>
 
         <div className="form-group">
-          <label className="text-xs md:text-sm">NSSF Amount (KSh)</label>
+          <label className="text-xs md:text-sm">NSSF Amount ({getCurrencySymbol()})</label>
           <input
             type="number"
             step="0.01"
@@ -2639,7 +2640,7 @@ export default function PayrollSystem() {
               payrollMonth: new Date().getMonth() + 1,
               payrollYear: new Date().getFullYear(),
               paymentMethod: "bank",
-              currency: "KES",
+              currency: getCurrencySymbol(),
               enableSha: true,
               enableNssf: true,
               enableTax: true,
@@ -3090,7 +3091,7 @@ export default function PayrollSystem() {
               </div>
 
               <div className="form-group">
-                <label>Advance (KES)</label>
+                <label>Advance ({getCurrencySymbol()})</label>
                 <input
                   type="number"
                   value={employeeForm.advance}
@@ -3196,7 +3197,7 @@ export default function PayrollSystem() {
                 step="0.01"
               />
               <p className="text-sm text-gray-500 mt-2">
-                Note: Minimum SHA contribution is KSh 300 (automatically
+                Note: Minimum SHA contribution is {getCurrencySymbol()} 300 (automatically
                 enforced)
               </p>
             </div>
@@ -3231,7 +3232,7 @@ export default function PayrollSystem() {
               Enter the fixed NSSF amount to apply to all employees:
             </p>
             <div className="form-group">
-              <label>NSSF Amount (KES)</label>
+              <label>NSSF Amount ({getCurrencySymbol()})</label>
               <input
                 type="number"
                 value={nssfAmount}

@@ -35,6 +35,7 @@ import {
   getTierProgress,
 } from "../lib/loyaltyProgram";
 import { formatNumber } from "@/react-app/utils/formatUtils";
+import { getCurrencySymbol } from "../lib/currency";
 
 interface StationLoyaltyManagerProps {
   stationId: string;
@@ -45,7 +46,7 @@ interface StationLoyaltyManagerProps {
 export default function StationLoyaltyManager({
   stationId,
   stationName,
-  currencySymbol = "KSh",
+  currencySymbol = getCurrencySymbol(),
 }: StationLoyaltyManagerProps) {
   const {
     customers,
@@ -450,7 +451,7 @@ export default function StationLoyaltyManager({
                     {r.valueType === "percentage"
                       ? `${r.value}% off`
                       : r.valueType === "fixed"
-                        ? `KSh ${r.value} off`
+                        ? `${currencySymbol} ${r.value} off`
                         : "Free"}
                   </span>
                 </div>

@@ -9,6 +9,7 @@ import {
 // ============================================================
 
 import { getCountryById } from "@/react-app/config/countries";
+import { getCurrencySymbol } from "../lib/currency";
 
 // Use BASE_CITIES from pricing config
 const KENYA_CITIES = BASE_CITIES;
@@ -1540,7 +1541,7 @@ async function fetchKenyaFuelPrices(): Promise<FuelPriceData | null> {
       petrolPrice,
       dieselPrice,
       kerosenePrice,
-      currency: "KES",
+      currency: getCurrencySymbol(),
       effectiveDate: new Date().toISOString().split("T")[0],
       priceSettingBody: "Energy and Petroleum Regulatory Authority (EPRA)",
       sourceUrl: "https://www.epra.go.ke",

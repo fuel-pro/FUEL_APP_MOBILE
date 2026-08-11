@@ -18,11 +18,12 @@ import {
   fetchExpenses,
   fetchExpenseCategories,
 } from "@/react-app/lib/pos-service";
+import { getCurrencySymbol, getDetectedCurrency } from "@/react-app/lib/currency";
 
 const formatMoney = (amount: number) =>
   new Intl.NumberFormat("en-KE", {
     style: "currency",
-    currency: "KES",
+    currency: getDetectedCurrency(),
     minimumFractionDigits: 0,
   }).format(amount);
 

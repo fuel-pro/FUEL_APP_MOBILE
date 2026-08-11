@@ -393,7 +393,7 @@ function StationFormModal({
                 onChange={(e) =>
                   setForm((p) => ({ ...p, phone: e.target.value }))
                 }
-                placeholder="+254..."
+                placeholder="+1 555 000 0000"
                 className="w-full px-4 py-2.5 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-400"
               />
             </div>

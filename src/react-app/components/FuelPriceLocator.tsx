@@ -22,6 +22,7 @@ import {
   Loader2,
   Droplet,
 } from "lucide-react";
+import { getCurrencySymbol } from "../lib/currency";
 
 // ── API base URL ──
 // Cloudflare Pages does NOT serve /api/* endpoints — only Vercel does.
@@ -292,8 +293,8 @@ export default function FuelPriceLocator() {
               premium: toNum(data.prices.premium),
               kerosene:
                 toNum(data.prices.kerosene) ?? data.kerosenePrice ?? null,
-              currency: data.currency || "KES",
-              currencySymbol: data.currencySymbol || "KSh",
+              currency: data.currency || getCurrencySymbol(),
+              currencySymbol: data.currencySymbol || getCurrencySymbol(),
               unit: data.unit || "litre",
               source: data.source || "Live API",
               location:
@@ -320,8 +321,8 @@ export default function FuelPriceLocator() {
     // This integrates with the existing LocationContext + pricing.ts config.
     // Only reached when the Vercel API is unreachable (e.g. offline).
     const countryCode = currentCountry?.id || "KE";
-    const currency = currentCountry?.currency?.code || "KES";
-    const symbol = currentCountry?.currency?.symbol || "KSh";
+    const currency = currentCountry?.currency?.code || getCurrencySymbol();
+    const symbol = currentCountry?.currency?.symbol || getCurrencySymbol();
 
     let petrol = unifiedPrices.petrol;
     let diesel = unifiedPrices.diesel;
@@ -394,7 +395,7 @@ export default function FuelPriceLocator() {
     icon: React.ReactNode,
     colorClass: string,
   ) => {
-    const symbol = nearbyResult?.currencySymbol || "KSh";
+    const symbol = nearbyResult?.currencySymbol || getCurrencySymbol();
     return (
       <div className="p-4 bg-slate-800/50 rounded-xl border border-slate-700/50 hover:border-slate-600 transition-colors">
         <div className="flex items-center gap-2 mb-1">
@@ -545,7 +546,7 @@ export default function FuelPriceLocator() {
           {(() => {
             const breakdown = costBreakdown(nearbyResult.gasoline);
             if (!breakdown) return null;
-            const symbol = nearbyResult?.currencySymbol || "KSh";
+            const symbol = nearbyResult?.currencySymbol || getCurrencySymbol();
             const fmt = (n: number) =>
               `${symbol} ${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
             return (
@@ -630,7 +631,7 @@ export default function FuelPriceLocator() {
                           {CANONICAL_FUEL_TYPES.petrol.label}
                         </span>
                         <span className="font-medium text-emerald-400">
-                          {unifiedPrices.currencySymbol || "KSh"}{" "}
+                          {unifiedPrices.currencySymbol || getCurrencySymbol()}{" "}
                           {stationPetrol.toLocaleString()}
                         </span>
                       </div>
@@ -641,7 +642,7 @@ export default function FuelPriceLocator() {
                           {CANONICAL_FUEL_TYPES.diesel.label}
                         </span>
                         <span className="font-medium text-amber-400">
-                          {unifiedPrices.currencySymbol || "KSh"}{" "}
+                          {unifiedPrices.currencySymbol || getCurrencySymbol()}{" "}
                           {stationDiesel.toLocaleString()}
                         </span>
                       </div>

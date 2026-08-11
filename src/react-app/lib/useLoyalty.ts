@@ -15,6 +15,7 @@ import {
   generateCardNumber,
   DEFAULT_TIER_THRESHOLDS,
 } from "./loyaltyProgram";
+import { getCurrencySymbol } from "./currency";
 
 const LOYALTY_CUSTOMERS_KEY = "fuelpro_loyalty_customers";
 const LOYALTY_REWARDS_KEY = "fuelpro_loyalty_rewards";
@@ -156,8 +157,8 @@ function getDefaultRewards(stationId: string): StationReward[] {
     {
       id: `${stationId}_r6`,
       stationId,
-      name: "KSh 500 Voucher",
-      description: "KSh 500 off any purchase over KSh 2000",
+      name: `${getCurrencySymbol()} 500 Voucher`,
+      description: `${getCurrencySymbol()} 500 off any purchase over ${getCurrencySymbol()} 2000`,
       category: "voucher",
       pointsCost: 3000,
       value: 500,

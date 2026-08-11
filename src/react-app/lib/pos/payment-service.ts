@@ -1,6 +1,7 @@
 // Card Payment Service - Handles payment terminal communication
 import { hardwareManager, type CardReaderDevice } from "./hardware-manager";
 import { EventEmitter } from "eventemitter3";
+import { getCurrencySymbol } from "../currency";
 
 // Import type-only to ensure USB types are available
 import type {} from "./hardware-manager";
@@ -341,7 +342,7 @@ class PaymentService extends EventEmitter {
   // Simulate payment for testing without real card reader
   async simulateCardPayment(
     amount: number,
-    currency: string = "KES",
+    currency: string = getCurrencySymbol(),
   ): Promise<PaymentResponse> {
     return new Promise((resolve) => {
       this.emit("simulating", { amount });

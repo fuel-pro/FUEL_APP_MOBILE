@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
+import { getCurrencySymbol } from "../lib/currency";
 import { useAuth } from "@/react-app/context/AuthContext";
 import { useStations } from "@/react-app/context/StationContext";
 import {
@@ -268,7 +269,7 @@ export default function ExpenseTracker() {
             <span className="text-xs text-gray-500">Total Expenses</span>
           </div>
           <p className="text-xl font-bold text-gray-900 dark:text-white">
-            KES {totalExpenses.toLocaleString()}
+            {getCurrencySymbol()} {totalExpenses.toLocaleString()}
           </p>
         </div>
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
@@ -277,7 +278,7 @@ export default function ExpenseTracker() {
             <span className="text-xs text-gray-500">Approved</span>
           </div>
           <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400">
-            KES {approvedTotal.toLocaleString()}
+            {getCurrencySymbol()} {approvedTotal.toLocaleString()}
           </p>
         </div>
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
@@ -286,7 +287,7 @@ export default function ExpenseTracker() {
             <span className="text-xs text-gray-500">Pending</span>
           </div>
           <p className="text-xl font-bold text-amber-600 dark:text-amber-400">
-            KES {pendingTotal.toLocaleString()}
+            {getCurrencySymbol()} {pendingTotal.toLocaleString()}
           </p>
         </div>
       </div>
@@ -411,7 +412,7 @@ export default function ExpenseTracker() {
                           {exp.description}
                         </td>
                         <td className="px-4 py-3 text-right font-medium text-gray-900 dark:text-white">
-                          KES {exp.amount.toLocaleString()}
+                          {getCurrencySymbol()} {exp.amount.toLocaleString()}
                         </td>
                         <td className="px-4 py-3 text-center">
                           <span
@@ -483,7 +484,7 @@ export default function ExpenseTracker() {
                         <CatIcon size={12} /> {cat.label}
                       </span>
                       <span className="text-gray-900 dark:text-white font-medium">
-                        KES {cat.total.toLocaleString()} ({pct.toFixed(1)}%)
+                        {getCurrencySymbol()} {cat.total.toLocaleString()} ({pct.toFixed(1)}%)
                       </span>
                     </div>
                     <div className="h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
@@ -516,19 +517,19 @@ export default function ExpenseTracker() {
               <div className="p-3 bg-emerald-50 dark:bg-emerald-500/10 rounded-lg">
                 <p className="text-xs text-gray-500">Approved</p>
                 <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
-                  KES {approvedTotal.toLocaleString()}
+                  {getCurrencySymbol()} {approvedTotal.toLocaleString()}
                 </p>
               </div>
               <div className="p-3 bg-amber-50 dark:bg-amber-500/10 rounded-lg">
                 <p className="text-xs text-gray-500">Pending Approval</p>
                 <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">
-                  KES {pendingTotal.toLocaleString()}
+                  {getCurrencySymbol()} {pendingTotal.toLocaleString()}
                 </p>
               </div>
               <div className="p-3 bg-red-50 dark:bg-red-500/10 rounded-lg">
                 <p className="text-xs text-gray-500">Average per Expense</p>
                 <p className="text-2xl font-bold text-red-600 dark:text-red-400">
-                  KES{" "}
+                  {getCurrencySymbol()}{" "}
                   {filtered.length > 0
                     ? Math.round(
                         totalExpenses / filtered.length,
@@ -574,7 +575,7 @@ export default function ExpenseTracker() {
                   </div>
                   <div>
                     <label className="text-xs text-gray-500 mb-1 block">
-                      Amount (KES) *
+                      Amount ({getCurrencySymbol()}) *
                     </label>
                     <input
                       type="number"

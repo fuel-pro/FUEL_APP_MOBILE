@@ -32,7 +32,7 @@ import { getRegionalConfig } from "../config/regions";
 import SearchableCountryDropdown from "./SearchableCountryDropdown";
 import { resolveCountryFromBrowser } from "../lib/geo-utils";
 
-const DEFAULT_CURRENCY = "KSh ";
+const DEFAULT_CURRENCY = "$ ";
 
 /** Resolve the currency symbol for a country code using the world-wide
  * pricing table (covers all 250+ countries, never defaults to "KSh"). */

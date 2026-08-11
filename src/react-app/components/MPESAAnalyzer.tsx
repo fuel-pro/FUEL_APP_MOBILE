@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { formatNumber } from "@/react-app/utils/formatUtils";
 import { getGeminiUrl } from "@/utils/apiConfig";
+import { getCurrencySymbol } from "@/react-app/lib/currency";
 import {
   addBatchTransactions,
   getTransactions,
@@ -111,6 +112,7 @@ export default function MPESAAnalyzer() {
   const { user } = useAuth();
   const { currentStation } = useStations();
   const stationId = currentStation?.id;
+  const currencySymbol = getCurrencySymbol(currentStation?.currency);
 
   // Input state
   const [inputMethod, setInputMethod] = useState<InputMethod>("pdf");
@@ -690,10 +692,10 @@ export default function MPESAAnalyzer() {
     setInflowData(records);
     setStats(st);
     addProgress(
-      `Done! ${records.length} inflows extracted | Total: Ksh ${formatNumber(st.totalAmount, 2)}`,
+      `Done! ${records.length} inflows extracted | Total: ${currencySymbol} ${formatNumber(st.totalAmount, 2)}`,
     );
     setValidationWarning(
-      `Validated: ${records.length} inflows | Ksh ${formatNumber(st.totalAmount, 2)} | ${excluded.length} excluded (loans/charges)`,
+      `Validated: ${records.length} inflows | ${currencySymbol} ${formatNumber(st.totalAmount, 2)} | ${excluded.length} excluded (loans/charges)`,
     );
 
     // Save to shared unified store (interlinked with Live Transaction)
@@ -770,7 +772,7 @@ export default function MPESAAnalyzer() {
   // ===== EXPORT =====
   const exportCSV = () => {
     if (!inflowData.length) return;
-    const header = "Details,Paid In (Ksh),Balance (Ksh),Receipt,Date,Time\n";
+    const header = `Details,Paid In (${currencySymbol}),Balance (${currencySymbol}),Receipt,Date,Time\n`;
     const rows = inflowData.map((r) =>
       [
         `"${(r.details || "").replace(/"/g, '""')}"`,
@@ -1175,25 +1177,25 @@ export default function MPESAAnalyzer() {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
             <div>
               <p className="text-lg font-bold text-emerald-700 dark:text-emerald-400">
-                Ksh {formatNumber(stats.cleanRevenue.genuineRevenue, 0)}
+                {currencySymbol} {formatNumber(stats.cleanRevenue.genuineRevenue, 0)}
               </p>
               <p className="text-[10px] text-emerald-600">Operating Revenue</p>
             </div>
             <div>
               <p className="text-lg font-bold text-red-600 dark:text-red-400">
-                Ksh {formatNumber(stats.cleanRevenue.excludedLoans, 0)}
+                {currencySymbol} {formatNumber(stats.cleanRevenue.excludedLoans, 0)}
               </p>
               <p className="text-[10px] text-red-500">Excluded (Loans)</p>
             </div>
             <div>
               <p className="text-lg font-bold text-orange-600 dark:text-orange-400">
-                Ksh {formatNumber(stats.cleanRevenue.excludedCharges, 0)}
+                {currencySymbol} {formatNumber(stats.cleanRevenue.excludedCharges, 0)}
               </p>
               <p className="text-[10px] text-orange-500">Excluded (Charges)</p>
             </div>
             <div>
               <p className="text-lg font-bold text-purple-600 dark:text-purple-400">
-                Ksh {formatNumber(stats.cleanRevenue.excludedTransfers, 0)}
+                {currencySymbol} {formatNumber(stats.cleanRevenue.excludedTransfers, 0)}
               </p>
               <p className="text-[10px] text-purple-500">
                 Excluded (Transfers)
@@ -1274,7 +1276,7 @@ export default function MPESAAnalyzer() {
           </div>
           <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 text-center">
             <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-              Ksh {formatNumber(stats.totalAmount, 0)}
+              {currencySymbol} {formatNumber(stats.totalAmount, 0)}
             </p>
             <p className="text-[10px] text-gray-500">Total Received</p>
           </div>
@@ -1286,7 +1288,7 @@ export default function MPESAAnalyzer() {
           </div>
           <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 text-center">
             <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">
-              Ksh {formatNumber(stats.averagePayment, 0)}
+              {currencySymbol} {formatNumber(stats.averagePayment, 0)}
             </p>
             <p className="text-[10px] text-gray-500">Average Payment</p>
           </div>
@@ -1304,7 +1306,7 @@ export default function MPESAAnalyzer() {
               {stats.topCustomer.name}
             </p>
             <p className="text-sm text-amber-700 dark:text-amber-400">
-              Ksh {formatNumber(stats.topCustomer.amount, 0)} across{" "}
+              {currencySymbol} {formatNumber(stats.topCustomer.amount, 0)} across{" "}
               {stats.topCustomer.count} payment
               {stats.topCustomer.count !== 1 ? "s" : ""}
             </p>
@@ -1359,13 +1361,13 @@ export default function MPESAAnalyzer() {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
             <div className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700 text-center">
               <p className="text-lg font-bold text-blue-600 dark:text-blue-400">
-                Ksh {formatNumber(stats.balanceAnalysis.recordedNet, 0)}
+                {currencySymbol} {formatNumber(stats.balanceAnalysis.recordedNet, 0)}
               </p>
               <p className="text-[9px] text-gray-500">Recorded Net (Paid In)</p>
             </div>
             <div className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700 text-center">
               <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
-                Ksh {formatNumber(stats.balanceAnalysis.trueInflow, 0)}
+                {currencySymbol} {formatNumber(stats.balanceAnalysis.trueInflow, 0)}
               </p>
               <p className="text-[9px] text-gray-500">
                 True Inflow (Balance Delta +)
@@ -1381,7 +1383,7 @@ export default function MPESAAnalyzer() {
               <p
                 className={`text-lg font-bold ${stats.balanceAnalysis.hasUnrecorded ? "text-amber-600 dark:text-amber-400" : "text-gray-600 dark:text-gray-400"}`}
               >
-                Ksh {formatNumber(stats.balanceAnalysis.unrecordedInflow, 0)}
+                {currencySymbol} {formatNumber(stats.balanceAnalysis.unrecordedInflow, 0)}
               </p>
               <p className="text-[9px] text-gray-500">Unrecorded Inflow</p>
             </div>
@@ -1402,7 +1404,7 @@ export default function MPESAAnalyzer() {
               <p className="text-[11px] text-amber-700 dark:text-amber-400">
                 <strong>Warning:</strong> The receipt parser detected{" "}
                 <strong>
-                  Ksh {formatNumber(stats.balanceAnalysis.unrecordedInflow, 0)}
+                  {currencySymbol} {formatNumber(stats.balanceAnalysis.unrecordedInflow, 0)}
                 </strong>{" "}
                 in unrecorded inflows. The statement Balance column shows higher
                 growth than the parsed receipts, suggesting some transactions
@@ -1534,7 +1536,7 @@ export default function MPESAAnalyzer() {
                 <div className="p-3 bg-white dark:bg-gray-800 rounded-lg border border-indigo-200">
                   <p className="text-xs text-gray-500">Filtered Result:</p>
                   <p className="text-xl font-bold text-indigo-700 dark:text-indigo-400">
-                    Ksh {formatNumber(rangeFilterTotal, 2)}
+                    {currencySymbol} {formatNumber(rangeFilterTotal, 2)}
                   </p>
                   <p className="text-xs text-gray-500">
                     from {rangeFilterCount} transaction
@@ -1675,7 +1677,7 @@ export default function MPESAAnalyzer() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-semibold text-gray-900 dark:text-white">
-                        Ksh {formatNumber(tx.amount, 2)}
+                        {currencySymbol} {formatNumber(tx.amount, 2)}
                       </span>
                       <span
                         className={`text-[10px] px-2 py-0.5 rounded ${

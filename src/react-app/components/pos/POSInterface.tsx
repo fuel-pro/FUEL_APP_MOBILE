@@ -9,6 +9,7 @@ import {
 } from "@/react-app/lib/pos/hardware-manager";
 import { printerService } from "@/react-app/lib/pos/printer-service";
 import { paymentService } from "@/react-app/lib/pos/payment-service";
+import { getCurrencySymbol } from "@/react-app/lib/currency";
 import {
   Printer,
   CreditCard,
@@ -182,7 +183,7 @@ export default function POSInterface() {
 
   const handleTestCardReader = async () => {
     try {
-      await paymentService.simulateCardPayment(10, "KES");
+      await paymentService.simulateCardPayment(10, getCurrencySymbol());
     } catch (error) {
       console.error("Card reader test failed:", error);
     }

@@ -24,6 +24,7 @@ import {
 import { useAutoSync } from "@/react-app/hooks/useAutoSync";
 import { useLocation } from "@/react-app/context/LocationContext";
 import { useStations } from "@/react-app/context/StationContext";
+import { getCurrencySymbol } from "@/react-app/lib/currency";
 
 interface PriceEntry {
   id: string;
@@ -104,7 +105,7 @@ export default function PriceBoard() {
     fuelType: CANONICAL_FUEL_TYPES.petrol.label,
     grade: "Regular",
     price: 0,
-    currency: "KES",
+    currency: getCurrencySymbol(),
     displayOrder: 0,
     isActive: true,
     effectiveDate: new Date().toISOString().slice(0, 10),
@@ -414,7 +415,7 @@ export default function PriceBoard() {
                 fuelType: CANONICAL_FUEL_TYPES.petrol.label,
                 grade: "Regular",
                 price: 0,
-                currency: "KES",
+                currency: getCurrencySymbol(),
                 displayOrder: prices.length + 1,
                 isActive: true,
                 effectiveDate: new Date().toISOString().slice(0, 10),

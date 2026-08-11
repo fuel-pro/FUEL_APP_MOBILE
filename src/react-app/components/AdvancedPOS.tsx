@@ -30,12 +30,13 @@ import {
   openTerminalSession,
 } from "@/react-app/lib/pos-service";
 import type { POSItem, POSCart } from "@/react-app/lib/pos-service";
+import { getCurrencySymbol, getDetectedCurrency } from "@/react-app/lib/currency";
 
 // Format currency
 const formatMoney = (amount: number) => {
   return new Intl.NumberFormat("en-KE", {
     style: "currency",
-    currency: "KES",
+    currency: getDetectedCurrency(),
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(amount);

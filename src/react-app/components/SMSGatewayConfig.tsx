@@ -368,7 +368,7 @@ export default function SMSGatewayConfig() {
             type="tel"
             value={testPhone}
             onChange={(e) => setTestPhone(e.target.value)}
-            placeholder="+254712345678"
+            placeholder="+1 555 000 0000"
             className="flex-1 px-3 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
           <button

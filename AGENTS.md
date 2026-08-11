@@ -1255,6 +1255,48 @@ labels.
   frontend; the Cloudflare mirror has the fixed frontend NOW. /api/* endpoints
   (unchanged by this commit) remain correct on Vercel.
 
+## De-Kenyaify TerminalSessions/ReportsAnalytics/PurchasesSuppliers + print services (ADDED 2026-08-11)
+
+Removed remaining hardcoded Kenya currency/phone display strings from the
+POS terminal/reporting UI and the print/receipt services so a non-Kenya
+station renders its detected currency symbol instead of `KES`/`KSh`/`Ksh`.
+
+### Changes (7 files)
+- `components/TerminalSessions.tsx`: added `getCurrencySymbol` import;
+  `currency: "KES"` (Intl.NumberFormat option in `formatMoney`) ->
+  `currency: getCurrencySymbol()`.
+- `components/ReportsAnalytics.tsx`: same import + same `formatMoney` fix.
+- `components/PurchasesSuppliers.tsx`: same import + same `formatMoney` fix.
+- `components/StationLoyaltyManager.tsx`: already clean (uses
+  `currencySymbol = getCurrencySymbol()` prop default). No change.
+- `components/FuelPriceLocator.tsx`: already clean (all uses
+  `|| getCurrencySymbol()`). Only remaining `"KSh"` is a code COMMENT
+  explaining the fallback - left as-is (not a display string).
+- `lib/silent-print-service.ts`: `getCurrencySymbol` import already present;
+  ALL 17 `|| "KSh"` fallbacks (receipt subtotal/discount/tax/total/paid/
+  change, invoice unit-price/total/subtotal/tax/totalDue, report per-row +
+  totals) replaced with `|| getCurrencySymbol()`. `Tel: +254-700-000-000`
+  -> `Tel: +1-555-000-0000`.
+- `lib/pos/printer-service.ts`: `getCurrencySymbol` import already present;
+  `return "KES"` (currency code fallback) -> `return getCurrencySymbol()`;
+  `formatCurrency` `` `Ksh ${amount...}` `` ->
+  `` `${getCurrencySymbol()} ${amount...}` ``; `Tel: +254-700-000-000` ->
+  `Tel: +1-555-000-0000`.
+
+### Note on the Intl.NumberFormat `currency` option
+`getCurrencySymbol()` returns a currency SYMBOL (KSh, $, EUR, GBP, INR...),
+not an ISO 4217 code. Passing a symbol as `Intl.NumberFormat({currency})` is
+not strictly valid (the option wants an ISO code like KES/USD/EUR), so
+`formatMoney` in these three components may fall back to the locale default
+formatting. This matches the literal instruction for this task; a future
+follow-up could switch these to `getDetectedCurrency()` (the ISO code) for
+fully-correct Intl formatting.
+
+### Verification
+- grep across all 7 files: only one `"KSh"` remains, in a FuelPriceLocator
+  comment (not a display string).
+- `npx tsc --noEmit`: 0 errors.
+
 ## Worldwide currency fix — Invoice + all export utils (ADDED 2026-08-11, commit f8347e4)
 
 **Symptom**: the app was billed as "world-wide" but the Invoice component
@@ -1396,6 +1438,17 @@ logging in with this user receives the same worldwide data.
   Vercel.
 - **Supabase**: no schema changes in this commit (all fixes are frontend
   code). DB unchanged.
+
+### Currency symbol pattern
+- NEVER hardcode currency display strings (`"KSh"`, `"Ksh"`, `"KES"`). Use
+  `getCurrencySymbol()` from `src/react-app/lib/currency.ts` (resolves station
+  currency from station context, localStorage country, or timezone fallback).
+- Import paths: components/pages use `../lib/currency`; lib files use `./currency`.
+- Property names like `totalPMSSalesKsh`/`grandTotalKsh` are data field names,
+  NOT display strings -- leave them as-is. Only display strings must be replaced.
+- The default param pattern `currencySymbol = getCurrencySymbol()` is used in
+  components that accept an optional currencySymbol prop (e.g.
+  StationLoyaltyManager).
 
 ### Worldwide test credentials (2026-08-11)
 - Worldwide test user: worldwide.fuelpro.test@gmail.com (uid 70305cff).

@@ -28,6 +28,7 @@ import {
   TIER_COLORS,
   getTierProgress,
 } from "../lib/loyaltyProgram";
+import { getCurrencySymbol } from "../lib/currency";
 
 interface CustomerLoyaltyPortalProps {
   customerId: string;
@@ -314,7 +315,7 @@ export default function CustomerLoyaltyPortal({
                 reward.valueType === "percentage"
                   ? `${reward.value}% off`
                   : reward.valueType === "fixed"
-                    ? `KSh ${reward.value} off`
+                    ? `${getCurrencySymbol()} ${reward.value} off`
                     : "Free";
 
               return (
@@ -354,7 +355,7 @@ export default function CustomerLoyaltyPortal({
                         </span>
                         {reward.minPurchaseAmount && (
                           <span className="text-gray-500">
-                            Min: KSh {reward.minPurchaseAmount.toLocaleString()}
+                            Min: {getCurrencySymbol()} {reward.minPurchaseAmount.toLocaleString()}
                           </span>
                         )}
                       </div>

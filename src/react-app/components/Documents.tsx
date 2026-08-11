@@ -25,6 +25,7 @@ import {
 import { useAuth } from "@/react-app/context/AuthContext";
 import { useFuel } from "../context/FuelContext";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
+import { getCurrencySymbol } from "../lib/currency";
 import { getSupabaseClient } from "@/supabase/client";
 
 interface DocumentFolder {
@@ -421,7 +422,7 @@ export default function Documents() {
     const formatDate = (d: string | Date) =>
       new Date(d).toLocaleDateString("en-GB");
     const formatCurrency = (n: number) =>
-      `Ksh ${(n || 0).toLocaleString("en-KE")}`;
+      `${getCurrencySymbol()} ${(n || 0).toLocaleString()}`;
 
     let content = "";
 
