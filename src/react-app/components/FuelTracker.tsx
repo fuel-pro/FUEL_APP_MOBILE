@@ -33,6 +33,7 @@ interface LocalFuelResponse {
   is_approximate?: boolean;
   nearest_town?: string;
   distance_km?: number;
+  no_real_data?: boolean;
   error?: string;
 }
 

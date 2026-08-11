@@ -63,6 +63,7 @@ interface NearbyPriceResult {
   distance_km?: number;
   last_updated?: string;
   is_approximate?: boolean;
+  no_real_data?: boolean;
   error?: string;
 }
 
@@ -223,6 +224,33 @@ export default function FuelPriceLocator() {
 
         if (response && response.ok) {
           const data: NearbyPriceResult = await response.json();
+          // no_real_data = the engine found NO real price for this exact
+          // location (no EPRA match, AI extraction rejected as implausible,
+          // no nearby cached real price). Show "N/A" — do NOT fall back to
+          // a client-side estimate, which would violate the "real prices
+          // only" requirement.
+          if (data.no_real_data) {
+            const result: StationPriceInfo = {
+              stationName:
+                data.locationName ||
+                data.location ||
+                locName ||
+                "Your Location",
+              gasoline: null,
+              diesel: null,
+              premium: null,
+              kerosene: null,
+              currency: data.currency || "KES",
+              currencySymbol: "KSh",
+              unit: "litre",
+              source: "No published price",
+              location: data.locationName || data.location || locName || "",
+            };
+            setNearbyResult(result);
+            setLastFetchAt(new Date().toISOString());
+            setLoading(false);
+            return;
+          }
           if (data.success && data.prices) {
             // /api/fuel-local returns super_petrol/diesel/kerosene as numbers.
             const toNum = (v: string | number | undefined): number | null => {

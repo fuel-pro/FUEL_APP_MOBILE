@@ -95,6 +95,7 @@ export interface LocalFuelPrices {
   is_approximate?: boolean;
   nearest_town?: string;
   distance_km?: number;
+  no_real_data?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -896,8 +897,23 @@ export async function getLocalFuelPrices(
       }
     }
 
-    const msg = e instanceof Error ? e.message : String(e);
-    throw new Error(`No fuel data for ${place.name}: ${msg}`);
+    // F. No real price available for this location. Return an explicit
+    // "no published price" result with null prices instead of throwing —
+    // this lets the API respond success:true so the frontend shows "N/A"
+    // rather than falling back to a client-side estimate. We never fabricate.
+    const currency = currencyForCountry(place.countryCode);
+    return {
+      location: place.name,
+      country: place.country,
+      country_code: place.countryCode,
+      lat,
+      lon,
+      prices: { super_petrol: null, diesel: null, kerosene: null },
+      currency: currency.code,
+      source: "No published price",
+      last_updated: new Date().toISOString(),
+      no_real_data: true,
+    };
   }
 }
 
