@@ -4,12 +4,18 @@
  * This is the SINGLE SOURCE OF TRUTH for all fuel prices in the application.
  * All components, services, and contexts should import from this file.
  *
- * PRICE STRATEGY:
- * - Kenya: Uses EPRA regulated prices (revised monthly)
- * - Other African countries: Regional average prices
- * - Prices are location-aware (city-based for Kenya)
+ * PRICE STRATEGY (WORLD-WIDE):
+ * - All 250+ countries are covered — no country ever falls back to Kenya prices.
+ * - Kenya: EPRA regulated prices (revised monthly)
+ * - Other African countries: regional average prices (REGIONAL_PRICES)
+ * - Every other country: USD-denominated baseline × local currency exchange
+ *   rate (WORLD_FUEL_PRICES, derived from world-country-utils). This gives a
+ *   reasonable offline fallback denominated in the user's OWN currency, never
+ *   Kenyan Shillings for a non-Kenyan user.
+ * - The live path (/api/fuel-local, /api/fuel-prices) is preferred whenever
+ *   the network is available; the tables here are the OFFLINE fallback only.
  *
- * Last Updated: 2026-08-08 (EPRA cycle: 15 Jul 2026 - 14 Aug 2026)
+ * Last Updated: 2026-08-11 (EPRA cycle: 15 Jul 2026 - 14 Aug 2026)
  */
 
 // ============================================
@@ -129,6 +135,159 @@ export const REGIONAL_PRICES: Record<
     kerosene: 12,
   }, // Botswana
 } as const;
+
+// ============================================
+// WORLD-WIDE FUEL PRICES (offline fallback for ALL 250+ countries)
+//
+// Every country that is NOT in REGIONAL_PRICES gets a price derived from a
+// USD-denominated baseline × the local-currency exchange rate, so a user in
+// the United States, Germany, India, Brazil, Japan, etc. always sees prices
+// in their OWN currency — never Kenyan Shillings. The numbers are an
+// approximate offline fallback only; the live /api/fuel-local engine
+// (reverse-geocode → web search → AI extract → PostGIS nearest) is always
+// preferred when the network is available.
+//
+// USD base prices (per litre, approximate global averages):
+//   petrol  ≈ $1.05, diesel ≈ $1.10, kerosene ≈ $0.90
+// Exchange rates (units per 1 USD) mirror world-country-utils.
+// ============================================
+
+const USD_BASE_PER_LITRE = {
+  petrol: 1.05,
+  diesel: 1.1,
+  kerosene: 0.9,
+} as const;
+
+// Exchange rates: local currency units per 1 USD. Covers every currency used
+// by WORLD_PAYMENT_CONFIGS so no country is left without a local price.
+const USD_EXCHANGE_RATES: Record<string, number> = {
+  USD: 1, EUR: 0.92, GBP: 0.79, CAD: 1.36, AUD: 1.52, JPY: 150, CHF: 0.88,
+  KES: 129, UGX: 3800, TZS: 2530, NGN: 900, ZAR: 18.9, GHS: 12.5, RWF: 1300,
+  ETB: 56, MAD: 10.1, DZD: 135, XOF: 605, XAF: 605, CVE: 102, GMD: 63,
+  MGA: 4550, MRU: 40, MZN: 64, NAD: 18.9, SZL: 18.9, SDG: 600, SOS: 571,
+  SSP: 13000, TND: 3.11, CNY: 7.19, INR: 83.1, PKR: 278, LKR: 300, IDR: 15600,
+  PHP: 56, THB: 35.5, MYR: 4.75, VND: 24500, KRW: 1330, SGD: 1.34, HKD: 7.82,
+  NZD: 1.61, BRL: 4.97, MXN: 17.1, ARS: 350, COP: 3920, CLP: 880, PEN: 3.73,
+  UYU: 39.2, AED: 3.67, SAR: 3.75, QAR: 3.64, KWD: 0.31, BHD: 0.38, OMR: 0.38,
+  RUB: 91, UAH: 38, PLN: 4, CZK: 23.2, HUF: 360, RON: 4.6, SEK: 10.4,
+  NOK: 10.5, DKK: 6.9, ILS: 3.7, TRY: 31, EGP: 31, IRR: 42000, IQD: 1310,
+  LBP: 89500, SYP: 13000, YER: 250, ALL: 95, MKD: 56.8, BAM: 1.8, HRK: 7,
+  RSD: 108, BGN: 1.8, GEL: 2.7, AMD: 405, AZN: 1.7, KZT: 500, TMT: 3.5,
+  UZS: 12500, TJS: 11, KGS: 89, MNT: 3400, LAK: 20700, MMK: 2100, KHR: 4100,
+  FJD: 2.22, PGK: 3.7, SBD: 8.4, VUV: 120, WST: 2.74, TOP: 2.36, JMD: 156,
+  TTD: 6.76, XCD: 2.7, HTG: 132, DOP: 59, GTQ: 7.82, HNL: 24.7, NIO: 36.6,
+  CRC: 514, PAB: 1, BZD: 2, CUP: 24, ANG: 1.79, AWG: 1.79, BMD: 1, PYG: 7300,
+  BOB: 6.91, VEF: 36.2, GYD: 209, SRD: 38, XPF: 109, BND: 1.34, MOP: 8,
+  TWD: 31.3, AFN: 71, BTN: 83.1, NPR: 133, SCR: 13.5, MVR: 15.4, GNF: 8600,
+  SLL: 22.5, LRD: 189, DJF: 178, ERN: 15, ZWL: 5800, BWP: 13.6, ZMW: 26,
+  ISK: 138, JOD: 0.71, LBP2: 89500, LYD: 4.8, BIF: 2950, KMF: 460, CDF: 2500,
+  GMD2: 63, GIP: 0.79, KMF2: 460, LSL: 18.9, MDL: 18, MUR: 45, MTP: 0.43,
+  PRS: 1, SHP: 0.79, SLL2: 22.5, SLL3: 22.5, SPL: 1, SVC: 8.75, SVC2: 8.75,
+  SYP2: 13000, TJS2: 11, TMT2: 3.5, TVD: 1.6, VES: 36.2, ZMK: 26,
+};
+
+/** Round to a "nice" number for display (avoid absurd decimals). */
+function niceRound(value: number): number {
+  if (value < 1) return Math.round(value * 100) / 100;
+  if (value < 10) return Math.round(value * 10) / 10;
+  if (value < 100) return Math.round(value);
+  if (value < 10000) return Math.round(value / 5) * 5;
+  return Math.round(value / 100) * 100;
+}
+
+/**
+ * Compute a fuel-price fallback (petrol/diesel/kerosene) for ANY currency code,
+ * in local-currency units per litre. Returns the country's own currency so the
+ * UI never shows Kenyan Shillings to a non-Kenyan user.
+ */
+function computeWorldPrices(currency: string): {
+  petrol: number;
+  diesel: number;
+  kerosene: number;
+} {
+  const rate = USD_EXCHANGE_RATES[currency] || 1;
+  return {
+    petrol: niceRound(USD_BASE_PER_LITRE.petrol * rate),
+    diesel: niceRound(USD_BASE_PER_LITRE.diesel * rate),
+    kerosene: niceRound(USD_BASE_PER_LITRE.kerosene * rate),
+  };
+}
+
+/**
+ * World-wide fuel price table. Built lazily on first access to avoid a startup
+ * cost for users who never need it. Maps ISO country code → local-currency
+ * prices per litre for every country in WORLD_PAYMENT_CONFIGS (250+).
+ */
+import { WORLD_PAYMENT_CONFIGS } from "./worldPaymentConfigs";
+
+let _worldFuelPricesCache: Record<
+  string,
+  { currency: string; currencySymbol: string; petrol: number; diesel: number; kerosene: number }
+> | null = null;
+
+export function getWorldFuelPrices(): Record<
+  string,
+  {
+    currency: string;
+    currencySymbol: string;
+    petrol: number;
+    diesel: number;
+    kerosene: number;
+  }
+> {
+  if (_worldFuelPricesCache) return _worldFuelPricesCache;
+  const table: Record<
+    string,
+    {
+      currency: string;
+      currencySymbol: string;
+      petrol: number;
+      diesel: number;
+      kerosene: number;
+    }
+  > = {};
+  for (const [code, config] of Object.entries(WORLD_PAYMENT_CONFIGS)) {
+    const currency = config.defaultCurrency;
+    const prices = computeWorldPrices(currency);
+    // Resolve a display symbol; WORLD_PAYMENT_CONFIGS may store a symbol.
+    const symbol =
+      (config as any).currencySymbol || currencySymbolFor(currency);
+    table[code] = { currency, currencySymbol: symbol, ...prices };
+  }
+  _worldFuelPricesCache = table;
+  return table;
+}
+
+/** Minimal currency → symbol map for currencies not in REGIONAL_PRICES. */
+function currencySymbolFor(currency: string): string {
+  const map: Record<string, string> = {
+    USD: "$", EUR: "€", GBP: "£", JPY: "¥", CNY: "¥", INR: "₹", AUD: "A$",
+    CAD: "C$", CHF: "CHF", BRL: "R$", MXN: "Mex$", ARS: "AR$", RUB: "₽",
+    CNY2: "¥", KRW: "₩", TRY: "₺", ZŁ: "zł", SEK: "kr", NOK: "kr", DKK: "kr",
+    PLN: "zł", CZK: "Kč", HUF: "Ft", RON: "lei", BGN: "лв", HRK: "kn",
+    ISK: "kr", ILS: "₪", SAR: "﷼", AED: "د.إ", QAR: "﷼", KWD: "د.ك",
+    BHD: ".د.ب", OMR: "﷼", JOD: "د.ا", THB: "฿", VND: "₫", IDR: "Rp",
+    MYR: "RM", PHP: "₱", SGD: "S$", HKD: "HK$", TWD: "NT$", NZD: "NZ$",
+    EGP: "E£", ZAR: "R", NGN: "₦", GHS: "GH₵", KES: "KSh", UGX: "USh",
+    TZS: "TSh", RWF: "RF", ETB: "Br", MAD: "د.م.", TND: "د.ت", DZD: "د.ج",
+    LYD: "ل.د", COP: "$", CLP: "$", PEN: "S/", UYU: "$U", BOB: "Bs",
+    PYG: "₲", GYD: "G$", SRD: "Sr$", GTQ: "Q", HNL: "L", NIO: "C$",
+    CRC: "₡", DOP: "RD$", HTG: "G", JMD: "J$", TTD: "TT$", BBD: "Bds$",
+    XOF: "CFA", XAF: "FCFA", XCD: "EC$", XPF: "₣", BDT: "৳", PKR: "₨",
+    NPR: "₨", LKR: "Rs", MVR: "Rf", MUR: "₨", BTN: "Nu.", AFN: "؋",
+    AMD: "֏", AZN: "₼", GEL: "₾", KZT: "₸", UZS: "so'm", KGS: "с",
+    MNT: "₮", KHR: "៛", LAK: "₭", MMK: "K", VUV: "Vt", PGK: "K",
+    SBD: "Si$", TOP: "T$", WST: "WS$", FJD: "FJ$", BND: "B$", MOP: "MOP$",
+    BWP: "P", ZMW: "K", MZN: "MT", ZWL: "Z$", SDG: "ج.س.", SOS: "Sh",
+    SSP: "SS£", ERN: "Nfk", DJF: "Fdj", GNF: "FG", LRD: "L$", SLL: "Le",
+    TJS: "ЅМ", TMT: "m", MGA: "Ar", MRU: "UM", CVE: "$", GMD: "D",
+    STN: "Db", SLL4: "Le", ANG: "ƒ", AWG: "ƒ", CUP: "₱", BZD: "BZ$",
+    PAB: "B/.", GTQ2: "Q", KMF: "CF", BIF: "FBu", CDF: "FC", XOF2: "CFA",
+  };
+  return map[currency] || currency;
+}
+
+
 
 // ============================================
 // KENYA CITY-SPECIFIC PRICES (with transport surcharges)
@@ -609,10 +768,33 @@ export function getCountryPrice(
     };
   }
 
+  // WORLD-WIDE: any country not in REGIONAL_PRICES (US, DE, IN, BR, JP, …)
+  // gets a price derived from the USD baseline × its own currency exchange
+  // rate — NEVER Kenya's KSh fallback.
+  const world = getWorldFuelPrices()[countryCode.toUpperCase()];
+  if (world) {
+    const canonical = normalizeFuelType(fuelType);
+    let price = world.petrol;
+    switch (canonical) {
+      case "diesel":
+        price = world.diesel;
+        break;
+      case "kerosene":
+        price = world.kerosene;
+        break;
+    }
+    return {
+      price,
+      currency: world.currency,
+      symbol: world.currencySymbol,
+    };
+  }
+
+  // Truly unknown country code: use a neutral USD baseline rather than Kenya.
   return {
-    price: DEFAULT_PRICES.petrol,
-    currency: DEFAULT_PRICES.currency,
-    symbol: DEFAULT_PRICES.currencySymbol,
+    price: USD_BASE_PER_LITRE.petrol,
+    currency: "USD",
+    symbol: "$",
   };
 }
 
@@ -802,6 +984,7 @@ export default {
   getClosestKenyaCityPrice,
   formatPrice,
   getKenyaFuelTypes,
+  getWorldFuelPrices,
   getVATRate,
   getTaxRates,
   calculateTax,

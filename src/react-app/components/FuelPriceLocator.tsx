@@ -9,6 +9,7 @@ import {
   KENYA_BASE_PRICES,
   REGIONAL_PRICES,
   CANONICAL_FUEL_TYPES,
+  getWorldFuelPrices,
 } from "@/react-app/config/pricing";
 import {
   MapPin,
@@ -47,6 +48,8 @@ interface NearbyPriceResult {
   locationName?: string;
   location?: string;
   country?: string;
+  country_code?: string;
+  countryCode?: string;
   stationName?: string;
   currency?: string;
   currencySymbol?: string;
@@ -238,6 +241,10 @@ export default function FuelPriceLocator() {
           // a client-side estimate, which would violate the "real prices
           // only" requirement.
           if (data.no_real_data) {
+            // Resolve the currency symbol for the user's country so we never
+            // show "KSh" to a US/Germany/India user with no published price.
+            const cc = (data.country_code || "").toUpperCase();
+            const worldPrice = getWorldFuelPrices()[cc];
             const result: StationPriceInfo = {
               stationName:
                 data.locationName ||
@@ -248,8 +255,11 @@ export default function FuelPriceLocator() {
               diesel: null,
               premium: null,
               kerosene: null,
-              currency: data.currency || "KES",
-              currencySymbol: "KSh",
+              currency: data.currency || worldPrice?.currency || "USD",
+              currencySymbol:
+                data.currencySymbol ||
+                worldPrice?.currencySymbol ||
+                "$",
               unit: "litre",
               source: "No published price",
               location: data.locationName || data.location || locName || "",

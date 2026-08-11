@@ -23,6 +23,7 @@ import FounderAccess from "@/react-app/pages/FounderAccess";
 import OfflineIndicator from "@/react-app/components/OfflineIndicator";
 import { TRPCProvider } from "@/providers/trpc";
 import { AlertTriangle, RefreshCw } from "lucide-react";
+import { resolveCountryCode } from "@/react-app/lib/geo-utils";
 
 // Supabase Configuration - Primary Auth & Database
 const supabaseConfigured =
@@ -131,27 +132,9 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   }
 }
 
-/** Detect country from localStorage or timezone */
+/** Detect country — world-wide (250+ timezone mappings), never Kenya-biased. */
 function useDetectedCountry(): string {
-  return useMemo(() => {
-    try {
-      const saved = localStorage.getItem("fuelpro_location_country");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        const cc = parsed.currentCountry || parsed.country;
-        if (cc) return cc.toUpperCase();
-      }
-    } catch {}
-    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    if (tz.includes("Nairobi")) return "KE";
-    if (tz.includes("Lagos")) return "NG";
-    if (tz.includes("Johannesburg")) return "ZA";
-    if (tz.includes("Dar_es_Salaam") || tz.includes("Dar es Salaam"))
-      return "TZ";
-    if (tz.includes("Kampala")) return "UG";
-    if (tz.includes("Accra")) return "GH";
-    return "US";
-  }, []);
+  return useMemo(() => resolveCountryCode("US"), []);
 }
 
 /** Loading screen shown only for main app, not for founder/public routes */
