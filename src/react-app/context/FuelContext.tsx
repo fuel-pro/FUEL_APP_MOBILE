@@ -1133,6 +1133,15 @@ export function FuelProvider({ children }: { children: ReactNode }) {
   // while WE are applying a fuel_types_config change to pmsPrice/agoPrice, we
   // must not re-broadcast it as a FuelContext change.
   const applyingFuelTypesRef = useRef(false);
+  // Track the last price values we broadcast so the price-propagation effect
+  // only emits when a price actually changes (not on every state render).
+  const lastBroadcastPriceRef = useRef<{
+    pms: number | null;
+    ago: number | null;
+  }>({
+    pms: null,
+    ago: null,
+  });
 
   const saveToStorage = useCallback(() => {
     try {
@@ -1966,6 +1975,62 @@ export function FuelProvider({ children }: { children: ReactNode }) {
     });
     return () => unsub();
   }, []);
+
+  // ------------------------------------------------------------
+  // Universal price-propagation effect: when ANY legacy scalar price field
+  // changes via dispatch(SET_PRICES) — e.g. DeliveryTracker's Petrol/Diesel
+  // Price inputs, SetupWizard price setup, or a restored LOAD_FROM_STORAGE —
+  // mirror the change into fuel_types_config + broadcast on the interlink
+  // bus so EVERY consumer (Dashboard cards, POS cart, Invoice hints,
+  // PriceBoard, Reports) stays in sync from a single source of truth.
+  // Note: petrol/diesel have TWO legacy fields each (petrolPrice/pmsPrice,
+  // dieselPrice/agoPrice) used by different components. We track all four and
+  // propagate any that changes.
+  useEffect(() => {
+    if (applyingFuelTypesRef.current) return;
+    // Resolve the effective petrol/diesel price: prefer pmsPrice/agoPrice, but
+    // also react to petrolPrice/dieselPrice edits (DeliveryTracker/SetupWizard).
+    const effectivePms = state.pmsPrice || state.petrolPrice;
+    const effectiveAgo = state.agoPrice || state.dieselPrice;
+    const last = lastBroadcastPriceRef.current;
+
+    const propagate = (
+      canonical: "petrol" | "diesel",
+      price: number,
+      label: string,
+    ) => {
+      if (price <= 0) return;
+      const list = fuelTypesRef.current;
+      if (list.length > 0) {
+        const idx = list.findIndex(
+          (ft) => normalizeFuelType(ft.name) === canonical,
+        );
+        if (idx >= 0 && list[idx].price !== price) {
+          const next = list.slice();
+          next[idx] = { ...next[idx], price };
+          fuelTypesRef.current = next;
+          cloudStorageService
+            .set("fuel_types_config", next, stationIdRef.current)
+            .catch(() => {});
+        }
+      }
+      emitFuelPriceChange({
+        fuelType: label,
+        canonical,
+        price,
+        source: "FuelContext.pricePropagate",
+      });
+    };
+
+    if (effectivePms > 0 && effectivePms !== last.pms) {
+      last.pms = effectivePms;
+      propagate("petrol", effectivePms, "Super Petrol");
+    }
+    if (effectiveAgo > 0 && effectiveAgo !== last.ago) {
+      last.ago = effectiveAgo;
+      propagate("diesel", effectiveAgo, "Diesel");
+    }
+  }, [state.pmsPrice, state.agoPrice, state.petrolPrice, state.dieselPrice]);
 
   // Apply theme to body - robust for all browsers
   useEffect(() => {

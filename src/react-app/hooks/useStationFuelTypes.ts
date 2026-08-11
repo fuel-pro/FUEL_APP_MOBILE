@@ -22,7 +22,10 @@ import {
   getFuelLabel,
   type CanonicalFuelType,
 } from "@/react-app/config/pricing";
-import { onFuelPriceChange } from "@/react-app/lib/fuel-interlink-bus";
+import {
+  onFuelPriceChange,
+  onFuelTypeChange,
+} from "@/react-app/lib/fuel-interlink-bus";
 import type { CustomFuelType } from "@/react-app/components/FuelTypesManager";
 
 const CLOUD_KEY = "fuel_types_config";
@@ -107,9 +110,14 @@ export function useStationFuelTypes(
         setFuelTypes(next);
       }
     });
+    // In-device bus: a fuel-type add/edit/delete/activate in another
+    // component refreshes the list immediately (the cloud real-time echo
+    // confirms shortly after).
+    const unsubTypeBus = onFuelTypeChange(() => load());
     return () => {
       unsub?.();
       unsubBus();
+      unsubTypeBus();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stationId]);

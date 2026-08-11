@@ -11,6 +11,8 @@ import {
 } from "lucide-react";
 import ExportDropdown from "@/react-app/components/ExportDropdown";
 import { useFuel } from "@/react-app/context/FuelContext";
+import { useStationFuelTypes } from "@/react-app/hooks/useStationFuelTypes";
+import { getFuelLabel, getFuelCode } from "@/react-app/config/pricing";
 import type { OffloadingRecord } from "@/react-app/context/FuelContext";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -26,6 +28,9 @@ const formatNumber = (num: number): string => {
 
 export default function FuelOffloading() {
   const { state, dispatch } = useFuel();
+  // Unified station fuel types so the offloading fuel-type dropdown reflects
+  // the station's actual configured fuels (from Fuel Type Manager).
+  const fuelTypeApi = useStationFuelTypes();
   const [selectedRecord, setSelectedRecord] = useState<OffloadingRecord | null>(
     null,
   );
@@ -594,8 +599,20 @@ export default function FuelOffloading() {
                   }
                   required
                 >
-                  <option value="PMS">PMS (Petrol)</option>
-                  <option value="AGO">AGO (Diesel)</option>
+                  {(fuelTypeApi.activeFuelTypes.length > 0
+                    ? fuelTypeApi.activeFuelTypes.map((ft) => ({
+                        value: getFuelCode(ft.name) || ft.name,
+                        label: getFuelLabel(ft.name),
+                      }))
+                    : [
+                        { value: "PMS", label: "Super Petrol" },
+                        { value: "AGO", label: "Diesel" },
+                      ]
+                  ).map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.value} ({opt.label})
+                    </option>
+                  ))}
                 </select>
               </div>
 
@@ -618,16 +635,33 @@ export default function FuelOffloading() {
 
               <div className="form-group">
                 <label>Rate per Litre ({state.companyData.currency}) *</label>
-                <input
-                  type="number"
-                  value={formData.rate ?? ""}
-                  onChange={(e) =>
-                    handleInputChange("rate", parseFloat(e.target.value) || 0)
-                  }
-                  step="0.01"
-                  min="0"
-                  required
-                />
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    value={formData.rate ?? ""}
+                    onChange={(e) =>
+                      handleInputChange("rate", parseFloat(e.target.value) || 0)
+                    }
+                    step="0.01"
+                    min="0"
+                    required
+                    className="flex-1"
+                  />
+                  {(() => {
+                    const label = getFuelLabel(formData.fuelType || "PMS");
+                    const price = fuelTypeApi.getPriceFor(label);
+                    return price != null ? (
+                      <button
+                        type="button"
+                        onClick={() => handleInputChange("rate", price)}
+                        className="px-3 py-1 text-xs rounded-lg bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-200 whitespace-nowrap"
+                        title={`Use the station's current ${label} price (${price}/L)`}
+                      >
+                        Use {label} price ({price})
+                      </button>
+                    ) : null;
+                  })()}
+                </div>
               </div>
 
               <div className="form-group">

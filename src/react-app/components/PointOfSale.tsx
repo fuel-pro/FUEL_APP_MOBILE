@@ -271,13 +271,18 @@ export default function PointOfSale() {
     const litres = parseFloat(quickSaleLitres) || 0;
     if (litres <= 0) return;
 
-    const price =
-      quickSaleType === "petrol" ? state.petrolPrice : state.dieselPrice;
-    const total = litres * price;
-    const fuelName =
+    const label =
       quickSaleType === "petrol"
         ? CANONICAL_FUEL_TYPES.petrol.label
         : CANONICAL_FUEL_TYPES.diesel.label;
+    // Use the unified bus-fresh price (falls back to legacy state field if the
+    // station has no matching fuel_types_config entry) so the charged total
+    // always matches the displayed per-litre price.
+    const price =
+      fuelTypeApi.getPriceFor(label) ??
+      (quickSaleType === "petrol" ? state.petrolPrice : state.dieselPrice);
+    const total = litres * price;
+    const fuelName = label;
 
     const newItem: CartItem = {
       id: `fuel-${Date.now()}`,
@@ -778,8 +783,12 @@ export default function PointOfSale() {
                   {formatNumber(
                     (parseFloat(quickSaleLitres) || 0) *
                       (quickSaleType === "petrol"
-                        ? state.petrolPrice
-                        : state.dieselPrice),
+                        ? (fuelTypeApi.getPriceFor(
+                            CANONICAL_FUEL_TYPES.petrol.label,
+                          ) ?? state.petrolPrice)
+                        : (fuelTypeApi.getPriceFor(
+                            CANONICAL_FUEL_TYPES.diesel.label,
+                          ) ?? state.dieselPrice)),
                   )}
                 </span>
                 <button onClick={addFuelToCart} className="btn btn-primary">

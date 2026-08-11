@@ -11,6 +11,7 @@ import {
   X,
 } from "lucide-react";
 import { useFuel } from "@/react-app/context/FuelContext";
+import { useStationFuelTypes } from "@/react-app/hooks/useStationFuelTypes";
 import SignatureCanvas from "@/react-app/components/SignatureCanvas";
 import ExportDropdown from "@/react-app/components/ExportDropdown";
 import {
@@ -22,6 +23,7 @@ import { formatNumber } from "@/react-app/utils/formatUtils";
 
 export default function DeliveryTracker() {
   const { state, dispatch } = useFuel();
+  const fuelTypeApi = useStationFuelTypes();
   const [managerSignature, setManagerSignature] = useState("");
   const [directorSignature, setDirectorSignature] = useState("");
 
@@ -261,7 +263,12 @@ export default function DeliveryTracker() {
     if (field === "litres" || field === "fuel") {
       const litres = parseFloat(value) || 0;
       const fuel = field === "fuel" ? value : row.fuel;
-      const price = fuel === "Petrol" ? state.petrolPrice : state.dieselPrice;
+      // Use the unified bus-fresh price so delivery amounts match the station's
+      // current fuel price (falls back to legacy state field).
+      const fuelLabel = fuel === "Petrol" ? "Super Petrol" : "Diesel";
+      const price =
+        fuelTypeApi.getPriceFor(fuelLabel) ??
+        (fuel === "Petrol" ? state.petrolPrice : state.dieselPrice);
       const amount = litres * price;
 
       row[field] = field === "litres" ? litres : value;
@@ -487,12 +494,13 @@ export default function DeliveryTracker() {
             <input
               type="number"
               value={state.petrolPrice ?? ""}
-              onChange={(e) =>
+              onChange={(e) => {
+                const v = parseFloat(e.target.value);
                 dispatch({
                   type: "SET_PRICES",
-                  payload: { petrolPrice: parseFloat(e.target.value) },
-                })
-              }
+                  payload: { petrolPrice: v, pmsPrice: v },
+                });
+              }}
               step="0.1"
             />
           </div>
@@ -501,12 +509,13 @@ export default function DeliveryTracker() {
             <input
               type="number"
               value={state.dieselPrice ?? ""}
-              onChange={(e) =>
+              onChange={(e) => {
+                const v = parseFloat(e.target.value);
                 dispatch({
                   type: "SET_PRICES",
-                  payload: { dieselPrice: parseFloat(e.target.value) },
-                })
-              }
+                  payload: { dieselPrice: v, agoPrice: v },
+                });
+              }}
               step="0.1"
             />
           </div>

@@ -1,5 +1,4 @@
 import { useState, useMemo, useEffect } from "react";
-import { useFuel } from "@/react-app/context/FuelContext";
 import { useLocation } from "@/react-app/context/LocationContext";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 import { useAuth } from "@/react-app/context/AuthContext";
@@ -59,7 +58,6 @@ interface CreditTransaction {
 }
 
 export default function CreditManagement() {
-  const { state } = useFuel();
   const location = useLocation();
   const currencySymbol = location.currencySymbol;
   const { user } = useAuth();
