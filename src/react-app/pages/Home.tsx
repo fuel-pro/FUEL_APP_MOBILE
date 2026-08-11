@@ -32,7 +32,7 @@ const FuelOffloading = lazy(
   () => import("@/react-app/components/FuelOffloading"),
 );
 const Invoice = lazy(() => import("@/react-app/components/Invoice"));
-const DebtReminder = lazy(() => import("@/react-app/components/DebtReminder"));
+// DebtReminder merged into CreditManagement as a sub-tab (no top-level tab).
 const SalesTracking = lazy(
   () => import("@/react-app/components/SalesTracking"),
 );
@@ -337,8 +337,6 @@ function HomeContent() {
         return <FuelOffloading />;
       case "invoice":
         return <Invoice />;
-      case "debt":
-        return <DebtReminder />;
       case "sales":
         return <SalesTracking />;
       case "reports":

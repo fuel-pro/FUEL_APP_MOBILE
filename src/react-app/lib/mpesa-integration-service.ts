@@ -311,3 +311,71 @@ export function calculateSummary(
 export function switchToTab(tabId: string): void {
   window.dispatchEvent(new CustomEvent("changeTab", { detail: tabId }));
 }
+
+/**
+ * Cross-tab navigation with an optional prefill payload. Switches the active
+ * top-level tab AND dispatches a `tabPayload` event carrying data the target
+ * component can use to pre-fill its form (e.g. opening the STK Push modal
+ * pre-filled with a credit account's phone + outstanding balance).
+ *
+ * Target components listen via `onTabPayload` (below) and apply the payload
+ * once on activation. This is the backbone of the inter-tab linking layer
+ * connecting Credit ↔ Live Transaction ↔ Invoice ↔ Dashboard quick actions.
+ */
+export function navigateToTab(tabId: string, payload?: unknown): void {
+  window.dispatchEvent(new CustomEvent("changeTab", { detail: tabId }));
+  if (payload !== undefined) {
+    // Fire after the tab switch so the target component is mounted.
+    setTimeout(() => {
+      window.dispatchEvent(
+        new CustomEvent("tabPayload", { detail: { tab: tabId, payload } }),
+      );
+    }, 0);
+  }
+}
+
+/**
+ * Subscribe to cross-tab prefill payloads for a given tab id. Returns an
+ * unsubscribe function. The callback receives the payload once per dispatch.
+ */
+export function onTabPayload(
+  tabId: string,
+  callback: (payload: unknown) => void,
+): () => void {
+  const handler = (event: Event) => {
+    const detail = (event as CustomEvent).detail as
+      { tab: string; payload: unknown } | undefined;
+    if (detail && detail.tab === tabId) callback(detail.payload);
+  };
+  window.addEventListener("tabPayload", handler);
+  return () => window.removeEventListener("tabPayload", handler);
+}
+
+/** Shared prefill shapes for the interlinked payment / billing flows. */
+export interface StkPushPrefill {
+  phone?: string;
+  amount?: number;
+  account_reference?: string;
+  transaction_desc?: string;
+  openStkPush?: boolean;
+}
+
+export interface InvoicePrefill {
+  customerName?: string;
+  amount?: number;
+  description?: string;
+}
+
+export interface CreditPrefill {
+  customerName?: string;
+  phone?: string;
+  amount?: number;
+}
+
+export interface ExpensePrefill {
+  category?: string;
+  amount?: number;
+  description?: string;
+  reference?: string;
+  paymentMethod?: string;
+}

@@ -1275,3 +1275,77 @@ FuelTypesManager now hosts 4 inner sub-tabs: Fuel Types / Pump Settings / Price 
 **Live Transaction Monitor -> Integration Hub link**: LiveTransaction.tsx "Payment Sources" card now has a "Live Payment Integrations" panel with M-PESA Payment + Kopo Kopo Payment buttons that switch to the "integration" tab (Integration Hub -> Payment Setup), plus an "Open Integration Hub" link. This wires the "Add Payment Source" flow to the real M-PESA Daraja / Kopo Kopo configuration in the Integration Hub.
 
 Verified: `npx tsc --noEmit` (0 errors), `npm run build` (115 precache, success), `eslint` (0 errors, warnings only), `prettier --check` (all pass).
+
+## Debt Reminder -> Credit Management merge + cross-tab interlink framework (ADDED 2026-08-11)
+
+### Debt Payment Reminder -> Credit Management (sub-tab merge)
+`DebtReminder.tsx` is no longer a standalone top-level tab. It is now embedded
+inside `CreditManagement.tsx` as a "Reminders" inner sub-tab (alongside the
+"Accounts" view) via `SubTabBar`. Overdue credit accounts show a "Send
+Reminder" button that switches to the reminders sub-tab. Removed: `debt` tab
+config from `FuelContext.tsx` tabConfigurations, `DebtReminder` lazy import +
+`case "debt"` from `Home.tsx`, and the `debt` nav entry from
+`MobileBottomNav.tsx` (fallback mapping `debt -> "credit"`). `DebtReminder.tsx`
+itself is unchanged (still rendered as an embedded component, no longer
+lazy-loaded via Home).
+
+### Cross-tab interlink framework (`mpesa-integration-service.ts`)
+Added a payload-carrying cross-tab navigation layer on top of `switchToTab`:
+
+- `navigateToTab(tabId, payload?)` — dispatches `changeTab` (tab switch) then a
+  deferred `tabPayload` event carrying `{ tab, payload }` so the target
+  component (now mounted) can apply the payload.
+- `onTabPayload(tabId, callback)` — subscribes a target component to prefill
+  payloads for its tab id; returns an unsubscribe fn (use in a `useEffect`
+  cleanup).
+- Typed prefill shapes: `StkPushPrefill`, `InvoicePrefill`, `CreditPrefill`,
+  `ExpensePrefill` (all in `mpesa-integration-service.ts`).
+
+### Live Transaction Monitor <-> Integration Hub (real config status)
+`LiveTransaction.tsx` now loads the real M-PESA Daraja (`mpesa_config`) and
+Kopo Kopo (`kopokopo_config`) configs from cloud on mount and reflects their
+connection status:
+
+- STK Push modal: a status banner shows "Connected to M-PESA Daraja
+  (Production/Sandbox, shortcode X)" or "M-PESA Daraja is not configured", with
+  a "Configure in Integration Hub" link (`switchToTab("integration")`).
+- Add Source modal: when the source type is `mpesa_paybill` shows the M-PESA
+  Daraja status; when `mpesa_buygoods` shows the Kopo Kopo status; each with a
+  "Configure in Integration Hub" link.
+- "Live Payment Integrations" panel: the M-PESA Payment + Kopo Kopo Payment
+  cards now show live "Connected"/"Not connected" badges (green/amber) derived
+  from the cloud config (previously static labels).
+
+### Interlinked cross-tab flows (built on the framework)
+- **Credit Management -> Live Transaction**: each credit account with an
+  outstanding balance has a "Collect via M-PESA" button that calls
+  `navigateToTab("livetransaction", {phone, amount, account_reference,
+  transaction_desc, openStkPush:true})` — opens the STK Push modal pre-filled.
+- **Credit Management -> Invoice**: each account has a "Create Invoice" button
+  that calls `navigateToTab("invoice", {customerName, amount, description})`.
+- **Invoice -> Live Transaction**: the Invoice form has a "Collect Payment"
+  card with a "Collect via M-PESA" button that sends the invoice total +
+  customer phone/reference to the STK Push modal.
+- **Live Transaction -> Credit Management**: each completed shared transaction
+  has an "Apply to Credit Account" button that calls `navigateToTab("credit",
+  {customerName, amount})` — opens the new-credit-account form pre-filled.
+- **Payroll System -> Expense Tracker**: the Payroll bulk-actions bar has a
+  "RECORD EXPENSE" button that calls `navigateToTab("expenses", {category:
+  "salaries", amount: totalNet, description, reference})` — opens the
+  new-expense form pre-filled.
+- **Maintenance Tracker -> Expense Tracker**: each maintenance record has a
+  "Record Expense" (Receipt icon) button that calls `navigateToTab("expenses",
+  {category: "maintenance", amount: record.cost, description, reference})`.
+- **Dashboard Quick Actions**: expanded from 6 to 12 deep-link actions (added
+  Credit, STK Push [opens STK Push modal via payload], Expenses, Suppliers,
+  Integration Hub, Payroll). Actions with a payload use `navigateToTab`, plain
+  ones use `switchToTab`.
+
+Receivers: `LiveTransaction.tsx`, `Invoice.tsx`, `CreditManagement.tsx`, and
+`ExpenseTracker.tsx` each register an `onTabPayload` listener that pre-fills
+their form state and opens the relevant modal/view.
+
+Verified: `npx tsc --noEmit` (0 errors), `npm run build` (114 precache,
+success), `eslint` (0 errors, warnings only), all interlink markers present in
+built chunks (LiveTransaction, CreditManagement, Invoice, PayrollSystem,
+MaintenanceTracker).

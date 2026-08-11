@@ -22,6 +22,9 @@ import {
   Plug,
   Smartphone,
   Wallet,
+  Settings,
+  Link2,
+  ExternalLink,
 } from "lucide-react";
 import { useFuel } from "@/react-app/context/FuelContext";
 import { useAuth } from "@/react-app/context/AuthContext";
@@ -33,8 +36,16 @@ import {
   subscribeToTransactions,
   calculateSummary,
   switchToTab,
+  onTabPayload,
+  navigateToTab,
+  type StkPushPrefill,
+  type CreditPrefill,
+  getMpesaConfig,
+  getKopokopoConfig,
   type UnifiedTransaction,
   type TransactionSummary,
+  type MpesaIntegrationConfig,
+  type KopokopoIntegrationConfig,
 } from "@/react-app/lib/mpesa-integration-service";
 import { formatNumber } from "@/react-app/utils/formatUtils";
 
@@ -131,6 +142,26 @@ export default function LiveTransaction() {
   const [sharedTxns, setSharedTxns] = useState<UnifiedTransaction[]>([]);
   const [summary, setSummary] = useState<TransactionSummary | null>(null);
 
+  // Integration Hub linkage — M-PESA (Daraja) + Kopo Kopo config status,
+  // so the STK Push and Add Source flows reflect whether a payment
+  // integration is actually connected (configured in Integration Hub).
+  const [mpesaConfig, setMpesaConfig] = useState<MpesaIntegrationConfig | null>(
+    null,
+  );
+  const [kopoConfig, setKopoConfig] =
+    useState<KopokopoIntegrationConfig | null>(null);
+  const mpesaConnected = !!(
+    mpesaConfig?.enabled &&
+    mpesaConfig?.consumerKey &&
+    mpesaConfig?.consumerSecret &&
+    mpesaConfig?.shortcode
+  );
+  const kopoConnected = !!(
+    kopoConfig?.enabled &&
+    kopoConfig?.tillNumber &&
+    kopoConfig?.apiKey
+  );
+
   // Load data on component mount
   useEffect(() => {
     if (user) {
@@ -168,6 +199,46 @@ export default function LiveTransaction() {
       unsub();
     };
   }, [user, stationId]);
+
+  // Load Integration Hub payment configs so STK Push / Add Source reflect
+  // the real M-PESA Daraja + Kopo Kopo connection status.
+  useEffect(() => {
+    if (!user) return;
+    let mounted = true;
+    (async () => {
+      const [mpesa, kopo] = await Promise.all([
+        getMpesaConfig(stationId),
+        getKopokopoConfig(stationId),
+      ]);
+      if (!mounted) return;
+      setMpesaConfig(mpesa);
+      setKopoConfig(kopo);
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [user, stationId]);
+
+  // Interlink receiver: another tab (Credit Management, Invoice) calls
+  // navigateToTab("livetransaction", <StkPushPrefill>) to collect a payment —
+  // pre-fill the STK Push form and open the modal.
+  useEffect(() => {
+    return onTabPayload("livetransaction", (raw) => {
+      const p = (raw || {}) as StkPushPrefill;
+      if (Object.keys(p).length === 0) return;
+      setStkPushData((prev) => ({
+        ...prev,
+        phone_number: p.phone ? formatPhoneNumber(p.phone) : prev.phone_number,
+        amount: p.amount ?? prev.amount,
+        account_reference: p.account_reference ?? prev.account_reference,
+        transaction_desc: p.transaction_desc ?? prev.transaction_desc,
+      }));
+      if (p.openStkPush) {
+        setStkPushStatus({ loading: false, success: false, error: "" });
+        setShowSTKPush(true);
+      }
+    });
+  }, []);
 
   // Filter transactions when search parameters change
   useEffect(() => {
@@ -766,6 +837,16 @@ export default function LiveTransaction() {
                 <p className="text-[11px] text-gray-400">
                   Daraja STK Push, Paybill & Buy Goods
                 </p>
+                <span
+                  className={`mt-1 inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full ${mpesaConnected ? "bg-green-500/20 text-green-300" : "bg-amber-500/20 text-amber-300"}`}
+                >
+                  {mpesaConnected ? (
+                    <Link2 size={9} />
+                  ) : (
+                    <AlertTriangle size={9} />
+                  )}
+                  {mpesaConnected ? "Connected" : "Not connected"}
+                </span>
               </div>
               <ArrowRight size={14} className="text-emerald-400" />
             </button>
@@ -783,6 +864,16 @@ export default function LiveTransaction() {
                 <p className="text-[11px] text-gray-400">
                   Till number & webhook transactions
                 </p>
+                <span
+                  className={`mt-1 inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full ${kopoConnected ? "bg-green-500/20 text-green-300" : "bg-amber-500/20 text-amber-300"}`}
+                >
+                  {kopoConnected ? (
+                    <Link2 size={9} />
+                  ) : (
+                    <AlertTriangle size={9} />
+                  )}
+                  {kopoConnected ? "Connected" : "Not connected"}
+                </span>
               </div>
               <ArrowRight size={14} className="text-blue-400" />
             </button>
@@ -970,6 +1061,40 @@ export default function LiveTransaction() {
               M-PESA STK Push
             </h3>
 
+            {/* Integration Hub status banner — links STK Push to the
+                configured M-PESA Daraja integration. */}
+            <div
+              className={`mb-4 rounded-lg p-3 border flex items-start gap-2 ${mpesaConnected ? "bg-green-500/10 border-green-500/40" : "bg-amber-500/10 border-amber-500/40"}`}
+            >
+              {mpesaConnected ? (
+                <Link2
+                  className="text-green-400 mt-0.5 flex-shrink-0"
+                  size={16}
+                />
+              ) : (
+                <AlertTriangle
+                  className="text-amber-400 mt-0.5 flex-shrink-0"
+                  size={16}
+                />
+              )}
+              <div className="flex-1">
+                <p
+                  className={`text-xs ${mpesaConnected ? "text-green-200" : "text-amber-200"}`}
+                >
+                  {mpesaConnected
+                    ? `Connected to M-PESA Daraja (${mpesaConfig?.environment === "production" ? "Production" : "Sandbox"}, shortcode ${mpesaConfig?.shortcode}).`
+                    : "M-PESA Daraja is not configured. STK Push requires a connected M-PESA payment source."}
+                </p>
+                <button
+                  onClick={() => switchToTab("integration")}
+                  className="mt-1.5 text-xs text-blue-300 hover:text-blue-200 flex items-center gap-1"
+                >
+                  <Settings size={11} /> Configure in Integration Hub
+                  <ExternalLink size={10} />
+                </button>
+              </div>
+            </div>
+
             {stkPushStatus.success ? (
               <div className="text-center">
                 <CheckCircle
@@ -1149,6 +1274,76 @@ export default function LiveTransaction() {
                   <option value="cash_register">Cash Register</option>
                 </select>
               </div>
+
+              {/* Integration Hub linkage — reflect the configured payment
+                  integration status for the selected source type. */}
+              {newSource.source_type === "mpesa_paybill" && (
+                <div
+                  className={`rounded-lg p-3 border flex items-start gap-2 ${mpesaConnected ? "bg-green-500/10 border-green-500/40" : "bg-amber-500/10 border-amber-500/40"}`}
+                >
+                  {mpesaConnected ? (
+                    <Link2
+                      className="text-green-400 mt-0.5 flex-shrink-0"
+                      size={14}
+                    />
+                  ) : (
+                    <AlertTriangle
+                      className="text-amber-400 mt-0.5 flex-shrink-0"
+                      size={14}
+                    />
+                  )}
+                  <div className="flex-1">
+                    <p
+                      className={`text-xs ${mpesaConnected ? "text-green-200" : "text-amber-200"}`}
+                    >
+                      {mpesaConnected
+                        ? "M-PESA Daraja (Paybill) is configured in Integration Hub."
+                        : "M-PESA Daraja is not configured. Set it up for live Paybill STK Push."}
+                    </p>
+                    <button
+                      onClick={() => switchToTab("integration")}
+                      className="mt-1 text-xs text-blue-300 hover:text-blue-200 flex items-center gap-1"
+                    >
+                      <Settings size={11} /> Configure M-PESA in Integration Hub
+                      <ExternalLink size={10} />
+                    </button>
+                  </div>
+                </div>
+              )}
+              {newSource.source_type === "mpesa_buygoods" && (
+                <div
+                  className={`rounded-lg p-3 border flex items-start gap-2 ${kopoConnected ? "bg-green-500/10 border-green-500/40" : "bg-amber-500/10 border-amber-500/40"}`}
+                >
+                  {kopoConnected ? (
+                    <Link2
+                      className="text-green-400 mt-0.5 flex-shrink-0"
+                      size={14}
+                    />
+                  ) : (
+                    <AlertTriangle
+                      className="text-amber-400 mt-0.5 flex-shrink-0"
+                      size={14}
+                    />
+                  )}
+                  <div className="flex-1">
+                    <p
+                      className={`text-xs ${kopoConnected ? "text-green-200" : "text-amber-200"}`}
+                    >
+                      {kopoConnected
+                        ? "Kopo Kopo (Buy Goods / Till) is configured in Integration Hub."
+                        : "Kopo Kopo is not configured. Set it up for automated Buy Goods reconciliation."}
+                    </p>
+                    <button
+                      onClick={() => switchToTab("integration")}
+                      className="mt-1 text-xs text-blue-300 hover:text-blue-200 flex items-center gap-1"
+                    >
+                      <Settings size={11} /> Configure Kopo Kopo in Integration
+                      Hub
+                      <ExternalLink size={10} />
+                    </button>
+                  </div>
+                </div>
+              )}
               <div>
                 <label className="block text-sm text-gray-300 mb-1">
                   {newSource.source_type.includes("mpesa")
@@ -1440,6 +1635,20 @@ export default function LiveTransaction() {
                   <div className="text-xs text-green-400">
                     From: {tx.sender_info}
                   </div>
+                )}
+                {tx.status === "completed" && (
+                  <button
+                    onClick={() =>
+                      navigateToTab("credit", {
+                        customerName: tx.sender_info || tx.account_reference,
+                        amount: tx.amount,
+                      } satisfies CreditPrefill)
+                    }
+                    className="mt-1 text-[11px] text-pink-300 hover:text-pink-200 flex items-center gap-1"
+                    title="Apply this payment to a Credit Management account"
+                  >
+                    <Wallet size={10} /> Apply to Credit Account
+                  </button>
                 )}
               </div>
             ))}

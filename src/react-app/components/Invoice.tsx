@@ -23,6 +23,12 @@ import { formatNumber } from "@/react-app/utils/formatUtils";
 import { silentPrintService } from "@/react-app/lib/silent-print-service";
 import SubTabBar from "@/react-app/components/SubTabBar";
 import SalesInvoices from "@/react-app/components/SalesInvoices";
+import {
+  onTabPayload,
+  navigateToTab,
+  type InvoicePrefill,
+  type StkPushPrefill,
+} from "@/react-app/lib/mpesa-integration-service";
 
 export default function Invoice() {
   const { state, dispatch } = useFuel();
@@ -53,6 +59,31 @@ export default function Invoice() {
     const today = new Date().toISOString().split("T")[0];
     setInvoiceDate(today);
   }, []);
+
+  // Interlink receiver: Credit Management calls
+  // navigateToTab("invoice", <InvoicePrefill>) to start a new invoice for an
+  // outstanding credit balance — pre-fill the customer + a line item.
+  useEffect(() => {
+    return onTabPayload("invoice", (raw) => {
+      const p = (raw || {}) as InvoicePrefill;
+      if (Object.keys(p).length === 0) return;
+      setActiveView("invoice");
+      if (p.customerName) setCustomerName(p.customerName);
+      if (p.amount || p.description) {
+        dispatch({
+          type: "SET_INVOICE_ITEMS",
+          payload: [
+            {
+              desc: p.description || "Outstanding balance",
+              qty: 1,
+              price: p.amount ?? 0,
+              total: p.amount ?? 0,
+            },
+          ],
+        });
+      }
+    });
+  }, [dispatch]);
 
   useEffect(() => {
     // Only pull in the global value if it changed for a reason OTHER than
@@ -706,6 +737,38 @@ export default function Invoice() {
               <div className="text-sm text-gray-600">
                 Save this invoice to your records and generate the invoice
                 number.
+              </div>
+            </div>
+
+            {/* Collect Payment — interlinks with the Live Transaction Monitor.
+                Sends the customer + invoice total to the M-PESA STK Push flow. */}
+            <div className="card">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-xl font-bold flex items-center gap-2">
+                  <FileText size={20} className="text-emerald-600" />
+                  Collect Payment
+                </h3>
+                <button
+                  onClick={() =>
+                    navigateToTab("livetransaction", {
+                      phone: customerPhone || "",
+                      amount: totalDue,
+                      account_reference: customerName || getInvoiceNumber(),
+                      transaction_desc: `Invoice ${getInvoiceNumber()} payment`,
+                      openStkPush: true,
+                    } satisfies StkPushPrefill)
+                  }
+                  disabled={totalDue <= 0}
+                  className="btn btn-primary flex items-center gap-2 disabled:opacity-50"
+                  title="Collect this invoice via M-PESA STK Push"
+                >
+                  Collect via M-PESA
+                </button>
+              </div>
+              <div className="text-sm text-gray-600">
+                Send the invoice total ({formatNumber(totalDue, 0)}{" "}
+                {state.companyData?.currency || "KES"}) as an M-PESA STK Push to
+                the customer's phone via the Live Transaction Monitor.
               </div>
             </div>
 

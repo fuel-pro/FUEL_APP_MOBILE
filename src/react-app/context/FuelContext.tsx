@@ -588,14 +588,8 @@ const initialState: FuelState = {
       order: 8,
       visible: true,
     },
-    {
-      id: "debt",
-      label: "Debt Reminder",
-      originalLabel: "Debt Reminder",
-      description: "Track outstanding customer balances",
-      order: 9,
-      visible: true,
-    },
+    // "debt" (Fuel Debt Payment Reminder) merged into Credit Management as
+    // the "Debt Payment Reminders" sub-tab — removed as a top-level tab.
     {
       id: "mpesa",
       label: "M-PESA Analyzer",
