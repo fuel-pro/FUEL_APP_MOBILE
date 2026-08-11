@@ -9,14 +9,26 @@ import React, {
 } from "react";
 import { useAuth } from "@/react-app/context/AuthContext";
 import { useStations } from "@/react-app/context/StationContext";
-// Unified pricing - single source of truth for all fuel prices
-import { KENYA_BASE_PRICES, DEFAULT_PRICES } from "@/react-app/config/pricing";
+import { KENYA_BASE_PRICES, DEFAULT_PRICES, getCountryPrice } from "@/react-app/config/pricing";
 // Cross-device cloud storage (Supabase app_kv-backed) — replaces /api/user-data
 import { cloudStorageService } from "@/react-app/lib/cloud-storage-service";
+import { getDetectedCountryCode } from "@/react-app/lib/currency";
 
-// Use unified pricing defaults (Kenya EPRA prices as default)
-const DEFAULT_PMS_PRICE = KENYA_BASE_PRICES.petrol; // 220.30 KES
-const DEFAULTAGO_PRICE = KENYA_BASE_PRICES.diesel; // 250.01 KES
+// Resolve default prices from the detected country (world-wide, not Kenya-only)
+const _detectedCC = (() => {
+  try {
+    return getDetectedCountryCode();
+  } catch {
+    return "";
+  }
+})();
+const _detectedPrices = _detectedCC
+  ? getCountryPrice(_detectedCC, "petrol")
+  : null;
+const DEFAULT_PMS_PRICE = _detectedPrices?.price ?? KENYA_BASE_PRICES.petrol;
+const DEFAULTAGO_PRICE = _detectedCC
+  ? getCountryPrice(_detectedCC, "diesel").price
+  : KENYA_BASE_PRICES.diesel;
 
 /**
  * Build the station-scoped compact-blob cloud key. Each station gets its own
@@ -52,7 +64,7 @@ export interface CompanyData {
   branchName: string;
   accountHolder: string;
   accountNumber: string;
-  // KRA eTIMS/ETR Configuration
+  // Tax compliance configuration (KRA eTIMS/ETR in Kenya, VAT/Tax ID elsewhere)
   kraPin: string;
   vatRegNo: string;
   physicalAddress: string;
@@ -489,8 +501,8 @@ const initialState: FuelState = {
   pmsTankClosing: 0,
   agoTankOpening: 0,
   agoTankClosing: 0,
-  pmsPrice: DEFAULT_PMS_PRICE, // 220.30 KES (Kenya EPRA)
-  agoPrice: DEFAULTAGO_PRICE, // 250.01 KES (Kenya EPRA)
+  pmsPrice: DEFAULT_PMS_PRICE,
+  agoPrice: DEFAULTAGO_PRICE,
   petrolPrice: DEFAULT_PMS_PRICE,
   dieselPrice: DEFAULTAGO_PRICE,
   deliveredTo: "",
@@ -696,7 +708,7 @@ const initialState: FuelState = {
       id: "integration",
       label: "Integrations",
       originalLabel: "Integrations",
-      description: "Connect KRA, ETR, POS, Payroll, Banks & more",
+      description: "Connect Tax Authority, POS, Payroll, Banks & more",
       order: 22,
       visible: true,
     },

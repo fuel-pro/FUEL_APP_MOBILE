@@ -475,7 +475,7 @@ export default function SecuritySection({ logAudit }: Props) {
               <input
                 value={newPhone}
                 onChange={(e) => setNewPhone(e.target.value)}
-                placeholder="+254700000000"
+                placeholder="+1 555 000 0000"
                 className="flex-1 px-3 py-2 bg-white/[0.03] border border-white/[0.08] rounded-lg text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500/30"
               />
               <button

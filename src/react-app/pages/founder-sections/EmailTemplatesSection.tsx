@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { Mail, Save, Eye, Edit3, CheckCircle2, RefreshCw } from "lucide-react";
+import { getDetectedCurrency, getCurrencySymbol } from "@/react-app/lib/currency";
+const CUR = () => getCurrencySymbol(getDetectedCurrency());
 
 interface Template {
   id: string;
@@ -112,7 +114,7 @@ export default function EmailTemplatesSection({ logAudit }: Props) {
       .replace(/{{level}}/g, "500")
       .replace(/{{threshold}}/g, "1000")
       .replace(/{{date}}/g, "2026-05-11")
-      .replace(/{{totalSales}}/g, "KES 45,000")
+      .replace(/{{totalSales}}/g, `${CUR()} 45,000`)
       .replace(/{{transactions}}/g, "120")
       .replace(/{{volume}}/g, "3,500");
   };

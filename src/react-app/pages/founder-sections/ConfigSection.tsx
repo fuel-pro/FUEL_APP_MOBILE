@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import SearchableCountryDropdown from "@/react-app/components/SearchableCountryDropdown";
 import { ALL_COUNTRIES } from "@/react-app/lib/world-country-utils";
+import { getDetectedCurrency } from "@/react-app/lib/currency";
 
 interface ConfigData {
   siteName: string;
@@ -44,7 +45,7 @@ function resolveDetectedConfig(): Partial<ConfigData> {
     /* */
   }
   return {
-    currency: "KES",
+    currency: getDetectedCurrency(),
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
   };
 }
@@ -53,7 +54,7 @@ const detected = resolveDetectedConfig();
 
 const DEFAULT_CONFIG: ConfigData = {
   siteName: "FuelPro",
-  currency: detected.currency || "KES",
+  currency: detected.currency || getDetectedCurrency(),
   timezone: detected.timezone || "UTC",
   dateFormat: "DD/MM/YYYY",
   language: "en",

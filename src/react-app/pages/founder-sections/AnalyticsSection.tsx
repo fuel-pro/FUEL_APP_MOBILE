@@ -16,6 +16,9 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { trpc } from "@/providers/trpc";
+import { getDetectedCurrency, getCurrencySymbol } from "@/react-app/lib/currency";
+
+const CUR = () => getCurrencySymbol(getDetectedCurrency());
 
 interface Props {
   logAudit: (
@@ -240,8 +243,8 @@ export default function AnalyticsSection({ logAudit }: Props) {
             label: "Total Revenue",
             value:
               totalRevenue > 0
-                ? `KES ${totalRevenue.toLocaleString()}`
-                : "KES 0",
+                ? `${CUR()} ${totalRevenue.toLocaleString()}`
+                : `${CUR()} 0`,
             icon: DollarSign,
             change: "+12%",
             up: true,
@@ -259,8 +262,8 @@ export default function AnalyticsSection({ logAudit }: Props) {
             label: "Avg Sale",
             value:
               avgSale > 0
-                ? `KES ${Math.round(avgSale).toLocaleString()}`
-                : "KES 0",
+                ? `${CUR()} ${Math.round(avgSale).toLocaleString()}`
+                : `${CUR()} 0`,
             icon: Fuel,
             change: "-3%",
             up: false,
@@ -450,7 +453,7 @@ export default function AnalyticsSection({ logAudit }: Props) {
           </div>
           <div className="text-center p-3 bg-white/[0.02] rounded-lg">
             <p className="text-2xl font-bold text-white">
-              KES {totalRevenue.toLocaleString()}
+              {CUR()} {totalRevenue.toLocaleString()}
             </p>
             <p className="text-[10px] text-gray-500">Total Revenue</p>
           </div>

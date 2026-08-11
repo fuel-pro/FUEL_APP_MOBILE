@@ -16,6 +16,8 @@ import {
   X,
   RefreshCw,
 } from "lucide-react";
+import { getDetectedCurrency, getCurrencySymbol } from "@/react-app/lib/currency";
+const CUR = () => getCurrencySymbol(getDetectedCurrency());
 import {
   loadCoupons,
   saveCoupons,
@@ -352,7 +354,7 @@ export default function CouponSection({ logAudit }: Props) {
               <div className="flex items-center gap-3">
                 <div className="text-right">
                   <p className="text-sm font-semibold text-white">
-                    {c.type === "percentage" ? `${c.value}%` : `KES ${c.value}`}
+                    {c.type === "percentage" ? `${c.value}%` : `${CUR()} ${c.value}`}
                   </p>
                   <p className="text-[10px] text-gray-500">
                     {c.usedCount}/{c.maxUses} used

@@ -636,7 +636,7 @@ function StationInfoStep({
               type="tel"
               value={data.contacts}
               onChange={(e) => updateField("contacts", e.target.value)}
-              placeholder="e.g., 0712 345 678"
+              placeholder="e.g., +1 555 123 4567"
               className="w-full pl-10 pr-4 py-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none transition-all text-slate-900 dark:text-white"
             />
           </div>
@@ -651,7 +651,7 @@ function StationInfoStep({
               type="email"
               value={data.email}
               onChange={(e) => updateField("email", e.target.value)}
-              placeholder="e.g., info@station.co.ke"
+              placeholder="e.g., info@station.com"
               className="w-full pl-10 pr-4 py-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none transition-all text-slate-900 dark:text-white"
             />
           </div>
@@ -1027,20 +1027,20 @@ function KRAStep({ data, updateField }: StepProps) {
           type="text"
           value={data.physicalAddress}
           onChange={(e) => updateField("physicalAddress", e.target.value)}
-          placeholder="e.g., Plot 123, Mombasa Road, Nairobi"
+          placeholder="e.g., 123 Main Street, City"
           className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none transition-all text-slate-900 dark:text-white"
         />
       </div>
 
       <div>
         <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-          ETR Serial Number
+          {isKenya ? "ETR Serial Number" : "Tax Device Serial No."}
         </label>
         <input
           type="text"
           value={data.etrSerialNo}
           onChange={(e) => updateField("etrSerialNo", e.target.value)}
-          placeholder="Optional - from your ETR device"
+          placeholder="Optional - from your tax receipting device"
           className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none transition-all text-slate-900 dark:text-white"
         />
       </div>

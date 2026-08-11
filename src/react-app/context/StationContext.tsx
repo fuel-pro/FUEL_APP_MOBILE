@@ -342,8 +342,9 @@ const defaultAdminSettings: AdminSettings = {
     enableAI: true,
     // Resolve the default currency from the timezone/location detection in
     // lib/currency.ts (which inspects station data, the location cache, and
-    // the browser timezone, in that order) instead of hard-coding "USD".
-    // This Kenyan-focused app defaults to KES when detection is inconclusive.
+    // the browser timezone, in that order) instead of hard-coding a single
+    // country's currency. Falls back to USD (international default) when
+    // detection is inconclusive.
     currency: (() => {
       try {
         const detected = getDetectedCurrency();
@@ -351,7 +352,7 @@ const defaultAdminSettings: AdminSettings = {
       } catch {
         /* */
       }
-      return "KES";
+      return "USD";
     })(),
     language: "en",
   },
@@ -1268,7 +1269,7 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
         currency: stationData.currency || "",
         currencySymbol:
           stationData.currencySymbol ||
-          currencySymbolFor(stationData.currency || "KES"),
+          currencySymbolFor(stationData.currency || getDetectedCurrency() || "USD"),
         timezone: stationData.timezone || "",
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),

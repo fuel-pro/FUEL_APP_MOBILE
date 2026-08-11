@@ -11,6 +11,8 @@ import {
   Calendar,
   Globe,
 } from "lucide-react";
+import { getDetectedCurrency, getCurrencySymbol } from "@/react-app/lib/currency";
+const CUR = () => getCurrencySymbol(getDetectedCurrency());
 import {
   getSubscription,
   getTrial,
@@ -151,7 +153,7 @@ export default function SubscriptionDashboardSection({ logAudit }: Props) {
         {[
           {
             label: "MRR",
-            value: `KES ${mrr.toLocaleString()}`,
+            value: `${CUR()} ${mrr.toLocaleString()}`,
             icon: TrendingUp,
             change: "+12%",
             up: true,
@@ -159,9 +161,9 @@ export default function SubscriptionDashboardSection({ logAudit }: Props) {
           },
           {
             label: "Total Revenue",
-            value: `KES ${stats.revenue.toLocaleString()}`,
+            value: `${CUR()} ${stats.revenue.toLocaleString()}`,
             icon: CreditCard,
-            change: `KES ${stats.avgOrder.toFixed(0)} avg`,
+            change: `${CUR()} ${stats.avgOrder.toFixed(0)} avg`,
             up: true,
             color: "text-blue-400",
           },
@@ -248,7 +250,7 @@ export default function SubscriptionDashboardSection({ logAudit }: Props) {
                     {data.count} txns
                   </span>
                   <span className="text-xs text-white">
-                    KES {data.revenue.toLocaleString()}
+                    {CUR()} {data.revenue.toLocaleString()}
                   </span>
                 </div>
               </div>

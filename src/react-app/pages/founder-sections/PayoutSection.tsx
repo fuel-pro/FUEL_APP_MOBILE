@@ -10,6 +10,8 @@ import {
   Search,
   Filter,
 } from "lucide-react";
+import { getDetectedCurrency, getCurrencySymbol } from "@/react-app/lib/currency";
+const CUR = () => getCurrencySymbol(getDetectedCurrency());
 import {
   loadPayments,
   savePayments,
@@ -178,13 +180,13 @@ export default function PayoutSection({ logAudit }: Props) {
         {[
           {
             label: "Revenue",
-            value: `KES ${totalRevenue.toLocaleString()}`,
+            value: `${CUR()} ${totalRevenue.toLocaleString()}`,
             icon: CheckCircle2,
             color: "text-emerald-400",
           },
           {
             label: "Pending",
-            value: `KES ${totalPending.toLocaleString()}`,
+            value: `${CUR()} ${totalPending.toLocaleString()}`,
             icon: RefreshCw,
             color: "text-amber-400",
           },
@@ -196,7 +198,7 @@ export default function PayoutSection({ logAudit }: Props) {
           },
           {
             label: "Refunded",
-            value: `KES ${totalRefunded.toLocaleString()}`,
+            value: `${CUR()} ${totalRefunded.toLocaleString()}`,
             icon: ArrowUpDown,
             color: "text-gray-400",
           },
