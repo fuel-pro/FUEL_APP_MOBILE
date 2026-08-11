@@ -236,7 +236,7 @@ export default function DebtReminder() {
               type="text"
               value={whatsappNo}
               onChange={(e) => setWhatsappNo(e.target.value)}
-              placeholder="+254..."
+              placeholder="+1 555 000 0000"
             />
           </div>
           <div className="form-group">

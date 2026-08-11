@@ -558,12 +558,12 @@ export default function Header({
               </div>
               <div>
                 <label className="block text-[10px] text-gray-400 mb-0.5">
-                  Contacts (e.g. +254...)
+                  Contacts (phone)
                 </label>
                 <input
                   value={editData.contacts}
                   onChange={(e) => updateEdit({ contacts: e.target.value })}
-                  placeholder="+254 700 000 000"
+                  placeholder="+1 555 000 0000"
                   className="w-full px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400"
                 />
               </div>
@@ -576,7 +576,7 @@ export default function Header({
                 <input
                   value={editData.email}
                   onChange={(e) => updateEdit({ email: e.target.value })}
-                  placeholder="info@company.co.ke"
+                  placeholder="info@company.com"
                   type="email"
                   className="w-full px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400"
                 />
