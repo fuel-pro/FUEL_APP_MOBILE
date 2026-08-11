@@ -1382,3 +1382,15 @@ Verified: `npx tsc --noEmit` (0 errors), `npm run build` (114 precache,
 success), `eslint` (0 errors, warnings only), all interlink markers present in
 built chunks (LiveTransaction, CreditManagement, Invoice, PayrollSystem,
 MaintenanceTracker).
+
+## Fuel price & fuel type interlink layer (ADDED 2026-08-11, PR #101, commit e362725)
+
+A single source of truth for station fuel types + prices, kept in sync across every tab. A price change anywhere propagates everywhere; any tab can jump to the Fuel Type Manager to edit the canonical fuel/price.
+
+- **Bus** (`src/react-app/lib/fuel-interlink-bus.ts`): in-memory pub/sub. `emitFuelPriceChange(payload)` broadcasts; `onFuelPriceChange(cb)` receives. `FuelPricePrefill` = `{ fuelType, canonical?, price?, amount?, view? }` where `view` is `"fueltypes" | "pumps" | "priceboard"`.
+- **Hook** (`src/react-app/hooks/useStationFuelTypes.ts`): `useStationFuelTypes()` returns `getPriceFor(label)` (canonical match via `isSameFuelType`, fallback `state.pmsPrice`/`agoPrice`), `listFuelTypes()`, `getCanonical()`.
+- **FuelContext**: two-way sync with `fuel_types_config` cloud key. Derives `pmsPrice`/`agoPrice` from active petrol/diesel entries. `syncPriceToFuelTypes(label, price)` writes to state + cloud key + bus. Subscribes to real-time changes.
+- **Wired components**: Dashboard (Edit Prices/Price Board/Find Prices buttons; synced `state.pmsPrice`/`agoPrice`), FuelTypesManager (emits on persist, receives prefill, honors `view`), PriceBoard (emits, "Set as station price"), FuelPriceLocator & FuelTracker ("Set as my price"), PointOfSale (unified price quick-sale, "Edit Fuels"), Invoice ("use fuel price" + edit links), PumpMappingV1/FuelQualityTesting/ReportsCenter (edit fuel-type deep-links).
+- **LiveTransaction Add Payment Source**: explicit `kopo_kopo` source type + status-aware "Configure Kopo Kopo in Integration Hub" deep-link.
+- **CI fixes bundled**: added `account_reference?` to `UnifiedTransaction`; removed stale `debt: "credit"` from MobileBottomNav `flagMap`. NOTE: CI uses `tsc -b` (project refs) which is stricter than `tsc --noEmit` — always run `npx tsc -b` + `prettier --check "src/**/*.{ts,tsx}" "*.{json,md}"` before committing.
+- **Deploy state 2026-08-11**: PR #101 commit e362725, all CI pass. Cloudflare Pages LIVE (preview https://3e2a0a1a.fuel-app-mobile.pages.dev). Vercel BLOCKED by `api-deployments-free-per-day` (100/day exhausted); GitHub integration auto-deploys when quota resets.
