@@ -791,6 +791,80 @@ exact-match to miss. This is a geocoder data-quality issue, not a price
 engine issue — the behavior remains correct (no fabrication). Enhancing the
   geocoder to return the parent town name would improve exact-match coverage.
 
+## Live Transaction ↔ M-PESA Analyzer interlink (ADDED 2026-08-10, commit 278a686)
+
+The Live Transaction tab and M-PESA Analyzer tab now share/interlink data,
+records, and analytics through a unified cloud-backed transaction store.
+
+### Shared service (`src/react-app/lib/mpesa-integration-service.ts`)
+- **Unified transaction store** (cloud key `mpesa_transactions`,
+  station-scoped): both tabs read from and write to the same
+  `UnifiedTransaction[]` in `app_kv` via `cloudStorageService`. Real-time
+  subscription (`subscribeToTransactions`) means a write in one tab
+  reflects instantly in the other.
+- **M-PESA Daraja config** (cloud key `mpesa_config`): typed
+  `MpesaIntegrationConfig` (name, type Buy Goods/Paybill, consumer key/
+  secret, passkey, initiator name/password, shortcode, account reference,
+  environment sandbox/production, enabled). `getMpesaConfig`/
+  `saveMpesaConfig`.
+- **Kopo Kopo config** (cloud key `kopokopo_config`): typed
+  `KopokopoIntegrationConfig` (name, client ID/secret, till number, API key
+  for HMAC webhook verification, environment, transaction search window,
+  enabled). `getKopokopoConfig`/`saveKopokopoConfig`.
+- **Analytics** (`calculateSummary`): total/completed/pending/failed, by
+  origin (stk_push/statement/manual/kopokopo), top sender, unique senders,
+  online payments.
+- **Cross-tab navigation** (`switchToTab`): dispatches the `changeTab`
+  CustomEvent that Home.tsx listens for.
+
+### LiveTransaction.tsx changes
+- Writes STK Push requests to the shared store (origin `stk_push`,
+  status `pending`) so they appear in the M-PESA Analyzer.
+- Shows a "Shared Analytics" panel (total revenue, transaction count,
+  unique senders, top sender) computed from the shared store.
+- Shows a "Shared Transaction Records" feed (STK Push + statement
+  transactions) with origin badges.
+- "View in Analyzer" button → `switchToTab("mpesa")`.
+- Subscribes to real-time updates via `subscribeToTransactions`.
+
+### MPESAAnalyzer.tsx changes
+- After extraction (pattern or AI), persists inflows to the shared store
+  (origin `statement`, status `completed`) via `addBatchTransactions`
+  (de-dup by receipt number to avoid double-imports).
+- Shows "saved to shared store" indicator with added/skipped counts.
+- Shows a collapsible "Shared Transaction Feed" section with STK Push +
+  statement transactions and "Open Live Transaction Tab" button.
+- "Live Transaction" button in the header → `switchToTab("livetransaction")`.
+- Subscribes to real-time updates via `subscribeToTransactions`.
+
+### IntegrationsSettings.tsx (new, tab `integrations-settings` order 38)
+Based on the 3 spec files (`Integrations.txt`, `M-PESA Integration.txt`,
+`Kopo Kopo Integration.txt`):
+- **Catalog view**: M-PESA + Kopo Kopo cards with "Connected"/"Setup"
+  status and "Setup"/"Configure" buttons.
+- **M-PESA setup form**: integration name, type (Buy Goods/Paybill),
+  consumer key/secret, passkey, initiator name/password, business
+  shortcode, account reference (max 12 chars), environment
+  (sandbox/production), enable toggle. Persists via `saveMpesaConfig`.
+- **Kopo Kopo setup form**: integration name, client ID/secret, till
+  number, API key (HMAC webhook verification), environment, transaction
+  search window (6h–7d), enable toggle. Persists via `saveKopokopoConfig`.
+
+### SettingsPanel.tsx changes
+- M-PESA and Kopo Kopo integration cards now show real "Connected"/"Not
+  Connected" status from the cloud config (not static labels).
+- Cards are now buttons → `switchToTab("integrations-settings")`.
+
+### Deployment
+- **Cloudflare Pages**: LIVE at https://c699b3ac.fuel-app-mobile.pages.dev
+  (all lazy chunks verified HTTP 200: IntegrationsSettings, LiveTransaction,
+  MPESAAnalyzer, mpesa-integration-service).
+- **Vercel production**: BLOCKED by `api-deployments-free-per-day` quota
+  (100/day exhausted, resets ~24h). GitHub integration will auto-deploy
+  commit 278a686 when the quota resets.
+- `npx tsc --noEmit` — 0 errors ✅
+- `npm run build` — success ✅
+
 ## Email rate-limit fix (DEPLOYED LIVE 2026-08-10, commit f40f552)
 
 **Symptom**: Users hit Supabase's "email rate limit exceeded" error on the
