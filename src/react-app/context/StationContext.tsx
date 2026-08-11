@@ -60,6 +60,36 @@ const STORAGE_KEY = "fuelpro_stations_v3";
 const ADMIN_KEY = "fuelpro_admin_v3";
 const SESSION_KEY = "fuelpro_session_v3";
 const CURRENT_STATION_KEY = "fuelpro_current_station_v3";
+// Marker recording which user last wrote the global (un-scoped) stations key.
+// Used to migrate a previous user's data to their user-scoped key on their
+// next login, and to detect cross-user contamination (a different user's
+// stations lingering in the shared global key).
+const STATIONS_OWNER_KEY = "fuelpro_stations_v3_owner";
+
+/**
+ * Resolve the user-scoped stations localStorage key. The legacy
+ * `fuelpro_stations_v3` key is NOT user-scoped, so stations from a previous
+ * user leak into a newly-signed-in user's view. We now namespace the key by
+ * user id so each account has its own isolated local cache. Guests (no user)
+ * fall back to the legacy global key for backward compatibility.
+ */
+function stationStorageKey(userId: string | null): string {
+  return userId ? `fuelpro_stations_v3_${userId}` : STORAGE_KEY;
+}
+
+/** Read the current user id from the persisted auth identity (best-effort). */
+function readAuthUserId(): string | null {
+  try {
+    const raw = localStorage.getItem("fuelpro_auth_identity");
+    if (raw) {
+      const id = JSON.parse(raw)?.id;
+      return typeof id === "string" ? id : null;
+    }
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
 const ACCESS_LOG_KEY = "fuelpro_access_log_v3";
 const BACKEND_SYNC_KEY = "fuelpro_backend_synced";
 const BACKEND_SYNC_TIMESTAMP = "fuelpro_backend_sync_time";
@@ -329,7 +359,25 @@ const loadFromStorage = (): {
   currentId: string | null;
 } => {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    // Use the user-scoped key so stations never leak across accounts. If a
+    // user just logged in and their scoped key is empty, attempt a one-time
+    // migration from the legacy global key — but ONLY if the owner marker
+    // matches this user (otherwise the global key holds a DIFFERENT user's
+    // stations and must be ignored, not migrated).
+    const userId = readAuthUserId();
+    const scopedKey = stationStorageKey(userId);
+    let raw = localStorage.getItem(scopedKey);
+    if (!raw && userId) {
+      const globalRaw = localStorage.getItem(STORAGE_KEY);
+      const globalOwner = localStorage.getItem(STATIONS_OWNER_KEY);
+      if (globalRaw && globalOwner === userId) {
+        // Same user's data is in the legacy global key — adopt it into the
+        // scoped key and continue. This preserves stations for a user who
+        // upgrades from the old un-scoped storage.
+        localStorage.setItem(scopedKey, globalRaw);
+        raw = globalRaw;
+      }
+    }
     const adminRaw = localStorage.getItem(ADMIN_KEY);
     const currentId = localStorage.getItem(CURRENT_STATION_KEY);
     if (raw) {
@@ -828,6 +876,18 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isStationLoading, setIsStationLoading] = useState(true);
 
+  // Track the user whose stations are currently loaded, and the ids of
+  // stations created during THIS session. The global `fuelpro_stations_v3`
+  // localStorage key is NOT user-scoped, so without these guards a previous
+  // user's stations leak into a newly-signed-in user's view (the "preserve
+  // local UUID stations" merge step would re-attach them). On a user switch
+  // we treat the cloud as the source of truth: clear the global localStorage
+  // stations + reset state, then sync fresh from Supabase (RLS scopes to the
+  // new user). Only stations created in the current session are preserved
+  // across the merge — those genuinely belong to this user.
+  const currentUserIdRef = useRef<string | null>(null);
+  const sessionCreatedStationIdsRef = useRef<Set<string>>(new Set());
+
   // Refs that always point to the latest state, so callbacks that need
   // stations/adminSettings can have stable identities (empty deps) without
   // capturing stale values. Without this, `persist` is recreated on every
@@ -879,10 +939,14 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
     (newStations?: Station[], newAdmin?: AdminSettings) => {
       const s = newStations ?? stationsRef.current;
       const a = newAdmin ?? adminSettingsRef.current;
-      localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify({ stations: s, version: "3.0" }),
-      );
+      // Write to the user-scoped key so stations are isolated per account.
+      const uid = currentUserIdRef.current;
+      const key = stationStorageKey(uid);
+      localStorage.setItem(key, JSON.stringify({ stations: s, version: "3.0" }));
+      // Record ownership so a future login by the SAME user can migrate from
+      // the legacy global key. A different user logging in next will see the
+      // marker mismatch and ignore (not migrate) the global key's stations.
+      if (uid) localStorage.setItem(STATIONS_OWNER_KEY, uid);
       localStorage.setItem(ADMIN_KEY, JSON.stringify(a));
     },
     // Stable identity — reads current state from refs to avoid stale closures.
@@ -902,8 +966,17 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
       // to syncStationsWithSupabase would tell the merge "I have nothing local"
       // so a cloud that returns [] overwrites localStorage and strands the user
       // on the "create station" screen. Reading fresh avoids that race entirely.
+      //
+      // CROSS-USER GUARD: the global `fuelpro_stations_v3` localStorage key is
+      // NOT user-scoped. If a different user just signed in, the localStorage
+      // stations belong to the PREVIOUS user — preserving them here would leak
+      // another user's stations into this account. Only merge local stations
+      // that were created in THIS session (sessionCreatedStationIdsRef), which
+      // genuinely belong to the current user.
       const fresh = loadFromStorage().stations;
-      const merged = await syncStationsWithSupabase(fresh);
+      const sessionCreated = sessionCreatedStationIdsRef.current;
+      const ownLocal = fresh.filter((s) => sessionCreated.has(s.id));
+      const merged = await syncStationsWithSupabase(ownLocal);
       if (merged === null) {
         console.log(
           "[StationContext] No Supabase session, staying in local-only mode",
@@ -913,14 +986,14 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
 
       // Re-read localStorage immediately before persisting. A station may have
       // been created locally (createStation writes directly to localStorage)
-      // during the network await above. If we persist `merged` (which was
-      // computed from the pre-await `fresh` read) we'd clobber that just-created
-      // station with an empty/shorter list and strand the user on the "create
-      // station" screen. Merge any local stations not represented in `merged`.
+      // during the network await above. Merge any stations created THIS session
+      // that aren't represented in `merged` — but never re-attach stations that
+      // were already in localStorage before this user signed in (they may belong
+      // to a different user).
       const latest = loadFromStorage().stations;
       const mergedIds = new Set(merged.map((s) => s.id));
       for (const s of latest) {
-        if (!mergedIds.has(s.id)) merged.push(s);
+        if (sessionCreated.has(s.id) && !mergedIds.has(s.id)) merged.push(s);
       }
 
       setStations(merged);
@@ -965,6 +1038,24 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
 
   // Load from storage on mount
   useEffect(() => {
+    // Detect the current user from the persisted auth identity so we can
+    // scope localStorage stations. If the auth identity doesn't match the
+    // stations in localStorage (e.g. a previous user's stations lingered),
+    // clear them — cloud is the source of truth per user.
+    let detectedUserId: string | null = null;
+    try {
+      const identityRaw = localStorage.getItem("fuelpro_auth_identity");
+      if (identityRaw) {
+        const identity = JSON.parse(identityRaw);
+        detectedUserId = identity?.id ?? null;
+      }
+    } catch {
+      // ignore parse errors
+    }
+    currentUserIdRef.current = detectedUserId;
+    // Fresh session — no stations created yet.
+    sessionCreatedStationIdsRef.current = new Set();
+
     const { stations: loadedStations, admin, currentId } = loadFromStorage();
     setStations(loadedStations);
     setAdminSettings(admin);
@@ -1011,16 +1102,53 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
   // Also sync whenever the person signs in (covers login without a full
   // page reload, and login on a device that already has the app loaded)
   useEffect(() => {
-    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "SIGNED_IN") {
-        // Re-show loading screen while we fetch cloud stations, so the
-        // SetupWizard doesn't flash on a new device before stations arrive.
-        setIsStationLoading(true);
-        syncFromBackend().finally(() => {
-          setIsStationLoading(false);
-        });
-      }
-    });
+    const { data: sub } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (event === "SIGNED_IN" && session?.user?.id) {
+          const newUserId = session.user.id;
+          // CROSS-USER ISOLATION: if a DIFFERENT user just signed in, the
+          // previous user's stations linger in their scoped localStorage key
+          // (and the legacy global key). Clear the previous user's scoped key
+          // + reset state so those stations don't leak into the new account.
+          // Cloud (RLS-scoped) is the source of truth. Also reset the
+          // session-created set so we don't carry over ids from a prior session.
+          if (
+            currentUserIdRef.current &&
+            currentUserIdRef.current !== newUserId
+          ) {
+            console.log(
+              `[StationContext] User changed (${currentUserIdRef.current} → ${newUserId}), clearing stale localStorage stations to prevent cross-user leak`,
+            );
+            localStorage.removeItem(
+              stationStorageKey(currentUserIdRef.current),
+            );
+            localStorage.removeItem(STORAGE_KEY);
+            localStorage.removeItem(CURRENT_STATION_KEY);
+            sessionCreatedStationIdsRef.current = new Set();
+            setStations([]);
+            setCurrentStation(null);
+          }
+          currentUserIdRef.current = newUserId;
+
+          // Re-show loading screen while we fetch cloud stations, so the
+          // SetupWizard doesn't flash on a new device before stations arrive.
+          setIsStationLoading(true);
+          syncFromBackend().finally(() => {
+            setIsStationLoading(false);
+          });
+        } else if (event === "SIGNED_OUT") {
+          // Clear local station state on logout so the next user starts clean.
+          const uid = currentUserIdRef.current;
+          if (uid) localStorage.removeItem(stationStorageKey(uid));
+          localStorage.removeItem(STORAGE_KEY);
+          localStorage.removeItem(CURRENT_STATION_KEY);
+          currentUserIdRef.current = null;
+          sessionCreatedStationIdsRef.current = new Set();
+          setStations([]);
+          setCurrentStation(null);
+        }
+      },
+    );
     return () => sub.subscription.unsubscribe();
   }, [syncFromBackend]);
 
@@ -1060,7 +1188,9 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (stations.length === 0) {
       try {
-        const raw = localStorage.getItem(STORAGE_KEY);
+        const raw = localStorage.getItem(
+          stationStorageKey(currentUserIdRef.current),
+        );
         const parsed = raw ? JSON.parse(raw) : null;
         const stored = Array.isArray(parsed) ? parsed : parsed?.stations;
         if (stored && stored.length > 0) {
@@ -1127,14 +1257,21 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
       setStations((prev) => [...prev, newStation]);
       setCurrentStation(newStation);
       localStorage.setItem(CURRENT_STATION_KEY, id);
+      // Track this station as created in the current session so the
+      // cross-user merge guard in syncFromBackend knows it belongs to
+      // this user and preserves it across the cloud sync race.
+      sessionCreatedStationIdsRef.current.add(id);
       // Also save directly to ensure persistence even if useEffect hasn't fired
       try {
+        const key = stationStorageKey(currentUserIdRef.current);
         const existing = JSON.parse(
-          localStorage.getItem(STORAGE_KEY) ||
+          localStorage.getItem(key) ||
             '{"stations":[],"version":"3.0"}',
         );
         existing.stations = [...(existing.stations || []), newStation];
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(existing));
+        localStorage.setItem(key, JSON.stringify(existing));
+        if (currentUserIdRef.current)
+          localStorage.setItem(STATIONS_OWNER_KEY, currentUserIdRef.current);
       } catch (e) {
         console.error("Failed to persist station:", e);
       }
