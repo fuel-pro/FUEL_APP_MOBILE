@@ -1,5 +1,5 @@
 import { trpc } from "@/providers/trpc";
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 export type AuditSeverity = "info" | "success" | "warning" | "danger";
 
@@ -271,6 +271,57 @@ export function useFounderBackend() {
       retry: 1,
     });
 
+  /* ─── Founder stats via /api/founder-stats (Supabase service role) ───
+   * The tRPC procedures above are runtime no-ops (no backend configured in
+   * this Supabase-only SPA), so allBackendUsers/allBackendStations are always
+   * null and the Founder Console showed 0 users / 0 stations. This fetches
+   * the REAL cross-owner counts from the serverless endpoint, which uses the
+   * service_role key (RLS-bypassing) after verifying the caller is a founder.
+   * The endpoint lives ONLY on Vercel (Cloudflare serves the SPA). */
+  const [statsUsers, setStatsUsers] = useState<any[] | null>(null);
+  const [statsStations, setStatsStations] = useState<any[] | null>(null);
+  const [statsLoading, setStatsLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadStats() {
+      try {
+        const { getSupabaseClient } = await import("@/supabase/client");
+        const client = getSupabaseClient();
+        const { data } = await client.auth.getSession();
+        const token = data.session?.access_token;
+        if (!token) return;
+        setStatsLoading(true);
+        // Prefer a same-origin /api path; on Cloudflare (no /api) fall back to
+        // the Vercel origin which has the serverless function.
+        const isVercel =
+          typeof window !== "undefined" &&
+          window.location.hostname.includes("vercel.app");
+        const base = isVercel
+          ? "/api/founder-stats"
+          : "https://fuel-app-mobile.vercel.app/api/founder-stats";
+        const res = await fetch(base, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) return;
+        const json = await res.json();
+        if (cancelled) return;
+        if (json?.success) {
+          setStatsUsers(json.users || []);
+          setStatsStations(json.stations || []);
+        }
+      } catch {
+        /* network / not a founder — silently ignore; tRPC null stays the fallback */
+      } finally {
+        if (!cancelled) setStatsLoading(false);
+      }
+    }
+    loadStats();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   return {
     // Audit
     logAudit,
@@ -288,13 +339,14 @@ export function useFounderBackend() {
     stationsLoading,
     stationCount,
 
-    // All Users (for founder dashboard)
-    allBackendUsers,
-    usersLoading,
+    // All Users (for founder dashboard) — prefer /api/founder-stats (real)
+    // over the no-op tRPC query which is always null in Supabase-only mode.
+    allBackendUsers: statsUsers || allBackendUsers,
+    usersLoading: usersLoading || statsLoading,
 
-    // All Stations (for founder dashboard)
-    allBackendStations,
-    allStationsLoading,
+    // All Stations (for founder dashboard) — same precedence.
+    allBackendStations: statsStations || allBackendStations,
+    allStationsLoading: allStationsLoading || statsLoading,
 
     // Sales Analytics
     salesAnalytics,
