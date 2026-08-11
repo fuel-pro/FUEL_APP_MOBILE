@@ -4,6 +4,10 @@ import { getCurrencySymbol } from "../lib/currency";
 import { useAuth } from "@/react-app/context/AuthContext";
 import { useStations } from "@/react-app/context/StationContext";
 import {
+  onTabPayload,
+  type ExpensePrefill,
+} from "@/react-app/lib/mpesa-integration-service";
+import {
   Receipt,
   Plus,
   Trash2,
@@ -98,6 +102,29 @@ export default function ExpenseTracker() {
     approvedBy: "",
     status: "pending",
   });
+
+  // Interlink receiver: PayrollSystem and MaintenanceTracker call
+  // navigateToTab("expenses", <ExpensePrefill>) to record a payroll/maintenance
+  // cost as an expense — open the form pre-filled with the category + amount.
+  useEffect(() => {
+    return onTabPayload("expenses", (raw) => {
+      const p = (raw || {}) as ExpensePrefill;
+      if (Object.keys(p).length === 0) return;
+      setActiveView("list");
+      setEditingId(null);
+      setFormData({
+        date: new Date().toISOString().slice(0, 10),
+        category: p.category || "other",
+        description: p.description || "",
+        amount: p.amount ?? 0,
+        paymentMethod: p.paymentMethod || "Bank Transfer",
+        reference: p.reference || "",
+        approvedBy: "",
+        status: "pending",
+      });
+      setShowForm(true);
+    });
+  }, []);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(expenses));

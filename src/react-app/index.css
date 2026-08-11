@@ -1267,3 +1267,68 @@ ol {
     display: none !important;
   }
 }
+
+/* ============================================================
+   Native <select> enhancement — CLICKING.txt 5 rules
+   Ensures ALL native <select> elements across the site have:
+   - 48px touch target (Rule 1)
+   - Hover/focus feedback (Rule 1)
+   - Dark mode styling (consistent with custom dropdowns)
+   - Smooth 150ms transitions (Rule 5)
+   - Custom caret icon via appearance:none + background SVG
+   ============================================================ */
+
+select {
+  min-height: 48px;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 16px;
+  padding-right: 40px !important;
+  transition: border-color 150ms ease, box-shadow 150ms ease, background-color 150ms ease;
+  cursor: pointer;
+}
+
+select:hover {
+  border-color: #6b7280;
+}
+
+select:focus {
+  outline: none;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.3);
+}
+
+select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+html.dark select {
+  background-color: #1f2937;
+  border-color: #4b5563;
+  color: #f3f4f6;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+}
+
+html.dark select:focus {
+  border-color: #818cf8;
+  box-shadow: 0 0 0 2px rgba(129, 140, 248, 0.3);
+}
+
+html.dark select option {
+  background-color: #1f2937;
+  color: #f3f4f6;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  select,
+  .dropdown-content,
+  [class*="transition"] {
+    transition-duration: 0ms !important;
+    animation-duration: 0ms !important;
+  }
+}

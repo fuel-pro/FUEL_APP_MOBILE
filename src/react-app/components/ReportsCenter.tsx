@@ -14,6 +14,10 @@ import {
 } from "lucide-react";
 import { useFuel } from "@/react-app/context/FuelContext";
 import { getCurrencySymbol } from "@/react-app/lib/currency";
+import {
+  navigateToTab,
+  type FuelPricePrefill,
+} from "@/react-app/lib/mpesa-integration-service";
 import { formatNumber } from "@/react-app/utils/formatUtils";
 import ExportDropdown from "@/react-app/components/ExportDropdown";
 import jsPDF from "jspdf";
@@ -1751,7 +1755,21 @@ export default function ReportsCenter() {
                           <td className="px-3 py-2 font-mono text-xs">
                             {t.receiptNo}
                           </td>
-                          <td className="px-3 py-2">{t.description}</td>
+                          <td className="px-3 py-2">
+                            {t.description}{" "}
+                            <button
+                              onClick={() =>
+                                navigateToTab("fueltypes", {
+                                  fuelType: t.description,
+                                  price: Number(t.unitPrice) || undefined,
+                                } as FuelPricePrefill)
+                              }
+                              className="text-[10px] text-indigo-600 dark:text-indigo-400 hover:underline"
+                              title="Edit this fuel type / price in Fuel Type Manager"
+                            >
+                              edit
+                            </button>
+                          </td>
                           <td className="px-3 py-2 text-right">
                             {formatNumber(t.quantity, 2)}
                           </td>

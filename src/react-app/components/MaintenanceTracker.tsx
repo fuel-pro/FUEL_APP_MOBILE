@@ -22,7 +22,12 @@ import {
   Droplets,
   Zap,
   Cog,
+  Receipt,
 } from "lucide-react";
+import {
+  navigateToTab,
+  type ExpensePrefill,
+} from "@/react-app/lib/mpesa-integration-service";
 
 interface MaintenanceRecord {
   id: string;
@@ -469,6 +474,22 @@ export default function MaintenanceTracker() {
                     className="p-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 rounded-lg transition-colors"
                   >
                     <Edit3 size={12} />
+                  </button>
+                  <button
+                    onClick={() =>
+                      navigateToTab("expenses", {
+                        category: "maintenance",
+                        amount: record.cost,
+                        description: `Maintenance — ${record.equipmentName} (${record.equipmentType})`,
+                        reference: record.id,
+                        paymentMethod: "Bank Transfer",
+                      } satisfies ExpensePrefill)
+                    }
+                    disabled={!record.cost || record.cost <= 0}
+                    className="p-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 rounded-lg transition-colors disabled:opacity-40"
+                    title="Record this maintenance cost as an expense"
+                  >
+                    <Receipt size={12} />
                   </button>
                   <button
                     onClick={() => handleDelete(record.id)}

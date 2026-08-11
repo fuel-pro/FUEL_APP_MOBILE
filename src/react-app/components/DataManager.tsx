@@ -1,5 +1,4 @@
 import React, { useState, useRef } from "react";
-import { KENYA_BASE_PRICES } from "@/react-app/config/pricing";
 import {
   Database,
   Download,
@@ -12,11 +11,6 @@ import {
   Cloud,
   CheckCircle,
   Fuel,
-  DollarSign,
-  Plus,
-  Minus,
-  AlertTriangle,
-  Lock,
   Wifi,
 } from "lucide-react";
 import { useFuel } from "@/react-app/context/FuelContext";
@@ -40,16 +34,6 @@ export default function DataManager() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importStatus, setImportStatus] = useState("");
   const [activeTab, setActiveTab] = useState("overview");
-
-  // Member-accessible pump settings
-  const [pmsPrice, setPmsPrice] = useState(
-    state.pmsPrice || KENYA_BASE_PRICES.petrol,
-  );
-  const [agoPrice, setAgoPrice] = useState(
-    state.agoPrice || KENYA_BASE_PRICES.diesel,
-  );
-  const [pmsPumpCount, setPmsPumpCount] = useState(state.pmsPumps?.length || 1);
-  const [agoPumpCount, setAgoPumpCount] = useState(state.agoPumps?.length || 1);
 
   const getDataSize = () => {
     const dataStr = JSON.stringify(state);
@@ -596,9 +580,6 @@ export default function DataManager() {
           <div className="flex space-x-1 bg-gray-100 dark:bg-gray-700 rounded-lg p-1 overflow-x-auto">
             {[
               { id: "overview", label: "Overview", icon: HardDrive },
-              hasPermission("canEditFuelPrices")
-                ? { id: "pumps", label: "Pump Settings", icon: Fuel }
-                : null,
               hasPermission("canManageCloud")
                 ? { id: "recovery", label: "Recovery", icon: RefreshCw }
                 : null,
@@ -799,238 +780,6 @@ export default function DataManager() {
                   <Trash2 size={16} />
                   Clear All Data
                 </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Pump Settings Tab - Members can edit pump prices and count */}
-        {activeTab === "pumps" && (
-          <div className="space-y-6">
-            {!isOwner && (
-              <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-3 flex items-center gap-2">
-                <AlertTriangle size={14} className="text-amber-500" />
-                <p className="text-xs text-amber-700 dark:text-amber-300">
-                  You have <strong>Member</strong> access. Changes are tracked.
-                  Some settings require Founder approval.
-                </p>
-              </div>
-            )}
-
-            {/* Fuel Prices */}
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg border border-gray-200 dark:border-gray-600">
-              <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-4 flex items-center gap-2">
-                <DollarSign size={18} className="text-green-500" />
-                Pump Prices (per Litre)
-              </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                {[
-                  {
-                    label: "PMS (Petrol)",
-                    value: pmsPrice,
-                    setter: setPmsPrice,
-                    color: "red",
-                    key: "pms",
-                  },
-                  {
-                    label: "AGO (Diesel)",
-                    value: agoPrice,
-                    setter: setAgoPrice,
-                    color: "blue",
-                    key: "ago",
-                  },
-                ].map((fuel) => (
-                  <div
-                    key={fuel.key}
-                    className={`p-4 bg-${fuel.color}-50 dark:bg-${fuel.color}-900/20 rounded-lg border border-${fuel.color}-200 dark:border-${fuel.color}-700`}
-                  >
-                    <label className="text-xs text-gray-500 dark:text-gray-400 block mb-2">
-                      {fuel.label}
-                    </label>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-gray-500">Ksh</span>
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={fuel.value}
-                        onChange={(e) =>
-                          fuel.setter(parseFloat(e.target.value) || 0)
-                        }
-                        className="flex-1 px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white focus:ring-2 focus:ring-green-500 outline-none"
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <button
-                onClick={() => {
-                  dispatch({
-                    type: "SET_PRICES",
-                    payload: { pmsPrice, agoPrice },
-                  });
-                  alert(
-                    `Pump prices updated:\nPMS: Ksh ${pmsPrice.toFixed(2)}\nAGO: Ksh ${agoPrice.toFixed(2)}`,
-                  );
-                }}
-                className="mt-4 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium flex items-center gap-2 transition-colors"
-              >
-                <Save size={14} /> Save Prices
-              </button>
-            </div>
-
-            {/* Pump Count */}
-            {hasPermission("canChangePumpCount") && (
-              <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg border border-gray-200 dark:border-gray-600">
-                <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-4 flex items-center gap-2">
-                  <Fuel size={18} className="text-blue-500" />
-                  Number of Pumps
-                </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {[
-                    {
-                      label: "PMS Pumps",
-                      value: pmsPumpCount,
-                      setter: setPmsPumpCount,
-                      color: "red",
-                    },
-                    {
-                      label: "AGO Pumps",
-                      value: agoPumpCount,
-                      setter: setAgoPumpCount,
-                      color: "blue",
-                    },
-                  ].map((pump) => (
-                    <div
-                      key={pump.label}
-                      className={`p-4 bg-${pump.color}-50 dark:bg-${pump.color}-900/20 rounded-lg border border-${pump.color}-200 dark:border-${pump.color}-700`}
-                    >
-                      <label className="text-xs text-gray-500 dark:text-gray-400 block mb-2">
-                        {pump.label}
-                      </label>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() =>
-                            pump.setter(Math.max(0, pump.value - 1))
-                          }
-                          className="p-2 bg-gray-200 dark:bg-gray-700 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
-                        >
-                          <Minus size={14} />
-                        </button>
-                        <span className="text-2xl font-bold text-gray-900 dark:text-white w-12 text-center">
-                          {pump.value}
-                        </span>
-                        <button
-                          onClick={() => pump.setter(pump.value + 1)}
-                          className="p-2 bg-gray-200 dark:bg-gray-700 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
-                        >
-                          <Plus size={14} />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <button
-                  onClick={() => {
-                    // Dispatch pump count changes
-                    const makePump = (id: string, name: string): any => ({
-                      id,
-                      name,
-                      openingKsh: 0,
-                      closingKsh: 0,
-                      openingL: 0,
-                      closingL: 0,
-                      salesL: 0,
-                      salesKsh: 0,
-                    });
-                    const newPmsPumps = Array.from(
-                      { length: pmsPumpCount },
-                      (_, i) =>
-                        state.pmsPumps[i] ||
-                        makePump(`pms-${i + 1}`, `PMS Pump ${i + 1}`),
-                    );
-                    const newAgoPumps = Array.from(
-                      { length: agoPumpCount },
-                      (_, i) =>
-                        state.agoPumps[i] ||
-                        makePump(`ago-${i + 1}`, `AGO Pump ${i + 1}`),
-                    );
-                    dispatch({ type: "SET_PMS_PUMPS", payload: newPmsPumps });
-                    dispatch({ type: "SET_AGO_PUMPS", payload: newAgoPumps });
-                    alert(
-                      `Pump count updated:\nPMS: ${pmsPumpCount} pumps\nAGO: ${agoPumpCount} pumps`,
-                    );
-                  }}
-                  className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium flex items-center gap-2 transition-colors"
-                >
-                  <Save size={14} /> Save Pump Count
-                </button>
-              </div>
-            )}
-
-            {/* Member Permissions Info */}
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg border border-gray-200 dark:border-gray-600">
-              <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-4 flex items-center gap-2">
-                <Lock size={18} className="text-gray-500" />
-                Your Access Level
-              </h3>
-              <div className="space-y-2">
-                {[
-                  {
-                    label: "Edit Pump Prices",
-                    allowed: hasPermission("canEditFuelPrices"),
-                  },
-                  {
-                    label: "Change Pump Count",
-                    allowed: hasPermission("canChangePumpCount"),
-                  },
-                  {
-                    label: "Edit Fuel Prices",
-                    allowed: hasPermission("canEditFuelPrices"),
-                  },
-                  {
-                    label: "Manage Inventory",
-                    allowed: hasPermission("canManageInventory"),
-                  },
-                  {
-                    label: "Edit Employees",
-                    allowed: hasPermission("canManageEmployees"),
-                  },
-                  {
-                    label: "Run Payroll",
-                    allowed: hasPermission("canRunPayroll"),
-                  },
-                  {
-                    label: "Export Data",
-                    allowed: hasPermission("canExportReports"),
-                  },
-                  {
-                    label: "Backup & Restore",
-                    allowed: hasPermission("canManageCloud"),
-                  },
-                  {
-                    label: "Cloud Sync",
-                    allowed: hasPermission("canManageCloud"),
-                  },
-                  { label: "Founder Access", allowed: isOwner },
-                ].map((item) => (
-                  <div
-                    key={item.label}
-                    className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-900 rounded-lg"
-                  >
-                    <span className="text-xs text-gray-700 dark:text-gray-300">
-                      {item.label}
-                    </span>
-                    <span
-                      className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
-                        item.allowed
-                          ? "bg-green-100 text-green-700"
-                          : "bg-red-100 text-red-700"
-                      }`}
-                    >
-                      {item.allowed ? "Allowed" : "Restricted"}
-                    </span>
-                  </div>
-                ))}
               </div>
             </div>
           </div>

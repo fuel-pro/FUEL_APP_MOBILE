@@ -970,7 +970,10 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
       // Write to the user-scoped key so stations are isolated per account.
       const uid = currentUserIdRef.current;
       const key = stationStorageKey(uid);
-      localStorage.setItem(key, JSON.stringify({ stations: s, version: "3.0" }));
+      localStorage.setItem(
+        key,
+        JSON.stringify({ stations: s, version: "3.0" }),
+      );
       // Record ownership so a future login by the SAME user can migrate from
       // the legacy global key. A different user logging in next will see the
       // marker mismatch and ignore (not migrate) the global key's stations.
@@ -1299,8 +1302,7 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
       try {
         const key = stationStorageKey(currentUserIdRef.current);
         const existing = JSON.parse(
-          localStorage.getItem(key) ||
-            '{"stations":[],"version":"3.0"}',
+          localStorage.getItem(key) || '{"stations":[],"version":"3.0"}',
         );
         existing.stations = [...(existing.stations || []), newStation];
         localStorage.setItem(key, JSON.stringify(existing));

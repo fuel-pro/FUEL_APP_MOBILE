@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import {
   Building2,
   ChevronDown,
@@ -24,6 +24,36 @@ export default function StationSelector({
   const [isEditing, setIsEditing] = useState<string | null>(null);
   const [newStation, setNewStation] = useState({ name: "", location: "" });
   const [editStation, setEditStation] = useState({ name: "", location: "" });
+  const [placement, setPlacement] = useState<"bottom" | "top">("bottom");
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Rule 2: edge-flip + Rule 3: keyboard
+  useEffect(() => {
+    if (isOpen && triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const menuHeight = 400;
+      if (spaceBelow < menuHeight && rect.top > menuHeight) {
+        setPlacement("top");
+      } else {
+        setPlacement("bottom");
+      }
+    }
+  }, [isOpen]);
+
+  const handleKeyDown = (e: ReactKeyboardEvent) => {
+    if (e.key === "Escape") {
+      setIsOpen(false);
+      setIsAdding(false);
+      setIsEditing(null);
+      triggerRef.current?.focus();
+    }
+    if (!isOpen && (e.key === "ArrowDown" || e.key === "Enter" || e.key === " ")) {
+      e.preventDefault();
+      setIsOpen(true);
+    }
+  };
 
   const stations = state.stations || [];
   const currentStation = stations.find((s) => s.id === state.currentStationId);
@@ -83,12 +113,19 @@ export default function StationSelector({
   };
 
   return (
-    <div className="relative inline-block">
-      {/* Station Selector Button */}
+    <div
+      className="relative inline-block"
+      onKeyDown={handleKeyDown}
+      ref={containerRef}
+    >
+      {/* Station Selector Button — Rule 1: 48px touch, ARIA */}
       <button
+        ref={triggerRef}
         onClick={() => setIsOpen(!isOpen)}
-        className={`flex items-center gap-1.5 bg-gradient-to-r from-amber-500/20 to-orange-500/20 hover:from-amber-500/30 hover:to-orange-500/30 border border-amber-400/50 rounded-lg transition-all duration-200 group ${
-          compact ? "px-2 py-1.5" : "px-3 py-2 rounded-xl gap-2"
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
+        className={`flex h-12 items-center gap-1.5 bg-gradient-to-r from-amber-500/20 to-orange-500/20 hover:from-amber-500/30 hover:to-orange-500/30 border border-amber-400/50 rounded-lg transition-all duration-150 group focus:outline-none focus:ring-2 focus:ring-indigo-500/50 ${
+          compact ? "px-2" : "px-3 rounded-xl gap-2"
         }`}
       >
         <Building2
@@ -119,7 +156,7 @@ export default function StationSelector({
         />
       </button>
 
-      {/* Dropdown */}
+      {/* Dropdown — Rule 2: edge-flip, Rule 5: 150ms animation */}
       {isOpen && (
         <>
           {/* Backdrop */}
@@ -133,7 +170,14 @@ export default function StationSelector({
           />
 
           {/* Dropdown Menu */}
-          <div className="absolute top-full mt-2 left-0 z-50 w-72 bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-amber-200 dark:border-amber-700 overflow-hidden">
+          <div
+            className={`absolute left-0 z-50 w-72 bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-amber-200 dark:border-amber-700 overflow-hidden transition-all duration-150 ${
+              placement === "top"
+                ? "bottom-full mb-2 origin-bottom"
+                : "top-full mt-2 origin-top"
+            }`}
+            role="listbox"
+          >
             {/* Header */}
             <div className="px-4 py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white">
               <div className="flex items-center justify-between">

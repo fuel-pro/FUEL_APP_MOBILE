@@ -1,7 +1,10 @@
 import { useState, useEffect } from "react";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 import { useAuth } from "@/react-app/context/AuthContext";
-import { CANONICAL_FUEL_TYPES, isSameFuelType } from "@/react-app/config/pricing";
+import {
+  CANONICAL_FUEL_TYPES,
+  isSameFuelType,
+} from "@/react-app/config/pricing";
 import {
   Monitor,
   Plus,
@@ -25,6 +28,12 @@ import { useAutoSync } from "@/react-app/hooks/useAutoSync";
 import { useLocation } from "@/react-app/context/LocationContext";
 import { useStations } from "@/react-app/context/StationContext";
 import { getCurrencySymbol } from "@/react-app/lib/currency";
+import { useFuel } from "@/react-app/context/FuelContext";
+import {
+  emitFuelPriceChange,
+  onFuelPriceChange,
+} from "@/react-app/lib/fuel-interlink-bus";
+import { normalizeFuelType } from "@/react-app/config/pricing";
 
 interface PriceEntry {
   id: string;
@@ -91,6 +100,7 @@ export default function PriceBoard() {
   const { user } = useAuth();
   const { currentStation } = useStations();
   const stationId = currentStation?.id;
+  const { syncPriceToFuelTypes } = useFuel();
   const [prices, setPrices] = useState<PriceEntry[]>(loadPrices);
   const [history, setHistory] = useState<PriceHistory[]>(loadHistory);
   const [showForm, setShowForm] = useState(false);
@@ -229,6 +239,17 @@ export default function PriceBoard() {
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(prices));
     cloudStorageService.set(CLOUD_KEY, prices, stationId).catch(() => {});
+    // Broadcast each active price on the interlink bus so FuelTypesManager,
+    // Dashboard, POS, Invoice, Reports see PriceBoard edits instantly.
+    for (const p of prices) {
+      if (!p.isActive) continue;
+      emitFuelPriceChange({
+        fuelType: p.fuelType,
+        canonical: normalizeFuelType(p.fuelType),
+        price: p.price,
+        source: "PriceBoard.persist",
+      });
+    }
   }, [prices, stationId]);
   useEffect(() => {
     localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
@@ -236,6 +257,30 @@ export default function PriceBoard() {
       .set(CLOUD_HISTORY_KEY, history, stationId)
       .catch(() => {});
   }, [history, stationId]);
+
+  // Interlink receiver: when a price changes elsewhere (FuelTypesManager,
+  // Dashboard, "Set as my price", FuelContext sync), mirror it into the
+  // matching PriceBoard entry so the board stays in sync.
+  useEffect(() => {
+    return onFuelPriceChange((p) => {
+      if (p.source === "PriceBoard.persist") return; // skip our own echo
+      const canonical = p.canonical ?? normalizeFuelType(p.fuelType);
+      if (!canonical) return;
+      setPrices((prev) => {
+        const idx = prev.findIndex(
+          (entry) => normalizeFuelType(entry.fuelType) === canonical,
+        );
+        if (idx < 0 || prev[idx].price === p.price) return prev;
+        const next = prev.slice();
+        next[idx] = {
+          ...next[idx],
+          price: p.price,
+          updatedAt: new Date().toISOString(),
+        };
+        return next;
+      });
+    });
+  }, []);
 
   // Load from cloud on mount (cross-device sync)
   useEffect(() => {
@@ -583,6 +628,15 @@ export default function PriceBoard() {
                           className="p-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 rounded-lg transition-colors"
                         >
                           <Edit3 size={12} />
+                        </button>
+                        <button
+                          onClick={() =>
+                            syncPriceToFuelTypes(price.fuelType, price.price)
+                          }
+                          className="p-1.5 bg-green-500/10 hover:bg-green-500/20 text-green-600 rounded-lg transition-colors"
+                          title="Set as station price (syncs to FuelContext + Fuel Type Manager)"
+                        >
+                          <CheckCircle2 size={12} />
                         </button>
                         <button
                           onClick={() => handleDelete(price.id)}

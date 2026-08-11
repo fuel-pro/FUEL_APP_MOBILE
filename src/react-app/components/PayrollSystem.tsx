@@ -14,11 +14,16 @@ import {
   FileText,
   BarChart3,
   Loader2,
+  Receipt,
 } from "lucide-react";
 import { useFuel } from "@/react-app/context/FuelContext";
 import { useAuth } from "@/react-app/context/AuthContext";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 import { useStations } from "@/react-app/context/StationContext";
+import {
+  navigateToTab,
+  type ExpensePrefill,
+} from "@/react-app/lib/mpesa-integration-service";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -2330,6 +2335,25 @@ export default function PayrollSystem() {
           )}
           <span className="hidden sm:inline">CPC CENTRALIZED</span>
           <span className="sm:hidden">CPC CENTRALIZED</span>
+        </button>
+
+        <button
+          onClick={() =>
+            navigateToTab("expenses", {
+              category: "salaries",
+              amount: totalNet,
+              description: `Payroll — ${employees.length} employee(s) (net pay)`,
+              reference: `PAYROLL-${new Date().toISOString().slice(0, 10)}`,
+              paymentMethod: "Bank Transfer",
+            } satisfies ExpensePrefill)
+          }
+          disabled={totalNet <= 0}
+          className="btn btn-primary px-2 md:px-4 py-1 md:py-2 text-xs md:text-base col-span-2 md:col-span-1 flex items-center gap-2 disabled:opacity-50"
+          title="Record this payroll total as an expense in the Expense Tracker"
+        >
+          <Receipt size={12} className="md:w-4 md:h-4" />
+          <span className="hidden sm:inline">RECORD EXPENSE</span>
+          <span className="sm:hidden">EXPENSE</span>
         </button>
       </div>
     </div>

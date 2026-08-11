@@ -21,12 +21,32 @@ import {
   Settings,
   ChevronDown,
   ChevronUp,
+  Monitor,
+  FlaskConical,
+  Gauge,
+  DollarSign,
+  Minus,
+  Lock,
 } from "lucide-react";
 import { useFuel } from "@/react-app/context/FuelContext";
+import { usePermissions } from "@/react-app/context/PermissionContext";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 import { getCurrencySymbol } from "@/react-app/lib/currency";
 import { useAuth } from "@/react-app/context/AuthContext";
 import { useStations } from "@/react-app/context/StationContext";
+import SubTabBar from "@/react-app/components/SubTabBar";
+import PriceBoard from "@/react-app/components/PriceBoard";
+import FuelQualityTesting from "@/react-app/components/FuelQualityTesting";
+import {
+  emitFuelTypeChange,
+  emitFuelPriceChange,
+  type FuelPricePrefill,
+} from "@/react-app/lib/fuel-interlink-bus";
+import {
+  onTabPayload,
+  navigateToTab,
+} from "@/react-app/lib/mpesa-integration-service";
+import { normalizeFuelType } from "@/react-app/config/pricing";
 
 // ============================================================
 // CUSTOM FUEL TYPE MANAGER
@@ -287,6 +307,11 @@ export default function FuelTypesManager() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [showPresets, setShowPresets] = useState(false);
+  // Inner sub-tab: hosts the formerly-standalone Pump Settings, Price Board,
+  // and Fuel Quality Testing tabs alongside the fuel-type catalog.
+  const [activeView, setActiveView] = useState<
+    "fueltypes" | "pumps" | "priceboard" | "quality"
+  >("fueltypes");
 
   // Form state
   const [formCode, setFormCode] = useState("");
@@ -306,6 +331,24 @@ export default function FuelTypesManager() {
     cloudStorageService
       .set("fuel_types_config", types, stationId)
       .catch(() => {});
+    // Broadcast each active fuel's price on the interlink bus so same-page
+    // consumers (Dashboard, PriceBoard, POS, Invoice, Reports) update
+    // instantly without waiting for the cloud real-time round-trip.
+    for (const ft of types) {
+      if (!ft.active) continue;
+      emitFuelTypeChange({
+        id: ft.id,
+        fuelType: ft.name,
+        canonical: normalizeFuelType(ft.name),
+        source: "FuelTypesManager.persist",
+      });
+      emitFuelPriceChange({
+        fuelType: ft.name,
+        canonical: normalizeFuelType(ft.name),
+        price: ft.price,
+        source: "FuelTypesManager.persist",
+      });
+    }
   };
 
   // Load from cloud on mount + real-time cross-device sync
@@ -330,6 +373,50 @@ export default function FuelTypesManager() {
     ];
     return () => unsubs.forEach((u) => u());
   }, [user, stationId]);
+
+  // Interlink receiver: when another tab calls navigateToTab("fueltypes",
+  // <FuelPricePrefill>), open the add form pre-filled with the fuel type +
+  // price so the user can review and save (which then propagates everywhere
+  // via the bus + cloud real-time).
+  useEffect(() => {
+    return onTabPayload("fueltypes", (raw) => {
+      const p = (raw || {}) as FuelPricePrefill;
+      if (Object.keys(p).length === 0) return;
+      const validViews = [
+        "fueltypes",
+        "pumps",
+        "priceboard",
+        "quality",
+      ] as const;
+      const target =
+        p.view && (validViews as readonly string[]).includes(p.view)
+          ? (p.view as (typeof validViews)[number])
+          : "fueltypes";
+      setActiveView(target);
+      // Only open the add form when a fuel type / price is actually being
+      // pre-filled — a pure "show price board" navigation has no fuelType.
+      if (p.fuelType) {
+        setFormName(p.fuelType);
+        setFormLocalName(p.fuelType);
+        const canonical = normalizeFuelType(p.fuelType);
+        if (canonical) {
+          // Use the canonical code as the form code (PMS/AGO/IK/...).
+          const codeMap: Record<string, string> = {
+            petrol: "PMS",
+            diesel: "AGO",
+            kerosene: "IK",
+            vpower: "VPW",
+            premium_diesel: "PDS",
+            lpg: "LPG",
+            cng: "CNG",
+          };
+          setFormCode(codeMap[canonical] || "");
+        }
+      }
+      if (typeof p.price === "number" && p.price > 0) setFormPrice(p.price);
+      setShowAddForm(true);
+    });
+  }, []);
 
   const resetForm = () => {
     setFormCode("");
@@ -406,316 +493,572 @@ export default function FuelTypesManager() {
         </div>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 text-center">
-          <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">
-            {fuelTypes.length}
-          </p>
-          <p className="text-[10px] text-gray-500">Fuel Types</p>
-        </div>
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 text-center">
-          <p className="text-2xl font-bold text-green-600 dark:text-green-400">
-            {fuelTypes.filter((f) => f.active).length}
-          </p>
-          <p className="text-[10px] text-gray-500">Active</p>
-        </div>
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 text-center">
-          <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-            {fuelTypes.reduce((s, f) => s + f.pumpCount, 0)}
-          </p>
-          <p className="text-[10px] text-gray-500">Total Pumps</p>
-        </div>
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 text-center">
-          <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">
-            {marginPercent(
-              fuelTypes.find((f) => f.id === "pms")?.price || 0,
-              fuelTypes.find((f) => f.id === "pms")?.costPrice || 0,
-            )}
-            %
-          </p>
-          <p className="text-[10px] text-gray-500">PMS Margin</p>
-        </div>
-      </div>
+      {/* Sub-tab switcher: Fuel Types / Pump Settings / Price Board / Quality */}
+      <SubTabBar
+        tabs={[
+          { id: "fueltypes", label: "Fuel Types", icon: Fuel },
+          { id: "pumps", label: "Pump Settings", icon: Gauge },
+          { id: "priceboard", label: "Price Board", icon: Monitor },
+          { id: "quality", label: "Fuel Quality", icon: FlaskConical },
+        ]}
+        active={activeView}
+        onChange={(id) =>
+          setActiveView(id as "fueltypes" | "pumps" | "priceboard" | "quality")
+        }
+      />
 
-      {/* Action Buttons */}
-      <div className="flex gap-3">
-        <button
-          onClick={() => {
-            setShowAddForm(!showAddForm);
-            setShowPresets(false);
-          }}
-          className="flex-1 px-4 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-colors shadow-lg"
-        >
-          <Plus size={18} /> {showAddForm ? "Cancel" : "Add Custom Fuel Type"}
-        </button>
-        <button
-          onClick={() => {
-            setShowPresets(!showPresets);
-            setShowAddForm(false);
-          }}
-          className="flex-1 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-colors shadow-lg"
-        >
-          <Fuel size={18} /> {showPresets ? "Hide" : "Add from Presets"}
-        </button>
-      </div>
+      {activeView === "priceboard" ? (
+        <PriceBoard />
+      ) : activeView === "quality" ? (
+        <FuelQualityTesting />
+      ) : activeView === "pumps" ? (
+        <PumpSettingsPanel />
+      ) : (
+        <>
+          {/* Summary Cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 text-center">
+              <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">
+                {fuelTypes.length}
+              </p>
+              <p className="text-[10px] text-gray-500">Fuel Types</p>
+            </div>
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 text-center">
+              <p className="text-2xl font-bold text-green-600 dark:text-green-400">
+                {fuelTypes.filter((f) => f.active).length}
+              </p>
+              <p className="text-[10px] text-gray-500">Active</p>
+            </div>
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 text-center">
+              <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                {fuelTypes.reduce((s, f) => s + f.pumpCount, 0)}
+              </p>
+              <p className="text-[10px] text-gray-500">Total Pumps</p>
+            </div>
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 text-center">
+              <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">
+                {marginPercent(
+                  fuelTypes.find((f) => f.id === "pms")?.price || 0,
+                  fuelTypes.find((f) => f.id === "pms")?.costPrice || 0,
+                )}
+                %
+              </p>
+              <p className="text-[10px] text-gray-500">PMS Margin</p>
+            </div>
+          </div>
 
-      {/* Add Custom Form */}
-      {showAddForm && (
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-amber-200 dark:border-amber-700 p-6 space-y-4">
-          <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-            <Settings size={18} className="text-amber-500" /> Add New Fuel Type
-          </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">Code *</label>
-              <input
-                value={formCode}
-                onChange={(e) => setFormCode(e.target.value)}
-                placeholder="e.g. V-PWR"
-                className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">Name *</label>
-              <input
-                value={formName}
-                onChange={(e) => setFormName(e.target.value)}
-                placeholder="e.g. V-Power"
-                className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">
-                Local Name
-              </label>
-              <input
-                value={formLocalName}
-                onChange={(e) => setFormLocalName(e.target.value)}
-                placeholder="e.g. V-Power Premium"
-                className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">
-                Selling Price ({currencySymbol}/L)
-              </label>
-              <input
-                type="number"
-                step="0.01"
-                value={formPrice}
-                onChange={(e) => setFormPrice(parseFloat(e.target.value) || 0)}
-                className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">
-                Cost Price ({currencySymbol}/L)
-              </label>
-              <input
-                type="number"
-                step="0.01"
-                value={formCostPrice}
-                onChange={(e) =>
-                  setFormCostPrice(parseFloat(e.target.value) || 0)
-                }
-                className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">
-                VAT Rate (%)
-              </label>
-              <input
-                type="number"
-                value={formTaxRate}
-                onChange={(e) =>
-                  setFormTaxRate(parseFloat(e.target.value) || 0)
-                }
-                className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">
-                Number of Pumps
-              </label>
-              <input
-                type="number"
-                value={formPumps}
-                onChange={(e) => setFormPumps(parseInt(e.target.value) || 0)}
-                className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">Color</label>
-              <div className="flex flex-wrap gap-1">
-                {COLOR_OPTIONS.map((c) => (
-                  <button
-                    key={c}
-                    onClick={() => setFormColor(c)}
-                    className={`w-6 h-6 rounded-full border-2 transition-all ${c === formColor ? "border-gray-900 scale-110" : "border-transparent"}`}
-                    style={{ backgroundColor: c }}
+          {/* Action Buttons */}
+          <div className="flex gap-3">
+            <button
+              onClick={() => {
+                setShowAddForm(!showAddForm);
+                setShowPresets(false);
+              }}
+              className="flex-1 px-4 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-colors shadow-lg"
+            >
+              <Plus size={18} />{" "}
+              {showAddForm ? "Cancel" : "Add Custom Fuel Type"}
+            </button>
+            <button
+              onClick={() => {
+                setShowPresets(!showPresets);
+                setShowAddForm(false);
+              }}
+              className="flex-1 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-colors shadow-lg"
+            >
+              <Fuel size={18} /> {showPresets ? "Hide" : "Add from Presets"}
+            </button>
+          </div>
+
+          {/* Add Custom Form */}
+          {showAddForm && (
+            <div className="bg-white dark:bg-gray-800 rounded-xl border border-amber-200 dark:border-amber-700 p-6 space-y-4">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                <Settings size={18} className="text-amber-500" /> Add New Fuel
+                Type
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">
+                    Code *
+                  </label>
+                  <input
+                    value={formCode}
+                    onChange={(e) => setFormCode(e.target.value)}
+                    placeholder="e.g. V-PWR"
+                    className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
                   />
-                ))}
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">
+                    Name *
+                  </label>
+                  <input
+                    value={formName}
+                    onChange={(e) => setFormName(e.target.value)}
+                    placeholder="e.g. V-Power"
+                    className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">
+                    Local Name
+                  </label>
+                  <input
+                    value={formLocalName}
+                    onChange={(e) => setFormLocalName(e.target.value)}
+                    placeholder="e.g. V-Power Premium"
+                    className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">
+                    Selling Price ({currencySymbol}/L)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={formPrice}
+                    onChange={(e) =>
+                      setFormPrice(parseFloat(e.target.value) || 0)
+                    }
+                    className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">
+                    Cost Price ({currencySymbol}/L)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={formCostPrice}
+                    onChange={(e) =>
+                      setFormCostPrice(parseFloat(e.target.value) || 0)
+                    }
+                    className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">
+                    VAT Rate (%)
+                  </label>
+                  <input
+                    type="number"
+                    value={formTaxRate}
+                    onChange={(e) =>
+                      setFormTaxRate(parseFloat(e.target.value) || 0)
+                    }
+                    className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">
+                    Number of Pumps
+                  </label>
+                  <input
+                    type="number"
+                    value={formPumps}
+                    onChange={(e) =>
+                      setFormPumps(parseInt(e.target.value) || 0)
+                    }
+                    className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">
+                    Color
+                  </label>
+                  <div className="flex flex-wrap gap-1">
+                    {COLOR_OPTIONS.map((c) => (
+                      <button
+                        key={c}
+                        onClick={() => setFormColor(c)}
+                        className={`w-6 h-6 rounded-full border-2 transition-all ${c === formColor ? "border-gray-900 scale-110" : "border-transparent"}`}
+                        style={{ backgroundColor: c }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">
+                  Description
+                </label>
+                <textarea
+                  value={formDesc}
+                  onChange={(e) => setFormDesc(e.target.value)}
+                  rows={2}
+                  className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+                />
+              </div>
+              <button
+                onClick={handleAdd}
+                className="w-full py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-sm font-semibold flex items-center justify-center gap-2"
+              >
+                <Save size={18} /> Save Fuel Type
+              </button>
+            </div>
+          )}
+
+          {/* Presets */}
+          {showPresets && (
+            <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800 p-4">
+              <h3 className="text-sm font-bold text-blue-900 dark:text-blue-300 mb-3">
+                Quick Add Preset Fuel Types
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {PRESET_FUELS.map((preset) => {
+                  const exists = fuelTypes.some((f) => f.code === preset.code);
+                  return (
+                    <div
+                      key={preset.id}
+                      className="flex items-center justify-between p-3 bg-white dark:bg-gray-800 rounded-lg"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Fuel size={14} className="text-blue-500" />
+                        <div>
+                          <p className="text-xs font-medium text-gray-900 dark:text-white">
+                            {preset.name}
+                          </p>
+                          <p className="text-[10px] text-gray-500">
+                            {preset.code} | {currencySymbol} {preset.price.toFixed(2)}/L
+                          </p>
+                        </div>
+                      </div>
+                      {exists ? (
+                        <span className="text-[10px] px-2 py-1 bg-green-100 text-green-700 rounded-full">
+                          Added
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => handleAddPreset(preset)}
+                          className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-medium rounded-lg flex items-center gap-1"
+                        >
+                          <Plus size={12} /> Add
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
-          </div>
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">
-              Description
-            </label>
-            <textarea
-              value={formDesc}
-              onChange={(e) => setFormDesc(e.target.value)}
-              rows={2}
-              className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
-            />
-          </div>
-          <button
-            onClick={handleAdd}
-            className="w-full py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-sm font-semibold flex items-center justify-center gap-2"
-          >
-            <Save size={18} /> Save Fuel Type
-          </button>
-        </div>
-      )}
+          )}
 
-      {/* Presets */}
-      {showPresets && (
-        <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800 p-4">
-          <h3 className="text-sm font-bold text-blue-900 dark:text-blue-300 mb-3">
-            Quick Add Preset Fuel Types
-          </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {PRESET_FUELS.map((preset) => {
-              const exists = fuelTypes.some((f) => f.code === preset.code);
+          {/* Fuel Types List */}
+          <div className="space-y-3">
+            {fuelTypes.map((ft) => {
+              const isExpanded = expandedId === ft.id;
+              const colorClass = FUEL_COLORS[ft.color] || FUEL_COLORS.red;
               return (
                 <div
-                  key={preset.id}
-                  className="flex items-center justify-between p-3 bg-white dark:bg-gray-800 rounded-lg"
+                  key={ft.id}
+                  className={`bg-white dark:bg-gray-800 rounded-xl border overflow-hidden transition-all ${ft.active ? "border-gray-200 dark:border-gray-700" : "border-gray-100 dark:border-gray-800 opacity-60"}`}
                 >
-                  <div className="flex items-center gap-2">
-                    <Fuel size={14} className="text-blue-500" />
-                    <div>
-                      <p className="text-xs font-medium text-gray-900 dark:text-white">
-                        {preset.name}
-                      </p>
-                      <p className="text-[10px] text-gray-500">
-                        {preset.code} | {currencySymbol} {preset.price.toFixed(2)}/L
+                  <div
+                    className="flex items-center gap-3 p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                    onClick={() => setExpandedId(isExpanded ? null : ft.id)}
+                  >
+                    <div className={`p-2 rounded-lg ${colorClass}`}>
+                      <Fuel size={18} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
+                          {ft.name}
+                        </h3>
+                        <span className="text-[10px] px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-600 rounded-full">
+                          {ft.code}
+                        </span>
+                        {!ft.active && (
+                          <span className="text-[10px] px-2 py-0.5 bg-gray-100 text-gray-400 rounded-full">
+                            Inactive
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        {ft.localName} | {currencySymbol} {ft.price.toFixed(2)}/L |{" "}
+                        {ft.pumpCount} pump{ft.pumpCount !== 1 ? "s" : ""}
                       </p>
                     </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleToggleActive(ft.id);
+                        }}
+                        className={`text-[10px] px-2 py-1 rounded-lg ${ft.active ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}
+                      >
+                        {ft.active ? "Active" : "Inactive"}
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDelete(ft.id);
+                        }}
+                        className="p-1.5 text-gray-400 hover:text-red-500 rounded-lg hover:bg-red-50"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                      {isExpanded ? (
+                        <ChevronUp size={16} className="text-gray-400" />
+                      ) : (
+                        <ChevronDown size={16} className="text-gray-400" />
+                      )}
+                    </div>
                   </div>
-                  {exists ? (
-                    <span className="text-[10px] px-2 py-1 bg-green-100 text-green-700 rounded-full">
-                      Added
-                    </span>
-                  ) : (
-                    <button
-                      onClick={() => handleAddPreset(preset)}
-                      className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-medium rounded-lg flex items-center gap-1"
-                    >
-                      <Plus size={12} /> Add
-                    </button>
+
+                  {isExpanded && (
+                    <div className="border-t border-gray-100 dark:border-gray-700 p-4">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+                        <InfoBox
+                          label="Selling Price"
+                          value={`${currencySymbol} ${ft.price.toFixed(2)}`}
+                        />
+                        <InfoBox
+                          label="Cost Price"
+                          value={`${currencySymbol} ${ft.costPrice.toFixed(2)}`}
+                        />
+                        <InfoBox
+                          label="Margin"
+                          value={`${marginPercent(ft.price, ft.costPrice)}%`}
+                        />
+                        <InfoBox label="VAT Rate" value={`${ft.taxRate}%`} />
+                        <InfoBox label="Pumps" value={`${ft.pumpCount}`} />
+                        <InfoBox label="Levy Rate" value={`${ft.levyRate}%`} />
+                      </div>
+                      {ft.description && (
+                        <p className="text-xs text-gray-500 dark:text-gray-400 italic">
+                          {ft.description}
+                        </p>
+                      )}
+                    </div>
                   )}
                 </div>
               );
             })}
           </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// PumpSettingsPanel — formerly the "Pump Settings" sub-tab of the
+// Data Management Center. Moved here (task 6) so all fuel/pump
+// configuration lives under the Fuel Type Manager. Self-contained: it
+// reads pump prices/counts from FuelContext and writes back via dispatch.
+// ============================================================
+function PumpSettingsPanel() {
+  const { state, dispatch } = useFuel();
+  const { hasPermission, isOwner } = usePermissions();
+  const [pmsPrice, setPmsPrice] = useState(
+    state.pmsPrice || KENYA_BASE_PRICES.petrol,
+  );
+  const [agoPrice, setAgoPrice] = useState(
+    state.agoPrice || KENYA_BASE_PRICES.diesel,
+  );
+  const [pmsPumpCount, setPmsPumpCount] = useState(state.pmsPumps?.length || 1);
+  const [agoPumpCount, setAgoPumpCount] = useState(state.agoPumps?.length || 1);
+
+  return (
+    <div className="space-y-6">
+      {!isOwner && (
+        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-3 flex items-center gap-2">
+          <AlertTriangle size={14} className="text-amber-500" />
+          <p className="text-xs text-amber-700 dark:text-amber-300">
+            You have <strong>Member</strong> access. Changes are tracked. Some
+            settings require Founder approval.
+          </p>
         </div>
       )}
 
-      {/* Fuel Types List */}
-      <div className="space-y-3">
-        {fuelTypes.map((ft) => {
-          const isExpanded = expandedId === ft.id;
-          const colorClass = FUEL_COLORS[ft.color] || FUEL_COLORS.red;
-          return (
+      {/* Fuel Prices */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg border border-gray-200 dark:border-gray-600">
+        <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-4 flex items-center gap-2">
+          <DollarSign size={18} className="text-green-500" />
+          Pump Prices (per Litre)
+        </h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {[
+            {
+              label: "PMS (Petrol)",
+              value: pmsPrice,
+              setter: setPmsPrice,
+              color: "red",
+            },
+            {
+              label: "AGO (Diesel)",
+              value: agoPrice,
+              setter: setAgoPrice,
+              color: "blue",
+            },
+          ].map((fuel) => (
             <div
-              key={ft.id}
-              className={`bg-white dark:bg-gray-800 rounded-xl border overflow-hidden transition-all ${ft.active ? "border-gray-200 dark:border-gray-700" : "border-gray-100 dark:border-gray-800 opacity-60"}`}
+              key={fuel.label}
+              className={`p-4 bg-${fuel.color}-50 dark:bg-${fuel.color}-900/20 rounded-lg border border-${fuel.color}-200 dark:border-${fuel.color}-700`}
             >
+              <label className="text-xs text-gray-500 dark:text-gray-400 block mb-2">
+                {fuel.label}
+              </label>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-500">{currencySymbol}</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={fuel.value}
+                  onChange={(e) => fuel.setter(parseFloat(e.target.value) || 0)}
+                  className="flex-1 px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white focus:ring-2 focus:ring-green-500 outline-none"
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+        <button
+          onClick={() => {
+            dispatch({ type: "SET_PRICES", payload: { pmsPrice, agoPrice } });
+            alert(
+              `Pump prices updated:\nPMS: ${currencySymbol} ${pmsPrice.toFixed(2)}\nAGO: ${currencySymbol} ${agoPrice.toFixed(2)}`,
+            );
+          }}
+          className="mt-4 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium flex items-center gap-2 transition-colors"
+        >
+          <Save size={14} /> Save Prices
+        </button>
+      </div>
+
+      {/* Pump Count */}
+      {hasPermission("canChangePumpCount") && (
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg border border-gray-200 dark:border-gray-600">
+          <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-4 flex items-center gap-2">
+            <Fuel size={18} className="text-blue-500" />
+            Number of Pumps
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {[
+              {
+                label: "PMS Pumps",
+                value: pmsPumpCount,
+                setter: setPmsPumpCount,
+                color: "red",
+              },
+              {
+                label: "AGO Pumps",
+                value: agoPumpCount,
+                setter: setAgoPumpCount,
+                color: "blue",
+              },
+            ].map((pump) => (
               <div
-                className="flex items-center gap-3 p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50"
-                onClick={() => setExpandedId(isExpanded ? null : ft.id)}
+                key={pump.label}
+                className={`p-4 bg-${pump.color}-50 dark:bg-${pump.color}-900/20 rounded-lg border border-${pump.color}-200 dark:border-${pump.color}-700`}
               >
-                <div className={`p-2 rounded-lg ${colorClass}`}>
-                  <Fuel size={18} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
-                      {ft.name}
-                    </h3>
-                    <span className="text-[10px] px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-600 rounded-full">
-                      {ft.code}
-                    </span>
-                    {!ft.active && (
-                      <span className="text-[10px] px-2 py-0.5 bg-gray-100 text-gray-400 rounded-full">
-                        Inactive
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    {ft.localName} | {currencySymbol} {ft.price.toFixed(2)}/L |{" "}
-                    {ft.pumpCount} pump{ft.pumpCount !== 1 ? "s" : ""}
-                  </p>
-                </div>
+                <label className="text-xs text-gray-500 dark:text-gray-400 block mb-2">
+                  {pump.label}
+                </label>
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleToggleActive(ft.id);
-                    }}
-                    className={`text-[10px] px-2 py-1 rounded-lg ${ft.active ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}
+                    onClick={() => pump.setter(Math.max(0, pump.value - 1))}
+                    className="p-2 bg-gray-200 dark:bg-gray-700 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
                   >
-                    {ft.active ? "Active" : "Inactive"}
+                    <Minus size={14} />
                   </button>
+                  <span className="text-2xl font-bold text-gray-900 dark:text-white w-12 text-center">
+                    {pump.value}
+                  </span>
                   <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDelete(ft.id);
-                    }}
-                    className="p-1.5 text-gray-400 hover:text-red-500 rounded-lg hover:bg-red-50"
+                    onClick={() => pump.setter(pump.value + 1)}
+                    className="p-2 bg-gray-200 dark:bg-gray-700 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
                   >
-                    <Trash2 size={14} />
+                    <Plus size={14} />
                   </button>
-                  {isExpanded ? (
-                    <ChevronUp size={16} className="text-gray-400" />
-                  ) : (
-                    <ChevronDown size={16} className="text-gray-400" />
-                  )}
                 </div>
               </div>
+            ))}
+          </div>
+          <button
+            onClick={() => {
+              const makePump = (id: string, name: string) => ({
+                id,
+                name,
+                openingKsh: 0,
+                closingKsh: 0,
+                openingL: 0,
+                closingL: 0,
+                salesL: 0,
+                salesKsh: 0,
+              });
+              const newPmsPumps = Array.from(
+                { length: pmsPumpCount },
+                (_, i) =>
+                  state.pmsPumps[i] ||
+                  makePump(`pms-${i + 1}`, `PMS Pump ${i + 1}`),
+              );
+              const newAgoPumps = Array.from(
+                { length: agoPumpCount },
+                (_, i) =>
+                  state.agoPumps[i] ||
+                  makePump(`ago-${i + 1}`, `AGO Pump ${i + 1}`),
+              );
+              dispatch({ type: "SET_PMS_PUMPS", payload: newPmsPumps });
+              dispatch({ type: "SET_AGO_PUMPS", payload: newAgoPumps });
+              alert(
+                `Pump count updated:\nPMS: ${pmsPumpCount} pumps\nAGO: ${agoPumpCount} pumps`,
+              );
+            }}
+            className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium flex items-center gap-2 transition-colors"
+          >
+            <Save size={14} /> Save Pump Count
+          </button>
+        </div>
+      )}
 
-              {isExpanded && (
-                <div className="border-t border-gray-100 dark:border-gray-700 p-4">
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-                    <InfoBox
-                      label="Selling Price"
-                      value={`${currencySymbol} ${ft.price.toFixed(2)}`}
-                    />
-                    <InfoBox
-                      label="Cost Price"
-                      value={`${currencySymbol} ${ft.costPrice.toFixed(2)}`}
-                    />
-                    <InfoBox
-                      label="Margin"
-                      value={`${marginPercent(ft.price, ft.costPrice)}%`}
-                    />
-                    <InfoBox label="VAT Rate" value={`${ft.taxRate}%`} />
-                    <InfoBox label="Pumps" value={`${ft.pumpCount}`} />
-                    <InfoBox label="Levy Rate" value={`${ft.levyRate}%`} />
-                  </div>
-                  {ft.description && (
-                    <p className="text-xs text-gray-500 dark:text-gray-400 italic">
-                      {ft.description}
-                    </p>
-                  )}
-                </div>
-              )}
+      {/* Access Level */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg border border-gray-200 dark:border-gray-600">
+        <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-4 flex items-center gap-2">
+          <Lock size={18} className="text-gray-500" />
+          Your Access Level
+        </h3>
+        <div className="space-y-2">
+          {[
+            {
+              label: "Edit Pump Prices",
+              allowed: hasPermission("canEditFuelPrices"),
+            },
+            {
+              label: "Change Pump Count",
+              allowed: hasPermission("canChangePumpCount"),
+            },
+            {
+              label: "Edit Fuel Prices",
+              allowed: hasPermission("canEditFuelPrices"),
+            },
+            {
+              label: "Manage Inventory",
+              allowed: hasPermission("canManageInventory"),
+            },
+            { label: "Founder Access", allowed: isOwner },
+          ].map((item) => (
+            <div
+              key={item.label}
+              className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-900 rounded-lg"
+            >
+              <span className="text-xs text-gray-700 dark:text-gray-300">
+                {item.label}
+              </span>
+              <span
+                className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+                  item.allowed
+                    ? "bg-green-100 text-green-700"
+                    : "bg-red-100 text-red-700"
+                }`}
+              >
+                {item.allowed ? "Allowed" : "Restricted"}
+              </span>
             </div>
-          );
-        })}
+          ))}
+        </div>
       </div>
     </div>
   );

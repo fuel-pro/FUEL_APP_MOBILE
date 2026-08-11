@@ -103,11 +103,25 @@ export default function SearchableCountryDropdown({
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  // Focus search on open
+  // Focus search on open + edge-flip detection
+  const [placement, setPlacement] = useState<"bottom" | "top">("bottom");
   useEffect(() => {
     if (isOpen) {
       setTimeout(() => searchRef.current?.focus(), 50);
       setHighlightedIndex(0);
+      // Rule 2: detect viewport edge and flip menu if needed
+      if (containerRef.current) {
+        const rect = containerRef.current.getBoundingClientRect();
+        const spaceBelow = window.innerHeight - rect.bottom;
+        const menuHeight = 320;
+        if (spaceBelow < menuHeight && rect.top > menuHeight) {
+          setPlacement("top");
+        } else {
+          setPlacement("bottom");
+        }
+      }
+    } else {
+      setPlacement("bottom");
     }
   }, [isOpen]);
 
@@ -153,12 +167,14 @@ export default function SearchableCountryDropdown({
         </label>
       )}
 
-      {/* Trigger button */}
+      {/* Trigger button — Rule 1: 48px touch target, hover feedback, ARIA */}
       <button
         type="button"
         id={id}
         onClick={() => setIsOpen((p) => !p)}
-        className="w-full flex items-center justify-between gap-2 px-3 py-2 bg-white/[0.03] border border-white/[0.08] rounded-lg text-sm text-white hover:bg-white/[0.06] focus:outline-none focus:border-amber-500/30 transition-colors"
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
+        className="w-full flex h-12 items-center justify-between gap-2 px-4 bg-white/[0.03] border border-white/[0.08] rounded-lg text-sm text-white hover:bg-white/[0.06] hover:border-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all duration-150"
       >
         <div className="flex items-center gap-2 min-w-0">
           {showFlag && selected && (
@@ -170,13 +186,19 @@ export default function SearchableCountryDropdown({
         </div>
         <ChevronDown
           size={14}
-          className={`text-gray-500 shrink-0 transition-transform ${isOpen ? "rotate-180" : ""}`}
+          className={`text-gray-500 shrink-0 transition-transform duration-150 ${isOpen ? "rotate-180" : ""}`}
         />
       </button>
 
-      {/* Dropdown */}
+      {/* Dropdown — Rule 2: edge-flip, Rule 5: 150ms animation */}
       {isOpen && (
-        <div className="absolute z-[100] mt-1 w-full bg-[#1c1c1e] border border-white/[0.08] rounded-lg shadow-2xl overflow-hidden">
+        <div
+          className={`absolute z-[100] w-full bg-[#1c1c1e] border border-white/[0.08] rounded-lg shadow-2xl overflow-hidden transition-all duration-150 ${
+            placement === "top"
+              ? "bottom-full mb-2 origin-bottom"
+              : "top-full mt-2 origin-top"
+          } opacity-100 scale-100 translate-y-0`}
+        >
           {/* Search bar */}
           <div className="flex items-center gap-2 px-3 py-2 border-b border-white/[0.06]">
             <Search size={13} className="text-gray-500 shrink-0" />
@@ -208,8 +230,8 @@ export default function SearchableCountryDropdown({
             {filtered.length} of {countries.length} countries
           </div>
 
-          {/* List */}
-          <div className="max-h-56 overflow-y-auto">
+          {/* List — Rule 3: ARIA listbox, Rule 1: 40px touch targets */}
+          <div className="max-h-56 overflow-y-auto" role="listbox">
             {filtered.length === 0 ? (
               <div className="px-3 py-4 text-center text-xs text-gray-600">
                 No countries match &quot;{search}&quot;
@@ -219,12 +241,14 @@ export default function SearchableCountryDropdown({
                 <button
                   key={c.code}
                   type="button"
+                  role="option"
+                  aria-selected={c.code === value}
                   onClick={() => {
                     onChange(c.code);
                     setIsOpen(false);
                     setSearch("");
                   }}
-                  className={`w-full flex items-center gap-2 px-3 py-1.5 text-sm transition-colors text-left ${
+                  className={`w-full flex h-10 items-center gap-2 px-3 text-sm transition-colors duration-150 text-left ${
                     c.code === value
                       ? "bg-amber-500/10 text-amber-300"
                       : i === highlightedIndex

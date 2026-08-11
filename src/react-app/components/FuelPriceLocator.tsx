@@ -3,6 +3,7 @@ import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 import { useAuth } from "@/react-app/context/AuthContext";
 import { useLocation } from "@/react-app/context/LocationContext";
 import { useStations } from "@/react-app/context/StationContext";
+import { useFuel } from "@/react-app/context/FuelContext";
 import { useFuelPrices } from "@/react-app/hooks/useFuelPrices";
 import {
   getClosestKenyaCityPrice,
@@ -23,6 +24,8 @@ import {
   Droplet,
 } from "lucide-react";
 import { getCurrencySymbol } from "../lib/currency";
+import SubTabBar from "@/react-app/components/SubTabBar";
+import FuelTracker from "@/react-app/components/FuelTracker";
 
 // ── API base URL ──
 // Cloudflare Pages does NOT serve /api/* endpoints — only Vercel does.
@@ -99,6 +102,7 @@ export default function FuelPriceLocator() {
     currentCountry,
   } = useLocation();
   const { stations } = useStations();
+  const { syncPriceToFuelTypes } = useFuel();
   const {
     prices: unifiedPrices,
     refreshPrices,
@@ -107,12 +111,16 @@ export default function FuelPriceLocator() {
   } = useFuelPrices();
 
   const [loading, setLoading] = useState(false);
+  const [appliedLabel, setAppliedLabel] = useState<string | null>(null);
   const [nearbyResult, setNearbyResult] = useState<StationPriceInfo | null>(
     null,
   );
   const [errorMessage, setErrorMessage] = useState("");
   const [lastFetchAt, setLastFetchAt] = useState<string | null>(null);
   const echoSkipRef = useRef(false);
+  // Inner sub-tab: "Price Finder" (this component) vs "Auto Fuel Price"
+  // (the formerly-standalone FuelTracker GPS engine, now hosted here).
+  const [activeView, setActiveView] = useState<"finder" | "auto">("finder");
 
   // Load cached result from cloud on mount
   useEffect(() => {
@@ -414,6 +422,17 @@ export default function FuelPriceLocator() {
               })}
             </div>
             <div className="text-xs text-slate-500">per litre</div>
+            <button
+              onClick={() => {
+                syncPriceToFuelTypes(label, val);
+                setAppliedLabel(label);
+                setTimeout(() => setAppliedLabel(null), 2000);
+              }}
+              className="mt-2 text-[10px] px-2 py-1 rounded-lg bg-emerald-600/20 text-emerald-300 hover:bg-emerald-600/40 transition-colors"
+              title={`Set ${label} market price as my station price`}
+            >
+              {appliedLabel === label ? "✓ Applied" : "Set as my price"}
+            </button>
           </div>
         ) : (
           <span className="text-lg font-bold text-slate-600">N/A</span>
@@ -437,239 +456,257 @@ export default function FuelPriceLocator() {
         </div>
       </div>
 
-      {/* Location status bar */}
-      <div className="flex flex-wrap items-center gap-3 p-3 bg-slate-800/30 rounded-xl border border-slate-700/50">
-        <div className="flex items-center gap-2 text-sm">
-          <MapPin
-            className={`w-4 h-4 ${preciseLocation ? "text-emerald-400" : "text-slate-500"}`}
-          />
-          {preciseLocationLoading ? (
-            <span className="text-amber-400">Detecting location...</span>
-          ) : preciseLocation ? (
-            <span className="text-slate-300">
-              {preciseLocation.city || preciseLocation.address} (
-              {preciseLocation.lat.toFixed(4)}, {preciseLocation.lng.toFixed(4)}
-              )
-            </span>
-          ) : (
-            <span className="text-slate-500">Location not detected</span>
-          )}
-        </div>
-        <div className="flex-1" />
-        <button
-          onClick={() => detectPreciseLocation()}
-          disabled={preciseLocationLoading}
-          className="text-xs text-blue-400 hover:text-blue-300 disabled:opacity-50 flex items-center gap-1"
-        >
-          <RefreshCw className="w-3 h-3" />
-          Update Location
-        </button>
-      </div>
+      {/* Sub-tab switcher: Price Finder vs Auto Fuel Price engine */}
+      <SubTabBar
+        tabs={[
+          { id: "finder", label: "Price Finder", icon: Navigation },
+          { id: "auto", label: "Auto Fuel Price", icon: Gauge },
+        ]}
+        active={activeView}
+        onChange={(id) => setActiveView(id as "finder" | "auto")}
+      />
 
-      {/* Action button */}
-      <button
-        onClick={fetchNearbyPrices}
-        disabled={loading || preciseLocationLoading}
-        className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3.5 px-4 rounded-xl font-medium transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-      >
-        {loading ? (
-          <>
-            <Loader2 className="w-5 h-5 animate-spin" />
-            Finding Nearby Prices...
-          </>
-        ) : (
-          <>
-            <Fuel className="w-5 h-5" />
-            Scan Local Fuel Rates
-          </>
-        )}
-      </button>
-
-      {/* Error message */}
-      {errorMessage && (
-        <div className="p-3 bg-red-950/50 border border-red-800 rounded-xl flex items-start gap-2">
-          <AlertTriangle className="w-4 h-4 text-red-400 mt-0.5 shrink-0" />
-          <span className="text-xs text-red-400">{errorMessage}</span>
-        </div>
-      )}
-
-      {/* Results */}
-      {nearbyResult && (
-        <div className="space-y-4">
-          {/* EPRA-style header */}
-          <div className="p-4 bg-gradient-to-r from-orange-600/20 to-red-600/20 rounded-xl border border-orange-700/40">
-            <h3 className="text-lg font-bold text-white flex items-center gap-2">
-              <Fuel className="w-5 h-5 text-orange-400" />
-              Current Pump Prices
-            </h3>
-            <p className="text-sm text-orange-200 mt-0.5">
-              Energy and Petroleum Regulatory Authority (EPRA)
-            </p>
-            {preciseLocation && (
-              <div className="mt-2 space-y-0.5">
-                <p className="text-xs text-slate-300 flex items-center gap-1">
-                  <MapPin className="w-3 h-3 text-orange-400" />
-                  📍 {preciseLocation.lat.toFixed(4)},{" "}
-                  {preciseLocation.lng.toFixed(4)}
-                </p>
-                <p className="text-xs text-slate-300 flex items-center gap-1">
-                  <MapPin className="w-3 h-3 text-orange-400" />
-                  📍 GPS: {nearbyResult.stationName}
-                </p>
-              </div>
-            )}
-          </div>
-
-          {/* Price grid — EPRA format: SUPER PETROL / DIESEL / KEROSENE */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {priceCard(
-              "Super Petrol",
-              nearbyResult.gasoline,
-              <Fuel className="w-4 h-4" />,
-              "text-emerald-400",
-            )}
-            {priceCard(
-              "Diesel",
-              nearbyResult.diesel,
-              <Droplet className="w-4 h-4" />,
-              "text-amber-400",
-            )}
-            {priceCard(
-              "Kerosene",
-              nearbyResult.kerosene,
-              <Gauge className="w-4 h-4" />,
-              "text-blue-400",
-            )}
-          </div>
-
-          {/* EPRA cost breakdown */}
-          {(() => {
-            const breakdown = costBreakdown(nearbyResult.gasoline);
-            if (!breakdown) return null;
-            const symbol = nearbyResult?.currencySymbol || getCurrencySymbol();
-            const fmt = (n: number) =>
-              `${symbol} ${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-            return (
-              <div className="p-4 bg-slate-800/40 rounded-xl border border-slate-700/50">
-                <div className="grid grid-cols-3 gap-3 text-center">
-                  <div>
-                    <div className="text-xs text-slate-500 uppercase font-semibold mb-1">
-                      Landed Cost
-                    </div>
-                    <div className="text-sm font-medium text-slate-200">
-                      {fmt(breakdown.landed)}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-slate-500 uppercase font-semibold mb-1">
-                      Taxes
-                    </div>
-                    <div className="text-sm font-medium text-slate-200">
-                      {fmt(breakdown.taxes)}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-slate-500 uppercase font-semibold mb-1">
-                      Margins
-                    </div>
-                    <div className="text-sm font-medium text-slate-200">
-                      {fmt(breakdown.margins)}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            );
-          })()}
-
-          {/* Source + timestamp */}
-          <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
-            <div className="flex items-center gap-1.5 text-xs text-slate-500">
-              <TrendingUp className="w-3.5 h-3.5" />
-              Source: {nearbyResult.source} (FuelPro)
+      {activeView === "auto" ? (
+        <FuelTracker />
+      ) : (
+        <>
+          {/* Location status bar */}
+          <div className="flex flex-wrap items-center gap-3 p-3 bg-slate-800/30 rounded-xl border border-slate-700/50">
+            <div className="flex items-center gap-2 text-sm">
+              <MapPin
+                className={`w-4 h-4 ${preciseLocation ? "text-emerald-400" : "text-slate-500"}`}
+              />
+              {preciseLocationLoading ? (
+                <span className="text-amber-400">Detecting location...</span>
+              ) : preciseLocation ? (
+                <span className="text-slate-300">
+                  {preciseLocation.city || preciseLocation.address} (
+                  {preciseLocation.lat.toFixed(4)},{" "}
+                  {preciseLocation.lng.toFixed(4)})
+                </span>
+              ) : (
+                <span className="text-slate-500">Location not detected</span>
+              )}
             </div>
-            {lastFetchAt && (
-              <div className="text-xs text-slate-500">
-                {new Date(lastFetchAt).toLocaleDateString()}
-              </div>
+            <div className="flex-1" />
+            <button
+              onClick={() => detectPreciseLocation()}
+              disabled={preciseLocationLoading}
+              className="text-xs text-blue-400 hover:text-blue-300 disabled:opacity-50 flex items-center gap-1"
+            >
+              <RefreshCw className="w-3 h-3" />
+              Update Location
+            </button>
+          </div>
+
+          {/* Action button */}
+          <button
+            onClick={fetchNearbyPrices}
+            disabled={loading || preciseLocationLoading}
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3.5 px-4 rounded-xl font-medium transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {loading ? (
+              <>
+                <Loader2 className="w-5 h-5 animate-spin" />
+                Finding Nearby Prices...
+              </>
+            ) : (
+              <>
+                <Fuel className="w-5 h-5" />
+                Scan Local Fuel Rates
+              </>
             )}
-          </div>
-        </div>
-      )}
+          </button>
 
-      {/* Your stations comparison */}
-      {stations.length > 0 && (
-        <div className="pt-4 border-t border-slate-800">
-          <h3 className="text-sm font-semibold text-slate-300 mb-3 flex items-center gap-2">
-            <Fuel className="w-4 h-4 text-blue-400" />
-            Your Station Prices
-          </h3>
-          <div className="space-y-2">
-            {stations.slice(0, 5).map((station) => {
-              const stationPetrol =
-                station.data?.pmsPrice || station.data?.petrolPrice;
-              const stationDiesel =
-                station.data?.agoPrice || station.data?.dieselPrice;
-              return (
-                <div
-                  key={station.id}
-                  className="flex items-center justify-between p-3 bg-slate-800/30 rounded-lg border border-slate-700/30"
-                >
-                  <div>
-                    <p className="text-sm font-medium text-slate-200">
-                      {station.name}
+          {/* Error message */}
+          {errorMessage && (
+            <div className="p-3 bg-red-950/50 border border-red-800 rounded-xl flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 text-red-400 mt-0.5 shrink-0" />
+              <span className="text-xs text-red-400">{errorMessage}</span>
+            </div>
+          )}
+
+          {/* Results */}
+          {nearbyResult && (
+            <div className="space-y-4">
+              {/* EPRA-style header */}
+              <div className="p-4 bg-gradient-to-r from-orange-600/20 to-red-600/20 rounded-xl border border-orange-700/40">
+                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                  <Fuel className="w-5 h-5 text-orange-400" />
+                  Current Pump Prices
+                </h3>
+                <p className="text-sm text-orange-200 mt-0.5">
+                  Energy and Petroleum Regulatory Authority (EPRA)
+                </p>
+                {preciseLocation && (
+                  <div className="mt-2 space-y-0.5">
+                    <p className="text-xs text-slate-300 flex items-center gap-1">
+                      <MapPin className="w-3 h-3 text-orange-400" />
+                      📍 {preciseLocation.lat.toFixed(4)},{" "}
+                      {preciseLocation.lng.toFixed(4)}
                     </p>
-                    {station.location && (
-                      <p className="text-xs text-slate-500">
-                        {station.location}
-                      </p>
-                    )}
+                    <p className="text-xs text-slate-300 flex items-center gap-1">
+                      <MapPin className="w-3 h-3 text-orange-400" />
+                      📍 GPS: {nearbyResult.stationName}
+                    </p>
                   </div>
-                  <div className="flex gap-4 text-xs">
-                    {stationPetrol && (
-                      <div className="text-right">
-                        <span className="block text-slate-500">
-                          {CANONICAL_FUEL_TYPES.petrol.label}
-                        </span>
-                        <span className="font-medium text-emerald-400">
-                          {unifiedPrices.currencySymbol || getCurrencySymbol()}{" "}
-                          {stationPetrol.toLocaleString()}
-                        </span>
-                      </div>
-                    )}
-                    {stationDiesel && (
-                      <div className="text-right">
-                        <span className="block text-slate-500">
-                          {CANONICAL_FUEL_TYPES.diesel.label}
-                        </span>
-                        <span className="font-medium text-amber-400">
-                          {unifiedPrices.currencySymbol || getCurrencySymbol()}{" "}
-                          {stationDiesel.toLocaleString()}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
+                )}
+              </div>
 
-      {/* Unified prices refresh */}
-      <div className="pt-4 border-t border-slate-800 flex items-center justify-between">
-        <div className="text-xs text-slate-500">
-          Unified prices from:{" "}
-          <span className="text-slate-400">{unifiedSource}</span>
-          {cityName && <span className="text-slate-400"> ({cityName})</span>}
-        </div>
-        <button
-          onClick={refreshPrices}
-          className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"
-        >
-          <RefreshCw className="w-3 h-3" />
-          Refresh Prices
-        </button>
-      </div>
+              {/* Price grid — EPRA format: SUPER PETROL / DIESEL / KEROSENE */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {priceCard(
+                  "Super Petrol",
+                  nearbyResult.gasoline,
+                  <Fuel className="w-4 h-4" />,
+                  "text-emerald-400",
+                )}
+                {priceCard(
+                  "Diesel",
+                  nearbyResult.diesel,
+                  <Droplet className="w-4 h-4" />,
+                  "text-amber-400",
+                )}
+                {priceCard(
+                  "Kerosene",
+                  nearbyResult.kerosene,
+                  <Gauge className="w-4 h-4" />,
+                  "text-blue-400",
+                )}
+              </div>
+
+              {/* EPRA cost breakdown */}
+              {(() => {
+                const breakdown = costBreakdown(nearbyResult.gasoline);
+                if (!breakdown) return null;
+                const symbol = nearbyResult?.currencySymbol || getCurrencySymbol();
+                const fmt = (n: number) =>
+                  `${symbol} ${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                return (
+                  <div className="p-4 bg-slate-800/40 rounded-xl border border-slate-700/50">
+                    <div className="grid grid-cols-3 gap-3 text-center">
+                      <div>
+                        <div className="text-xs text-slate-500 uppercase font-semibold mb-1">
+                          Landed Cost
+                        </div>
+                        <div className="text-sm font-medium text-slate-200">
+                          {fmt(breakdown.landed)}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-slate-500 uppercase font-semibold mb-1">
+                          Taxes
+                        </div>
+                        <div className="text-sm font-medium text-slate-200">
+                          {fmt(breakdown.taxes)}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-slate-500 uppercase font-semibold mb-1">
+                          Margins
+                        </div>
+                        <div className="text-sm font-medium text-slate-200">
+                          {fmt(breakdown.margins)}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Source + timestamp */}
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
+                <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                  <TrendingUp className="w-3.5 h-3.5" />
+                  Source: {nearbyResult.source} (FuelPro)
+                </div>
+                {lastFetchAt && (
+                  <div className="text-xs text-slate-500">
+                    {new Date(lastFetchAt).toLocaleDateString()}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Your stations comparison */}
+          {stations.length > 0 && (
+            <div className="pt-4 border-t border-slate-800">
+              <h3 className="text-sm font-semibold text-slate-300 mb-3 flex items-center gap-2">
+                <Fuel className="w-4 h-4 text-blue-400" />
+                Your Station Prices
+              </h3>
+              <div className="space-y-2">
+                {stations.slice(0, 5).map((station) => {
+                  const stationPetrol =
+                    station.data?.pmsPrice || station.data?.petrolPrice;
+                  const stationDiesel =
+                    station.data?.agoPrice || station.data?.dieselPrice;
+                  return (
+                    <div
+                      key={station.id}
+                      className="flex items-center justify-between p-3 bg-slate-800/30 rounded-lg border border-slate-700/30"
+                    >
+                      <div>
+                        <p className="text-sm font-medium text-slate-200">
+                          {station.name}
+                        </p>
+                        {station.location && (
+                          <p className="text-xs text-slate-500">
+                            {station.location}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex gap-4 text-xs">
+                        {stationPetrol && (
+                          <div className="text-right">
+                            <span className="block text-slate-500">
+                              {CANONICAL_FUEL_TYPES.petrol.label}
+                            </span>
+                            <span className="font-medium text-emerald-400">
+                              {unifiedPrices.currencySymbol || getCurrencySymbol()}{" "}
+                              {stationPetrol.toLocaleString()}
+                            </span>
+                          </div>
+                        )}
+                        {stationDiesel && (
+                          <div className="text-right">
+                            <span className="block text-slate-500">
+                              {CANONICAL_FUEL_TYPES.diesel.label}
+                            </span>
+                            <span className="font-medium text-amber-400">
+                              {unifiedPrices.currencySymbol || getCurrencySymbol()}{" "}
+                              {stationDiesel.toLocaleString()}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Unified prices refresh */}
+          <div className="pt-4 border-t border-slate-800 flex items-center justify-between">
+            <div className="text-xs text-slate-500">
+              Unified prices from:{" "}
+              <span className="text-slate-400">{unifiedSource}</span>
+              {cityName && (
+                <span className="text-slate-400"> ({cityName})</span>
+              )}
+            </div>
+            <button
+              onClick={refreshPrices}
+              className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"
+            >
+              <RefreshCw className="w-3 h-3" />
+              Refresh Prices
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }

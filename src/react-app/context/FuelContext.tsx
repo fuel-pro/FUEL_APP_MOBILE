@@ -9,10 +9,22 @@ import React, {
 } from "react";
 import { useAuth } from "@/react-app/context/AuthContext";
 import { useStations } from "@/react-app/context/StationContext";
-import { KENYA_BASE_PRICES, DEFAULT_PRICES, getCountryPrice } from "@/react-app/config/pricing";
+// Unified pricing - single source of truth for all fuel prices
+import {
+  KENYA_BASE_PRICES,
+  DEFAULT_PRICES,
+  getCountryPrice,
+  normalizeFuelType,
+} from "@/react-app/config/pricing";
 // Cross-device cloud storage (Supabase app_kv-backed) — replaces /api/user-data
 import { cloudStorageService } from "@/react-app/lib/cloud-storage-service";
 import { getDetectedCountryCode, getCurrencySymbol } from "@/react-app/lib/currency";
+// Fuel interlink bus — in-device pub/sub for instant price/type propagation
+import {
+  emitFuelPriceChange,
+  onFuelPriceChange,
+} from "@/react-app/lib/fuel-interlink-bus";
+import type { CustomFuelType } from "@/react-app/components/FuelTypesManager";
 
 // Resolve default prices from the detected country (world-wide, not Kenya-only)
 const _detectedCC = (() => {
@@ -588,7 +600,7 @@ const initialState: FuelState = {
       id: "invoice",
       label: "Invoice",
       originalLabel: "Invoice",
-      description: "Generate and manage customer invoices",
+      description: "Generate & manage customer invoices and sales invoices",
       order: 7,
       visible: true,
     },
@@ -600,14 +612,8 @@ const initialState: FuelState = {
       order: 8,
       visible: true,
     },
-    {
-      id: "debt",
-      label: "Debt Reminder",
-      originalLabel: "Debt Reminder",
-      description: "Track outstanding customer balances",
-      order: 9,
-      visible: true,
-    },
+    // "debt" (Fuel Debt Payment Reminder) merged into Credit Management as
+    // the "Debt Payment Reminders" sub-tab — removed as a top-level tab.
     {
       id: "mpesa",
       label: "M-PESA Analyzer",
@@ -625,27 +631,11 @@ const initialState: FuelState = {
       visible: true,
     },
     {
-      id: "shifts",
-      label: "Shifts",
-      originalLabel: "Shifts",
-      description: "Employee shift scheduling & attendance",
-      order: 12,
-      visible: true,
-    },
-    {
       id: "customers",
       label: "Customers",
       originalLabel: "Customers",
       description: "Customer loyalty & rewards program",
       order: 13,
-      visible: true,
-    },
-    {
-      id: "quality",
-      label: "Fuel Quality",
-      originalLabel: "Fuel Quality",
-      description: "Test & certify fuel quality standards",
-      order: 14,
       visible: true,
     },
     {
@@ -706,9 +696,10 @@ const initialState: FuelState = {
     },
     {
       id: "integration",
-      label: "Integrations",
-      originalLabel: "Integrations",
-      description: "Connect Tax Authority, POS, Payroll, Banks & more",
+      label: "Integration Hub",
+      originalLabel: "Integration Hub",
+      description:
+        "Country-specific integrations & payment setup (M-PESA, Kopo Kopo, KRA, banks)",
       order: 22,
       visible: true,
     },
@@ -722,42 +713,35 @@ const initialState: FuelState = {
       visible: true,
     },
     {
-      id: "docconverter",
-      label: "Doc Converter",
-      originalLabel: "Doc Converter",
-      description: "Zero-rejection document upload & format conversion",
-      order: 31,
-      visible: true,
-    },
-    {
       id: "fueltypes",
-      label: "Fuel Types",
-      originalLabel: "Fuel Types",
-      description: "Add and manage custom fuel products",
+      label: "Fuel Type Manager",
+      originalLabel: "Fuel Type Manager",
+      description:
+        "Manage fuel products, pump settings, price board & quality testing",
       order: 24,
       visible: true,
     },
     {
       id: "team",
-      label: "Team",
-      originalLabel: "Team",
-      description: "Invite and manage team access",
+      label: "Team Manager",
+      originalLabel: "Team Manager",
+      description: "Invite & manage team access and shift scheduling",
       order: 25,
       visible: true,
     },
     {
       id: "documents",
-      label: "Documents",
-      originalLabel: "Documents",
-      description: "Smart document management",
+      label: "Document Center",
+      originalLabel: "Document Center",
+      description: "Smart document management & format conversion",
       order: 26,
       visible: true,
     },
     {
       id: "suppliers",
-      label: "Suppliers",
-      originalLabel: "Suppliers",
-      description: "Manage fuel suppliers & purchase orders",
+      label: "Supplier Management",
+      originalLabel: "Supplier Management",
+      description: "Manage fuel suppliers, purchase orders & purchases",
       order: 27,
       visible: true,
     },
@@ -778,28 +762,11 @@ const initialState: FuelState = {
       visible: true,
     },
     {
-      id: "priceboard",
-      label: "Price Board",
-      originalLabel: "Price Board",
-      description: "Digital price board management",
-      order: 30,
-      visible: true,
-    },
-    {
       id: "pumpmapping",
       label: "Pump Mapping V1",
       originalLabel: "Pump Mapping V1",
       description: "AI-powered pump ledger parsing & extraction",
       order: 31,
-      visible: true,
-    },
-    {
-      id: "fueltracker",
-      label: "Auto Fuel Price",
-      originalLabel: "Auto Fuel Price",
-      description:
-        "GPS-detected hyper-local fuel prices (AI-parsed, PostGIS cached)",
-      order: 32,
       visible: true,
     },
     // ─── SalesZote-style additive POS modules ───
@@ -816,22 +783,6 @@ const initialState: FuelState = {
       visible: true,
     },
     {
-      id: "sales-invoices",
-      label: "Sales Invoices",
-      originalLabel: "Sales Invoices",
-      description: "Issue and track detailed sales invoices",
-      order: 34,
-      visible: true,
-    },
-    {
-      id: "purchases",
-      label: "Purchases & Suppliers",
-      originalLabel: "Purchases & Suppliers",
-      description: "Purchase orders and supplier management",
-      order: 35,
-      visible: true,
-    },
-    {
       id: "terminal",
       label: "Terminal Sessions",
       originalLabel: "Terminal Sessions",
@@ -843,16 +794,9 @@ const initialState: FuelState = {
       id: "price-finder",
       label: "Fuel Price Finder",
       originalLabel: "Fuel Price Finder",
-      description: "GPS-based nearby fuel price locator & comparison",
+      description:
+        "GPS-based nearby fuel price locator & auto fuel price comparison",
       order: 37,
-      visible: true,
-    },
-    {
-      id: "integrations-settings",
-      label: "Integrations",
-      originalLabel: "Integrations",
-      description: "M-PESA & Kopo Kopo payment integration setup",
-      order: 38,
       visible: true,
     },
   ],
@@ -908,11 +852,12 @@ function mergeCompanyData(
  */
 function itemsHaveContent(items?: InvoiceItem[] | null): number {
   if (!items || !Array.isArray(items)) return 0;
-  return items.filter((it) => (it.desc && it.desc.trim() !== "") || it.price > 0).length;
+  return items.filter(
+    (it) => (it.desc && it.desc.trim() !== "") || it.price > 0,
+  ).length;
 }
 
 function fuelReducer(state: FuelState, action: FuelAction): FuelState {
-
   switch (action.type) {
     case "SET_THEME":
       return { ...state, theme: action.payload };
@@ -1000,7 +945,8 @@ function fuelReducer(state: FuelState, action: FuelAction): FuelState {
       const incomingItems = incoming.invoiceItems;
       const currentItems = state.invoiceItems;
       const invoiceItems =
-        incomingItems && itemsHaveContent(incomingItems) >= itemsHaveContent(currentItems)
+        incomingItems &&
+        itemsHaveContent(incomingItems) >= itemsHaveContent(currentItems)
           ? incomingItems
           : currentItems;
       return {
@@ -1088,7 +1034,10 @@ function fuelReducer(state: FuelState, action: FuelAction): FuelState {
           ...state,
           currentStationId: action.payload,
           stationData: savedStationData,
-          companyData: mergeCompanyData(state.companyData, loadedStation.companyData),
+          companyData: mergeCompanyData(
+            state.companyData,
+            loadedStation.companyData,
+          ),
           pmsPumps: loadedStation.pmsPumps || [],
           agoPumps: loadedStation.agoPumps || [],
           pmsTankOpening: loadedStation.pmsTankOpening || 0,
@@ -1124,6 +1073,15 @@ interface FuelContextType {
   loadFromCloud: () => Promise<void>;
   isCloudSaving: boolean;
   lastCloudSave: Date | null;
+  /**
+   * Propagate a fuel-price change from FuelContext to the shared
+   * `fuel_types_config` cloud key (so FuelTypesManager / PriceBoard / POS /
+   * Invoice / Reports all see the new price), AND broadcast it on the
+   * in-device fuel-interlink bus for instant same-page updates. Call this
+   * alongside dispatch(SET_PRICES) from any component that edits a station
+   * pump price (PumpSettingsPanel, "Set as my price" actions, etc.).
+   */
+  syncPriceToFuelTypes: (raw: string, price: number) => void;
 }
 
 const FuelContext = createContext<FuelContextType | undefined>(undefined);
@@ -1207,6 +1165,33 @@ export function FuelProvider({ children }: { children: ReactNode }) {
   // Real-time echo guard: set before saveToCloud writes so the real-time
   // subscription knows to skip the echo of our own write.
   const skipRemoteUpdateRef = useRef(false);
+
+  // ============================================================
+  // FUEL TYPE / PRICE INTERLINK (FuelContext <-> fuel_types_config)
+  // ------------------------------------------------------------
+  // fuel_types_config (edited by FuelTypesManager) is the rich source of
+  // truth for the station's fuel types + their per-litre prices. FuelContext
+  // keeps legacy scalar pmsPrice/agoPrice for backwards compatibility. These
+  // two are kept in sync: when fuel_types_config loads (or changes via
+  // real-time), the active petrol/diesel entries drive pmsPrice/agoPrice; and
+  // syncPriceToFuelTypes() writes a FuelContext price change back into
+  // fuel_types_config + broadcasts on the interlink bus. This makes a price
+  // edited anywhere (Dashboard, PriceBoard, "Set as my price", PumpSettings)
+  // reflect everywhere instantly.
+  const fuelTypesRef = useRef<CustomFuelType[]>([]);
+  // Guard the FuelContext -> fuel_types_config derivation so we don't loop:
+  // while WE are applying a fuel_types_config change to pmsPrice/agoPrice, we
+  // must not re-broadcast it as a FuelContext change.
+  const applyingFuelTypesRef = useRef(false);
+  // Track the last price values we broadcast so the price-propagation effect
+  // only emits when a price actually changes (not on every state render).
+  const lastBroadcastPriceRef = useRef<{
+    pms: number | null;
+    ago: number | null;
+  }>({
+    pms: null,
+    ago: null,
+  });
 
   const saveToStorage = useCallback(() => {
     try {
@@ -1882,6 +1867,221 @@ export function FuelProvider({ children }: { children: ReactNode }) {
     return () => unsub();
   }, [user, stationId]);
 
+  // ------------------------------------------------------------
+  // Load fuel_types_config on mount/station change, keep fuelTypesRef in
+  // sync, derive pmsPrice/agoPrice from the active petrol/diesel entries,
+  // and subscribe to real-time cloud updates so a price edit in
+  // FuelTypesManager on another device propagates here instantly.
+  useEffect(() => {
+    let cancelled = false;
+    const applyFuelTypes = (list: CustomFuelType[]) => {
+      if (cancelled) return;
+      fuelTypesRef.current = list;
+      const s = stateRef.current;
+      const petrol = list.find(
+        (ft) => ft.active && normalizeFuelType(ft.name) === "petrol",
+      );
+      const diesel = list.find(
+        (ft) => ft.active && normalizeFuelType(ft.name) === "diesel",
+      );
+      const updates: Partial<{ pmsPrice: number; agoPrice: number }> = {};
+      if (
+        petrol &&
+        typeof petrol.price === "number" &&
+        petrol.price > 0 &&
+        petrol.price !== s.pmsPrice
+      ) {
+        updates.pmsPrice = petrol.price;
+      }
+      if (
+        diesel &&
+        typeof diesel.price === "number" &&
+        diesel.price > 0 &&
+        diesel.price !== s.agoPrice
+      ) {
+        updates.agoPrice = diesel.price;
+      }
+      if (Object.keys(updates).length > 0) {
+        applyingFuelTypesRef.current = true;
+        dispatch({ type: "SET_PRICES", payload: updates });
+        // Broadcast so same-page consumers (Dashboard, PriceBoard) update.
+        if (updates.pmsPrice != null) {
+          emitFuelPriceChange({
+            fuelType: "Super Petrol",
+            canonical: "petrol",
+            price: updates.pmsPrice,
+            source: "FuelContext.fuelTypesSync",
+          });
+        }
+        if (updates.agoPrice != null) {
+          emitFuelPriceChange({
+            fuelType: "Diesel",
+            canonical: "diesel",
+            price: updates.agoPrice,
+            source: "FuelContext.fuelTypesSync",
+          });
+        }
+        applyingFuelTypesRef.current = false;
+      }
+    };
+
+    (async () => {
+      try {
+        const data = await cloudStorageService.get<CustomFuelType[]>(
+          "fuel_types_config",
+          stationId,
+        );
+        if (data && Array.isArray(data)) applyFuelTypes(data);
+      } catch {
+        /* ignore */
+      }
+    })();
+
+    const unsub = cloudStorageService.subscribe<CustomFuelType[]>(
+      "fuel_types_config",
+      stationId,
+      (val) => {
+        if (val && Array.isArray(val)) applyFuelTypes(val);
+      },
+    );
+    return () => {
+      cancelled = true;
+      unsub?.();
+    };
+  }, [stationId]);
+
+  // ------------------------------------------------------------
+  // syncPriceToFuelTypes: write a FuelContext price change back into
+  // fuel_types_config (so FuelTypesManager/PriceBoard/POS/Invoice/Reports see
+  // it) and broadcast on the interlink bus. Exposed via context for any
+  // component that edits a station pump price.
+  const syncPriceToFuelTypes = useCallback((raw: string, price: number) => {
+    if (typeof price !== "number" || !isFinite(price) || price <= 0) return;
+    const canonical = normalizeFuelType(raw);
+    if (!canonical) return;
+    // Update the matching fuel_types_config entry (if any) and persist.
+    const list = fuelTypesRef.current;
+    if (list.length > 0) {
+      const idx = list.findIndex(
+        (ft) => normalizeFuelType(ft.name) === canonical,
+      );
+      if (idx >= 0 && list[idx].price !== price) {
+        const next = list.slice();
+        next[idx] = { ...next[idx], price };
+        fuelTypesRef.current = next;
+        cloudStorageService
+          .set("fuel_types_config", next, stationIdRef.current)
+          .catch(() => {});
+      }
+    }
+    // Also keep the legacy FuelContext scalar fields in sync for petrol/diesel.
+    if (canonical === "petrol" || canonical === "diesel") {
+      dispatch({
+        type: "SET_PRICES",
+        payload:
+          canonical === "petrol" ? { pmsPrice: price } : { agoPrice: price },
+      });
+    }
+    // Broadcast for instant same-page updates (Dashboard, PriceBoard, …).
+    emitFuelPriceChange({
+      fuelType: raw,
+      canonical,
+      price,
+      source: "FuelContext.syncPriceToFuelTypes",
+    });
+  }, []);
+
+  // Listen for price changes broadcast by OTHER components on the bus (e.g.
+  // FuelPriceLocator "Set as my price") and mirror them into FuelContext +
+  // fuel_types_config, so those actions update the Dashboard/legacy fields too.
+  useEffect(() => {
+    const unsub = onFuelPriceChange((p) => {
+      if (applyingFuelTypesRef.current) return; // avoid loop with our own emit
+      const canonical = p.canonical ?? normalizeFuelType(p.fuelType);
+      if (!canonical) return;
+      const list = fuelTypesRef.current;
+      if (list.length > 0) {
+        const idx = list.findIndex(
+          (ft) => normalizeFuelType(ft.name) === canonical,
+        );
+        if (idx >= 0 && list[idx].price !== p.price) {
+          const next = list.slice();
+          next[idx] = { ...next[idx], price: p.price };
+          fuelTypesRef.current = next;
+          cloudStorageService
+            .set("fuel_types_config", next, stationIdRef.current)
+            .catch(() => {});
+        }
+      }
+      if (canonical === "petrol" || canonical === "diesel") {
+        dispatch({
+          type: "SET_PRICES",
+          payload:
+            canonical === "petrol"
+              ? { pmsPrice: p.price }
+              : { agoPrice: p.price },
+        });
+      }
+    });
+    return () => unsub();
+  }, []);
+
+  // ------------------------------------------------------------
+  // Universal price-propagation effect: when ANY legacy scalar price field
+  // changes via dispatch(SET_PRICES) — e.g. DeliveryTracker's Petrol/Diesel
+  // Price inputs, SetupWizard price setup, or a restored LOAD_FROM_STORAGE —
+  // mirror the change into fuel_types_config + broadcast on the interlink
+  // bus so EVERY consumer (Dashboard cards, POS cart, Invoice hints,
+  // PriceBoard, Reports) stays in sync from a single source of truth.
+  // Note: petrol/diesel have TWO legacy fields each (petrolPrice/pmsPrice,
+  // dieselPrice/agoPrice) used by different components. We track all four and
+  // propagate any that changes.
+  useEffect(() => {
+    if (applyingFuelTypesRef.current) return;
+    // Resolve the effective petrol/diesel price: prefer pmsPrice/agoPrice, but
+    // also react to petrolPrice/dieselPrice edits (DeliveryTracker/SetupWizard).
+    const effectivePms = state.pmsPrice || state.petrolPrice;
+    const effectiveAgo = state.agoPrice || state.dieselPrice;
+    const last = lastBroadcastPriceRef.current;
+
+    const propagate = (
+      canonical: "petrol" | "diesel",
+      price: number,
+      label: string,
+    ) => {
+      if (price <= 0) return;
+      const list = fuelTypesRef.current;
+      if (list.length > 0) {
+        const idx = list.findIndex(
+          (ft) => normalizeFuelType(ft.name) === canonical,
+        );
+        if (idx >= 0 && list[idx].price !== price) {
+          const next = list.slice();
+          next[idx] = { ...next[idx], price };
+          fuelTypesRef.current = next;
+          cloudStorageService
+            .set("fuel_types_config", next, stationIdRef.current)
+            .catch(() => {});
+        }
+      }
+      emitFuelPriceChange({
+        fuelType: label,
+        canonical,
+        price,
+        source: "FuelContext.pricePropagate",
+      });
+    };
+
+    if (effectivePms > 0 && effectivePms !== last.pms) {
+      last.pms = effectivePms;
+      propagate("petrol", effectivePms, "Super Petrol");
+    }
+    if (effectiveAgo > 0 && effectiveAgo !== last.ago) {
+      last.ago = effectiveAgo;
+      propagate("diesel", effectiveAgo, "Diesel");
+    }
+  }, [state.pmsPrice, state.agoPrice, state.petrolPrice, state.dieselPrice]);
+
   // Apply theme to body - robust for all browsers
   useEffect(() => {
     try {
@@ -1920,6 +2120,7 @@ export function FuelProvider({ children }: { children: ReactNode }) {
         loadFromCloud,
         isCloudSaving,
         lastCloudSave,
+        syncPriceToFuelTypes,
       }}
     >
       {children}

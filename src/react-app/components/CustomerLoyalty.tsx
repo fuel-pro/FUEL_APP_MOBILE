@@ -4,6 +4,8 @@ import { useLocation } from "@/react-app/context/LocationContext";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 import { useAuth } from "@/react-app/context/AuthContext";
 import { useStations } from "@/react-app/context/StationContext";
+import { useStationFuelTypes } from "@/react-app/hooks/useStationFuelTypes";
+import { getFuelLabel } from "@/react-app/config/pricing";
 import {
   Users,
   Star,
@@ -114,6 +116,10 @@ function tierColor(tier: Customer["tier"]): string {
 export default function CustomerLoyalty() {
   const { state } = useFuel();
   const location = useLocation();
+  // Unified fuel-type lookup so the loyalty program can resolve the live
+  // station price for a member's preferred fuel (PMS/AGO) via the same
+  // canonical source every other tab uses.
+  const fuelTypeApi = useStationFuelTypes();
   const { user } = useAuth();
   const { currentStation } = useStations();
   const stationId = currentStation?.id;
@@ -363,8 +369,8 @@ export default function CustomerLoyalty() {
               }
               className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
             >
-              <option value="PMS">PMS</option>
-              <option value="AGO">AGO</option>
+              <option value="PMS">{getFuelLabel("PMS")}</option>
+              <option value="AGO">{getFuelLabel("AGO")}</option>
               <option value="Both">Both</option>
             </select>
             <input

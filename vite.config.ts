@@ -11,6 +11,10 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: "autoUpdate",
+      // SW registration + update handling is in index.html (inline script).
+      // Disabling the plugin's auto-inject avoids a duplicate minimal
+      // registration that doesn't handle updates.
+      injectRegister: false,
       includeAssets: ["favicon.ico", "logo-main.jpg", "logo-small.jpg", "*.svg"],
       manifest: {
         name: "FuelPro - Fuel Management System",

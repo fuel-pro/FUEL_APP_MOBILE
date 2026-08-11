@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { useFuel } from "@/react-app/context/FuelContext";
 import { getCurrencySymbol } from "@/react-app/lib/currency";
+import { useStationFuelTypes } from "@/react-app/hooks/useStationFuelTypes";
 
 // Declare Speech Recognition types
 declare global {
@@ -53,6 +54,9 @@ interface Message {
 
 export default function AIChatbot() {
   const { state } = useFuel();
+  // Unified fuel types so the AI assistant knows about ALL the station's
+  // configured fuels (and their live prices), not just petrol/diesel.
+  const fuelTypeApi = useStationFuelTypes();
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
@@ -119,12 +123,18 @@ export default function AIChatbot() {
         : null,
     };
 
-    // Fuel Prices & Tank Levels
+    // Fuel Prices & Tank Levels — enriched with ALL station fuel types so the
+    // AI can answer questions about any fuel the station sells (not just PMS/AGO).
     context.fuelPrices = {
       petrol: state.petrolPrice || state.pmsPrice,
       diesel: state.dieselPrice || state.agoPrice,
       pms: state.pmsPrice,
       ago: state.agoPrice,
+      allFuelTypes: fuelTypeApi.activeFuelTypes.map((ft) => ({
+        name: ft.name,
+        price: ft.price,
+        active: ft.active,
+      })),
     };
 
     context.tankLevels = {

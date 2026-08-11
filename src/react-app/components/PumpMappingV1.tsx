@@ -22,6 +22,10 @@
 import React, { useState, useCallback, useRef, useEffect, memo } from "react";
 import { useAuth } from "@/react-app/context/AuthContext";
 import { useStations } from "@/react-app/context/StationContext";
+import {
+  navigateToTab,
+  type FuelPricePrefill,
+} from "@/react-app/lib/mpesa-integration-service";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 import { getCurrencySymbol } from "@/react-app/lib/currency";
 import {
@@ -1285,7 +1289,19 @@ const PumpMappingV1: React.FC = () => {
                             )}
                           </td>
                           <td className="px-3 py-2 text-slate-600 dark:text-slate-400">
-                            {pump.fuel_name}
+                            {pump.fuel_name}{" "}
+                            <button
+                              onClick={() =>
+                                navigateToTab("fueltypes", {
+                                  fuelType: pump.fuel_name || pump.fuel_type,
+                                  price: pump.unit_price || undefined,
+                                } as FuelPricePrefill)
+                              }
+                              className="ml-1 text-[10px] text-indigo-600 dark:text-indigo-400 hover:underline"
+                              title="Edit this fuel type / price in Fuel Type Manager"
+                            >
+                              edit
+                            </button>
                           </td>
                           <td className="px-3 py-2 text-right text-slate-600 dark:text-slate-400">
                             {pump.opening_reading.toFixed(2)}
