@@ -44,3 +44,11 @@ DROP POLICY IF EXISTS authenticated_insert ON config;
 
 -- Verify no broad authenticated_* policies remain.
 -- SELECT tablename, policyname, cmd FROM pg_policies WHERE policyname LIKE 'authenticated_%';
+
+-- Backfill created_by for existing stations (was NULL for all pre-existing
+-- rows). The "Users can view own stations" / "Users can update own
+-- stations" policies key on (created_by = auth.uid()), so NULL created_by
+-- left those stations unreachable via that policy path (only the
+-- owner_id path matched). Set created_by = owner_id so both owner-scoped
+-- policies cover every existing station.
+UPDATE stations SET created_by = owner_id WHERE created_by IS NULL;

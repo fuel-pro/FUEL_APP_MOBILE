@@ -502,6 +502,9 @@ async function pushStationUpsert(station: Station, ownerId: string) {
     const { error: upsertError } = await supabase.from("stations").upsert({
       id: station.id,
       owner_id: ownerId,
+      // Set `created_by` too so BOTH owner-scoped RLS policies
+      // (auth.uid() = owner_id AND created_by = auth.uid()) match.
+      created_by: ownerId,
       // `code` is NOT NULL UNIQUE on the stations table — backfill one for
       // any station created before this field existed so the upsert succeeds.
       code: station.code || generateStationCode(station.name),
@@ -665,6 +668,7 @@ async function syncStationsWithSupabase(
         .from("stations")
         .insert({
           owner_id: userId,
+          created_by: userId,
           code: s.code || generateStationCode(s.name),
           ...stationToRowFields(s),
         })
@@ -776,6 +780,7 @@ async function syncStationsWithSupabase(
               .from("stations")
               .insert({
                 owner_id: userId,
+                created_by: userId,
                 code: s.code || generateStationCode(s.name || "Station"),
                 ...stationToRowFields(s),
               })

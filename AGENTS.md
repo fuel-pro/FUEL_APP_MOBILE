@@ -253,6 +253,50 @@ field with a default value (currency, invoice label, etc.). Fix applied:
   (project `ojjscjwatikixlpshmub`). NEVER commit these.
 - Vercel token in `$VERCEL`. GitHub token in `$GITHUB_TOKEN`.
 
+## CRITICAL — Cross-user station + data leak via overly-permissive RLS (FIXED 2026-08-09, commit fb9eb29)
+**Symptom**: any logged-in user received the GLOBAL station list — including
+every other user's stations — via the cloud sync query. On a fresh device
+(cleared localStorage), the app defaulted to another user's station
+("Publican Energy Test Station") on first login, and the leaked stations
+were persisted into the user-scoped localStorage cache. This affected not
+just `stations` but also `users`, `inventory`, `sales`, `audit_logs`, and
+`config` — all of which had broad `authenticated_*` RLS policies.
+
+**Root cause**: the tables had three broad RLS policies shadowing the proper
+owner-scoped ones:
+- `authenticated_select`: `(auth.role() = 'authenticated')` → ANY
+  authenticated user can SELECT ALL rows.
+- `authenticated_update`: same → ANY user can UPDATE ALL rows.
+- `authenticated_insert`: `(auth.role() = 'authenticated')` WITH CHECK →
+  ANY user can INSERT as anyone.
+Because Postgres RLS policies are OR'd, the broad policy made the
+owner-scoped `(auth.uid() = owner_id)` policy irrelevant — every row was
+visible to every authenticated user.
+
+**Fix** (migration `009_stations_rls_crossuser_fix.sql`, applied live via
+Management API):
+- Dropped `authenticated_select/update/insert` on `stations`, `users`,
+  `inventory`, `sales`, `audit_logs`, `config`. Only owner-scoped policies
+  remain (verified: `SELECT tablename, policyname FROM pg_policies WHERE
+  policyname LIKE 'authenticated_%'` returns empty).
+- `StationContext.syncStationsWithSupabase` adds `.eq('owner_id', userId)`
+  to ALL station SELECT queries + direct-fetch fallbacks as
+  defense-in-depth (so a future misconfigured RLS policy can never leak
+  foreign stations into an account).
+- Station localStorage key is user-scoped
+  (`fuelpro_stations_v3_<userId>`, see commit 9cc8603) — each account has
+  its own isolated local cache; the legacy global key is cleared on
+  user change/logout.
+
+**Verified end-to-end**: a real user token now returns ONLY that user's
+stations (was 5 incl. 4 foreign; now 1 own station). Fresh-device login
+defaults to the user's OWN station, never another user's. localStorage
+scoped key contains only the user's own station; old global key empty.
+IMPORTANT: `created_by` is NULL for all existing stations, so the
+`(created_by = auth.uid())` policy matches nothing — the `(auth.uid() =
+owner_id)` policy is the effective one. New stations should set both
+`owner_id` AND `created_by` to the auth uid for full coverage.
+
 ## CRITICAL — Cross-device cloud data overwrite race (FIXED 2026-08-09, commit 00522ac)
 
 **Symptom**: When a user logs in on a NEW device/browser (empty local cache),
