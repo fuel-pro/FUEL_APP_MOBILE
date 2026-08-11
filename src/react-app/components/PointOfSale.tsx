@@ -485,14 +485,22 @@ export default function PointOfSale() {
     const shift = new Date(timestamp).getHours() < 14 ? "Day" : "Night";
     const key = `${date}_${shift}`;
 
-    // Calculate fuel totals from POS items
+    // Calculate fuel totals from POS items — wire through canonical fuel types
     let pmsLitres = 0,
       pmsAmount = 0;
     let agoLitres = 0,
       agoAmount = 0;
 
     items.forEach((item) => {
-      if (item.fuelType === "PMS") {
+      const canonical = fuelTypeApi.canonicalOf(item.fuelType || item.name || "");
+      if (canonical === "petrol") {
+        pmsLitres += item.litres || item.quantity;
+        pmsAmount += item.total;
+      } else if (canonical === "diesel") {
+        agoLitres += item.litres || item.quantity;
+        agoAmount += item.total;
+      } else if (item.fuelType === "PMS") {
+        // Legacy fallback for items without canonical resolution
         pmsLitres += item.litres || item.quantity;
         pmsAmount += item.total;
       } else if (item.fuelType === "AGO") {
@@ -533,9 +541,8 @@ export default function PointOfSale() {
     posSales.agoAmount += agoAmount;
 
     // Update till payment for M-Pesa transactions
-    const tillPayment =
-      existingSales.tillPayment +
-      (payment === "mpesa" ? pmsAmount + agoAmount : 0);
+    const mpesaAmount = payment === "mpesa" ? pmsAmount + agoAmount : 0;
+    const tillPayment = existingSales.tillPayment + mpesaAmount;
 
     dispatch({
       type: "SET_SALES_HISTORY",
@@ -544,6 +551,40 @@ export default function PointOfSale() {
         [key]: { ...existingSales, posSales, tillPayment },
       },
     });
+
+    // Wire: decrement tank closing levels to reflect fuel sold
+    if (pmsLitres > 0 || agoLitres > 0) {
+      dispatch({
+        type: "SET_TANK_VALUES",
+        payload: {
+          pmsTankOpening: state.pmsTankOpening,
+          pmsTankClosing: Math.max(0, (state.pmsTankClosing || 0) - pmsLitres),
+          agoTankOpening: state.agoTankOpening,
+          agoTankClosing: Math.max(0, (state.agoTankClosing || 0) - agoLitres),
+        },
+      });
+    }
+
+    // Wire: add M-PESA transaction to the ledger so M-PESA Analyzer + AI chatbot see it
+    if (mpesaAmount > 0) {
+      const now = new Date(timestamp);
+      const mpesaTxn = {
+        id: `pos_${now.getTime()}`,
+        date: date,
+        time: now.toTimeString().split(" ")[0],
+        type: "POS Sale",
+        amount: mpesaAmount,
+        reference: `POS-${now.getTime().toString().slice(-8)}`,
+        description: `POS fuel sale (${[pmsLitres > 0 ? `${pmsLitres.toFixed(1)}L ${fuelTypeApi.labelOf("Petrol")}` : null, agoLitres > 0 ? `${agoLitres.toFixed(1)}L ${fuelTypeApi.labelOf("Diesel")}` : null].filter(Boolean).join(" + ")})`,
+        balance: 0,
+        phoneNumber: "",
+        merchantCode: "",
+      };
+      dispatch({
+        type: "SET_MPESA_TRANSACTIONS",
+        payload: [...(state.mpesaTransactions || []), mpesaTxn],
+      });
+    }
   };
 
   // Add credit sales to delivery tracking for customer accounts

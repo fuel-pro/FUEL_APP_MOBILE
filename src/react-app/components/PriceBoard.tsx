@@ -99,7 +99,8 @@ export default function PriceBoard() {
   const { user } = useAuth();
   const { currentStation } = useStations();
   const stationId = currentStation?.id;
-  const { syncPriceToFuelTypes } = useFuel();
+  const { syncPriceToFuelTypes, state } = useFuel();
+  const stationCurrency = state.companyData.currency || "KES";
   const [prices, setPrices] = useState<PriceEntry[]>(loadPrices);
   const [history, setHistory] = useState<PriceHistory[]>(loadHistory);
   const [showForm, setShowForm] = useState(false);
@@ -114,7 +115,7 @@ export default function PriceBoard() {
     fuelType: CANONICAL_FUEL_TYPES.petrol.label,
     grade: "Regular",
     price: 0,
-    currency: "KES",
+    currency: stationCurrency,
     displayOrder: 0,
     isActive: true,
     effectiveDate: new Date().toISOString().slice(0, 10),
@@ -459,7 +460,7 @@ export default function PriceBoard() {
                 fuelType: CANONICAL_FUEL_TYPES.petrol.label,
                 grade: "Regular",
                 price: 0,
-                currency: "KES",
+                currency: stationCurrency,
                 displayOrder: prices.length + 1,
                 isActive: true,
                 effectiveDate: new Date().toISOString().slice(0, 10),

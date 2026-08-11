@@ -1,4 +1,5 @@
 import { useFuel } from "@/react-app/context/FuelContext";
+import { useStationFuelTypes } from "@/react-app/hooks/useStationFuelTypes";
 import { useLocation } from "@/react-app/context/LocationContext";
 import { useStations } from "@/react-app/context/StationContext";
 import { useAutoSync } from "@/react-app/hooks/useAutoSync";
@@ -90,6 +91,7 @@ ChartJS.register(
 
 export default function Dashboard() {
   const { state } = useFuel();
+  const fuelTypeApi = useStationFuelTypes();
   const location = useLocation();
   const { currentStation } = useStations();
   const {
@@ -120,19 +122,27 @@ export default function Dashboard() {
   // Use precise location-based fuel prices (auto-synced with GPS)
   const stationCity = currentStation?.location || "Nairobi";
   const regionalPrice = getPriceForCity(fuelPrice, stationCity);
-  // Prefer location-based price from GPS, then fall back to regional, then national, then default
+  // Prefer station-configured price (fuel_types_config), then location-based price from GPS,
+  // then regional, then national, then state default
+  const stationPetrolPrice = fuelTypeApi.getPriceFor("Petrol");
+  const stationDieselPrice = fuelTypeApi.getPriceFor("Diesel");
   const displayPmsPrice =
+    stationPetrolPrice ??
     locationPrice?.petrolPrice ??
     (regionalPrice.isRegional ? regionalPrice.petrol : null) ??
     fuelPrice?.petrolPrice ??
     state.pmsPrice;
   const displayAgoPrice =
+    stationDieselPrice ??
     locationPrice?.dieselPrice ??
     (regionalPrice.isRegional ? regionalPrice.diesel : null) ??
     fuelPrice?.dieselPrice ??
     state.agoPrice;
   const displayKerosenePrice =
-    locationPrice?.kerosenePrice ?? fuelPrice?.kerosenePrice ?? 0; // Kerosene price not in base state
+    fuelTypeApi.getPriceFor("Kerosene") ??
+    locationPrice?.kerosenePrice ??
+    fuelPrice?.kerosenePrice ??
+    0;
   // Show the detected city for location-based pricing
   const priceCityName =
     locationPrice?.cityName || regionalPrice.cityName || "Nairobi";

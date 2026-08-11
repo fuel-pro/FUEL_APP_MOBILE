@@ -45,7 +45,7 @@ import {
   onTabPayload,
   navigateToTab,
 } from "@/react-app/lib/mpesa-integration-service";
-import { normalizeFuelType } from "@/react-app/config/pricing";
+import { normalizeFuelType, getFuelLabel } from "@/react-app/config/pricing";
 
 // ============================================================
 // CUSTOM FUEL TYPE MANAGER
@@ -849,15 +849,33 @@ export default function FuelTypesManager() {
 // ============================================================
 function PumpSettingsPanel() {
   const { state, dispatch } = useFuel();
+  const { user } = useAuth();
+  const { currentStation } = useStations();
+  const stationId = currentStation?.id;
   const { hasPermission, isOwner } = usePermissions();
+
+  // Read prices from the station's fuel_types_config (single source of truth),
+  // falling back to legacy state.pmsPrice/agoPrice
+  const [fuelTypeConfigs, setFuelTypeConfigs] = useState<CustomFuelType[]>([]);
+  useEffect(() => {
+    const stored = localStorage.getItem("fuelpro_custom_fuel_types");
+    if (stored) {
+      try {
+        setFuelTypeConfigs(JSON.parse(stored));
+      } catch {}
+    }
+  }, []);
+
+  const pmsConfig = fuelTypeConfigs.find((ft) => ft.id === "pms" || normalizeFuelType(ft.localName) === "petrol");
+  const agoConfig = fuelTypeConfigs.find((ft) => ft.id === "ago" || normalizeFuelType(ft.localName) === "diesel");
   const [pmsPrice, setPmsPrice] = useState(
-    state.pmsPrice || KENYA_BASE_PRICES.petrol,
+    pmsConfig?.price ?? state.pmsPrice ?? KENYA_BASE_PRICES.petrol,
   );
   const [agoPrice, setAgoPrice] = useState(
-    state.agoPrice || KENYA_BASE_PRICES.diesel,
+    agoConfig?.price ?? state.agoPrice ?? KENYA_BASE_PRICES.diesel,
   );
-  const [pmsPumpCount, setPmsPumpCount] = useState(state.pmsPumps?.length || 1);
-  const [agoPumpCount, setAgoPumpCount] = useState(state.agoPumps?.length || 1);
+  const [pmsPumpCount, setPmsPumpCount] = useState(pmsConfig?.pumpCount || state.pmsPumps?.length || 1);
+  const [agoPumpCount, setAgoPumpCount] = useState(agoConfig?.pumpCount || state.agoPumps?.length || 1);
 
   return (
     <div className="space-y-6">
@@ -915,8 +933,22 @@ function PumpSettingsPanel() {
         <button
           onClick={() => {
             dispatch({ type: "SET_PRICES", payload: { pmsPrice, agoPrice } });
+            // Wire: also persist to fuel_types_config (single source of truth) + emit bus events
+            const updated = fuelTypeConfigs.map((ft) => {
+              if (ft.id === "pms" || normalizeFuelType(ft.localName) === "petrol") {
+                return { ...ft, price: pmsPrice, pumpCount: pmsPumpCount };
+              }
+              if (ft.id === "ago" || normalizeFuelType(ft.localName) === "diesel") {
+                return { ...ft, price: agoPrice, pumpCount: agoPumpCount };
+              }
+              return ft;
+            });
+            localStorage.setItem("fuelpro_custom_fuel_types", JSON.stringify(updated));
+            cloudStorageService.set("fuel_types_config", updated, stationId).catch(() => {});
+            emitFuelPriceChange({ fuelType: "Petrol", canonical: "petrol", price: pmsPrice, source: "PumpSettingsPanel" });
+            emitFuelPriceChange({ fuelType: "Diesel", canonical: "diesel", price: agoPrice, source: "PumpSettingsPanel" });
             alert(
-              `Pump prices updated:\nPMS: Ksh ${pmsPrice.toFixed(2)}\nAGO: Ksh ${agoPrice.toFixed(2)}`,
+              `Pump prices updated & synced:\n${getFuelLabel("Petrol")}: ${state.companyData.currency || "KSh"} ${pmsPrice.toFixed(2)}\n${getFuelLabel("Diesel")}: ${state.companyData.currency || "KSh"} ${agoPrice.toFixed(2)}`,
             );
           }}
           className="mt-4 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium flex items-center gap-2 transition-colors"
