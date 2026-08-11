@@ -285,6 +285,7 @@ export function useFounderBackend() {
   useEffect(() => {
     let cancelled = false;
     let unsubscribe: (() => void) | undefined;
+    let pollTimer: ReturnType<typeof setTimeout> | undefined;
 
     async function loadStats() {
       try {
@@ -323,7 +324,8 @@ export function useFounderBackend() {
     loadStats();
 
     // The hook mounts BEFORE the founder logs in (the auth gate is rendered
-    // by the same component), so getSession() returns null on the first run.
+    // by the same component), so getSession() may return null on the first
+    // run (the Supabase client hasn't restored the persisted session yet).
     // Subscribe to auth state changes so the fetch re-fires the moment the
     // founder signs in (signInWithPassword emits SIGNED_IN / TOKEN_REFRESHED).
     (async () => {
@@ -341,9 +343,26 @@ export function useFounderBackend() {
       }
     })();
 
+    // Polling fallback: if the session wasn't ready on mount AND
+    // onAuthStateChange already fired before the subscription attached
+    // (a race on slow networks), retry a few times until the session is
+    // available. Stops as soon as statsUsers is populated.
+    let attempts = 0;
+    const poll = () => {
+      if (cancelled || statsUsers || attempts >= 8) return;
+      attempts++;
+      pollTimer = setTimeout(() => {
+        loadStats().then(() => {
+          if (!cancelled && !statsUsers) poll();
+        });
+      }, 1500);
+    };
+    poll();
+
     return () => {
       cancelled = true;
       unsubscribe?.();
+      if (pollTimer) clearTimeout(pollTimer);
     };
   }, []);
 
