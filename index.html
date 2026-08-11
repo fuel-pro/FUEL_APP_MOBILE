@@ -85,9 +85,31 @@
     <div id="root"></div>
     <script type="module" src="/src/react-app/main.tsx"></script>
     <script>
+      // Service Worker registration with automatic update handling.
+      // When a new build is deployed the browser detects the changed sw.js,
+      // installs the new SW (which calls self.skipWaiting() via the workbox
+      // config), and this script reloads the page so the user immediately
+      // sees the fresh build instead of stale cached bundles.
       if ("serviceWorker" in navigator) {
-        window.addEventListener("load", () => {
-          navigator.serviceWorker.register("/sw.js").catch(() => {});
+        var refreshing = false;
+        navigator.serviceWorker.addEventListener("controllerchange", function () {
+          if (refreshing) return;
+          refreshing = true;
+          window.location.reload();
+        });
+        window.addEventListener("load", function () {
+          navigator.serviceWorker.register("/sw.js").then(function (reg) {
+            reg.addEventListener("updatefound", function () {
+              var newWorker = reg.installing;
+              if (!newWorker) return;
+              newWorker.addEventListener("statechange", function () {
+                if (newWorker.state === "installed" && navigator.serviceWorker.controller) {
+                  newWorker.postMessage({ type: "SKIP_WAITING" });
+                }
+              });
+            });
+            reg.update().catch(function () {});
+          }).catch(function () {});
         });
       }
     </script>
