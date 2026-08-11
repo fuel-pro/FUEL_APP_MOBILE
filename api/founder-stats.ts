@@ -88,35 +88,44 @@ export async function GET(request: Request): Promise<Response> {
     );
   }
 
-  // 3) Fetch ALL users (service_role bypasses RLS). The `users` table holds
-  //    the founder/admin role bindings; `profiles` holds the per-user display
-  //    info. Join-like: read users, then enrich from profiles in one query.
-  const { data: usersRows, error: usersErr } = await supabaseAdmin
-    .from("users")
-    .select("id, email, name, role, created_at, last_sign_in_at")
+  // 3) Fetch ALL users. The `profiles` table holds every signed-up user
+  //    (created by the handle_new_user trigger on auth.users INSERT). The
+  //    `users` table holds founder/admin role bindings only. A regular user
+  //    who signs up has a profiles row but NO users row — so querying only
+  //    `users` would miss them entirely from the Founder Console.
+  //    We use profiles as the base (all users) and LEFT JOIN users for role.
+  const { data: profilesRows, error: profilesErr } = await supabaseAdmin
+    .from("profiles")
+    .select("id, email, name, username, unique_id, created_at")
     .order("created_at", { ascending: false });
 
-  const { data: profilesRows } = await supabaseAdmin
-    .from("profiles")
-    .select("id, email, name, username, created_at");
+  const { data: usersRows, error: usersErr } = await supabaseAdmin
+    .from("users")
+    .select("id, email, name, role, created_at, last_sign_in_at");
 
-  const profileById = new Map<
-    string,
-    { email?: string; name?: string; username?: string; created_at?: string }
-  >();
-  for (const p of profilesRows || []) {
-    profileById.set(String(p.id), p);
+  // Build a role map from the users table (founder/admin bindings).
+  const roleById = new Map<string, string>();
+  for (const u of usersRows || []) {
+    roleById.set(String(u.id), u.role || "user");
   }
 
-  const users = (usersRows || []).map((u: any) => {
-    const p = profileById.get(String(u.id));
+  // Build the unified users list: every profile, enriched with role +
+  // last_sign_in_at from the users table where available.
+  const lastSignInById = new Map<string, string>();
+  for (const u of usersRows || []) {
+    if (u.last_sign_in_at) {
+      lastSignInById.set(String(u.id), u.last_sign_in_at);
+    }
+  }
+
+  const users = (profilesRows || []).map((p: any) => {
     return {
-      id: u.id,
-      email: u.email || p?.email || "",
-      name: u.name || p?.name || "Unknown",
-      role: u.role || "user",
-      createdAt: u.created_at,
-      lastSignInAt: u.last_sign_in_at,
+      id: p.id,
+      email: p.email || "",
+      name: p.name || "Unknown",
+      role: roleById.get(String(p.id)) || "user",
+      createdAt: p.created_at,
+      lastSignInAt: lastSignInById.get(String(p.id)) || null,
     };
   });
 
@@ -129,8 +138,12 @@ export async function GET(request: Request): Promise<Response> {
   if (stationsErr) {
     return json({ success: false, error: stationsErr.message, users }, 500);
   }
-  if (usersErr) {
+  if (profilesErr) {
     // Non-fatal: return stations with whatever users we have.
+    console.warn("[founder-stats] profiles query error:", profilesErr.message);
+  }
+  if (usersErr) {
+    // Non-fatal: role bindings unavailable; all users default to "user".
     console.warn("[founder-stats] users query error:", usersErr.message);
   }
 
