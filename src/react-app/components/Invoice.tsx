@@ -19,7 +19,7 @@ import {
 } from "@/react-app/utils/exportUtils";
 import { formatNumber } from "@/react-app/utils/formatUtils";
 import { silentPrintService } from "@/react-app/lib/silent-print-service";
-import { getCurrencySymbol } from "@/react-app/lib/currency";
+import { getCurrencySymbol, getDetectedCurrency } from "@/react-app/lib/currency";
 
 export default function Invoice() {
   const { state, dispatch } = useFuel();
@@ -190,7 +190,7 @@ export default function Invoice() {
         tax: 0,
         discount: 0,
         totalDue: totalDue,
-        currency: state.companyData.currency || "KSh",
+        currency: state.companyData.currency || getDetectedCurrency(),
         attendantName: "System",
         footerMessage: "Thank you for your business",
       };

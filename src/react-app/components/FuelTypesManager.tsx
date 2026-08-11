@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { useFuel } from "@/react-app/context/FuelContext";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
+import { getCurrencySymbol } from "@/react-app/lib/currency";
 import { useAuth } from "@/react-app/context/AuthContext";
 import { useStations } from "@/react-app/context/StationContext";
 
@@ -278,6 +279,8 @@ function saveFuelTypes(types: CustomFuelType[]) {
 export default function FuelTypesManager() {
   const { user } = useAuth();
   const { currentStation } = useStations();
+  const { state } = useFuel();
+  const currencySymbol = getCurrencySymbol(state.companyData?.currency);
   const stationId = currentStation?.id;
   const [fuelTypes, setFuelTypes] = useState<CustomFuelType[]>(loadFuelTypes);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -495,7 +498,7 @@ export default function FuelTypesManager() {
             </div>
             <div>
               <label className="block text-xs text-gray-500 mb-1">
-                Selling Price (Ksh/L)
+                Selling Price ({currencySymbol}/L)
               </label>
               <input
                 type="number"
@@ -507,7 +510,7 @@ export default function FuelTypesManager() {
             </div>
             <div>
               <label className="block text-xs text-gray-500 mb-1">
-                Cost Price (Ksh/L)
+                Cost Price ({currencySymbol}/L)
               </label>
               <input
                 type="number"
@@ -598,7 +601,7 @@ export default function FuelTypesManager() {
                         {preset.name}
                       </p>
                       <p className="text-[10px] text-gray-500">
-                        {preset.code} | Ksh {preset.price.toFixed(2)}/L
+                        {preset.code} | {currencySymbol} {preset.price.toFixed(2)}/L
                       </p>
                     </div>
                   </div>
@@ -653,7 +656,7 @@ export default function FuelTypesManager() {
                     )}
                   </div>
                   <p className="text-xs text-gray-500 dark:text-gray-400">
-                    {ft.localName} | Ksh {ft.price.toFixed(2)}/L |{" "}
+                    {ft.localName} | {currencySymbol} {ft.price.toFixed(2)}/L |{" "}
                     {ft.pumpCount} pump{ft.pumpCount !== 1 ? "s" : ""}
                   </p>
                 </div>
@@ -689,11 +692,11 @@ export default function FuelTypesManager() {
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
                     <InfoBox
                       label="Selling Price"
-                      value={`Ksh ${ft.price.toFixed(2)}`}
+                      value={`${currencySymbol} ${ft.price.toFixed(2)}`}
                     />
                     <InfoBox
                       label="Cost Price"
-                      value={`Ksh ${ft.costPrice.toFixed(2)}`}
+                      value={`${currencySymbol} ${ft.costPrice.toFixed(2)}`}
                     />
                     <InfoBox
                       label="Margin"

@@ -26,6 +26,7 @@ import {
   exportSalesTXT,
 } from "@/react-app/utils/exportUtils";
 import { formatNumber } from "@/react-app/utils/formatUtils";
+import { getCurrencySymbol } from "@/react-app/lib/currency";
 import ImageCropper from "@/react-app/components/ImageCropper";
 
 interface ExtractedPump {
@@ -60,6 +61,7 @@ type ScanStep = "idle" | "uploading" | "analyzing" | "review" | "error";
 
 export default function SalesTracking() {
   const { state, dispatch } = useFuel();
+  const currencySymbol = getCurrencySymbol(state.companyData?.currency);
   const [scanStep, setScanStep] = useState<ScanStep>("idle");
   const [scanResult, setScanResult] = useState<ScanResultData | null>(null);
   const [editableResult, setEditableResult] = useState<ScanResultData | null>(
@@ -954,7 +956,7 @@ export default function SalesTracking() {
                             className="w-24 px-2 py-1 rounded border text-xs"
                             placeholder="Sales"
                           />
-                          <span className="text-xs text-gray-500">Ksh</span>
+                          <span className="text-xs text-gray-500">{currencySymbol}</span>
                         </div>
                       ))}
                     </div>
@@ -996,7 +998,7 @@ export default function SalesTracking() {
                               className="w-24 px-2 py-1 rounded border text-xs"
                               placeholder="Amount"
                             />
-                            <span className="text-xs text-gray-500">Ksh</span>
+                            <span className="text-xs text-gray-500">{currencySymbol}</span>
                           </div>
                         ))}
                       </div>

@@ -24,6 +24,7 @@ import { useFuel } from "@/react-app/context/FuelContext";
 import { useAuth } from "@/react-app/context/AuthContext";
 import { useStations } from "@/react-app/context/StationContext";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
+import { getDetectedCurrency } from "@/react-app/lib/currency";
 import {
   getTransactions,
   addTransaction,
@@ -397,7 +398,7 @@ export default function LiveTransaction() {
             origin: "stk_push",
             transaction_type: "STK Push",
             amount: stkPushData.amount,
-            currency: state.companyData.currency || "KES",
+            currency: state.companyData.currency || getDetectedCurrency(),
             sender_info: stkPushData.phone_number,
             description: stkPushData.transaction_desc || "STK Push payment",
             status: "pending",

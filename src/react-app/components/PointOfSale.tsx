@@ -22,6 +22,7 @@ import { useAuth } from "@/react-app/context/AuthContext";
 import { useStations } from "@/react-app/context/StationContext";
 import { formatNumber } from "@/react-app/utils/formatUtils";
 import { CANONICAL_FUEL_TYPES } from "@/react-app/config/pricing";
+import { getCurrencySymbol } from "@/react-app/lib/currency";
 import QRCode from "qrcode";
 import { useLoyalty } from "@/react-app/lib/useLoyalty";
 import { LoyaltyCustomer, TIER_COLORS } from "@/react-app/lib/loyaltyProgram";
@@ -68,6 +69,7 @@ export default function PointOfSale() {
   const { user } = useAuth();
   const { currentStation } = useStations();
   const stationId = currentStation?.id;
+  const currencySymbol = getCurrencySymbol(state.companyData?.currency);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [paymentMethod, setPaymentMethod] = useState<
     "cash" | "mpesa" | "card" | "bank"
@@ -728,7 +730,7 @@ export default function PointOfSale() {
                       : "bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
                   }`}
                 >
-                  Petrol (Ksh {state.petrolPrice}/L)
+                  Petrol ({currencySymbol} {state.petrolPrice}/L)
                 </button>
                 <button
                   onClick={() => setQuickSaleType("diesel")}
@@ -738,7 +740,7 @@ export default function PointOfSale() {
                       : "bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
                   }`}
                 >
-                  Diesel (Ksh {state.dieselPrice}/L)
+                  Diesel ({currencySymbol} {state.dieselPrice}/L)
                 </button>
               </div>
               <div className="flex gap-2 items-center">
@@ -751,7 +753,7 @@ export default function PointOfSale() {
                   step="0.1"
                 />
                 <span className="text-gray-500">
-                  = Ksh{" "}
+                  = {currencySymbol}{" "}
                   {formatNumber(
                     (parseFloat(quickSaleLitres) || 0) *
                       (quickSaleType === "petrol"
@@ -781,7 +783,7 @@ export default function PointOfSale() {
                 type="number"
                 value={customItemPrice}
                 onChange={(e) => setCustomItemPrice(e.target.value)}
-                placeholder="Price (Ksh)"
+                placeholder={`Price (${currencySymbol})`}
                 className="w-32 px-3 py-2 rounded-lg border dark:bg-gray-800 dark:border-gray-600"
               />
               <button onClick={addCustomItem} className="btn btn-outline">
@@ -849,7 +851,7 @@ export default function PointOfSale() {
                         </div>
                       )}
                       <span className="font-semibold w-24 text-right">
-                        Ksh {formatNumber(item.total)}
+                        {currencySymbol} {formatNumber(item.total)}
                       </span>
                       <button
                         onClick={() => removeItem(item.id)}
@@ -976,27 +978,27 @@ export default function PointOfSale() {
             <div className="space-y-1 mb-4 text-sm">
               <div className="flex justify-between text-gray-600 dark:text-gray-400">
                 <span>Taxable (A-16%):</span>
-                <span>Ksh {formatNumber(taxableA)}</span>
+                <span>{currencySymbol} {formatNumber(taxableA)}</span>
               </div>
               <div className="flex justify-between text-gray-600 dark:text-gray-400">
                 <span>VAT (16%):</span>
-                <span>Ksh {formatNumber(vatA)}</span>
+                <span>{currencySymbol} {formatNumber(vatA)}</span>
               </div>
               {taxableB > 0 && (
                 <div className="flex justify-between text-gray-600 dark:text-gray-400">
                   <span>Zero-rated (B-0%):</span>
-                  <span>Ksh {formatNumber(taxableB)}</span>
+                  <span>{currencySymbol} {formatNumber(taxableB)}</span>
                 </div>
               )}
               {exemptE > 0 && (
                 <div className="flex justify-between text-gray-600 dark:text-gray-400">
                   <span>Exempt (E):</span>
-                  <span>Ksh {formatNumber(exemptE)}</span>
+                  <span>{currencySymbol} {formatNumber(exemptE)}</span>
                 </div>
               )}
               <div className="flex justify-between text-xl font-bold border-t pt-2">
                 <span>Total:</span>
-                <span>Ksh {formatNumber(total)}</span>
+                <span>{currencySymbol} {formatNumber(total)}</span>
               </div>
             </div>
 
@@ -1117,7 +1119,7 @@ export default function PointOfSale() {
                         {txn.invoiceNumber}
                       </span>
                       <span className="font-semibold">
-                        Ksh {formatNumber(txn.total)}
+                        {currencySymbol} {formatNumber(txn.total)}
                       </span>
                     </div>
                     <div className="flex justify-between text-xs text-gray-500">
@@ -1425,12 +1427,12 @@ export default function PointOfSale() {
                   <div key={idx}>
                     <div className="flex justify-between text-xs">
                       <span className="font-medium">{item.name}</span>
-                      <span>Ksh {formatNumber(item.total)}</span>
+                      <span>{currencySymbol} {formatNumber(item.total)}</span>
                     </div>
                     <div className="text-[10px] text-gray-600 ml-2">
                       {item.litres
                         ? `${item.litres} L`
-                        : `${item.quantity} x Ksh ${formatNumber(item.unitPrice)}`}
+                        : `${item.quantity} x ${currencySymbol} ${formatNumber(item.unitPrice)}`}
                       {" | VAT-"}
                       {item.vatCategory}
                       {item.hsCode && ` | HS:${item.hsCode}`}
@@ -1478,7 +1480,7 @@ export default function PointOfSale() {
                 <div className="flex justify-between">
                   <span>Subtotal (Excl. VAT):</span>
                   <span>
-                    Ksh{" "}
+                    {currencySymbol}{" "}
                     {formatNumber(
                       currentTransaction.subtotal - currentTransaction.totalVat,
                     )}
@@ -1486,13 +1488,13 @@ export default function PointOfSale() {
                 </div>
                 <div className="flex justify-between">
                   <span>Total VAT:</span>
-                  <span>Ksh {formatNumber(currentTransaction.totalVat)}</span>
+                  <span>{currencySymbol} {formatNumber(currentTransaction.totalVat)}</span>
                 </div>
               </div>
 
               <div className="flex justify-between text-lg font-bold border-t-2 border-b-2 border-black py-2 my-3">
                 <span>TOTAL:</span>
-                <span>Ksh {formatNumber(currentTransaction.total)}</span>
+                <span>{currencySymbol} {formatNumber(currentTransaction.total)}</span>
               </div>
 
               {/* ETR/KRA Section */}

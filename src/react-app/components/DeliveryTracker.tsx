@@ -19,9 +19,11 @@ import {
   exportDeliveryTXT,
 } from "@/react-app/utils/exportUtils";
 import { formatNumber } from "@/react-app/utils/formatUtils";
+import { getCurrencySymbol } from "@/react-app/lib/currency";
 
 export default function DeliveryTracker() {
   const { state, dispatch } = useFuel();
+  const currencySymbol = getCurrencySymbol(state.companyData?.currency);
   const [managerSignature, setManagerSignature] = useState("");
   const [directorSignature, setDirectorSignature] = useState("");
 
@@ -75,7 +77,7 @@ export default function DeliveryTracker() {
 
   const addPaymentRow = () => {
     const amount = parseFloat(
-      prompt("Enter payment amount (Ksh):", "0") || "0",
+      prompt(`Enter payment amount (${currencySymbol}):`, "0") || "0",
     );
     const name = prompt("Payment from:", "") || "";
 
@@ -120,7 +122,7 @@ export default function DeliveryTracker() {
 
   const addCarriedOverDebt = () => {
     const amount = parseFloat(
-      prompt("Carried Over Debt Amount (Ksh):", "0") || "0",
+      prompt(`Carried Over Debt Amount (${currencySymbol}):`, "0") || "0",
     );
 
     const newRow: any = {};
@@ -412,15 +414,15 @@ export default function DeliveryTracker() {
       .map((r) =>
         state.deliveryData.columns
           .map((col) => {
-            if (col.key === "amount") return `Ksh${formatNumber(r.amount)}`;
-            if (col.key === "debt") return `Ksh${formatNumber(r.debt)}`;
+            if (col.key === "amount") return `${currencySymbol}${formatNumber(r.amount)}`;
+            if (col.key === "debt") return `${currencySymbol}${formatNumber(r.debt)}`;
             return r[col.key] || "";
           })
           .join(" | "),
       )
       .join("\n");
 
-    return `FUEL DELIVERED TO: ${state.deliveredTo || "Client"}\nTOTAL ORDER: ${state.totalOrder || "N/A"} Litres\nYEAR: ${state.deliveryYear}\nPetrol Price: Ksh ${state.petrolPrice} /L\nDiesel Price: Ksh ${state.dieselPrice} /L\n\n${headers.join(" | ")}\n${rows}\n\nTotal Supplied: ${formatNumber(state.deliveryData.totals.totalSupplied)} L\nTotal Payments: Ksh ${formatNumber(state.deliveryData.totals.totalPayments)}\nBalance Due: Ksh ${formatNumber(state.deliveryData.totals.balanceDue, 2)}`;
+    return `FUEL DELIVERED TO: ${state.deliveredTo || "Client"}\nTOTAL ORDER: ${state.totalOrder || "N/A"} Litres\nYEAR: ${state.deliveryYear}\nPetrol Price: ${currencySymbol} ${state.petrolPrice} /L\nDiesel Price: ${currencySymbol} ${state.dieselPrice} /L\n\n${headers.join(" | ")}\n${rows}\n\nTotal Supplied: ${formatNumber(state.deliveryData.totals.totalSupplied)} L\nTotal Payments: ${currencySymbol} ${formatNumber(state.deliveryData.totals.totalPayments)}\nBalance Due: ${currencySymbol} ${formatNumber(state.deliveryData.totals.balanceDue, 2)}`;
   };
 
   useEffect(() => {
@@ -483,7 +485,7 @@ export default function DeliveryTracker() {
             />
           </div>
           <div className="form-group">
-            <label>Petrol Price (Ksh/L)</label>
+            <label>Petrol Price ({currencySymbol}/L)</label>
             <input
               type="number"
               value={state.petrolPrice ?? ""}
@@ -497,7 +499,7 @@ export default function DeliveryTracker() {
             />
           </div>
           <div className="form-group">
-            <label>Diesel Price (Ksh/L)</label>
+            <label>Diesel Price ({currencySymbol}/L)</label>
             <input
               type="number"
               value={state.dieselPrice ?? ""}
@@ -695,11 +697,11 @@ export default function DeliveryTracker() {
             {formatNumber(state.deliveryData.totals.totalSupplied)} L
           </div>
           <div>
-            <strong>Total Payments:</strong> Ksh{" "}
+            <strong>Total Payments:</strong> {currencySymbol}{" "}
             {formatNumber(state.deliveryData.totals.totalPayments)}
           </div>
           <div>
-            <strong>Balance Due:</strong> Ksh{" "}
+            <strong>Balance Due:</strong> {currencySymbol}{" "}
             {formatNumber(state.deliveryData.totals.balanceDue, 2)}
           </div>
         </div>
