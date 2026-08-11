@@ -78,7 +78,12 @@ export default function Invoice() {
   };
 
   const updateInvoiceItem = (index: number, field: string, value: any) => {
-    const updatedItems = [...state.invoiceItems];
+    // Clone the item object (not just the array) so we never mutate the
+    // shared state object in place — a shared reference can be clobbered
+    // by a concurrent LOAD_FROM_STORAGE/real-time echo and lose the edit.
+    const updatedItems = state.invoiceItems.map((it, i) =>
+      i === index ? { ...it } : it,
+    );
     const item = updatedItems[index];
 
     if (field === "qty" || field === "price") {

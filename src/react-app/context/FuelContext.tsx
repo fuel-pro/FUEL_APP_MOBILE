@@ -887,6 +887,18 @@ function mergeCompanyData(
   return merged;
 }
 
+/**
+ * Count how many invoice line items carry REAL content (non-empty
+ * description OR non-zero price). Used by LOAD_FROM_STORAGE to decide
+ * whether an incoming items blob should overwrite the current in-progress
+ * draft: a stale all-empty-items blob (default rows) must not clobber a
+ * draft the user is actively editing.
+ */
+function itemsHaveContent(items?: InvoiceItem[] | null): number {
+  if (!items || !Array.isArray(items)) return 0;
+  return items.filter((it) => (it.desc && it.desc.trim() !== "") || it.price > 0).length;
+}
+
 function fuelReducer(state: FuelState, action: FuelAction): FuelState {
 
   switch (action.type) {
@@ -968,10 +980,22 @@ function fuelReducer(state: FuelState, action: FuelAction): FuelState {
       // name:"" was shallow-merging over a populated name. mergeCompanyData
       // keeps the non-empty (existing OR incoming) value for each field.
       const incoming = action.payload;
+      // Protect the in-progress invoice draft (invoiceItems) from being
+      // clobbered by a stale all-empty-items blob on reload/real-time echo.
+      // The incoming items win ONLY when they carry more real content
+      // (non-empty desc OR non-zero price) than the current draft; otherwise
+      // keep the current draft so the user's edits survive a reload.
+      const incomingItems = incoming.invoiceItems;
+      const currentItems = state.invoiceItems;
+      const invoiceItems =
+        incomingItems && itemsHaveContent(incomingItems) >= itemsHaveContent(currentItems)
+          ? incomingItems
+          : currentItems;
       return {
         ...state,
         ...incoming,
         companyData: mergeCompanyData(state.companyData, incoming.companyData),
+        invoiceItems,
       };
     }
     // Station management
