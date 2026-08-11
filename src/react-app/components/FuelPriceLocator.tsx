@@ -8,6 +8,7 @@ import {
   getClosestKenyaCityPrice,
   KENYA_BASE_PRICES,
   REGIONAL_PRICES,
+  CANONICAL_FUEL_TYPES,
 } from "@/react-app/config/pricing";
 import {
   MapPin,
@@ -148,12 +149,19 @@ export default function FuelPriceLocator() {
     };
   }, [user]);
 
-  // Auto-detect location on first mount if not already available
+  // Auto-detect location on first mount if not already available.
+  // Guarded by a ref to prevent re-detect storms: preciseLocation is a new
+  // object every set, so depending on it caused the effect to re-fire
+  // repeatedly (the "location logo keeps appearing" + refresh-loop bug).
+  const hasDetectedRef = useRef(false);
   useEffect(() => {
+    if (hasDetectedRef.current) return;
     if (!preciseLocation && !preciseLocationLoading && user) {
+      hasDetectedRef.current = true;
       detectPreciseLocation().catch(() => {});
     }
-  }, [user, preciseLocation, preciseLocationLoading, detectPreciseLocation]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, preciseLocationLoading]);
 
   const saveToCloud = useCallback(
     (data: StationPriceInfo) => {
@@ -608,7 +616,9 @@ export default function FuelPriceLocator() {
                   <div className="flex gap-4 text-xs">
                     {stationPetrol && (
                       <div className="text-right">
-                        <span className="block text-slate-500">Petrol</span>
+                        <span className="block text-slate-500">
+                          {CANONICAL_FUEL_TYPES.petrol.label}
+                        </span>
                         <span className="font-medium text-emerald-400">
                           {unifiedPrices.currencySymbol || "KSh"}{" "}
                           {stationPetrol.toLocaleString()}
@@ -617,7 +627,9 @@ export default function FuelPriceLocator() {
                     )}
                     {stationDiesel && (
                       <div className="text-right">
-                        <span className="block text-slate-500">Diesel</span>
+                        <span className="block text-slate-500">
+                          {CANONICAL_FUEL_TYPES.diesel.label}
+                        </span>
                         <span className="font-medium text-amber-400">
                           {unifiedPrices.currencySymbol || "KSh"}{" "}
                           {stationDiesel.toLocaleString()}

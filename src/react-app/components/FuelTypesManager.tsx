@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import {
   KENYA_BASE_PRICES,
   KENYA_SPECIALTY_PRICES,
+  CANONICAL_FUEL_TYPES,
 } from "@/react-app/config/pricing";
 import {
   Fuel,
@@ -50,9 +51,9 @@ export interface CustomFuelType {
 const DEFAULT_FUEL_TYPES: CustomFuelType[] = [
   {
     id: "pms",
-    code: "PMS",
+    code: CANONICAL_FUEL_TYPES.petrol.code,
     name: "Premium Motor Spirit",
-    localName: "Petrol",
+    localName: CANONICAL_FUEL_TYPES.petrol.label,
     price: KENYA_BASE_PRICES.petrol,
     costPrice: 190.0,
     taxRate: 16,
@@ -65,9 +66,9 @@ const DEFAULT_FUEL_TYPES: CustomFuelType[] = [
   },
   {
     id: "ago",
-    code: "AGO",
+    code: CANONICAL_FUEL_TYPES.diesel.code,
     name: "Automotive Gas Oil",
-    localName: "Diesel",
+    localName: CANONICAL_FUEL_TYPES.diesel.label,
     price: KENYA_BASE_PRICES.diesel,
     costPrice: 189.5,
     taxRate: 16,
@@ -83,9 +84,9 @@ const DEFAULT_FUEL_TYPES: CustomFuelType[] = [
 const PRESET_FUELS: CustomFuelType[] = [
   {
     id: "iko",
-    code: "IK",
+    code: CANONICAL_FUEL_TYPES.kerosene.code,
     name: "Illuminating Kerosene",
-    localName: "Kerosene",
+    localName: CANONICAL_FUEL_TYPES.kerosene.label,
     price: 164.9,
     costPrice: 155.0,
     taxRate: 16,
@@ -98,9 +99,9 @@ const PRESET_FUELS: CustomFuelType[] = [
   },
   {
     id: "vpower",
-    code: "V-PWR",
+    code: CANONICAL_FUEL_TYPES.vpower.code,
     name: "Shell V-Power",
-    localName: "V-Power",
+    localName: CANONICAL_FUEL_TYPES.vpower.label,
     price: 214.35,
     costPrice: 200.0,
     taxRate: 16,
@@ -113,9 +114,9 @@ const PRESET_FUELS: CustomFuelType[] = [
   },
   {
     id: "diesel-premium",
-    code: "AGO-P",
+    code: CANONICAL_FUEL_TYPES.premium_diesel.code,
     name: "Premium Diesel",
-    localName: "Premium Diesel",
+    localName: CANONICAL_FUEL_TYPES.premium_diesel.label,
     price: 213.72,
     costPrice: 199.5,
     taxRate: 16,
@@ -128,9 +129,9 @@ const PRESET_FUELS: CustomFuelType[] = [
   },
   {
     id: "lpg",
-    code: "LPG",
+    code: CANONICAL_FUEL_TYPES.lpg.code,
     name: "Liquefied Petroleum Gas",
-    localName: "Cooking Gas",
+    localName: CANONICAL_FUEL_TYPES.lpg.label,
     price: 120.0,
     costPrice: 100.0,
     taxRate: 8,

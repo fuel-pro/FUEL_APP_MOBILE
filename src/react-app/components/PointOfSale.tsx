@@ -21,6 +21,7 @@ import { useLocation } from "@/react-app/context/LocationContext";
 import { useAuth } from "@/react-app/context/AuthContext";
 import { useStations } from "@/react-app/context/StationContext";
 import { formatNumber } from "@/react-app/utils/formatUtils";
+import { CANONICAL_FUEL_TYPES } from "@/react-app/config/pricing";
 import QRCode from "qrcode";
 import { useLoyalty } from "@/react-app/lib/useLoyalty";
 import { LoyaltyCustomer, TIER_COLORS } from "@/react-app/lib/loyaltyProgram";
@@ -268,7 +269,9 @@ export default function PointOfSale() {
       quickSaleType === "petrol" ? state.petrolPrice : state.dieselPrice;
     const total = litres * price;
     const fuelName =
-      quickSaleType === "petrol" ? "Super Petrol (PMS)" : "Diesel (AGO)";
+      quickSaleType === "petrol"
+        ? CANONICAL_FUEL_TYPES.petrol.label
+        : CANONICAL_FUEL_TYPES.diesel.label;
 
     const newItem: CartItem = {
       id: `fuel-${Date.now()}`,

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 import { useAuth } from "@/react-app/context/AuthContext";
+import { CANONICAL_FUEL_TYPES, isSameFuelType } from "@/react-app/config/pricing";
 import {
   Monitor,
   Plus,
@@ -53,11 +54,13 @@ const HISTORY_KEY = "fuelpro_price_history_v2";
 const CLOUD_KEY = "priceboard_data";
 const CLOUD_HISTORY_KEY = "price_history_data";
 
+// Fuel-type labels are the CANONICAL labels from pricing.ts so that
+// PriceBoard prices line up with Dashboard/POS/FuelTracker pricing.
 const FUEL_GRADES: Record<string, string[]> = {
-  Petrol: ["Regular", "Premium", "V-Power"],
-  Diesel: ["Regular", "Premium", "Bio-Diesel"],
-  Kerosene: ["Standard", "Premium"],
-  LPG: ["3kg", "6kg", "13kg", "25kg"],
+  [CANONICAL_FUEL_TYPES.petrol.label]: ["Regular", "Premium", "V-Power"],
+  [CANONICAL_FUEL_TYPES.diesel.label]: ["Regular", "Premium", "Bio-Diesel"],
+  [CANONICAL_FUEL_TYPES.kerosene.label]: ["Standard", "Premium"],
+  [CANONICAL_FUEL_TYPES.lpg.label]: ["3kg", "6kg", "13kg", "25kg"],
 };
 
 function loadPrices(): PriceEntry[] {
@@ -98,7 +101,7 @@ export default function PriceBoard() {
     type: "success" | "warning";
   } | null>(null);
   const [formData, setFormData] = useState<Partial<PriceEntry>>({
-    fuelType: "Petrol",
+    fuelType: CANONICAL_FUEL_TYPES.petrol.label,
     grade: "Regular",
     price: 0,
     currency: "KES",
@@ -128,10 +131,13 @@ export default function PriceBoard() {
       let needsUpdate = false;
       const newPrices = [...currentPrices];
 
-      // Map EPRA prices to our entries
+      // Map EPRA prices to our entries (alias-aware so legacy "Petrol" and
+      // canonical "Super Petrol" labels both match)
       if (fuelPrice.petrolPrice > 0) {
         const petrolEntry = newPrices.find(
-          (p) => p.fuelType === "Petrol" && p.isActive,
+          (p) =>
+            p.isActive &&
+            isSameFuelType(p.fuelType, CANONICAL_FUEL_TYPES.petrol.label),
         );
         if (petrolEntry && petrolEntry.price !== fuelPrice.petrolPrice) {
           // Log history before updating
@@ -157,7 +163,9 @@ export default function PriceBoard() {
 
       if (fuelPrice.dieselPrice > 0) {
         const dieselEntry = newPrices.find(
-          (p) => p.fuelType === "Diesel" && p.isActive,
+          (p) =>
+            p.isActive &&
+            isSameFuelType(p.fuelType, CANONICAL_FUEL_TYPES.diesel.label),
         );
         if (dieselEntry && dieselEntry.price !== fuelPrice.dieselPrice) {
           // Log history
@@ -183,7 +191,9 @@ export default function PriceBoard() {
 
       if (fuelPrice.kerosenePrice && fuelPrice.kerosenePrice > 0) {
         const keroseneEntry = newPrices.find(
-          (p) => p.fuelType === "Kerosene" && p.isActive,
+          (p) =>
+            p.isActive &&
+            isSameFuelType(p.fuelType, CANONICAL_FUEL_TYPES.kerosene.label),
         );
         if (keroseneEntry && keroseneEntry.price !== fuelPrice.kerosenePrice) {
           // Log history
@@ -401,7 +411,7 @@ export default function PriceBoard() {
               setShowForm(true);
               setEditingId(null);
               setFormData({
-                fuelType: "Petrol",
+                fuelType: CANONICAL_FUEL_TYPES.petrol.label,
                 grade: "Regular",
                 price: 0,
                 currency: "KES",

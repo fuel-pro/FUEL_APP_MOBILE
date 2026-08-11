@@ -4,6 +4,8 @@ import React, {
   useState,
   useCallback,
   useEffect,
+  useRef,
+  useMemo,
 } from "react";
 import {
   CountryProfile,
@@ -781,46 +783,77 @@ export function LocationProvider({
     }
   }, []);
 
-  // Auto-detect precise location on mount
+  // Auto-detect precise location on mount — once only.
+  // A ref guard prevents re-detection storms caused by provider re-mounts
+  // (e.g. when StationContext syncs and currentStation gets a new identity).
+  const hasAutoDetectedRef = useRef(false);
   useEffect(() => {
+    if (hasAutoDetectedRef.current) return;
+    hasAutoDetectedRef.current = true;
     detectPreciseLocation();
   }, [detectPreciseLocation]);
 
+  // Memoize the context value so consumers don't re-render on every
+  // LocationProvider render (which previously cascaded into infinite
+  // re-render / max-update-depth crashes that triggered page reloads).
+  const value = useMemo(
+    () => ({
+      currentCountry,
+      currentLocation,
+      allCountries: COUNTRY_LIST,
+      getCountry,
+      getStationLocation,
+      getStationCountry,
+      fmtCurrency,
+      fmtPhone,
+      fmtDate,
+      fmtNumber,
+      getFuelTax,
+      setStationCountry,
+      setStationCity,
+      detectLocation,
+      preciseLocation,
+      preciseLocationLoading,
+      detectPreciseLocation,
+      getActiveMobileMoney,
+      getMobileMoneyById,
+      getActivePaymentMethods,
+      currencySymbol: currentCountry.currency.symbol,
+      currencyCode: currentCountry.currency.code,
+      language: currentCountry.defaultLanguage,
+      revenueAuthority: currentCountry.revenueAuthority,
+      payrollConfig: currentCountry.payroll,
+      communication: currentCountry.communication,
+      units: currentCountry.units,
+      complianceDocs: currentCountry.complianceDocuments,
+      fuelRegulations: currentCountry.fuelRegulations,
+      newsSources: currentCountry.newsSources,
+    }),
+    [
+      currentCountry,
+      currentLocation,
+      getCountry,
+      getStationLocation,
+      getStationCountry,
+      fmtCurrency,
+      fmtPhone,
+      fmtDate,
+      fmtNumber,
+      getFuelTax,
+      setStationCountry,
+      setStationCity,
+      detectLocation,
+      preciseLocation,
+      preciseLocationLoading,
+      detectPreciseLocation,
+      getActiveMobileMoney,
+      getMobileMoneyById,
+      getActivePaymentMethods,
+    ],
+  );
+
   return (
-    <LocationContext.Provider
-      value={{
-        currentCountry,
-        currentLocation,
-        allCountries: COUNTRY_LIST,
-        getCountry,
-        getStationLocation,
-        getStationCountry,
-        fmtCurrency,
-        fmtPhone,
-        fmtDate,
-        fmtNumber,
-        getFuelTax,
-        setStationCountry,
-        setStationCity,
-        detectLocation,
-        preciseLocation,
-        preciseLocationLoading,
-        detectPreciseLocation,
-        getActiveMobileMoney,
-        getMobileMoneyById,
-        getActivePaymentMethods,
-        currencySymbol: currentCountry.currency.symbol,
-        currencyCode: currentCountry.currency.code,
-        language: currentCountry.defaultLanguage,
-        revenueAuthority: currentCountry.revenueAuthority,
-        payrollConfig: currentCountry.payroll,
-        communication: currentCountry.communication,
-        units: currentCountry.units,
-        complianceDocs: currentCountry.complianceDocuments,
-        fuelRegulations: currentCountry.fuelRegulations,
-        newsSources: currentCountry.newsSources,
-      }}
-    >
+    <LocationContext.Provider value={value}>
       {children}
     </LocationContext.Provider>
   );

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Cloud,
   Sun,
@@ -103,22 +103,39 @@ export default function WeatherWidget() {
     [],
   );
 
-  // Use precise location when available
+  // Use precise location when available. Depend on primitive coordinate fields
+  // rather than the whole preciseLocation object (which is a new reference
+  // every set, causing the weather fetch + "Precise GPS" badge to churn).
+  const lastFetchedKeyRef = useRef("");
   useEffect(() => {
-    if (preciseLocation) {
-      fetchWeather(
-        preciseLocation.lat,
-        preciseLocation.lng,
-        preciseLocation.address,
-      );
+    const lat = preciseLocation?.lat;
+    const lng = preciseLocation?.lng;
+    const addr = preciseLocation?.address;
+    const stationLoc = currentStation?.location;
+
+    if (lat != null && lng != null) {
+      const key = `p:${lat.toFixed(2)},${lng.toFixed(2)}`;
+      if (key === lastFetchedKeyRef.current) return; // already fetched
+      lastFetchedKeyRef.current = key;
+      fetchWeather(lat, lng, addr);
     } else if (!preciseLocationLoading) {
-      // Fallback to station location or default
-      const fallback = currentStation?.location
-        ? { lat: -1.2921, lng: 36.8219, name: currentStation.location }
+      const fallback = stationLoc
+        ? { lat: -1.2921, lng: 36.8219, name: stationLoc }
         : { lat: -1.2921, lng: 36.8219, name: "Nairobi, Kenya" };
+      const key = `f:${fallback.lat},${fallback.lng}`;
+      if (key === lastFetchedKeyRef.current) return;
+      lastFetchedKeyRef.current = key;
       fetchWeather(fallback.lat, fallback.lng, fallback.name);
     }
-  }, [preciseLocation, preciseLocationLoading, currentStation, fetchWeather]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    preciseLocation?.lat,
+    preciseLocation?.lng,
+    preciseLocation?.address,
+    preciseLocationLoading,
+    currentStation?.location,
+    fetchWeather,
+  ]);
 
   const getIcon = () => {
     if (!weather) return <Sun size={32} className="text-amber-400" />;

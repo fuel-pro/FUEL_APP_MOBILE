@@ -368,36 +368,208 @@ export const PRICE_KEYS = {
 } as const;
 
 // ============================================
+// CANONICAL FUEL TYPE NORMALIZATION
+// Single source of truth for fuel-type aliases.
+// Every part of the app (Dashboard, POS, PriceBoard, FuelSalesReport,
+// FuelTracker, FuelPriceLocator, backend APIs) MUST normalize raw fuel
+// names through normalizeFuelType() before comparing/storing them, so
+// "Super Petrol", "Petrol", "PMS", "Premium Motor Spirit", and
+// "Gasoline" are all treated as the SAME fuel.
+// ============================================
+
+export type CanonicalFuelType =
+  | "petrol"
+  | "diesel"
+  | "kerosene"
+  | "vpower"
+  | "premium_diesel"
+  | "lpg"
+  | "cng";
+
+export interface FuelTypeAlias {
+  canonical: CanonicalFuelType;
+  /** Display label shown to users (uniform across the whole app). */
+  label: string;
+  /** Short code used in pricing tables / legacy refs. */
+  code: string;
+}
+
+/**
+ * Canonical fuel registry. The label is the ONLY display string that
+ * should appear in the UI; the code matches EPRA/industry shorthand.
+ */
+export const CANONICAL_FUEL_TYPES: Record<CanonicalFuelType, FuelTypeAlias> = {
+  petrol: { canonical: "petrol", label: "Super Petrol", code: "PMS" },
+  diesel: { canonical: "diesel", label: "Diesel", code: "AGO" },
+  kerosene: { canonical: "kerosene", label: "Kerosene", code: "IK" },
+  vpower: { canonical: "vpower", label: "V-Power", code: "VPW" },
+  premium_diesel: {
+    canonical: "premium_diesel",
+    label: "Premium Diesel",
+    code: "PDS",
+  },
+  lpg: { canonical: "lpg", label: "LPG", code: "LPG" },
+  cng: { canonical: "cng", label: "CNG", code: "CNG" },
+};
+
+/**
+ * Alias map — every known spelling/abbreviation maps to a canonical type.
+ * Keys are upper-cased before lookup, so matching is case-insensitive.
+ * Add new aliases here as they are discovered; nothing else needs to change.
+ */
+const FUEL_ALIAS_MAP: Record<string, CanonicalFuelType> = {
+  // Petrol
+  PETROL: "petrol",
+  SUPER: "petrol",
+  "SUPER PETROL": "petrol",
+  "SUPER UNLEADED": "petrol",
+  UNLEADED: "petrol",
+  "UNLEADED PETROL": "petrol",
+  "UNLEADED GASOLINE": "petrol",
+  GASOLINE: "petrol",
+  PETROLI: "petrol", // localized (IT/PT)
+  PMS: "petrol",
+  "PMS (PETROL)": "petrol",
+  "PREMIUM MOTOR SPIRIT": "petrol",
+  REGULAR: "petrol",
+  "REGULAR PETROL": "petrol",
+  "REGULAR GASOLINE": "petrol",
+  SUPER_PETROL: "petrol",
+  // Diesel
+  DIESEL: "diesel",
+  "GAS OIL": "diesel",
+  "AUTOMOTIVE GAS OIL": "diesel",
+  AGO: "diesel",
+  "AGO (DIESEL)": "diesel",
+  DERV: "diesel", // UK term
+  GASOIL: "diesel", // localized (FR)
+  AUTOMOTIVE_DIESEL: "diesel",
+  PREMIUMDIESEL: "premium_diesel", // edge: no space
+  // Kerosene
+  KEROSENE: "kerosene",
+  "ILLUMINATING KEROSENE": "kerosene",
+  IK: "kerosene",
+  "IK (KEROSENE)": "kerosene",
+  "DUAL PURPOSE KEROSENE": "kerosene",
+  DPK: "kerosene", // Nigeria uses DPK for the same product
+  KERO: "kerosene",
+  LAMPKEROSENE: "kerosene",
+  "LAMP KEROSENE": "kerosene",
+  // V-Power / Premium Petrol
+  VPOWER: "vpower",
+  "V-POWER": "vpower",
+  "V POWER": "vpower",
+  "V-POWER PREMIUM PETROL": "vpower",
+  "V-POWER PREMIUM": "vpower",
+  "PREMIUM PETROL": "vpower", // commonly V-Power
+  "PREMIUM GASOLINE": "vpower",
+  // Premium Diesel
+  "PREMIUM DIESEL": "premium_diesel",
+  PREMIUM_DIESEL: "premium_diesel",
+  // LPG
+  LPG: "lpg",
+  "LIQUEFIED PETROLEUM GAS": "lpg",
+  "COOKING GAS": "lpg",
+  GAS: "lpg",
+  // CNG
+  CNG: "cng",
+  "COMPRESSED NATURAL GAS": "cng",
+};
+
+/**
+ * Normalize any raw fuel-type string to its canonical type.
+ * Returns the canonical key (e.g. "petrol") or null if unknown.
+ */
+export function normalizeFuelType(raw: string): CanonicalFuelType | null {
+  if (!raw) return null;
+  const key = String(raw).trim().toUpperCase();
+  return FUEL_ALIAS_MAP[key] ?? null;
+}
+
+/**
+ * Get the canonical display label for any fuel-type string.
+ * Falls back to the trimmed original string if no alias is known.
+ */
+export function getFuelLabel(raw: string): string {
+  const canonical = normalizeFuelType(raw);
+  if (canonical) return CANONICAL_FUEL_TYPES[canonical].label;
+  return String(raw).trim();
+}
+
+/**
+ * Get the canonical short code for any fuel-type string.
+ * Falls back to "" if unknown.
+ */
+export function getFuelCode(raw: string): string {
+  const canonical = normalizeFuelType(raw);
+  if (canonical) return CANONICAL_FUEL_TYPES[canonical].code;
+  return "";
+}
+
+/**
+ * Check whether two raw fuel-type strings refer to the SAME fuel.
+ */
+export function isSameFuelType(a: string, b: string): boolean {
+  const ca = normalizeFuelType(a);
+  const cb = normalizeFuelType(b);
+  if (ca && cb) return ca === cb;
+  // Fall back to case-insensitive string compare for unknown types
+  return String(a).trim().toLowerCase() === String(b).trim().toLowerCase();
+}
+
+// ============================================
 // HELPER FUNCTIONS
 // ============================================
 
 /**
- * Get the base price for a fuel type
+ * Get the base price for a fuel type. Normalizes through the canonical
+ * alias map so any known spelling (PMS, Super Petrol, Gasoline, AGO, DPK,
+ * etc.) resolves to the correct price.
  */
 export function getBasePrice(fuelType: string): number {
-  const type =
-    FUEL_TYPES[fuelType as keyof typeof FUEL_TYPES] || fuelType.toLowerCase();
-
-  switch (type) {
+  const canonical = normalizeFuelType(fuelType);
+  switch (canonical) {
     case "petrol":
-    case "pms":
       return KENYA_BASE_PRICES.petrol;
     case "diesel":
-    case "ago":
       return KENYA_BASE_PRICES.diesel;
     case "kerosene":
-    case "ik":
       return KENYA_BASE_PRICES.kerosene;
     case "vpower":
       return KENYA_SPECIALTY_PRICES.vPower;
-    case "premiumdiesel":
+    case "premium_diesel":
       return KENYA_SPECIALTY_PRICES.premiumDiesel;
     case "lpg":
       return KENYA_SPECIALTY_PRICES.lpg;
     case "cng":
       return KENYA_SPECIALTY_PRICES.cng;
-    default:
-      return KENYA_BASE_PRICES.petrol;
+    default: {
+      // Fall back to legacy lookup for backward compatibility
+      const type =
+        FUEL_TYPES[fuelType as keyof typeof FUEL_TYPES] ||
+        fuelType.toLowerCase();
+      switch (type) {
+        case "petrol":
+        case "pms":
+          return KENYA_BASE_PRICES.petrol;
+        case "diesel":
+        case "ago":
+          return KENYA_BASE_PRICES.diesel;
+        case "kerosene":
+        case "ik":
+          return KENYA_BASE_PRICES.kerosene;
+        case "vpower":
+          return KENYA_SPECIALTY_PRICES.vPower;
+        case "premiumdiesel":
+          return KENYA_SPECIALTY_PRICES.premiumDiesel;
+        case "lpg":
+          return KENYA_SPECIALTY_PRICES.lpg;
+        case "cng":
+          return KENYA_SPECIALTY_PRICES.cng;
+        default:
+          return KENYA_BASE_PRICES.petrol;
+      }
+    }
   }
 }
 
@@ -418,17 +590,14 @@ export function getCountryPrice(
 
   const regional = REGIONAL_PRICES[countryCode];
   if (regional) {
-    const type =
-      FUEL_TYPES[fuelType as keyof typeof FUEL_TYPES] || fuelType.toLowerCase();
+    const canonical = normalizeFuelType(fuelType);
     let price = regional.petrol;
 
-    switch (type) {
+    switch (canonical) {
       case "diesel":
-      case "ago":
         price = regional.diesel;
         break;
       case "kerosene":
-      case "ik":
         price = regional.kerosene;
         break;
     }
@@ -497,17 +666,41 @@ export function getKenyaFuelTypes(): Array<{
   price: number;
 }> {
   return [
-    { id: "pms", name: "PMS (Petrol)", price: KENYA_BASE_PRICES.petrol },
-    { id: "ago", name: "AGO (Diesel)", price: KENYA_BASE_PRICES.diesel },
-    { id: "ik", name: "IK (Kerosene)", price: KENYA_BASE_PRICES.kerosene },
-    { id: "vpower", name: "V-Power", price: KENYA_SPECIALTY_PRICES.vPower },
     {
-      id: "premiumDiesel",
-      name: "Premium Diesel",
+      id: "petrol",
+      name: CANONICAL_FUEL_TYPES.petrol.label,
+      price: KENYA_BASE_PRICES.petrol,
+    },
+    {
+      id: "diesel",
+      name: CANONICAL_FUEL_TYPES.diesel.label,
+      price: KENYA_BASE_PRICES.diesel,
+    },
+    {
+      id: "kerosene",
+      name: CANONICAL_FUEL_TYPES.kerosene.label,
+      price: KENYA_BASE_PRICES.kerosene,
+    },
+    {
+      id: "vpower",
+      name: CANONICAL_FUEL_TYPES.vpower.label,
+      price: KENYA_SPECIALTY_PRICES.vPower,
+    },
+    {
+      id: "premium_diesel",
+      name: CANONICAL_FUEL_TYPES.premium_diesel.label,
       price: KENYA_SPECIALTY_PRICES.premiumDiesel,
     },
-    { id: "lpg", name: "LPG", price: KENYA_SPECIALTY_PRICES.lpg },
-    { id: "cng", name: "CNG", price: KENYA_SPECIALTY_PRICES.cng },
+    {
+      id: "lpg",
+      name: CANONICAL_FUEL_TYPES.lpg.label,
+      price: KENYA_SPECIALTY_PRICES.lpg,
+    },
+    {
+      id: "cng",
+      name: CANONICAL_FUEL_TYPES.cng.label,
+      price: KENYA_SPECIALTY_PRICES.cng,
+    },
   ];
 }
 

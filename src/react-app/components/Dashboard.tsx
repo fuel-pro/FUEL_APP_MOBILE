@@ -30,6 +30,7 @@ import {
   Info,
 } from "lucide-react";
 import { formatNumber } from "@/react-app/utils/formatUtils";
+import { CANONICAL_FUEL_TYPES } from "@/react-app/config/pricing";
 import { useState, useEffect, useMemo, useCallback } from "react";
 
 // Lazy API base URL getter using dynamic import to avoid circular deps
@@ -348,7 +349,7 @@ export default function Dashboard() {
       labels: days,
       datasets: [
         {
-          label: "Petrol (PMS)",
+          label: CANONICAL_FUEL_TYPES.petrol.label,
           data: pmsData,
           borderColor: "rgb(34, 197, 94)",
           backgroundColor: "rgba(34, 197, 94, 0.1)",
@@ -358,7 +359,7 @@ export default function Dashboard() {
           pointHoverRadius: 6,
         },
         {
-          label: "Diesel (AGO)",
+          label: CANONICAL_FUEL_TYPES.diesel.label,
           data: agoData,
           borderColor: "rgb(234, 179, 8)",
           backgroundColor: "rgba(234, 179, 8, 0.1)",
@@ -391,7 +392,7 @@ export default function Dashboard() {
       ago = 1;
     } // default for empty state
     return {
-      labels: ["Petrol (PMS)", "Diesel (AGO)"],
+      labels: [CANONICAL_FUEL_TYPES.petrol.label, CANONICAL_FUEL_TYPES.diesel.label],
       datasets: [
         {
           data: [pms, ago],
@@ -763,7 +764,7 @@ export default function Dashboard() {
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-white dark:bg-gray-800 rounded-lg p-3 text-center">
               <p className="text-[10px] text-gray-500 uppercase tracking-wide">
-                Super Petrol
+                {CANONICAL_FUEL_TYPES.petrol.label}
               </p>
               <p className="text-xl font-bold text-green-700 dark:text-green-400">
                 {currencySymbol} {displayPmsPrice.toFixed(2)}
@@ -980,7 +981,7 @@ export default function Dashboard() {
               className={`rounded-lg p-2 ${fuelPrice ? "bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800" : "bg-gray-50 dark:bg-gray-700/30"}`}
             >
               <p className="text-xs text-gray-500 dark:text-gray-400">
-                PMS Price
+                {CANONICAL_FUEL_TYPES.petrol.label} Price
               </p>
               <p className="font-semibold text-green-700 dark:text-green-300">
                 {currencySymbol} {displayPmsPrice}/L
@@ -995,7 +996,7 @@ export default function Dashboard() {
               className={`rounded-lg p-2 ${fuelPrice ? "bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800" : "bg-gray-50 dark:bg-gray-700/30"}`}
             >
               <p className="text-xs text-gray-500 dark:text-gray-400">
-                AGO Price
+                {CANONICAL_FUEL_TYPES.diesel.label} Price
               </p>
               <p className="font-semibold text-amber-700 dark:text-amber-300">
                 {currencySymbol} {displayAgoPrice}/L
@@ -1056,7 +1057,7 @@ export default function Dashboard() {
           <div>
             <div className="flex justify-between items-center mb-2">
               <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                Petrol (PMS) Tank
+                {CANONICAL_FUEL_TYPES.petrol.label} Tank
               </span>
               <span className="text-xs text-gray-500 dark:text-gray-400">
                 {formatNumber(state.pmsTankClosing - state.pmsTankOpening, 0)} L
@@ -1081,7 +1082,7 @@ export default function Dashboard() {
           <div>
             <div className="flex justify-between items-center mb-2">
               <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                Diesel (AGO) Tank
+                {CANONICAL_FUEL_TYPES.diesel.label} Tank
               </span>
               <span className="text-xs text-gray-500 dark:text-gray-400">
                 {formatNumber(state.agoTankClosing - state.agoTankOpening, 0)} L

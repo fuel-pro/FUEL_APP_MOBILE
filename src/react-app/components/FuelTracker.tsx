@@ -14,6 +14,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { MapPin, RefreshCw, Navigation, AlertTriangle } from "lucide-react";
 import { useFuelPrices } from "@/react-app/hooks/useFuelPrices";
+import { CANONICAL_FUEL_TYPES } from "@/react-app/config/pricing";
 
 interface LocalFuelResponse {
   success: boolean;
@@ -208,19 +209,19 @@ function ReadyView({ data }: { data: LocalFuelResponse }) {
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <PriceCard
-          label="Super Petrol"
+          label={CANONICAL_FUEL_TYPES.petrol.label}
           value={prices.super_petrol}
           currency={currency}
           color="from-green-500 to-emerald-600"
         />
         <PriceCard
-          label="Diesel"
+          label={CANONICAL_FUEL_TYPES.diesel.label}
           value={prices.diesel}
           currency={currency}
           color="from-blue-500 to-indigo-600"
         />
         <PriceCard
-          label="Kerosene"
+          label={CANONICAL_FUEL_TYPES.kerosene.label}
           value={prices.kerosene}
           currency={currency}
           color="from-amber-500 to-orange-600"
