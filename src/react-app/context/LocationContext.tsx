@@ -550,15 +550,43 @@ export function LocationProvider({
       if (stationCountry && sid === stationId) {
         return getCountryById(stationCountry) || getUniversalFallback();
       }
+      // Derive the country from the station's own data (location, currency)
+      // BEFORE consulting the browser-local stationCountries cache. The
+      // station's data is authoritative — the cache frequently defaults to
+      // "US" (the CDN edge country) and would override the real country.
+      if (sid === stationId) {
+        if (stationLocation) {
+          const derived = getCountryFromLocation(stationLocation)?.code;
+          if (derived) {
+            return getCountryById(derived) || getUniversalFallback();
+          }
+        }
+        if (stationCurrency) {
+          const cc = getCountryByCurrency(stationCurrency);
+          if (cc) {
+            return getCountryById(cc) || getUniversalFallback();
+          }
+        }
+        // Station has no country/location/currency data. Fall through to
+        // currentCountry (which checks getDetectedCurrency → timezone →
+        // localStorage cache) INSTEAD of the stale stationCountries cache.
+        // The latter frequently defaults to "US" (CDN edge country) and
+        // would mask the correct country derived from timezone/currency.
+        return currentCountry;
+      }
       const loc = stationCountries[sid];
       if (loc?.countryCode)
         return getCountryById(loc.countryCode) || getUniversalFallback();
-      // Fall back to currentCountry, which already derives the country from the
-      // active station's location string (preferred) before timezone/IP. This
-      // keeps the header selector in sync with the station's real country.
       return currentCountry;
     },
-    [stationCountry, stationId, stationCountries, currentCountry],
+    [
+      stationCountry,
+      stationId,
+      stationCountries,
+      currentCountry,
+      stationLocation,
+      stationCurrency,
+    ],
   );
 
   const fmtCurrency = useCallback(
