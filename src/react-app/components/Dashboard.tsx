@@ -28,9 +28,7 @@ import {
   Wallet,
   Globe,
   Zap,
-  TrendingUpIcon,
   FileText,
-  Info,
   Smartphone,
   Truck,
   Plug,
@@ -49,22 +47,12 @@ import {
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { on } from "@/react-app/lib/automation-engine";
 
-// Lazy API base URL getter using dynamic import to avoid circular deps
-let _apiBase: string | null = null;
-let _apiPromise: Promise<string> | null = null;
+// API base URL getter. Uses the VITE_BACKEND_URL env var (empty string when
+// unset, which makes the fetch a same-origin relative path — correct on
+// Vercel where /api/* is served by the same origin, and a harmless 404 on
+// static-only hosts where the result is ignored).
 function getApiBase(): string {
-  if (_apiBase) return _apiBase;
-  // Use environment variable or empty string (Firebase-only mode)
   return import.meta.env.VITE_BACKEND_URL || "";
-}
-// Async version for callers that can await
-async function getApiBaseAsync(): Promise<string> {
-  if (_apiBase) return _apiBase;
-  if (!_apiPromise) {
-    _apiPromise = import("@/utils/apiConfig").then((m) => m.getBackendUrl());
-  }
-  _apiBase = await _apiPromise;
-  return _apiBase || "";
 }
 
 // Import chart.js components
@@ -96,6 +84,25 @@ ChartJS.register(
   Filler,
 );
 
+/**
+ * Tank fill percentage for the Dashboard tank-level bar.
+ *
+ * Uses the period's opening reading as the true capacity denominator (the
+ * opening reading is the tank's known-full level at the start of the period),
+ * so the bar shows real fill rather than the old `closing/(closing+5000)`
+ * magic-number heuristic that was wrong for every station whose tank wasn't
+ * ~5000 L. When no opening reading exists, falls back to the closing reading
+ * alone (treats it as full) so the bar is never 0% for a tank that clearly
+ * has fuel.
+ */
+function tankFillPercent(opening: number, closing: number): number {
+  const o = Math.max(0, Number(opening) || 0);
+  const c = Math.max(0, Number(closing) || 0);
+  if (c <= 0) return 0;
+  const denom = o > 0 ? o : c;
+  return Math.min(100, Math.max(0, (c / denom) * 100));
+}
+
 export default function Dashboard() {
   const { state } = useFuel();
   const location = useLocation();
@@ -108,13 +115,13 @@ export default function Dashboard() {
   const {
     fuelPrice,
     taxRates,
-    exchangeRates,
+    exchangeRates: _exchangeRates,
     isSyncing,
-    lastSync,
+    lastSync: _lastSync,
     syncNow,
     locationPrice,
     currentLocation,
-    refreshLocation,
+    refreshLocation: _refreshLocation,
     refreshPrices,
   } = useAutoSync(stationCountry);
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -139,7 +146,8 @@ export default function Dashboard() {
     getCountryById(stationCountry.toUpperCase()) || location.currentCountry;
 
   // Use precise location-based fuel prices (auto-synced with GPS)
-  const stationCity = currentStation?.location || stationCountryProfile?.capital || "—";
+  const stationCity =
+    currentStation?.location || stationCountryProfile?.capital || "—";
   // The useAutoSync hook's `fuelPrice` state can lag the synced cache during a
   // country switch (the station loads from cloud AFTER the hook's initial KE
   // sync). Read the persisted synced price for the STATION's country directly
@@ -147,17 +155,21 @@ export default function Dashboard() {
   // (state.pmsPrice = 214.03) until the hook catches up.
   const effectiveFuelPrice = fuelPrice ?? getSyncedFuelPrice(stationCountry);
   const regionalPrice = getPriceForCity(effectiveFuelPrice, stationCity);
-  // Prefer location-based price from GPS, then fall back to regional, then national, then default
+  // Prefer location-based price from GPS, then fall back to regional, then national, then default.
+  // Every branch resolves to a finite number so .toFixed(2) and string
+  // interpolation can never throw "Cannot read properties of null/undefined".
   const displayPmsPrice =
     locationPrice?.petrolPrice ??
     (regionalPrice.isRegional ? regionalPrice.petrol : null) ??
     effectiveFuelPrice?.petrolPrice ??
-    state.pmsPrice;
+    state.pmsPrice ??
+    0;
   const displayAgoPrice =
     locationPrice?.dieselPrice ??
     (regionalPrice.isRegional ? regionalPrice.diesel : null) ??
     effectiveFuelPrice?.dieselPrice ??
-    state.agoPrice;
+    state.agoPrice ??
+    0;
   const displayKerosenePrice =
     locationPrice?.kerosenePrice ?? effectiveFuelPrice?.kerosenePrice ?? 0;
   // Show the detected city for location-based pricing
@@ -177,6 +189,22 @@ export default function Dashboard() {
     fuelSold: 0,
     debt: 0,
   });
+  // Locale for date/number formatting — derived from the STATION's country
+  // (never a hardcoded "en-KE"), so a German station formats dates in de-DE.
+  // Falls back to the browser locale if the station country is unknown.
+  const stationLocale = useMemo(() => {
+    const langs = stationCountryProfile?.languages;
+    const cc = stationCountryProfile?.id || stationCountry;
+    if (langs && langs.length > 0 && cc) {
+      try {
+        const loc = new Intl.Locale(`${langs[0]}-${cc.toUpperCase()}`);
+        return loc.toString();
+      } catch {
+        /* fall through */
+      }
+    }
+    return undefined; // browser default
+  }, [stationCountryProfile, stationCountry]);
 
   // Fetch dashboard stats from backend
   const fetchBackendStats = useCallback(async () => {
@@ -250,62 +278,10 @@ export default function Dashboard() {
     return () => clearInterval(timer);
   }, []);
 
-  // Animate KPI values on mount - use backend data if available, then local
-  useEffect(() => {
-    // Prefer backend stats over local calculation
-    let targets = {
-      revenue: 0,
-      profit: 0,
-      fuelSold: 0,
-      debt: 0,
-    };
-
-    if (hasBackendData && backendStats) {
-      targets = {
-        revenue: backendStats.totalRevenue,
-        profit: backendStats.netProfit,
-        fuelSold: backendStats.fuelSold,
-        debt: backendStats.balanceDue,
-      };
-    } else if (totalRevenue > 0 || totalFuelSold > 0) {
-      targets = {
-        revenue: totalRevenue,
-        profit: netProfit,
-        fuelSold: totalFuelSold,
-        debt: totalDebt,
-      };
-    } else {
-      // Production mode
-      targets = {
-        revenue: 0,
-        profit: 0,
-        fuelSold: 0,
-        debt: 0,
-      };
-    }
-
-    const duration = 1000;
-    const steps = 30;
-    const interval = duration / steps;
-    let step = 0;
-
-    const animTimer = setInterval(() => {
-      step++;
-      const progress = step / steps;
-      const eased = 1 - Math.pow(1 - progress, 3); // ease-out cubic
-      setAnimatedValues({
-        revenue: targets.revenue * eased,
-        profit: targets.profit * eased,
-        fuelSold: targets.fuelSold * eased,
-        debt: targets.debt * eased,
-      });
-      if (step >= steps) clearInterval(animTimer);
-    }, interval);
-
-    return () => clearInterval(animTimer);
-  }, [hasBackendData, backendStats]);
-
-  // Calculate totals from sales history
+  // Calculate totals from sales history (declared before the animation
+  // effect so the effect can depend on these values — otherwise the KPI
+  // cards never re-animate when sales data loads from cloud after mount,
+  // leaving them stuck at 0).
   const {
     totalRevenue,
     netProfit,
@@ -376,6 +352,68 @@ export default function Dashboard() {
       todaySales: tSales,
     };
   }, [state.salesHistory, state.deliveryData.totals]);
+
+  // Animate KPI values on mount - use backend data if available, then local
+  useEffect(() => {
+    // Prefer backend stats over local calculation
+    let targets = {
+      revenue: 0,
+      profit: 0,
+      fuelSold: 0,
+      debt: 0,
+    };
+
+    if (hasBackendData && backendStats) {
+      targets = {
+        revenue: backendStats.totalRevenue,
+        profit: backendStats.netProfit,
+        fuelSold: backendStats.fuelSold,
+        debt: backendStats.balanceDue,
+      };
+    } else if (totalRevenue > 0 || totalFuelSold > 0) {
+      targets = {
+        revenue: totalRevenue,
+        profit: netProfit,
+        fuelSold: totalFuelSold,
+        debt: totalDebt,
+      };
+    } else {
+      // Production mode
+      targets = {
+        revenue: 0,
+        profit: 0,
+        fuelSold: 0,
+        debt: 0,
+      };
+    }
+
+    const duration = 1000;
+    const steps = 30;
+    const intervalMs = duration / steps;
+    let step = 0;
+
+    const animTimer = setInterval(() => {
+      step++;
+      const progress = step / steps;
+      const eased = 1 - Math.pow(1 - progress, 3); // ease-out cubic
+      setAnimatedValues({
+        revenue: targets.revenue * eased,
+        profit: targets.profit * eased,
+        fuelSold: targets.fuelSold * eased,
+        debt: targets.debt * eased,
+      });
+      if (step >= steps) clearInterval(animTimer);
+    }, intervalMs);
+
+    return () => clearInterval(animTimer);
+  }, [
+    hasBackendData,
+    backendStats,
+    totalRevenue,
+    netProfit,
+    totalFuelSold,
+    totalDebt,
+  ]);
 
   // Chart data - Sales over last 7 days
   const salesChartData = useMemo(() => {
@@ -504,7 +542,7 @@ export default function Dashboard() {
         },
       ],
     };
-  }, [state.salesHistory]);
+  }, [state.salesHistory, currencySymbol]);
 
   const chartOptions = {
     responsive: true,
@@ -693,14 +731,16 @@ export default function Dashboard() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <SyncStatusIndicator
-            countryCode={stationCountry}
-            compact
-          />
+          <SyncStatusIndicator countryCode={stationCountry} compact />
+          {backendLoading && (
+            <span className="text-xs text-blue-500 animate-pulse hidden sm:inline">
+              syncing stats…
+            </span>
+          )}
           <div className="flex items-center gap-3 bg-white dark:bg-gray-800 rounded-xl px-4 py-2.5 shadow-sm border border-gray-200 dark:border-gray-700">
             <Clock size={18} className="text-blue-500" />
             <span className="text-sm font-mono text-gray-700 dark:text-gray-300">
-              {currentTime.toLocaleString("en-KE", {
+              {currentTime.toLocaleString(stationLocale, {
                 weekday: "short",
                 year: "numeric",
                 month: "short",
@@ -863,23 +903,24 @@ export default function Dashboard() {
           </div>
           {/* Location-based price indicator */}
           <div className="mb-2 flex items-center gap-2">
-            {currentLocation && (
-              <span className="text-[10px] text-blue-600 dark:text-blue-400">
-                📍 {currentLocation.latitude.toFixed(4)},{" "}
-                {currentLocation.longitude.toFixed(4)}
-              </span>
-            )}
+            {currentLocation?.latitude != null &&
+              currentLocation?.longitude != null && (
+                <span className="text-[10px] text-blue-600 dark:text-blue-400">
+                  📍 {currentLocation.latitude.toFixed(4)},{" "}
+                  {currentLocation.longitude.toFixed(4)}
+                </span>
+              )}
             <span
               className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${isLocationBased ? "bg-green-100 dark:bg-green-800 text-green-700 dark:text-green-300" : "bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400"}`}
             >
               {isLocationBased
-                ? `📍 GPS: ${priceCityName} (${locationPrice.transportSurcharge >= 0 ? "+" : ""}${locationPrice.transportSurcharge.toFixed(2)})`
+                ? `📍 GPS: ${priceCityName} (${(Number(locationPrice?.transportSurcharge) || 0) >= 0 ? "+" : ""}${(Number(locationPrice?.transportSurcharge) || 0).toFixed(2)})`
                 : regionalPrice.isRegional
                   ? `${stationCountryProfile.fuelRegulations.priceSettingBody} ${regionalPrice.cityName} Price`
                   : `${stationCity} - National Average`}
             </span>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             <div className="bg-white dark:bg-gray-800 rounded-lg p-3 text-center">
               <p className="text-[10px] text-gray-500 uppercase tracking-wide">
                 {CANONICAL_FUEL_TYPES.petrol.label}
@@ -900,7 +941,7 @@ export default function Dashboard() {
             </div>
             <div className="bg-white dark:bg-gray-800 rounded-lg p-3 text-center">
               <p className="text-[10px] text-gray-500 uppercase tracking-wide">
-                Diesel
+                {CANONICAL_FUEL_TYPES.diesel.label}
               </p>
               <p className="text-xl font-bold text-amber-700 dark:text-amber-400">
                 {currencySymbol} {displayAgoPrice.toFixed(2)}
@@ -912,6 +953,24 @@ export default function Dashboard() {
                 </p>
               ) : regionalPrice.isRegional ? (
                 <p className="text-[9px] text-amber-600 dark:text-amber-400 mt-0.5">
+                  {regionalPrice.cityName}
+                </p>
+              ) : null}
+            </div>
+            <div className="bg-white dark:bg-gray-800 rounded-lg p-3 text-center col-span-2 sm:col-span-1">
+              <p className="text-[10px] text-gray-500 uppercase tracking-wide">
+                {CANONICAL_FUEL_TYPES.kerosene.label}
+              </p>
+              <p className="text-xl font-bold text-rose-700 dark:text-rose-400">
+                {currencySymbol} {displayKerosenePrice.toFixed(2)}
+              </p>
+              <p className="text-[9px] text-gray-400">per litre</p>
+              {isLocationBased ? (
+                <p className="text-[9px] text-rose-600 dark:text-rose-400 mt-0.5">
+                  {priceCityName}
+                </p>
+              ) : regionalPrice.isRegional ? (
+                <p className="text-[9px] text-rose-600 dark:text-rose-400 mt-0.5">
                   {regionalPrice.cityName}
                 </p>
               ) : null}
@@ -957,19 +1016,22 @@ export default function Dashboard() {
                 <div>
                   <p className="text-[9px] text-gray-500">Landed Cost</p>
                   <p className="text-xs font-semibold text-gray-700 dark:text-gray-300">
-                    {currencySymbol} {effectiveFuelPrice.breakdown.landedCost.toFixed(2)}
+                    {currencySymbol}{" "}
+                    {effectiveFuelPrice.breakdown.landedCost.toFixed(2)}
                   </p>
                 </div>
                 <div>
                   <p className="text-[9px] text-gray-500">Taxes</p>
                   <p className="text-xs font-semibold text-gray-700 dark:text-gray-300">
-                    {currencySymbol} {effectiveFuelPrice.breakdown.taxes.toFixed(2)}
+                    {currencySymbol}{" "}
+                    {effectiveFuelPrice.breakdown.taxes.toFixed(2)}
                   </p>
                 </div>
                 <div>
                   <p className="text-[9px] text-gray-500">Margins</p>
                   <p className="text-xs font-semibold text-gray-700 dark:text-gray-300">
-                    {currencySymbol} {effectiveFuelPrice.breakdown.margins.toFixed(2)}
+                    {currencySymbol}{" "}
+                    {effectiveFuelPrice.breakdown.margins.toFixed(2)}
                   </p>
                 </div>
               </div>
@@ -1082,7 +1144,7 @@ export default function Dashboard() {
                 {currencySymbol}{" "}
                 {(
                   taxRates || location.payrollConfig
-                ).minimumWage.toLocaleString()}
+                ).minimumWage.toLocaleString(stationLocale)}
               </span>
             </div>
           </div>
@@ -1223,7 +1285,7 @@ export default function Dashboard() {
               <div
                 className="h-full bg-gradient-to-r from-green-400 to-green-600 rounded-full transition-all duration-500"
                 style={{
-                  width: `${Math.min(100, state.pmsTankClosing > 0 ? (state.pmsTankClosing / (state.pmsTankClosing + 5000)) * 100 : 0)}%`,
+                  width: `${tankFillPercent(state.pmsTankOpening, state.pmsTankClosing)}%`,
                 }}
               />
             </div>
@@ -1248,7 +1310,7 @@ export default function Dashboard() {
               <div
                 className="h-full bg-gradient-to-r from-amber-400 to-amber-600 rounded-full transition-all duration-500"
                 style={{
-                  width: `${Math.min(100, state.agoTankClosing > 0 ? (state.agoTankClosing / (state.agoTankClosing + 5000)) * 100 : 0)}%`,
+                  width: `${tankFillPercent(state.agoTankOpening, state.agoTankClosing)}%`,
                 }}
               />
             </div>
@@ -1272,7 +1334,7 @@ export default function Dashboard() {
               {state.pmsPumps.length}
             </p>
             <p className="text-xs text-gray-500 dark:text-gray-400">
-              PMS Pumps
+              {CANONICAL_FUEL_TYPES.petrol.label} Pumps
             </p>
           </div>
           <div className="text-center p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
@@ -1280,7 +1342,7 @@ export default function Dashboard() {
               {state.agoPumps.length}
             </p>
             <p className="text-xs text-gray-500 dark:text-gray-400">
-              AGO Pumps
+              {CANONICAL_FUEL_TYPES.diesel.label} Pumps
             </p>
           </div>
           <div className="text-center p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
