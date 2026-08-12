@@ -432,25 +432,19 @@ export function LocationProvider({
   stationLocation,
   stationCountry,
   stationCurrency,
+  companyCurrency,
 }: {
   children: React.ReactNode;
   stationId?: string;
-  // The active station's free-text location string (e.g. "Nairobi, Kenya").
-  // Used to derive the country when no explicit station country has been set,
-  // so IP/CDN geolocation (which often returns the server's country, e.g. US)
-  // does not override the station's real location.
   stationLocation?: string;
-  // The active station's explicitly selected ISO country code (e.g. "DE").
-  // This is the authoritative source of the station's country — it comes from
-  // the SetupWizard selection (persisted on the Station + Supabase) and takes
-  // precedence over GPS/timezone so the app is genuinely world-wide and the
-  // user's choice survives across devices/browsers.
   stationCountry?: string;
-  // The active station's currency code (e.g. "KES"). Used as a fallback to
-  // derive the country when stationCountry is not set — e.g. a station with
-  // currency "KES" but no country code resolves to Kenya (KE), so the header
-  // shows 🇰🇪 Kenya KES instead of falling through to 🇺🇸 United States USD.
   stationCurrency?: string;
+  // The FuelContext companyData.currency (e.g. "KSh" or "KES"). This is the
+  // most reliable currency signal — it's set via Edit Info and loaded from
+  // cloud sync. Passed as a prop so the useMemo re-evaluates when companyData
+  // arrives (the station record may have empty currency, but companyData
+  // always has one after cloud load).
+  companyCurrency?: string;
 }) {
   const [stationCountries, setStationCountries] =
     useState<Record<string, StationLocation>>(loadStationCountries);
@@ -486,11 +480,18 @@ export function LocationProvider({
       }
     }
     // Derive the country from the station's currency code (e.g. "KES" → KE).
-    // This bridges the gap when a station has a currency set (via Edit Info)
-    // but no explicit country code — the header should still show the right
-    // flag/currency instead of defaulting to 🇺🇸 United States USD.
     if (stationCurrency) {
       const cc = getCountryByCurrency(stationCurrency);
+      if (cc) {
+        return getCountryById(cc) || getUniversalFallback();
+      }
+    }
+    // Derive the country from the FuelContext companyData.currency. This is
+    // passed as a prop from Home.tsx and updates reactively when companyData
+    // loads from cloud sync. Handles both codes ("KES") and symbols ("KSh")
+    // via normalizeCurrencyCode.
+    if (companyCurrency) {
+      const cc = getCountryByCurrency(companyCurrency);
       if (cc) {
         return getCountryById(cc) || getUniversalFallback();
       }
@@ -519,7 +520,13 @@ export function LocationProvider({
     // Auto-detect from browser timezone or resolved country
     const resolved = resolveUserCountry();
     return getCountryById(resolved) || getUniversalFallback();
-  }, [stationCountry, currentLocation, stationLocation, stationCurrency]);
+  }, [
+    stationCountry,
+    currentLocation,
+    stationLocation,
+    stationCurrency,
+    companyCurrency,
+  ]);
 
   // Persist changes
   useEffect(() => {
@@ -586,6 +593,7 @@ export function LocationProvider({
       currentCountry,
       stationLocation,
       stationCurrency,
+      companyCurrency,
     ],
   );
 

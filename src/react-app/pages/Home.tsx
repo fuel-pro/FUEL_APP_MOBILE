@@ -12,6 +12,7 @@ import { useAuth } from "@/react-app/context/AuthContext";
 import { usePermissions } from "@/react-app/context/PermissionContext";
 import { useTenant } from "@/react-app/context/TenantContext";
 import { LocationProvider } from "@/react-app/context/LocationContext";
+import { useFuel } from "@/react-app/context/FuelContext";
 import Header from "@/react-app/components/Header";
 import TabNavigation from "@/react-app/components/TabNavigation";
 import MobileBottomNav from "@/react-app/components/MobileBottomNav";
@@ -623,6 +624,7 @@ function HomeContent() {
 
 export default function Home() {
   const { currentStation } = useStations();
+  const { state } = useFuel();
   const stationId = currentStation?.id || "default";
 
   // Detect country for tenant context
@@ -653,6 +655,7 @@ export default function Home() {
       stationLocation={currentStation?.location}
       stationCountry={currentStation?.country}
       stationCurrency={currentStation?.currency}
+      companyCurrency={state?.companyData?.currency}
     >
       <HomeContent />
     </LocationProvider>
