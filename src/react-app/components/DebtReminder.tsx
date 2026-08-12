@@ -1,5 +1,12 @@
-import { useState } from "react";
-import { Save, Trash2, MessageCircle, Mail } from "lucide-react";
+import { useState, useCallback } from "react";
+import {
+  Save,
+  Trash2,
+  MessageCircle,
+  Mail,
+  CheckCircle2,
+  AlertTriangle,
+} from "lucide-react";
 import { useFuel } from "@/react-app/context/FuelContext";
 import ExportDropdown from "@/react-app/components/ExportDropdown";
 import {
@@ -26,6 +33,14 @@ export default function DebtReminder() {
   const [whatsappNo, setWhatsappNo] = useState("");
   const [managerName, setManagerName] = useState("");
   const [contactMethod, setContactMethod] = useState("WhatsApp");
+  const [toast, setToast] = useState<string | null>(null);
+  const [nameError, setNameError] = useState(false);
+  const [deleteKey, setDeleteKey] = useState<string | null>(null);
+
+  const showToast = useCallback((msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 3000);
+  }, []);
 
   const handleAmountChange = (value: string) => {
     const formatted = formatAmountWithCommas(value);
@@ -60,13 +75,15 @@ export default function DebtReminder() {
   const saveDebtReminder = () => {
     const name = debtCustomerName.trim();
     if (!name) {
-      alert("Please enter a customer name");
+      setNameError(true);
+      showToast("Please enter a customer name");
       return;
     }
+    setNameError(false);
 
     const data = {
       name: debtCustomerName,
-      amount: formatNumber(parseNumberFromFormatted(debtAmount) || 0),
+      amount: parseNumberFromFormatted(debtAmount) || 0,
       till: buyGoodsNo,
       bank: bankName,
       acName: accountName,
@@ -84,30 +101,34 @@ export default function DebtReminder() {
       payload: { ...state.debtHistory, [key]: data },
     });
 
-    alert(`Debt reminder for ${name} saved!`);
+    showToast(`Debt reminder for ${name} saved`);
   };
 
   const loadDebt = (key: string) => {
     const item = state.debtHistory[key];
     if (!item) return;
 
-    setDebtCustomerName(item.name);
-    setDebtAmount(item.amount);
-    setBuyGoodsNo(item.till);
-    setBankName(item.bank);
-    setAccountName(item.acName);
-    setAccountNo(item.acNo);
-    setWhatsappNo(item.contact);
-    setManagerName(item.manager);
-    setContactMethod(item.method);
+    setDebtCustomerName(item.name || "");
+    setDebtAmount(
+      typeof item.amount === "number"
+        ? formatNumber(item.amount)
+        : String(item.amount || ""),
+    );
+    setBuyGoodsNo(item.till || "");
+    setBankName(item.bank || "");
+    setAccountName(item.acName || "");
+    setAccountNo(item.acNo || "");
+    setWhatsappNo(item.contact || "");
+    setManagerName(item.manager || "");
+    setContactMethod(item.method || "WhatsApp");
   };
 
   const deleteDebt = (key: string) => {
-    if (confirm("Delete this reminder?")) {
-      const updatedHistory = { ...state.debtHistory };
-      delete updatedHistory[key];
-      dispatch({ type: "SET_DEBT_HISTORY", payload: updatedHistory });
-    }
+    const updatedHistory = { ...state.debtHistory };
+    delete updatedHistory[key];
+    dispatch({ type: "SET_DEBT_HISTORY", payload: updatedHistory });
+    setDeleteKey(null);
+    showToast("Reminder deleted");
   };
 
   const sendWhatsApp = () => {
@@ -181,9 +202,18 @@ export default function DebtReminder() {
             <input
               type="text"
               value={debtCustomerName}
-              onChange={(e) => setDebtCustomerName(e.target.value)}
+              onChange={(e) => {
+                setDebtCustomerName(e.target.value);
+                if (nameError) setNameError(false);
+              }}
               placeholder="Customer name"
+              className={nameError ? "border-red-500" : ""}
             />
+            {nameError && (
+              <p className="text-xs text-red-500 mt-1">
+                Customer name is required
+              </p>
+            )}
           </div>
           <div className="form-group">
             <label>{`Amount (${currencySymbol})`}</label>
@@ -278,13 +308,21 @@ export default function DebtReminder() {
               return (
                 <div key={key} className="history-item">
                   <span>
-                    {item.name} - {currencySymbol} {item.amount}
+                    {item.name} - {currencySymbol}{" "}
+                    {formatNumber(
+                      typeof item.amount === "number"
+                        ? item.amount
+                        : parseNumberFromFormatted(String(item.amount)) || 0,
+                    )}
                   </span>
                   <div className="flex gap-2">
                     <button onClick={() => loadDebt(key)} className="text-xs">
                       Load
                     </button>
-                    <button onClick={() => deleteDebt(key)} className="text-xs">
+                    <button
+                      onClick={() => setDeleteKey(key)}
+                      className="text-xs text-red-500"
+                    >
                       Delete
                     </button>
                   </div>
@@ -308,6 +346,46 @@ export default function DebtReminder() {
           </button>
         </div>
       </div>
+
+      {/* Delete confirmation modal */}
+      {deleteKey && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 max-w-sm w-full shadow-2xl">
+            <div className="flex items-center gap-2 mb-4">
+              <AlertTriangle className="text-red-500" size={20} />
+              <h3 className="text-lg font-semibold dark:text-white">
+                Delete Reminder?
+              </h3>
+            </div>
+            <p className="text-sm text-gray-500 mb-4">
+              This will permanently delete this debt reminder. This cannot be
+              undone.
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setDeleteKey(null)}
+                className="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded-lg text-sm dark:text-white"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => deleteDebt(deleteKey)}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toast notification */}
+      {toast && (
+        <div className="fixed bottom-6 right-6 bg-gray-900 dark:bg-gray-700 text-white px-4 py-3 rounded-xl shadow-2xl text-sm font-medium z-50 flex items-center gap-2">
+          <CheckCircle2 size={16} className="text-green-400" />
+          {toast}
+        </div>
+      )}
     </div>
   );
 }
