@@ -61,6 +61,8 @@ import {
   Send,
   HardDrive,
   Gauge,
+  ArrowRight,
+  Download,
 } from "lucide-react";
 import { loginFounder } from "@/react-app/lib/founder-auth";
 import { requestPasswordReset } from "@/react-app/lib/founder-auth";
@@ -114,6 +116,7 @@ import {
   WebhookDeliveriesSection,
   StorageExplorerSection,
   ApiRateLimitsSection,
+  DeveloperControlCenterSection,
 } from "./founder-sections";
 import { useFounderBackend } from "@/react-app/hooks/useFounderBackend";
 import { useFounderConsoleStore } from "@/react-app/hooks/useFounderConsoleStore";
@@ -217,7 +220,8 @@ type SectionId =
   | "migrations"
   | "deliveries"
   | "storage"
-  | "ratelimits";
+  | "ratelimits"
+  | "devcontrol";
 
 export default function FounderAccess() {
   /* ─── Cloud Sync State ─── */
@@ -1134,6 +1138,11 @@ export default function FounderAccess() {
         { id: "maintenance" as SectionId, label: "Maintenance", icon: Wrench },
         { id: "datamgmt" as SectionId, label: "Data Manager", icon: FolderCog },
         {
+          id: "devcontrol" as SectionId,
+          label: "Dev Control Center",
+          icon: Terminal,
+        },
+        {
           id: "editor" as SectionId,
           label: "AI Website Editor",
           icon: Sparkles,
@@ -1473,7 +1482,8 @@ export default function FounderAccess() {
           {/* ══════ OVERVIEW ══════ */}
           {activeSection === "overview" && (
             <div className="space-y-6">
-              <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+              {/* Extended stats grid — 8 cards with real-time data */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
                 {[
                   {
                     label: "Users",
@@ -1483,37 +1493,225 @@ export default function FounderAccess() {
                         : users.length,
                     icon: Users,
                     color: "text-blue-400",
+                    onClick: () => setActiveSection("users"),
                   },
                   {
                     label: "Stations",
                     value: effectiveStationCount,
                     icon: Building2,
                     color: "text-green-400",
+                    onClick: () => setActiveSection("stations"),
                   },
                   {
                     label: "Revenue",
                     value: `${getCurrencySymbol(getDetectedCurrency())} ${effectiveRevenue.toLocaleString()}`,
                     icon: DollarSign,
                     color: "text-amber-400",
+                    onClick: () => setActiveSection("analytics"),
                   },
                   {
                     label: "Secrets",
                     value: secrets.length,
                     icon: Key,
                     color: "text-purple-400",
+                    onClick: () => setActiveSection("secrets"),
+                  },
+                  {
+                    label: "Feature Flags",
+                    value: featureFlags.length,
+                    icon: ToggleRight,
+                    color: "text-indigo-400",
+                    onClick: () => setActiveSection("flags"),
+                  },
+                  {
+                    label: "Audit Events",
+                    value: auditLog.length,
+                    icon: Shield,
+                    color: "text-cyan-400",
+                    onClick: () => setActiveSection("audit"),
+                  },
+                  {
+                    label: "Webhooks",
+                    value: advancedStore.webhooks.length,
+                    icon: Webhook,
+                    color: "text-pink-400",
+                    onClick: () => setActiveSection("webhooks"),
+                  },
+                  {
+                    label: "API Keys",
+                    value: advancedStore.apiKeys.length,
+                    icon: KeyRound,
+                    color: "text-orange-400",
+                    onClick: () => setActiveSection("apikeys"),
                   },
                 ].map((s) => (
                   <div
                     key={s.label}
-                    className="bg-[#161618] border border-white/[0.06] rounded-xl p-5"
+                    onClick={s.onClick}
+                    className="bg-[#161618] border border-white/[0.06] rounded-xl p-5 hover:border-white/[0.12] cursor-pointer transition-colors group"
                   >
-                    <div className="flex items-center gap-2 mb-3">
-                      <s.icon size={14} className={s.color} />
-                      <span className="text-[11px] text-gray-500">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <s.icon size={14} className={s.color} />
+                        <span className="text-[11px] text-gray-500">
+                          {s.label}
+                        </span>
+                      </div>
+                      <ArrowRight
+                        size={12}
+                        className="text-gray-700 group-hover:text-gray-400 transition-colors"
+                      />
+                    </div>
+                    <p className="text-xl font-bold text-white">{s.value}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Quick Actions panel */}
+              <div className="bg-[#161618] border border-white/[0.06] rounded-xl p-5">
+                <h3 className="text-sm font-medium text-gray-300 mb-4 flex items-center gap-2">
+                  <Zap size={14} className="text-amber-400" />
+                  Quick Actions
+                </h3>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+                  {[
+                    {
+                      label: "Add Secret",
+                      icon: Key,
+                      section: "secrets" as SectionId,
+                    },
+                    {
+                      label: "New Flag",
+                      icon: ToggleRight,
+                      section: "flags" as SectionId,
+                    },
+                    {
+                      label: "Add Webhook",
+                      icon: Webhook,
+                      section: "webhooks" as SectionId,
+                    },
+                    {
+                      label: "API Keys",
+                      icon: KeyRound,
+                      section: "apikeys" as SectionId,
+                    },
+                    {
+                      label: "Dev Center",
+                      icon: Terminal,
+                      section: "devcontrol" as SectionId,
+                    },
+                    {
+                      label: "Data Manager",
+                      icon: FolderCog,
+                      section: "datamgmt" as SectionId,
+                    },
+                    {
+                      label: "DB Query",
+                      icon: Database,
+                      section: "dbquery" as SectionId,
+                    },
+                    {
+                      label: "Schema",
+                      icon: HardDrive,
+                      section: "storage" as SectionId,
+                    },
+                    {
+                      label: "Migrations",
+                      icon: Database,
+                      section: "migrations" as SectionId,
+                    },
+                    {
+                      label: "Error Log",
+                      icon: AlertTriangle,
+                      section: "errortracker" as SectionId,
+                    },
+                    {
+                      label: "Sessions",
+                      icon: Monitor,
+                      section: "sessions" as SectionId,
+                    },
+                    {
+                      label: "Task Queue",
+                      icon: ListChecks,
+                      section: "taskqueue" as SectionId,
+                    },
+                  ].map((a) => (
+                    <button
+                      key={a.label}
+                      onClick={() => setActiveSection(a.section)}
+                      className="flex flex-col items-center gap-1.5 p-3 bg-white/[0.02] hover:bg-white/[0.05] rounded-lg text-xs text-gray-400 hover:text-white transition-colors"
+                    >
+                      <a.icon size={16} className="text-gray-500" />
+                      <span className="text-[10px]">{a.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Advanced stats row — developer datasets */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
+                {[
+                  {
+                    label: "Errors",
+                    value: advancedStore.errorLog.filter((e) => !e.resolved)
+                      .length,
+                    icon: AlertTriangle,
+                    color: "text-red-400",
+                    section: "errortracker" as SectionId,
+                  },
+                  {
+                    label: "Sessions",
+                    value: advancedStore.sessions.filter((s) => s.active)
+                      .length,
+                    icon: Monitor,
+                    color: "text-amber-400",
+                    section: "sessions" as SectionId,
+                  },
+                  {
+                    label: "Jobs",
+                    value: advancedStore.jobs.filter((j) => j.enabled).length,
+                    icon: Clock,
+                    color: "text-purple-400",
+                    section: "jobs" as SectionId,
+                  },
+                  {
+                    label: "Experiments",
+                    value: advancedStore.experiments.filter(
+                      (e) => e.status === "running",
+                    ).length,
+                    icon: FlaskConical,
+                    color: "text-green-400",
+                    section: "experiments" as SectionId,
+                  },
+                  {
+                    label: "Announcements",
+                    value: advancedStore.announcements.filter((a) => a.active)
+                      .length,
+                    icon: Megaphone,
+                    color: "text-cyan-400",
+                    section: "announcements" as SectionId,
+                  },
+                  {
+                    label: "Blocklist",
+                    value: advancedStore.blocklist.filter((b) => b.active)
+                      .length,
+                    icon: ShieldBan,
+                    color: "text-pink-400",
+                    section: "blocklist" as SectionId,
+                  },
+                ].map((s) => (
+                  <div
+                    key={s.label}
+                    onClick={() => setActiveSection(s.section)}
+                    className="bg-[#161618] border border-white/[0.06] rounded-xl p-3 hover:border-white/[0.12] cursor-pointer transition-colors"
+                  >
+                    <div className="flex items-center gap-2 mb-2">
+                      <s.icon size={12} className={s.color} />
+                      <span className="text-[10px] text-gray-500">
                         {s.label}
                       </span>
                     </div>
-                    <p className="text-xl font-bold text-white">{s.value}</p>
+                    <p className="text-lg font-bold text-white">{s.value}</p>
                   </div>
                 ))}
               </div>
@@ -1660,28 +1858,149 @@ export default function FounderAccess() {
           {/* ══════ USERS ══════ */}
           {activeSection === "users" && (
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between flex-wrap gap-3">
                 <h2 className="text-lg font-medium text-white">
                   All Registered Users
                 </h2>
-                <span className="text-xs text-gray-500">
-                  {filteredUsers.length} total
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-500">
+                    {filteredUsers.length} of{" "}
+                    {users.length + (allBackendUsers?.length || 0)} total
+                  </span>
+                  <button
+                    onClick={() => {
+                      const data = filteredUsers;
+                      const csv = [
+                        [
+                          "Name",
+                          "Email",
+                          "Auth Method",
+                          "Role",
+                          "Stations",
+                          "Status",
+                          "Last Active",
+                          "Created At",
+                        ].join(","),
+                        ...data.map((u) =>
+                          [
+                            u.name,
+                            u.email,
+                            u.authMethod,
+                            u.role,
+                            u.stations,
+                            "Active",
+                            u.lastActive,
+                            u.createdAt,
+                          ]
+                            .map(
+                              (v) =>
+                                `"${(v || "").toString().replace(/"/g, '""')}"`,
+                            )
+                            .join(","),
+                        ),
+                      ].join("\n");
+                      const blob = new Blob([csv], { type: "text/csv" });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement("a");
+                      a.href = url;
+                      a.download = `users_${Date.now()}.csv`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                      logAudit(
+                        "Export Users",
+                        `${data.length} users exported to CSV`,
+                        "info",
+                      );
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-white/[0.04] hover:bg-white/[0.08] text-gray-400 hover:text-white rounded-lg text-xs font-medium transition-colors"
+                  >
+                    <Download size={13} />
+                    Export CSV
+                  </button>
+                  <button
+                    onClick={() => {
+                      const data = filteredUsers;
+                      const json = JSON.stringify(data, null, 2);
+                      const blob = new Blob([json], {
+                        type: "application/json",
+                      });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement("a");
+                      a.href = url;
+                      a.download = `users_${Date.now()}.json`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                      logAudit(
+                        "Export Users",
+                        `${data.length} users exported to JSON`,
+                        "info",
+                      );
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-white/[0.04] hover:bg-white/[0.08] text-gray-400 hover:text-white rounded-lg text-xs font-medium transition-colors"
+                  >
+                    <FileCode size={13} />
+                    Export JSON
+                  </button>
+                </div>
               </div>
+
+              {/* User stats summary */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {[
+                  {
+                    label: "Total Users",
+                    value: filteredUsers.length,
+                    color: "text-blue-400",
+                  },
+                  {
+                    label: "Owners",
+                    value: filteredUsers.filter((u) => u.role === "owner")
+                      .length,
+                    color: "text-purple-400",
+                  },
+                  {
+                    label: "Managers",
+                    value: filteredUsers.filter((u) => u.role === "manager")
+                      .length,
+                    color: "text-indigo-400",
+                  },
+                  {
+                    label: "Staff",
+                    value: filteredUsers.filter((u) => u.role === "staff")
+                      .length,
+                    color: "text-green-400",
+                  },
+                ].map((s) => (
+                  <div
+                    key={s.label}
+                    className="bg-[#161618] border border-white/[0.06] rounded-xl p-3"
+                  >
+                    <p className="text-[10px] text-gray-500 mb-1">{s.label}</p>
+                    <p className={`text-lg font-bold ${s.color}`}>{s.value}</p>
+                  </div>
+                ))}
+              </div>
+
               <div className="bg-[#161618] border border-white/[0.06] rounded-xl overflow-x-auto -mx-3 sm:mx-0">
                 <table className="w-full min-w-[640px]">
                   <thead>
                     <tr className="border-b border-white/[0.06]">
-                      {["User", "Auth", "Role", "Stations", "Status", ""].map(
-                        (h) => (
-                          <th
-                            key={h}
-                            className="text-left text-[11px] text-gray-500 font-medium px-4 py-3"
-                          >
-                            {h}
-                          </th>
-                        ),
-                      )}
+                      {[
+                        "User",
+                        "Auth",
+                        "Role",
+                        "Stations",
+                        "Status",
+                        "Last Active",
+                        "Actions",
+                      ].map((h) => (
+                        <th
+                          key={h}
+                          className="text-left text-[11px] text-gray-500 font-medium px-4 py-3"
+                        >
+                          {h}
+                        </th>
+                      ))}
                     </tr>
                   </thead>
                   <tbody>
@@ -1712,7 +2031,9 @@ export default function FounderAccess() {
                                   ? "bg-blue-500/15 text-blue-300"
                                   : u.role === "staff"
                                     ? "bg-green-500/15 text-green-300"
-                                    : "bg-amber-500/15 text-amber-300"
+                                    : u.role === "founder" || u.role === "admin"
+                                      ? "bg-red-500/15 text-red-300"
+                                      : "bg-amber-500/15 text-amber-300"
                             }`}
                           >
                             {u.role}
@@ -1726,15 +2047,53 @@ export default function FounderAccess() {
                             <Radio size={10} /> Active
                           </span>
                         </td>
+                        <td className="px-4 py-3 text-[11px] text-gray-500">
+                          {u.lastActive
+                            ? new Date(u.lastActive).toLocaleDateString()
+                            : "—"}
+                        </td>
                         <td className="px-4 py-3">
-                          <Eye size={14} className="text-gray-600" />
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => {
+                                const newRole = prompt(
+                                  `Change role for ${u.name || u.email}?\nCurrent: ${u.role}\nEnter new role (owner/manager/staff):`,
+                                  u.role,
+                                );
+                                if (newRole && newRole !== u.role) {
+                                  logAudit(
+                                    "Role Change",
+                                    `${u.email}: ${u.role} → ${newRole}`,
+                                    "warning",
+                                  );
+                                  alert(
+                                    `Role change for ${u.email} from ${u.role} to ${newRole} has been logged. Use the Supabase admin API to apply this change.`,
+                                  );
+                                }
+                              }}
+                              className="p-1 text-gray-500 hover:text-indigo-400 transition-colors"
+                              title="Change role"
+                            >
+                              <Settings size={13} />
+                            </button>
+                            <button
+                              onClick={() => {
+                                const info = `User Details:\n\nName: ${u.name || "Anonymous"}\nEmail: ${u.email}\nAuth Method: ${u.authMethod}\nRole: ${u.role}\nStations: ${u.stations}\nLast Active: ${u.lastActive}\nCreated: ${u.createdAt}\nAuth ID: ${u.authId}`;
+                                alert(info);
+                              }}
+                              className="p-1 text-gray-500 hover:text-blue-400 transition-colors"
+                              title="View details"
+                            >
+                              <Eye size={13} />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
                     {filteredUsers.length === 0 && (
                       <tr>
                         <td
-                          colSpan={6}
+                          colSpan={7}
                           className="text-center text-gray-600 py-12"
                         >
                           No users found
@@ -1750,30 +2109,119 @@ export default function FounderAccess() {
           {/* ══════ STATIONS ══════ */}
           {activeSection === "stations" && (
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between flex-wrap gap-3">
                 <h2 className="text-lg font-medium text-white">
                   All Stations Worldwide
                 </h2>
-                <span className="text-xs text-gray-500">
-                  {filteredStations.length} total
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-500">
+                    {filteredStations.length} total
+                  </span>
+                  <button
+                    onClick={() => {
+                      const csv = [
+                        [
+                          "Name",
+                          "Location",
+                          "Owner",
+                          "Members",
+                          "Revenue",
+                          "Status",
+                          "Created",
+                          "Last Active",
+                        ].join(","),
+                        ...filteredStations.map((s) =>
+                          [
+                            s.name,
+                            s.location,
+                            s.ownerName,
+                            s.members,
+                            s.revenue,
+                            "Active",
+                            s.createdAt,
+                            s.lastActive,
+                          ]
+                            .map(
+                              (v) =>
+                                `"${(v || "").toString().replace(/"/g, '""')}"`,
+                            )
+                            .join(","),
+                        ),
+                      ].join("\n");
+                      const blob = new Blob([csv], { type: "text/csv" });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement("a");
+                      a.href = url;
+                      a.download = `stations_${Date.now()}.csv`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                      logAudit(
+                        "Export Stations",
+                        `${filteredStations.length} stations exported`,
+                        "info",
+                      );
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-white/[0.04] hover:bg-white/[0.08] text-gray-400 hover:text-white rounded-lg text-xs font-medium transition-colors"
+                  >
+                    <Download size={13} />
+                    Export CSV
+                  </button>
+                </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+
+              {/* Station stats */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {[
+                  {
+                    label: "Total Stations",
+                    value: filteredStations.length,
+                    color: "text-green-400",
+                  },
+                  {
+                    label: "Total Members",
+                    value: filteredStations.reduce(
+                      (s, st) => s + st.members,
+                      0,
+                    ),
+                    color: "text-blue-400",
+                  },
+                  {
+                    label: "Total Revenue",
+                    value: `${getCurrencySymbol(getDetectedCurrency())} ${(filteredStations.reduce((s, st) => s + st.revenue, 0) / 1000).toFixed(0)}K`,
+                    color: "text-amber-400",
+                  },
+                  {
+                    label: "Avg Revenue",
+                    value: `${getCurrencySymbol(getDetectedCurrency())} ${filteredStations.length > 0 ? (filteredStations.reduce((s, st) => s + st.revenue, 0) / filteredStations.length / 1000).toFixed(1) : 0}K`,
+                    color: "text-purple-400",
+                  },
+                ].map((s) => (
+                  <div
+                    key={s.label}
+                    className="bg-[#161618] border border-white/[0.06] rounded-xl p-3"
+                  >
+                    <p className="text-[10px] text-gray-500 mb-1">{s.label}</p>
+                    <p className={`text-lg font-bold ${s.color}`}>{s.value}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {filteredStations.map((s) => (
                   <div
                     key={s.id}
-                    className="bg-[#161618] border border-white/[0.06] rounded-xl p-5"
+                    className="bg-[#161618] border border-white/[0.06] rounded-xl p-5 hover:border-white/[0.12] transition-colors"
                   >
                     <div className="flex items-start justify-between mb-3">
-                      <div>
-                        <h3 className="text-sm font-semibold text-white">
+                      <div className="min-w-0">
+                        <h3 className="text-sm font-semibold text-white truncate">
                           {s.name}
                         </h3>
-                        <p className="text-[11px] text-gray-500">
+                        <p className="text-[11px] text-gray-500 truncate">
                           {s.location}
                         </p>
                       </div>
-                      <div className="w-7 h-7 bg-green-500/10 rounded-lg flex items-center justify-center">
+                      <div className="w-7 h-7 bg-green-500/10 rounded-lg flex items-center justify-center shrink-0">
                         <Building2 size={13} className="text-green-400" />
                       </div>
                     </div>
@@ -1803,9 +2251,21 @@ export default function FounderAccess() {
                         </div>
                       ))}
                     </div>
-                    <p className="text-[10px] text-gray-600 mt-2">
-                      Owner: {s.ownerName}
-                    </p>
+                    <div className="flex items-center justify-between mt-3">
+                      <p className="text-[10px] text-gray-600 truncate">
+                        Owner: {s.ownerName || "—"}
+                      </p>
+                      <button
+                        onClick={() => {
+                          const info = `Station Details:\n\nName: ${s.name}\nLocation: ${s.location}\nOwner: ${s.ownerName}\nMembers: ${s.members}\nRevenue: ${getCurrencySymbol(getDetectedCurrency())} ${s.revenue.toLocaleString()}\nID: ${s.id}\nOwner ID: ${s.ownerId}\nCreated: ${s.createdAt}\nLast Active: ${s.lastActive}`;
+                          alert(info);
+                        }}
+                        className="flex items-center gap-1 text-[10px] text-gray-500 hover:text-blue-400 transition-colors"
+                      >
+                        <Eye size={11} />
+                        Details
+                      </button>
+                    </div>
                   </div>
                 ))}
                 {filteredStations.length === 0 && (
@@ -2322,6 +2782,13 @@ export default function FounderAccess() {
           )}
           {activeSection === "ratelimits" && (
             <ApiRateLimitsSection
+              store={advancedStore}
+              logAudit={consoleStore.addAudit}
+            />
+          )}
+
+          {activeSection === "devcontrol" && (
+            <DeveloperControlCenterSection
               store={advancedStore}
               logAudit={consoleStore.addAudit}
             />

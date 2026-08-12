@@ -47,3 +47,4 @@ export { default as MigrationsSection } from "./MigrationsSection";
 export { default as WebhookDeliveriesSection } from "./WebhookDeliveriesSection";
 export { default as StorageExplorerSection } from "./StorageExplorerSection";
 export { default as ApiRateLimitsSection } from "./ApiRateLimitsSection";
+export { default as DeveloperControlCenterSection } from "./DeveloperControlCenterSection";
