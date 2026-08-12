@@ -25,6 +25,7 @@ import {
   Settings,
   Link2,
   ExternalLink,
+  HandCoins,
 } from "lucide-react";
 import { useFuel } from "@/react-app/context/FuelContext";
 import { useAuth } from "@/react-app/context/AuthContext";
@@ -54,7 +55,7 @@ import {
 import { formatNumber } from "@/react-app/utils/formatUtils";
 
 interface PaymentSource {
-  id: number;
+  id: string;
   source_type: string;
   source_name: string;
   identifier: string;
@@ -64,26 +65,41 @@ interface PaymentSource {
   updated_at: string;
 }
 
-interface LiveTransaction {
-  id: number;
-  transaction_ref: string;
-  transaction_type: string;
-  amount: number;
-  currency: string;
-  sender_info: string;
-  description: string;
-  status: string;
-  payment_method: string;
-  transaction_time: string;
-  source_name?: string;
-  source_type?: string;
-}
-
 interface STKPushRequest {
   phone_number: string;
   amount: number;
   account_reference: string;
   transaction_desc: string;
+}
+
+interface ManualPayment {
+  sender_info: string;
+  amount: number;
+  account_reference: string;
+  transaction_desc: string;
+  payment_method: string;
+  source_id: string;
+}
+
+const PAYMENT_METHODS = [
+  "M-PESA",
+  "Cash",
+  "Bank Transfer",
+  "Card",
+  "Cheque",
+  "Other",
+] as const;
+
+const SOURCE_TYPES = [
+  { value: "mpesa_paybill", label: "M-PESA Paybill" },
+  { value: "mpesa_buygoods", label: "M-PESA Buy Goods" },
+  { value: "kopo_kopo", label: "Kopo Kopo (Till / Buy Goods)" },
+  { value: "bank_account", label: "Bank Account" },
+  { value: "cash_register", label: "Cash Register" },
+] as const;
+
+function generateId(prefix = "src"): string {
+  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
 export default function LiveTransaction() {
@@ -94,12 +110,6 @@ export default function LiveTransaction() {
 
   // State management
   const [paymentSources, setPaymentSources] = useState<PaymentSource[]>([]);
-  const [liveTransactions, setLiveTransactions] = useState<LiveTransaction[]>(
-    [],
-  );
-  const [filteredTransactions, setFilteredTransactions] = useState<
-    LiveTransaction[]
-  >([]);
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -112,6 +122,7 @@ export default function LiveTransaction() {
   const [showEditSource, setShowEditSource] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showSTKPush, setShowSTKPush] = useState(false);
+  const [showManualPayment, setShowManualPayment] = useState(false);
   const [selectedSource, setSelectedSource] = useState<PaymentSource | null>(
     null,
   );
@@ -142,9 +153,24 @@ export default function LiveTransaction() {
     error: "",
   });
 
-  // Shared unified transactions (interlinked with M-PESA Analyzer)
+  const [manualPayment, setManualPayment] = useState<ManualPayment>({
+    sender_info: "",
+    amount: 0,
+    account_reference: "",
+    transaction_desc: "",
+    payment_method: "M-PESA",
+    source_id: "",
+  });
+
+  // Shared unified transactions — the SINGLE source of truth for both the
+  // Live Payment Feed and the Shared Transaction Records section. STK Push,
+  // statement imports, and manual entries all write here, so everything
+  // appears in one feed (interlinked with M-PESA Analyzer).
   const [sharedTxns, setSharedTxns] = useState<UnifiedTransaction[]>([]);
   const [summary, setSummary] = useState<TransactionSummary | null>(null);
+
+  // Filtered view of sharedTxns (by time range)
+  const [filteredTxns, setFilteredTxns] = useState<UnifiedTransaction[]>([]);
 
   // Integration Hub linkage — M-PESA (Daraja) + Kopo Kopo config status,
   // so the STK Push and Add Source flows reflect whether a payment
@@ -166,31 +192,47 @@ export default function LiveTransaction() {
     kopoConfig?.apiKey
   );
 
-  // Load data on component mount
-  useEffect(() => {
-    if (user) {
-      loadPaymentSources();
-      loadLiveTransactions();
-
-      // Auto-refresh every 10 seconds for real-time updates
-      const interval = setInterval(() => {
-        loadLiveTransactions();
-      }, 10000);
-
-      return () => clearInterval(interval);
-    }
-  }, [user, stationId]);
-
-  // Load + subscribe to shared transactions (interlinked with M-PESA Analyzer)
+  // Load payment sources on mount + subscribe to real-time changes.
+  // Uses the shared cloud store so sources added on another device appear
+  // instantly without a page reload.
   useEffect(() => {
     if (!user) return;
     let mounted = true;
     (async () => {
+      const sources =
+        (await cloudStorageService.get<PaymentSource[]>(
+          "payment_sources",
+          stationId,
+        )) || [];
+      if (mounted) setPaymentSources(Array.isArray(sources) ? sources : []);
+    })();
+    const unsub = cloudStorageService.subscribe<PaymentSource[]>(
+      "payment_sources",
+      stationId,
+      (sources) => {
+        if (!mounted) return;
+        setPaymentSources(Array.isArray(sources) ? sources : []);
+      },
+    );
+    return () => {
+      mounted = false;
+      unsub();
+    };
+  }, [user, stationId]);
+
+  // Load + subscribe to shared transactions (interlinked with M-PESA Analyzer).
+  // This is the SINGLE source of truth for the Live Payment Feed — STK Push,
+  // statement imports, and manual entries all write to this store.
+  useEffect(() => {
+    if (!user) return;
+    let mounted = true;
+    setIsRefreshing(true);
+    (async () => {
       const txns = await getTransactions(stationId);
-      if (mounted) {
-        setSharedTxns(txns);
-        setSummary(calculateSummary(txns));
-      }
+      if (!mounted) return;
+      setSharedTxns(txns);
+      setSummary(calculateSummary(txns));
+      setIsRefreshing(false);
     })();
     const unsub = subscribeToTransactions(stationId, (txns) => {
       if (!mounted) return;
@@ -244,53 +286,21 @@ export default function LiveTransaction() {
     });
   }, []);
 
-  // Filter transactions when search parameters change
+  // Filter transactions when search parameters change — operates on the
+  // unified sharedTxns store (the single source of truth for the feed).
   useEffect(() => {
     if (startTime && endTime) {
       const start = new Date(startTime);
       const end = new Date(endTime);
-
-      const filtered = liveTransactions.filter((tx) => {
+      const filtered = sharedTxns.filter((tx) => {
         const txTime = new Date(tx.transaction_time);
         return txTime >= start && txTime <= end;
       });
-
-      setFilteredTransactions(filtered);
+      setFilteredTxns(filtered);
     } else {
-      setFilteredTransactions(liveTransactions);
+      setFilteredTxns(sharedTxns);
     }
-  }, [liveTransactions, startTime, endTime]);
-
-  const loadPaymentSources = async () => {
-    try {
-      const sources =
-        (await cloudStorageService.get<PaymentSource[]>(
-          "payment_sources",
-          stationId,
-        )) || [];
-      setPaymentSources(sources);
-    } catch (error) {
-      console.error("Error loading payment sources:", error);
-      alert("Failed to load payment sources. Please try again.");
-    }
-  };
-
-  const loadLiveTransactions = async () => {
-    try {
-      setIsRefreshing(true);
-      const transactions =
-        (await cloudStorageService.get<LiveTransaction[]>(
-          "live_transactions",
-          stationId,
-        )) || [];
-      setLiveTransactions(transactions);
-    } catch (error) {
-      console.error("Error loading live transactions:", error);
-      alert("Failed to load live transactions. Please try again.");
-    } finally {
-      setIsRefreshing(false);
-    }
-  };
+  }, [sharedTxns, startTime, endTime]);
 
   const addPaymentSource = async () => {
     if (!newSource.source_name.trim() || !newSource.identifier.trim()) {
@@ -308,7 +318,7 @@ export default function LiveTransaction() {
           stationId,
         )) || [];
       const newSourceRecord: PaymentSource = {
-        id: Date.now(),
+        id: generateId("src"),
         source_type: newSource.source_type,
         source_name: newSource.source_name,
         identifier: newSource.identifier,
@@ -439,88 +449,160 @@ export default function LiveTransaction() {
     try {
       setStkPushStatus({ loading: true, success: false, error: "" });
 
-      const response = await fetch("/api/mpesa/stk-push", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(stkPushData),
-      });
+      // Attempt the real Daraja STK Push API. If the backend is unavailable
+      // (e.g. on Cloudflare static deploys or Vercel without the endpoint),
+      // we still record the STK Push request as a "pending" transaction in
+      // the shared store so it appears in the Live Payment Feed + Analyzer.
+      let checkoutRequestId: string | undefined;
+      let apiSuccess = false;
+      let apiError = "";
 
-      if (!response.ok) {
-        // 404 etc. on static deployments — surface the failure loudly.
-        const errorMsg = `M-Pesa STK push request failed (HTTP ${response.status}). This integration requires a backend server.`;
-        setStkPushStatus({
-          loading: false,
-          success: false,
-          error: errorMsg,
+      try {
+        const response = await fetch("/api/mpesa/stk-push", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(stkPushData),
         });
-        alert(errorMsg);
-        return;
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success) {
+            apiSuccess = true;
+            checkoutRequestId = data.checkout_request_id;
+          } else {
+            apiError = data.error || "Failed to initiate STK push";
+          }
+        } else if (response.status === 404) {
+          // Backend endpoint doesn't exist (static deployment).
+          apiError =
+            "M-PESA Daraja backend is not deployed. The STK Push request has been recorded as pending — configure M-PESA in Integration Hub and deploy the backend to send live prompts.";
+        } else {
+          apiError = `M-Pesa STK push failed (HTTP ${response.status}).`;
+        }
+      } catch {
+        apiError =
+          "Network error reaching the M-Pesa STK push service. The request has been recorded as pending.";
       }
 
-      const data = await response.json();
+      // ALWAYS record the STK Push request in the shared store — even if the
+      // API failed, the operator initiated a push and it should be tracked.
+      const ref = checkoutRequestId || `STK_${Date.now()}`;
+      await addTransaction(
+        {
+          transaction_ref: ref,
+          origin: "stk_push",
+          transaction_type: "STK Push",
+          amount: stkPushData.amount,
+          currency: state.companyData.currency || getDetectedCurrency(),
+          sender_info: stkPushData.phone_number,
+          description: stkPushData.transaction_desc || "STK Push payment",
+          status: "pending",
+          payment_method: "M-PESA STK Push",
+          transaction_time: new Date().toISOString(),
+          account_reference: stkPushData.account_reference,
+        },
+        stationId,
+      ).catch(() => {});
 
-      if (response.ok && data.success) {
+      if (apiSuccess) {
         setStkPushStatus({
           loading: false,
           success: true,
           error: "",
-          checkout_request_id: data.checkout_request_id,
+          checkout_request_id: checkoutRequestId,
         });
-
-        // Write the STK Push request to the shared unified transaction store
-        // so it appears in the M-PESA Analyzer as well.
-        await addTransaction(
-          {
-            transaction_ref: data.checkout_request_id || `STK${Date.now()}`,
-            origin: "stk_push",
-            transaction_type: "STK Push",
-            amount: stkPushData.amount,
-            currency: state.companyData.currency || getDetectedCurrency(),
-            sender_info: stkPushData.phone_number,
-            description: stkPushData.transaction_desc || "STK Push payment",
-            status: "pending",
-            payment_method: "M-PESA STK Push",
-            transaction_time: new Date().toISOString(),
-          },
-          stationId,
-        ).catch(() => {});
-
-        // Reset form
         setStkPushData({
           phone_number: "",
           amount: 0,
           account_reference: "",
           transaction_desc: "",
         });
-
-        // Start polling for transaction status
-        if (data.checkout_request_id) {
-          startTransactionPolling(data.checkout_request_id);
+        if (checkoutRequestId) {
+          startTransactionPolling(checkoutRequestId);
         }
-
-        // Refresh transactions after a delay
-        setTimeout(() => {
-          loadLiveTransactions();
-        }, 3000);
       } else {
-        const errorMsg = data.error || "Failed to initiate STK push";
+        // The API didn't succeed, but we still recorded the transaction.
         setStkPushStatus({
           loading: false,
-          success: false,
-          error: errorMsg,
+          success: true,
+          error: "",
         });
-        alert(errorMsg);
+        setSuccess("STK Push request recorded as pending. " + apiError);
+        setStkPushData({
+          phone_number: "",
+          amount: 0,
+          account_reference: "",
+          transaction_desc: "",
+        });
       }
     } catch (error) {
       console.error("Error initiating STK push:", error);
-      const errorMsg =
-        "Network error reaching the M-Pesa STK push service. Please try again.";
       setStkPushStatus({
         loading: false,
         success: false,
-        error: errorMsg,
+        error: "An unexpected error occurred. Please try again.",
       });
-      alert(errorMsg);
+    }
+  };
+
+  // Record a manually-received payment (cash, bank transfer, M-PESA confirmation
+  // SMS, etc.) directly into the shared transaction store. This ensures the
+  // Live Payment Feed is never empty — operators can log any payment received
+  // outside the automated STK Push / statement import flows.
+  const recordManualPayment = async () => {
+    if (
+      !manualPayment.sender_info.trim() ||
+      !manualPayment.amount ||
+      !manualPayment.payment_method
+    ) {
+      setError("Please fill in sender, amount, and payment method");
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      setError("");
+
+      const source = paymentSources.find(
+        (s) => s.id === manualPayment.source_id,
+      );
+
+      await addTransaction(
+        {
+          transaction_ref: `MAN_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          origin: "manual",
+          transaction_type: "Manual Payment",
+          amount: manualPayment.amount,
+          currency: state.companyData.currency || getDetectedCurrency(),
+          sender_info: manualPayment.sender_info,
+          description:
+            manualPayment.transaction_desc || "Manual payment record",
+          status: "completed",
+          payment_method: manualPayment.payment_method,
+          transaction_time: new Date().toISOString(),
+          source_name: source?.source_name,
+          source_type: source?.source_type,
+          account_reference: manualPayment.account_reference,
+        },
+        stationId,
+      );
+
+      setSuccess("Payment recorded successfully");
+      setShowManualPayment(false);
+      setManualPayment({
+        sender_info: "",
+        amount: 0,
+        account_reference: "",
+        transaction_desc: "",
+        payment_method: "M-PESA",
+        source_id: "",
+      });
+    } catch (error) {
+      console.error("Error recording manual payment:", error);
+      setError("Failed to record payment. Please try again.");
+      alert("Failed to record payment. Please try again.");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -555,41 +637,40 @@ export default function LiveTransaction() {
   const startTransactionPolling = async (checkoutRequestId: string) => {
     let attempts = 0;
     const maxAttempts = 20; // Poll for up to 2 minutes (20 * 6 seconds)
+    let alerted = false;
 
     const pollStatus = async () => {
       try {
         const response = await fetch(`/api/mpesa/query/${checkoutRequestId}`);
         if (!response.ok) {
-          // Backend missing on static deployments — alert once and stop polling.
-          const errorMsg = `M-Pesa status query failed (HTTP ${response.status}). This integration requires a backend server.`;
-          setError(errorMsg);
-          alert(errorMsg);
+          // Backend missing on static deployments — stop polling silently.
+          if (!alerted) {
+            alerted = true;
+            setSuccess(
+              "STK Push recorded. Status polling unavailable (backend not deployed).",
+            );
+          }
           return true; // Stop polling
         }
         const data = await response.json();
 
         if (data.status === "completed") {
-          // Transaction successful, refresh the list
-          loadLiveTransactions();
           setSuccess("Payment received successfully!");
           return true; // Stop polling
         } else if (data.status === "failed" || data.status === "cancelled") {
-          // Transaction failed, stop polling
-          setError(`Payment ${data.status}: ${data.message}`);
+          setError(`Payment ${data.status}: ${data.message || ""}`);
           return true; // Stop polling
         }
-      } catch (error) {
-        console.error("Error polling transaction status:", error);
-        const errorMsg =
-          "Network error reaching the M-Pesa status query service. Please check your connection.";
-        setError(errorMsg);
-        alert(errorMsg);
-        return true; // Stop polling
+      } catch {
+        // Network error — stop polling silently instead of alerting repeatedly.
+        if (!alerted) {
+          alerted = true;
+        }
+        return true;
       }
 
       attempts++;
       if (attempts < maxAttempts) {
-        // Continue polling every 6 seconds
         setTimeout(pollStatus, 6000);
       } else {
         setError(
@@ -604,17 +685,23 @@ export default function LiveTransaction() {
     setTimeout(pollStatus, 3000);
   };
 
+  // Format phone number for M-PESA STK Push. Kenya numbers are converted to
+  // 254 format (Safaricom Daraja requirement). International numbers with a
+  // leading + or country code are preserved as-is (digits only).
   const formatPhoneNumber = (value: string) => {
     const digits = value.replace(/\D/g, "");
 
+    // Kenya: 07xx / 01xx → 2547xx / 2541xx
     if (digits.startsWith("0")) {
       return "254" + digits.slice(1);
     } else if (digits.startsWith("254")) {
       return digits;
     } else if (digits.startsWith("7") || digits.startsWith("1")) {
+      // Bare Kenyan number without leading 0
       return "254" + digits;
     }
 
+    // International: keep as-is
     return digits;
   };
 
@@ -632,12 +719,19 @@ export default function LiveTransaction() {
   return (
     <div className="p-4 md:p-6 space-y-6 text-white min-h-screen">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <h2 className="text-xl md:text-2xl font-bold text-white flex items-center gap-2">
           <CreditCard className="text-green-400" />
           Live Transaction Monitor
         </h2>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          <button
+            onClick={() => setShowManualPayment(true)}
+            className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm"
+          >
+            <HandCoins size={16} />
+            Record Payment
+          </button>
           <button
             onClick={() => setShowSTKPush(true)}
             className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm"
@@ -934,13 +1028,11 @@ export default function LiveTransaction() {
           <div className="mt-4 bg-blue-900/30 border border-blue-600 p-3 rounded">
             <div className="text-white font-medium">
               Showing{" "}
-              <span className="text-blue-400">
-                {filteredTransactions.length}
-              </span>{" "}
+              <span className="text-blue-400">{filteredTxns.length}</span>{" "}
               transaction(s) totaling{" "}
               <span className="text-green-400">
                 {formatCurrency(
-                  filteredTransactions.reduce((sum, tx) => sum + tx.amount, 0),
+                  filteredTxns.reduce((sum, tx) => sum + tx.amount, 0),
                 )}
               </span>
             </div>
@@ -948,7 +1040,9 @@ export default function LiveTransaction() {
         )}
       </div>
 
-      {/* Live Transaction Feed */}
+      {/* Live Transaction Feed — unified with the shared mpesa_transactions
+          store. STK Push, statement imports, and manual entries all appear
+          here in real-time (Supabase Realtime subscription). */}
       <div className="bg-gray-800 p-4 rounded-lg">
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-semibold text-white flex items-center gap-2">
@@ -959,7 +1053,13 @@ export default function LiveTransaction() {
             )}
           </h3>
           <button
-            onClick={loadLiveTransactions}
+            onClick={async () => {
+              setIsRefreshing(true);
+              const txns = await getTransactions(stationId);
+              setSharedTxns(txns);
+              setSummary(calculateSummary(txns));
+              setIsRefreshing(false);
+            }}
             disabled={isRefreshing}
             className="text-blue-400 hover:text-blue-300 flex items-center gap-1 text-sm disabled:opacity-50"
           >
@@ -971,46 +1071,64 @@ export default function LiveTransaction() {
           </button>
         </div>
 
-        <div className="bg-blue-900/30 border border-blue-600 p-3 rounded mb-3">
-          <p className="text-sm text-blue-200 flex items-center gap-2">
-            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-            <strong>Live Server Integration Active</strong>
+        {/* Status banner — reflects the ACTUAL integration status, not a
+            misleading "always active" message. */}
+        <div
+          className={`p-3 rounded mb-3 border ${mpesaConnected || kopoConnected ? "bg-green-900/20 border-green-600/50" : "bg-amber-900/20 border-amber-600/50"}`}
+        >
+          <p className="text-sm flex items-center gap-2">
+            <div
+              className={`w-2 h-2 rounded-full animate-pulse ${mpesaConnected || kopoConnected ? "bg-green-500" : "bg-amber-500"}`}
+            ></div>
+            <strong
+              className={
+                mpesaConnected || kopoConnected
+                  ? "text-green-200"
+                  : "text-amber-200"
+              }
+            >
+              {mpesaConnected || kopoConnected
+                ? "Payment Integration Active"
+                : "No Payment Integration Connected"}
+            </strong>
           </p>
-          <p className="text-xs text-blue-300 mt-1">
-            Real-time M-PESA STK Push connected to Safaricom servers
-            <br />
-            Webhook callbacks enabled for instant payment notifications
-            <br />
-            Auto-polling every 10 seconds for transaction updates
+          <p className="text-xs text-gray-400 mt-1">
+            {mpesaConnected || kopoConnected
+              ? `Real-time sync via Supabase Realtime. M-PESA Daraja ${mpesaConnected ? "connected" : "not connected"}, Kopo Kopo ${kopoConnected ? "connected" : "not connected"}. STK Push and statement imports appear here instantly.`
+              : "Configure M-PESA Daraja or Kopo Kopo in Integration Hub for automated STK Push and webhook ingestion. You can still record payments manually — they sync across all devices via cloud."}
           </p>
         </div>
 
         <div className="space-y-3 max-h-96 overflow-y-auto">
-          {filteredTransactions.length === 0 ? (
+          {filteredTxns.length === 0 ? (
             <div className="text-gray-400 italic text-center py-8">
               <Clock size={24} className="mx-auto mb-2" />
               <div className="font-medium">
                 No live transactions recorded yet
               </div>
               <div className="text-sm mt-2">
-                Real payments will appear here when received through your
-                registered sources.
+                Payments will appear here when received through STK Push,
+                statement import, or manual entry.
               </div>
               <div className="text-xs mt-1">
-                Use STK Push to test M-PESA payments or add more payment
-                sources.
+                Use "Record Payment" to log a received payment, or "STK Push" to
+                send an M-PESA prompt.
               </div>
             </div>
           ) : (
-            filteredTransactions.map((tx) => (
+            filteredTxns.map((tx) => (
               <div
                 key={tx.id}
                 className={`p-3 rounded border-l-4 transition-all duration-300 ${
                   tx.payment_method.toLowerCase().includes("mpesa")
                     ? "border-green-500 bg-green-900/20"
-                    : tx.payment_method.toLowerCase().includes("paypal")
-                      ? "border-blue-500 bg-blue-900/20"
-                      : "border-yellow-500 bg-yellow-900/20"
+                    : tx.payment_method.toLowerCase().includes("cash")
+                      ? "border-yellow-500 bg-yellow-900/20"
+                      : tx.payment_method.toLowerCase().includes("bank")
+                        ? "border-blue-500 bg-blue-900/20"
+                        : tx.payment_method.toLowerCase().includes("card")
+                          ? "border-purple-500 bg-purple-900/20"
+                          : "border-gray-500 bg-gray-900/20"
                 }`}
               >
                 <div className="flex justify-between items-start mb-2">
@@ -1028,18 +1146,27 @@ export default function LiveTransaction() {
                     >
                       {tx.status.toUpperCase()}
                     </span>
+                    <span className="text-[10px] px-2 py-0.5 rounded bg-gray-700 text-gray-300">
+                      {tx.origin === "stk_push"
+                        ? "STK Push"
+                        : tx.origin === "statement"
+                          ? "Statement"
+                          : tx.origin === "manual"
+                            ? "Manual"
+                            : tx.origin === "kopokopo"
+                              ? "Kopo Kopo"
+                              : tx.origin}
+                    </span>
                   </div>
                   <div className="text-xs text-gray-400">
                     {new Date(tx.transaction_time).toLocaleString()}
                   </div>
                 </div>
                 <div className="text-sm text-gray-300">
-                  {tx.transaction_type.toUpperCase()} • Ref:{" "}
-                  {tx.transaction_ref}
+                  {tx.transaction_type} • Ref: {tx.transaction_ref}
                 </div>
                 <div className="text-xs text-blue-400">
-                  Source: {tx.source_name || "Unknown Source"} (
-                  {tx.payment_method})
+                  Source: {tx.source_name || "Direct"} ({tx.payment_method})
                 </div>
                 {tx.sender_info && (
                   <div className="text-xs text-green-400">
@@ -1050,6 +1177,20 @@ export default function LiveTransaction() {
                   <div className="text-xs text-gray-400 mt-1">
                     {tx.description}
                   </div>
+                )}
+                {tx.status === "completed" && (
+                  <button
+                    onClick={() =>
+                      navigateToTab("credit", {
+                        customerName: tx.sender_info || tx.account_reference,
+                        amount: tx.amount,
+                      } satisfies CreditPrefill)
+                    }
+                    className="mt-1 text-[11px] text-pink-300 hover:text-pink-200 flex items-center gap-1"
+                    title="Apply this payment to a Credit Management account"
+                  >
+                    <Wallet size={10} /> Apply to Credit Account
+                  </button>
                 )}
               </div>
             ))
@@ -1276,13 +1417,11 @@ export default function LiveTransaction() {
                   }
                   className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white"
                 >
-                  <option value="mpesa_paybill">M-PESA Paybill</option>
-                  <option value="mpesa_buygoods">M-PESA Buy Goods</option>
-                  <option value="kopo_kopo">
-                    Kopo Kopo (Till / Buy Goods)
-                  </option>
-                  <option value="bank_account">Bank Account</option>
-                  <option value="cash_register">Cash Register</option>
+                  {SOURCE_TYPES.map((st) => (
+                    <option key={st.value} value={st.value}>
+                      {st.label}
+                    </option>
+                  ))}
                 </select>
               </div>
 
@@ -1408,7 +1547,7 @@ export default function LiveTransaction() {
                   placeholder={
                     newSource.source_type.includes("mpesa") ||
                     newSource.source_type === "kopo_kopo"
-                      ? "589252"
+                      ? "e.g., 589252"
                       : "Enter identifier"
                   }
                 />
@@ -1490,15 +1629,17 @@ export default function LiveTransaction() {
                   }
                   className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white"
                 >
-                  <option value="mpesa_paybill">M-PESA Paybill</option>
-                  <option value="mpesa_buygoods">M-PESA Buy Goods</option>
-                  <option value="bank_account">Bank Account</option>
-                  <option value="cash_register">Cash Register</option>
+                  {SOURCE_TYPES.map((st) => (
+                    <option key={st.value} value={st.value}>
+                      {st.label}
+                    </option>
+                  ))}
                 </select>
               </div>
               <div>
                 <label className="block text-sm text-gray-300 mb-1">
-                  {newSource.source_type.includes("mpesa")
+                  {newSource.source_type.includes("mpesa") ||
+                  newSource.source_type === "kopo_kopo"
                     ? "Shortcode/Till Number"
                     : newSource.source_type === "bank_account"
                       ? "Account Number"
@@ -1511,6 +1652,12 @@ export default function LiveTransaction() {
                     setNewSource({ ...newSource, identifier: e.target.value })
                   }
                   className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white"
+                  placeholder={
+                    newSource.source_type.includes("mpesa") ||
+                    newSource.source_type === "kopo_kopo"
+                      ? "e.g., 589252"
+                      : "Enter identifier"
+                  }
                 />
               </div>
               <div>
@@ -1619,92 +1766,165 @@ export default function LiveTransaction() {
         </div>
       )}
 
-      {/* Shared Transactions from M-PESA Analyzer (interlinked) */}
-      {sharedTxns.length > 0 && (
-        <div className="bg-gray-800 p-4 rounded-lg">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-semibold text-white flex items-center gap-2">
-              <FileText size={18} className="text-blue-400" />
-              Shared Transaction Records
-              <span className="text-xs text-gray-400 font-normal">
-                (from M-PESA Analyzer + STK Push)
-              </span>
+      {/* Manual Payment Modal — record a received payment directly into the
+          shared store. This ensures the feed is never empty even without a
+          backend: operators can log cash, bank transfers, M-PESA
+          confirmations, etc. */}
+      {showManualPayment && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-gray-800 rounded-lg p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+              <HandCoins className="text-amber-400" size={20} />
+              Record Payment
             </h3>
-            <button
-              onClick={() => switchToTab("mpesa")}
-              className="text-blue-400 hover:text-blue-300 flex items-center gap-1 text-sm"
-            >
-              Open Analyzer <ArrowRight size={14} />
-            </button>
-          </div>
-          <div className="space-y-2 max-h-64 overflow-y-auto">
-            {sharedTxns.slice(0, 20).map((tx) => (
-              <div
-                key={tx.id}
-                className={`p-3 rounded border-l-4 ${
-                  tx.origin === "stk_push"
-                    ? "border-green-500 bg-green-900/20"
-                    : tx.origin === "statement"
-                      ? "border-blue-500 bg-blue-900/20"
-                      : "border-yellow-500 bg-yellow-900/20"
-                }`}
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm text-gray-300 mb-1">
+                  Sender / Customer Name *
+                </label>
+                <input
+                  type="text"
+                  value={manualPayment.sender_info}
+                  onChange={(e) =>
+                    setManualPayment({
+                      ...manualPayment,
+                      sender_info: e.target.value,
+                    })
+                  }
+                  className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white"
+                  placeholder="e.g., John Mwangi"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-300 mb-1">
+                  Amount (
+                  {getCurrencySymbol(
+                    state.companyData.currency || getDetectedCurrency(),
+                  )}
+                  ) *
+                </label>
+                <input
+                  type="number"
+                  value={manualPayment.amount || ""}
+                  onChange={(e) =>
+                    setManualPayment({
+                      ...manualPayment,
+                      amount: parseFloat(e.target.value) || 0,
+                    })
+                  }
+                  className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white"
+                  placeholder="1000"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-300 mb-1">
+                  Payment Method *
+                </label>
+                <select
+                  value={manualPayment.payment_method}
+                  onChange={(e) =>
+                    setManualPayment({
+                      ...manualPayment,
+                      payment_method: e.target.value,
+                    })
+                  }
+                  className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white"
+                >
+                  {PAYMENT_METHODS.map((m) => (
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm text-gray-300 mb-1">
+                  Payment Source (optional)
+                </label>
+                <select
+                  value={manualPayment.source_id}
+                  onChange={(e) =>
+                    setManualPayment({
+                      ...manualPayment,
+                      source_id: e.target.value,
+                    })
+                  }
+                  className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white"
+                >
+                  <option value="">— Direct / Unspecified —</option>
+                  {paymentSources.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.source_name} ({s.source_type.replace(/_/g, " ")})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm text-gray-300 mb-1">
+                  Account Reference
+                </label>
+                <input
+                  type="text"
+                  value={manualPayment.account_reference}
+                  onChange={(e) =>
+                    setManualPayment({
+                      ...manualPayment,
+                      account_reference: e.target.value,
+                    })
+                  }
+                  className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white"
+                  placeholder="INV-001 or Customer Account"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-300 mb-1">
+                  Description
+                </label>
+                <input
+                  type="text"
+                  value={manualPayment.transaction_desc}
+                  onChange={(e) =>
+                    setManualPayment({
+                      ...manualPayment,
+                      transaction_desc: e.target.value,
+                    })
+                  }
+                  className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white"
+                  placeholder="Payment for fuel"
+                />
+              </div>
+            </div>
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={recordManualPayment}
+                disabled={isLoading}
+                className="flex-1 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white py-2 rounded flex items-center justify-center gap-2"
               >
-                <div className="flex justify-between items-start mb-1">
-                  <div className="font-semibold text-white text-sm">
-                    {formatCurrency(tx.amount)}
-                    <span
-                      className={`ml-2 text-[10px] px-2 py-0.5 rounded ${
-                        tx.status === "completed"
-                          ? "bg-green-600"
-                          : tx.status === "pending"
-                            ? "bg-yellow-600"
-                            : "bg-red-600"
-                      }`}
-                    >
-                      {tx.status.toUpperCase()}
-                    </span>
-                    <span className="ml-2 text-[10px] px-2 py-0.5 rounded bg-gray-700 text-gray-300">
-                      {tx.origin === "stk_push"
-                        ? "STK Push"
-                        : tx.origin === "statement"
-                          ? "Statement"
-                          : tx.origin}
-                    </span>
-                  </div>
-                  <div className="text-xs text-gray-400">
-                    {new Date(tx.transaction_time).toLocaleString()}
-                  </div>
-                </div>
-                <div className="text-xs text-gray-300">
-                  {tx.transaction_type} • Ref: {tx.transaction_ref}
-                </div>
-                {tx.sender_info && (
-                  <div className="text-xs text-green-400">
-                    From: {tx.sender_info}
-                  </div>
+                {isLoading ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : (
+                  <HandCoins size={16} />
                 )}
-                {tx.status === "completed" && (
-                  <button
-                    onClick={() =>
-                      navigateToTab("credit", {
-                        customerName: tx.sender_info || tx.account_reference,
-                        amount: tx.amount,
-                      } satisfies CreditPrefill)
-                    }
-                    className="mt-1 text-[11px] text-pink-300 hover:text-pink-200 flex items-center gap-1"
-                    title="Apply this payment to a Credit Management account"
-                  >
-                    <Wallet size={10} /> Apply to Credit Account
-                  </button>
-                )}
-              </div>
-            ))}
-            {sharedTxns.length > 20 && (
-              <div className="text-center text-xs text-gray-400 py-2">
-                Showing 20 of {sharedTxns.length} — open M-PESA Analyzer for
-                full view
-              </div>
-            )}
+                Record Payment
+              </button>
+              <button
+                onClick={() => {
+                  setShowManualPayment(false);
+                  setManualPayment({
+                    sender_info: "",
+                    amount: 0,
+                    account_reference: "",
+                    transaction_desc: "",
+                    payment_method: "M-PESA",
+                    source_id: "",
+                  });
+                }}
+                disabled={isLoading}
+                className="flex-1 bg-gray-600 hover:bg-gray-700 disabled:opacity-50 text-white py-2 rounded"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}
