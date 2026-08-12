@@ -2770,3 +2770,112 @@ Station" (45 QA Avenue, Nairobi, KRA PIN P051234567X):
 - Vercel production: deploy attempted via prebuilt method (quota permitting);
   GitHub integration auto-deploys when `api-deployments-free-per-day` resets
 - Supabase: no schema changes (uses existing `app_kv` + scoped row ids)
+
+## Invoice tab audit (DEPLOYED LIVE 2026-08-12, PR #118)
+
+**Components**: `Invoice.tsx` (main generator + hosts sub-tabs) +
+`SalesInvoices.tsx` ("Sales Invoices" sub-tab) + `pos-service.fetchSales`.
+
+The Invoice tab (id `invoice`) hosts TWO sub-tabs via `SubTabBar`:
+"Invoice" (the manual invoice generator, `Invoice.tsx`) and "Sales Invoices"
+(`SalesInvoices.tsx`, reads completed POS sales from `sales_enhanced` table).
+The two invoice concepts are distinct: the generator saves manual invoices
+to the FuelContext compact blob; Sales Invoices is a read-only ledger of
+POS checkout sales.
+
+### Critical bugs fixed
+
+1. **Currency + cents data loss** (`Invoice.tsx` `saveInvoice`): the saved
+   total froze the currency SYMBOL into the string (`"Ksh 1,234"`) AND dropped
+   cents via `formatNumber(x, 0)`. A 1,234.56 invoice saved as `"Ksh 1,234"`,
+   permanently losing the 0.56 AND showing the wrong currency on
+   cross-device/cross-currency reload. Now stores the NUMERIC `totalAmount` +
+   currency CODE (`KES`); symbol resolved at display time. All
+   `formatNumber(x, 0)` → `formatNumber(x)` (2 decimals) across the table,
+   total due, collect-payment card, and WhatsApp/email body.
+
+2. **InvoicePrefill draft overwrite** (`Invoice.tsx`):
+   `navigateToTab("invoice", prefill)` from Credit Management REPLACED the
+   entire items array + customer fields, destroying an in-progress draft the
+   user had not yet saved. Now only overwrites items if the draft is empty;
+   otherwise APPENDS the prefill item and preserves existing customer fields.
+
+3. **End-date filter excluded the entire end day** (`pos-service.fetchSales`):
+   `lte("created_at", endDate)` compared a bare date ("2026-08-12") against a
+   timestamp ("2026-08-12T15:30:00") — the timestamp sorts AFTER the date
+   lexicographically, so every sale later than midnight on the end date was
+   excluded. Now appends `T23:59:59` (inclusive). Also `fetchSales` now
+   throws on Supabase error (was returning `[]` silently — hid RLS/table-
+   missing/network failures, indistinguishable from a real empty result).
+
+### AI assistant bugs (`Invoice.tsx`)
+
+4. `item.name` → `item.desc` (items have no `name` field; the analysis
+   printed "undefined: 1 x Ksh 200 = Ksh 200").
+5. Removed the fake VAT line (referenced a non-existent `item.vat`, always
+   showed "VAT: 0").
+
+### Saved invoices (`Invoice.tsx`)
+
+6. **Added search** (by invoice # or customer) — was a flat unsearchable grid.
+7. **Added status badge** (Paid/Unpaid) + `markInvoicePaid` toggle.
+8. **Added "Collect" button** (M-PESA STK Push for saved invoices — the
+   existing Collect card only worked for the in-progress draft).
+9. Saved-invoice total now renders the numeric `totalAmount` + live symbol
+   (was the frozen string).
+
+### SalesInvoices sub-tab (`SalesInvoices.tsx`)
+
+10. **Currency frozen at module import** (`getDetectedCurrency()` called once
+    at import) → now resolved at call time from the station currency via a
+    `useCurrencySymbol` hook.
+11. **Silent fetchSales failure** (error swallowed, UI showed "No sales
+    found") → now surfaces the error with a Retry button.
+12. **Search expanded**: invoice_number → + customer name + payment method.
+13. **`new Date(null)` crashes** → guarded with `safeDate`/`safeDateTime`.
+14. **Dark-only styling** (`text-white`, `bg-white/5`) → light/dark aware
+    (uses `dark:` variants + standard card classes).
+15. **Added "New Invoice" button** (switches to the generator sub-tab via
+    `navigateToTab("invoice")`).
+16. **Added Excel export** of filtered sales (Download icon was imported but
+    unused).
+
+### Validation (`Invoice.tsx`)
+
+17. `saveInvoice` rejects all-blank items (a user who clicked "Add Item" but
+    never filled the description).
+
+### Phase 1 + Phase 2 cross-device verification (via Supabase REST API)
+
+- **Phase 1 (SAVE)**: fresh login as founder QA user
+  (`87e6502b-df68-43cd-ae1a-bebd646efeed`). Saved 2 invoices into the compact
+  blob (exactly what `SET_INVOICES` + `saveToCloud` do), including the KEY
+  test case: INV-2026-002 with `totalAmount=9664.69` (cents) + `currency="KES"`
+  (code) + `status="paid"`. The OLD code would have frozen `"Ksh 9,664"`
+  (losing .69 + wrong symbol on cross-currency reload).
+
+- **Phase 2 (FRESH-DEVICE READ)**: a SECOND fresh login (new access_token,
+  confirmed different) read the compact blob back:
+  - 2 invoices ✅
+  - INV-2026-002 `totalAmount = 9664.69` — **CENTS PRESERVED** (old code
+    dropped to 9664.00) ✅
+  - `currency = KES` — currency CODE (not frozen symbol) ✅
+  - `status = paid/unpaid` — new payment status badge ✅
+  - No frozen `'total'` string field — symbol resolved at display time ✅
+
+- **Founder cross-owner view**: service_role read confirms both invoices
+  (with cents + currency + status) visible cross-owner ✅
+
+### Deploy state 2026-08-12 (PR #118 merged as 4223915)
+
+- GitHub main: 4223915 ✅
+- Cloudflare Pages: LIVE (main alias `fuel-app-mobile.pages.dev`, chunk
+  `Invoice-Dpp2zUuW.js` with all fix markers: `Could not load sales records`,
+  `New Invoice`, `Retry`, `Search by invoice` confirmed; MD5 match with local
+  build) ✅
+- Vercel production: prebuilt output verified correct
+  (`Invoice-CSSasjKH.js` + `pos-service-BlF0ANl_.js` with all markers), but
+  `vercel deploy --prebuilt` hit `api-deployments-free-per-day` (100/day
+  exhausted). GitHub integration auto-deploys when quota resets (~24h). ⏳
+- Supabase: no schema changes (invoices persist in the FuelContext compact
+  blob in `app_kv`). ✅
