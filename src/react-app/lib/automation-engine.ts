@@ -462,6 +462,12 @@ export async function fulfillReorder(
       return { success: false, error: upErr.message };
     }
     // 2) Record an inventory_transaction (restock) for the audit trail.
+    // NOTE: inventory_transactions.reference_id is a UUID column, but the
+    // auto-reorder id is a string like "REO-1723...". Passing the string id
+    // triggers a Postgres 22P02 "invalid input syntax for type uuid" error,
+    // which would abort the insert and leave no audit trail. Use the
+    // product UUID as reference_id (it IS a valid product row id) and keep
+    // the reorder id in the human-readable notes.
     const { data: userData } = await supabase.auth.getUser();
     const ownerId = userData.user?.id;
     await supabase.from("inventory_transactions").insert({
@@ -473,7 +479,7 @@ export async function fulfillReorder(
       new_quantity: newQty,
       unit_cost: product.cost_price || 0,
       reference_type: "reorder",
-      reference_id: reorderId,
+      reference_id: reorder.productId, // valid UUID (the product id)
       notes: `Auto-reorder fulfilled (${reorderId})`,
       owner_id: ownerId,
     });
