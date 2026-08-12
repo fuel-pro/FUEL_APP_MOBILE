@@ -284,6 +284,13 @@ export default function PayrollSystem() {
   const [saving, setSaving] = useState(false);
   const [importing, setImporting] = useState(false);
 
+  // CRITICAL: guard against the auto-save (saveSettings fired from the
+  // companyData sync effect) overwriting the cloud store BEFORE the initial
+  // cloud load completes. Without this, on a fresh device the default/empty
+  // settings are persisted to cloud before fetchSettings returns, wiping the
+  // user's real settings (the same class of bug fixed in FuelContext).
+  const cloudLoadCompleteRef = useRef(false);
+
   // UI State
   const [activeTab, setActiveTab] = useState("employees");
   const [showEmployeeModal, setShowEmployeeModal] = useState(false);
@@ -294,6 +301,7 @@ export default function PayrollSystem() {
 
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [employeeToDelete, setEmployeeToDelete] = useState<number | null>(null);
+  const [employeeToDeleteId, setEmployeeToDeleteId] = useState<string>("");
   const [currentPage, setCurrentPage] = useState(1);
   const [entriesPerPage, setEntriesPerPage] = useState(25);
   const [searchTerm, setSearchTerm] = useState("");
@@ -323,8 +331,8 @@ export default function PayrollSystem() {
     shaNo: "",
     nssfNo: "",
     bankAccount: "",
-    bankName: "KCB LODWAR",
-    bankCode: "01144",
+    bankName: "",
+    bankCode: "",
     phone: "",
     email: "",
     advance: 0,
@@ -335,11 +343,29 @@ export default function PayrollSystem() {
 
   // Helper functions
   const formatNumber = (num: number) => {
+    if (!Number.isFinite(num)) return "0.00";
     return num.toFixed(2).replace(/\d(?=(\d{3})+\.)/g, "$&,");
   };
 
   const formatCurrency = (amount: number) => {
     return `${settings.currency} ${formatNumber(amount)}`;
+  };
+
+  // Single source of truth for net-pay calculation. Guards against NaN /
+  // Infinity (bad parse, missing field). Was duplicated inline in 4 places
+  // (saveEmployee, applyShaToAll, applyNssfToAll, updateCell) — each with a
+  // slightly different formula and none guarded against NaN.
+  const calcNetPay = (emp: {
+    basicSalary: number;
+    advance: number;
+    sha: number;
+    nssf: number;
+  }): number => {
+    const basic = Number.isFinite(emp.basicSalary) ? emp.basicSalary : 0;
+    const advance = Number.isFinite(emp.advance) ? emp.advance : 0;
+    const sha = Number.isFinite(emp.sha) ? emp.sha : 0;
+    const nssf = Number.isFinite(emp.nssf) ? emp.nssf : 0;
+    return Math.round((basic - advance - sha - nssf) * 100) / 100;
   };
 
   // API calls
@@ -399,8 +425,13 @@ export default function PayrollSystem() {
   };
 
   const saveSettings = async (newSettings: Partial<PayrollSettings>) => {
+    // CRITICAL: do NOT persist until the initial cloud load has completed.
+    // On a fresh device, this fires from the companyData sync effect BEFORE
+    // fetchSettings returns; persisting would overwrite the user's real
+    // cloud settings with defaults.
+    if (user && !cloudLoadCompleteRef.current) return;
     try {
-      setImporting(true);
+      setSaving(true);
       const merged = { ...settings, ...newSettings };
       // Persist to cloud (Supabase app_kv) + localStorage cache
       const payload = {
@@ -430,7 +461,7 @@ export default function PayrollSystem() {
       console.error("Error saving settings:", error);
       alert("Failed to save payroll settings: " + (error as Error).message);
     } finally {
-      setImporting(false);
+      setSaving(false);
     }
   };
 
@@ -458,8 +489,14 @@ export default function PayrollSystem() {
   // Initialize data
   useEffect(() => {
     if (user) {
-      Promise.all([fetchEmployees(), fetchSettings()]);
+      cloudLoadCompleteRef.current = false;
+      Promise.all([fetchEmployees(), fetchSettings()]).finally(() => {
+        cloudLoadCompleteRef.current = true;
+      });
+    } else {
+      cloudLoadCompleteRef.current = false;
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, stationId]);
 
   // Employee CRUD operations
@@ -478,8 +515,8 @@ export default function PayrollSystem() {
       shaNo: "",
       nssfNo: "",
       bankAccount: "",
-      bankName: "KCB LODWAR",
-      bankCode: "01144",
+      bankName: "",
+      bankCode: "",
       phone: "",
       email: "",
       advance: 0,
@@ -520,11 +557,34 @@ export default function PayrollSystem() {
   const saveEmployee = async () => {
     try {
       setSaving(true);
+
+      // Required-field validation (was missing — a user could save an
+      // employee with no name, producing a blank row in the table + cloud).
+      if (!employeeForm.firstName.trim() && !employeeForm.lastName.trim()) {
+        alert("Please enter at least a first name or last name.");
+        return;
+      }
+      if (!employeeForm.role.trim()) {
+        alert("Please enter a role/position for the employee.");
+        return;
+      }
+
+      const resolvedEmployeeId =
+        employeeForm.employeeId.trim() ||
+        `EMP-${Date.now().toString(36).toUpperCase()}`;
+
+      const computedNet = calcNetPay({
+        basicSalary: employeeForm.basicSalary,
+        advance: employeeForm.advance,
+        sha: employeeForm.sha,
+        nssf: employeeForm.nssf,
+      });
+
       const empData = {
         first_name: employeeForm.firstName,
         last_name: employeeForm.lastName,
         full_name: `${employeeForm.firstName} ${employeeForm.lastName}`.trim(),
-        employee_id: employeeForm.employeeId,
+        employee_id: resolvedEmployeeId,
         role: employeeForm.role,
         department: employeeForm.department,
         basic_salary: employeeForm.basicSalary,
@@ -541,11 +601,7 @@ export default function PayrollSystem() {
         advance_amount: employeeForm.advance,
         sha_amount: employeeForm.sha || 0,
         nssf_amount: employeeForm.nssf || 0,
-        net_pay:
-          (employeeForm.basicSalary || 0) -
-          (employeeForm.advance || 0) -
-          (employeeForm.sha || 0) -
-          (employeeForm.nssf || 0),
+        net_pay: computedNet,
         notes: employeeForm.notes,
       };
 
@@ -556,8 +612,13 @@ export default function PayrollSystem() {
         )) || [];
       let updatedList: any[];
       if (editingEmployee) {
+        // Match by employee_id (stable). Was matching by employeeId which is
+        // empty for new employees → idx=-1 → appended a duplicate instead of
+        // updating the intended row.
         const idx = cloudData.findIndex(
-          (e: any) => e.employee_id === editingEmployee.employeeId,
+          (e: any) =>
+            e.employee_id === editingEmployee.employeeId ||
+            e.id === editingEmployee.id,
         );
         updatedList =
           idx >= 0
@@ -566,7 +627,7 @@ export default function PayrollSystem() {
                 { ...cloudData[idx], ...empData },
                 ...cloudData.slice(idx + 1),
               ]
-            : [...cloudData, empData];
+            : [...cloudData, { ...empData, id: Date.now() }];
       } else {
         updatedList = [...cloudData, { ...empData, id: Date.now() }];
       }
@@ -604,42 +665,57 @@ export default function PayrollSystem() {
   };
 
   const confirmDeleteEmployee = (employee: Employee) => {
+    // Store the employeeId (stable string) AND the numeric id so delete can
+    // match either. Was `employee.id || 0` — a real employee with id=0
+    // (first in a fresh list) would set 0, then `if (employeeToDelete)` is
+    // falsy → delete silently no-ops.
     setEmployeeToDelete(employee.id || 0);
+    setEmployeeToDeleteId(employee.employeeId);
     setShowDeleteModal(true);
   };
 
   const deleteEmployee = async () => {
-    if (employeeToDelete) {
-      try {
-        setSaving(true);
-        const cloudData =
-          (await cloudStorageService.get<any[]>(
-            "payroll_employees",
-            stationId,
-          )) || [];
-        const updatedList = cloudData.filter(
-          (e: any) =>
-            e.id !== employeeToDelete && e.employee_id !== employeeToDelete,
-        );
-        await cloudStorageService.set(
+    // Match by BOTH the numeric id AND the stable employeeId string. The old
+    // code only matched `e.id !== employeeToDelete` — but the cloud record's
+    // `id` is assigned at insert (Date.now()) and may not match the
+    // normalized Employee.id (which falls back to index+1). So deletes
+    // frequently failed to match and the employee stayed in cloud.
+    const targetId = employeeToDelete;
+    const targetEmpId = employeeToDeleteId;
+    if (!targetId && !targetEmpId) return;
+    try {
+      setSaving(true);
+      const cloudData =
+        (await cloudStorageService.get<any[]>(
           "payroll_employees",
-          updatedList,
           stationId,
-        );
-        localStorage.setItem(
-          "fuelpro_payroll_employees",
-          JSON.stringify(updatedList),
-        );
+        )) || [];
+      const updatedList = cloudData.filter(
+        (e: any) =>
+          !(
+            (targetId && e.id === targetId) ||
+            (targetEmpId && e.employee_id === targetEmpId)
+          ),
+      );
+      await cloudStorageService.set(
+        "payroll_employees",
+        updatedList,
+        stationId,
+      );
+      localStorage.setItem(
+        "fuelpro_payroll_employees",
+        JSON.stringify(updatedList),
+      );
 
-        await fetchEmployees();
-        setShowDeleteModal(false);
-        setEmployeeToDelete(null);
-      } catch (error) {
-        console.error("Error deleting employee:", error);
-        alert("Failed to delete employee: " + (error as Error).message);
-      } finally {
-        setSaving(false);
-      }
+      await fetchEmployees();
+      setShowDeleteModal(false);
+      setEmployeeToDelete(null);
+      setEmployeeToDeleteId("");
+    } catch (error) {
+      console.error("Error deleting employee:", error);
+      alert("Failed to delete employee: " + (error as Error).message);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -652,15 +728,24 @@ export default function PayrollSystem() {
           "payroll_employees",
           stationId,
         )) || [];
-      const updatedList = cloudData.map((emp: any) => ({
-        ...emp,
-        sha_amount: (emp.basic_salary || 0) * (shaPercentage / 100),
-        net_pay:
-          (emp.basic_salary || 0) -
-          (emp.advance_amount || 0) -
-          (emp.sha_amount || 0) -
-          (emp.nssf_amount || 0),
-      }));
+      // CRITICAL FIX: the old code computed net_pay using emp.sha_amount
+      // (the OLD value) instead of the NEW sha_amount it just set. So after
+      // "Apply SHA to All", every employee's net_pay was wrong (used the
+      // pre-update SHA). Now we compute the new SHA first, then derive
+      // net_pay from it via calcNetPay (with NaN guard).
+      const updatedList = cloudData.map((emp: any) => {
+        const newSha = (emp.basic_salary || 0) * (shaPercentage / 100);
+        return {
+          ...emp,
+          sha_amount: Math.round(newSha * 100) / 100,
+          net_pay: calcNetPay({
+            basicSalary: emp.basic_salary || 0,
+            advance: emp.advance_amount || 0,
+            sha: newSha,
+            nssf: emp.nssf_amount || 0,
+          }),
+        };
+      });
       await cloudStorageService.set(
         "payroll_employees",
         updatedList,
@@ -674,9 +759,13 @@ export default function PayrollSystem() {
       await fetchEmployees();
       const updatedSettings = { ...settings, shaPercentage };
       setSettings(updatedSettings);
+      saveSettings(updatedSettings);
       setShowShaModal(false);
     } catch (error) {
+      // Was only console.error — the user saw the modal close with no SHA
+      // applied and no explanation.
       console.error("Error updating SHA:", error);
+      alert("Failed to apply SHA: " + (error as Error).message);
     } finally {
       setSaving(false);
     }
@@ -690,15 +779,18 @@ export default function PayrollSystem() {
           "payroll_employees",
           stationId,
         )) || [];
-      const updatedList = cloudData.map((emp: any) => ({
-        ...emp,
-        nssf_amount: nssfAmount,
-        net_pay:
-          (emp.basic_salary || 0) -
-          (emp.advance_amount || 0) -
-          (emp.sha_amount || 0) -
-          nssfAmount,
-      }));
+      const updatedList = cloudData.map((emp: any) => {
+        return {
+          ...emp,
+          nssf_amount: nssfAmount,
+          net_pay: calcNetPay({
+            basicSalary: emp.basic_salary || 0,
+            advance: emp.advance_amount || 0,
+            sha: emp.sha_amount || 0,
+            nssf: nssfAmount,
+          }),
+        };
+      });
       await cloudStorageService.set(
         "payroll_employees",
         updatedList,
@@ -712,6 +804,7 @@ export default function PayrollSystem() {
       await fetchEmployees();
       const updatedSettings = { ...settings, nssfAmount };
       setSettings(updatedSettings);
+      saveSettings(updatedSettings);
       setShowNssfModal(false);
     } catch (error) {
       console.error("Error updating NSSF:", error);
@@ -749,11 +842,12 @@ export default function PayrollSystem() {
         if (field === "nssf") updatedEmployee.nssf = numValue;
         if (field === "advance") updatedEmployee.advance = numValue;
 
-        updatedEmployee.netPay =
-          updatedEmployee.basicSalary -
-          (updatedEmployee.sha +
-            updatedEmployee.nssf +
-            updatedEmployee.advance);
+        updatedEmployee.netPay = calcNetPay({
+          basicSalary: updatedEmployee.basicSalary,
+          advance: updatedEmployee.advance,
+          sha: updatedEmployee.sha,
+          nssf: updatedEmployee.nssf,
+        });
       } else {
         (updatedEmployee as any)[field] = value;
       }
@@ -847,28 +941,52 @@ export default function PayrollSystem() {
     reader.readAsDataURL(file);
   };
 
+  // Reset to page 1 whenever the search term changes (was missing — after
+  // filtering to e.g. 1 result on page 3, the table showed an empty page).
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
+
   // Filter and pagination
-  const filteredEmployees = employees.filter(
-    (emp) =>
-      (emp.fullName || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (emp.role || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (emp.department || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+  const filteredEmployees = employees.filter((emp) => {
+    const q = searchTerm.toLowerCase();
+    return (
+      (emp.fullName || "").toLowerCase().includes(q) ||
+      (emp.role || "").toLowerCase().includes(q) ||
+      (emp.department || "").toLowerCase().includes(q) ||
       (emp.no || "").includes(searchTerm) ||
       (emp.idNo || "").includes(searchTerm) ||
-      (emp.employeeId || "").includes(searchTerm),
-  );
+      (emp.employeeId || "").includes(searchTerm) ||
+      // Was missing — searching by phone/email/KRA PIN found nothing.
+      (emp.phone || "").toLowerCase().includes(q) ||
+      (emp.email || "").toLowerCase().includes(q) ||
+      (emp.kraPin || "").toLowerCase().includes(q) ||
+      (emp.bankAccount || "").includes(searchTerm)
+    );
+  });
 
-  const totalPages = Math.ceil(filteredEmployees.length / entriesPerPage);
-  const startIndex = (currentPage - 1) * entriesPerPage;
+  const totalPages = Math.max(
+    Math.ceil(filteredEmployees.length / entriesPerPage),
+    1,
+  );
+  const safePage = Math.min(currentPage, totalPages);
+  const startIndex = (safePage - 1) * entriesPerPage;
   const endIndex = startIndex + entriesPerPage;
   const paginatedEmployees = filteredEmployees.slice(startIndex, endIndex);
 
-  // Summary calculations
-  const totalGross = employees.reduce((sum, emp) => sum + emp.basicSalary, 0);
-  const totalSha = employees.reduce((sum, emp) => sum + emp.sha, 0);
-  const totalNssf = employees.reduce((sum, emp) => sum + emp.nssf, 0);
-  const totalAdvances = employees.reduce((sum, emp) => sum + emp.advance, 0);
-  const totalNet = employees.reduce((sum, emp) => sum + emp.netPay, 0);
+  // Summary calculations (guard against NaN from corrupt cloud records).
+  const safeNum = (n: number) => (Number.isFinite(n) ? n : 0);
+  const totalGross = employees.reduce(
+    (sum, emp) => sum + safeNum(emp.basicSalary),
+    0,
+  );
+  const totalSha = employees.reduce((sum, emp) => sum + safeNum(emp.sha), 0);
+  const totalNssf = employees.reduce((sum, emp) => sum + safeNum(emp.nssf), 0);
+  const totalAdvances = employees.reduce(
+    (sum, emp) => sum + safeNum(emp.advance),
+    0,
+  );
+  const totalNet = employees.reduce((sum, emp) => sum + safeNum(emp.netPay), 0);
 
   // Export functions with backend integration
   const exportToExcel = () => {
@@ -1460,6 +1578,7 @@ export default function PayrollSystem() {
     if (!file) return;
 
     try {
+      setImporting(true);
       setSaving(true);
 
       // Read the Excel file
@@ -1617,10 +1736,8 @@ export default function PayrollSystem() {
           sha_number: String(row[getColumnIndex("shaNo")] || "").trim(),
           nssf_number: String(row[getColumnIndex("nssfNo")] || "").trim(),
           bank_account: String(row[getColumnIndex("bankAccount")] || "").trim(),
-          bank_name: String(
-            row[getColumnIndex("bankName")] || "KCB LODWAR",
-          ).trim(),
-          bank_code: String(row[getColumnIndex("bankCode")] || "01144").trim(),
+          bank_name: String(row[getColumnIndex("bankName")] || "").trim(),
+          bank_code: String(row[getColumnIndex("bankCode")] || "").trim(),
           phone: String(row[getColumnIndex("phone")] || "").trim(),
           email: String(row[getColumnIndex("email")] || "").trim(),
           employment_date: String(
@@ -1659,20 +1776,29 @@ export default function PayrollSystem() {
 
       // Import employees directly to cloud storage + localStorage
       let successCount = 0;
-      const errorCount = 0;
+      let errorCount = 0;
       const localImported: any[] = [];
 
       for (const employeeData of importedEmployees) {
+        // Assign a stable employee_id if missing (was `Date.now() + Math.random()`
+        // which produced a FLOAT id — breaks cloud lookups that compare with ===).
+        const empId =
+          employeeData.employee_id ||
+          `EMP-${Date.now().toString(36).toUpperCase()}-${successCount}`;
         localImported.push({
-          id: Date.now() + Math.random(),
+          id: Date.now() + successCount, // integer, not float
           ...employeeData,
-          sha: 0,
-          nssf: 0,
-          advance: employeeData.advance_amount || 0,
-          basicSalary: employeeData.basic_salary || 0,
-          netPay:
-            (employeeData.basic_salary || 0) -
-            (employeeData.advance_amount || 0),
+          employee_id: empId,
+          sha_amount: 0,
+          nssf_amount: 0,
+          advance_amount: employeeData.advance_amount || 0,
+          basic_salary: employeeData.basic_salary || 0,
+          net_pay: calcNetPay({
+            basicSalary: employeeData.basic_salary || 0,
+            advance: employeeData.advance_amount || 0,
+            sha: 0,
+            nssf: 0,
+          }),
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         });
@@ -1687,7 +1813,23 @@ export default function PayrollSystem() {
               "payroll_employees",
               stationId,
             )) || [];
-          const updated = [...cloudData, ...localImported];
+          // De-duplicate: skip imported employees whose employee_id already
+          // exists in cloud (was missing — re-importing the same file
+          // created duplicates every time).
+          const existingIds = new Set(
+            cloudData.map((e: any) => e.employee_id).filter(Boolean),
+          );
+          const toAdd = localImported.filter(
+            (emp) => !existingIds.has(emp.employee_id),
+          );
+          const skippedDupes = localImported.length - toAdd.length;
+          if (toAdd.length === 0) {
+            alert(
+              `All ${localImported.length} imported employees already exist (matched by Employee ID). No duplicates added.`,
+            );
+            return;
+          }
+          const updated = [...toAdd, ...cloudData];
           await cloudStorageService.set(
             "payroll_employees",
             updated,
@@ -1699,10 +1841,9 @@ export default function PayrollSystem() {
           );
           // Update local state
           setEmployees((prev) => [
-            ...prev,
-            ...localImported.map((emp) => ({
+            ...toAdd.map((emp, i) => ({
               id: emp.id,
-              no: String(prev.length + localImported.indexOf(emp) + 1),
+              no: String(prev.length + i + 1),
               firstName: emp.first_name || "",
               lastName: emp.last_name || "",
               fullName: `${emp.first_name || ""} ${emp.last_name || ""}`.trim(),
@@ -1713,7 +1854,7 @@ export default function PayrollSystem() {
               sha: 0,
               nssf: 0,
               advance: emp.advance_amount || 0,
-              netPay: (emp.basic_salary || 0) - (emp.advance_amount || 0),
+              netPay: emp.net_pay || 0,
               bank: emp.bank_name || "",
               bankCode: emp.bank_code || "",
               idNo: emp.id_number || "",
@@ -1726,21 +1867,32 @@ export default function PayrollSystem() {
               employmentDate: emp.employment_date || "",
               notes: emp.notes || "",
             })),
+            ...prev,
           ]);
-        } catch {
-          /* */
+          if (skippedDupes > 0) {
+            alert(
+              `Imported ${toAdd.length} employees. ${skippedDupes} duplicate(s) skipped (already exist by Employee ID).`,
+            );
+          }
+        } catch (importErr) {
+          // Was `catch { /* */ }` — silently swallowed, so the user saw
+          // "Successfully imported" even when the cloud write failed.
+          errorCount = localImported.length;
+          console.error("Error saving imported employees to cloud:", importErr);
+          alert(
+            "Failed to save imported employees to cloud: " +
+              (importErr as Error).message,
+          );
         }
       }
 
       // Show results
-      if (successCount > 0) {
+      if (successCount > 0 && errorCount === 0) {
+        alert(`Successfully imported ${successCount} employees.`);
+        await fetchEmployees(); // Refresh from cloud
+      } else if (errorCount > 0) {
         alert(
-          `Successfully imported ${successCount} employees${errorCount > 0 ? ` (${errorCount} failed)` : ""}.`,
-        );
-        if (errorCount === 0) await fetchEmployees(); // Refresh if all API
-      } else {
-        alert(
-          "Failed to import any employees. Please check the file format and try again.",
+          `Import partially failed: ${errorCount} employee(s) could not be saved.`,
         );
       }
     } catch (error) {
@@ -1749,6 +1901,7 @@ export default function PayrollSystem() {
         "Error reading Excel file. Please ensure it is a valid .xlsx file and try again.",
       );
     } finally {
+      setImporting(false);
       setSaving(false);
       // Reset the file input
       if (importInputRef.current) {
@@ -2225,21 +2378,19 @@ export default function PayrollSystem() {
         </div>
         <div className="flex gap-1 md:gap-2">
           <button
-            onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-            disabled={currentPage === 1}
+            onClick={() => setCurrentPage(Math.max(1, safePage - 1))}
+            disabled={safePage === 1}
             className="px-2 md:px-3 py-1 md:py-2 text-xs md:text-base border border-gray-300 dark:border-gray-600 rounded disabled:opacity-50"
           >
             <span className="hidden md:inline">Previous</span>
             <span className="md:hidden">Prev</span>
           </button>
           <span className="px-2 md:px-3 py-1 md:py-2 text-xs md:text-base bg-blue-900 text-white rounded">
-            {currentPage} of {totalPages}
+            {safePage} of {totalPages}
           </span>
           <button
-            onClick={() =>
-              setCurrentPage(Math.min(totalPages, currentPage + 1))
-            }
-            disabled={currentPage === totalPages}
+            onClick={() => setCurrentPage(Math.min(totalPages, safePage + 1))}
+            disabled={safePage === totalPages}
             className="px-2 md:px-3 py-1 md:py-2 text-xs md:text-base border border-gray-300 dark:border-gray-600 rounded disabled:opacity-50"
           >
             Next
