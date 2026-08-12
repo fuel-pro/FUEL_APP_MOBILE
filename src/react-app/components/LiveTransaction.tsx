@@ -146,6 +146,8 @@ export default function LiveTransaction() {
     loading: boolean;
     success: boolean;
     error: string;
+    pending?: boolean;
+    pendingMessage?: string;
     checkout_request_id?: string;
   }>({
     loading: false,
@@ -439,6 +441,7 @@ export default function LiveTransaction() {
       !stkPushData.account_reference
     ) {
       setStkPushStatus({
+        pending: false,
         loading: false,
         success: false,
         error: "Please fill in all required fields",
@@ -506,6 +509,7 @@ export default function LiveTransaction() {
 
       if (apiSuccess) {
         setStkPushStatus({
+          pending: false,
           loading: false,
           success: true,
           error: "",
@@ -521,13 +525,21 @@ export default function LiveTransaction() {
           startTransactionPolling(checkoutRequestId);
         }
       } else {
-        // The API didn't succeed, but we still recorded the transaction.
+        // The API didn't succeed, but we still recorded the transaction as
+        // pending. Show a clear, non-contradictory message — do NOT set
+        // stkPushStatus.success=true (that would show the "sent successfully"
+        // message alongside the failure notice). Instead, set a `pending`
+        // flag so the modal shows a yellow "recorded as pending" notice.
         setStkPushStatus({
           loading: false,
-          success: true,
+          success: false,
           error: "",
+          pending: true,
+          pendingMessage:
+            "STK Push request recorded as pending. " +
+            (apiError || "The M-Pesa backend is not deployed yet.") +
+            " The request is saved and will sync across all devices.",
         });
-        setSuccess("STK Push request recorded as pending. " + apiError);
         setStkPushData({
           phone_number: "",
           amount: 0,
@@ -538,6 +550,7 @@ export default function LiveTransaction() {
     } catch (error) {
       console.error("Error initiating STK push:", error);
       setStkPushStatus({
+        pending: false,
         loading: false,
         success: false,
         error: "An unexpected error occurred. Please try again.",
@@ -1257,12 +1270,37 @@ export default function LiveTransaction() {
                   onClick={() => {
                     setShowSTKPush(false);
                     setStkPushStatus({
+                      pending: false,
                       loading: false,
                       success: false,
                       error: "",
                     });
                   }}
                   className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded"
+                >
+                  Close
+                </button>
+              </div>
+            ) : stkPushStatus.pending ? (
+              <div className="text-center">
+                <Clock className="text-amber-400 mx-auto mb-4" size={48} />
+                <p className="text-amber-200 mb-4 font-semibold">
+                  STK Push recorded as pending
+                </p>
+                <p className="text-gray-300 text-sm mb-4">
+                  {stkPushStatus.pendingMessage}
+                </p>
+                <button
+                  onClick={() => {
+                    setShowSTKPush(false);
+                    setStkPushStatus({
+                      pending: false,
+                      loading: false,
+                      success: false,
+                      error: "",
+                    });
+                  }}
+                  className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded"
                 >
                   Close
                 </button>
@@ -1375,6 +1413,7 @@ export default function LiveTransaction() {
                     onClick={() => {
                       setShowSTKPush(false);
                       setStkPushStatus({
+                        pending: false,
                         loading: false,
                         success: false,
                         error: "",
