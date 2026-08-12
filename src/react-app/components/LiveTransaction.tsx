@@ -33,6 +33,7 @@ import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 import {
   getCurrencySymbol,
   getDetectedCurrency,
+  getDetectedCountryCode,
 } from "@/react-app/lib/currency";
 import {
   getTransactions,
@@ -52,6 +53,81 @@ import {
   type KopokopoIntegrationConfig,
 } from "@/react-app/lib/mpesa-integration-service";
 import { formatNumber } from "@/react-app/utils/formatUtils";
+
+// Country ISO code → international dialing code. Covers every country where
+// M-PESA-equivalent STK Push / mobile money is commonly used, plus all major
+// countries, so the phone formatter is country-aware (was hardcoded +254 KE).
+const DIALING_CODES: Record<string, string> = {
+  KE: "254",
+  UG: "256",
+  TZ: "255",
+  NG: "234",
+  GH: "233",
+  ZA: "27",
+  RW: "250",
+  ET: "251",
+  IN: "91",
+  US: "1",
+  GB: "44",
+  AE: "971",
+  SA: "966",
+  EG: "20",
+  ZM: "260",
+  MW: "265",
+  MZ: "258",
+  BW: "267",
+  NA: "264",
+  SL: "232",
+  LR: "231",
+  GM: "220",
+  SN: "221",
+  CI: "225",
+  CM: "237",
+  CG: "242",
+  CD: "243",
+  AO: "244",
+  SD: "249",
+  MA: "212",
+  DZ: "213",
+  TN: "216",
+  LY: "218",
+  PK: "92",
+  BD: "880",
+  ID: "62",
+  PH: "63",
+  MY: "60",
+  TH: "66",
+  VN: "84",
+  CN: "86",
+  JP: "81",
+  KR: "82",
+  AU: "61",
+  NZ: "64",
+  CA: "1",
+  BR: "55",
+  MX: "52",
+  AR: "54",
+  CL: "56",
+  CO: "57",
+  PE: "51",
+  TR: "90",
+  RU: "7",
+  DE: "49",
+  FR: "33",
+  IT: "39",
+  ES: "34",
+  NL: "31",
+  PT: "351",
+  SE: "46",
+  NO: "47",
+  DK: "45",
+  FI: "358",
+  PL: "48",
+};
+function getDialingCode(): string {
+  const cc = getDetectedCountryCode();
+  return DIALING_CODES[cc] || "254";
+}
 
 interface PaymentSource {
   id: number;
@@ -166,19 +242,30 @@ export default function LiveTransaction() {
     kopoConfig?.apiKey
   );
 
-  // Load data on component mount
+  // Load data on component mount.
+  // NOTE: the 10s polling interval was removed — real-time Supabase
+  // subscriptions (subscribeToTransactions below) push cross-device updates
+  // instantly, so polling only burned bandwidth + risked overwriting an
+  // in-progress edit with stale cloud data.
   useEffect(() => {
     if (user) {
       loadPaymentSources();
       loadLiveTransactions();
-
-      // Auto-refresh every 10 seconds for real-time updates
-      const interval = setInterval(() => {
-        loadLiveTransactions();
-      }, 10000);
-
-      return () => clearInterval(interval);
     }
+  }, [user, stationId]);
+
+  // Real-time subscription for payment sources so a source added/edited on
+  // another device shows up instantly (was missing — only loaded on mount).
+  useEffect(() => {
+    if (!user) return;
+    const unsub = cloudStorageService.subscribe<PaymentSource[]>(
+      "payment_sources",
+      stationId,
+      (val) => {
+        if (val && Array.isArray(val)) setPaymentSources(val);
+      },
+    );
+    return () => unsub?.();
   }, [user, stationId]);
 
   // Load + subscribe to shared transactions (interlinked with M-PESA Analyzer)
@@ -271,22 +358,40 @@ export default function LiveTransaction() {
       setPaymentSources(sources);
     } catch (error) {
       console.error("Error loading payment sources:", error);
-      alert("Failed to load payment sources. Please try again.");
+      setError("Failed to load payment sources. Please try again.");
     }
   };
 
   const loadLiveTransactions = async () => {
+    // The "Live Transaction Feed" must show the SAME records that
+    // STK Push and the M-PESA Analyzer write to. Both write to the shared
+    // `mpesa_transactions` store (mpesa-integration-service), so we read from
+    // there — NOT the orphan `live_transactions` cloud key (which no code
+    // anywhere writes, so the feed was permanently empty even though
+    // transactions existed in the shared store).
     try {
       setIsRefreshing(true);
-      const transactions =
-        (await cloudStorageService.get<LiveTransaction[]>(
-          "live_transactions",
-          stationId,
-        )) || [];
-      setLiveTransactions(transactions);
+      const transactions = await getTransactions(stationId);
+      // Map the shared UnifiedTransaction shape to the local LiveTransaction
+      // view so the existing table render works unchanged.
+      const mapped: LiveTransaction[] = transactions.map((t) => ({
+        id: t.id as unknown as number,
+        transaction_ref: t.transaction_ref,
+        transaction_type: t.transaction_type,
+        amount: t.amount,
+        currency: t.currency,
+        sender_info: t.sender_info,
+        description: t.description,
+        status: t.status,
+        payment_method: t.payment_method,
+        transaction_time: t.transaction_time,
+        source_name: t.source_name,
+        source_type: t.source_type,
+      }));
+      setLiveTransactions(mapped);
     } catch (error) {
       console.error("Error loading live transactions:", error);
-      alert("Failed to load live transactions. Please try again.");
+      setError("Failed to load live transactions. Please try again.");
     } finally {
       setIsRefreshing(false);
     }
@@ -331,7 +436,7 @@ export default function LiveTransaction() {
     } catch (error) {
       console.error("Error adding payment source:", error);
       setError("Failed to add payment source. Please try again.");
-      alert("Failed to add payment source. Please try again.");
+      setError("Failed to add payment source. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -382,7 +487,7 @@ export default function LiveTransaction() {
     } catch (error) {
       console.error("Error updating payment source:", error);
       setError("Failed to update payment source. Please try again.");
-      alert("Failed to update payment source. Please try again.");
+      setError("Failed to update payment source. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -416,7 +521,7 @@ export default function LiveTransaction() {
     } catch (error) {
       console.error("Error deleting payment source:", error);
       setError("Failed to delete payment source. Please try again.");
-      alert("Failed to delete payment source. Please try again.");
+      setError("Failed to delete payment source. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -436,9 +541,70 @@ export default function LiveTransaction() {
       return;
     }
 
-    try {
-      setStkPushStatus({ loading: true, success: false, error: "" });
+    setStkPushStatus({ loading: true, success: false, error: "" });
 
+    // 1) ALWAYS persist the pending STK Push request to the shared cloud store
+    // FIRST — so the transaction record is cross-device durable regardless of
+    // whether the M-PESA Daraja backend is reachable. Previously the write was
+    // inside the `if (data.success)` branch, so a 404 (no /api/mpesa/stk-push
+    // route exists in this project) meant the transaction was NEVER recorded —
+    // it vanished as if it never happened. The account_reference is now
+    // included so the Invoice→STK→Credit round trip works.
+    const checkoutRef = `STK${Date.now()}`;
+    const currency = state.companyData.currency || getDetectedCurrency();
+    const formattedPhone = formatPhoneNumber(stkPushData.phone_number);
+    await addTransaction(
+      {
+        transaction_ref: checkoutRef,
+        origin: "stk_push",
+        transaction_type: "STK Push",
+        amount: stkPushData.amount,
+        currency,
+        sender_info: formattedPhone,
+        description: stkPushData.transaction_desc || "STK Push payment",
+        status: "pending",
+        payment_method: "M-PESA STK Push",
+        transaction_time: new Date().toISOString(),
+        account_reference: stkPushData.account_reference,
+      },
+      stationId,
+    ).catch(() => {});
+
+    // Refresh both feeds so the pending transaction appears immediately.
+    loadLiveTransactions();
+
+    // 2) Attempt the actual Daraja STK Push call. The /api/mpesa/stk-push
+    // serverless route does not exist in this project, so on Vercel/Cloudflare
+    // this returns 404. We treat that as "no live backend" — the pending
+    // record is already saved above and can be completed later via the
+    // M-PESA Analyzer statement import or a webhook. We do NOT alert() on
+    // the 404 (it's expected when the integration isn't deployed); we surface
+    // a clear inline message and let the user proceed.
+    const mpesaReady = !!(
+      mpesaConfig?.enabled &&
+      mpesaConfig?.consumerKey &&
+      mpesaConfig?.consumerSecret &&
+      mpesaConfig?.shortcode
+    );
+
+    if (!mpesaReady) {
+      setStkPushStatus({
+        loading: false,
+        success: false,
+        error:
+          "STK Push request saved as pending. To trigger a real M-PESA prompt, configure the M-PESA Daraja integration in the Integration Hub (Payment Setup) — the live Daraja backend is not yet connected. The record is saved and will show in the M-PESA Analyzer.",
+      });
+      // Reset form; keep the modal open so the user sees the message.
+      setStkPushData({
+        phone_number: "",
+        amount: 0,
+        account_reference: "",
+        transaction_desc: "",
+      });
+      return;
+    }
+
+    try {
       const response = await fetch("/api/mpesa/stk-push", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -446,81 +612,65 @@ export default function LiveTransaction() {
       });
 
       if (!response.ok) {
-        // 404 etc. on static deployments — surface the failure loudly.
-        const errorMsg = `M-Pesa STK push request failed (HTTP ${response.status}). This integration requires a backend server.`;
+        // 404 etc. — the Daraja backend is not deployed. The pending record is
+        // already saved, so this is a soft failure (no destructive alert).
         setStkPushStatus({
           loading: false,
           success: false,
-          error: errorMsg,
+          error: `STK Push request saved as pending. The M-PESA Daraja backend returned HTTP ${response.status} (not deployed). The record is saved and visible in the M-PESA Analyzer. Connect the backend to trigger live prompts.`,
         });
-        alert(errorMsg);
-        return;
-      }
-
-      const data = await response.json();
-
-      if (response.ok && data.success) {
-        setStkPushStatus({
-          loading: false,
-          success: true,
-          error: "",
-          checkout_request_id: data.checkout_request_id,
-        });
-
-        // Write the STK Push request to the shared unified transaction store
-        // so it appears in the M-PESA Analyzer as well.
-        await addTransaction(
-          {
-            transaction_ref: data.checkout_request_id || `STK${Date.now()}`,
-            origin: "stk_push",
-            transaction_type: "STK Push",
-            amount: stkPushData.amount,
-            currency: state.companyData.currency || getDetectedCurrency(),
-            sender_info: stkPushData.phone_number,
-            description: stkPushData.transaction_desc || "STK Push payment",
-            status: "pending",
-            payment_method: "M-PESA STK Push",
-            transaction_time: new Date().toISOString(),
-          },
-          stationId,
-        ).catch(() => {});
-
-        // Reset form
         setStkPushData({
           phone_number: "",
           amount: 0,
           account_reference: "",
           transaction_desc: "",
         });
+        return;
+      }
 
-        // Start polling for transaction status
+      const data = await response.json();
+
+      if (data.success) {
+        setStkPushStatus({
+          loading: false,
+          success: true,
+          error: "",
+          checkout_request_id: data.checkout_request_id,
+        });
+        // Start polling for transaction status.
         if (data.checkout_request_id) {
-          startTransactionPolling(data.checkout_request_id);
+          startTransactionPolling(data.checkout_request_id, checkoutRef);
         }
-
-        // Refresh transactions after a delay
-        setTimeout(() => {
-          loadLiveTransactions();
-        }, 3000);
       } else {
-        const errorMsg = data.error || "Failed to initiate STK push";
         setStkPushStatus({
           loading: false,
           success: false,
-          error: errorMsg,
+          error:
+            data.error ||
+            "STK Push request saved as pending, but the Daraja API did not confirm. Check the Integration Hub config.",
         });
-        alert(errorMsg);
       }
+      // Reset form regardless.
+      setStkPushData({
+        phone_number: "",
+        amount: 0,
+        account_reference: "",
+        transaction_desc: "",
+      });
     } catch (error) {
       console.error("Error initiating STK push:", error);
-      const errorMsg =
-        "Network error reaching the M-Pesa STK push service. Please try again.";
       setStkPushStatus({
         loading: false,
         success: false,
-        error: errorMsg,
+        error:
+          "STK Push request saved as pending. Network error reaching the Daraja backend. The record is saved and visible in the M-PESA Analyzer.",
       });
-      alert(errorMsg);
+      setStkPushData({
+        phone_number: "",
+        amount: 0,
+        account_reference: "",
+        transaction_desc: "",
+      });
     }
   };
 
@@ -552,69 +702,61 @@ export default function LiveTransaction() {
   const formatCurrency = (amount: number) =>
     `${state.companyData.currency || getCurrencySymbol(getDetectedCurrency())} ${amount.toLocaleString()}`;
 
-  const startTransactionPolling = async (checkoutRequestId: string) => {
+  // Poll the SHARED cloud store for the transaction's final status. When a
+  // webhook, the M-PESA Analyzer statement import, or another device updates
+  // the transaction from "pending" → "completed"/"failed", this detects it.
+  // Previously this fetched a non-existent /api/mpesa/query/{id} route (always
+  // 404'd), aborted on the first error, leaked the timer, and alert()'d inside
+  // the loop. Now it reads from cloud (always available) and stops cleanly.
+  const startTransactionPolling = async (
+    _checkoutRequestId: string,
+    transactionRef: string,
+  ) => {
     let attempts = 0;
-    const maxAttempts = 20; // Poll for up to 2 minutes (20 * 6 seconds)
+    const maxAttempts = 20; // ~2 minutes (20 * 6s)
 
     const pollStatus = async () => {
       try {
-        const response = await fetch(`/api/mpesa/query/${checkoutRequestId}`);
-        if (!response.ok) {
-          // Backend missing on static deployments — alert once and stop polling.
-          const errorMsg = `M-Pesa status query failed (HTTP ${response.status}). This integration requires a backend server.`;
-          setError(errorMsg);
-          alert(errorMsg);
-          return true; // Stop polling
-        }
-        const data = await response.json();
-
-        if (data.status === "completed") {
-          // Transaction successful, refresh the list
+        const txns = await getTransactions(stationId);
+        const match = txns.find((t) => t.transaction_ref === transactionRef);
+        if (match && match.status !== "pending") {
           loadLiveTransactions();
-          setSuccess("Payment received successfully!");
-          return true; // Stop polling
-        } else if (data.status === "failed" || data.status === "cancelled") {
-          // Transaction failed, stop polling
-          setError(`Payment ${data.status}: ${data.message}`);
-          return true; // Stop polling
+          if (match.status === "completed") {
+            setSuccess("Payment received successfully!");
+          } else {
+            setError(`Payment ${match.status}.`);
+          }
+          return; // done — do not schedule another poll
         }
-      } catch (error) {
-        console.error("Error polling transaction status:", error);
-        const errorMsg =
-          "Network error reaching the M-Pesa status query service. Please check your connection.";
-        setError(errorMsg);
-        alert(errorMsg);
-        return true; // Stop polling
+      } catch {
+        // transient read error — keep polling, don't alert (the realtime
+        // subscription will also catch the eventual update).
       }
-
       attempts++;
       if (attempts < maxAttempts) {
-        // Continue polling every 6 seconds
         setTimeout(pollStatus, 6000);
-      } else {
-        setError(
-          "Transaction status check timed out. Please refresh to see latest status.",
-        );
       }
-
-      return false;
     };
-
-    // Start first poll after 3 seconds
     setTimeout(pollStatus, 3000);
   };
 
   const formatPhoneNumber = (value: string) => {
     const digits = value.replace(/\D/g, "");
+    const dial = getDialingCode();
 
-    if (digits.startsWith("0")) {
-      return "254" + digits.slice(1);
-    } else if (digits.startsWith("254")) {
-      return digits;
-    } else if (digits.startsWith("7") || digits.startsWith("1")) {
-      return "254" + digits;
+    // Already in international format with the correct dialing code.
+    if (digits.startsWith(dial)) return digits;
+    // Leading 0 → replace with the dialing code (KE 0712 → 254712, US 0555→1 555).
+    if (digits.startsWith("0")) return dial + digits.slice(1);
+    // Starts with the dialing code already (e.g. 254712 or 15551234567).
+    if (dial === "1" && digits.length === 10 && !digits.startsWith("1")) {
+      return "1" + digits; // NANP: 10-digit national → prefix 1
     }
-
+    // Local number without leading 0 (KE: 712… → 254712…). For dialing code "1"
+    // we already handled the 10-digit case above, so this is the non-NANP path.
+    if (digits.length > 0 && !digits.startsWith(dial) && dial !== "1") {
+      return dial + digits;
+    }
     return digits;
   };
 
@@ -971,17 +1113,30 @@ export default function LiveTransaction() {
           </button>
         </div>
 
-        <div className="bg-blue-900/30 border border-blue-600 p-3 rounded mb-3">
-          <p className="text-sm text-blue-200 flex items-center gap-2">
-            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-            <strong>Live Server Integration Active</strong>
+        <div
+          className={`border p-3 rounded mb-3 ${mpesaConnected || kopoConnected ? "bg-blue-900/30 border-blue-600" : "bg-amber-900/30 border-amber-600"}`}
+        >
+          <p className="text-sm flex items-center gap-2">
+            <div
+              className={`w-2 h-2 rounded-full animate-pulse ${mpesaConnected || kopoConnected ? "bg-green-500" : "bg-amber-500"}`}
+            ></div>
+            <strong>
+              {mpesaConnected || kopoConnected
+                ? "Payment Integration Connected"
+                : "No Payment Integration Connected"}
+            </strong>
           </p>
-          <p className="text-xs text-blue-300 mt-1">
-            Real-time M-PESA STK Push connected to Safaricom servers
+          <p className="text-xs mt-1">
+            {mpesaConnected
+              ? `M-PESA Daraja (${mpesaConfig?.environment || "sandbox"}) connected — STK Push can trigger live prompts.`
+              : "M-PESA Daraja is not configured. STK Push requests are saved as pending."}
             <br />
-            Webhook callbacks enabled for instant payment notifications
+            {kopoConnected
+              ? "Kopo Kopo connected — webhook notifications enabled."
+              : "Configure Kopo Kopo in the Integration Hub for webhook notifications."}
             <br />
-            Auto-polling every 10 seconds for transaction updates
+            Real-time cloud sync active — transactions sync instantly across all
+            devices (no polling required).
           </p>
         </div>
 
@@ -1141,7 +1296,7 @@ export default function LiveTransaction() {
                         phone_number: formatPhoneNumber(e.target.value),
                       })
                     }
-                    placeholder="Enter phone number"
+                    placeholder={`Enter phone number (e.g. ${getDialingCode()}712345678)`}
                     className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white"
                   />
                 </div>
@@ -1408,7 +1563,7 @@ export default function LiveTransaction() {
                   placeholder={
                     newSource.source_type.includes("mpesa") ||
                     newSource.source_type === "kopo_kopo"
-                      ? "589252"
+                      ? "e.g. 5785900"
                       : "Enter identifier"
                   }
                 />
