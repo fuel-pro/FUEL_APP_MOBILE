@@ -33,7 +33,7 @@ export interface AuthIdentity {
 export interface StationRoleBinding {
   stationId: string;
   stationName: string;
-  role: "owner" | "manager" | "staff" | "auditor";
+  role: string; // base role (owner/manager/staff/auditor) or custom role slug
   invitedBy: string;
   joinedAt: string;
   expiresAt?: string;

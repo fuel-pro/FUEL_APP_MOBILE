@@ -93,8 +93,8 @@ export default function PointOfSale() {
   // return false on a fresh device before cloud station data hydrates, so we
   // also check currentStation.country directly as a fast path.
   const stationCountry = (
-    currentStation?.country ||
-    state.companyData?.country ||
+    (currentStation as { country?: string })?.country ||
+    state.companyData?.county ||
     ""
   ).toUpperCase();
   const hasKraPin = Boolean(
@@ -103,7 +103,11 @@ export default function PointOfSale() {
   const kenyaStation =
     isKenyaStation() ||
     stationCountry === "KE" ||
-    (hasKraPin && stationCountry !== "US" && stationCountry !== "GB" && stationCountry !== "DE" && stationCountry !== "EU");
+    (hasKraPin &&
+      stationCountry !== "US" &&
+      stationCountry !== "GB" &&
+      stationCountry !== "DE" &&
+      stationCountry !== "EU");
   const fuelTypeApi = useStationFuelTypes(stationId);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [paymentMethod, setPaymentMethod] = useState<
@@ -628,7 +632,8 @@ export default function PointOfSale() {
         origin: "stk_push",
         transaction_type: "POS M-Pesa Sale",
         amount: total,
-        currency: state.companyData?.currency || getCurrencyByCountry(countryCode),
+        currency:
+          state.companyData?.currency || getCurrencyByCountry(countryCode),
         sender_info: customerPhone || "",
         description: `POS sale ${invoiceNumber} (${cart
           .map((i) => i.name)
@@ -1787,13 +1792,13 @@ export default function PointOfSale() {
               <div className="etr-section mt-4 pt-3 border-t border-dashed border-gray-400 text-center">
                 {kenyaStation ? (
                   <>
-                    <p className="font-bold text-xs">
-                      ELECTRONIC TAX REGISTER
-                    </p>
+                    <p className="font-bold text-xs">ELECTRONIC TAX REGISTER</p>
                     <p className="text-[10px] mt-1">
                       ETR S/N: {etrConfig.etrSerialNo}
                     </p>
-                    <p className="text-[10px]">CU S/N: {etrConfig.cuSerialNo}</p>
+                    <p className="text-[10px]">
+                      CU S/N: {etrConfig.cuSerialNo}
+                    </p>
                     <p className="text-[10px]">
                       CU Invoice No: {currentTransaction.cuInvoiceNo}
                     </p>
@@ -1801,7 +1806,8 @@ export default function PointOfSale() {
                       Fiscal Counter: #{currentTransaction.fiscalCounter}
                     </p>
                     <div className="mt-2 text-[9px] font-mono break-all bg-gray-100 p-1 rounded">
-                      <strong>Signature:</strong> {currentTransaction.cuSignature}
+                      <strong>Signature:</strong>{" "}
+                      {currentTransaction.cuSignature}
                     </div>
                   </>
                 ) : (

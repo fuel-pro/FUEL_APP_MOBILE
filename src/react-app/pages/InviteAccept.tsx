@@ -15,6 +15,8 @@ import {
   UserPlus,
 } from "lucide-react";
 import { useAuth } from "@/react-app/context/AuthContext";
+import { usePermissions } from "@/react-app/context/PermissionContext";
+import { getSupabaseClient } from "@/supabase/client";
 import type { UserRole } from "@/react-app/context/PermissionContext";
 
 interface InviteData {
@@ -75,6 +77,7 @@ export default function InviteAccept() {
   const { inviteId: encodedData } = useParams<{ inviteId: string }>();
   const navigate = useNavigate();
   const { user, loginWithEmail, registerWithEmail, bindRole } = useAuth();
+  const { acceptInvite } = usePermissions();
 
   const [username, setUsername] = useState("");
   const [invite, setInvite] = useState<InviteData | null>(null);
@@ -182,7 +185,7 @@ export default function InviteAccept() {
       setError("Failed to create account. Email may already exist.");
   };
 
-  const handleAccept = () => {
+  const handleAccept = async () => {
     if (!username.trim() || !invite) {
       setError("Please enter your username");
       return;
@@ -192,75 +195,55 @@ export default function InviteAccept() {
       return;
     }
 
-    // Track usage in localStorage
-    const useCount =
-      parseInt(
-        localStorage.getItem(`fuelpro_invite_uses_${invite.id}`) || "0",
-      ) + 1;
-    localStorage.setItem(`fuelpro_invite_uses_${invite.id}`, String(useCount));
-
-    const usedInvites = JSON.parse(
-      localStorage.getItem("fuelpro_used_invites") || "{}",
-    );
-    usedInvites[invite.id] = username;
-    localStorage.setItem("fuelpro_used_invites", JSON.stringify(usedInvites));
-
-    // Add to team (store in localStorage for the station)
-    const teamMembers = JSON.parse(
-      localStorage.getItem("fuelpro_v2_team") || "[]",
-    );
-    teamMembers.push({
-      id: `mem_${Date.now()}`,
-      username,
-      role: invite.role,
-      assignedPumps: [],
-      assignedShifts: [],
-      invitedBy: invite.createdBy,
-      invitedAt: new Date().toISOString(),
-      expiresAt: invite.expiresAt,
-      active: true,
-    });
-    localStorage.setItem("fuelpro_v2_team", JSON.stringify(teamMembers));
-
-    // Create the station locally if it doesn't exist
-    try {
-      const STORAGE_KEY = "fuelpro_stations_v3";
-      const stored = localStorage.getItem(STORAGE_KEY);
-      const parsed = stored
-        ? JSON.parse(stored)
-        : { stations: [], version: "3.0" };
-      const stations = parsed.stations || [];
-      if (
-        !stations.some((s: any) => s.id === (invite.stationId || "default"))
-      ) {
-        stations.push({
-          id: invite.stationId || "default",
-          name: invite.stationName || "Fuel Station",
-          location: "Unknown Location",
-          phone: "",
-          email: "",
-          kraPin: "",
-          etrSerial: "",
-          taxRate: 16,
-          theme: "default",
-          logo: "",
-          description: `Station joined via ${invite.role} invite`,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          data: {},
-          access: [],
-          sharedUsers: [],
-        });
-        localStorage.setItem(
-          STORAGE_KEY,
-          JSON.stringify({ stations, version: "3.0" }),
-        );
-      }
-    } catch {
-      /* ignore station creation errors */
+    // 1) Accept via PermissionContext — this persists the team member to the
+    //    cloud (app_kv team_members key, scoped by owner) so the Owner sees
+    //    the new member on every device. No more localStorage-only team write.
+    const ok = acceptInvite(invite.id, username.trim());
+    if (!ok) {
+      setError(
+        "This invite is invalid, expired, or already fully used. Please ask the station owner for a new invite.",
+      );
+      return;
     }
 
-    // Bind role to auth identity
+    // 2) Upsert into the DB station_members table (server-side, cross-device,
+    //    RLS-validated). This is the authoritative membership record used by
+    //    AuthContext.syncBindingsFromCloud on every subsequent device login.
+    try {
+      const sc = getSupabaseClient();
+      const stationId = invite.stationId || "default";
+      const isUuid =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+          stationId,
+        );
+      if (isUuid) {
+        const { error: dbErr } = await sc.from("station_members").upsert(
+          {
+            station_id: stationId,
+            user_id: user.id,
+            invited_email: user.email,
+            name: username.trim(),
+            role: invite.role,
+            status: "accepted",
+            invite_token: invite.id,
+            invited_by_name: invite.createdBy,
+            expires_at: invite.expiresAt || null,
+          },
+          { onConflict: "station_id,user_id" },
+        );
+        if (dbErr) {
+          console.warn(
+            "[InviteAccept] station_members upsert failed:",
+            dbErr.message,
+          );
+        }
+      }
+    } catch (e) {
+      console.warn("[InviteAccept] DB membership write failed:", e);
+    }
+
+    // 3) Bind role to auth identity (client-side binding, cross-device via
+    //    station_members sync above).
     bindRole(
       invite.stationId || "default",
       invite.stationName || "Fuel Station",
@@ -269,7 +252,7 @@ export default function InviteAccept() {
       invite.expiresAt,
     );
 
-    // Store current station context
+    // 4) Store current station context (read-through cache only).
     localStorage.setItem(
       "fuelpro_current_station",
       JSON.stringify({
