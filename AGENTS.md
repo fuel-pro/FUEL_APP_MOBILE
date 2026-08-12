@@ -3287,3 +3287,104 @@ the Supabase REST API as `founder.qa.fuelpro@gmail.com` (uid
   commit `b77ffba` when quota resets. ⏳
 - Supabase: no schema changes (uses existing `payroll_employees` +
   `payroll_settings` cloud keys in `app_kv`, scoped by owner). ✅
+
+## Analytics tab audit (DEPLOYED LIVE 2026-08-12, PR #126)
+
+Deep audit of the **Analytics** tab (`AdvancedAnalytics.tsx`, 645 lines).
+Found **3 CRITICAL data-correctness bugs** plus a useEffect re-fetch storm,
+wrong currency, NaN/Infinity risks, silent error swallowing, and missing
+features. All fixed.
+
+### Critical bugs fixed
+
+1. **Revenue double-counting**: the component aggregated BOTH
+   `sales_enhanced` AND legacy `sales` tables into the same date buckets →
+   revenue was counted **twice** for stations with data in both tables.
+   Now only queries `sales_enhanced`; falls back to legacy `sales` ONLY if
+   `sales_enhanced` returns nothing.
+
+2. **Fake data on error**: `processLocalData` generated a flat
+   "real-looking" daily trend on ANY error (network glitch, RLS, missing
+   table) → users saw fabricated revenue numbers that looked real. Now
+   shows a real empty state with CTAs when there is genuinely no data;
+   falls back to real tank readings + `salesHistory` (cloud blob) only
+   when those exist.
+
+3. **New stations saw a zero-filled dashboard**: all dates in the range
+   were pre-initialized to `{total:0, count:0}` so the
+   `salesData.length === 0` guard was unreachable → new stations showed a
+   confusing dashboard of zeros. Now only includes dates that have actual
+   sales, so the empty state renders correctly.
+
+### High-severity bugs fixed
+
+4. **useEffect re-fetch storm**: the fetch effect had `state` (entire
+   FuelContext) in deps → re-fetched Supabase on every keystroke anywhere
+   in the app. Now deps are `[currentStation?.id, dateRange.start,
+   dateRange.end]` only (via `useCallback`).
+
+5. **Wrong currency**: `currencySymbol` came from device-detected
+   `useLocation()` (wrong for multi-country: a Kenyan station viewed from
+   a US browser showed `$`). Now uses station currency → company currency
+   → location → KES.
+
+6. **NaN/Infinity in calculations**: `avgPrice || 200` hardcoded a Kenya
+   price fallback → `estimatedVolume` was Infinity/NaN when both prices
+   were 0. Now uses 0 when no prices, guards with `Number.isFinite`.
+   `growth30d` fabricated `last7Total*4` (extrapolating 7 days into a
+   month) → nonsensical percentages. Now uses real 30-day data. Trend
+   denom could be 0 when `last7.length===1` → guarded. All totals/growth
+   now use `Number.isFinite` guards + `|| 0` fallbacks.
+
+### Medium-severity bugs fixed
+
+7. **Silent error swallowing**: `fuelError`, `invError`, `fuel_types`,
+   `pumps` errors were silently warned. Now surfaces via `console.warn`
+   with the error message. `tank_capacity || 10000` fabricated a 10000L
+   capacity → now uses actual (0 if missing).
+8. **predMax duplicate `1`**: `Math.max(..., 1, 1)` typo fixed to
+   `Math.max(..., 1)`.
+
+### Missing features added
+
+9. **CSV export**: download raw sales data as CSV (was missing entirely).
+10. **Refresh + Retry buttons**: manual refresh + retry on error.
+11. **Empty state with CTAs**: new stations see "No sales data yet" with
+    **Record a Sale**, **View Inventory**, **Sales Tracking** buttons (via
+    `switchToTab`).
+12. **Data-source indicator**: shows "Live (Supabase)" / "Local records"
+    / "No data yet".
+13. **Cross-tab interlinks**: `switchToTab` to `pos`, `inventory`, `sales`.
+14. **Accessibility**: `aria-pressed` on time-range buttons, `aria-label`
+    on refresh, `flex-wrap` for responsive.
+15. Cleaned up unused imports (`Calendar`, `ArrowUpRight`,
+    `ArrowDownRight`).
+
+### Phase 1 + Phase 2 cross-device verification (VERIFIED LIVE)
+
+The Analytics tab reads from Supabase tables (`sales_enhanced`,
+`inventory`, `pumps`) which are station-scoped by RLS — data is inherently
+cross-device. Verified via the Supabase REST API as
+`founder.qa.fuelpro@gmail.com` (uid `87e6502b`):
+
+- **Phase 1 (SAVE)**: 5 sales rows (5 consecutive days, amounts 15000.50
+  → 23000.50, cents preserved) into `sales_enhanced` for station
+  `52c24393` (Founder Admin Station).
+- **Phase 2 (FRESH-DEVICE READ)**: new token login → ALL 5 rows synced
+  with every field intact. Total revenue = 95002.5 (matches Phase 1
+  sum). ✅ **NO DATA LOSS**.
+- **Double-counting fix verified**: revenue = 95002.5 (correct — OLD code
+  would have also queried the legacy `sales` table and double-counted any
+  rows there, inflating the total).
+
+### Deploy status 2026-08-12 (commit 78e8438)
+
+- GitHub main: `78e8438` (PR #126 merged, synced with origin/main) ✅
+- Cloudflare Pages: LIVE (preview https://20a93ff6.fuel-app-mobile.pages.dev
+  + main alias https://fuel-app-mobile.pages.dev). Chunk
+  `AdvancedAnalytics-Cf1GXkpu.js`. All markers confirmed: `No sales data
+  yet`, `Record a Sale`, `Export CSV`, `Retry`, `Live (Supabase)` ✅
+- Vercel production: LIVE (prebuilt deploy, chunk
+  `AdvancedAnalytics-DTRMoeAZ.js`, all markers confirmed). ✅
+- Supabase: no schema changes (reads existing `sales_enhanced`,
+  `inventory`, `pumps`, `fuel_types` tables, RLS-scoped). ✅
