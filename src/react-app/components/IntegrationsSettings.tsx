@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 import { useAuth } from "@/react-app/context/AuthContext";
 import { useStations } from "@/react-app/context/StationContext";
 import {
@@ -15,7 +14,6 @@ import {
 import {
   Smartphone,
   Building2,
-  Key,
   Eye,
   EyeOff,
   Save,
@@ -23,9 +21,6 @@ import {
   AlertTriangle,
   ChevronRight,
   ChevronLeft,
-  Shield,
-  Search,
-  Lock,
   Zap,
 } from "lucide-react";
 import { isKenyaStation } from "@/react-app/lib/currency";

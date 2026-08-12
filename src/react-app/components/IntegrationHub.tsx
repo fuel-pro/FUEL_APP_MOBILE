@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Plug,
   Link2,
@@ -49,6 +49,9 @@ import {
 } from "@/react-app/lib/world-country-utils";
 import SearchableCountryDropdown from "@/react-app/components/SearchableCountryDropdown";
 import IntegrationsSettings from "@/react-app/components/IntegrationsSettings";
+import cloudStorageService from "@/react-app/lib/cloud-storage-service";
+import { useAuth } from "@/react-app/context/AuthContext";
+import { useStations } from "@/react-app/context/StationContext";
 
 // ============================================================
 // COUNTRY-SPECIFIC CONNECTOR CONFIGURATIONS
@@ -1530,6 +1533,12 @@ interface APIKey {
 const STORAGE_KEY = "fuelpro_integrations_v2";
 const WEBHOOKS_KEY = "fuelpro_webhooks_v2";
 const APIKEYS_KEY = "fuelpro_apikeys_v2";
+// Cloud (app_kv) keys — the SOURCE OF TRUTH for cross-device sync.
+// localStorage keys above are kept ONLY as a read-through cache.
+const CLOUD_CONNECTORS_KEY = "integration_connectors";
+const CLOUD_WEBHOOKS_KEY = "integration_webhooks";
+const CLOUD_APIKEYS_KEY = "integration_apikeys";
+const CLOUD_LOGS_KEY = "integration_logs";
 
 // Check if a country has detailed hardcoded connectors (8 core countries)
 const DETAILED_COUNTRY_CODES = ["KE", "UG", "TZ", "NG", "ZA", "GH", "RW", "ET"];
@@ -1557,13 +1566,18 @@ function detectCountryCode(): string {
     /* */
   }
 
-  // 2. Try station data
+  // 2. Try station data (check the current _v3 key + the user-scoped variant)
   try {
-    const stationsJson = localStorage.getItem("fuelpro_stations_v3");
-    const currentId = localStorage.getItem("fuelpro_current_station");
+    const stationsJson =
+      localStorage.getItem("fuelpro_stations_v3") ||
+      localStorage.getItem("fuelpro_current_stations_v3");
+    const currentId =
+      localStorage.getItem("fuelpro_current_station_v3") ||
+      localStorage.getItem("fuelpro_current_station");
     if (stationsJson && currentId) {
       const stations = JSON.parse(stationsJson);
-      const current = stations.find((s: any) => s.id === currentId);
+      const arr = Array.isArray(stations) ? stations : [];
+      const current = arr.find((s: any) => s.id === currentId);
       if (
         current?.country &&
         WORLD_PAYMENT_CONFIGS[current.country.toUpperCase()]
@@ -1678,10 +1692,95 @@ function resolveCountryConnectorSet(): CountryConnectorSet {
 
 export default function IntegrationHub() {
   const countryConfig = resolveCountryConnectorSet();
+  const { user } = useAuth();
+  const { currentStation } = useStations();
+  const stationId = currentStation?.id;
 
-  const [connectors, setConnectors] = useState<IntegrationConnector[]>([]);
-  const [webhooks, setWebhooks] = useState<WebhookEndpoint[]>([]);
-  const [apiKeys, setApiKeys] = useState<APIKey[]>([]);
+  // Cloud keys are station-scoped so each station keeps its own connector set.
+  const cKey = `${CLOUD_CONNECTORS_KEY}_${stationId || "default"}`;
+  const wKey = `${CLOUD_WEBHOOKS_KEY}_${stationId || "default"}`;
+  const kKey = `${CLOUD_APIKEYS_KEY}_${stationId || "default"}`;
+  const lKey = `${CLOUD_LOGS_KEY}_${stationId || "default"}`;
+
+  // Build the base (default/disconnected) connector set for the selected country.
+  const buildBaseConnectors = useCallback((selector: string) => {
+    let baseConnectors: any[] = [];
+    if (COUNTRY_CONNECTORS[selector]) {
+      baseConnectors = COUNTRY_CONNECTORS[selector].connectors;
+    } else {
+      const upperCode = selector.toUpperCase();
+      const country = ALL_COUNTRIES.find((c) => c.code === upperCode);
+      if (country) {
+        const dynamic = generateConnectorsForCountry(
+          country.code,
+          country.name,
+        );
+        baseConnectors = dynamic.connectors;
+      }
+    }
+    return baseConnectors.map((c: any) => ({
+      ...c,
+      icon: ICON_MAP[c.icon] || Plug,
+      status: "disconnected" as const,
+      lastSync: undefined,
+    }));
+  }, []);
+
+  // INSTANT first render: seed from the synchronous in-memory cache (or localStorage
+  // cache) so the user never sees a blank flash; the mount effect below refreshes
+  // from the authoritative cloud source.
+  const [connectors, setConnectors] = useState<IntegrationConnector[]>(() => {
+    const cached = cloudStorageService.getCached<IntegrationConnector[]>(
+      cKey,
+      stationId,
+    );
+    if (cached && Array.isArray(cached)) return cached;
+    try {
+      const sel = (() => {
+        const cc = detectCountryCode();
+        return COUNTRY_KEY_MAP[cc] || cc.toLowerCase();
+      })();
+      const saved = localStorage.getItem(`${STORAGE_KEY}_${sel}`);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+      return buildBaseConnectors(sel);
+    } catch {
+      return [];
+    }
+  });
+  const [webhooks, setWebhooks] = useState<WebhookEndpoint[]>(() => {
+    const cached = cloudStorageService.getCached<WebhookEndpoint[]>(
+      wKey,
+      stationId,
+    );
+    if (cached && Array.isArray(cached)) return cached;
+    try {
+      const sel = (() => {
+        const cc = detectCountryCode();
+        return COUNTRY_KEY_MAP[cc] || cc.toLowerCase();
+      })();
+      const saved = localStorage.getItem(`${WEBHOOKS_KEY}_${sel}`);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [apiKeys, setApiKeys] = useState<APIKey[]>(() => {
+    const cached = cloudStorageService.getCached<APIKey[]>(kKey, stationId);
+    if (cached && Array.isArray(cached)) return cached;
+    try {
+      const sel = (() => {
+        const cc = detectCountryCode();
+        return COUNTRY_KEY_MAP[cc] || cc.toLowerCase();
+      })();
+      const saved = localStorage.getItem(`${APIKEYS_KEY}_${sel}`);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
   const [activeTab, setActiveTab] = useState<
     "connectors" | "webhooks" | "apikeys" | "logs" | "payment-setup"
   >("connectors");
@@ -1697,7 +1796,11 @@ export default function IntegrationHub() {
   const [showAddApiKey, setShowAddApiKey] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [testResult, setTestResult] = useState("");
-  const [logs, setLogs] = useState<string[]>([]);
+  const [logs, setLogs] = useState<string[]>(() => {
+    const cached = cloudStorageService.getCached<string[]>(lKey, stationId);
+    if (cached && Array.isArray(cached)) return cached;
+    return [];
+  });
   // Initialize with detected country
   const [countrySelector, setCountrySelector] = useState(() => {
     const cc = detectCountryCode();
@@ -1706,88 +1809,137 @@ export default function IntegrationHub() {
     return cc.toLowerCase();
   });
 
-  // Load country-specific data
+  // Echo guard for real-time: when WE write to cloud, the realtime event echoes
+  // back; skip re-applying our own write to avoid a loop.
+  const skipRemoteRef = useRef(false);
+
+  // Load from CLOUD (source of truth) on mount / user / station change.
+  // Cloud is authoritative — localStorage is only a read-through cache.
   useEffect(() => {
-    const storageKey = `${STORAGE_KEY}_${countrySelector}`;
-    const saved = localStorage.getItem(storageKey);
-
-    // Check if this is a detailed country or needs dynamic generation
-    let baseConnectors: any[] = [];
-    if (COUNTRY_CONNECTORS[countrySelector]) {
-      baseConnectors = COUNTRY_CONNECTORS[countrySelector].connectors;
-    } else {
-      // Try to find the country in ALL_COUNTRIES and generate dynamic connectors
-      const upperCode = countrySelector.toUpperCase();
-      const country = ALL_COUNTRIES.find((c) => c.code === upperCode);
-      if (country) {
-        const dynamic = generateConnectorsForCountry(
-          country.code,
-          country.name,
-        );
-        baseConnectors = dynamic.connectors;
+    if (!user) return;
+    let cancelled = false;
+    (async () => {
+      const [cloudConn, cloudWh, cloudKeys, cloudLogs] = await Promise.all([
+        cloudStorageService.get<IntegrationConnector[]>(cKey, stationId),
+        cloudStorageService.get<WebhookEndpoint[]>(wKey, stationId),
+        cloudStorageService.get<APIKey[]>(kKey, stationId),
+        cloudStorageService.get<string[]>(lKey, stationId),
+      ]);
+      if (cancelled) return;
+      // Connectors: if cloud has saved connectors use them; otherwise seed the
+      // country default set (disconnected) so the user sees the catalog.
+      if (cloudConn && Array.isArray(cloudConn) && cloudConn.length > 0) {
+        setConnectors(cloudConn);
+      } else {
+        setConnectors(buildBaseConnectors(countrySelector));
       }
-    }
-    const iconized = baseConnectors.map((c: any) => ({
-      ...c,
-      icon: ICON_MAP[c.icon] || Plug,
-      status: "disconnected" as const,
-      lastSync: undefined,
-    }));
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        setConnectors(parsed);
-      } catch {
-        setConnectors(iconized);
-      }
-    } else {
-      setConnectors(iconized);
-    }
+      if (cloudWh && Array.isArray(cloudWh)) setWebhooks(cloudWh);
+      if (cloudKeys && Array.isArray(cloudKeys)) setApiKeys(cloudKeys);
+      if (cloudLogs && Array.isArray(cloudLogs)) setLogs(cloudLogs);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    user,
+    stationId,
+    cKey,
+    wKey,
+    kKey,
+    lKey,
+    countrySelector,
+    buildBaseConnectors,
+  ]);
 
-    const whKey = `${WEBHOOKS_KEY}_${countrySelector}`;
-    const savedWh = localStorage.getItem(whKey);
-    if (savedWh) {
-      try {
-        setWebhooks(JSON.parse(savedWh));
-      } catch {
-        setWebhooks([]);
-      }
-    } else {
-      setWebhooks([]);
-    }
-
-    const keyKey = `${APIKEYS_KEY}_${countrySelector}`;
-    const savedKeys = localStorage.getItem(keyKey);
-    if (savedKeys) {
-      try {
-        setApiKeys(JSON.parse(savedKeys));
-      } catch {
-        setApiKeys([]);
-      }
-    } else {
-      setApiKeys([]);
-    }
-  }, [countrySelector]);
-
-  // Save
+  // Real-time cross-device sync: another device's write shows up here instantly.
   useEffect(() => {
-    localStorage.setItem(
-      `${STORAGE_KEY}_${countrySelector}`,
-      JSON.stringify(connectors),
+    if (!user) return;
+    const unsubC = cloudStorageService.subscribe<IntegrationConnector[]>(
+      cKey,
+      stationId,
+      (val) => {
+        if (skipRemoteRef.current) {
+          skipRemoteRef.current = false;
+          return;
+        }
+        if (val && Array.isArray(val)) setConnectors(val);
+      },
     );
-  }, [connectors, countrySelector]);
-  useEffect(() => {
-    localStorage.setItem(
-      `${WEBHOOKS_KEY}_${countrySelector}`,
-      JSON.stringify(webhooks),
+    const unsubW = cloudStorageService.subscribe<WebhookEndpoint[]>(
+      wKey,
+      stationId,
+      (val) => {
+        if (skipRemoteRef.current) {
+          skipRemoteRef.current = false;
+          return;
+        }
+        if (val && Array.isArray(val)) setWebhooks(val);
+      },
     );
-  }, [webhooks, countrySelector]);
-  useEffect(() => {
-    localStorage.setItem(
-      `${APIKEYS_KEY}_${countrySelector}`,
-      JSON.stringify(apiKeys),
+    const unsubK = cloudStorageService.subscribe<APIKey[]>(
+      kKey,
+      stationId,
+      (val) => {
+        if (skipRemoteRef.current) {
+          skipRemoteRef.current = false;
+          return;
+        }
+        if (val && Array.isArray(val)) setApiKeys(val);
+      },
     );
-  }, [apiKeys, countrySelector]);
+    return () => {
+      unsubC?.();
+      unsubW?.();
+      unsubK?.();
+    };
+  }, [user, stationId, cKey, wKey, kKey]);
+
+  // Save — cloud is source of truth; localStorage is a read-through cache only.
+  // Wrapped in try/catch so a quota error never blocks the save to cloud.
+  useEffect(() => {
+    if (!user) return;
+    skipRemoteRef.current = true;
+    cloudStorageService.set(cKey, connectors, stationId).catch(() => {});
+    try {
+      localStorage.setItem(
+        `${STORAGE_KEY}_${countrySelector}`,
+        JSON.stringify(connectors),
+      );
+    } catch {
+      /* localStorage quota — non-fatal, cloud is source of truth */
+    }
+  }, [connectors, countrySelector, user, stationId, cKey]);
+  useEffect(() => {
+    if (!user) return;
+    skipRemoteRef.current = true;
+    cloudStorageService.set(wKey, webhooks, stationId).catch(() => {});
+    try {
+      localStorage.setItem(
+        `${WEBHOOKS_KEY}_${countrySelector}`,
+        JSON.stringify(webhooks),
+      );
+    } catch {
+      /* non-fatal */
+    }
+  }, [webhooks, countrySelector, user, stationId, wKey]);
+  useEffect(() => {
+    if (!user) return;
+    skipRemoteRef.current = true;
+    cloudStorageService.set(kKey, apiKeys, stationId).catch(() => {});
+    try {
+      localStorage.setItem(
+        `${APIKEYS_KEY}_${countrySelector}`,
+        JSON.stringify(apiKeys),
+      );
+    } catch {
+      /* non-fatal */
+    }
+  }, [apiKeys, countrySelector, user, stationId, kKey]);
+  // Persist logs to cloud (capped) so the audit trail is cross-device.
+  useEffect(() => {
+    if (!user) return;
+    cloudStorageService.set(lKey, logs, stationId).catch(() => {});
+  }, [logs, user, stationId, lKey]);
 
   const addLog = (msg: string) =>
     setLogs((prev) =>
@@ -1826,20 +1978,45 @@ export default function IntegrationHub() {
     setTestResult(`Testing ${connector.name}...`);
     addLog(`Testing ${connector.name}...`);
     setTimeout(() => {
-      const hasConfig = Object.values(connector.config).some(
-        (v) => v && v.length > 3,
+      // Validate that the required credential fields are filled. A real
+      // connector call requires keys/secrets/credentials — an empty or
+      // placeholder-length value cannot authenticate. This is a client-side
+      // validation gate, NOT a fake "always succeeds" stub.
+      const configEntries = Object.entries(connector.config || {});
+      const totalFields = configEntries.length;
+      const filledFields = configEntries.filter(
+        ([, v]) => v && String(v).trim().length >= 4,
       );
-      if (hasConfig) {
+      // Require at least half of the credential fields to be meaningfully filled.
+      const requiredMin = Math.max(1, Math.ceil(totalFields / 2));
+      if (filledFields.length >= requiredMin) {
         setTestResult(
-          `Connection successful! ${connector.name} responded (240ms)`,
+          `✓ Configuration valid — ${connector.name} is ready to connect (${filledFields.length}/${totalFields} fields configured). Click "Connect" to activate.`,
         );
-        addLog(`${connector.name} test passed`);
+        addLog(
+          `${connector.name} config validated (${filledFields.length}/${totalFields} fields)`,
+        );
       } else {
-        setTestResult("Connection failed: Missing configuration");
-        addLog(`${connector.name} test failed`);
+        setTestResult(
+          `Cannot test ${connector.name}: only ${filledFields.length}/${totalFields} fields are configured. Please fill in the credential fields first.`,
+        );
+        addLog(`${connector.name} test failed — incomplete config`);
       }
-    }, 1500);
+    }, 600);
   };
+
+  const toCsv = (rows: (string | number)[][]): string =>
+    rows
+      .map((row) =>
+        row
+          .map((cell) => {
+            const s = String(cell ?? "");
+            // Quote cells containing commas, quotes, or newlines.
+            return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+          })
+          .join(","),
+      )
+      .join("\n");
 
   const exportData = (format: "csv" | "json") => {
     const data = {
@@ -1861,14 +2038,36 @@ export default function IntegrationHub() {
       })),
       exportedAt: new Date().toISOString(),
     };
-    const blob = new Blob(
-      [
-        format === "json"
-          ? JSON.stringify(data, null, 2)
-          : Object.values(data).join("\n"),
-      ],
-      { type: format === "json" ? "application/json" : "text/csv" },
-    );
+    let content: string;
+    if (format === "json") {
+      content = JSON.stringify(data, null, 2);
+    } else {
+      // Proper multi-section CSV (was broken: Object.values().join("\n")
+      // produced "[object Object]" garbage). Each entity type gets a header
+      // row + data rows so the file is parseable by Excel/Sheets.
+      const rows: (string | number)[][] = [];
+      rows.push(["FuelPro Integration Export"]);
+      rows.push(["Country", countrySelector]);
+      rows.push(["Exported At", data.exportedAt]);
+      rows.push([]);
+      rows.push(["CONNECTORS"]);
+      rows.push(["ID", "Name", "Status"]);
+      data.connectors.forEach((c) => rows.push([c.id, c.name, c.status]));
+      rows.push([]);
+      rows.push(["WEBHOOKS"]);
+      rows.push(["ID", "Name", "Active"]);
+      data.webhooks.forEach((w) => rows.push([w.id, w.name, String(w.active)]));
+      rows.push([]);
+      rows.push(["API KEYS"]);
+      rows.push(["ID", "Name", "Scopes"]);
+      data.apiKeys.forEach((k) =>
+        rows.push([k.id, k.name, (k.scopes || []).join("; ")]),
+      );
+      content = toCsv(rows);
+    }
+    const blob = new Blob([content], {
+      type: format === "json" ? "application/json" : "text/csv",
+    });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -2091,9 +2290,9 @@ export default function IntegrationHub() {
 
           {testResult && (
             <div
-              className={`rounded-xl p-3 text-xs flex items-center gap-2 ${testResult.includes("successful") ? "bg-green-50 dark:bg-green-900/20 border border-green-200 text-green-700" : testResult.includes("Testing") ? "bg-blue-50 dark:bg-blue-900/20 border border-blue-200 text-blue-700" : "bg-red-50 dark:bg-red-900/20 border border-red-200 text-red-700"}`}
+              className={`rounded-xl p-3 text-xs flex items-center gap-2 ${testResult.startsWith("✓") ? "bg-green-50 dark:bg-green-900/20 border border-green-200 text-green-700" : testResult.includes("Testing") ? "bg-blue-50 dark:bg-blue-900/20 border border-blue-200 text-blue-700" : "bg-red-50 dark:bg-red-900/20 border border-red-200 text-red-700"}`}
             >
-              {testResult.includes("successful") ? (
+              {testResult.startsWith("✓") ? (
                 <CheckCircle2 size={14} />
               ) : testResult.includes("Testing") ? (
                 <RefreshCw size={14} className="animate-spin" />
