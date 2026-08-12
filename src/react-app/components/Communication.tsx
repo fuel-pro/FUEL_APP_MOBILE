@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Users,
   Send,
@@ -16,6 +16,7 @@ import {
   MessageCircleMore,
   Archive,
   Star,
+  Download,
 } from "lucide-react";
 import { useFuel } from "@/react-app/context/FuelContext";
 import { useAuth } from "@/react-app/context/AuthContext";
@@ -199,12 +200,39 @@ export default function Communication() {
     category: "general",
   });
 
+  // CRITICAL: cloud-load race guard. Without this, a save/delete fired
+  // BEFORE the initial cloud load completes reads an empty/default state
+  // and writes it back to cloud, wiping ALL the user's data on a fresh
+  // device. Same class of bug fixed in FuelContext + PayrollSystem.
+  const cloudLoadCompleteRef = useRef(false);
+  // Refs to the latest contacts/messages/templates so save/delete functions
+  // operate on the CURRENT state (not a stale re-fetch that may return []
+  // before load completes).
+  const contactsRef = useRef<Contact[]>([]);
+  const messagesRef = useRef<Message[]>([]);
+  const templatesRef = useRef<MessageTemplate[]>([]);
+  contactsRef.current = contacts;
+  messagesRef.current = messages;
+  templatesRef.current = templates;
+
+  // Reset the load-complete guard on user/station change so a fresh load
+  // is required before any save is allowed.
+  useEffect(() => {
+    cloudLoadCompleteRef.current = false;
+  }, [user, stationId]);
+
   // Load data from backend + real-time cross-device sync
   useEffect(() => {
     if (!user) return;
-    loadContacts();
-    loadMessages();
-    loadTemplates();
+    let cancelled = false;
+
+    // Load all three collections; mark load complete only after ALL resolve
+    // so no save can fire against an empty (pre-load) state.
+    Promise.all([loadContacts(), loadMessages(), loadTemplates()]).finally(
+      () => {
+        if (!cancelled) cloudLoadCompleteRef.current = true;
+      },
+    );
 
     // Real-time: when another device updates contacts/messages/templates, update instantly
     const unsubs = [
@@ -230,7 +258,10 @@ export default function Communication() {
         },
       ),
     ];
-    return () => unsubs.forEach((u) => u());
+    return () => {
+      cancelled = true;
+      unsubs.forEach((u) => u());
+    };
   }, [user, stationId]);
 
   // Auto-refresh messages every 30 seconds for live updates
@@ -281,10 +312,19 @@ export default function Communication() {
   };
 
   const saveContact = async () => {
-    try {
-      const existing = normalizeContacts(
-        await cloudStorageService.get<Contact[]>("comm_contacts", stationId),
+    // Validation: require at least a name.
+    if (!contactForm.name.trim()) {
+      alert("Contact name is required.");
+      return;
+    }
+    // Guard: don't save before the initial cloud load completes (would wipe).
+    if (!cloudLoadCompleteRef.current) {
+      alert(
+        "Still loading your contacts from cloud. Please try again in a moment.",
       );
+      return;
+    }
+    try {
       const tags = contactForm.tags
         ? typeof contactForm.tags === "string"
           ? contactForm.tags
@@ -295,18 +335,26 @@ export default function Communication() {
         : [];
 
       const newContact: Contact = {
-        id: selectedContact?.id || `ct_${Date.now()}`,
-        name: contactForm.name || "",
-        phone: contactForm.phone || "",
-        email: contactForm.email || "",
-        company: contactForm.company || "",
+        // Add random suffix to avoid ID collision on rapid double-save.
+        id:
+          selectedContact?.id ||
+          `ct_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        name: contactForm.name.trim(),
+        phone: contactForm.phone.trim(),
+        email: contactForm.email.trim(),
+        company: contactForm.company.trim(),
         tags: tags as string[],
-        balance: (contactForm as any).balance || 0,
-        lastContact: new Date().toISOString(),
+        balance:
+          typeof (contactForm as any).balance === "number"
+            ? (contactForm as any).balance
+            : 0,
+        lastContact: selectedContact?.lastContact || new Date().toISOString(),
         notes: contactForm.notes || "",
         starred: selectedContact?.starred || false,
       };
 
+      // Operate on the LATEST state (ref), not a stale re-fetch.
+      const existing = contactsRef.current;
       let updated: Contact[];
       if (selectedContact) {
         updated = existing.map((c) =>
@@ -320,6 +368,9 @@ export default function Communication() {
       setShowContactModal(false);
       setSelectedContact(null);
       resetContactForm();
+      import("@/react-app/lib/toast").then(({ toastSuccess }) =>
+        toastSuccess("Contact saved"),
+      );
     } catch (error) {
       console.error("Error saving contact:", error);
       alert("Failed to save contact: " + (error as Error).message);
@@ -327,15 +378,34 @@ export default function Communication() {
   };
 
   const deleteContact = async (id: string) => {
-    if (!confirm("Delete this contact?")) return;
+    if (!confirm("Delete this contact? Related messages will also be deleted."))
+      return;
+    if (!cloudLoadCompleteRef.current) {
+      alert("Still loading from cloud. Please try again in a moment.");
+      return;
+    }
 
     try {
-      const existing = normalizeContacts(
-        await cloudStorageService.get<Contact[]>("comm_contacts", stationId),
+      // Delete the contact + orphaned messages (cascade).
+      const updatedContacts = contactsRef.current.filter((c) => c.id !== id);
+      const updatedMessages = messagesRef.current.filter(
+        (m) => m.contactId !== id,
       );
-      const updated = existing.filter((c) => c.id !== id);
-      await cloudStorageService.set("comm_contacts", updated, stationId);
-      setContacts(updated);
+      await cloudStorageService.set(
+        "comm_contacts",
+        updatedContacts,
+        stationId,
+      );
+      await cloudStorageService.set(
+        "comm_messages",
+        updatedMessages,
+        stationId,
+      );
+      setContacts(updatedContacts);
+      setMessages(updatedMessages);
+      import("@/react-app/lib/toast").then(({ toastSuccess }) =>
+        toastSuccess("Contact deleted"),
+      );
     } catch (error) {
       console.error("Error deleting contact:", error);
       alert("Failed to delete contact: " + (error as Error).message);
@@ -343,30 +413,47 @@ export default function Communication() {
   };
 
   const sendMessage = async () => {
+    // Validation: require content + at least one recipient.
+    if (!messageForm.content.trim()) {
+      alert("Message content is required.");
+      return;
+    }
+    const recipients =
+      selectedContacts.length > 0 ? selectedContacts : messageForm.recipients;
+    if (!recipients || recipients.length === 0) {
+      alert("Please select at least one recipient.");
+      return;
+    }
+    if (!cloudLoadCompleteRef.current) {
+      alert("Still loading from cloud. Please try again in a moment.");
+      return;
+    }
     try {
-      const existing = normalizeMessages(
-        await cloudStorageService.get<Message[]>("comm_messages", stationId),
-      );
-      const newMessage: Message = {
-        id: `msg_${Date.now()}`,
-        contactId: (selectedContacts[0] ||
-          messageForm.recipients?.[0] ||
-          "") as string,
+      // Create one message per recipient (bulk send was ignoring all but the first).
+      const now = new Date().toISOString();
+      const sentBy = user?.email || user?.id || "user";
+      const newMessages: Message[] = recipients.map((rid, idx) => ({
+        id: `msg_${Date.now()}_${idx}_${Math.random().toString(36).slice(2, 8)}`,
+        contactId: rid,
         type: messageForm.type || "sms",
         content: messageForm.content || "",
         subject: messageForm.subject || "",
-        status: "sent",
-        timestamp: new Date().toISOString(),
-        sentBy: "user",
-      };
-      const updated = [newMessage, ...existing];
+        // Status is "pending" — the message is stored, not actually sent via a
+        // gateway. The previous "sent" status was misleading.
+        status: "pending",
+        timestamp: now,
+        sentBy,
+      }));
+      const updated = [...newMessages, ...messagesRef.current];
       await cloudStorageService.set("comm_messages", updated, stationId);
       setMessages(updated);
       setShowMessageModal(false);
       setSelectedContacts([]);
       resetMessageForm();
       import("@/react-app/lib/toast").then(({ toastSuccess }) =>
-        toastSuccess("Message sent successfully!"),
+        toastSuccess(
+          `Message queued for ${recipients.length} recipient(s). Configure an SMS/email gateway in Integration Hub to actually send.`,
+        ),
       );
     } catch (error) {
       console.error("Error sending message:", error);
@@ -376,27 +463,67 @@ export default function Communication() {
     }
   };
 
-  const saveTemplate = async () => {
+  const deleteMessage = async (id: string) => {
+    if (!confirm("Delete this message?")) return;
+    if (!cloudLoadCompleteRef.current) {
+      alert("Still loading from cloud. Please try again in a moment.");
+      return;
+    }
     try {
-      const existing = normalizeTemplates(
-        await cloudStorageService.get<MessageTemplate[]>(
-          "comm_templates",
-          stationId,
-        ),
+      const updated = messagesRef.current.filter((m) => m.id !== id);
+      await cloudStorageService.set("comm_messages", updated, stationId);
+      setMessages(updated);
+      import("@/react-app/lib/toast").then(({ toastSuccess }) =>
+        toastSuccess("Message deleted"),
       );
+    } catch (error) {
+      console.error("Error deleting message:", error);
+      alert("Failed to delete message: " + (error as Error).message);
+    }
+  };
+
+  const saveTemplate = async () => {
+    if (!templateForm.name.trim()) {
+      alert("Template name is required.");
+      return;
+    }
+    if (!templateForm.content.trim()) {
+      alert("Template content is required.");
+      return;
+    }
+    if (!cloudLoadCompleteRef.current) {
+      alert("Still loading from cloud. Please try again in a moment.");
+      return;
+    }
+    try {
+      const existing = templatesRef.current;
+      // If editing (a template with a matching id was selected), update; else add.
+      const editingId = (templateForm as any)._editingId;
       const newTemplate: MessageTemplate = {
-        id: `tpl_${Date.now()}`,
-        name: templateForm.name || "",
+        id:
+          editingId ||
+          `tpl_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        name: templateForm.name.trim(),
         type: templateForm.type || "sms",
         subject: templateForm.subject || "",
-        content: templateForm.content || "",
+        content: templateForm.content.trim(),
         category: templateForm.category || "general",
       };
-      const updated = [...existing, newTemplate];
+      let updated: MessageTemplate[];
+      if (editingId) {
+        updated = existing.map((t) =>
+          t.id === editingId ? { ...t, ...newTemplate } : t,
+        );
+      } else {
+        updated = [...existing, newTemplate];
+      }
       await cloudStorageService.set("comm_templates", updated, stationId);
       setTemplates(updated);
       setShowTemplateModal(false);
       resetTemplateForm();
+      import("@/react-app/lib/toast").then(({ toastSuccess }) =>
+        toastSuccess("Template saved"),
+      );
     } catch (error) {
       console.error("Error saving template:", error);
       alert("Failed to save template: " + (error as Error).message);
@@ -405,17 +532,18 @@ export default function Communication() {
 
   const deleteTemplate = async (id: string) => {
     if (!confirm("Delete this template?")) return;
+    if (!cloudLoadCompleteRef.current) {
+      alert("Still loading from cloud. Please try again in a moment.");
+      return;
+    }
 
     try {
-      const existing = normalizeTemplates(
-        await cloudStorageService.get<MessageTemplate[]>(
-          "comm_templates",
-          stationId,
-        ),
-      );
-      const updated = existing.filter((t) => t.id !== id);
+      const updated = templatesRef.current.filter((t) => t.id !== id);
       await cloudStorageService.set("comm_templates", updated, stationId);
       setTemplates(updated);
+      import("@/react-app/lib/toast").then(({ toastSuccess }) =>
+        toastSuccess("Template deleted"),
+      );
     } catch (error) {
       console.error("Error deleting template:", error);
       alert("Failed to delete template: " + (error as Error).message);
@@ -423,10 +551,9 @@ export default function Communication() {
   };
 
   const toggleStarContact = async (contact: Contact) => {
+    if (!cloudLoadCompleteRef.current) return;
     try {
-      const existing = normalizeContacts(
-        await cloudStorageService.get<Contact[]>("comm_contacts", stationId),
-      );
+      const existing = contactsRef.current;
       const updated = existing.map((c) =>
         c.id === contact.id ? { ...c, starred: !c.starred } : c,
       );
@@ -434,8 +561,45 @@ export default function Communication() {
       setContacts(updated);
     } catch (error) {
       console.error("Error updating contact:", error);
-      alert("Failed to update contact: " + (error as Error).message);
     }
+  };
+
+  const exportContactsCSV = () => {
+    if (contacts.length === 0) {
+      alert("No contacts to export.");
+      return;
+    }
+    const escape = (val: string) => `"${String(val).replace(/"/g, '""')}"`;
+    const headers = [
+      "Name",
+      "Phone",
+      "Email",
+      "Company",
+      "Tags",
+      "Balance",
+      "Notes",
+      "Starred",
+    ];
+    const rows = contacts.map((c) => [
+      c.name,
+      c.phone,
+      c.email,
+      c.company,
+      (c.tags || []).join("; "),
+      String(c.balance || 0),
+      c.notes || "",
+      c.starred ? "Yes" : "No",
+    ]);
+    const csv = [headers, ...rows]
+      .map((r) => r.map(escape).join(","))
+      .join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `contacts_${new Date().toISOString().split("T")[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const applyTemplate = (template: MessageTemplate) => {
@@ -478,6 +642,21 @@ export default function Communication() {
       content: "",
       category: "general",
     });
+    // Clear the hidden editing-id flag.
+    (templateForm as any)._editingId = undefined;
+  };
+
+  const openEditTemplate = (template: MessageTemplate) => {
+    setTemplateForm({
+      name: template.name,
+      type: template.type,
+      subject: template.subject || "",
+      content: template.content,
+      category: template.category,
+    } as any);
+    // Stash the id so saveTemplate knows to update instead of insert.
+    (templateForm as any)._editingId = template.id;
+    setShowTemplateModal(true);
   };
 
   const openEditContact = (contact: Contact) => {
@@ -582,6 +761,15 @@ export default function Communication() {
           >
             <Plus size={20} />
             Add Contact
+          </button>
+          <button
+            onClick={exportContactsCSV}
+            disabled={contacts.length === 0}
+            className="btn px-4 py-2 flex items-center gap-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg disabled:opacity-50"
+            title="Export contacts as CSV"
+          >
+            <Download size={18} />
+            <span className="hidden sm:inline">Export</span>
           </button>
         </div>
       </div>
@@ -784,6 +972,13 @@ export default function Communication() {
                   <span className="text-xs text-gray-500">
                     {new Date(message.timestamp || "").toLocaleString()}
                   </span>
+                  <button
+                    onClick={() => deleteMessage(message.id)}
+                    className="text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 p-1 rounded ml-1"
+                    title="Delete message"
+                  >
+                    <Trash2 size={14} />
+                  </button>
                 </div>
               </div>
               <p className="text-sm text-gray-700 dark:text-gray-300 mb-2">
@@ -802,6 +997,12 @@ export default function Communication() {
         <div className="text-center py-12">
           <MessageCircleMore size={48} className="mx-auto text-gray-400 mb-4" />
           <p className="text-gray-500">No messages yet</p>
+          <button
+            onClick={() => openNewMessage()}
+            className="mt-3 inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700"
+          >
+            <Plus size={16} /> New Message
+          </button>
         </div>
       )}
     </div>
@@ -840,12 +1041,22 @@ export default function Communication() {
                   {template.category}
                 </span>
               </div>
-              <button
-                onClick={() => deleteTemplate(template.id)}
-                className="text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 p-1 rounded"
-              >
-                <Trash2 size={16} />
-              </button>
+              <div className="flex gap-1">
+                <button
+                  onClick={() => openEditTemplate(template)}
+                  className="text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 p-1 rounded"
+                  title="Edit template"
+                >
+                  <Edit size={16} />
+                </button>
+                <button
+                  onClick={() => deleteTemplate(template.id)}
+                  className="text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 p-1 rounded"
+                  title="Delete template"
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
             </div>
 
             {template.subject && (
