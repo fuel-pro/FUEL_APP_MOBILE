@@ -301,10 +301,19 @@ export function useFounderBackend() {
 
     async function loadStats() {
       try {
-        const { getSupabaseClient } = await import("@/supabase/client");
-        const client = getSupabaseClient();
-        const { data } = await client.auth.getSession();
-        const token = data.session?.access_token;
+        // Prefer the FOUNDER's token (stored by loginFounder in
+        // fuelpro_founder_token). The app's AuthContext may have restored a
+        // DIFFERENT (non-founder) session on the shared Supabase client, so
+        // getSupabaseClient().auth.getSession() can return the regular app
+        // user's token → /api/founder-stats returns 403 → counts stay at 0.
+        const founderToken = localStorage.getItem("fuelpro_founder_token");
+        let token = founderToken;
+        if (!token) {
+          const { getSupabaseClient } = await import("@/supabase/client");
+          const client = getSupabaseClient();
+          const { data } = await client.auth.getSession();
+          token = data.session?.access_token;
+        }
         if (!token) return;
         setStatsLoading(true);
         // Prefer a same-origin /api path; on Cloudflare (no /api) fall back to
