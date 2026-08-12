@@ -103,7 +103,11 @@ export default function PointOfSale() {
   const kenyaStation =
     isKenyaStation() ||
     stationCountry === "KE" ||
-    (hasKraPin && stationCountry !== "US" && stationCountry !== "GB" && stationCountry !== "DE" && stationCountry !== "EU");
+    (hasKraPin &&
+      stationCountry !== "US" &&
+      stationCountry !== "GB" &&
+      stationCountry !== "DE" &&
+      stationCountry !== "EU");
   const fuelTypeApi = useStationFuelTypes(stationId);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [paymentMethod, setPaymentMethod] = useState<
@@ -138,9 +142,15 @@ export default function PointOfSale() {
     return [];
   });
   const [fiscalCounter, setFiscalCounter] = useState(1);
-  const [quickSaleType, setQuickSaleType] = useState<
-    "petrol" | "diesel" | "custom"
-  >("petrol");
+  // The selected quick-sale fuel — the canonical display LABEL of the active
+  // fuel type (e.g. "Super Petrol", "Diesel", "Kerosene", "LPG"). Defaults to
+  // the canonical petrol label so the first render works before cloud data
+  // hydrates. The buttons below render dynamically from the station's active
+  // fuel types (fuel_types_config), so a station with Kerosene/LPG/V-Power
+  // configured can sell those from POS too — not just hardcoded Petrol/Diesel.
+  const [quickSaleFuel, setQuickSaleFuel] = useState<string>(
+    CANONICAL_FUEL_TYPES.petrol.label,
+  );
   const [quickSaleLitres, setQuickSaleLitres] = useState("");
   const [customItemName, setCustomItemName] = useState("");
   const [customItemPrice, setCustomItemPrice] = useState("");
@@ -398,19 +408,27 @@ export default function PointOfSale() {
     const litres = parseFloat(quickSaleLitres) || 0;
     if (litres <= 0) return;
 
-    const label =
-      quickSaleType === "petrol"
-        ? CANONICAL_FUEL_TYPES.petrol.label
-        : CANONICAL_FUEL_TYPES.diesel.label;
+    const label = quickSaleFuel;
     // Use the unified bus-fresh price (falls back to legacy state field if the
     // station has no matching fuel_types_config entry) so the charged total
     // always matches the displayed per-litre price.
     const price =
       fuelTypeApi.getPriceFor(label) ??
-      (quickSaleType === "petrol" ? state.petrolPrice : state.dieselPrice) ??
+      (fuelTypeApi.canonicalOf(label) === "diesel"
+        ? state.dieselPrice
+        : state.petrolPrice) ??
       0;
     const total = litres * price;
     const fuelName = label;
+    // Resolve the fuel code (PMS/AGO/IK/LPG…) from the configured entry if
+    // available; fall back to the canonical code so the receipt still has a
+    // machine-readable fuel identifier for unknown custom fuels.
+    const canonical = fuelTypeApi.canonicalOf(label);
+    const configuredCode = fuelTypeApi.findFuelType(label)?.code;
+    const fuelCode =
+      configuredCode ||
+      (canonical ? CANONICAL_FUEL_TYPES[canonical]?.code : undefined) ||
+      (canonical === "diesel" ? "AGO" : "PMS");
 
     const newItem: CartItem = {
       id: `fuel-${Date.now()}`,
@@ -418,10 +436,10 @@ export default function PointOfSale() {
       quantity: 1,
       unitPrice: total,
       total: total,
-      fuelType: quickSaleType === "petrol" ? "PMS" : "AGO",
+      fuelType: (fuelCode === "AGO" ? "AGO" : "PMS") as "PMS" | "AGO",
       litres: litres,
       vatCategory: "A", // Fuel is standard-rated (VAT-able)
-      hsCode: quickSaleType === "petrol" ? "2710.12.10" : "2710.19.20",
+      hsCode: canonical === "diesel" ? "2710.19.20" : "2710.12.10",
     };
 
     setCart([...cart, newItem]);
@@ -628,7 +646,8 @@ export default function PointOfSale() {
         origin: "stk_push",
         transaction_type: "POS M-Pesa Sale",
         amount: total,
-        currency: state.companyData?.currency || getCurrencyByCountry(countryCode),
+        currency:
+          state.companyData?.currency || getCurrencyByCountry(countryCode),
         sender_info: customerPhone || "",
         description: `POS sale ${invoiceNumber} (${cart
           .map((i) => i.name)
@@ -922,43 +941,84 @@ export default function PointOfSale() {
           <div className="card">
             <h3 className="text-lg font-semibold mb-4">Quick Fuel Sale</h3>
             <div className="flex flex-wrap gap-4 items-end">
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setQuickSaleType("petrol")}
-                  className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                    quickSaleType === "petrol"
-                      ? "bg-green-500 text-white"
-                      : "bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
-                  }`}
-                >
-                  Petrol ({currencySymbol}{" "}
-                  {(
-                    fuelTypeApi.getPriceFor(
-                      CANONICAL_FUEL_TYPES.petrol.label,
-                    ) ??
-                    state.petrolPrice ??
-                    0
-                  ).toFixed(2)}
-                  /L)
-                </button>
-                <button
-                  onClick={() => setQuickSaleType("diesel")}
-                  className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                    quickSaleType === "diesel"
-                      ? "bg-yellow-500 text-white"
-                      : "bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
-                  }`}
-                >
-                  Diesel ({currencySymbol}{" "}
-                  {(
-                    fuelTypeApi.getPriceFor(
-                      CANONICAL_FUEL_TYPES.diesel.label,
-                    ) ??
-                    state.dieselPrice ??
-                    0
-                  ).toFixed(2)}
-                  /L)
-                </button>
+              <div className="flex flex-wrap gap-2">
+                {/* Render one button per ACTIVE fuel type configured for this
+                    station (from fuel_types_config, via useStationFuelTypes).
+                    Falls back to the canonical Petrol + Diesel buttons when
+                    the station has no configured fuel types yet (first run /
+                    before cloud hydration) so POS is never empty. */}
+                {(() => {
+                  const active = fuelTypeApi.activeFuelTypes;
+                  if (active.length > 0) {
+                    return active.map((ft) => {
+                      const selected =
+                        fuelTypeApi.labelOf(ft.name) === quickSaleFuel;
+                      return (
+                        <button
+                          key={ft.id || ft.name}
+                          onClick={() =>
+                            setQuickSaleFuel(fuelTypeApi.labelOf(ft.name))
+                          }
+                          className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                            selected
+                              ? "bg-green-500 text-white"
+                              : "bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
+                          }`}
+                        >
+                          {fuelTypeApi.labelOf(ft.name)} ({currencySymbol}{" "}
+                          {(fuelTypeApi.getPriceFor(ft.name) ?? 0).toFixed(2)}
+                          /L)
+                        </button>
+                      );
+                    });
+                  }
+                  // Fallback: no configured fuel types — show canonical
+                  // Petrol + Diesel so the cashier can still make a sale.
+                  return (
+                    <>
+                      <button
+                        onClick={() =>
+                          setQuickSaleFuel(CANONICAL_FUEL_TYPES.petrol.label)
+                        }
+                        className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                          quickSaleFuel === CANONICAL_FUEL_TYPES.petrol.label
+                            ? "bg-green-500 text-white"
+                            : "bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
+                        }`}
+                      >
+                        {CANONICAL_FUEL_TYPES.petrol.label} ({currencySymbol}{" "}
+                        {(
+                          fuelTypeApi.getPriceFor(
+                            CANONICAL_FUEL_TYPES.petrol.label,
+                          ) ??
+                          state.petrolPrice ??
+                          0
+                        ).toFixed(2)}
+                        /L)
+                      </button>
+                      <button
+                        onClick={() =>
+                          setQuickSaleFuel(CANONICAL_FUEL_TYPES.diesel.label)
+                        }
+                        className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                          quickSaleFuel === CANONICAL_FUEL_TYPES.diesel.label
+                            ? "bg-yellow-500 text-white"
+                            : "bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
+                        }`}
+                      >
+                        {CANONICAL_FUEL_TYPES.diesel.label} ({currencySymbol}{" "}
+                        {(
+                          fuelTypeApi.getPriceFor(
+                            CANONICAL_FUEL_TYPES.diesel.label,
+                          ) ??
+                          state.dieselPrice ??
+                          0
+                        ).toFixed(2)}
+                        /L)
+                      </button>
+                    </>
+                  );
+                })()}
                 <button
                   onClick={() =>
                     navigateToTab("fueltypes", {
@@ -984,17 +1044,11 @@ export default function PointOfSale() {
                   = {currencySymbol}{" "}
                   {formatNumber(
                     (parseFloat(quickSaleLitres) || 0) *
-                      (quickSaleType === "petrol"
-                        ? (fuelTypeApi.getPriceFor(
-                            CANONICAL_FUEL_TYPES.petrol.label,
-                          ) ??
-                          state.petrolPrice ??
-                          0)
-                        : (fuelTypeApi.getPriceFor(
-                            CANONICAL_FUEL_TYPES.diesel.label,
-                          ) ??
-                          state.dieselPrice ??
-                          0)),
+                      (fuelTypeApi.getPriceFor(quickSaleFuel) ??
+                        (fuelTypeApi.canonicalOf(quickSaleFuel) === "diesel"
+                          ? state.dieselPrice
+                          : state.petrolPrice) ??
+                        0),
                   )}
                 </span>
                 <button onClick={addFuelToCart} className="btn btn-primary">
@@ -1787,13 +1841,13 @@ export default function PointOfSale() {
               <div className="etr-section mt-4 pt-3 border-t border-dashed border-gray-400 text-center">
                 {kenyaStation ? (
                   <>
-                    <p className="font-bold text-xs">
-                      ELECTRONIC TAX REGISTER
-                    </p>
+                    <p className="font-bold text-xs">ELECTRONIC TAX REGISTER</p>
                     <p className="text-[10px] mt-1">
                       ETR S/N: {etrConfig.etrSerialNo}
                     </p>
-                    <p className="text-[10px]">CU S/N: {etrConfig.cuSerialNo}</p>
+                    <p className="text-[10px]">
+                      CU S/N: {etrConfig.cuSerialNo}
+                    </p>
                     <p className="text-[10px]">
                       CU Invoice No: {currentTransaction.cuInvoiceNo}
                     </p>
@@ -1801,7 +1855,8 @@ export default function PointOfSale() {
                       Fiscal Counter: #{currentTransaction.fiscalCounter}
                     </p>
                     <div className="mt-2 text-[9px] font-mono break-all bg-gray-100 p-1 rounded">
-                      <strong>Signature:</strong> {currentTransaction.cuSignature}
+                      <strong>Signature:</strong>{" "}
+                      {currentTransaction.cuSignature}
                     </div>
                   </>
                 ) : (
