@@ -3063,3 +3063,108 @@ the Supabase REST API as `founder.qa.fuelpro@gmail.com` (uid
   `MPESAAnalyzer-BM7gnttg.js` 43097 bytes, all markers confirmed). ✅
 - Supabase: no schema changes (uses existing `mpesa_transactions` cloud key
   in `app_kv`, scoped by owner). ✅
+
+## Team Manager + Shift Management QA & bug fixes (DEPLOYED LIVE 2026-08-12, commit a8822c8)
+
+Full QA of the Team Manager tab and its Shift Management sub-tab.
+Cross-device sync verified end-to-end; 12 bugs fixed across both files.
+
+### Phase 1 + Phase 2 cross-device verification (PASSED)
+
+- **QA user**: `livetransaction.qa.0812@gmail.com` (uid 5f47a88e)
+- **Station**: "Live Transaction Test Station", 45 Mpesa Avenue, Nairobi
+- **Data entered on Cloudflare deploy cb4b7a95**:
+  - Invite link `inv_1786532703233_4f3f` (staff role, maxUses 1)
+  - Employee "John Mwangi Test" (Attendant, +254700123456, hourlyRate 200,
+    active)
+- **Phase 2 (new deployment 3dee0179)**: logged in on a fresh Cloudflare
+  preview URL → Team Manager showed the synced invite (Uses 0/1) + the
+  synced employee "John Mwangi Test" (Attendant) in the Shifts sub-tab.
+  All data present without re-entry.
+- **Supabase app_kv verification** (scoped keys with `__ownerId` suffix):
+  - `shift_employees__5f47a88e...__3114a4c0...` → list[1] with the employee ✅
+  - `team_invites__5f47a88e...` → list[1] with the invite ✅
+  - `team_members__5f47a88e...` → list[0] (no joins yet, expected) ✅
+  - `role_tab_grants__5f47a88e...` → dict[3] (staff/auditor/manager) ✅
+- **Founder panel**: All Stations (17) shows "Live Transaction Test
+  Station" with owner "Live Transaction QA Tester", location "45 Mpesa
+  Avenue, Nairobi", status Active ✅
+
+### TeamManager.tsx fixes
+
+1. **Revoke bug (CRITICAL)**: `{canRevoke && !isOwner}` →
+   `{canRevoke && member.role !== "owner"}`. `isOwner` is the CURRENT
+   user (from `usePermissions`), so when the current user IS the owner,
+   `!isOwner` was false → the Revoke button NEVER appeared for any member.
+   Owners couldn't revoke managers/staff. Fixed to check the MEMBER's role.
+2. **ROLE_ICONS/ROLE_LABELS crash (CRITICAL)**: `ROLE_ICONS[member.role]`
+   returned `undefined` for any role outside owner/manager/staff/auditor →
+   React crash "Element type is invalid". Added `getRoleIcon()` and
+   `getRoleLabel()` safe accessors with a User icon + gray badge fallback.
+   Applied to all `.map()` render paths (team members, invite links,
+   feature access control, used/expired invites).
+3. **Shared extendDays state**: single `extendDays` state was shared across
+   all expanded members → editing it for member A changed the displayed
+   value for member B. Replaced with `extendDaysByMember` (Record<string,
+   string>) keyed by member ID.
+4. **navigator.share error handling**: `navigator.share()` promise was
+   uncaught → a rejected share (user cancels) was silently swallowed. Added
+   `.catch(() => handleCopyLink(inv))` fallback.
+
+### ShiftManagement.tsx fixes
+
+1. **hourlyRate input (CRITICAL)**: the Add Employee form had NO hourlyRate
+   input — `newEmployee.hourlyRate` was hardcoded to 200 and the Rate/hr
+   column was a constant 200 for every new employee. Added a number input
+   (`Rate/hr (currencySymbol)`) to the form; grid changed from 4-col to
+   5-col. The reset now defaults to 200 (same as before) but the user can
+   set any value.
+2. **ID collision (B10)**: `id: shift_${Date.now()}` and
+   `id: emp_${Date.now()}` → two rapid adds in the same ms produced
+   duplicate IDs. Added `_${Math.random().toString(36).slice(2, 8)}` suffix
+   (matching the `normalizeShift`/`normalizeEmployee` pattern).
+3. **Dead employeeId field (B1)**: `employeeId: emp.id` was set on the
+   Shift object via `as any` — the field is NOT in the `Shift` interface,
+   never read anywhere → dead schema-polluting data persisted to both
+   localStorage and cloud. Removed.
+4. **Notes rendering (B9)**: `notes` was captured in the schedule form and
+   persisted but never rendered on the shift card → invisible data. Added
+   an italic notes display below the check-out time.
+5. **Delete buttons (B7/B8)**: no delete/edit existed for employees or
+   shifts. Added: a delete (✕) button on each shift card, and a delete (✕)
+   button in each employee roster row (with confirm dialog). New functions:
+   `deleteShift(id)`, `deleteEmployee(id)`.
+6. **Mark Absent (B2)**: the `absent` status was in the interface and
+   rendered in the badge but was unreachable from the UI (`toggleStatus`
+   only cycles scheduled→active→completed). Added a "Mark Absent" button
+   (AlertCircle icon) visible only for scheduled shifts.
+7. **CSV export (B3)**: the `Download` icon was imported but never used.
+   Added an "Export" button next to "Add Employee" that exports the full
+   employee roster (Name, Role, Phone, Rate/hr, Status, Join Date) as a CSV
+   file via Blob + URL.createObjectURL.
+8. **Real-time subscriber guards (R2/R4)**: the `subscribe()` callbacks for
+   `shift_employees` and `shift_data` did NOT check `localModifiedRef` →
+   a real-time push arriving mid-edit could overwrite uncommitted local
+   changes. Added `!localModifiedRef.current` guard to both subscribers.
+9. **Post-load flush (R3/R6)**: the cloud-load `finally` block set
+   `cloudLoadCompleteRef.current = true` but never flushed
+   locally-modified state to cloud — pre-load or failed-load edits stayed
+   local-only and were lost on cache clear. Added a post-load flush: if
+   `localModifiedRef.current` is true after the load completes, re-push
+   `employeesRef.current` and `shiftsRef.current` to cloud.
+10. **Refs for post-load flush**: added `employeesRef` and `shiftsRef`
+    (updated every render) so the post-load flush reads the CURRENT state,
+    not stale closure values.
+11. **Unused imports removed**: `CheckCircle2`, `ChevronDown`, `Sunset`.
+
+### Deploy status 2026-08-12 (commit a8822c8)
+
+- GitHub main: pushed ✅
+- Cloudflare Pages: LIVE (https://a75e65e7.fuel-app-mobile.pages.dev +
+  main alias https://fuel-app-mobile.pages.dev) ✅
+- Vercel production: BLOCKED by `api-deployments-free-per-day` (100/100;
+  resets ~24h). GitHub integration auto-deploys when quota resets. ✅
+- Supabase: no schema changes (all data uses existing `app_kv` cloud keys
+  with `__ownerId` scoped row IDs). ✅
+- `npx tsc --noEmit` (0 errors), `npm run build` (112 precache), `eslint`
+  (0 errors), `prettier --check` (all pass). ✅
