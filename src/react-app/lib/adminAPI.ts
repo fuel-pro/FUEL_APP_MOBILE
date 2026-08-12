@@ -613,7 +613,7 @@ export class AdminAPI {
         company: {
           name: isKenya ? "FuelPro Kenya" : "FuelPro",
           address: isKenya ? "123 Business Park, Nairobi" : "",
-          phone: "+1 555 000 1234",
+          phone: isKenya ? "+254 700 000 000" : "",
           email: "info@fuelpro.app",
         },
         localization: {
