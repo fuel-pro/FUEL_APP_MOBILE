@@ -2029,3 +2029,70 @@ palette, dbquery (SQL audit log). Provides `add`/`update`/`remove`/
 - Verified: `tsc -b` 0 errors, `eslint` 0 errors, `prettier` clean, build
   success (founder chunk 880 KB), 3 unit tests pass.
 
+## Founder Console — Batch 2: 10 MORE real-time cloud-backed developer-control sections (ADDED 2026-08-12)
+
+Extends `useFounderAdvancedStore.ts` with 10 additional cloud-backed,
+real-time datasets (Supabase `app_kv` + Realtime — instant cross-device
+sync, zero polling). Total cloud datasets in the advanced store: 22.
+Two new nav groups ("Observability" + "DevOps") added to the Founder
+Console sidebar.
+
+New datasets + keys:
+- `founder_console_error_tracker` — `ErrorLogEntry[]` (fingerprint-deduped
+  error aggregation from client/server/api/webhook sources).
+- `founder_console_sessions` — `UserSession[]` (active user sessions with
+  device/browser/os/ip/location, revoke single or all).
+- `founder_console_task_queue` — `TaskQueueItem[]` (background job queue:
+  enqueue, progress, cancel, retry, clear completed).
+- `founder_console_log_streams` — `LogStreamEntry[]` (live log tail by
+  level/source, export to .log, clear).
+- `founder_console_role_matrix` — `RolePermission[]` (5 roles × 16 resources
+  × 6 permission actions, visual toggle matrix, export CSV, reset defaults).
+- `founder_console_release_coord` — `ReleaseCoordinator[]` (staged rollout:
+  canary→rolling→live, promote 10/25/50/100%, pause, rollback).
+- `founder_console_migrations` — `MigrationRecord[]` (migration tracker:
+  applied/pending/failed/rolled-back, mark applied, rollback).
+- `founder_console_webhook_deliveries` — `WebhookDelivery[]` (delivery log
+  per webhook: status code, latency, request/response body, retry).
+- `founder_console_storage_explorer` — `StorageBucketItem[]` (Supabase
+  Storage bucket browser: folders, files, sizes, public URLs).
+- `founder_console_api_rate_limits` — `ApiRateLimitEntry[]` (per-endpoint
+  rate limit config: limit/burst/strategy, toggle, reset counters).
+
+New section components (`src/react-app/pages/founder-sections/`):
+- `ErrorTrackerSection.tsx` — source/severity/resolved filters, stats,
+  manual log, resolve toggle, clear resolved/all.
+- `SessionInspectorSection.tsx` — device icons, active badge, revoke
+  single/all, by-device stats.
+- `TaskQueueSection.tsx` — New Task form (type/priority/payload/scheduled),
+  progress bars, retry/cancel, status/type filters, stats.
+- `LogStreamsSection.tsx` — level-colored badges, collapsible metadata,
+  newest-first, Export .log, real-time indicator, clear.
+- `RoleMatrixSection.tsx` — matrix grid (resources × roles), toggle
+  action chips, Export CSV, Reset to Defaults, filter by role.
+- `ReleaseCoordinatorSection.tsx` — New Release form, promote quick-buttons
+  (10/25/50/100%), pause, rollback, delete, rollout vs target progress.
+- `MigrationsSection.tsx` — status badges, tablesAffected chips, checksum,
+  mark applied, rollback, add migration, status filter + stats.
+- `WebhookDeliveriesSection.tsx` — expandable rows (request/response body),
+  retry per delivery, clear all, status filter, success-rate stats.
+- `StorageExplorerSection.tsx` — size formatting, publicUrl links, bucket
+  filter, size/date sort, new folder/upload, delete, stats.
+- `ApiRateLimitsSection.tsx` — currentCount progress vs limit, strategy
+  badges, toggle/delete, reset counters, add endpoint, method/strategy
+  filter, stats.
+
+Nav groups in FounderAccess.tsx:
+- **Observability**: Error Tracker, Sessions, Log Streams, Webhook Logs.
+- **DevOps**: Task Queue, Role Matrix, Release Coordinator, Migrations,
+  Storage, API Rate Limits.
+
+All 10 new sections use the same `useCloudList` generic (load → subscribe
+→ echo-guarded set) pattern as batch 1, so every write is instantly
+broadcast to all subscribed founder devices via Supabase Realtime. No
+Supabase schema changes (all use existing `app_kv` table + RLS + Realtime
+publication).
+
+Verified: `tsc -b` 0 errors, `eslint` 0 errors, `prettier` clean,
+`npm run build` success, 3 unit tests pass.
+

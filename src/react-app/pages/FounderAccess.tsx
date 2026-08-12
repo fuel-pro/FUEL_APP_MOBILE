@@ -55,6 +55,12 @@ import {
   Globe,
   Languages,
   Database,
+  Monitor,
+  ListChecks,
+  Rocket,
+  Send,
+  HardDrive,
+  Gauge,
 } from "lucide-react";
 import { loginFounder } from "@/react-app/lib/founder-auth";
 import { requestPasswordReset } from "@/react-app/lib/founder-auth";
@@ -98,6 +104,16 @@ import {
   CacheManagementSection,
   CommandPaletteSection,
   DatabaseQuerySection,
+  ErrorTrackerSection,
+  SessionInspectorSection,
+  TaskQueueSection,
+  LogStreamsSection,
+  RoleMatrixSection,
+  ReleaseCoordinatorSection,
+  MigrationsSection,
+  WebhookDeliveriesSection,
+  StorageExplorerSection,
+  ApiRateLimitsSection,
 } from "./founder-sections";
 import { useFounderBackend } from "@/react-app/hooks/useFounderBackend";
 import { useFounderConsoleStore } from "@/react-app/hooks/useFounderConsoleStore";
@@ -191,7 +207,17 @@ type SectionId =
   | "localization"
   | "cachemgmt"
   | "commandpalette"
-  | "dbquery";
+  | "dbquery"
+  | "errortracker"
+  | "sessions"
+  | "taskqueue"
+  | "logstreams"
+  | "rolematrix"
+  | "releasecoord"
+  | "migrations"
+  | "deliveries"
+  | "storage"
+  | "ratelimits";
 
 export default function FounderAccess() {
   /* ─── Cloud Sync State ─── */
@@ -1206,6 +1232,80 @@ export default function FounderAccess() {
         },
       ],
     },
+    {
+      label: "Observability",
+      items: [
+        {
+          id: "errortracker" as SectionId,
+          label: "Error Tracker",
+          icon: AlertTriangle,
+          count: advancedStore.errorLog.filter((e) => !e.resolved).length,
+        },
+        {
+          id: "sessions" as SectionId,
+          label: "Sessions",
+          icon: Monitor,
+          count: advancedStore.sessions.filter((s) => s.active).length,
+        },
+        {
+          id: "logstreams" as SectionId,
+          label: "Log Streams",
+          icon: Radio,
+          count: advancedStore.logStreams.length,
+        },
+        {
+          id: "deliveries" as SectionId,
+          label: "Webhook Logs",
+          icon: Send,
+          count: advancedStore.webhookDeliveries.length,
+        },
+      ],
+    },
+    {
+      label: "DevOps",
+      items: [
+        {
+          id: "taskqueue" as SectionId,
+          label: "Task Queue",
+          icon: ListChecks,
+          count: advancedStore.taskQueue.filter(
+            (t) => t.status === "queued" || t.status === "running",
+          ).length,
+        },
+        {
+          id: "rolematrix" as SectionId,
+          label: "Role Matrix",
+          icon: ShieldCheck,
+        },
+        {
+          id: "releasecoord" as SectionId,
+          label: "Release Coord.",
+          icon: Rocket,
+          count: advancedStore.releases.filter(
+            (r) => r.status === "rolling" || r.status === "canary",
+          ).length,
+        },
+        {
+          id: "migrations" as SectionId,
+          label: "Migrations",
+          icon: Database,
+          count: advancedStore.migrations.filter((m) => m.status === "pending")
+            .length,
+        },
+        {
+          id: "storage" as SectionId,
+          label: "Storage",
+          icon: HardDrive,
+          count: advancedStore.storageItems.filter((s) => !s.isFolder).length,
+        },
+        {
+          id: "ratelimits" as SectionId,
+          label: "API Rate Limits",
+          icon: Gauge,
+          count: advancedStore.apiRateLimits.filter((r) => r.enabled).length,
+        },
+      ],
+    },
   ];
 
   const NavItem = ({
@@ -2162,6 +2262,66 @@ export default function FounderAccess() {
           )}
           {activeSection === "localization" && (
             <LocalizationSection
+              store={advancedStore}
+              logAudit={consoleStore.addAudit}
+            />
+          )}
+          {activeSection === "errortracker" && (
+            <ErrorTrackerSection
+              store={advancedStore}
+              logAudit={consoleStore.addAudit}
+            />
+          )}
+          {activeSection === "sessions" && (
+            <SessionInspectorSection
+              store={advancedStore}
+              logAudit={consoleStore.addAudit}
+            />
+          )}
+          {activeSection === "taskqueue" && (
+            <TaskQueueSection
+              store={advancedStore}
+              logAudit={consoleStore.addAudit}
+            />
+          )}
+          {activeSection === "logstreams" && (
+            <LogStreamsSection
+              store={advancedStore}
+              logAudit={consoleStore.addAudit}
+            />
+          )}
+          {activeSection === "rolematrix" && (
+            <RoleMatrixSection
+              store={advancedStore}
+              logAudit={consoleStore.addAudit}
+            />
+          )}
+          {activeSection === "releasecoord" && (
+            <ReleaseCoordinatorSection
+              store={advancedStore}
+              logAudit={consoleStore.addAudit}
+            />
+          )}
+          {activeSection === "migrations" && (
+            <MigrationsSection
+              store={advancedStore}
+              logAudit={consoleStore.addAudit}
+            />
+          )}
+          {activeSection === "deliveries" && (
+            <WebhookDeliveriesSection
+              store={advancedStore}
+              logAudit={consoleStore.addAudit}
+            />
+          )}
+          {activeSection === "storage" && (
+            <StorageExplorerSection
+              store={advancedStore}
+              logAudit={consoleStore.addAudit}
+            />
+          )}
+          {activeSection === "ratelimits" && (
+            <ApiRateLimitsSection
               store={advancedStore}
               logAudit={consoleStore.addAudit}
             />

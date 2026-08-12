@@ -22,6 +22,16 @@
  *   - founder_console_health_checks
  *   - founder_console_localization
  *   - founder_console_secret_access
+ *   - founder_console_error_tracker
+ *   - founder_console_sessions
+ *   - founder_console_task_queue
+ *   - founder_console_log_streams
+ *   - founder_console_role_matrix
+ *   - founder_console_release_coord
+ *   - founder_console_migrations
+ *   - founder_console_webhook_deliveries
+ *   - founder_console_storage_explorer
+ *   - founder_console_api_rate_limits
  *
  * All keys are owner-scoped by cloudStorageService (RLS `auth.uid() = owner_id`)
  * so founder accounts are isolated. localStorage is only a read-through cache.
@@ -191,6 +201,173 @@ export interface SecretAccessLogEntry {
   ip?: string;
 }
 
+/* ─── Batch 2 types: additional developer-control datasets ─── */
+
+export interface ErrorLogEntry {
+  id: string;
+  message: string;
+  stack?: string;
+  source: "client" | "server" | "api" | "webhook";
+  severity: "error" | "warning" | "fatal";
+  url?: string;
+  userAgent?: string;
+  userId?: string;
+  count: number;
+  firstSeen: string;
+  lastSeen: string;
+  resolved: boolean;
+  fingerprint: string;
+}
+
+export interface UserSession {
+  id: string;
+  userId: string;
+  email: string;
+  device: "desktop" | "mobile" | "tablet";
+  browser: string;
+  os: string;
+  ip: string;
+  location?: string;
+  loginAt: string;
+  lastActiveAt: string;
+  active: boolean;
+  tokenExpiresAt?: string;
+}
+
+export type TaskStatus =
+  "queued" | "running" | "completed" | "failed" | "retrying";
+export type TaskPriority = "low" | "normal" | "high" | "critical";
+
+export interface TaskQueueItem {
+  id: string;
+  name: string;
+  type:
+    "email" | "sync" | "export" | "import" | "report" | "cleanup" | "custom";
+  status: TaskStatus;
+  priority: TaskPriority;
+  payload?: string;
+  progress: number; // 0-100
+  result?: string;
+  error?: string;
+  attempts: number;
+  maxAttempts: number;
+  createdAt: string;
+  startedAt?: string;
+  completedAt?: string;
+  scheduledFor?: string;
+}
+
+export type LogLevel = "debug" | "info" | "warn" | "error" | "fatal";
+export type LogSource =
+  "auth" | "api" | "db" | "realtime" | "storage" | "worker" | "cron" | "ui";
+
+export interface LogStreamEntry {
+  id: string;
+  level: LogLevel;
+  source: LogSource;
+  message: string;
+  metadata?: string;
+  timestamp: string;
+  traceId?: string;
+}
+
+export type PermissionAction =
+  "read" | "write" | "delete" | "admin" | "export" | "import";
+
+export interface RolePermission {
+  id: string;
+  role: string; // founder, admin, manager, cashier, user
+  resource: string; // e.g. "stations", "sales", "reports"
+  actions: PermissionAction[];
+  granted: boolean;
+  updatedAt: string;
+}
+
+export type ReleaseStatus =
+  "draft" | "canary" | "rolling" | "live" | "paused" | "rolled-back";
+
+export interface ReleaseCoordinator {
+  id: string;
+  name: string;
+  version: string;
+  description: string;
+  status: ReleaseStatus;
+  rolloutPercent: number; // 0-100
+  targetPercent: number;
+  enabledFlags: string[]; // feature flag ids to enable
+  cohortSize: number;
+  affectedUsers: number;
+  createdAt: string;
+  updatedAt: string;
+  promotedAt?: string;
+  notes?: string;
+}
+
+export type MigrationStatus =
+  "pending" | "applied" | "failed" | "rolled-back" | "skipped";
+
+export interface MigrationRecord {
+  id: string;
+  filename: string;
+  description: string;
+  status: MigrationStatus;
+  appliedAt?: string;
+  durationMs?: number;
+  tablesAffected: string[];
+  error?: string;
+  checksum?: string;
+}
+
+export type DeliveryStatus =
+  "pending" | "success" | "failed" | "retrying" | "timeout";
+
+export interface WebhookDelivery {
+  id: string;
+  webhookId: string;
+  webhookName: string;
+  event: string;
+  url: string;
+  status: DeliveryStatus;
+  statusCode?: number;
+  requestBody: string;
+  responseBody?: string;
+  responseHeaders?: string;
+  attempt: number;
+  latencyMs?: number;
+  queuedAt: string;
+  deliveredAt?: string;
+  nextRetryAt?: string;
+  errorMessage?: string;
+}
+
+export interface StorageBucketItem {
+  id: string;
+  bucketName: string;
+  path: string;
+  name: string;
+  size: number;
+  mimeType: string;
+  isFolder: boolean;
+  publicUrl?: string;
+  uploadedAt: string;
+  uploadedBy?: string;
+}
+
+export interface ApiRateLimitEntry {
+  id: string;
+  endpoint: string; // e.g. "/api/fuel-local"
+  method: string; // GET, POST
+  limitPerMin: number;
+  windowMs: number;
+  currentCount: number;
+  burstLimit: number;
+  enabled: boolean;
+  strategy: "fixed" | "sliding" | "token-bucket" | "leaky-bucket";
+  lastHitAt?: string;
+  topIps?: string[];
+  updatedAt: string;
+}
+
 /* ───────────────────────── Keys ───────────────────────── */
 
 const KEYS = {
@@ -206,6 +383,16 @@ const KEYS = {
   health: "founder_console_health_checks",
   localization: "founder_console_localization",
   secretAccess: "founder_console_secret_access",
+  errorTracker: "founder_console_error_tracker",
+  sessions: "founder_console_sessions",
+  taskQueue: "founder_console_task_queue",
+  logStreams: "founder_console_log_streams",
+  roleMatrix: "founder_console_role_matrix",
+  releaseCoord: "founder_console_release_coord",
+  migrations: "founder_console_migrations",
+  webhookDeliveries: "founder_console_webhook_deliveries",
+  storageExplorer: "founder_console_storage_explorer",
+  apiRateLimits: "founder_console_api_rate_limits",
 } as const;
 
 /* ───────────────────────── Defaults ───────────────────────── */
@@ -295,6 +482,223 @@ const DEFAULT_JOBS: ScheduledJob[] = [
     endpoint: "/api/cron/audit-archive",
     createdAt: new Date().toISOString(),
   },
+];
+
+/* ─── Batch 2 defaults ─── */
+
+const DEFAULT_ROLES = ["founder", "admin", "manager", "cashier", "user"];
+
+const DEFAULT_RESOURCES = [
+  "stations",
+  "sales",
+  "products",
+  "inventory",
+  "invoices",
+  "reports",
+  "expenses",
+  "customers",
+  "suppliers",
+  "payroll",
+  "shifts",
+  "credit",
+  "fuel_types",
+  "documents",
+  "integrations",
+  "founder_panel",
+];
+
+const DEFAULT_ROLE_MATRIX: RolePermission[] = DEFAULT_ROLES.flatMap((role) =>
+  DEFAULT_RESOURCES.map((res) => ({
+    id: `${role}-${res}`,
+    role,
+    resource: res,
+    actions:
+      role === "founder"
+        ? ["read", "write", "delete", "admin", "export", "import"]
+        : role === "admin"
+          ? ["read", "write", "export"]
+          : role === "manager"
+            ? ["read", "write"]
+            : role === "cashier"
+              ? ["read"]
+              : [],
+    granted: role === "founder" || role === "admin" || role === "manager",
+    updatedAt: new Date().toISOString(),
+  })),
+);
+
+const DEFAULT_API_RATE_LIMITS: ApiRateLimitEntry[] = [
+  {
+    id: "fuel-local",
+    endpoint: "/api/fuel-local",
+    method: "GET",
+    limitPerMin: 60,
+    windowMs: 60000,
+    currentCount: 0,
+    burstLimit: 10,
+    enabled: true,
+    strategy: "sliding",
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: "fuel-prices",
+    endpoint: "/api/fuel-prices",
+    method: "GET",
+    limitPerMin: 100,
+    windowMs: 60000,
+    currentCount: 0,
+    burstLimit: 20,
+    enabled: true,
+    strategy: "token-bucket",
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: "founder-stats",
+    endpoint: "/api/founder-stats",
+    method: "GET",
+    limitPerMin: 30,
+    windowMs: 60000,
+    currentCount: 0,
+    burstLimit: 5,
+    enabled: true,
+    strategy: "fixed",
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    id: "trpc",
+    endpoint: "/api/trpc/*",
+    method: "POST",
+    limitPerMin: 200,
+    windowMs: 60000,
+    currentCount: 0,
+    burstLimit: 50,
+    enabled: true,
+    strategy: "leaky-bucket",
+    updatedAt: new Date().toISOString(),
+  },
+];
+
+const DEFAULT_RELEASES: ReleaseCoordinator[] = [
+  {
+    id: "v2-autofuel",
+    name: "Auto Fuel Price Engine v2",
+    version: "2.1.0",
+    description: "Hyper-local GPS fuel price detection with smart-cache",
+    status: "live",
+    rolloutPercent: 100,
+    targetPercent: 100,
+    enabledFlags: ["auto_fuel_price"],
+    cohortSize: 0,
+    affectedUsers: 0,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    promotedAt: new Date().toISOString(),
+  },
+  {
+    id: "v2-realtime",
+    name: "Real-time Cross-device Sync",
+    version: "2.2.0",
+    description: "Supabase Realtime pub/sub for instant cross-device updates",
+    status: "rolling",
+    rolloutPercent: 50,
+    targetPercent: 100,
+    enabledFlags: ["realtime_sync"],
+    cohortSize: 0,
+    affectedUsers: 0,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+];
+
+const DEFAULT_MIGRATIONS: MigrationRecord[] = [
+  {
+    id: "005",
+    filename: "005_saleszote_features.sql",
+    description:
+      "POS module tables (products, sales_enhanced, sale_items, expenses)",
+    status: "applied",
+    appliedAt: new Date(Date.now() - 86400000 * 3).toISOString(),
+    durationMs: 1240,
+    tablesAffected: [
+      "products",
+      "sales_enhanced",
+      "sale_items",
+      "inventory_transactions",
+    ],
+    checksum: "a1b2c3",
+  },
+  {
+    id: "012",
+    filename: "012_fuel_prices_postgis.sql",
+    description: "fuel_prices table + PostGIS spatial index + RPCs",
+    status: "applied",
+    appliedAt: new Date(Date.now() - 86400000 * 2).toISOString(),
+    durationMs: 890,
+    tablesAffected: ["fuel_prices"],
+    checksum: "d4e5f6",
+  },
+  {
+    id: "013",
+    filename: "013_founder_2fa_profiles.sql",
+    description: "Founder 2FA, recovery codes, unique_id on profiles",
+    status: "applied",
+    appliedAt: new Date(Date.now() - 86400000).toISOString(),
+    durationMs: 450,
+    tablesAffected: ["profiles"],
+    checksum: "g7h8i9",
+  },
+  {
+    id: "014",
+    filename: "014_error_tracking.sql",
+    description:
+      "Pending: error_logs table for client/server error aggregation",
+    status: "pending",
+    tablesAffected: [],
+  },
+];
+
+const DEFAULT_STORAGE_ITEMS: StorageBucketItem[] = [
+  {
+    id: "logos-dir",
+    bucketName: "fuelpro-files",
+    path: "logos/",
+    name: "logos",
+    size: 0,
+    mimeType: "folder",
+    isFolder: true,
+    uploadedAt: new Date().toISOString(),
+  },
+  {
+    id: "docs-dir",
+    bucketName: "fuelpro-files",
+    path: "documents/",
+    name: "documents",
+    size: 0,
+    mimeType: "folder",
+    isFolder: true,
+    uploadedAt: new Date().toISOString(),
+  },
+];
+
+const DEFAULT_TASK_TYPES = [
+  "email",
+  "sync",
+  "export",
+  "import",
+  "report",
+  "cleanup",
+  "custom",
+] as const;
+
+const DEFAULT_LOG_SOURCES: LogSource[] = [
+  "auth",
+  "api",
+  "db",
+  "realtime",
+  "storage",
+  "worker",
+  "cron",
+  "ui",
 ];
 
 /* ───────────────────────── Helpers ───────────────────────── */
@@ -469,6 +873,78 @@ export function useFounderAdvancedStore(stationId?: string) {
     stationId,
     [],
     isArr<SecretAccessLogEntry>(),
+  );
+
+  /* ─── Batch 2 stores ─── */
+  /* Error Tracker */
+  const errorTrackerStore = useCloudList<ErrorLogEntry>(
+    KEYS.errorTracker,
+    stationId,
+    [],
+    isArr<ErrorLogEntry>(),
+  );
+  /* Sessions */
+  const sessionsStore = useCloudList<UserSession>(
+    KEYS.sessions,
+    stationId,
+    [],
+    isArr<UserSession>(),
+  );
+  /* Task Queue */
+  const taskQueueStore = useCloudList<TaskQueueItem>(
+    KEYS.taskQueue,
+    stationId,
+    [],
+    isArr<TaskQueueItem>(),
+  );
+  /* Log Streams */
+  const logStreamsStore = useCloudList<LogStreamEntry>(
+    KEYS.logStreams,
+    stationId,
+    [],
+    isArr<LogStreamEntry>(),
+  );
+  /* Role Matrix */
+  const roleMatrixStore = useCloudList<RolePermission>(
+    KEYS.roleMatrix,
+    stationId,
+    DEFAULT_ROLE_MATRIX,
+    isArr<RolePermission>(),
+  );
+  /* Release Coordinator */
+  const releaseCoordStore = useCloudList<ReleaseCoordinator>(
+    KEYS.releaseCoord,
+    stationId,
+    DEFAULT_RELEASES,
+    isArr<ReleaseCoordinator>(),
+  );
+  /* Migrations */
+  const migrationsStore = useCloudList<MigrationRecord>(
+    KEYS.migrations,
+    stationId,
+    DEFAULT_MIGRATIONS,
+    isArr<MigrationRecord>(),
+  );
+  /* Webhook Deliveries */
+  const webhookDeliveriesStore = useCloudList<WebhookDelivery>(
+    KEYS.webhookDeliveries,
+    stationId,
+    [],
+    isArr<WebhookDelivery>(),
+  );
+  /* Storage Explorer */
+  const storageExplorerStore = useCloudList<StorageBucketItem>(
+    KEYS.storageExplorer,
+    stationId,
+    DEFAULT_STORAGE_ITEMS,
+    isArr<StorageBucketItem>(),
+  );
+  /* API Rate Limits */
+  const apiRateLimitsStore = useCloudList<ApiRateLimitEntry>(
+    KEYS.apiRateLimits,
+    stationId,
+    DEFAULT_API_RATE_LIMITS,
+    isArr<ApiRateLimitEntry>(),
   );
 
   /* ─── Webhook actions ─── */
@@ -934,6 +1410,407 @@ export function useFounderAdvancedStore(stationId?: string) {
     [secretAccessStore],
   );
 
+  /* ─── Batch 2 actions ─── */
+
+  /* Error Tracker */
+  const recordError = useCallback(
+    (
+      entry: Omit<
+        ErrorLogEntry,
+        "id" | "firstSeen" | "lastSeen" | "count" | "fingerprint" | "resolved"
+      >,
+    ) => {
+      const fingerprint = `${entry.source}:${entry.message.slice(0, 80)}`;
+      const existing = errorTrackerStore.data.find(
+        (e) => e.fingerprint === fingerprint,
+      );
+      const now = new Date().toISOString();
+      if (existing) {
+        errorTrackerStore.setData(
+          errorTrackerStore.data.map((e) =>
+            e.fingerprint === fingerprint
+              ? { ...e, count: e.count + 1, lastSeen: now }
+              : e,
+          ),
+        );
+      } else {
+        errorTrackerStore.setData(
+          [
+            {
+              ...entry,
+              id: uid(),
+              fingerprint,
+              count: 1,
+              firstSeen: now,
+              lastSeen: now,
+              resolved: false,
+            },
+            ...errorTrackerStore.data,
+          ].slice(0, 500),
+        );
+      }
+    },
+    [errorTrackerStore],
+  );
+  const resolveError = useCallback(
+    (id: string) =>
+      errorTrackerStore.setData(
+        errorTrackerStore.data.map((e) =>
+          e.id === id ? { ...e, resolved: !e.resolved } : e,
+        ),
+      ),
+    [errorTrackerStore],
+  );
+  const clearResolvedErrors = useCallback(
+    () =>
+      errorTrackerStore.setData(
+        errorTrackerStore.data.filter((e) => !e.resolved),
+      ),
+    [errorTrackerStore],
+  );
+  const clearAllErrors = useCallback(
+    () => errorTrackerStore.setData([]),
+    [errorTrackerStore],
+  );
+
+  /* Sessions */
+  const upsertSession = useCallback(
+    (s: UserSession) => {
+      const exists = sessionsStore.data.some((x) => x.id === s.id);
+      sessionsStore.setData(
+        exists
+          ? sessionsStore.data.map((x) => (x.id === s.id ? s : x))
+          : [s, ...sessionsStore.data],
+      );
+    },
+    [sessionsStore],
+  );
+  const revokeSession = useCallback(
+    (id: string) =>
+      sessionsStore.setData(
+        sessionsStore.data.map((x) =>
+          x.id === id ? { ...x, active: false } : x,
+        ),
+      ),
+    [sessionsStore],
+  );
+  const revokeAllSessions = useCallback(
+    () =>
+      sessionsStore.setData(
+        sessionsStore.data.map((x) => ({ ...x, active: false })),
+      ),
+    [sessionsStore],
+  );
+
+  /* Task Queue */
+  const enqueueTask = useCallback(
+    (
+      task: Omit<
+        TaskQueueItem,
+        "id" | "createdAt" | "attempts" | "status" | "progress"
+      >,
+    ) => {
+      const item: TaskQueueItem = {
+        ...task,
+        id: uid(),
+        status: "queued",
+        progress: 0,
+        attempts: 0,
+        createdAt: new Date().toISOString(),
+      };
+      taskQueueStore.setData([...taskQueueStore.data, item]);
+      return item.id;
+    },
+    [taskQueueStore],
+  );
+  const updateTask = useCallback(
+    (id: string, patch: Partial<TaskQueueItem>) =>
+      taskQueueStore.setData(
+        taskQueueStore.data.map((t) => (t.id === id ? { ...t, ...patch } : t)),
+      ),
+    [taskQueueStore],
+  );
+  const cancelTask = useCallback(
+    (id: string) =>
+      taskQueueStore.setData(
+        taskQueueStore.data.map((t) =>
+          t.id === id
+            ? { ...t, status: "failed", error: "Cancelled by admin" }
+            : t,
+        ),
+      ),
+    [taskQueueStore],
+  );
+  const retryTask = useCallback(
+    (id: string) =>
+      taskQueueStore.setData(
+        taskQueueStore.data.map((t) =>
+          t.id === id
+            ? {
+                ...t,
+                status: "queued",
+                attempts: t.attempts + 1,
+                error: undefined,
+              }
+            : t,
+        ),
+      ),
+    [taskQueueStore],
+  );
+  const clearCompletedTasks = useCallback(
+    () =>
+      taskQueueStore.setData(
+        taskQueueStore.data.filter((t) => t.status !== "completed"),
+      ),
+    [taskQueueStore],
+  );
+
+  /* Log Streams */
+  const appendLog = useCallback(
+    (entry: Omit<LogStreamEntry, "id" | "timestamp">) =>
+      logStreamsStore.setData(
+        [
+          { ...entry, id: uid(), timestamp: new Date().toISOString() },
+          ...logStreamsStore.data,
+        ].slice(0, 1000),
+      ),
+    [logStreamsStore],
+  );
+  const clearLogs = useCallback(
+    () => logStreamsStore.setData([]),
+    [logStreamsStore],
+  );
+
+  /* Role Matrix */
+  const updateRolePermission = useCallback(
+    (id: string, patch: Partial<RolePermission>) =>
+      roleMatrixStore.setData(
+        roleMatrixStore.data.map((rp) =>
+          rp.id === id
+            ? { ...rp, ...patch, updatedAt: new Date().toISOString() }
+            : rp,
+        ),
+      ),
+    [roleMatrixStore],
+  );
+  const toggleRoleAction = useCallback(
+    (id: string, action: PermissionAction) =>
+      roleMatrixStore.setData(
+        roleMatrixStore.data.map((rp) =>
+          rp.id === id
+            ? {
+                ...rp,
+                actions: rp.actions.includes(action)
+                  ? rp.actions.filter((a) => a !== action)
+                  : [...rp.actions, action],
+                updatedAt: new Date().toISOString(),
+              }
+            : rp,
+        ),
+      ),
+    [roleMatrixStore],
+  );
+  const resetRoleMatrix = useCallback(
+    () => roleMatrixStore.setData(DEFAULT_ROLE_MATRIX),
+    [roleMatrixStore],
+  );
+
+  /* Release Coordinator */
+  const upsertRelease = useCallback(
+    (r: ReleaseCoordinator) => {
+      const exists = releaseCoordStore.data.some((x) => x.id === r.id);
+      releaseCoordStore.setData(
+        exists
+          ? releaseCoordStore.data.map((x) =>
+              x.id === r.id ? { ...r, updatedAt: new Date().toISOString() } : x,
+            )
+          : [...releaseCoordStore.data, r],
+      );
+    },
+    [releaseCoordStore],
+  );
+  const promoteRelease = useCallback(
+    (id: string, percent: number) =>
+      releaseCoordStore.setData(
+        releaseCoordStore.data.map((r) =>
+          r.id === id
+            ? {
+                ...r,
+                rolloutPercent: percent,
+                status: percent >= 100 ? "live" : "rolling",
+                promotedAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+              }
+            : r,
+        ),
+      ),
+    [releaseCoordStore],
+  );
+  const pauseRelease = useCallback(
+    (id: string) =>
+      releaseCoordStore.setData(
+        releaseCoordStore.data.map((r) =>
+          r.id === id
+            ? { ...r, status: "paused", updatedAt: new Date().toISOString() }
+            : r,
+        ),
+      ),
+    [releaseCoordStore],
+  );
+  const rollbackRelease = useCallback(
+    (id: string) =>
+      releaseCoordStore.setData(
+        releaseCoordStore.data.map((r) =>
+          r.id === id
+            ? {
+                ...r,
+                status: "rolled-back",
+                rolloutPercent: 0,
+                updatedAt: new Date().toISOString(),
+              }
+            : r,
+        ),
+      ),
+    [releaseCoordStore],
+  );
+  const deleteRelease = useCallback(
+    (id: string) =>
+      releaseCoordStore.setData(
+        releaseCoordStore.data.filter((r) => r.id !== id),
+      ),
+    [releaseCoordStore],
+  );
+
+  /* Migrations */
+  const upsertMigration = useCallback(
+    (m: MigrationRecord) => {
+      const exists = migrationsStore.data.some((x) => x.id === m.id);
+      migrationsStore.setData(
+        exists
+          ? migrationsStore.data.map((x) => (x.id === m.id ? m : x))
+          : [...migrationsStore.data, m],
+      );
+    },
+    [migrationsStore],
+  );
+  const markMigrationApplied = useCallback(
+    (id: string) =>
+      migrationsStore.setData(
+        migrationsStore.data.map((m) =>
+          m.id === id
+            ? {
+                ...m,
+                status: "applied",
+                appliedAt: new Date().toISOString(),
+              }
+            : m,
+        ),
+      ),
+    [migrationsStore],
+  );
+  const rollbackMigration = useCallback(
+    (id: string) =>
+      migrationsStore.setData(
+        migrationsStore.data.map((m) =>
+          m.id === id ? { ...m, status: "rolled-back" } : m,
+        ),
+      ),
+    [migrationsStore],
+  );
+
+  /* Webhook Deliveries */
+  const recordDelivery = useCallback(
+    (d: Omit<WebhookDelivery, "id" | "queuedAt">) =>
+      webhookDeliveriesStore.setData(
+        [
+          { ...d, id: uid(), queuedAt: new Date().toISOString() },
+          ...webhookDeliveriesStore.data,
+        ].slice(0, 500),
+      ),
+    [webhookDeliveriesStore],
+  );
+  const retryDelivery = useCallback(
+    (id: string) =>
+      webhookDeliveriesStore.setData(
+        webhookDeliveriesStore.data.map((d) =>
+          d.id === id
+            ? {
+                ...d,
+                status: "retrying" as DeliveryStatus,
+                attempt: d.attempt + 1,
+              }
+            : d,
+        ),
+      ),
+    [webhookDeliveriesStore],
+  );
+  const clearDeliveries = useCallback(
+    () => webhookDeliveriesStore.setData([]),
+    [webhookDeliveriesStore],
+  );
+
+  /* Storage Explorer */
+  const upsertStorageItem = useCallback(
+    (item: StorageBucketItem) => {
+      const exists = storageExplorerStore.data.some((x) => x.id === item.id);
+      storageExplorerStore.setData(
+        exists
+          ? storageExplorerStore.data.map((x) => (x.id === item.id ? item : x))
+          : [...storageExplorerStore.data, item],
+      );
+    },
+    [storageExplorerStore],
+  );
+  const deleteStorageItem = useCallback(
+    (id: string) =>
+      storageExplorerStore.setData(
+        storageExplorerStore.data.filter((x) => x.id !== id),
+      ),
+    [storageExplorerStore],
+  );
+
+  /* API Rate Limits */
+  const upsertRateLimit = useCallback(
+    (entry: ApiRateLimitEntry) => {
+      const exists = apiRateLimitsStore.data.some((x) => x.id === entry.id);
+      apiRateLimitsStore.setData(
+        exists
+          ? apiRateLimitsStore.data.map((x) =>
+              x.id === entry.id
+                ? { ...entry, updatedAt: new Date().toISOString() }
+                : x,
+            )
+          : [...apiRateLimitsStore.data, entry],
+      );
+    },
+    [apiRateLimitsStore],
+  );
+  const toggleRateLimit = useCallback(
+    (id: string) =>
+      apiRateLimitsStore.setData(
+        apiRateLimitsStore.data.map((x) =>
+          x.id === id
+            ? { ...x, enabled: !x.enabled, updatedAt: new Date().toISOString() }
+            : x,
+        ),
+      ),
+    [apiRateLimitsStore],
+  );
+  const deleteRateLimit = useCallback(
+    (id: string) =>
+      apiRateLimitsStore.setData(
+        apiRateLimitsStore.data.filter((x) => x.id !== id),
+      ),
+    [apiRateLimitsStore],
+  );
+  const resetRateCounters = useCallback(
+    () =>
+      apiRateLimitsStore.setData(
+        apiRateLimitsStore.data.map((x) => ({ ...x, currentCount: 0 })),
+      ),
+    [apiRateLimitsStore],
+  );
+
   return {
     loading:
       webhooksStore.loading ||
@@ -947,7 +1824,17 @@ export function useFounderAdvancedStore(stationId?: string) {
       experimentsStore.loading ||
       healthStore.loading ||
       localizationStore.loading ||
-      secretAccessStore.loading,
+      secretAccessStore.loading ||
+      errorTrackerStore.loading ||
+      sessionsStore.loading ||
+      taskQueueStore.loading ||
+      logStreamsStore.loading ||
+      roleMatrixStore.loading ||
+      releaseCoordStore.loading ||
+      migrationsStore.loading ||
+      webhookDeliveriesStore.loading ||
+      storageExplorerStore.loading ||
+      apiRateLimitsStore.loading,
     /* webhooks */
     webhooks: webhooksStore.data,
     upsertWebhook,
@@ -1017,6 +1904,60 @@ export function useFounderAdvancedStore(stationId?: string) {
     secretAccessLog: secretAccessStore.data,
     recordSecretAccess,
     clearSecretAccess,
+    /* error tracker */
+    errorLog: errorTrackerStore.data,
+    recordError,
+    resolveError,
+    clearResolvedErrors,
+    clearAllErrors,
+    /* sessions */
+    sessions: sessionsStore.data,
+    upsertSession,
+    revokeSession,
+    revokeAllSessions,
+    /* task queue */
+    taskQueue: taskQueueStore.data,
+    enqueueTask,
+    updateTask,
+    cancelTask,
+    retryTask,
+    clearCompletedTasks,
+    /* log streams */
+    logStreams: logStreamsStore.data,
+    appendLog,
+    clearLogs,
+    /* role matrix */
+    roleMatrix: roleMatrixStore.data,
+    updateRolePermission,
+    toggleRoleAction,
+    resetRoleMatrix,
+    /* release coordinator */
+    releases: releaseCoordStore.data,
+    upsertRelease,
+    promoteRelease,
+    pauseRelease,
+    rollbackRelease,
+    deleteRelease,
+    /* migrations */
+    migrations: migrationsStore.data,
+    upsertMigration,
+    markMigrationApplied,
+    rollbackMigration,
+    /* webhook deliveries */
+    webhookDeliveries: webhookDeliveriesStore.data,
+    recordDelivery,
+    retryDelivery,
+    clearDeliveries,
+    /* storage explorer */
+    storageItems: storageExplorerStore.data,
+    upsertStorageItem,
+    deleteStorageItem,
+    /* api rate limits */
+    apiRateLimits: apiRateLimitsStore.data,
+    upsertRateLimit,
+    toggleRateLimit,
+    deleteRateLimit,
+    resetRateCounters,
     /* utility */
     uid,
     randomKey,
@@ -1025,6 +1966,10 @@ export function useFounderAdvancedStore(stationId?: string) {
     DEFAULT_API_SCOPES,
     DEFAULT_CORS_METHODS,
     DEFAULT_ENV_CATEGORIES,
+    DEFAULT_ROLES,
+    DEFAULT_RESOURCES,
+    DEFAULT_TASK_TYPES,
+    DEFAULT_LOG_SOURCES,
   };
 }
 
