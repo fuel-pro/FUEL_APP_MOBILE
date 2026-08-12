@@ -2879,3 +2879,94 @@ POS checkout sales.
   exhausted). GitHub integration auto-deploys when quota resets (~24h). ⏳
 - Supabase: no schema changes (invoices persist in the FuelContext compact
   blob in `app_kv`). ✅
+
+## M-PESA Inflow Analyzer tab audit (DEPLOYED LIVE 2026-08-12, PR #120)
+
+Deep audit of the **M-PESA Analyzer** tab (`src/react-app/components/MPESAAnalyzer.tsx`,
+1761 lines). Found **3 CRITICAL data-loss bugs** plus silent failures,
+crashes, and missing cross-tab interlinks. All fixed.
+
+### Critical bugs fixed
+
+1. **Empty-receipt dedup data loss** (`saveToSharedStore`): the fallback
+   `transaction_ref` was `STMT${date}${time}`, which collapsed to the literal
+   `"STMT"` when date/time were empty (common for pasted statements).
+   `addBatchTransactions` dedupes by `transaction_ref` — so EVERY
+   empty-receipt inflow was deduped into ONE record, silently dropping all
+   but the first. Now builds a unique synthetic ref
+   (`STMT-<idx>-<amount>-<sender>`). Also `transaction_time` was
+   `${date}T${time}` (invalid ISO when date empty) → now falls back to
+   `new Date().toISOString()`.
+
+2. **Cloud save failures swallowed** (`saveToSharedStore`): the catch only
+   `console.error`'d → user saw a false "saved" success and transactions
+   never reached the shared store → cross-device sync silently dropped them.
+   Now alerts the user with the error + retry hint.
+
+3. **Session state not persisted** (`inflowData`/`pastedText`): in-memory
+   only → refresh wiped the table even though transactions were safely in
+   the cloud store. Added a mount effect that hydrates `inflowData` from the
+   shared store (origin `statement`) so the last extraction reappears
+   without re-processing.
+
+### Silent failures fixed
+
+4. `extractWithAI`: `!response.ok → continue` and `catch → continue`. A
+   TOTAL AI failure returned `[]` with no user-facing error (looked
+   identical to "no transactions found"). Now tracks failed chunks, logs
+   each, and throws if EVERY chunk failed so `processWithAI` can alert.
+5. `processWithAI`: no try/catch → unhandled rejection. Now catches + alerts.
+
+### Range filter + search + crashes fixed
+
+6. **Range filter didn't filter the visible table**: "Calculate Total"
+   computed a total but left the table showing ALL rows. Now stores the
+   filtered set (`rangeFiltered`) and the rendered table uses it (combined
+   with the text search). Reset clears it too.
+7. **Search only matched `details`**: now searches details + receipt + date
+   + time + paidIn + balance.
+8. **Invalid Date crash**: shared feed rendered
+   `new Date(tx.transaction_time).toLocaleString()` → "Invalid Date" when
+   `transaction_time` empty. Now guarded (shows "—").
+9. **NaN% discrepancy**: `balanceAnalysis.discrepancy` could be NaN when
+   amounts were NaN (bad parse) or when `recordedNet` was 0. Now guarded
+   with `Number.isFinite` + capped at 100%. Display uses `toFixed(1)`.
+
+### Missing cross-tab interlinks added
+
+10. Only "Open Live Transaction Tab" existed. Added **Integration Hub**,
+    **New Invoice**, **Credit**, **Expenses** buttons (via `navigateToTab`)
+    so the user can act on analyzed inflows without re-entering data.
+
+### Phase 1 + Phase 2 cross-device verification (VERIFIED LIVE)
+
+Simulated the exact `saveToSharedStore` + `addBatchTransactions` flow via
+the Supabase REST API as `founder.qa.fuelpro@gmail.com` (uid
+`87e6502b`):
+
+- **Phase 1 (SAVE)**: inserted 4 statement transactions into
+  `mpesa_transactions__<uid>` (3 empty-receipt + 1 with-receipt), each with
+  a unique synthetic ref. Cents (750.50) preserved.
+- **Phase 2 (FRESH-DEVICE READ)**: logged in with a NEW token (different
+  access_token) on a simulated fresh device, read the same key. ALL 4
+  transactions synced:
+  - 3 empty-receipt transactions survived (OLD code: would be 1 — losing 2)
+  - 4 unique refs (OLD code: 2 unique — "STMT" + "QGH7X4AB12")
+  - Cents (750.5) preserved
+  - All senders/amounts intact
+  - ✅ NO DATA LOSS
+
+### Deploy status 2026-08-12 (commit 0f82f2e)
+
+- GitHub main: `0f82f2e` (PR #120 merged, synced with origin/main) ✅
+- Cloudflare Pages: LIVE (preview https://189c34f7.fuel-app-mobile.pages.dev
+  + main alias https://fuel-app-mobile.pages.dev). Chunk
+  `MPESAAnalyzer-p4hILA43.js` (MD5 `54cfa78...` match). All markers
+  confirmed: `STMT-`, `Restored ... transactions from cloud`, `Search
+  details, receipt, amount`, `AI extraction failed`, `Integration Hub`,
+  `Could not save ... transactions to the shared store`, `partial results
+  shown` ✅
+- Vercel production: LIVE (prebuilt deploy, chunk
+  `MPESAAnalyzer-BM7gnttg.js` 43097 bytes, all markers confirmed). ✅
+- Supabase: no schema changes (uses existing `mpesa_transactions` cloud key
+  in `app_kv`, scoped by owner). ✅
