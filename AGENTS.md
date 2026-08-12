@@ -1645,3 +1645,43 @@ the username must match exactly — `FOUNDER` ≠ `founder`). Then
 `signInWithPassword` + role check in the `users` table (NOT `profiles`).
 `leonibuyanawose@gmail.com`: `users.role='founder'`,
 `profiles.username='FOUNDER'`, password `FuelPro@2026!`.
+
+## Responsive design audit (DEPLOYED LIVE 2026-08-12, commit ac3bb58)
+
+Full multi-device responsive audit across phone/tablet/laptop/TV aspect ratios. All fixes verified at 8 device sizes (320px small phone -> 4K TV) with zero horizontal overflow and zero HTTP errors.
+
+### Founder Console sidebar (biggest issue)
+FounderAccess.tsx had a FIXED w-60 (240px) sidebar always visible. On a 320px phone this left only 80px for content and crushed the Overview 4-col stat grid to ~0px per card. Fix: sidebar is now a slide-in drawer on <lg (1024px) with backdrop overlay; persistent rail on lg+. Hamburger button in header (hidden on lg+) opens it. Nav-item click auto-closes. Verified: aside x=-240 (off-screen) on load, x=0 after hamburger, x=-240 after nav selection.
+
+### Global CSS (src/react-app/index.css)
+- .main-content + body min-height: 100dvh (100vh fallback) fixes mobile address-bar cutoff that hid the fixed MobileBottomNav.
+- Compaction media queries: raised .btn/input min-height floor from 24-28px -> 32-40px (was below WCAG touch-target minimum).
+- Added .h-screen-dvh/.min-h-screen-dvh/.max-h-screen-dvh/.h-screen-svh utility classes (dynamic viewport units).
+- Global table/pre/code: overflow-x:auto + max-width:100% so dense data never pushes page sideways.
+- html/body: overflow-x:clip (not hidden - preserves position:sticky on descendants).
+- Touch-target floor: native button/a[role=button] get min-height:40px on coarse pointers (@media hover:none and pointer:coarse).
+- Safe-area-inset padding for .fixed.bottom-0/.fixed.top-0 (notch/home indicator).
+- .break-anywhere utility for long emails/UUIDs/receipt numbers.
+
+### index.html viewport
+- Removed maximum-scale=1.0, user-scalable=no (re-enables user zoom, WCAG 1.4.4). Added viewport-fit=cover for notch safe areas.
+
+### tRPC 405 errors - /undefined/api/trpc bug (FIXED)
+Symptom: every tRPC query/mutation POSTed to /undefined/api/trpc/* and /api/auth/founder-login returning 405 on Cloudflare Pages (no /api/* serverless fns). Root cause (src/providers/trpc.tsx getApiUrl()): the expression import.meta.env.VITE_BACKEND_URL + "/api/trpc" evaluated to the STRING "undefined/api/trpc" when VITE_BACKEND_URL was unset (JS coerces undefined to "undefined" in string concatenation). Because that string is truthy, the || "" fallback never fired. httpBatchLink POSTed the relative path which resolved to the page origin -> 405. Also pages.dev was NOT in the static-deployment host list. Fix: getApiUrl() guards each env var explicitly (returns "" in Supabase-only mode). httpBatchLink fetch rejects immediately when apiUrl is empty. On Vercel the relative /api/trpc path is still used. Founder console falls back to Supabase-direct auth when tRPC fails.
+
+### FounderAccess login
+completeLogin skips /api/auth/founder-login + /api/trpc/founderAuth.login fetches when getBackendUrl() returns "" (no backend) - was 405-ing the static host on every founder login on Cloudflare. Local Supabase auth handles the session.
+
+### Founder Console tables (Users, Secrets, Audit Log)
+All three table containers changed from overflow-hidden (clips wide tables on phones) to overflow-x-auto + -mx-3 sm:mx-0 (edge-to-edge on phones, inset on sm+), with min-w-[480-640px] on the table so it scrolls horizontally instead of crushing columns.
+
+### Responsive grids in Founder Console
+- Overview 4-col stat grid: grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 (2 on phone, 4 on desktop; was crushing to 0px on 320px).
+- System Health 3-col grid: grid-cols-1 sm:grid-cols-3.
+- Header: search input hidden on <sm, cloud-status label hidden on <md (icon-only); responsive padding px-3 sm:px-6.
+
+### Deploy status 2026-08-12
+- GitHub main: commit ac3bb58 (pushed 469afbc incl. audit scripts).
+- Cloudflare Pages: LIVE (preview https://62a6ff6e.fuel-app-mobile.pages.dev + main alias https://fuel-app-mobile.pages.dev, bundle index-BXNHje2B.js, 112 precache).
+- Vercel production: BLOCKED by api-deployments-free-per-day (100/100; prebuilt deploy also hit the limit). GitHub integration auto-deploys when quota resets (~24h). /api/* endpoints unchanged.
+- Verified live on Cloudflare: Founder sidebar drawer opens/closes at 375px; no 405 errors; overview grid spans full 351px; no horizontal overflow. Main app (non-founder) passes at all 8 sizes.
