@@ -2437,3 +2437,129 @@ exact calls the app makes — MORE rigorous than browser testing):
   (~24h). Until then Vercel production serves the previous frontend;
   Cloudflare has the fix NOW. ⏳
 - Supabase: no schema changes (uses existing `app_kv` + scoped row ids). ✅
+
+## Stock Management audit (DEPLOYED LIVE 2026-08-12, PR #113 + commit ce43e89)
+
+**Component**: `InventoryManagement.tsx` (id `inventory`, 7 sub-tabs: Products /
+Adjustments / Transfers / Counts / Wastage / Auto-Reorders / History). Plus
+fixes in `pos-service.ts` and `automation-engine.ts`.
+
+### Bugs Fixed
+
+1. **CRITICAL — inactive products permanently unmanageable**: `fetchProducts`
+   filtered `is_active=true`, so once a product was deactivated it became a
+   ghost row that could never be viewed/reactivated/edited/deleted. Added
+   `fetchAllProducts` (no `is_active` filter); the Products sub-tab now uses
+   it so inactive products are visible + manageable.
+
+2. **CRITICAL — `fulfillReorder` never moved stock**: it only flipped the
+   reorder status to `fulfilled` with no stock movement, no
+   `inventory_transaction`, so the product stayed below reorder level and
+   the reorder re-appeared immediately. Now restocks the product
+   (`stock_quantity += receivedQty`), records a `restock`
+   inventory_transaction, emits a `stock:adjusted` event, and returns
+   `{success,error}` for caller feedback.
+
+3. **`fulfillReorder` reference_id UUID bug (commit ce43e89)**:
+   `inventory_transactions.reference_id` is a UUID column, but the auto-reorder
+   id is a string like `REO-1723...`. Passing the string id triggered Postgres
+   22P02 "invalid input syntax for type uuid", aborting the
+   inventory_transaction insert and leaving no audit trail. Now uses the
+   product UUID (a valid products row id) as `reference_id`; keeps the
+   reorder id in the human-readable notes.
+
+4. **`handleTransfer` ignored `createStockTransfer`'s `{success,error}`**
+   → false "Transfer created" notice on failure. Now checks it.
+
+5. **`completeStockTransfer` didn't refresh parent Products** → stale stock
+   after completing a transfer. `TransfersList` now takes an `onComplete`
+   callback; `TransferForm` takes `onTransferChanged`; the main component
+   passes `loadData`.
+
+6. **`ReordersPanel.handleFulfill` gave no feedback** (`fulfillReorder`
+   returned void). Now checks the result, alerts on error, shows a busy
+   spinner, and refreshes the parent Products via an `onFulfilled` callback.
+
+### Hardcoded items fixed
+
+7. **`formatMoney` not currency-aware** (hardcoded en-US, no symbol).
+   `getCurrencySymbol`/`getDetectedCurrency` were dead imports. Now formats
+   with the detected/station currency symbol.
+
+8. **`INITIAL_PRODUCT.tax_rate` hardcoded 16** (Kenya VAT) → inflated POS
+   totals for non-Kenyan stations. Now country-aware via
+   `getVATRate(getDetectedCountryCode())`.
+
+### Missing links fixed
+
+9. **Cross-tab navigation**: Products panel "Sell in POS" button
+   (`switchToTab("pos")`); Auto-Reorders "Create PO" button
+   (`switchToTab("suppliers")`).
+
+10. **Realtime**: added Supabase `postgres_changes` subscription on
+    `products`, `inventory_transactions`, and `stock_transfers` for the
+    station so cross-device changes appear instantly (was load-on-mount
+    only).
+
+### Robustness fixes
+
+11. **Silent read errors**: `fetchProducts`/`fetchAllProducts`/
+    `fetchInventoryTransactions` swallowed `{error}` → silent empty states.
+    Now log to console.
+
+12. **`HistoryTable` crashed on null `transaction_type`** (`.replace` on
+    null). Guarded with `|| "unknown"`.
+
+### Phase 1 + Phase 2 cross-device verification (via Supabase REST API)
+
+Verified via the Supabase auth + PostgREST REST API (directly exercises the
+exact calls the app makes):
+
+- **Phase 1 (SAVE)**: fresh login as founder QA user
+  (`87e6502b-df68-43cd-ae1a-bebd646efeed`, station
+  `52c24393-55e1-4ff4-9087-f06009f69da3`). Inserted 2 test products via the
+  `products` table (exactly what `handleSaveProduct` does):
+  - Castrol GTX 15W-40 (active, stock=50, tax=16%, cost=850/sell=1100)
+  - Discontinued Filter (**INACTIVE**, stock=2, tax=0%, cost=120/sell=250) —
+    the key bug: the old `fetchProducts` (is_active=true) would have hidden
+    this product.
+  Created 1 pending auto-reorder (Castrol, current=5, reorder=20, suggested=35)
+  in `app_kv` (key `auto_reorders__<ownerId>__<stationId>`). Created 1 pending
+  stock transfer (TRF-QA-..., qty=10) in the `stock_transfers` table. All
+  inserts returned HTTP 201.
+
+- **Phase 2 (FRESH-DEVICE READ)**: a SECOND fresh login (new access_token,
+  confirmed different) queried via PostgREST (exactly what the sub-tabs do
+  on mount):
+  - Products (`fetchAllProducts`): 2 products (BOTH active + inactive with
+    all fields intact) ✅
+  - Auto-reorders (`getAutoReorders`): 1 pending (Castrol) ✅
+  - Stock transfers: 1 pending (TRF-QA-...) ✅
+  - History (`fetchInventoryTransactions`): 1 restock txn (Castrol, +35,
+    before=85 → after=120, with product join name+sku) ✅
+
+  **A fresh device with empty localStorage WILL load ALL Stock Management
+  data from cloud** — including inactive products (the critical fix).
+
+- **`fulfillReorder` restock flow verified live**: stock increased 50→85→120,
+  the inventory_transaction insert now succeeds with `reference_id`=product
+  UUID (HTTP 201, previously 22P02 uuid error), and the History sub-tab
+  shows the restock with the product join.
+
+### Deploy state 2026-08-12 (PR #113 merged as 71eee0e + ce43e89)
+
+- GitHub main: ce43e89 (reference_id UUID fix) on top of 71eee0e
+  (PR #113 squash merge) ✅
+- Cloudflare Pages: LIVE (preview https://850ba39e.fuel-app-mobile.pages.dev
+  + main alias https://fuel-app-mobile.pages.dev, chunk
+  `InventoryManagement-CrT87xGp.js` with "Sell in POS", "Create PO",
+  "Failed to fulfill reorder" all confirmed) ✅
+- Vercel production: the fresh `vercel build --prod` regenerated
+  `.vercel/output` with the correct chunk
+  `InventoryManagement-Dzim6M4y.js` (verified with all fix markers), but
+  `vercel deploy --prebuilt` hit `api-deployments-free-per-day` (100/day
+  exhausted). The GitHub integration (prodBranch=main) will auto-deploy
+  commit ce43e89 when the quota resets (~24h). ⏳
+- Supabase: no schema changes (uses existing `products`,
+  `inventory_transactions`, `stock_transfers`, `app_kv` tables + scoped
+  row ids). ✅
