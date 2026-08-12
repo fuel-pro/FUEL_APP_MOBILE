@@ -472,12 +472,17 @@ class SilentPrintService {
    * Generate receipt HTML
    */
   private generateReceiptHTML(receipt: ReceiptData): string {
+    const logoHTML = receipt.logoUrl
+      ? `<img src="${receipt.logoUrl}" alt="Logo" style="max-width: 150px; max-height: 60px; margin-bottom: 3mm; object-fit: contain;" crossorigin="anonymous"/><br/>`
+      : "";
     return `
       <div style="font-family: 'Courier New', monospace; width: ${receipt.settings?.paperWidth || 80}mm; padding: 2mm; margin: 0 auto;">
         <div style="text-align: center; margin-bottom: 5mm;">
+          ${logoHTML}
           <strong style="font-size: 14pt;">${receipt.stationName}</strong><br/>
           ${receipt.stationLocation}<br/>
-          Tel: +1-555-000-0000
+          Tel: ${receipt.stationPhone || "+254 700 000 000"}
+          ${receipt.stationEmail ? `<br/>Email: ${receipt.stationEmail}` : ""}
         </div>
         <div style="border-top: 1px dashed #000; border-bottom: 1px dashed #000; padding: 3mm 0; margin: 3mm 0;">
           Receipt #: ${receipt.receiptNumber}<br/>

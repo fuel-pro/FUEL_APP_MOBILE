@@ -435,14 +435,14 @@ export default function Invoice() {
   };
 
   const exportHandlers = {
-    pdf: () => {
+    pdf: async () => {
       if (!customerName || state.invoiceItems.length === 0) {
         alert(
           "Please add customer details and invoice items before exporting.",
         );
         return;
       }
-      exportInvoicePDF({
+      await exportInvoicePDF({
         ...state,
         customerName,
         customerAddress,

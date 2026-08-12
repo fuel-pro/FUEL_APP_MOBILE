@@ -8,6 +8,9 @@ import type {} from "./hardware-manager";
 export interface ReceiptData {
   stationName: string;
   stationLocation: string;
+  stationPhone?: string;
+  stationEmail?: string;
+  logoUrl?: string;
   receiptNumber: string;
   date: string;
   time: string;
@@ -185,8 +188,14 @@ class PrinterService {
     commands.push(this.cmdBold(false));
     commands.push(this.textToBytes(receipt.stationLocation));
     commands.push(this.newline());
-    commands.push(this.textToBytes("Tel: +1-555-000-0000"));
+    commands.push(
+      this.textToBytes(`Tel: ${receipt.stationPhone || "+254 700 000 000"}`),
+    );
     commands.push(this.newline());
+    if (receipt.stationEmail) {
+      commands.push(this.textToBytes(`Email: ${receipt.stationEmail}`));
+      commands.push(this.newline());
+    }
 
     // Divider
     commands.push(this.textToBytes("========================================"));

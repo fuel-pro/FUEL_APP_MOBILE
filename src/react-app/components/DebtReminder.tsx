@@ -146,8 +146,8 @@ export default function DebtReminder() {
   };
 
   const exportHandlers = {
-    pdf: () =>
-      exportDebtPDF({
+    pdf: async () =>
+      await exportDebtPDF({
         ...state,
         debtData: getDebtData(),
       }),

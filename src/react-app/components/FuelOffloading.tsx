@@ -24,6 +24,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
+import { loadLogoAsDataURL } from "@/react-app/utils/exportUtils";
 
 const formatNumber = (num: number): string => {
   return new Intl.NumberFormat("en-US", {
@@ -255,15 +256,18 @@ export default function FuelOffloading() {
   }, [state.offloadingRecords, search, fuelFilter, dateFrom, dateTo]);
 
   // Export functions
-  const exportToPDF = () => {
+  const exportToPDF = async () => {
     const doc = new jsPDF();
 
     let y = 20;
-    if (state.companyData.logo) {
-      const img = new Image();
-      img.src = state.companyData.logo;
-      doc.addImage(img, "PNG", 80, 10, 50, 20);
-      y = 40;
+    if (state.companyData?.logo) {
+      const logoDataUrl = await loadLogoAsDataURL(state.companyData.logo);
+      if (logoDataUrl) {
+        try {
+          doc.addImage(logoDataUrl, "PNG", 80, 10, 50, 20);
+          y = 40;
+        } catch {}
+      }
     }
 
     doc.setFontSize(16);

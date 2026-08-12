@@ -28,6 +28,7 @@ import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { getCurrencySymbol, isKenyaStation } from "../lib/currency";
+import { loadLogoAsDataURL } from "@/react-app/utils/exportUtils";
 
 interface Employee {
   id?: number;
@@ -1371,7 +1372,7 @@ export default function PayrollSystem() {
   };
 
   // Individual payslip PDF generation
-  const exportEmployeePayslip = (employee: Employee) => {
+  const exportEmployeePayslip = async (employee: Employee) => {
     const doc = new jsPDF();
     const monthName = new Date(2023, settings.payrollMonth - 1).toLocaleString(
       "default",
@@ -1380,15 +1381,16 @@ export default function PayrollSystem() {
 
     let y = 20;
 
-    // Company logo
+    // Company logo (supports Supabase Storage URLs via loadLogoAsDataURL).
     if (settings.organizationLogo) {
-      try {
-        if (settings.organizationLogo.startsWith("data:")) {
-          doc.addImage(settings.organizationLogo, "PNG", 15, 10, 40, 25);
+      const logoDataUrl = await loadLogoAsDataURL(settings.organizationLogo);
+      if (logoDataUrl) {
+        try {
+          doc.addImage(logoDataUrl, "PNG", 15, 10, 40, 25);
           y = 45;
+        } catch (error) {
+          console.warn("Could not load company logo for payslip:", error);
         }
-      } catch (error) {
-        console.warn("Could not load company logo for payslip:", error);
       }
     }
 

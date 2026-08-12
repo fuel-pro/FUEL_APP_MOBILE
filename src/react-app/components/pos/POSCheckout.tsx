@@ -44,6 +44,9 @@ interface POSCheckoutProps {
   attendantName: string;
   stationName: string;
   stationLocation: string;
+  stationPhone?: string;
+  stationEmail?: string;
+  logoUrl?: string;
   onComplete: () => void;
   onCancel: () => void;
 }
@@ -57,6 +60,9 @@ export default function POSCheckout({
   attendantName,
   stationName,
   stationLocation,
+  stationPhone,
+  stationEmail,
+  logoUrl,
   onComplete,
   onCancel,
 }: POSCheckoutProps) {
@@ -82,6 +88,9 @@ export default function POSCheckout({
     return {
       stationName,
       stationLocation,
+      stationPhone,
+      stationEmail,
+      logoUrl,
       receiptNumber: generateReceiptNumber(),
       date: now.toLocaleDateString("en-KE"),
       time: now.toLocaleTimeString("en-KE"),
