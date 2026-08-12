@@ -32,6 +32,7 @@ import {
   Layers,
   Save,
   X,
+  Menu,
   Copy,
   Check,
   Sparkles,
@@ -90,7 +91,10 @@ import {
 } from "@/react-app/hooks/useCloudSync";
 import { checkApiStatus } from "@/react-app/lib/restApiSync";
 import { getBackendUrl } from "@/utils/apiConfig";
-import { getDetectedCurrency, getCurrencySymbol } from "@/react-app/lib/currency";
+import {
+  getDetectedCurrency,
+  getCurrencySymbol,
+} from "@/react-app/lib/currency";
 
 /* ─── Types ─── */
 interface AppUser {
@@ -349,6 +353,7 @@ export default function FounderAccess() {
 
   /* ─── Admin State ─── */
   const [activeSection, setActiveSection] = useState<SectionId>("overview");
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [users, setUsers] = useState<AppUser[]>([]);
   const [stations, setStations] = useState<StationRecord[]>([]);
   const [secrets, setSecrets] = useState<Secret[]>(loadSecrets);
@@ -417,7 +422,11 @@ export default function FounderAccess() {
         if (session?.active && session.loginTime) {
           if (Date.now() - session.loginTime < 8 * 60 * 60 * 1000) {
             setIsAuthenticated(true);
-            logAuditRef.current("Session Resumed", "Founder session restored", "info");
+            logAuditRef.current(
+              "Session Resumed",
+              "Founder session restored",
+              "info",
+            );
           } else {
             localStorage.removeItem(FOUNDER_SESSION_KEY);
           }
@@ -645,39 +654,46 @@ export default function FounderAccess() {
     let token = null;
     const API_URL = getBackendUrl();
 
-    try {
-      // Try the founder-login REST endpoint first
-      const res = await fetch(`${API_URL}/api/auth/founder-login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          username: loginUsername.trim(),
-          password: loginPassword,
-        }),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        if (data?.token) {
-          token = data.token;
-        }
-      } else {
-        // Try tRPC endpoint as fallback
-        const trpcRes = await fetch(`${API_URL}/api/trpc/founderAuth.login`, {
+    // Only attempt the backend login when a backend is actually configured.
+    // On static hosts (Cloudflare Pages, local dev without VITE_BACKEND_URL)
+    // there are no /api/auth/* serverless functions, so the fetch would 405
+    // against the host on every login. Local Supabase auth handles the
+    // session in that case (token stays null, which is fine).
+    if (API_URL) {
+      try {
+        // Try the founder-login REST endpoint first
+        const res = await fetch(`${API_URL}/api/auth/founder-login`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            json: { username: loginUsername.trim(), password: loginPassword },
+            username: loginUsername.trim(),
+            password: loginPassword,
           }),
         });
-        const trpcData = await trpcRes.json();
-        if (trpcData?.result?.data?.json?.token) {
-          token = trpcData.result.data.json.token;
+
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.token) {
+            token = data.token;
+          }
+        } else {
+          // Try tRPC endpoint as fallback
+          const trpcRes = await fetch(`${API_URL}/api/trpc/founderAuth.login`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              json: { username: loginUsername.trim(), password: loginPassword },
+            }),
+          });
+          const trpcData = await trpcRes.json();
+          if (trpcData?.result?.data?.json?.token) {
+            token = trpcData.result.data.json.token;
+          }
         }
+      } catch (e) {
+        console.warn("Backend unavailable, using local auth");
+        // Backend might be unavailable - continue with local auth
       }
-    } catch (e) {
-      console.warn("Backend unavailable, using local auth");
-      // Backend might be unavailable - continue with local auth
     }
 
     // Store session with timestamp for 8-hour expiry
@@ -1294,7 +1310,10 @@ export default function FounderAccess() {
     count?: number;
   }) => (
     <button
-      onClick={() => setActiveSection(id)}
+      onClick={() => {
+        setActiveSection(id);
+        setMobileSidebarOpen(false);
+      }}
       className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-left transition-all ${
         activeSection === id
           ? "bg-amber-500/15 text-amber-300 border-l-2 border-amber-400"
@@ -1314,9 +1333,27 @@ export default function FounderAccess() {
   );
 
   return (
-    <div className="min-h-screen bg-[#0c0c0e] text-white flex">
-      {/* ─── Sidebar ─── */}
-      <aside className="w-60 min-h-screen border-r border-white/[0.06] bg-[#111113] flex flex-col">
+    <div className="min-h-screen min-h-screen-dvh bg-[#0c0c0e] text-white flex">
+      {/* ─── Sidebar ───
+          Desktop (lg+): fixed 240px rail alongside content.
+          Mobile/tablet (<lg): hidden by default, slides in as an overlay
+          drawer when mobileSidebarOpen. This prevents the 240px sidebar from
+          eating the viewport on phones (was leaving only 80-150px for content
+          and crushing the Overview 4-col stat grid to ~0-13px per card). */}
+      {mobileSidebarOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/60 lg:hidden"
+          onClick={() => setMobileSidebarOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+      <aside
+        className={`fixed lg:static z-50 inset-y-0 left-0 w-60 min-h-screen min-h-screen-dvh border-r border-white/[0.06] bg-[#111113] flex flex-col transition-transform duration-200 ease-out lg:translate-x-0 ${
+          mobileSidebarOpen
+            ? "translate-x-0"
+            : "-translate-x-full lg:translate-x-0"
+        }`}
+      >
         <div className="px-5 py-5 flex items-center gap-3">
           <div className="w-8 h-8 bg-gradient-to-br from-amber-400 to-amber-600 rounded-lg flex items-center justify-center">
             <Crown size={16} className="text-white" />
@@ -1365,18 +1402,29 @@ export default function FounderAccess() {
       </aside>
 
       {/* ─── Main Content ─── */}
-      <main className="flex-1 flex flex-col min-h-screen overflow-hidden">
-        <header className="h-14 border-b border-white/[0.06] flex items-center justify-between px-6 bg-[#0c0c0e] flex-shrink-0">
-          <div className="flex items-center gap-3">
-            <Shield size={14} className="text-amber-500" />
-            <span className="text-xs text-gray-500">Super Admin</span>
-            <span className="text-gray-700">|</span>
-            <span className="text-xs text-gray-400">
+      <main className="flex-1 flex flex-col min-h-screen min-h-screen-dvh overflow-hidden w-0 lg:w-auto">
+        <header className="h-14 border-b border-white/[0.06] flex items-center justify-between px-3 sm:px-6 bg-[#0c0c0e] flex-shrink-0 gap-2">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            {/* Mobile hamburger — opens the slide-in sidebar drawer.
+                Hidden on lg+ where the sidebar is a persistent rail. */}
+            <button
+              onClick={() => setMobileSidebarOpen(true)}
+              className="lg:hidden flex items-center justify-center w-10 h-10 -ml-1 rounded-lg text-gray-300 hover:text-white hover:bg-white/[0.06] transition-colors flex-shrink-0"
+              aria-label="Open navigation menu"
+            >
+              <Menu size={20} />
+            </button>
+            <Shield size={14} className="text-amber-500 flex-shrink-0" />
+            <span className="text-xs text-gray-500 hidden sm:inline flex-shrink-0">
+              Super Admin
+            </span>
+            <span className="text-gray-700 hidden sm:inline">|</span>
+            <span className="text-xs text-gray-400 truncate min-w-0">
               {activeSection.charAt(0).toUpperCase() + activeSection.slice(1)}
             </span>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="relative">
+          <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+            <div className="relative hidden sm:block">
               <Search
                 size={13}
                 className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-600"
@@ -1385,35 +1433,37 @@ export default function FounderAccess() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search..."
-                className="pl-8 pr-3 py-1.5 bg-white/[0.03] border border-white/[0.08] rounded-lg text-xs text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/30 w-48"
+                className="pl-8 pr-3 py-1.5 bg-white/[0.03] border border-white/[0.08] rounded-lg text-xs text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/30 w-28 sm:w-48"
               />
             </div>
-            {/* Cloud Sync Status */}
+            {/* Cloud Sync Status — collapse to icon-only on very small screens */}
             <div
-              className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg ${cloudStatus.isOnline ? "bg-emerald-500/10 border border-emerald-500/20" : "bg-amber-500/10 border border-amber-500/20"}`}
+              className={`flex items-center gap-2 px-2 sm:px-2.5 py-1.5 rounded-lg ${cloudStatus.isOnline ? "bg-emerald-500/10 border border-emerald-500/20" : "bg-amber-500/10 border border-amber-500/20"}`}
             >
               {cloudStatus.isOnline ? (
                 <>
-                  <Cloud size={10} className="text-emerald-400" />
-                  <span className="text-[10px] text-emerald-300">
+                  <Cloud size={12} className="text-emerald-400" />
+                  <span className="text-[10px] text-emerald-300 hidden md:inline">
                     Cloud Synced
                   </span>
                 </>
               ) : (
                 <>
-                  <CloudOff size={10} className="text-amber-400" />
-                  <span className="text-[10px] text-amber-300">No Cloud</span>
+                  <CloudOff size={12} className="text-amber-400" />
+                  <span className="text-[10px] text-amber-300 hidden md:inline">
+                    No Cloud
+                  </span>
                 </>
               )}
             </div>
           </div>
         </header>
 
-        <div className="flex-1 p-6 overflow-auto">
+        <div className="flex-1 p-3 sm:p-4 lg:p-6 overflow-auto">
           {/* ══════ OVERVIEW ══════ */}
           {activeSection === "overview" && (
             <div className="space-y-6">
-              <div className="grid grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                 {[
                   {
                     label: "Users",
@@ -1608,8 +1658,8 @@ export default function FounderAccess() {
                   {filteredUsers.length} total
                 </span>
               </div>
-              <div className="bg-[#161618] border border-white/[0.06] rounded-xl overflow-hidden">
-                <table className="w-full">
+              <div className="bg-[#161618] border border-white/[0.06] rounded-xl overflow-x-auto -mx-3 sm:mx-0">
+                <table className="w-full min-w-[640px]">
                   <thead>
                     <tr className="border-b border-white/[0.06]">
                       {["User", "Auth", "Role", "Stations", "Status", ""].map(
@@ -1809,8 +1859,8 @@ export default function FounderAccess() {
                   </button>
                 </div>
               )}
-              <div className="bg-[#161618] border border-white/[0.06] rounded-xl overflow-hidden">
-                <table className="w-full">
+              <div className="bg-[#161618] border border-white/[0.06] rounded-xl overflow-x-auto -mx-3 sm:mx-0">
+                <table className="w-full min-w-[480px]">
                   <thead>
                     <tr className="border-b border-white/[0.06]">
                       <th className="text-left text-[11px] text-gray-500 font-medium px-5 py-3 w-1/2">
@@ -1910,8 +1960,8 @@ export default function FounderAccess() {
                   </span>
                 </div>
               </div>
-              <div className="bg-[#161618] border border-white/[0.06] rounded-xl overflow-hidden">
-                <table className="w-full">
+              <div className="bg-[#161618] border border-white/[0.06] rounded-xl overflow-x-auto -mx-3 sm:mx-0">
+                <table className="w-full min-w-[640px]">
                   <thead>
                     <tr className="border-b border-white/[0.06]">
                       {["Status", "Event", "Detail", "User", "Time"].map(
@@ -2018,7 +2068,7 @@ export default function FounderAccess() {
           {activeSection === "system" && (
             <div className="space-y-4">
               <h2 className="text-lg font-medium text-white">System Health</h2>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 {[
                   {
                     label: "Storage Used",

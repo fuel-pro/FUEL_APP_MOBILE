@@ -66,6 +66,7 @@ body {
     background-color 0.4s ease,
     color 0.4s ease;
   min-height: 100vh;
+  min-height: 100dvh;
   position: relative;
   scroll-behavior: smooth;
   -webkit-font-smoothing: antialiased;
@@ -813,9 +814,9 @@ html.dark .summary-value {
   }
 
   .btn {
-    padding: 4px 8px;
     font-size: 0.7rem;
-    min-height: 32px;
+    padding: 4px 8px;
+    min-height: 40px;
     border-radius: 8px;
   }
 
@@ -832,7 +833,7 @@ html.dark .summary-value {
     padding: 6px;
     font-size: 0.7rem;
     border-radius: 6px;
-    min-height: 32px;
+    min-height: 40px;
   }
 
   table {
@@ -936,7 +937,7 @@ html.dark .summary-value {
   .btn {
     padding: 5px 10px;
     font-size: 0.8rem;
-    min-height: 36px;
+    min-height: 40px;
     border-radius: 10px;
   }
 
@@ -953,7 +954,7 @@ html.dark .summary-value {
     padding: 7px;
     font-size: 0.8rem;
     border-radius: 8px;
-    min-height: 36px;
+    min-height: 40px;
   }
 
   table {
@@ -1064,10 +1065,14 @@ html.dark .summary-value {
   }
 }
 
-/* Ensure content always fits within viewport */
+/* Ensure content always fits within viewport.
+   Use dvh (dynamic viewport height) so mobile browser chrome (address bar)
+   doesn't cut off content; fall back to vh where dvh is unsupported. */
 .main-content {
   min-height: 100vh;
+  min-height: 100dvh;
   max-height: 100vh;
+  max-height: 100dvh;
   overflow-y: auto;
   box-sizing: border-box;
   display: flex;
@@ -1075,7 +1080,9 @@ html.dark .summary-value {
 }
 
 /* Make main container fill available height */
-#root, body, html {
+#root,
+body,
+html {
   height: 100%;
 }
 
@@ -1131,7 +1138,7 @@ html.dark .summary-value {
   .btn {
     font-size: 0.7rem;
     padding: 4px 8px;
-    min-height: 28px;
+    min-height: 36px;
   }
 
   .form-group input,
@@ -1139,7 +1146,7 @@ html.dark .summary-value {
   .form-group textarea {
     font-size: 0.7rem;
     padding: 4px;
-    min-height: 28px;
+    min-height: 36px;
   }
 
   table {
@@ -1167,7 +1174,7 @@ html.dark .summary-value {
   .btn {
     font-size: 0.6rem;
     padding: 3px 6px;
-    min-height: 24px;
+    min-height: 32px;
   }
 
   .form-group input,
@@ -1175,7 +1182,7 @@ html.dark .summary-value {
   .form-group textarea {
     font-size: 0.6rem;
     padding: 3px;
-    min-height: 24px;
+    min-height: 32px;
   }
 
   table {
@@ -1288,7 +1295,10 @@ select {
   background-position: right 12px center;
   background-size: 16px;
   padding-right: 40px !important;
-  transition: border-color 150ms ease, box-shadow 150ms ease, background-color 150ms ease;
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease,
+    background-color 150ms ease;
   cursor: pointer;
 }
 
@@ -1331,4 +1341,103 @@ html.dark select option {
     transition-duration: 0ms !important;
     animation-duration: 0ms !important;
   }
+}
+
+/* ============================================================
+   GLOBAL RESPONSIVE SAFETY NET (added for full multi-device audit)
+   These rules protect EVERY page/component at every aspect ratio
+   (phone portrait/landscape, small phone, tablet, laptop, TV).
+   ============================================================ */
+
+/* Dynamic viewport-height utilities — fix mobile address-bar cutoff.
+   100vh on mobile includes the area hidden by the browser chrome, which
+   cuts off the bottom of the page (and the fixed MobileBottomNav).
+   dvh/svh/lvh adapt to the visible area. */
+.h-screen-dvh {
+  height: 100vh;
+  height: 100dvh;
+}
+.min-h-screen-dvh {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+.max-h-screen-dvh {
+  max-height: 100vh;
+  max-height: 100dvh;
+}
+.h-screen-svh {
+  height: 100vh;
+  height: 100svh;
+}
+.min-h-screen-svh {
+  min-height: 100vh;
+  min-height: 100svh;
+}
+
+/* Tables: never let a wide table break page layout — always scroll
+   horizontally inside a wrapper. Applied to every <table> so dense data
+   tables (Founder Users/Stations, Payroll, Sales, MPESA, Credit) degrade
+   gracefully on phones/tablets instead of overflowing the viewport. */
+table {
+  width: 100%;
+}
+.table-container,
+.overflow-x-auto,
+.overflow-auto {
+  -webkit-overflow-scrolling: touch;
+  max-width: 100%;
+}
+
+/* Touch target floor: interactive elements should never be smaller than
+   40px tall on touch devices (44px ideal). The compaction media queries
+   above shrink some .btn variants for very dense admin views, but native
+   buttons and links that are NOT .btn still need a sane minimum. */
+@media (hover: none) and (pointer: coarse) {
+  button:not([class*="h-"]):not([class*="min-h-"]):not(.btn):not(.icon-btn),
+  a[role="button"]:not([class*="h-"]):not([class*="min-h-"]) {
+    min-height: 40px;
+  }
+}
+
+/* Long unbroken strings (emails, URLs, UUIDs, receipt numbers) must wrap
+   or break instead of forcing horizontal overflow on narrow viewports. */
+.break-anywhere {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* Prevent horizontal page scroll caused by wide fixed/absolute elements
+   (modals, drawers, code blocks) bleeding past the viewport. overflow-x:clip
+   (not hidden) avoids creating a scroll container, so position:sticky on
+   descendants still works. */
+html {
+  overflow-x: clip;
+}
+body {
+  max-width: 100%;
+  overflow-x: clip;
+}
+@supports not (overflow-x: clip) {
+  body {
+    overflow-x: hidden;
+  }
+}
+
+/* Pre/code blocks must scroll internally, never push the page sideways. */
+pre,
+code {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+/* Fixed bottom bars respect the home indicator on notched phones. */
+.fixed.bottom-0,
+.fixed.bottom-\[ {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Fixed top bars respect the status bar / notch on notched phones. */
+.fixed.top-0,
+.fixed.top-\[ {
+  padding-top: env(safe-area-inset-top, 0px);
 }

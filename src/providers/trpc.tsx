@@ -40,30 +40,36 @@ function isStaticDeployment(): boolean {
 }
 
 // Determine the correct API URL - use relative path for Vercel deployments
-// to leverage the Vercel proxy which handles CORS headers
+// to leverage the Vercel proxy which handles CORS headers.
+// Returns "" (Supabase-only mode) when no backend is configured, so callers
+// can short-circuit instead of POSTing to a broken URL.
 function getApiUrl(): string {
-  // For Vercel/static deployments, use relative URL to go through proxy
   if (typeof window !== "undefined") {
     const host = window.location.hostname;
-    if (
-      host.includes("vercel.app") ||
-      host.includes("netlify.app") ||
-      host.includes("github.io")
-    ) {
-      // Use relative path - but only if backend is configured
-      // Otherwise use Supabase-only mode
-      if (import.meta.env.VITE_TRPC_URL || import.meta.env.VITE_BACKEND_URL) {
-        return "/api/trpc";
-      }
+    // Vercel serves the /api/trpc serverless functions same-origin, so a
+    // relative URL works and avoids CORS. Cloudflare Pages and other static
+    // hosts have NO /api/* endpoints, so we must NOT use a relative URL there
+    // (it would 405 against the static host). Fall through to the explicit
+    // backend URL or Supabase-only mode.
+    const isVercel = host.includes("vercel.app");
+    const hasBackendEnv = !!(
+      import.meta.env.VITE_TRPC_URL || import.meta.env.VITE_BACKEND_URL
+    );
+    if (isVercel && hasBackendEnv) {
+      return "/api/trpc";
     }
   }
-  // For other environments, use the configured backend URL
-  // Return empty string if not configured (Supabase-only mode)
-  return (
-    import.meta.env.VITE_TRPC_URL ||
-    import.meta.env.VITE_BACKEND_URL + "/api/trpc" ||
-    ""
-  );
+  // Explicit backend URL (e.g. a separate API host). Guard against undefined
+  // so we never produce the string "undefined/api/trpc" (which happened when
+  // VITE_BACKEND_URL was unset: undefined + "/api/trpc" is a truthy string,
+  // so the `|| ""` fallback never fired → POST /undefined/api/trpc → 405).
+  const trpcUrl = import.meta.env.VITE_TRPC_URL;
+  if (trpcUrl) return trpcUrl;
+  const backendUrl = import.meta.env.VITE_BACKEND_URL;
+  if (backendUrl) return `${backendUrl}/api/trpc`;
+  // No backend configured → Supabase-only mode. tRPC queries will fail
+  // fast with a network error rather than spamming 405s against the host.
+  return "";
 }
 
 // Check if Supabase is configured
@@ -95,10 +101,14 @@ async function getSupabaseToken(): Promise<string | null> {
 }
 
 function createTrpcClient() {
+  const apiUrl = getApiUrl();
   return trpc.createClient({
     links: [
       httpBatchLink({
-        url: getApiUrl(),
+        // tRPC requires a non-empty url; fall back to the relative path so the
+        // link initialises, but the custom fetch below short-circuits when no
+        // backend is actually configured (Supabase-only mode).
+        url: apiUrl || "/api/trpc",
         // superjson is configured globally on the router (initTRPC.create),
         // so httpBatchLink must not set its own transformer.
         // Limit URL length to prevent 431 errors from oversized batch requests
@@ -142,7 +152,18 @@ function createTrpcClient() {
           return headers;
         },
         fetch(input, init) {
-          // Always allow backend calls - no blocking
+          // When no backend is configured (Supabase-only mode, e.g. on
+          // Cloudflare Pages which has no /api/* serverless functions), reject
+          // the request immediately instead of POSTing to the host origin
+          // (an empty url "" resolves to the current page → 405 on every
+          // query/mutation). Callers already fall back to Supabase-direct.
+          if (!apiUrl) {
+            return Promise.reject(
+              new Error(
+                "tRPC backend not configured — running in Supabase-only mode",
+              ),
+            );
+          }
           return globalThis.fetch(input, {
             ...(init ?? {}),
             credentials: "include",
