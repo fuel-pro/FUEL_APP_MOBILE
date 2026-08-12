@@ -690,6 +690,18 @@ export function PermissionProvider({
   const skipInvitesRemoteRef = useRef(false);
   const skipGrantsRemoteRef = useRef(false);
 
+  // Cloud-load completion guard: prevents the cloud-save effects from writing
+  // the default/empty in-memory state to app_kv BEFORE the initial cloud load
+  // has returned. Without this, a freshly-created invite (or team member) is
+  // silently overwritten by an empty cloud blob on a new-device login — the
+  // same race fixed in FuelContext (commit 00522ac).
+  const cloudLoadCompleteRef = useRef(false);
+  // Tracks whether ANY local mutation (createInvite, acceptInvite, revoke,
+  // extend, assign, grant/revoke tab) happened before the async cloud load
+  // completed. If so, the cloud load must NOT overwrite local state — the
+  // user's changes take precedence over stale cloud data.
+  const localModifiedRef = useRef(false);
+
   // Persist grants to localStorage cache (cloud save happens in the effect below).
   useEffect(() => {
     localStorage.setItem(GRANTS_STORAGE_KEY, JSON.stringify(roleTabGrants));
@@ -704,39 +716,47 @@ export function PermissionProvider({
 
   // Cloud persistence: whenever team/invites/grants change, sync to app_kv so
   // the data is available on every device the owner signs into.
+  // Guarded by cloudLoadCompleteRef so the initial empty state is NOT written
+  // to cloud before the real cloud data has been loaded.
   useEffect(() => {
     if (!user) return;
+    if (!cloudLoadCompleteRef.current) return;
     cloudStorageService.set(TEAM_CLOUD_KEY, team).catch(() => {});
   }, [team, user]);
   useEffect(() => {
     if (!user) return;
+    if (!cloudLoadCompleteRef.current) return;
     cloudStorageService.set(INVITES_CLOUD_KEY, invites).catch(() => {});
   }, [invites, user]);
   useEffect(() => {
     if (!user) return;
+    if (!cloudLoadCompleteRef.current) return;
     cloudStorageService.set(GRANTS_CLOUD_KEY, roleTabGrants).catch(() => {});
   }, [roleTabGrants, user]);
 
   // Load from cloud on mount + real-time cross-device sync.
   useEffect(() => {
     if (!user) return;
+    cloudLoadCompleteRef.current = false;
+    localModifiedRef.current = false;
     let cancelled = false;
     (async () => {
       const cloudTeam = await cloudStorageService.get<unknown>(TEAM_CLOUD_KEY);
-      if (!cancelled && Array.isArray(cloudTeam)) {
+      if (!cancelled && Array.isArray(cloudTeam) && !localModifiedRef.current) {
         setTeam(normalizeTeamMembers(cloudTeam));
       }
       const cloudInvites =
         await cloudStorageService.get<unknown>(INVITES_CLOUD_KEY);
-      if (!cancelled && Array.isArray(cloudInvites)) {
+      if (!cancelled && Array.isArray(cloudInvites) && !localModifiedRef.current) {
         setInvites(normalizeInvites(cloudInvites));
       }
       const cloudGrants =
         await cloudStorageService.get<unknown>(GRANTS_CLOUD_KEY);
-      if (!cancelled) {
+      if (!cancelled && !localModifiedRef.current) {
         const n = normalizeGrants(cloudGrants);
         if (n) setRoleTabGrantsState(n);
       }
+      if (!cancelled) cloudLoadCompleteRef.current = true;
     })();
 
     const unsubs = [
@@ -856,12 +876,14 @@ export function PermissionProvider({
   );
 
   const setRoleTabGrants = useCallback((grants: RoleTabGrants) => {
+    localModifiedRef.current = true;
     skipGrantsRemoteRef.current = true;
     setRoleTabGrantsState(grants);
   }, []);
 
   const grantTabToRole = useCallback((targetRole: UserRole, tabId: string) => {
     if (targetRole === "owner") return; // Owner already has everything
+    localModifiedRef.current = true;
     skipGrantsRemoteRef.current = true;
     setRoleTabGrantsState((prev) => ({
       ...prev,
@@ -872,6 +894,7 @@ export function PermissionProvider({
   const revokeTabFromRole = useCallback(
     (targetRole: UserRole, tabId: string) => {
       if (targetRole === "owner") return; // Cannot revoke from owner
+      localModifiedRef.current = true;
       skipGrantsRemoteRef.current = true;
       setRoleTabGrantsState((prev) => ({
         ...prev,
@@ -899,6 +922,7 @@ export function PermissionProvider({
         uses: 0,
       };
       skipInvitesRemoteRef.current = true;
+      localModifiedRef.current = true;
       setInvites((prev) => [...prev, invite]);
       return invite;
     },
@@ -928,6 +952,7 @@ export function PermissionProvider({
 
       skipTeamRemoteRef.current = true;
       skipInvitesRemoteRef.current = true;
+      localModifiedRef.current = true;
       setTeam((prev) => [...prev, member]);
       setInvites((prev) =>
         prev.map((i) =>
@@ -947,11 +972,13 @@ export function PermissionProvider({
   );
 
   const revokeMember = useCallback((memberId: string) => {
+    localModifiedRef.current = true;
     skipTeamRemoteRef.current = true;
     setTeam((prev) => prev.filter((m) => m.id !== memberId));
   }, []);
 
   const extendAccess = useCallback((memberId: string, days: number) => {
+    localModifiedRef.current = true;
     skipTeamRemoteRef.current = true;
     setTeam((prev) =>
       prev.map((m) =>
@@ -966,6 +993,7 @@ export function PermissionProvider({
   }, []);
 
   const assignPumps = useCallback((memberId: string, pumpIds: string[]) => {
+    localModifiedRef.current = true;
     skipTeamRemoteRef.current = true;
     setTeam((prev) =>
       prev.map((m) =>
@@ -975,6 +1003,7 @@ export function PermissionProvider({
   }, []);
 
   const assignShifts = useCallback((memberId: string, shiftIds: string[]) => {
+    localModifiedRef.current = true;
     skipTeamRemoteRef.current = true;
     setTeam((prev) =>
       prev.map((m) =>

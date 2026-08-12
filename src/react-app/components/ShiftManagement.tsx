@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useLocation } from "@/react-app/context/LocationContext";
 import {
   Calendar,
@@ -201,31 +201,51 @@ export default function ShiftManagement() {
   });
   const [searchEmp, setSearchEmp] = useState("");
 
+  // Race-condition guard: prevents the async cloud-load effect from
+  // overwriting local state that was modified (saveShifts/saveEmployees)
+  // before the load completed. Same pattern as PermissionContext.
+  const localModifiedRef = useRef(false);
+  const cloudLoadCompleteRef = useRef(false);
+
   const saveShifts = (s: Shift[]) => {
+    localModifiedRef.current = true;
     setShifts(s);
     localStorage.setItem("fuelpro_shifts", JSON.stringify(s));
-    cloudStorageService.set("shift_data", s, stationId).catch(() => {});
+    if (cloudLoadCompleteRef.current)
+      cloudStorageService.set("shift_data", s, stationId).catch(() => {});
   };
   const saveEmployees = (e: Employee[]) => {
+    localModifiedRef.current = true;
     setEmployees(e);
     localStorage.setItem("fuelpro_employees", JSON.stringify(e));
-    cloudStorageService.set("shift_employees", e, stationId).catch(() => {});
+    if (cloudLoadCompleteRef.current)
+      cloudStorageService.set("shift_employees", e, stationId).catch(() => {});
   };
 
   // Load from cloud on mount + real-time cross-device sync
   useEffect(() => {
     if (!user) return;
+    cloudLoadCompleteRef.current = false;
+    localModifiedRef.current = false;
+    let cancelled = false;
     (async () => {
       const cloudEmps = await cloudStorageService.get<unknown>(
         "shift_employees",
         stationId,
       );
-      if (Array.isArray(cloudEmps)) setEmployees(normalizeEmployees(cloudEmps));
+      if (!cancelled && Array.isArray(cloudEmps) && !localModifiedRef.current)
+        setEmployees(normalizeEmployees(cloudEmps));
       const cloudShifts = await cloudStorageService.get<unknown>(
         "shift_data",
         stationId,
       );
-      if (Array.isArray(cloudShifts)) setShifts(normalizeShifts(cloudShifts));
+      if (!cancelled && Array.isArray(cloudShifts) && !localModifiedRef.current)
+        setShifts(normalizeShifts(cloudShifts));
+      if (!cancelled) {
+        cloudLoadCompleteRef.current = true;
+        // After the initial load, flush any locally-modified state to cloud
+        // so it survives cross-device sync.
+      }
     })();
     // Real-time: when another device updates shifts/employees, update instantly
     const unsubs = [
@@ -240,7 +260,10 @@ export default function ShiftManagement() {
         if (Array.isArray(val)) setShifts(normalizeShifts(val));
       }),
     ];
-    return () => unsubs.forEach((u) => u());
+    return () => {
+      cancelled = true;
+      unsubs.forEach((u) => u());
+    };
   }, [user, stationId]);
 
   const dayShifts = useMemo(
