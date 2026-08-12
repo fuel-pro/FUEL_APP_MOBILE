@@ -1,4 +1,9 @@
-import { useState, useRef, useEffect, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import {
+  useState,
+  useRef,
+  useEffect,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from "react";
 import {
   Building2,
   ChevronDown,
@@ -49,7 +54,10 @@ export default function StationSelector({
       setIsEditing(null);
       triggerRef.current?.focus();
     }
-    if (!isOpen && (e.key === "ArrowDown" || e.key === "Enter" || e.key === " ")) {
+    if (
+      !isOpen &&
+      (e.key === "ArrowDown" || e.key === "Enter" || e.key === " ")
+    ) {
       e.preventDefault();
       setIsOpen(true);
     }
