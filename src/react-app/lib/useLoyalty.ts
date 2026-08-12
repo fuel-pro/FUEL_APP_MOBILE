@@ -1,9 +1,15 @@
 /**
  * FuelPro useLoyalty Hook
  * React hook for managing multi-station loyalty programs
+ *
+ * Cross-device cloud sync: customers, rewards, transactions, and per-station
+ * config are persisted to Supabase `app_kv` (RLS by owner_id, scoped row id)
+ * via `cloudStorageService`, so a loyalty member enrolled / points awarded on
+ * one device are visible on every other device. localStorage is kept ONLY as a
+ * read-through cache for instant first render.
  */
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   LoyaltyCustomer,
   StationReward,
@@ -16,12 +22,19 @@ import {
   DEFAULT_TIER_THRESHOLDS,
 } from "./loyaltyProgram";
 import { getCurrencySymbol } from "./currency";
+import cloudStorageService from "./cloud-storage-service";
 
 const LOYALTY_CUSTOMERS_KEY = "fuelpro_loyalty_customers";
 const LOYALTY_REWARDS_KEY = "fuelpro_loyalty_rewards";
 const LOYALTY_TRANSACTIONS_KEY = "fuelpro_loyalty_transactions";
 const LOYALTY_CONFIG_KEY = "fuelpro_loyalty_config";
-const LOYALTY_STATS_KEY = "fuelpro_loyalty_stats";
+
+// Cloud keys (station-scoped). These are the cross-device source of truth;
+// the LOYALTY_*_KEY constants above are now ONLY the localStorage cache names.
+const CLOUD_CUSTOMERS_KEY = "loyalty_customers";
+const CLOUD_REWARDS_KEY = "loyalty_rewards";
+const CLOUD_TXNS_KEY = "loyalty_transactions";
+const CLOUD_CONFIG_KEY = "loyalty_config";
 
 // ─── Storage Helpers ───
 function loadFromStorage<T>(key: string, defaultValue: T): T {
@@ -39,6 +52,30 @@ function saveToStorage<T>(key: string, data: T): void {
   } catch (e) {
     console.error("[Loyalty] Storage error:", e);
   }
+}
+
+/** Coerce an unknown cloud value into a LoyaltyCustomer array (defensive). */
+function normalizeCustomers(arr: unknown): LoyaltyCustomer[] {
+  if (!Array.isArray(arr)) return [];
+  return arr.filter(
+    (c) => c && typeof c === "object" && (c as LoyaltyCustomer).id,
+  );
+}
+
+/** Coerce an unknown cloud value into a LoyaltyTransaction array. */
+function normalizeTxns(arr: unknown): LoyaltyTransaction[] {
+  if (!Array.isArray(arr)) return [];
+  return arr.filter(
+    (t) => t && typeof t === "object" && (t as LoyaltyTransaction).id,
+  );
+}
+
+/** Coerce an unknown cloud value into a StationReward array. */
+function normalizeRewards(arr: unknown): StationReward[] {
+  if (!Array.isArray(arr)) return [];
+  return arr.filter(
+    (r) => r && typeof r === "object" && (r as StationReward).id,
+  );
 }
 
 // ─── Default Station Config ───
@@ -208,21 +245,51 @@ function getDefaultRewards(stationId: string): StationReward[] {
 // ─── Main Hook ───
 export function useLoyalty(stationId: string) {
   // ─── State ───
-  const [customers, setCustomers] = useState<LoyaltyCustomer[]>(() =>
-    loadFromStorage(LOYALTY_CUSTOMERS_KEY, []),
-  );
-  const [rewards, setRewards] = useState<StationReward[]>(() =>
-    loadFromStorage(LOYALTY_REWARDS_KEY, getDefaultRewards(stationId)),
-  );
-  const [transactions, setTransactions] = useState<LoyaltyTransaction[]>(() =>
-    loadFromStorage(LOYALTY_TRANSACTIONS_KEY, []),
-  );
+  // Initialize from the synchronous in-memory cloud cache (freshest
+  // cross-device data) for an instant first render, falling back to the
+  // localStorage read-through cache. The async cloud `get` in the load effect
+  // below reconciles with the authoritative source of truth.
+  const [customers, setCustomers] = useState<LoyaltyCustomer[]>(() => {
+    const cached = cloudStorageService.getCached<unknown>(
+      CLOUD_CUSTOMERS_KEY,
+      stationId,
+    );
+    const arr = normalizeCustomers(cached);
+    if (arr.length) return arr;
+    return loadFromStorage<LoyaltyCustomer[]>(LOYALTY_CUSTOMERS_KEY, []);
+  });
+  const [rewards, setRewards] = useState<StationReward[]>(() => {
+    const cached = cloudStorageService.getCached<unknown>(
+      CLOUD_REWARDS_KEY,
+      stationId,
+    );
+    const arr = normalizeRewards(cached);
+    if (arr.length) return arr;
+    return loadFromStorage<StationReward[]>(
+      LOYALTY_REWARDS_KEY,
+      getDefaultRewards(stationId),
+    );
+  });
+  const [transactions, setTransactions] = useState<LoyaltyTransaction[]>(() => {
+    const cached = cloudStorageService.getCached<unknown>(
+      CLOUD_TXNS_KEY,
+      stationId,
+    );
+    const arr = normalizeTxns(cached);
+    if (arr.length) return arr;
+    return loadFromStorage<LoyaltyTransaction[]>(LOYALTY_TRANSACTIONS_KEY, []);
+  });
   const [configs, setConfigs] = useState<Record<string, StationLoyaltyConfig>>(
     () => {
-      const stored = loadFromStorage<Record<string, StationLoyaltyConfig>>(
-        LOYALTY_CONFIG_KEY,
-        {},
-      );
+      const cached = cloudStorageService.getCached<
+        Record<string, StationLoyaltyConfig>
+      >(CLOUD_CONFIG_KEY, stationId);
+      const stored =
+        cached ||
+        loadFromStorage<Record<string, StationLoyaltyConfig>>(
+          LOYALTY_CONFIG_KEY,
+          {},
+        );
       if (!stored[stationId]) {
         stored[stationId] = getDefaultStationConfig(
           stationId,
@@ -235,19 +302,152 @@ export function useLoyalty(stationId: string) {
   );
   const [isLoading, setIsLoading] = useState(false);
 
-  // ─── Persist to localStorage ───
+  // Echo guard: when state is set FROM the cloud (load or real-time
+  // subscription), we must NOT write it straight back to the cloud — that
+  // would create a write → realtime-echo → write loop. Each flag is set true
+  // immediately before a cloud-originated setState and consumed (reset) by the
+  // matching persist effect.
+  const skipWrite = useRef({
+    customers: false,
+    rewards: false,
+    transactions: false,
+    configs: false,
+  });
+
+  // ─── Load from cloud (authoritative) on mount / station change ───
+  useEffect(() => {
+    let cancelled = false;
+    setIsLoading(true);
+    (async () => {
+      const [cloudCust, cloudRew, cloudTxn, cloudCfg] = await Promise.all([
+        cloudStorageService.get<unknown>(CLOUD_CUSTOMERS_KEY, stationId),
+        cloudStorageService.get<unknown>(CLOUD_REWARDS_KEY, stationId),
+        cloudStorageService.get<unknown>(CLOUD_TXNS_KEY, stationId),
+        cloudStorageService.get<Record<string, StationLoyaltyConfig>>(
+          CLOUD_CONFIG_KEY,
+          stationId,
+        ),
+      ]);
+      if (cancelled) return;
+      if (cloudCust) {
+        skipWrite.current.customers = true;
+        setCustomers(normalizeCustomers(cloudCust));
+      }
+      if (cloudRew && normalizeRewards(cloudRew).length) {
+        skipWrite.current.rewards = true;
+        setRewards(normalizeRewards(cloudRew));
+      }
+      if (cloudTxn) {
+        skipWrite.current.transactions = true;
+        setTransactions(normalizeTxns(cloudTxn));
+      }
+      if (cloudCfg) {
+        if (!cloudCfg[stationId]) {
+          cloudCfg[stationId] = getDefaultStationConfig(
+            stationId,
+            `Station ${stationId.slice(0, 4)}`,
+          );
+        }
+        skipWrite.current.configs = true;
+        setConfigs(cloudCfg);
+      }
+      setIsLoading(false);
+    })();
+    // Real-time cross-device sync: edits on another device reflect instantly.
+    const unsubs = [
+      cloudStorageService.subscribe<unknown>(
+        CLOUD_CUSTOMERS_KEY,
+        stationId,
+        (val) => {
+          if (val) {
+            skipWrite.current.customers = true;
+            setCustomers(normalizeCustomers(val));
+          }
+        },
+      ),
+      cloudStorageService.subscribe<unknown>(
+        CLOUD_REWARDS_KEY,
+        stationId,
+        (val) => {
+          if (val) {
+            const arr = normalizeRewards(val);
+            if (arr.length) {
+              skipWrite.current.rewards = true;
+              setRewards(arr);
+            }
+          }
+        },
+      ),
+      cloudStorageService.subscribe<unknown>(
+        CLOUD_TXNS_KEY,
+        stationId,
+        (val) => {
+          if (val) {
+            skipWrite.current.transactions = true;
+            setTransactions(normalizeTxns(val));
+          }
+        },
+      ),
+      cloudStorageService.subscribe<Record<string, StationLoyaltyConfig>>(
+        CLOUD_CONFIG_KEY,
+        stationId,
+        (val) => {
+          if (val) {
+            skipWrite.current.configs = true;
+            setConfigs(val);
+          }
+        },
+      ),
+    ];
+    return () => {
+      cancelled = true;
+      unsubs.forEach((u) => u());
+    };
+  }, [stationId]);
+
+  // ─── Persist to localStorage cache (instant) + cloud (cross-device) ───
+  // Cloud writes are skipped when the state change originated from the cloud
+  // (echo guard) to prevent write → realtime-echo → write loops.
   useEffect(() => {
     saveToStorage(LOYALTY_CUSTOMERS_KEY, customers);
-  }, [customers]);
+    if (skipWrite.current.customers) {
+      skipWrite.current.customers = false;
+      return;
+    }
+    cloudStorageService
+      .set(CLOUD_CUSTOMERS_KEY, customers, stationId)
+      .catch(() => {});
+  }, [customers, stationId]);
   useEffect(() => {
     saveToStorage(LOYALTY_REWARDS_KEY, rewards);
-  }, [rewards]);
+    if (skipWrite.current.rewards) {
+      skipWrite.current.rewards = false;
+      return;
+    }
+    cloudStorageService
+      .set(CLOUD_REWARDS_KEY, rewards, stationId)
+      .catch(() => {});
+  }, [rewards, stationId]);
   useEffect(() => {
     saveToStorage(LOYALTY_TRANSACTIONS_KEY, transactions);
-  }, [transactions]);
+    if (skipWrite.current.transactions) {
+      skipWrite.current.transactions = false;
+      return;
+    }
+    cloudStorageService
+      .set(CLOUD_TXNS_KEY, transactions, stationId)
+      .catch(() => {});
+  }, [transactions, stationId]);
   useEffect(() => {
     saveToStorage(LOYALTY_CONFIG_KEY, configs);
-  }, [configs]);
+    if (skipWrite.current.configs) {
+      skipWrite.current.configs = false;
+      return;
+    }
+    cloudStorageService
+      .set(CLOUD_CONFIG_KEY, configs, stationId)
+      .catch(() => {});
+  }, [configs, stationId]);
 
   // ─── Station-specific data ───
   const stationCustomers = useMemo(

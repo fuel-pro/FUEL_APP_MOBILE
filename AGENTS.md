@@ -2649,3 +2649,124 @@ OLD code). The `dist/index.html` entry correctly referenced the NEW index
 chunk, but the Cloudflare deploy initially served the cached OLD chunk. Fixed
 by `rm -rf dist && npm run build` (clean build) + redeploy — always do a
 clean build before deploying to avoid serving stale orphaned chunks.
+
+Deep follow-up audit of the Point of Sale tab after PR #109. Found and fixed
+the country/VAT detection inconsistency, added real-time cross-device sync,
+seeded the fiscal counter from cloud history, and wired M-Pesa POS sales into
+the shared unified transaction store. All verified live on Cloudflare Pages.
+
+### `currency.ts` — user-scoped stations key (CRITICAL detection bug)
+
+`getDetectedCurrency()` and `getDetectedCountryCode()` read the BARE
+`fuelpro_stations_v3` localStorage key. But StationContext (since the
+cross-user isolation fix, commit 9cc8603) writes stations under the
+USER-SCOPED key `fuelpro_stations_v3_<userId>` (via `getStationsKey(userId)`).
+For accounts created after that fix, the bare key is EMPTY → country/currency
+detection silently fell through to the (often inaccurate) timezone fallback
+(→ "US" in the CI/test environment), making `isKenyaStation()` inconsistent
+and the Dashboard/POS VAT show 0% instead of 16% for Kenyan stations.
+
+**Fix**: added `readStationsJson()` helper that checks the user-scoped key
+(`fuelpro_stations_v3_<userId>`, userId from `fuelpro_auth_identity` — same
+sync source as `cloudStorageService.currentUserIdSync`) FIRST, then falls
+back to the legacy bare key. Used in both `getDetectedCurrency` and
+`getDetectedCountryCode`. This is a read-time fix — no migration needed.
+
+### `PointOfSale.tsx` — KRA-PIN-aware Kenya detection + VAT consistency
+
+`isKenyaStation()` reads localStorage synchronously and returns `false` on a
+FRESH device before the cloud station data hydrates into localStorage — yet
+the React-context `currentStation` (with its `kraPin`) IS already available
+on the first render. This caused the VAT rate (16%, via the new
+`hasKraPin` path) and the KRA banner ("Tax Settings", via `kenyaStation`)
+to DISAGREE on a fresh device.
+
+**Fix**: `kenyaStation = isKenyaStation() || hasKraPin` where
+`hasKraPin = Boolean(currentStation?.kraPin || state.companyData?.kraPin)`.
+Now the KRA eTIMS banner ("KRA eTIMS Ready: PIN: ..."), the "KRA Settings"
+button, the "Customer KRA PIN (for B2B)" label, the TIMS receipt footer, AND
+the 16% VAT rate are ALL consistent from the first render on any device.
+VAT resolution order: KRA PIN → kenyaStation → station.country → detected
+country → "KE" default (never 0% by accident for the app's primary market).
+
+### `PointOfSale.tsx` — real-time cross-device POS sync
+
+Added `cloudStorageService.subscribe("pos_transactions", stationId, cb)` in
+the load-on-mount effect. A sale completed on another device now appears in
+"Recent Transactions" INSTANTLY without a page reload. Cleanup unsubscribes
+on unmount. The fiscal counter is also re-seeded from the cloud history on
+every real-time update (`Math.max(prev, val.length + 1)`) so invoice numbers
+never collide across sessions/devices.
+
+### `PointOfSale.tsx` — fiscal counter seeding + invoice uniqueness
+
+`fiscalCounter` was `useState(1)` only — a fresh device with empty localStorage
+reset to #1 and re-generated today's invoice numbers, colliding with sales
+from other devices. Now seeded from the cloud-backed `transactions` array
+length on mount AND on every real-time update. Additionally,
+`generateInvoiceNumber()` appends a short random suffix
+(`Math.random().toString(36).slice(2,6)`) so two devices loading the same
+counter seed and selling concurrently can never collide.
+
+### `PointOfSale.tsx` — M-Pesa sale → shared unified transaction store
+
+An M-Pesa sale completed at the POS is a real digital inflow. It is now
+mirrored into the shared `mpesa_transactions` cloud store via
+`addTransaction(unified, stationId)` (origin `stk_push`, status `completed`,
+transaction_type `POS M-Pesa Sale`, account_reference = station code). It
+then appears in the Live Transaction feed + M-PESA Analyzer (cross-device)
+just like an STK Push / statement inflow — keeping all payment records in one
+place. Verified live: the M-Pesa sale (INV20260812000002Z8JS, $3,342.90) is
+in BOTH `pos_transactions` AND `mpesa_transactions` cloud rows for the QA
+user, owner-scoped.
+
+### `PointOfSale.tsx` — loyalty stationId + QR caption
+
+- `loyaltyStationId` now uses the REAL `stationId` (from `useStations()`)
+  instead of `location.currentLocation?.stationId` (a LocationContext value
+  that was often "default" / mismatched). Loyalty customers are now correctly
+  scoped to the actual station and cross-device cloud data resolves.
+- QR caption is country-aware: "Scan to verify at KRA iTax" (Kenya) vs
+  "Scan to verify this invoice" (other countries).
+
+### `useLoyalty.ts` — cross-device cloud migration
+
+Loyalty customers, rewards, transactions, and per-station config now persist
+to Supabase `app_kv` (RLS by owner_id, scoped row id) via
+`cloudStorageService` (cloud keys `loyalty_customers`, `loyalty_rewards`,
+`loyalty_transactions`, `loyalty_config`). localStorage is kept ONLY as a
+read-through cache for instant first render. Real-time subscription so a
+loyalty member enrolled / points awarded on one device reflects on every
+other device. Defensive `normalizeCustomers`/`normalizeTxns` guards on
+cloud-loaded data.
+
+### Verification (live, 2026-08-12, Cloudflare preview b57e82c0)
+
+QA user `qa.pos.audit.0812@gmail.com` (uid 32c6d1df), station "QA POS Audit
+Station" (45 QA Avenue, Nairobi, KRA PIN P051234567X):
+
+- **Cash sale** (INV20260812000001FF58, 20L petrol, $4,280.60, cashier="QA
+  POS Auditor") — made on prior deploy (b6722377) before the VAT fix, so
+  totalVat=0 and QR points to the preview URL. Persisted to cloud.
+- **M-Pesa sale** (INV20260812000002Z8JS, 15L diesel, $3,342.90, customer
+  "Mary Achieng", phone 0712345678) — made on b57e82c0 AFTER all fixes:
+  - VAT 16% correctly applied (Taxable $2,881.81, VAT $461.09)
+  - KRA eTIMS banner shows "PIN: P051234567X | ETR: ETR-00000000"
+  - Receipt: "Powered by TIMS", "KRA eTIMS COMPLIANT INVOICE", fiscalCounter
+    #2, CU Invoice No, Signature, QR → itax.kra.go.ke
+  - Mirrored to `mpesa_transactions` cloud store (origin stk_push, completed)
+- **Cross-device sync**: BOTH transactions visible on fresh preview URLs
+  (b341188f, b57e82c0) — confirmed via Supabase Management API: the
+  `pos_transactions__32c6d1df...` row contains a JSONB array of length 2,
+  owner-scoped. A fresh device with empty localStorage loads them from cloud.
+- **Real-time**: the load-on-mount `subscribe()` keeps Recent Transactions
+  in sync across devices without a reload.
+
+### Deploy state 2026-08-12
+
+- GitHub main: pending push (this commit)
+- Cloudflare Pages: LIVE (preview https://b57e82c0.fuel-app-mobile.pages.dev
+  + main alias https://fuel-app-mobile.pages.dev)
+- Vercel production: deploy attempted via prebuilt method (quota permitting);
+  GitHub integration auto-deploys when `api-deployments-free-per-day` resets
+- Supabase: no schema changes (uses existing `app_kv` + scoped row ids)
