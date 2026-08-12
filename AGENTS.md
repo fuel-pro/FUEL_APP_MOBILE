@@ -1003,13 +1003,88 @@ never in the client bundle):
   (schedule `0 0 1 * *`) refreshes the top-N most-queried cache rows,
   guarded by `Bearer $CRON_SECRET`.
 
-## 2026-08-10 deploy state (commit 2edda45)
+## Latency optimization — INSTANT data loading (ADDED 2026-08-12, commit 74d9cb7)
 
-Git HEAD = origin/main = 2edda45 ("feat: cross-device founder auth — cloud
-2FA, forgot-password, unique ID"). Vercel production READY, aliased to
-fuel-app-mobile.vercel.app (bundle `index-CBkT6CGK.js` + lazy chunk
-`founder-FznFW3ku.js`). Cloudflare Pages mirror live
-(fuel-app-mobile.pages.dev, preview fce6fd74).
+**Requirement**: Remove ALL lag/latency in the entire site — show data
+INSTANTLY and AUTOMATICALLY. No artificial delays, no blank flashes while
+async cloud loads resolve.
+
+### Root causes of latency (all fixed)
+
+1. **`cloudStorageService` made a network call on EVERY `get()`/`set()`**:
+   `currentUserId()` called `supabase.auth.getUser()` (200-500ms round-trip)
+   on every single cloud operation. With 10+ components each loading data on
+   mount, this was ~2-5s of dead time on every page load.
+   **Fix**: `currentUserIdSync()` reads the user ID synchronously from
+   localStorage (`fuelpro_auth_identity` key, set by AuthContext on login).
+   Network `auth.getUser()` is now only a fallback when localStorage is empty.
+   Added a 60s in-memory cache (`memoryCache` Map) so repeated `get()` calls
+   for the same key return instantly.
+
+2. **`FuelContext` had 100ms setTimeout on load**: the load-from-storage
+   effect used a 100ms timer before reading localStorage, and a 100ms timer
+   on station-change. Removed both — hydrate instantly from localStorage.
+   Reduced localStorage save debounce 300ms→100ms, cloud save debounce
+   1500ms→500ms. Removed the 15000ms periodic cloud-save interval (real-time
+   subscription handles cross-device sync).
+
+3. **`StationContext` made redundant network calls**: `syncStationsWithSupabase`
+   called `getSession()` then `getUser()` (2 round-trips) just to get the
+   user ID. Now reads userId from localStorage FIRST; only injects the
+   session into the client if needed.
+
+4. **Per-component useState initializers were async-only**: 10 components
+   (ShiftManagement, CreditManagement, CustomerLoyalty, SupplierManagement,
+   ExpenseTracker, PriceBoard, FuelTypesManager, MaintenanceTracker,
+   PayrollSystem, Communication) used `useState(loadFn)` where `loadFn` only
+   read localStorage. The async cloud `get()` ran in a separate `useEffect`
+   that fired AFTER the first render — causing a blank flash then a re-render.
+   **Fix**: all now use `useState(() => { const cached =
+   cloudStorageService.getCached(key, stationId); if (cached) return
+   normalize(cached); return loadFromLocalStorage(); })` — INSTANT first
+   render from the cloud/localStorage cache, no blank flash.
+
+5. **Artificial delays (total ~5s dead time per user flow)**:
+   - `Invoice.tsx`: 800ms "AI analysis" wait → instant
+   - `SalesTracking.tsx`: 600ms upload + 1500ms AI scan wait → instant
+   - `SMSGatewayConfig.tsx`: 2000ms test SMS + 500ms save debounce → instant
+   - `AIChatbot.tsx`: 800-1400ms simulated AI delay → instant
+   - `DocumentConverter.tsx`: 200ms "processing" delay → instant
+   - `CacheControl.tsx`: 500ms clear-storage delay → instant
+   - `useFuelPrices.ts`: 500ms refresh delay → instant
+   - `FounderAccess.tsx`: 1500ms AI editor delay → instant
+   - `adminAPI.ts`: 300ms `simulateResponse` default → 0ms
+   - `PayrollSystem.tsx`: 500ms/employee batch export → 50ms/employee
+
+### `getCached()` method (new in cloud-storage-service.ts)
+
+```typescript
+getCached<T>(key: string, stationId?: string): T | null
+```
+
+Synchronous read from the in-memory cache (60s TTL). Returns `null` if not
+cached. Used in `useState` initializers for instant first render. The async
+`get()` method still runs in a `useEffect` to refresh from cloud + update
+the cache for the next render.
+
+### Deploy status 2026-08-12
+
+- **GitHub main**: ✅ commit 74d9cb7 pushed
+- **Cloudflare Pages**: ✅ LIVE (preview https://b661595a.fuel-app-mobile.pages.dev
+  + main alias https://fuel-app-mobile.pages.dev). Verified: `getCached` is
+  present in the deployed `reports-BSaoPwf5.js` chunk.
+- **Vercel production**: ❌ BLOCKED by `api-deployments-free-per-day`
+  (100/day exhausted; ALL deploy paths blocked: git-source API, prebuilt,
+  CLI deploy, preview). The GitHub integration (prodBranch=main) will
+  auto-deploy commit 74d9cb7 when the quota resets (~24h). Until then
+  Vercel production serves the previous commit (df9daf0). The Cloudflare
+  mirror has the fixed code NOW.
+- **Supabase**: No schema changes needed (all changes are frontend-only).
+
+Git HEAD = origin/main = 74d9cb7 ("perf: eliminate all latency sources —
+instant data loading & sync"). Cloudflare Pages LIVE. Vercel production
+BLOCKED by deploy quota (auto-deploys when quota resets). Bundle
+`index-B2Q3i45P.js` + lazy chunk `founder-k1klAbtc.js` (Cloudflare).
 
 ## Village-level REAL fuel prices — no estimates (ADDED 2026-08-10, PR #100, commit ea0bb41)
 
