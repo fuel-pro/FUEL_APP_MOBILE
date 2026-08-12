@@ -182,6 +182,7 @@ function HomeContent() {
   const { setRole } = usePermissions();
   const { featureFlags, isFeatureEnabled } = useTenant();
   const { broadcast, subscribe } = useCrossTabSync();
+  const { state: fuelState } = useFuel();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("dashboard");
@@ -325,7 +326,7 @@ function HomeContent() {
     const adminEntry =
       filteredTabConfig[tabId as keyof typeof filteredTabConfig];
     if (adminEntry?.label) return adminEntry.label;
-    const fuelEntry = state.tabConfigurations?.find((t) => t.id === tabId);
+    const fuelEntry = fuelState.tabConfigurations?.find((t) => t.id === tabId);
     if (fuelEntry?.label) return fuelEntry.label;
     return tabId;
   };
