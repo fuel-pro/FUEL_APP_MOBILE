@@ -4,8 +4,10 @@ import {
   useState,
   useEffect,
   useCallback,
+  useRef,
 } from "react";
 import { useAuth } from "./AuthContext";
+import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 
 // ============================================================
 // PERMISSION CONTEXT v3 - Hierarchy: Owner > Manager > Staff > Auditor
@@ -522,6 +524,20 @@ const PermissionContext = createContext<PermissionContextType>({
 
 const GRANTS_STORAGE_KEY = "fuelpro_role_tab_grants";
 
+// Cloud keys (user-scoped — team/invites/grants belong to the station owner's
+// account, not a specific station, so cross-device sync uses owner-only scoping).
+const TEAM_CLOUD_KEY = "team_members";
+const INVITES_CLOUD_KEY = "team_invites";
+const GRANTS_CLOUD_KEY = "role_tab_grants";
+
+function defaultGrants(): RoleTabGrants {
+  return {
+    manager: [...DEFAULT_ROLE_TABS.manager],
+    staff: [...DEFAULT_ROLE_TABS.staff],
+    auditor: [...DEFAULT_ROLE_TABS.auditor],
+  };
+}
+
 function loadGrants(): RoleTabGrants {
   try {
     const saved = localStorage.getItem(GRANTS_STORAGE_KEY);
@@ -529,10 +545,85 @@ function loadGrants(): RoleTabGrants {
   } catch {
     /* ignore */
   }
+  return defaultGrants();
+}
+
+/** Normalize a cloud-loaded TeamMember so partial/legacy records never crash the UI. */
+function normalizeTeamMember(m: unknown): TeamMember | null {
+  if (!m || typeof m !== "object") return null;
+  const r = m as Record<string, unknown>;
   return {
-    manager: [...DEFAULT_ROLE_TABS.manager],
-    staff: [...DEFAULT_ROLE_TABS.staff],
-    auditor: [...DEFAULT_ROLE_TABS.auditor],
+    id:
+      typeof r.id === "string"
+        ? r.id
+        : `mem_${Math.random().toString(36).slice(2)}`,
+    username: typeof r.username === "string" ? r.username : "",
+    role:
+      r.role === "owner" ||
+      r.role === "manager" ||
+      r.role === "staff" ||
+      r.role === "auditor"
+        ? (r.role as UserRole)
+        : "staff",
+    assignedPumps: Array.isArray(r.assignedPumps)
+      ? r.assignedPumps.filter((p) => typeof p === "string")
+      : [],
+    assignedShifts: Array.isArray(r.assignedShifts)
+      ? r.assignedShifts.filter((s) => typeof s === "string")
+      : [],
+    invitedBy: typeof r.invitedBy === "string" ? r.invitedBy : "",
+    invitedAt:
+      typeof r.invitedAt === "string" ? r.invitedAt : new Date().toISOString(),
+    expiresAt: typeof r.expiresAt === "string" ? r.expiresAt : undefined,
+    active: typeof r.active === "boolean" ? r.active : true,
+  };
+}
+
+function normalizeTeamMembers(arr: unknown): TeamMember[] {
+  if (!Array.isArray(arr)) return [];
+  return arr
+    .map(normalizeTeamMember)
+    .filter((m): m is TeamMember => m !== null);
+}
+
+/** Normalize a cloud-loaded AccessInvite. */
+function normalizeInvite(i: unknown): AccessInvite | null {
+  if (!i || typeof i !== "object") return null;
+  const r = i as Record<string, unknown>;
+  return {
+    id: typeof r.id === "string" ? r.id : "",
+    role:
+      r.role === "manager" || r.role === "staff" || r.role === "auditor"
+        ? (r.role as UserRole)
+        : "staff",
+    createdBy: typeof r.createdBy === "string" ? r.createdBy : "",
+    createdAt:
+      typeof r.createdAt === "string" ? r.createdAt : new Date().toISOString(),
+    expiresAt: typeof r.expiresAt === "string" ? r.expiresAt : undefined,
+    usedBy: typeof r.usedBy === "string" ? r.usedBy : undefined,
+    usedAt: typeof r.usedAt === "string" ? r.usedAt : undefined,
+    maxUses: typeof r.maxUses === "number" ? r.maxUses : 1,
+    uses: typeof r.uses === "number" ? r.uses : 0,
+  };
+}
+
+function normalizeInvites(arr: unknown): AccessInvite[] {
+  if (!Array.isArray(arr)) return [];
+  return arr
+    .map(normalizeInvite)
+    .filter((i): i is AccessInvite => i !== null && i.id !== "");
+}
+
+/** Normalize a cloud-loaded RoleTabGrants object. */
+function normalizeGrants(g: unknown): RoleTabGrants | null {
+  if (!g || typeof g !== "object") return null;
+  const r = g as Record<string, unknown>;
+  const asArr = (v: unknown): string[] =>
+    Array.isArray(v) ? v.filter((x) => typeof x === "string") : [];
+  return {
+    manager: asArr(r.manager),
+    staff: asArr(r.staff),
+    auditor: asArr(r.auditor),
   };
 }
 
@@ -541,8 +632,11 @@ export function PermissionProvider({
 }: {
   children: React.ReactNode;
 }) {
-  const { getActiveBinding } = useAuth();
+  const { user, getActiveBinding } = useAuth();
 
+  // --- cloud-backed state (user-scoped): team members, invites, role grants ---
+  // getCached first (instant from memory/localStorage cache), then async cloud
+  // refresh in a mount effect. localStorage remains only a read-through cache.
   const [role, setRoleState] = useState<UserRole>(() => {
     // Every new user starts as Owner - no role switching allowed
     const saved = localStorage.getItem("fuelpro_v2_role");
@@ -559,22 +653,133 @@ export function PermissionProvider({
   });
 
   const [team, setTeam] = useState<TeamMember[]>(() => {
-    const saved = localStorage.getItem("fuelpro_v2_team");
-    return saved ? JSON.parse(saved) : [];
+    const cloudCached =
+      cloudStorageService.getCached<unknown[]>(TEAM_CLOUD_KEY);
+    if (Array.isArray(cloudCached)) return normalizeTeamMembers(cloudCached);
+    try {
+      const saved = localStorage.getItem("fuelpro_v2_team");
+      return saved ? normalizeTeamMembers(JSON.parse(saved)) : [];
+    } catch {
+      return [];
+    }
   });
 
   const [invites, setInvites] = useState<AccessInvite[]>(() => {
-    const saved = localStorage.getItem("fuelpro_v2_invites");
-    return saved ? JSON.parse(saved) : [];
+    const cloudCached =
+      cloudStorageService.getCached<unknown[]>(INVITES_CLOUD_KEY);
+    if (Array.isArray(cloudCached)) return normalizeInvites(cloudCached);
+    try {
+      const saved = localStorage.getItem("fuelpro_v2_invites");
+      return saved ? normalizeInvites(JSON.parse(saved)) : [];
+    } catch {
+      return [];
+    }
   });
 
-  const [roleTabGrants, setRoleTabGrantsState] =
-    useState<RoleTabGrants>(loadGrants);
+  const [roleTabGrants, setRoleTabGrantsState] = useState<RoleTabGrants>(() => {
+    const cloudCached =
+      cloudStorageService.getCached<unknown>(GRANTS_CLOUD_KEY);
+    const n = normalizeGrants(cloudCached);
+    if (n) return n;
+    return loadGrants();
+  });
 
-  // Persist grants
+  // Echo guard: skip applying a remote update that we just wrote locally, to
+  // avoid an unnecessary setState/refetch loop on the same device.
+  const skipTeamRemoteRef = useRef(false);
+  const skipInvitesRemoteRef = useRef(false);
+  const skipGrantsRemoteRef = useRef(false);
+
+  // Persist grants to localStorage cache (cloud save happens in the effect below).
   useEffect(() => {
     localStorage.setItem(GRANTS_STORAGE_KEY, JSON.stringify(roleTabGrants));
   }, [roleTabGrants]);
+
+  useEffect(() => {
+    localStorage.setItem("fuelpro_v2_team", JSON.stringify(team));
+  }, [team]);
+  useEffect(() => {
+    localStorage.setItem("fuelpro_v2_invites", JSON.stringify(invites));
+  }, [invites]);
+
+  // Cloud persistence: whenever team/invites/grants change, sync to app_kv so
+  // the data is available on every device the owner signs into.
+  useEffect(() => {
+    if (!user) return;
+    cloudStorageService.set(TEAM_CLOUD_KEY, team).catch(() => {});
+  }, [team, user]);
+  useEffect(() => {
+    if (!user) return;
+    cloudStorageService.set(INVITES_CLOUD_KEY, invites).catch(() => {});
+  }, [invites, user]);
+  useEffect(() => {
+    if (!user) return;
+    cloudStorageService.set(GRANTS_CLOUD_KEY, roleTabGrants).catch(() => {});
+  }, [roleTabGrants, user]);
+
+  // Load from cloud on mount + real-time cross-device sync.
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    (async () => {
+      const cloudTeam = await cloudStorageService.get<unknown>(TEAM_CLOUD_KEY);
+      if (!cancelled && Array.isArray(cloudTeam)) {
+        setTeam(normalizeTeamMembers(cloudTeam));
+      }
+      const cloudInvites =
+        await cloudStorageService.get<unknown>(INVITES_CLOUD_KEY);
+      if (!cancelled && Array.isArray(cloudInvites)) {
+        setInvites(normalizeInvites(cloudInvites));
+      }
+      const cloudGrants =
+        await cloudStorageService.get<unknown>(GRANTS_CLOUD_KEY);
+      if (!cancelled) {
+        const n = normalizeGrants(cloudGrants);
+        if (n) setRoleTabGrantsState(n);
+      }
+    })();
+
+    const unsubs = [
+      cloudStorageService.subscribe<unknown>(
+        TEAM_CLOUD_KEY,
+        undefined,
+        (val) => {
+          if (skipTeamRemoteRef.current) {
+            skipTeamRemoteRef.current = false;
+            return;
+          }
+          if (Array.isArray(val)) setTeam(normalizeTeamMembers(val));
+        },
+      ),
+      cloudStorageService.subscribe<unknown>(
+        INVITES_CLOUD_KEY,
+        undefined,
+        (val) => {
+          if (skipInvitesRemoteRef.current) {
+            skipInvitesRemoteRef.current = false;
+            return;
+          }
+          if (Array.isArray(val)) setInvites(normalizeInvites(val));
+        },
+      ),
+      cloudStorageService.subscribe<unknown>(
+        GRANTS_CLOUD_KEY,
+        undefined,
+        (val) => {
+          if (skipGrantsRemoteRef.current) {
+            skipGrantsRemoteRef.current = false;
+            return;
+          }
+          const n = normalizeGrants(val);
+          if (n) setRoleTabGrantsState(n);
+        },
+      ),
+    ];
+    return () => {
+      cancelled = true;
+      unsubs.forEach((u) => u());
+    };
+  }, [user]);
 
   // setRole: OWNER cannot switch roles. Only non-owner invited users can have different roles.
   const setRole = useCallback(
@@ -651,11 +856,13 @@ export function PermissionProvider({
   );
 
   const setRoleTabGrants = useCallback((grants: RoleTabGrants) => {
+    skipGrantsRemoteRef.current = true;
     setRoleTabGrantsState(grants);
   }, []);
 
   const grantTabToRole = useCallback((targetRole: UserRole, tabId: string) => {
     if (targetRole === "owner") return; // Owner already has everything
+    skipGrantsRemoteRef.current = true;
     setRoleTabGrantsState((prev) => ({
       ...prev,
       [targetRole]: [...new Set([...prev[targetRole], tabId])],
@@ -665,6 +872,7 @@ export function PermissionProvider({
   const revokeTabFromRole = useCallback(
     (targetRole: UserRole, tabId: string) => {
       if (targetRole === "owner") return; // Cannot revoke from owner
+      skipGrantsRemoteRef.current = true;
       setRoleTabGrantsState((prev) => ({
         ...prev,
         [targetRole]: prev[targetRole].filter((t) => t !== tabId),
@@ -690,6 +898,7 @@ export function PermissionProvider({
         maxUses,
         uses: 0,
       };
+      skipInvitesRemoteRef.current = true;
       setInvites((prev) => [...prev, invite]);
       return invite;
     },
@@ -706,7 +915,7 @@ export function PermissionProvider({
       if (invite.uses >= invite.maxUses) return false;
 
       const member: TeamMember = {
-        id: `mem_${Date.now()}`,
+        id: `mem_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
         username,
         role: invite.role,
         assignedPumps: [],
@@ -717,6 +926,8 @@ export function PermissionProvider({
         active: true,
       };
 
+      skipTeamRemoteRef.current = true;
+      skipInvitesRemoteRef.current = true;
       setTeam((prev) => [...prev, member]);
       setInvites((prev) =>
         prev.map((i) =>
@@ -736,10 +947,12 @@ export function PermissionProvider({
   );
 
   const revokeMember = useCallback((memberId: string) => {
+    skipTeamRemoteRef.current = true;
     setTeam((prev) => prev.filter((m) => m.id !== memberId));
   }, []);
 
   const extendAccess = useCallback((memberId: string, days: number) => {
+    skipTeamRemoteRef.current = true;
     setTeam((prev) =>
       prev.map((m) =>
         m.id === memberId
@@ -753,6 +966,7 @@ export function PermissionProvider({
   }, []);
 
   const assignPumps = useCallback((memberId: string, pumpIds: string[]) => {
+    skipTeamRemoteRef.current = true;
     setTeam((prev) =>
       prev.map((m) =>
         m.id === memberId ? { ...m, assignedPumps: pumpIds } : m,
@@ -761,19 +975,13 @@ export function PermissionProvider({
   }, []);
 
   const assignShifts = useCallback((memberId: string, shiftIds: string[]) => {
+    skipTeamRemoteRef.current = true;
     setTeam((prev) =>
       prev.map((m) =>
         m.id === memberId ? { ...m, assignedShifts: shiftIds } : m,
       ),
     );
   }, []);
-
-  useEffect(() => {
-    localStorage.setItem("fuelpro_v2_team", JSON.stringify(team));
-  }, [team]);
-  useEffect(() => {
-    localStorage.setItem("fuelpro_v2_invites", JSON.stringify(invites));
-  }, [invites]);
 
   return (
     <PermissionContext.Provider
