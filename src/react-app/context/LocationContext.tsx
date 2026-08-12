@@ -19,6 +19,7 @@ import {
 import {
   getCountryByCode,
   getCountryFromLocation,
+  getCountryByCurrency,
 } from "@/react-app/lib/world-country-utils";
 
 /** Get the first available country profile as universal fallback */
@@ -429,6 +430,7 @@ export function LocationProvider({
   stationId,
   stationLocation,
   stationCountry,
+  stationCurrency,
 }: {
   children: React.ReactNode;
   stationId?: string;
@@ -443,6 +445,11 @@ export function LocationProvider({
   // precedence over GPS/timezone so the app is genuinely world-wide and the
   // user's choice survives across devices/browsers.
   stationCountry?: string;
+  // The active station's currency code (e.g. "KES"). Used as a fallback to
+  // derive the country when stationCountry is not set — e.g. a station with
+  // currency "KES" but no country code resolves to Kenya (KE), so the header
+  // shows 🇰🇪 Kenya KES instead of falling through to 🇺🇸 United States USD.
+  stationCurrency?: string;
 }) {
   const [stationCountries, setStationCountries] =
     useState<Record<string, StationLocation>>(loadStationCountries);
@@ -480,10 +487,20 @@ export function LocationProvider({
         return getCountryById(derived) || getUniversalFallback();
       }
     }
+    // Derive the country from the station's currency code (e.g. "KES" → KE).
+    // This bridges the gap when a station has a currency set (via Edit Info)
+    // but no explicit country code — the header should still show the right
+    // flag/currency instead of defaulting to 🇺🇸 United States USD.
+    if (stationCurrency) {
+      const cc = getCountryByCurrency(stationCurrency);
+      if (cc) {
+        return getCountryById(cc) || getUniversalFallback();
+      }
+    }
     // Auto-detect from browser timezone or resolved country
     const resolved = resolveUserCountry();
     return getCountryById(resolved) || getUniversalFallback();
-  }, [stationCountry, currentLocation, stationLocation]);
+  }, [stationCountry, currentLocation, stationLocation, stationCurrency]);
 
   // Persist changes
   useEffect(() => {

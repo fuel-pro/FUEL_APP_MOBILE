@@ -612,7 +612,9 @@ function HomeContent() {
       {automationNotice && (
         <div className="fixed bottom-20 right-4 z-50 bg-amber-500/95 text-white rounded-xl shadow-lg p-4 max-w-sm">
           <p className="font-semibold text-sm">{automationNotice.title}</p>
-          <p className="text-white/80 text-xs mt-1">{automationNotice.message}</p>
+          <p className="text-white/80 text-xs mt-1">
+            {automationNotice.message}
+          </p>
         </div>
       )}
     </div>
@@ -650,6 +652,7 @@ export default function Home() {
       stationId={stationId}
       stationLocation={currentStation?.location}
       stationCountry={currentStation?.country}
+      stationCurrency={currentStation?.currency}
     >
       <HomeContent />
     </LocationProvider>

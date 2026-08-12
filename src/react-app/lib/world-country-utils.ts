@@ -49,6 +49,131 @@ export function getCountryByName(name: string): CountryInfo | undefined {
   return ALL_COUNTRIES.find((c) => c.name.toLowerCase() === n);
 }
 
+// ─── City → ISO country code map ───
+// Many station location strings contain only a city/neighborhood name
+// (e.g. "Kasarani, Nairobi") without the country name. Without this map,
+// getCountryFromLocation returns undefined and the app falls through to
+// CDN/IP-based geolocation (which often resolves to the server's country,
+// e.g. US), showing the wrong flag/currency in the header.
+const CITY_TO_COUNTRY: Record<string, string> = {
+  // Kenya
+  nairobi: "KE",
+  mombasa: "KE",
+  kisumu: "KE",
+  nakuru: "KE",
+  eldoret: "KE",
+  kakamega: "KE",
+  kitale: "KE",
+  bungoma: "KE",
+  lodwar: "KE",
+  garissa: "KE",
+  kericho: "KE",
+  kakuma: "KE",
+  malindi: "KE",
+  lamu: "KE",
+  nyeri: "KE",
+  meru: "KE",
+  machakos: "KE",
+  kiambu: "KE",
+  kasarani: "KE",
+  thika: "KE",
+  // Uganda
+  kampala: "UG",
+  entebbe: "UG",
+  gulu: "UG",
+  jinja: "UG",
+  mbarara: "UG",
+  // Tanzania
+  "dar es salaam": "TZ",
+  dodoma: "TZ",
+  arusha: "TZ",
+  mwanza: "TZ",
+  zanzibar: "TZ",
+  tanga: "TZ",
+  // Rwanda
+  kigali: "RW",
+  // Ethiopia
+  "addis ababa": "ET",
+  // Nigeria
+  lagos: "NG",
+  abuja: "NG",
+  kano: "NG",
+  ibadan: "NG",
+  // Ghana
+  accra: "GH",
+  kumasi: "GH",
+  // South Africa
+  johannesburg: "ZA",
+  cape_town: "ZA",
+  "cape town": "ZA",
+  durban: "ZA",
+  pretoria: "ZA",
+  // Germany
+  berlin: "DE",
+  munich: "DE",
+  hamburg: "DE",
+  frankfurt: "DE",
+  cologne: "DE",
+  // UK
+  london: "GB",
+  manchester: "GB",
+  birmingham: "GB",
+  // US
+  "new york": "US",
+  "los angeles": "US",
+  chicago: "US",
+  houston: "US",
+  // India
+  "new delhi": "IN",
+  mumbai: "IN",
+  bangalore: "IN",
+  chennai: "IN",
+};
+
+// ─── Currency → ISO country code map (for currencies with a unique country) ───
+// Used when a station has a currency code but no country code. EUR is
+// intentionally omitted (shared by multiple countries).
+export const CURRENCY_TO_COUNTRY: Record<string, string> = {
+  KES: "KE",
+  UGX: "UG",
+  TZS: "TZ",
+  RWF: "RW",
+  ETB: "ET",
+  NGN: "NG",
+  GHS: "GH",
+  ZAR: "ZA",
+  GBP: "GB",
+  USD: "US",
+  CHF: "CH",
+  CNY: "CN",
+  INR: "IN",
+  PKR: "PK",
+  JPY: "JP",
+  CAD: "CA",
+  AUD: "AU",
+  MAD: "MA",
+  DZD: "DZ",
+  TND: "TN",
+  SDG: "SD",
+  SOS: "SO",
+  SSP: "SS",
+  MGA: "MG",
+  MRU: "MR",
+  MZN: "MZ",
+  NAD: "NA",
+  SZL: "SZ",
+  GMD: "GM",
+  CVE: "CV",
+  XOF: "SN",
+  XAF: "CM",
+};
+
+/** Resolve a country from a currency code (e.g. "KES" → "KE"). */
+export function getCountryByCurrency(currency: string): string | undefined {
+  if (!currency) return undefined;
+  return CURRENCY_TO_COUNTRY[currency.toUpperCase()];
+}
+
 // ─── Extract a country from a free-text location string ───
 // Handles "City, Country", "Country", and common variants. Returns the
 // matched CountryInfo, or undefined if no known country is found.
@@ -56,6 +181,14 @@ export function getCountryFromLocation(
   location: string,
 ): CountryInfo | undefined {
   if (!location) return undefined;
+  const lower = location.toLowerCase();
+  // Fast path: check the city map first (handles "Kasarani, Nairobi" → KE).
+  for (const [city, cc] of Object.entries(CITY_TO_COUNTRY)) {
+    if (lower.includes(city)) {
+      const country = ALL_COUNTRIES.find((c) => c.code === cc);
+      if (country) return country;
+    }
+  }
   // Split on commas / semicolons / pipes and try each segment, longest first
   // so "Mombasa Road, Nairobi, Kenya" prefers the most specific match.
   const segments = location
