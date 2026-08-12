@@ -3676,3 +3676,121 @@ label, not hardcoded "Petrol"), "10 L | VAT-A | HS:2710.12.10",
 
 Deploy: GitHub commit c7cac7b, Cloudflare LIVE (832e1cb7 + main alias).
 Vercel BLOCKED by api-deployments-free-per-day (auto-deploys on reset).
+
+
+## Team Manager hierarchy + delegation + privilege-escalation guard (DEPLOYED LIVE 2026-08-12, PR #130, commit 0ae8aed)
+
+FULLY upgraded the Team Manager tab with a complete access hierarchy derived
+from the main user (Owner), custom sub-users, delegation, and a
+privilege-escalation guard. Deployed to Cloudflare Pages + Vercel production +
+Supabase (migration 015 applied live) + GitHub (PR #130 merged to main).
+
+### Hierarchy model (Owner > Manager > Staff > Auditor)
+
+- Every user links to a unique ID (`profiles.unique_id`, e.g. `FPRQA2026`)
+  shown on member cards + invite provenance. The hierarchy is derived from
+  the Owner (the station creator); all sub-users descend from the Owner.
+- `PermissionContext` v4 introduces `ROLE_RANK` (owner=100, manager=70,
+  staff=40, auditor=20) + `outranks(a, b)` and a **privilege-escalation
+  guard**: a lower-ranked user can NEVER grant a sub-user more ability than
+  they themselves hold. `canDo(action)` consults both the default
+  `ROLE_DEFAULTS` and a per-role `__perm_overrides__` cloud blob. Until a
+  user's own ability is increased, they cannot increase it for others.
+- **Custom roles**: Owner (and any role with `canCreateSubUsers`) can create
+  custom sub-user types (Manager, Staff, Auditor, Accountant, Cashier, etc.)
+  via `createCustomRole` (name + label + baseRole + rank + delegation flags).
+  Custom roles persist to cloud key `custom_roles` (scoped
+  `custom_roles__<ownerId>__<stationId>`), real-time synced.
+- **Delegation**: Owner can grant other sub-users the ability to (a) create
+  further sub-users (`canCreateSubUsers`) and (b) determine what other
+  sub-users can access/interact/edit/upload/view (`canGrantPermissions`).
+  Both flags persist on the team member + the invite, enforced by the
+  escalation guard -- a Manager without `canGrantPermissions` cannot edit
+  any role's permissions.
+- **Per-role feature access control**: the "Roles & Permissions" sub-tab
+  renders a per-role x per-tab toggle grid (`Feature Access Control`).
+  Edits write to the `role_tab_grants` cloud key + the per-role
+  `__perm_overrides__` blob. Only the Owner (or a role with
+  `canGrantPermissions`) sees the editor.
+
+### Files changed
+
+- `src/react-app/context/PermissionContext.tsx` -- v4: `ROLE_RANK`,
+  `outranks`, `canCreateSubUsers`, `canGrantPermissions`, custom roles,
+  `ACTION_PERM_MAP` + `TAB_PERMISSION_MAP` moved to module scope,
+  `__perm_overrides__` cloud key, escalation guard in all grant functions.
+- `src/react-app/components/TeamManager.tsx` -- three sub-tabs (Team Access /
+  Roles & Permissions / Shifts); `RolesAndPermissionsView` (per-role
+  permission editor + custom role creator + delegation UI); member cards
+  show `unique_id` + email + "Invited by <name> (<unique_id>)".
+- `src/react-app/components/RoleSelector.tsx` -- string-based `UserRole`
+  (custom roles).
+- `src/react-app/pages/InviteAccept.tsx` -- accept flow carries delegation
+  flags + provenance.
+- `supabase/migrations/015_team_hierarchy_delegation.sql` -- APPLIED LIVE:
+  `station_members` gains `invited_by_user_id`, `invited_by_name`,
+  `invited_by_unique_id`, `expires_at`, `max_uses`, `uses`, `permissions`
+  (JSONB), `tab_grants` (JSONB), `can_create_subusers`, `can_grant_permissions`,
+  `member_unique_id`, `member_email`, `member_role`. RLS by `owner_id =
+  auth.uid()`.
+
+### Phase 1 + Phase 2 cross-device verification (VERIFIED LIVE)
+
+Simulated the exact `cloudStorageService.set` + DB insert flow via the
+Supabase REST API as `founder.qa.fuelpro@gmail.com` (uid `87e6502b`,
+station `52c24393`):
+
+- **Phase 1 (SAVE)**: wrote (1) a custom "Accountant" role (baseRole staff,
+  rank 55), (2) `__perm_overrides__` granting staff canManagePayroll +
+  manager delegation flags, (3) a Manager team invite with
+  canCreateSubUsers=true + canGrantPermissions=true + provenance
+  (createdByUniqueId FPRQA2026), (4) a `station_members` DB row with all
+  new delegation columns + permissions + tab_grants. All 4 writes HTTP 201.
+- **Phase 2 (FRESH-DEVICE READ)**: a SECOND fresh login (NEW access_token,
+  confirmed different -- simulates a new device/browser) read back ALL 4:
+  - custom_roles: accountant role present (count 1)
+  - perm_overrides: staff.canManagePayroll=True, manager.canCreateSubUsers=True,
+    manager.canGrantPermissions=True
+  - team_invites: invite id, role=manager, both delegation flags True,
+    createdByName + createdByUniqueId intact
+  - station_members (DB): name, role, can_create_subusers, can_grant_permissions,
+    invited_by_unique_id=FPRQA2026, permissions, tab_grants all intact
+  **NO DATA LOSS -- full cross-device sync confirmed.** localStorage is never
+  the source of truth (all via `app_kv` scoped row ids + the `station_members`
+  table, RLS by owner).
+- **Founder cross-owner view**: service_role (Management API) confirms the
+  station_members row with all new hierarchy columns visible cross-owner.
+
+### Live UI verification
+
+- **Cloudflare Pages** (https://4353814d.fuel-app-mobile.pages.dev): logged in
+  as Owner (founder.qa.fuelpro@gmail.com, US station, USD). Navigated to Team
+  Manager tab -> renders the new sub-tabs (Team Access / Roles & Permissions /
+  Shifts) + "Create Invite Link" button. "Roles & Permissions" sub-tab
+  renders: "Hierarchy: Owner > Manager > Staff > Auditor", "Feature Access
+  Control -- Grant or revoke tab access per role", stat cards (Team Members /
+  Managers / Staff / Active Invites).
+- **Vercel production** (fuel-app-mobile.vercel.app): TeamManager chunk
+  `TeamManager-t-gcc9eJ.js` (48,871 bytes) contains ALL hierarchy markers:
+  "Hierarchy: Owner > Manager > Staff > Auditor", "Roles & Permissions",
+  "Feature Access Control", "Create Custom Role", "outranks",
+  "canGrantPermissions".
+
+### Deploy status 2026-08-12 (commit 0ae8aed, PR #130 merged)
+
+- **GitHub main**: merged (squash) commit 0ae8aed
+- **Cloudflare Pages**: LIVE (preview https://4353814d.fuel-app-mobile.pages.dev
+  + main alias https://fuel-app-mobile.pages.dev)
+- **Vercel production**: READY (prebuilt deploy dpl_4XcYXyY7chBetawCRFZesjj3WkUB,
+  aliased to fuel-app-mobile.vercel.app, TeamManager-t-gcc9eJ.js verified)
+- **Supabase**: migration 015 applied live (station_members new columns)
+- **CI**: Lint/Build/TypeCheck/Unit/E2E/CodeQL/Analyze all pass (the only
+  "fail" entries are Vercel deploy rate-limit on the PR preview, unrelated
+  to code). Also fixed a pre-existing prettier failure on ReportsCenter.tsx
+  (commit d1a6cef) so the Lint gate passes.
+
+### Founder QA test credentials (2026-08-12)
+
+- Owner/founder: `founder.qa.fuelpro@gmail.com` / `FuelPro@2026!`
+  (uid `87e6502b`, unique_id `FPRQA2026`, role `founder`, US station
+  "Founder Admin Station", USD).
