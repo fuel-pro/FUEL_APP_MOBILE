@@ -28,6 +28,7 @@ import { formatNumber } from "@/react-app/utils/formatUtils";
 import { CANONICAL_FUEL_TYPES, getVATRate } from "@/react-app/config/pricing";
 import {
   getCurrencySymbol,
+  getCurrencyByCountry,
   getDetectedCountryCode,
   isKenyaStation,
 } from "@/react-app/lib/currency";
@@ -627,7 +628,7 @@ export default function PointOfSale() {
         origin: "stk_push",
         transaction_type: "POS M-Pesa Sale",
         amount: total,
-        currency: state.companyData?.currency || "KES",
+        currency: state.companyData?.currency || getCurrencyByCountry(countryCode),
         sender_info: customerPhone || "",
         description: `POS sale ${invoiceNumber} (${cart
           .map((i) => i.name)
