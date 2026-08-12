@@ -52,6 +52,33 @@ function userScopedId(key: string, ownerId: string): string {
   return `${key}__${ownerId}`;
 }
 
+/**
+ * Coerce a value read from the app_kv `data` (JSONB) column into the expected
+ * JSON shape. Older versions of set() (and some manual API inserts) stored
+ * arrays/objects as a double-encoded JSON STRING inside the JSONB column
+ * (e.g. the column held `"[{ ... }]"` instead of `[{ ... }]`). Without this
+ * guard, callers that check `Array.isArray(value)` would see `false` for the
+ * string and silently discard ALL cloud-synced per-component data (suppliers,
+ * expenses, shifts, payroll, etc.) — manifesting as an empty UI even though
+ * the data exists in the DB. This helper transparently unwraps such strings
+ * so existing rows auto-heal: the next set() repersists the parsed value as
+ * proper JSONB, fixing the stored data without any migration script.
+ */
+function coerceJson<T = Json>(raw: unknown): T | null {
+  if (raw == null) return null;
+  if (typeof raw === "string") {
+    const trimmed = raw.trim();
+    if (!trimmed) return null;
+    try {
+      return JSON.parse(trimmed) as T;
+    } catch {
+      // Not JSON — return the original string wrapped as the value.
+      return raw as unknown as T;
+    }
+  }
+  return raw as T;
+}
+
 /** Current authenticated user id, or null. */
 async function currentUserId(): Promise<string | null> {
   try {
@@ -132,10 +159,17 @@ class CloudStorageService {
           .maybeSingle();
         if (error) throw error;
         if (data?.data != null) {
-          const value = data.data as T;
-          this.memoryCache.set(ck, { value, ts: Date.now() });
-          writeCache(ck, value);
-          return value;
+          const value = coerceJson<T>(data.data);
+          if (value != null) {
+            this.memoryCache.set(ck, { value, ts: Date.now() });
+            writeCache(ck, value);
+            // Auto-heal: if the stored row was a double-encoded string,
+            // repersist as proper JSONB so future reads skip the parse.
+            if (typeof data.data === "string") {
+              this.set(key, value, stationId).catch(() => {});
+            }
+            return value;
+          }
         }
       }
 
@@ -149,10 +183,16 @@ class CloudStorageService {
         .maybeSingle();
       if (usError) throw usError;
       if (usData?.data != null) {
-        const value = usData.data as T;
-        this.memoryCache.set(ck, { value, ts: Date.now() });
-        writeCache(ck, value);
-        return value;
+        const value = coerceJson<T>(usData.data);
+        if (value != null) {
+          this.memoryCache.set(ck, { value, ts: Date.now() });
+          writeCache(ck, value);
+          if (typeof usData.data === "string") {
+            // Repersist under the scoped id as proper JSONB.
+            this.set(key, value, stationId).catch(() => {});
+          }
+          return value;
+        }
       }
 
       // 3. Legacy bare-key row (pre-user-scoping). Read once so existing data
@@ -165,10 +205,13 @@ class CloudStorageService {
           .eq("owner_id", ownerId)
           .maybeSingle();
         if (legacy?.data != null) {
-          const value = legacy.data as T;
-          this.memoryCache.set(ck, { value, ts: Date.now() });
-          writeCache(ck, value);
-          return value;
+          const value = coerceJson<T>(legacy.data);
+          if (value != null) {
+            this.memoryCache.set(ck, { value, ts: Date.now() });
+            writeCache(ck, value);
+            this.set(key, value, stationId).catch(() => {});
+            return value;
+          }
         }
       }
       // No cloud row — fall back to cache (e.g. offline-first write not yet synced).
@@ -279,7 +322,7 @@ class CloudStorageService {
         const logicalKey = row.id.endsWith(suffix)
           ? row.id.slice(0, -suffix.length)
           : row.id;
-        out[logicalKey] = row.data as T;
+        out[logicalKey] = coerceJson<T>(row.data) as T;
       }
       return out;
     } catch {
@@ -338,10 +381,11 @@ class CloudStorageService {
           (payload) => {
             // Invalidate memory cache so next get() reads fresh.
             this.memoryCache.delete(ck);
-            const newData =
+            const rawNew =
               payload.eventType === "DELETE"
                 ? null
-                : ((payload.new as { data?: T })?.data ?? null);
+                : ((payload.new as { data?: unknown })?.data ?? null);
+            const newData = rawNew == null ? null : coerceJson<T>(rawNew);
             if (newData != null) {
               writeCache(ck, newData);
               this.memoryCache.set(ck, { value: newData, ts: Date.now() });
@@ -404,7 +448,7 @@ class CloudStorageService {
             const row =
               payload.eventType === "DELETE"
                 ? (payload.old as { id?: string })
-                : (payload.new as { id?: string; data?: T });
+                : (payload.new as { id?: string; data?: unknown });
             const id = row?.id ?? "";
             // Invalidate any memory cache entry whose key is a prefix of this row id.
             for (const [ck] of this.memoryCache) {
@@ -412,7 +456,8 @@ class CloudStorageService {
                 this.memoryCache.delete(ck);
               }
             }
-            const value = (payload.new as { data?: T })?.data ?? null;
+            const rawValue = (payload.new as { data?: unknown })?.data ?? null;
+            const value = rawValue == null ? null : coerceJson<T>(rawValue);
             if (value != null && id) {
               callback(id, value);
             }
