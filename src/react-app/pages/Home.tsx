@@ -317,6 +317,19 @@ function HomeContent() {
     return config;
   }, [adminSettings.tabConfig, featureFlags]);
 
+  // Resolve a tab's display label from adminSettings first, then fall back to
+  // FuelContext's authoritative tabConfigurations (which use the canonical
+  // lowercase ids). Prevents the raw tab id (e.g. "fuelsalesreport") leaking
+  // into the mobile heading when the two configs use different casing.
+  const resolveTabLabel = (tabId: string): string => {
+    const adminEntry =
+      filteredTabConfig[tabId as keyof typeof filteredTabConfig];
+    if (adminEntry?.label) return adminEntry.label;
+    const fuelEntry = state.tabConfigurations?.find((t) => t.id === tabId);
+    if (fuelEntry?.label) return fuelEntry.label;
+    return tabId;
+  };
+
   // ─── Render tab content with cross-tab data ───
   const renderTabContent = () => {
     const tabConfig =
@@ -570,8 +583,7 @@ function HomeContent() {
         <div className="md:hidden mb-1 sm:mb-2">
           <div className="bg-white dark:bg-gray-800 rounded-lg sm:rounded-xl px-3 py-2 sm:px-4 sm:py-3 shadow-sm border border-gray-200 dark:border-gray-700 flex items-center justify-between">
             <h2 className="text-base sm:text-lg font-bold text-gray-800 dark:text-gray-100 capitalize">
-              {filteredTabConfig[activeTab as keyof typeof filteredTabConfig]
-                ?.label || activeTab}
+              {resolveTabLabel(activeTab)}
             </h2>
             {featureFlags.mpesa && activeTab === "mpesa" && (
               <span className="text-[10px] px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-full font-medium">

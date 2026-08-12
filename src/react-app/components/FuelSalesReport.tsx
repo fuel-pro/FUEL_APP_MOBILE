@@ -11,6 +11,8 @@ interface SalesEntry {
   shift: "DAY" | "NIGHT";
   petrolSales: number;
   dieselSales: number;
+  petrolLitres: number;
+  dieselLitres: number;
   totalSales: number;
 }
 
@@ -24,6 +26,8 @@ export default function FuelSalesReport() {
   const [totals, setTotals] = useState({
     petrol: 0,
     diesel: 0,
+    petrolLitres: 0,
+    dieselLitres: 0,
     total: 0,
   });
 
@@ -42,11 +46,11 @@ export default function FuelSalesReport() {
     "December",
   ];
 
-  // Generate year options for unlimited range (100+ years in each direction)
+  // Generate year options for a sensible range (10 years back, 5 forward)
   const generateYearOptions = () => {
     const currentYear = new Date().getFullYear();
-    const startYear = currentYear - 100;
-    const endYear = currentYear + 100;
+    const startYear = currentYear - 10;
+    const endYear = currentYear + 5;
     const years = [];
 
     for (let year = startYear; year <= endYear; year++) {
@@ -79,48 +83,117 @@ export default function FuelSalesReport() {
             salesDate.getMonth() + 1 === selectedMonth &&
             salesDate.getFullYear() === selectedYear
           ) {
-            // Only process if we have actual sales data
-            if (salesData && (salesData.pmsPumps || salesData.agoPumps)) {
-              // Calculate petrol sales from all PMS pumps (with rounding for safety)
-              const petrolSales =
-                Math.round(
-                  (salesData.pmsPumps || []).reduce(
-                    (sum: number, pump: any) => sum + (pump.salesKsh || 0),
-                    0,
-                  ) * 100,
-                ) / 100;
+            // Only process if we have any fuel data (pumps OR tank readings)
+            const hasPumpData =
+              salesData &&
+              ((salesData.pmsPumps && salesData.pmsPumps.length > 0) ||
+                (salesData.agoPumps && salesData.agoPumps.length > 0));
+            const hasTankData =
+              salesData &&
+              ((Number(salesData.pmsTankClosing) > 0 &&
+                Number(salesData.pmsTankOpening) >= 0 &&
+                Number(salesData.pmsTankClosing) >
+                  Number(salesData.pmsTankOpening)) ||
+                (Number(salesData.agoTankClosing) > 0 &&
+                  Number(salesData.agoTankOpening) >= 0 &&
+                  Number(salesData.agoTankClosing) >
+                    Number(salesData.agoTankOpening)));
+            if (!hasPumpData && !hasTankData) return;
 
-              // Calculate diesel sales from all AGO pumps (with rounding for safety)
-              const dieselSales =
-                Math.round(
-                  (salesData.agoPumps || []).reduce(
-                    (sum: number, pump: any) => sum + (pump.salesKsh || 0),
-                    0,
-                  ) * 100,
-                ) / 100;
+            const pmsPrice = Number(salesData.pmsPrice) || 0;
+            const agoPrice = Number(salesData.agoPrice) || 0;
 
-              // Format date as DD/MM/YYYY(SHIFT)
-              const day = salesDate.getDate().toString().padStart(2, "0");
-              const month = selectedMonth.toString().padStart(2, "0");
-              const year = selectedYear.toString();
-              const shift =
-                salesData.shift === "Night" || salesData.shift === "NIGHT"
-                  ? "NIGHT"
-                  : "DAY";
-              const formattedDate = `${day}/${month}/${year}(${shift})`;
+            // Calculate petrol sales from PMS pumps — recompute salesKsh/salesL
+            // from meter readings in case the saved record has stale zeroes.
+            let petrolSales = 0;
+            let petrolLitres = 0;
+            (salesData.pmsPumps || []).forEach((pump: any) => {
+              const openingKsh = Number(pump.openingKsh) || 0;
+              const closingKsh = Number(pump.closingKsh) || 0;
+              const openingL = Number(pump.openingL) || 0;
+              const closingL = Number(pump.closingL) || 0;
+              petrolSales += Math.max(0, closingKsh - openingKsh);
+              petrolLitres += Math.max(0, closingL - openingL);
+            });
 
-              // Only add entry if there are actual sales (petrol or diesel)
-              if (petrolSales > 0 || dieselSales > 0) {
-                entries.push({
-                  date: formattedDate,
-                  shift: shift as "DAY" | "NIGHT",
-                  petrolSales,
-                  dieselSales,
-                  totalSales:
-                    Math.round((petrolSales + dieselSales) * 100) / 100,
-                });
+            // Calculate diesel sales from AGO pumps
+            let dieselSales = 0;
+            let dieselLitres = 0;
+            (salesData.agoPumps || []).forEach((pump: any) => {
+              const openingKsh = Number(pump.openingKsh) || 0;
+              const closingKsh = Number(pump.closingKsh) || 0;
+              const openingL = Number(pump.openingL) || 0;
+              const closingL = Number(pump.closingL) || 0;
+              dieselSales += Math.max(0, closingKsh - openingKsh);
+              dieselLitres += Math.max(0, closingL - openingL);
+            });
+
+            // If pumps had no Ksh sales but had litre readings, compute value
+            // from litres × price (pumps store meter readings in currency).
+            if (petrolSales === 0 && petrolLitres === 0 && pmsPrice > 0) {
+              (salesData.pmsPumps || []).forEach((pump: any) => {
+                petrolLitres += Math.max(
+                  0,
+                  (Number(pump.closingL) || 0) - (Number(pump.openingL) || 0),
+                );
+              });
+              petrolSales = Math.round(petrolLitres * pmsPrice * 100) / 100;
+            }
+            if (dieselSales === 0 && dieselLitres === 0 && agoPrice > 0) {
+              (salesData.agoPumps || []).forEach((pump: any) => {
+                dieselLitres += Math.max(
+                  0,
+                  (Number(pump.closingL) || 0) - (Number(pump.openingL) || 0),
+                );
+              });
+              dieselSales = Math.round(dieselLitres * agoPrice * 100) / 100;
+            }
+
+            // If still no sales but tank readings show fuel was dispensed,
+            // compute litres from tank meter delta and value from price.
+            if (petrolSales === 0 && petrolLitres === 0 && hasTankData) {
+              const tankDelta =
+                Number(salesData.pmsTankClosing) -
+                Number(salesData.pmsTankOpening);
+              if (tankDelta > 0 && pmsPrice > 0) {
+                petrolLitres = Math.round(tankDelta * 100) / 100;
+                petrolSales = Math.round(tankDelta * pmsPrice * 100) / 100;
               }
             }
+            if (dieselSales === 0 && dieselLitres === 0 && hasTankData) {
+              const tankDelta =
+                Number(salesData.agoTankClosing) -
+                Number(salesData.agoTankOpening);
+              if (tankDelta > 0 && agoPrice > 0) {
+                dieselLitres = Math.round(tankDelta * 100) / 100;
+                dieselSales = Math.round(tankDelta * agoPrice * 100) / 100;
+              }
+            }
+
+            petrolSales = Math.round(petrolSales * 100) / 100;
+            dieselSales = Math.round(dieselSales * 100) / 100;
+
+            // Format date as DD/MM/YYYY(SHIFT)
+            const day = salesDate.getDate().toString().padStart(2, "0");
+            const month = selectedMonth.toString().padStart(2, "0");
+            const year = selectedYear.toString();
+            const shift =
+              salesData.shift === "Night" || salesData.shift === "NIGHT"
+                ? "NIGHT"
+                : "DAY";
+            const formattedDate = `${day}/${month}/${year}(${shift})`;
+
+            // Add entry if there's ANY fuel data — even if monetary value is 0,
+            // so the user can see their recorded litres sold and meter readings.
+            entries.push({
+              date: formattedDate,
+              shift: shift as "DAY" | "NIGHT",
+              petrolSales,
+              dieselSales,
+              petrolLitres,
+              dieselLitres,
+              totalSales: Math.round((petrolSales + dieselSales) * 100) / 100,
+            });
           }
         },
       );
@@ -148,10 +221,20 @@ export default function FuelSalesReport() {
       (sum, entry) => sum + entry.dieselSales,
       0,
     );
+    const petrolLitresTotal = entries.reduce(
+      (sum, entry) => sum + entry.petrolLitres,
+      0,
+    );
+    const dieselLitresTotal = entries.reduce(
+      (sum, entry) => sum + entry.dieselLitres,
+      0,
+    );
 
     setTotals({
       petrol: petrolTotal,
       diesel: dieselTotal,
+      petrolLitres: petrolLitresTotal,
+      dieselLitres: dieselLitresTotal,
       total: petrolTotal + dieselTotal,
     });
   };
@@ -258,11 +341,15 @@ export default function FuelSalesReport() {
           date: entry.date,
           petrolSales: entry.petrolSales,
           dieselSales: entry.dieselSales,
+          petrolLitres: entry.petrolLitres,
+          dieselLitres: entry.dieselLitres,
           totalSales: entry.totalSales,
         })),
         totals: {
           petrol: totals.petrol,
           diesel: totals.diesel,
+          petrolLitres: totals.petrolLitres,
+          dieselLitres: totals.dieselLitres,
           total: totals.total,
         },
       };
@@ -483,6 +570,11 @@ export default function FuelSalesReport() {
           <div className="text-xl font-bold text-white">
             {currency} {totals.petrol.toFixed(2)}
           </div>
+          {totals.petrolLitres > 0 && (
+            <div className="text-xs text-green-300 mt-1">
+              {totals.petrolLitres.toFixed(2)} L sold
+            </div>
+          )}
         </div>
         <div className="bg-blue-900/30 border border-blue-600 p-4 rounded-lg">
           <div className="flex items-center gap-2 mb-2">
@@ -492,6 +584,11 @@ export default function FuelSalesReport() {
           <div className="text-xl font-bold text-white">
             {currency} {totals.diesel.toFixed(2)}
           </div>
+          {totals.dieselLitres > 0 && (
+            <div className="text-xs text-blue-300 mt-1">
+              {totals.dieselLitres.toFixed(2)} L sold
+            </div>
+          )}
         </div>
         <div className="bg-purple-900/30 border border-purple-600 p-4 rounded-lg">
           <div className="flex items-center gap-2 mb-2">
@@ -501,6 +598,11 @@ export default function FuelSalesReport() {
           <div className="text-xl font-bold text-white">
             {currency} {totals.total.toFixed(2)}
           </div>
+          {(totals.petrolLitres > 0 || totals.dieselLitres > 0) && (
+            <div className="text-xs text-purple-300 mt-1">
+              {(totals.petrolLitres + totals.dieselLitres).toFixed(2)} L total
+            </div>
+          )}
         </div>
       </div>
 
@@ -557,10 +659,16 @@ export default function FuelSalesReport() {
                       DD/MM/YYYY(SHIFT)
                     </th>
                     <th className="border border-gray-400 p-3 text-right">
-                      Total Petrol Sales ({currency})
+                      Petrol (L)
                     </th>
                     <th className="border border-gray-400 p-3 text-right">
-                      Total Diesel Sales ({currency})
+                      Petrol Sales ({currency})
+                    </th>
+                    <th className="border border-gray-400 p-3 text-right">
+                      Diesel (L)
+                    </th>
+                    <th className="border border-gray-400 p-3 text-right">
+                      Diesel Sales ({currency})
                     </th>
                     <th className="border border-gray-400 p-3 text-right">
                       Total Sales/Revenue ({currency})
@@ -577,7 +685,13 @@ export default function FuelSalesReport() {
                         {entry.date}
                       </td>
                       <td className="border border-gray-400 p-3 text-right">
+                        {entry.petrolLitres.toFixed(2)}
+                      </td>
+                      <td className="border border-gray-400 p-3 text-right">
                         {entry.petrolSales.toFixed(2)}
+                      </td>
+                      <td className="border border-gray-400 p-3 text-right">
+                        {entry.dieselLitres.toFixed(2)}
                       </td>
                       <td className="border border-gray-400 p-3 text-right">
                         {entry.dieselSales.toFixed(2)}
@@ -600,12 +714,22 @@ export default function FuelSalesReport() {
                   Monthly Total Petrol Sales:
                 </span>{" "}
                 {currency} {totals.petrol.toFixed(2)}
+                {totals.petrolLitres > 0 && (
+                  <span className="text-gray-300 ml-2">
+                    ({totals.petrolLitres.toFixed(2)} L)
+                  </span>
+                )}
               </div>
               <div className="text-white">
                 <span className="font-semibold">
                   Monthly Total Diesel Sales:
                 </span>{" "}
                 {currency} {totals.diesel.toFixed(2)}
+                {totals.dieselLitres > 0 && (
+                  <span className="text-gray-300 ml-2">
+                    ({totals.dieselLitres.toFixed(2)} L)
+                  </span>
+                )}
               </div>
               <div className="text-white text-lg">
                 <span className="font-bold">Total Monthly Sales/Revenue:</span>{" "}
