@@ -1756,3 +1756,70 @@ service_role founder queries see all data.
   fuel-app-mobile.pages.dev). `companyCurrency` verified in live bundle.
 - Supabase: no schema changes needed (frontend-only fixes). All app_kv
   data for QA user verified with scoped `__ownerId` row ids.
+
+## Cross-device double-encoded JSON auto-heal (DEPLOYED LIVE 2026-08-11, commit df9daf0)
+
+**Symptom**: ALL per-component cloud data (suppliers, expenses, priceboard,
+credit, shifts, payroll, communication, maintenance, loyalty) was stored as a
+DOUBLE-ENCODED JSON STRING inside the `app_kv` JSONB column. Supabase returns
+JSONB as a parsed object, but when the JS client stored a value via
+`cloudStorageService.set(key, data)`, it sometimes double-encoded (stringified
+the already-stringified data). On read, `cloudStorageService.get(key)` returned
+the raw string, which then failed `Array.isArray()` / object access → the
+component's load-on-mount effect set empty state → the data appeared to
+vanish on cross-device login. The `get` fallback to the legacy bare-key row
+made it worse: the legacy row had the SAME double-encoded string.
+
+**Root cause**: The `cloudStorageService.get`/`getAll` functions returned the
+raw `data` field from the `app_kv` row WITHOUT checking if it was a string
+that needed parsing. PostgREST returns JSONB columns as parsed JSON objects,
+BUT if the stored value was a JSON string (e.g. `"[\"item1\",\"item2\"]"` as a
+JSON string literal), PostgREST returns it as a STRING type, not an array.
+The code assumed it was always already-parsed.
+
+**Fix** (`src/react-app/lib/cloud-storage-service.ts`): added `coerceJson<T>(raw)`
+helper. It checks `typeof raw === "string"`; if so, it `JSON.parse`s the
+trimmed string. If parsing fails, it returns the original string (so non-JSON
+strings are preserved). Called in `get` (line 162, 186, 208 — scoped, legacy,
+fallback paths), `getAll` (line 325), `subscribe` (line 388), and
+`useCloudKV` (line 460). This is a READ-TIME fix — no migration needed. Any
+double-encoded string is parsed on read, and the next `set` (auto-heal)
+re-persists it as proper JSONB. The `coerceJson` logic is confirmed present
+in BOTH production bundles (Vercel `reports-CmmZTPUJ.js` + Cloudflare
+`reports-DK69wUr6.js`), minified as
+`typeof e=="string"){const t=e.trim();if(!t)return null;try{return JSON.parse(t)}catch{return e}}return e`.
+
+**Data healing**: All 13 per-component data keys for the worldwide user
+(c27fc92a) were manually healed from str → proper JSONB via the Supabase REST
+API (PATCH app_kv SET data = JSON_PARSE(data)). All data is now accessible as
+proper lists/dicts. The `coerceJson` fix is a safety net for any future
+double-encoding.
+
+**Deploy state 2026-08-11 (commit df9daf0)**:
+- GitHub main: df9daf0 (pushed, synced with origin/main)
+- Vercel production: dpl_APNW9gxJ6r8SifQwRhnrQzXhNgnW, READY, aliased to
+  fuel-app-mobile.vercel.app (bundle index-C9vUOFes.js, reports-CmmZTPUJ.js)
+- Cloudflare Pages: LIVE (main alias fuel-app-mobile.pages.dev, bundle
+  index-BuWIkTV5.js, reports-DK69wUr6.js; preview 84f8febf)
+- Supabase: all 13 per-component data keys healed to proper JSONB
+- Phase 2 cross-device sync VERIFIED via API: fresh login → all data
+  accessible as proper JSONB → would load correctly on any new device
+
+## Worldwide (non-Kenya-centric) station (DEPLOYED LIVE 2026-08-11)
+
+The app is now confirmed world-wide (not Kenya-centric):
+- Worldwide user: `worldwide.test.0811@gmail.com` (uid c27fc92a)
+- Station: "Global Energy Worldwide Station", 100 Worldwide Boulevard, New York
+- Country: US, Currency: USD, code: global-energy-wo-9d6p9
+- All per-component data uses worldwide entities:
+  - Suppliers: Global Fuel Supply Inc.
+  - Expenses: Monthly station rent - Worldwide Boulevard ($5000)
+  - Price Board: Petrol ($3.45), Diesel ($3.85)
+  - Credit: Metro Logistics Corp ($10,000 limit)
+  - Payroll: Sarah Johnson, Station Manager ($5,000 salary)
+  - Communication: Emily Rodriguez (Rodriguez Transport)
+  - Maintenance: Pump #3 quarterly maintenance ($750)
+  - Loyalty: Robert Chen (Gold tier, 1250 points)
+  - Shifts: Sarah Johnson (morning shift)
+- Currency detection: `getDetectedCurrency()` resolves USD for US; the app
+  supports all countries via the browser's locale/timezone.
