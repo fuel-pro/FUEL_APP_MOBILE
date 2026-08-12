@@ -204,10 +204,16 @@ export default function Header({
                   <span className="max-w-20 truncate">
                     {currentStation?.name}
                   </span>
-                  <ChevronDown size={10} className={`transition-transform duration-150 ${showStationMenu ? "rotate-180" : ""}`} />
+                  <ChevronDown
+                    size={10}
+                    className={`transition-transform duration-150 ${showStationMenu ? "rotate-180" : ""}`}
+                  />
                 </button>
                 {showStationMenu && (
-                  <div className="absolute top-full left-0 mt-1 w-52 bg-gray-800 rounded-xl shadow-xl border border-white/10 overflow-hidden z-50 transition-all duration-150 origin-top" role="listbox">
+                  <div
+                    className="absolute top-full left-0 mt-1 w-52 bg-gray-800 rounded-xl shadow-xl border border-white/10 overflow-hidden z-50 transition-all duration-150 origin-top"
+                    role="listbox"
+                  >
                     {stations.map((s) => (
                       <button
                         key={s.id}

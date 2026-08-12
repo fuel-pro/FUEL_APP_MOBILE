@@ -1,4 +1,9 @@
-import { useState, useRef, useEffect, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import {
+  useState,
+  useRef,
+  useEffect,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from "react";
 import {
   Download,
   FileText,
@@ -82,18 +87,17 @@ export default function ExportDropdown({
       setOpen(false);
       triggerRef.current?.focus();
     }
-    if (!open && (e.key === "ArrowDown" || e.key === "Enter" || e.key === " ")) {
+    if (
+      !open &&
+      (e.key === "ArrowDown" || e.key === "Enter" || e.key === " ")
+    ) {
       e.preventDefault();
       setOpen(true);
     }
   };
 
   return (
-    <div
-      ref={ref}
-      className="relative inline-block"
-      onKeyDown={handleKeyDown}
-    >
+    <div ref={ref} className="relative inline-block" onKeyDown={handleKeyDown}>
       <button
         ref={triggerRef}
         onClick={() => setOpen(!open)}

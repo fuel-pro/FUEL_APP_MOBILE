@@ -1445,6 +1445,7 @@ install, but the page never reloaded to pick up the new controller → users
 were stuck on old cached bundles until they manually unregistered the SW.
 
 **Fix** (`index.html` inline script): added full update lifecycle:
+
 1. `controllerchange` listener → `window.location.reload()` (auto-reload
    when a new SW takes control).
 2. `updatefound` listener → track `reg.installing` state → when
@@ -1466,9 +1467,10 @@ https://fuel-app-mobile.pages.dev). Vercel BLOCKED by
 `api-deployments-free-per-day` (100/100; resets ~24h; GitHub integration
 auto-deploys commit f90b895 when quota resets). All merges verified live
 on Cloudflare:
+
 - Credit tab → sub-tabs: Credit Accounts + Debt Payment Reminders ✅
 - Fuel Type Manager → sub-tabs: Fuel Types + Pump Settings + Price Board
-  + Fuel Quality ✅
+  - Fuel Quality ✅
 - Supplier Management → sub-tabs: Suppliers + Purchase Orders + Purchases ✅
 - Invoice → sub-tabs: Invoice + Sales Invoices ✅
 - Integration Hub → sub-tabs: Connectors + Webhooks + API Keys + Logs +
@@ -1482,7 +1484,9 @@ on Cloudflare:
 Implemented all 5 dropdown UX rules from `CLICKING.txt` across the entire site:
 
 ### Universal `Select` component (`src/react-app/components/ui/Select.tsx`)
+
 A reusable, accessible dropdown implementing ALL 5 rules:
+
 - **Rule 1 (Make it Clickable)**: 48px `h-12` touch target, hover border
   highlight, clear ChevronDown caret icon with 150ms rotate animation,
   focus ring (`focus:ring-2 focus:ring-indigo-500`).
@@ -1502,7 +1506,9 @@ A reusable, accessible dropdown implementing ALL 5 rules:
   `prefers-reduced-motion` support via global CSS.
 
 ### Global CSS for ALL native `<select>` elements (`index.css`)
+
 Applied site-wide to all 78 native `<select>` elements across 36 files:
+
 - `min-height: 48px` (Rule 1 touch target)
 - `appearance: none` + custom SVG caret icon (consistent across browsers)
 - `background-position: right 12px center` (caret placement)
@@ -1548,6 +1554,7 @@ Applied site-wide to all 78 native `<select>` elements across 36 files:
    - `role="listbox"` on menu container (Rule 3)
 
 ### Deploy state 2026-08-11 (commit 270ff2f)
+
 - GitHub: pushed ✅
 - Cloudflare Pages: LIVE (https://44d99f82.fuel-app-mobile.pages.dev +
   main alias https://fuel-app-mobile.pages.dev) ✅
