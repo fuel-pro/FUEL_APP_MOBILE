@@ -2563,3 +2563,89 @@ exact calls the app makes):
 - Supabase: no schema changes (uses existing `products`,
   `inventory_transactions`, `stock_transfers`, `app_kv` tables + scoped
   row ids). ✅
+
+## Fuel Offloading Tracker audit (DEPLOYED LIVE 2026-08-12, PR #115)
+
+**Component**: `FuelOffloading.tsx` (id `offloading`) + `FuelContext.tsx`
+(`OffloadingRecord` type).
+
+### Critical bug fixed
+
+1. **Totals hardcoded to PMS/AGO only**: `OffloadingRecord.fuelType` was
+   typed as `"PMS" | "AGO"` (only 2 fuels), but the form dropdown uses
+   `useStationFuelTypes()` which can return IK (kerosene), LPG, VPW (V-Power),
+   CNG, etc. Any non-PMS/AGO offload was **silently EXCLUDED** from the summary
+   cards AND every export (PDF/Excel/TXT/WhatsApp/email). Widened the type to
+   `string`; replaced the hardcoded `pmsQuantity`/`agoQuantity`/`pmsAmount`/
+   `agoAmount` with a dynamic per-fuel-type breakdown (`totals.byFuel`) used
+   everywhere (cards, PDF, Excel, TXT, WhatsApp, email).
+
+### Hardcoded items fixed
+
+2. **`formData` default fuelType `"PMS"`** → first active station fuel type
+   (made no sense for a diesel-only or kerosene station).
+3. **`formatNumber`** guarded against NaN (`|| 0`).
+4. **Fuel-type badge** only colored PMS vs "else" (all non-PMS got AGO's purple)
+   → now PMS=yellow, AGO=purple, other=blue.
+
+### Missing links fixed
+
+5. **Cross-tab navigation**: "Delivery Tracker" + "Suppliers" buttons
+   (`switchToTab`).
+6. **Supplier autocomplete**: datalist populated from cloud-saved
+   `suppliers_data` (Supplier Management module) — cross-device, no more
+   retyping the same supplier name every offload.
+7. **Search + filter bar** (was entirely missing — no way to find a record in a
+   long list): search by truck/driver/supplier/invoice/fuel, filter by fuel
+   type + date range (from/to), with a Clear button.
+
+### Robustness fixes
+
+8. **Edit button was an empty `<button></button>`** (no icon, no visible
+   affordance) → now renders the `Edit` icon.
+9. **`fuelOptions` memoized** (was rebuilt inline on every keystroke,
+   re-rendering the `<select>` and resetting its value).
+10. **Table uses `filteredRecords`** (was sorting the raw array inline on every
+    render).
+
+### Phase 1 + Phase 2 cross-device verification (via Supabase REST API)
+
+- **Phase 1 (SAVE)**: fresh login as founder QA user
+  (`87e6502b-df68-43cd-ae1a-bebd646efeed`). Inserted 3 offloading records
+  into the compact blob (`user_<id>_compact__<id>`) — exactly what
+  `SET_OFFLOADING_RECORDS` + `saveToCloud` do:
+  - KDA 100A | PMS | 8000L | Total Kenya Marketing
+  - KDB 200B | AGO | 6000L | Vivo Energy
+  - KDC 300C | **IK (kerosene)** | 2000L | KenolKobil — the key bug: the old
+    hardcoded PMS/AGO code would have silently dropped this from totals.
+
+- **Phase 2 (FRESH-DEVICE READ)**: a SECOND fresh login (new access_token,
+  confirmed different) read the compact blob back:
+  - 3 offloading records ✅
+  - Dynamic `byFuel` breakdown: PMS=8000L, AGO=6000L, **IK=2000L (382,760)**
+    — IK kerosene now COUNTED (old code dropped it).
+  - Total Quantity: 16,000 L; Total Amount: 3,432,160.
+
+- **Founder cross-owner view**: service_role read confirms all 3 records
+  (including the IK kerosene record) visible cross-owner.
+
+### Deploy state 2026-08-12 (PR #115 merged as 534428e)
+
+- GitHub main: 534428e ✅
+- Cloudflare Pages: LIVE (main alias `fuel-app-mobile.pages.dev`, chunk
+  `FuelOffloading-DszSNPA2.js` with all fix markers:
+  `offloading-suppliers`, `Delivery Tracker`, `byFuel`, `All Fuels`,
+  `No records match` confirmed) ✅
+- Vercel production: prebuilt output verified correct
+  (`FuelOffloading-Bw1IJZDH.js` with all markers), but `vercel deploy
+  --prebuilt` hit `api-deployments-free-per-day` (100/day exhausted). GitHub
+  integration auto-deploys when quota resets (~24h). ⏳
+- Supabase: no schema changes (offloading records persist in the FuelContext
+  compact blob in `app_kv`). ✅
+
+**NOTE — stale chunk cleanup**: a prior `npm run build` left orphaned old
+chunks in `dist/` (`FuelOffloading-DuSwBTaW.js` + `index-De6F8O5Y.js` — the
+OLD code). The `dist/index.html` entry correctly referenced the NEW index
+chunk, but the Cloudflare deploy initially served the cached OLD chunk. Fixed
+by `rm -rf dist && npm run build` (clean build) + redeploy — always do a
+clean build before deploying to avoid serving stale orphaned chunks.
