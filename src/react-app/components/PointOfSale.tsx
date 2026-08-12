@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import {
   ShoppingCart,
   Plus,
@@ -32,6 +32,7 @@ import {
   getDetectedCountryCode,
   isKenyaStation,
 } from "@/react-app/lib/currency";
+import { getCountryById } from "@/react-app/config/countries";
 import QRCode from "qrcode";
 import { useLoyalty } from "@/react-app/lib/useLoyalty";
 import { LoyaltyCustomer, TIER_COLORS } from "@/react-app/lib/loyaltyProgram";
@@ -93,7 +94,27 @@ export default function PointOfSale() {
   const [showSettings, setShowSettings] = useState(false);
   const [currentTransaction, setCurrentTransaction] =
     useState<POSTransaction | null>(null);
-  const [transactions, setTransactions] = useState<POSTransaction[]>([]);
+  // Load POS transactions from cloud on mount (cross-device sync). The
+  // `transactions` state is initialized from the synchronous in-memory cache
+  // (getCached) so the first render is instant; the async cloud fetch then
+  // refreshes it with the authoritative cross-device source of truth.
+  const [transactions, setTransactions] = useState<POSTransaction[]>(() => {
+    if (!user) return [];
+    const cached = cloudStorageService.getCached<POSTransaction[]>(
+      "pos_transactions",
+      stationId,
+    );
+    if (cached && Array.isArray(cached)) return cached;
+    try {
+      const local = JSON.parse(
+        localStorage.getItem("fuelpro_pos_transactions") || "[]",
+      );
+      if (Array.isArray(local)) return local;
+    } catch {
+      /* ignore */
+    }
+    return [];
+  });
   const [fiscalCounter, setFiscalCounter] = useState(1);
   const [quickSaleType, setQuickSaleType] = useState<
     "petrol" | "diesel" | "custom"
@@ -110,7 +131,6 @@ export default function PointOfSale() {
   // ─── Loyalty Integration ───
   const loyaltyStationId = location.currentLocation?.stationId || "default";
   const {
-    customers,
     earnPoints,
     findCustomerByPhone,
     findCustomerByCard,
@@ -119,19 +139,19 @@ export default function PointOfSale() {
   const [loyaltyCustomer, setLoyaltyCustomer] =
     useState<LoyaltyCustomer | null>(null);
   const [showLoyaltyScanner, setShowLoyaltyScanner] = useState(false);
-  const [loyaltyLookupMode, setLoyaltyLookupMode] = useState<"phone" | "card">(
-    "phone",
-  );
 
   // Loyalty lookup by phone or card number
-  const lookupLoyaltyCustomer = (input: string) => {
-    let customer = findCustomerByPhone(input);
-    if (!customer) {
-      customer = findCustomerByCard(input);
-    }
-    setLoyaltyCustomer(customer || null);
-    return customer;
-  };
+  const lookupLoyaltyCustomer = useCallback(
+    (input: string) => {
+      let customer = findCustomerByPhone(input);
+      if (!customer) {
+        customer = findCustomerByCard(input);
+      }
+      setLoyaltyCustomer(customer || null);
+      return customer;
+    },
+    [findCustomerByPhone, findCustomerByCard],
+  );
 
   // Auto-lookup when phone changes
   useEffect(() => {
@@ -143,18 +163,25 @@ export default function PointOfSale() {
     } else if (!customerPhone) {
       setLoyaltyCustomer(null);
     }
-  }, [customerPhone]);
+  }, [customerPhone, lookupLoyaltyCustomer]);
 
-  // Load POS transactions from cloud on mount (cross-device sync)
+  // Refresh POS transactions from the authoritative cloud source on mount /
+  // user / station change. The instant initial render comes from the
+  // `transactions` useState initializer (cache/localStorage); this async fetch
+  // resolves the true cross-device state and reconciles any divergence.
   useEffect(() => {
     if (!user) return;
+    let cancelled = false;
     (async () => {
       const cloud = await cloudStorageService.get<POSTransaction[]>(
         "pos_transactions",
         stationId,
       );
-      if (cloud && Array.isArray(cloud)) setTransactions(cloud);
+      if (!cancelled && cloud && Array.isArray(cloud)) setTransactions(cloud);
     })();
+    return () => {
+      cancelled = true;
+    };
   }, [user, stationId]);
 
   // Award points after successful transaction
@@ -203,11 +230,29 @@ export default function PointOfSale() {
 
   // Country-aware VAT rate: resolve the station's ISO country code (from the
   // current station, falling back to location/timezone detection) and look it
-  // up in the unified TAX_RATES table. Defaults to 16% only when the country
+  // up in the unified TAX_RATES table. Defaults to 0% only when the country
   // is genuinely unknown.
   const countryCode =
     currentStation?.country || getDetectedCountryCode() || "KE";
   const VAT_RATE = getVATRate(countryCode);
+  const vatPercent = (VAT_RATE * 100).toFixed(2);
+
+  // Locale for date/number formatting — derived from the STATION's country
+  // (never a hardcoded "en-KE"), so a German station formats dates in de-DE.
+  // Falls back to the browser locale if the station country is unknown.
+  const stationLocale = useMemo(() => {
+    const profile = getCountryById(countryCode.toUpperCase());
+    const langs = profile?.languages;
+    const cc = profile?.id || countryCode;
+    if (langs && langs.length > 0 && cc) {
+      try {
+        return new Intl.Locale(`${langs[0]}-${cc.toUpperCase()}`).toString();
+      } catch {
+        /* fall through */
+      }
+    }
+    return undefined; // browser default
+  }, [countryCode]);
 
   // Generate unique invoice number in KRA format
   const generateInvoiceNumber = () => {
@@ -256,7 +301,16 @@ export default function PointOfSale() {
       sig: transaction.cuSignature,
     };
 
-    const qrString = `https://itax.kra.go.ke/etims/validate?data=${encodeURIComponent(JSON.stringify(qrData))}`;
+    // Country-aware verification URL — Kenya stations validate at KRA iTax;
+    // others use a generic FuelPro verification endpoint so the QR is never
+    // hardcoded to a Kenya-only authority.
+    const profile = getCountryById(countryCode.toUpperCase());
+    const verifyUrl =
+      profile?.fuelRegulations?.priceSettingBody &&
+      countryCode.toUpperCase() === "KE"
+        ? "https://itax.kra.go.ke/etims/validate"
+        : `${window.location.origin}/verify`;
+    const qrString = `${verifyUrl}?data=${encodeURIComponent(JSON.stringify(qrData))}`;
 
     try {
       const qrUrl = await QRCode.toDataURL(qrString, {
@@ -294,7 +348,8 @@ export default function PointOfSale() {
     // always matches the displayed per-litre price.
     const price =
       fuelTypeApi.getPriceFor(label) ??
-      (quickSaleType === "petrol" ? state.petrolPrice : state.dieselPrice);
+      (quickSaleType === "petrol" ? state.petrolPrice : state.dieselPrice) ??
+      0;
     const total = litres * price;
     const fuelName = label;
 
@@ -414,6 +469,14 @@ export default function PointOfSale() {
     const receiptNumber = generateReceiptNumber();
     const timestamp = new Date().toISOString();
 
+    // Cashier identity: prefer the logged-in user's name, then their email
+    // local-part, then a station-scoped fallback — never a hardcoded "Cashier 1".
+    const cashier =
+      user?.name ||
+      (user?.email ? user.email.split("@")[0] : undefined) ||
+      currentStation?.name ||
+      "Cashier";
+
     const transactionData: Omit<POSTransaction, "qrCodeData"> = {
       id: `txn-${Date.now()}`,
       items: [...cart],
@@ -430,7 +493,7 @@ export default function PointOfSale() {
       timestamp,
       receiptNumber,
       invoiceNumber,
-      cashier: "Cashier 1",
+      cashier,
       cuInvoiceNo,
       cuSignature,
       fiscalCounter,
@@ -444,34 +507,35 @@ export default function PointOfSale() {
       qrCodeData: qrString,
     };
 
-    // Save transaction locally (serverless mode)
+    // CLOUD-FIRST persistence — the cloud (app_kv) is the source of truth, NOT
+    // localStorage. We merge the new transaction into the cloud-backed
+    // `transactions` state (loaded on mount), persist the merged list to cloud,
+    // then mirror to localStorage ONLY as a read-through cache. This prevents
+    // the cross-device data-loss bug where a new device with empty localStorage
+    // would overwrite the cloud with just the single new transaction,
+    // destroying every prior sale from other devices.
+    const merged = [transaction, ...transactions];
+    const trimmed = merged.slice(0, 200); // keep the most recent 200
+    setTransactions(trimmed);
     try {
-      const localTransactions = JSON.parse(
-        localStorage.getItem("fuelpro_pos_transactions") || "[]",
+      localStorage.setItem(
+        "fuelpro_pos_transactions",
+        JSON.stringify(trimmed.map((t) => ({ ...t, savedAt: timestamp }))),
       );
-      localTransactions.push({
-        ...transaction,
-        savedAt: new Date().toISOString(),
-      });
-      const trimmed = localTransactions.slice(-100);
-      localStorage.setItem("fuelpro_pos_transactions", JSON.stringify(trimmed));
-      // Cross-device sync
-      cloudStorageService
-        .set("pos_transactions", trimmed, stationId)
-        .catch(() => {});
-
-      // Sale is now persisted locally — notify the automation engine so
-      // downstream reactions (stock adjustment, dashboard refresh, reorder
-      // checks) fire. Emitted here, after the successful save above.
-      emit({
-        type: "sale:completed",
-        stationId: currentStation?.id || "",
-        total,
-        items: cart,
-      });
-    } catch (error) {
-      console.error("Failed to save POS transaction locally:", error);
+    } catch (cacheErr) {
+      console.warn("POS localStorage cache write failed:", cacheErr);
     }
+    await cloudStorageService.set("pos_transactions", trimmed, stationId);
+
+    // Sale is now persisted to cloud — notify the automation engine so
+    // downstream reactions (stock adjustment, dashboard refresh, reorder
+    // checks) fire.
+    emit({
+      type: "sale:completed",
+      stationId: currentStation?.id || "",
+      total,
+      items: cart,
+    });
 
     // Sync fuel sales to salesHistory for reporting
     syncFuelSalesToHistory(cart, timestamp, paymentMethod);
@@ -483,13 +547,17 @@ export default function PointOfSale() {
     };
     awardLoyaltyPoints(transactionForLoyalty);
 
-    // Add credit sale to delivery tracking if customer has a name
-    if (customerName && paymentMethod !== "cash" && paymentMethod !== "mpesa") {
+    // Add a CREDIT sale (bank/deferred) to delivery tracking so the customer
+    // owes a balance. Cash and M-Pesa are settled on the spot — they are NOT
+    // debt. Previously card/bank were wrongly treated as debt too.
+    if (
+      customerName &&
+      (paymentMethod === "bank" || paymentMethod === "card")
+    ) {
       addToDeliveryTracking(cart, customerName, timestamp);
     }
 
     setCurrentTransaction(transaction);
-    setTransactions([transaction, ...transactions]);
     setShowReceipt(true);
     setCart([]);
     setCustomerPhone("");
@@ -673,7 +741,7 @@ export default function PointOfSale() {
 
   const formatDate = (isoString: string) => {
     const date = new Date(isoString);
-    return date.toLocaleDateString("en-KE", {
+    return date.toLocaleDateString(stationLocale, {
       day: "2-digit",
       month: "2-digit",
       year: "numeric",
@@ -776,8 +844,13 @@ export default function PointOfSale() {
                   }`}
                 >
                   Petrol ({currencySymbol}{" "}
-                  {fuelTypeApi.getPriceFor(CANONICAL_FUEL_TYPES.petrol.label) ??
-                    state.petrolPrice}
+                  {(
+                    fuelTypeApi.getPriceFor(
+                      CANONICAL_FUEL_TYPES.petrol.label,
+                    ) ??
+                    state.petrolPrice ??
+                    0
+                  ).toFixed(2)}
                   /L)
                 </button>
                 <button
@@ -789,8 +862,13 @@ export default function PointOfSale() {
                   }`}
                 >
                   Diesel ({currencySymbol}{" "}
-                  {fuelTypeApi.getPriceFor(CANONICAL_FUEL_TYPES.diesel.label) ??
-                    state.dieselPrice}
+                  {(
+                    fuelTypeApi.getPriceFor(
+                      CANONICAL_FUEL_TYPES.diesel.label,
+                    ) ??
+                    state.dieselPrice ??
+                    0
+                  ).toFixed(2)}
                   /L)
                 </button>
                 <button
@@ -821,10 +899,14 @@ export default function PointOfSale() {
                       (quickSaleType === "petrol"
                         ? (fuelTypeApi.getPriceFor(
                             CANONICAL_FUEL_TYPES.petrol.label,
-                          ) ?? state.petrolPrice)
+                          ) ??
+                          state.petrolPrice ??
+                          0)
                         : (fuelTypeApi.getPriceFor(
                             CANONICAL_FUEL_TYPES.diesel.label,
-                          ) ?? state.dieselPrice)),
+                          ) ??
+                          state.dieselPrice ??
+                          0)),
                   )}
                 </span>
                 <button onClick={addFuelToCart} className="btn btn-primary">
@@ -1047,13 +1129,13 @@ export default function PointOfSale() {
             {/* VAT Breakdown */}
             <div className="space-y-1 mb-4 text-sm">
               <div className="flex justify-between text-gray-600 dark:text-gray-400">
-                <span>Taxable (A-{(VAT_RATE * 100).toFixed(0)}%):</span>
+                <span>Taxable (A-{vatPercent}%):</span>
                 <span>
                   {currencySymbol} {formatNumber(taxableA)}
                 </span>
               </div>
               <div className="flex justify-between text-gray-600 dark:text-gray-400">
-                <span>VAT ({(VAT_RATE * 100).toFixed(0)}%):</span>
+                <span>VAT ({vatPercent}%):</span>
                 <span>
                   {currencySymbol} {formatNumber(vatA)}
                 </span>
@@ -1533,7 +1615,7 @@ export default function PointOfSale() {
               <div className="vat-summary text-xs space-y-1 mb-3">
                 <div className="font-bold border-b pb-1">VAT SUMMARY</div>
                 <div className="flex justify-between">
-                  <span>A-16.00%:</span>
+                  <span>A-{vatPercent}%:</span>
                   <span>
                     Taxable:{" "}
                     {formatNumber(
