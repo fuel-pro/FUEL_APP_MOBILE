@@ -151,7 +151,11 @@ export interface OffloadingRecord {
   time: string;
   truckReg: string;
   driverName: string;
-  fuelType: "PMS" | "AGO";
+  // Widened from "PMS" | "AGO" to string so the offloading form can capture
+  // ANY station fuel type (kerosene/IK, LPG, V-Power, premium diesel, CNG…).
+  // The previous 2-value union silently dropped/blocked every non-PMS/AGO fuel
+  // type and made the totals (which only counted PMS + AGO) undercount stock.
+  fuelType: string;
   quantity: number;
   rate: number;
   totalAmount: number;
