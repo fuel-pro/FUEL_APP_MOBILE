@@ -429,15 +429,76 @@ export async function getAutoReorders(): Promise<any[]> {
 export async function fulfillReorder(
   reorderId: string,
   receivedQty: number,
-): Promise<void> {
+): Promise<{ success: boolean; error?: string }> {
   const reorders =
     (await cloudStorageService.get<any[]>("auto_reorders")) || [];
   const idx = reorders.findIndex((r: any) => r.id === reorderId);
-  if (idx < 0) return;
+  if (idx < 0) return { success: false, error: "Reorder not found" };
+  const reorder = reorders[idx];
+
+  // 1) Restock the product so the reorder actually changes inventory.
+  // Previously this only flipped the reorder status to "fulfilled" — no
+  // stock movement, no inventory_transaction, so the product stayed below
+  // the reorder level and the reorder re-appeared immediately.
+  try {
+    const { data: product, error: pErr } = await supabase
+      .from("products")
+      .select("stock_quantity, cost_price")
+      .eq("id", reorder.productId)
+      .eq("station_id", reorder.stationId)
+      .single();
+    if (pErr || !product) {
+      return {
+        success: false,
+        error: pErr?.message || "Product not found for reorder",
+      };
+    }
+    const newQty = (product.stock_quantity || 0) + receivedQty;
+    const { error: upErr } = await supabase
+      .from("products")
+      .update({ stock_quantity: newQty })
+      .eq("id", reorder.productId);
+    if (upErr) {
+      return { success: false, error: upErr.message };
+    }
+    // 2) Record an inventory_transaction (restock) for the audit trail.
+    const { data: userData } = await supabase.auth.getUser();
+    const ownerId = userData.user?.id;
+    await supabase.from("inventory_transactions").insert({
+      station_id: reorder.stationId,
+      product_id: reorder.productId,
+      transaction_type: "restock",
+      quantity_change: receivedQty,
+      previous_quantity: product.stock_quantity || 0,
+      new_quantity: newQty,
+      unit_cost: product.cost_price || 0,
+      reference_type: "reorder",
+      reference_id: reorderId,
+      notes: `Auto-reorder fulfilled (${reorderId})`,
+      owner_id: ownerId,
+    });
+    // 3) Emit a stock event so listeners (dashboard, reorder check) refresh.
+    emit({
+      type: "stock:adjusted",
+      productId: reorder.productId,
+      stationId: reorder.stationId,
+      newQty,
+      reason: `Reorder fulfilled (${receivedQty} units)`,
+    } as any);
+  } catch (err: any) {
+    console.warn("[automation] fulfillReorder restock failed:", err);
+    return {
+      success: false,
+      error: err?.message || "Failed to restock product",
+    };
+  }
+
+  // 4) Mark fulfilled.
   reorders[idx].status = "fulfilled";
   reorders[idx].receivedQty = receivedQty;
   reorders[idx].fulfilledAt = Date.now();
   await cloudStorageService.set("auto_reorders", reorders);
+  return { success: true };
 }
 
 // ─── Helper: emit a domain event from any component ──────────────────────
