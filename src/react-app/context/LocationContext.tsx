@@ -21,6 +21,7 @@ import {
   getCountryFromLocation,
   getCountryByCurrency,
 } from "@/react-app/lib/world-country-utils";
+import { getDetectedCurrency } from "@/react-app/lib/currency";
 
 /** Get the first available country profile as universal fallback */
 function getUniversalFallback(): CountryProfile {
@@ -494,9 +495,22 @@ export function LocationProvider({
         return getCountryById(cc) || getUniversalFallback();
       }
     }
+    // Derive the country from the globally-detected currency BEFORE consulting
+    // the browser-local GPS cache. getDetectedCurrency inspects station data,
+    // location localStorage, and timezone — all more reliable than the
+    // stationCountries cache, which frequently defaults to "US" (the CDN edge
+    // country). E.g. Africa/Nairobi timezone → KES → Kenya, even when the
+    // station record has empty location/currency/country fields.
+    const detectedCurrency = getDetectedCurrency();
+    if (detectedCurrency && detectedCurrency !== "USD") {
+      const cc = getCountryByCurrency(detectedCurrency);
+      if (cc) {
+        return getCountryById(cc) || getUniversalFallback();
+      }
+    }
     // Fall back to the browser-local GPS-detected country code (stored in
     // localStorage). This is a browser-local cache and may be stale or
-    // resolve to the CDN edge country, so it's BELOW the station's own data.
+    // resolve to the CDN edge country, so it's a low-priority fallback.
     if (currentLocation?.countryCode) {
       return (
         getCountryById(currentLocation.countryCode) || getUniversalFallback()
