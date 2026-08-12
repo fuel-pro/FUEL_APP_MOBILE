@@ -22,7 +22,7 @@ import {
   navigateToTab,
   type FuelPricePrefill,
 } from "@/react-app/lib/mpesa-integration-service";
-import { getVATRate } from "@/react-app/config/pricing";
+import { getVATRate, getFuelLabel } from "@/react-app/config/pricing";
 import { formatNumber } from "@/react-app/utils/formatUtils";
 import ExportDropdown from "@/react-app/components/ExportDropdown";
 import jsPDF from "jspdf";
@@ -42,6 +42,19 @@ type ReportPeriod = "daily" | "weekly" | "monthly" | "yearly";
 export default function ReportsCenter() {
   const { state } = useFuel();
   const currencySymbol = getCurrencySymbol(state.companyData?.currency);
+
+  // Country-aware VAT rate + label (replaces hardcoded "16%")
+  const VAT_RATE = getVATRate(getDetectedCountryCode());
+  const vatPercentLabel = `${(VAT_RATE * 100).toFixed(0)}%`;
+  const isKenya = isKenyaStation();
+
+  // Country-aware locale for date formatting (replaces hardcoded "en-KE")
+  const countryCode = getDetectedCountryCode();
+  const reportLocale = countryCode
+    ? new Intl.Locale(countryCode).toString()
+    : undefined;
+  const formatGeneratedDate = () =>
+    new Date().toLocaleString(reportLocale || undefined);
   const [activeReport, setActiveReport] = useState<ReportType>("overall");
   const [reportPeriod, setReportPeriod] = useState<ReportPeriod>("daily");
   const [startDate, setStartDate] = useState(
@@ -104,9 +117,6 @@ export default function ReportsCenter() {
   };
 
   // Country-aware VAT rate
-  const VAT_RATE = getVATRate(getDetectedCountryCode());
-  const isKenya = isKenyaStation();
-
   // Calculate VAT from inclusive amount
   const calculateVAT = (inclusiveAmount: number) => {
     const vatAmount = inclusiveAmount - inclusiveAmount / (1 + VAT_RATE);
@@ -176,7 +186,7 @@ export default function ReportsCenter() {
               items.push({
                 receiptNo: `${state.companyData.etrInvoicePrefix || "ETR"}${String(receiptNo++).padStart(6, "0")}`,
                 time: sale.date?.split("T")[1]?.substring(0, 5) || "00:00",
-                description: `PMS - Pump ${pump.id}`,
+                description: `${getFuelLabel("PMS")} - Pump ${pump.id}`,
                 quantity: pump.salesL || 0,
                 unit: "L",
                 unitPrice: pump.salesL > 0 ? pump.salesKsh / pump.salesL : 0,
@@ -195,7 +205,7 @@ export default function ReportsCenter() {
               items.push({
                 receiptNo: `${state.companyData.etrInvoicePrefix || "ETR"}${String(receiptNo++).padStart(6, "0")}`,
                 time: sale.date?.split("T")[1]?.substring(0, 5) || "00:00",
-                description: `AGO - Pump ${pump.id}`,
+                description: `${getFuelLabel("AGO")} - Pump ${pump.id}`,
                 quantity: pump.salesL || 0,
                 unit: "L",
                 unitPrice: pump.salesL > 0 ? pump.salesKsh / pump.salesL : 0,
@@ -214,7 +224,7 @@ export default function ReportsCenter() {
               items.push({
                 receiptNo: `${state.companyData.etrInvoicePrefix || "ETR"}${String(receiptNo++).padStart(6, "0")}`,
                 time: "12:00",
-                description: "PMS - POS Transaction",
+                description: `${getFuelLabel("PMS")} - POS Transaction`,
                 quantity: sale.posSales.pmsLitres || 0,
                 unit: "L",
                 unitPrice:
@@ -232,7 +242,7 @@ export default function ReportsCenter() {
               items.push({
                 receiptNo: `${state.companyData.etrInvoicePrefix || "ETR"}${String(receiptNo++).padStart(6, "0")}`,
                 time: "12:00",
-                description: "AGO - POS Transaction",
+                description: `${getFuelLabel("AGO")} - POS Transaction`,
                 quantity: sale.posSales.agoLitres || 0,
                 unit: "L",
                 unitPrice:
@@ -525,7 +535,7 @@ export default function ReportsCenter() {
     const doc = new jsPDF();
     const reportTitle = getReportTitle();
     const pageWidth = doc.internal.pageSize.getWidth();
-    const currency = getCurrencySymbol(state.companyData.currency);
+    const currency = getCurrencySymbol(state.companyData?.currency);
 
     // Professional Header with KRA Compliance
     const addProfessionalHeader = (y: number) => {
@@ -533,7 +543,7 @@ export default function ReportsCenter() {
       if (state.companyData.logo) {
         try {
           doc.addImage(state.companyData.logo, "PNG", 15, 10, 35, 15);
-        } catch (e) {
+        } catch {
           /* Skip if logo fails */
         }
       }
@@ -611,12 +621,9 @@ export default function ReportsCenter() {
       });
 
       y += 4;
-      doc.text(
-        `Generated: ${new Date().toLocaleString("en-KE")}`,
-        pageWidth / 2,
-        y,
-        { align: "center" },
-      );
+      doc.text(`Generated: ${formatGeneratedDate()}`, pageWidth / 2, y, {
+        align: "center",
+      });
 
       return y + 10;
     };
@@ -724,7 +731,7 @@ export default function ReportsCenter() {
       doc.setFontSize(11);
       doc.setFont("helvetica", "bold");
       doc.setTextColor(26, 58, 95);
-      doc.text("VAT RETURN SUMMARY (16%)", 15, y);
+      doc.text("VAT RETURN SUMMARY (" + vatPercentLabel + ")", 15, y);
       y += 8;
 
       autoTable(doc, {
@@ -875,7 +882,7 @@ export default function ReportsCenter() {
             currency + " " + formatNumber(data.summary.totalGross),
           ],
           [
-            "Total Output VAT (16%)",
+            "Total Output VAT (" + vatPercentLabel + ")",
             currency + " " + formatNumber(data.summary.totalVAT),
           ],
           ["Net Sales", currency + " " + formatNumber(data.summary.totalNet)],
@@ -997,7 +1004,7 @@ export default function ReportsCenter() {
           ]
         : [`VAT Reg: ${state.companyData.vatRegNo || "N/A"}`],
       [`Period: ${startDate} to ${endDate}`],
-      [`Generated: ${new Date().toLocaleString("en-KE")}`],
+      [`Generated: ${formatGeneratedDate()}`],
       [],
     ];
 
@@ -1029,7 +1036,7 @@ export default function ReportsCenter() {
     } else if (activeReport === "vat-return") {
       const data = calculateVATReturn();
       ws_data.push(
-        ["VAT RETURN SUMMARY (16%)", ""],
+        ["VAT RETURN SUMMARY (" + vatPercentLabel + ")", ""],
         [],
         ["Category", "Gross", "Net", "VAT"],
         [
@@ -1091,7 +1098,7 @@ export default function ReportsCenter() {
         ["Total Transactions", data.summary.totalTransactions],
         ["Total Litres Sold", data.summary.totalLitres],
         ["Gross Sales", data.summary.totalGross],
-        ["Output VAT (16%)", data.summary.totalVAT],
+        ["Output VAT (" + vatPercentLabel + ")", data.summary.totalVAT],
         ["Net Sales", data.summary.totalNet],
         ["Input VAT", data.summary.inputVAT],
         ["Net VAT Payable", data.summary.netVATPayable],
@@ -1144,13 +1151,13 @@ export default function ReportsCenter() {
 
   const exportToTXT = () => {
     const reportTitle = getReportTitle();
-    const currency = getCurrencySymbol(state.companyData.currency);
+    const currency = getCurrencySymbol(state.companyData?.currency);
     let txt = `${"=".repeat(60)}\n`;
     txt += `${state.companyData.name}\n`;
     txt += `${"=".repeat(60)}\n\n`;
     txt += `${reportTitle}\n`;
     txt += `Period: ${startDate} to ${endDate}\n`;
-    txt += `Generated: ${new Date().toLocaleString("en-KE")}\n\n`;
+    txt += `Generated: ${formatGeneratedDate()}\n\n`;
     if (isKenya) {
       txt += `KRA PIN: ${state.companyData.kraPin || "N/A"}\n`;
     }
@@ -1177,7 +1184,7 @@ export default function ReportsCenter() {
       txt += `${"=".repeat(40)}\n`;
     } else if (activeReport === "vat-return") {
       const data = calculateVATReturn();
-      txt += `VAT RETURN SUMMARY (16%)\n\n`;
+      txt += `VAT RETURN SUMMARY (${vatPercentLabel})\n\n`;
       txt += `OUTPUT VAT (Sales):\n`;
       txt += `  Gross:  ${currency} ${formatNumber(data.outputVAT.inclusiveAmount)}\n`;
       txt += `  Net:    ${currency} ${formatNumber(data.outputVAT.netAmount)}\n`;
@@ -1194,7 +1201,7 @@ export default function ReportsCenter() {
       txt += `Total Transactions: ${data.summary.totalTransactions}\n`;
       txt += `Total Litres Sold:  ${formatNumber(data.summary.totalLitres, 2)} L\n`;
       txt += `Gross Sales:        ${currency} ${formatNumber(data.summary.totalGross)}\n`;
-      txt += `Output VAT (16%):   ${currency} ${formatNumber(data.summary.totalVAT)}\n`;
+      txt += `Output VAT (${vatPercentLabel}):   ${currency} ${formatNumber(data.summary.totalVAT)}\n`;
       txt += `Net Sales:          ${currency} ${formatNumber(data.summary.totalNet)}\n`;
       txt += `Input VAT:          ${currency} ${formatNumber(data.summary.inputVAT)}\n\n`;
       txt += `${"=".repeat(40)}\n`;
@@ -1219,7 +1226,7 @@ export default function ReportsCenter() {
     txt: exportToTXT,
     whatsapp: () => {
       const reportTitle = getReportTitle();
-      const currency = getCurrencySymbol(state.companyData.currency);
+      const currency = getCurrencySymbol(state.companyData?.currency);
       let msg = `*${state.companyData.name}*\n`;
       if (isKenya) {
         msg += `KRA PIN: ${state.companyData.kraPin || "N/A"}\n`;
@@ -1246,7 +1253,7 @@ export default function ReportsCenter() {
     },
     email: () => {
       const reportTitle = getReportTitle();
-      const currency = getCurrencySymbol(state.companyData.currency);
+      const currency = getCurrencySymbol(state.companyData?.currency);
       const subject = `${reportTitle} - ${state.companyData.name}`;
       let body = `${state.companyData.name}\n`;
       if (isKenya) {
@@ -1270,6 +1277,21 @@ export default function ReportsCenter() {
 
   const renderExpensesReport = () => {
     const data = calculateExpensesReport();
+
+    if (data.length === 0) {
+      return (
+        <div className="text-center py-12 text-gray-500">
+          <TrendingDown size={48} className="mx-auto mb-4 opacity-50" />
+          <p className="font-medium">
+            No expense records found for the selected period.
+          </p>
+          <p className="text-sm mt-1">
+            Record expenses via Sales Tracking or the Expenses tab, then return
+            here to view the report.
+          </p>
+        </div>
+      );
+    }
 
     return (
       <div className="space-y-6">
@@ -1320,6 +1342,21 @@ export default function ReportsCenter() {
 
   const renderProfitLossReport = () => {
     const data = calculateProfitLossReport();
+
+    if (data.length === 0) {
+      return (
+        <div className="text-center py-12 text-gray-500">
+          <TrendingUp size={48} className="mx-auto mb-4 opacity-50" />
+          <p className="font-medium">
+            No profit &amp; loss data for the selected period.
+          </p>
+          <p className="text-sm mt-1">
+            Record sales and expenses, then return here to view your
+            profitability.
+          </p>
+        </div>
+      );
+    }
 
     return (
       <div className="space-y-6">
@@ -1386,6 +1423,25 @@ export default function ReportsCenter() {
 
   const renderOverallReport = () => {
     const data = calculateOverallReport();
+    const hasData =
+      data.transactionCounts.sales > 0 ||
+      data.transactionCounts.deliveries > 0 ||
+      data.transactionCounts.offloading > 0;
+
+    if (!hasData) {
+      return (
+        <div className="text-center py-12 text-gray-500">
+          <BarChart3 size={48} className="mx-auto mb-4 opacity-50" />
+          <p className="font-medium">
+            No financial activity for the selected period.
+          </p>
+          <p className="text-sm mt-1">
+            Record sales, deliveries, or fuel purchases, then return here to
+            view your overall financial report.
+          </p>
+        </div>
+      );
+    }
 
     return (
       <div className="space-y-6">
@@ -1615,7 +1671,9 @@ export default function ReportsCenter() {
                 </span>
               </div>
               <div className="flex justify-between items-center border-t pt-2 bg-blue-50 dark:bg-blue-900/30 -mx-2 px-2 py-2 rounded">
-                <span className="font-semibold">VAT Collected (16%)</span>
+                <span className="font-semibold">
+                  VAT Collected ({vatPercentLabel})
+                </span>
                 <span className="font-bold text-blue-600 text-lg">
                   {currencySymbol} {formatNumber(data.outputVAT.vatAmount)}
                 </span>
@@ -1643,7 +1701,9 @@ export default function ReportsCenter() {
                 </span>
               </div>
               <div className="flex justify-between items-center border-t pt-2 bg-orange-50 dark:bg-orange-900/30 -mx-2 px-2 py-2 rounded">
-                <span className="font-semibold">VAT Paid (16%)</span>
+                <span className="font-semibold">
+                  VAT Paid ({vatPercentLabel})
+                </span>
                 <span className="font-bold text-orange-600 text-lg">
                   {currencySymbol} {formatNumber(data.inputVAT.vatAmount)}
                 </span>
@@ -1762,7 +1822,9 @@ export default function ReportsCenter() {
                         <th className="px-3 py-2 text-right">Qty (L)</th>
                         <th className="px-3 py-2 text-right">Unit Price</th>
                         <th className="px-3 py-2 text-right">Gross</th>
-                        <th className="px-3 py-2 text-right">VAT (16%)</th>
+                        <th className="px-3 py-2 text-right">
+                          VAT ({vatPercentLabel})
+                        </th>
                         <th className="px-3 py-2 text-right">Net</th>
                       </tr>
                     </thead>
@@ -1938,13 +2000,13 @@ export default function ReportsCenter() {
           </h5>
           <div className="space-y-3">
             <div className="flex justify-between items-center py-2">
-              <span>Output VAT (Sales @ 16%)</span>
+              <span>Output VAT (Sales @ {vatPercentLabel})</span>
               <span className="font-medium text-blue-600">
                 {currencySymbol} {formatNumber(data.summary.totalVAT)}
               </span>
             </div>
             <div className="flex justify-between items-center py-2">
-              <span>Less: Input VAT (Purchases @ 16%)</span>
+              <span>Less: Input VAT (Purchases @ {vatPercentLabel})</span>
               <span className="font-medium text-orange-600">
                 ({currencySymbol} {formatNumber(data.summary.inputVAT)})
               </span>
@@ -2019,10 +2081,16 @@ export default function ReportsCenter() {
       {/* Header */}
       <div className="card">
         <div className="flex justify-between items-center mb-6 pb-4 border-b border-gray-200 dark:border-gray-700">
-          <h2 className="text-2xl font-bold text-blue-900 dark:text-blue-200 flex items-center gap-2">
-            <BarChart3 size={24} />
-            Reports Center
-          </h2>
+          <div className="flex items-center gap-3">
+            <h2 className="text-2xl font-bold text-blue-900 dark:text-blue-200 flex items-center gap-2">
+              <BarChart3 size={24} />
+              Reports Center
+            </h2>
+            <span className="inline-flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+              Synced
+            </span>
+          </div>
           <ExportDropdown onExport={exportHandlers} title="Export Report" />
         </div>
 
