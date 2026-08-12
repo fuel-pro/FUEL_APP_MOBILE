@@ -91,8 +91,13 @@ export const DEFAULT_MPESA_CONFIG: MpesaIntegrationConfig = {
   initiatorName: "",
   initiatorPassword: "",
   shortcode: "",
-  accountReference: "FuelPro",
-  environment: "production",
+  // accountReference is intentionally empty — it is populated per-station
+  // (e.g. the station code/name) at save time. A hardcoded "FuelPro" default
+  // would leak across all stations and break account reconciliation.
+  accountReference: "",
+  // Default to sandbox so a freshly-configured integration cannot accidentally
+  // hit the production Daraja endpoint before the user has verified it works.
+  environment: "sandbox",
   enabled: false,
 };
 
