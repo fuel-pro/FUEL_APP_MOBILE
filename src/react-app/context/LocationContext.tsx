@@ -473,14 +473,11 @@ export function LocationProvider({
     if (stationCountry) {
       return getCountryById(stationCountry) || getUniversalFallback();
     }
-    if (currentLocation?.countryCode) {
-      return (
-        getCountryById(currentLocation.countryCode) || getUniversalFallback()
-      );
-    }
-    // Derive the country from the station's configured location string before
-    // falling back to browser/IP detection, since the latter frequently
-    // resolves to the CDN edge country rather than the user's real country.
+    // Derive the country from the station's configured location string. The
+    // station's own data (location, currency) is authoritative — it was set
+    // by the user and synced via cloud — so it takes precedence over the
+    // browser-local GPS cache, which frequently resolves to the CDN edge
+    // country (e.g. US) rather than the user's real country.
     if (stationLocation) {
       const derived = getCountryFromLocation(stationLocation)?.code;
       if (derived) {
@@ -496,6 +493,14 @@ export function LocationProvider({
       if (cc) {
         return getCountryById(cc) || getUniversalFallback();
       }
+    }
+    // Fall back to the browser-local GPS-detected country code (stored in
+    // localStorage). This is a browser-local cache and may be stale or
+    // resolve to the CDN edge country, so it's BELOW the station's own data.
+    if (currentLocation?.countryCode) {
+      return (
+        getCountryById(currentLocation.countryCode) || getUniversalFallback()
+      );
     }
     // Auto-detect from browser timezone or resolved country
     const resolved = resolveUserCountry();
