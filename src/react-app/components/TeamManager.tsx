@@ -67,6 +67,15 @@ const ROLE_ICONS: Record<UserRole, any> = {
   auditor: Eye,
 };
 
+// Safe accessors with fallback so an unknown/custom role never crashes the UI.
+const getRoleIcon = (role: string): any => ROLE_ICONS[role as UserRole] || User;
+const getRoleLabel = (role: string) =>
+  ROLE_LABELS[role as UserRole] || {
+    label: role.charAt(0).toUpperCase() + role.slice(1),
+    color: "bg-gray-100 text-gray-700",
+    desc: "",
+  };
+
 function makeInviteLink(inv: any, station: any): string {
   const payload = JSON.stringify({
     id: inv.id,
@@ -111,7 +120,10 @@ export default function TeamManager() {
   const [maxUses, setMaxUses] = useState("1");
   const [copiedId, setCopiedId] = useState("");
   const [expandedMember, setExpandedMember] = useState<string | null>(null);
-  const [extendDays, setExtendDays] = useState("30");
+  // Per-member extend-days state so editing one member doesn't change another's.
+  const [extendDaysByMember, setExtendDaysByMember] = useState<
+    Record<string, string>
+  >({});
   const [showTerminateConfirm, setShowTerminateConfirm] = useState(false);
   const [showFeatureGrant, setShowFeatureGrant] = useState(false);
   // Inner sub-tab: "Team" (this component) vs "Shifts" (the formerly-standalone
@@ -323,7 +335,7 @@ export default function TeamManager() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${ROLE_LABELS[role].color}`}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${getRoleLabel(role).color}`}
                 >
                   {role.charAt(0).toUpperCase() + role.slice(1)}
                 </div>
@@ -505,9 +517,9 @@ export default function TeamManager() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <div
-                        className={`px-2 py-1 rounded text-[10px] font-medium ${ROLE_LABELS[inv.role].color}`}
+                        className={`px-2 py-1 rounded text-[10px] font-medium ${getRoleLabel(inv.role).color}`}
                       >
-                        {ROLE_LABELS[inv.role].label}
+                        {getRoleLabel(inv.role).label}
                       </div>
                       <code className="text-xs text-gray-500 font-mono bg-gray-100 dark:bg-gray-900 px-2 py-1 rounded">
                         {inv.id}
@@ -565,11 +577,13 @@ export default function TeamManager() {
                       onClick={() => {
                         const link = getLink(inv);
                         if (navigator.share) {
-                          navigator.share({
-                            title: "FuelPro Invite",
-                            text: `Join ${currentStation?.name || "Fuel Station"} as ${inv.role}`,
-                            url: link,
-                          });
+                          navigator
+                            .share({
+                              title: "FuelPro Invite",
+                              text: `Join ${currentStation?.name || "Fuel Station"} as ${inv.role}`,
+                              url: link,
+                            })
+                            .catch(() => handleCopyLink(inv));
                         } else {
                           handleCopyLink(inv);
                         }
@@ -635,9 +649,9 @@ export default function TeamManager() {
                     (targetRole) => (
                       <div key={targetRole}>
                         <h4
-                          className={`text-xs font-semibold mb-2 px-2 py-1 rounded inline-block ${ROLE_LABELS[targetRole].color.replace("text-", "text-opacity-100 ")}`}
+                          className={`text-xs font-semibold mb-2 px-2 py-1 rounded inline-block ${getRoleLabel(targetRole).color.replace("text-", "text-opacity-100 ")}`}
                         >
-                          {ROLE_LABELS[targetRole].label} Access
+                          {getRoleLabel(targetRole).label} Access
                         </h4>
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
                           {Object.keys(tabIdToLabel).map((tabId) => {
@@ -712,7 +726,8 @@ export default function TeamManager() {
             )}
             {team.map((member) => {
               const isExpanded = expandedMember === member.id;
-              const RoleIcon = ROLE_ICONS[member.role];
+              const RoleIcon = getRoleIcon(member.role);
+              const roleInfo = getRoleLabel(member.role);
               const isExpired =
                 member.expiresAt && new Date(member.expiresAt) < new Date();
               return (
@@ -727,7 +742,7 @@ export default function TeamManager() {
                     }
                   >
                     <div
-                      className={`p-2 rounded-lg ${ROLE_LABELS[member.role].color.split(" ")[0]}`}
+                      className={`p-2 rounded-lg ${roleInfo.color.split(" ")[0]}`}
                     >
                       <RoleIcon size={18} />
                     </div>
@@ -737,9 +752,9 @@ export default function TeamManager() {
                           {member.username}
                         </p>
                         <span
-                          className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${ROLE_LABELS[member.role].color}`}
+                          className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${roleInfo.color}`}
                         >
-                          {ROLE_LABELS[member.role].label}
+                          {roleInfo.label}
                         </span>
                         {isExpired && (
                           <span className="text-[10px] px-2 py-0.5 bg-red-100 text-red-700 rounded-full">
@@ -837,8 +852,13 @@ export default function TeamManager() {
                           <div className="flex items-center gap-2 flex-1">
                             <input
                               type="number"
-                              value={extendDays}
-                              onChange={(e) => setExtendDays(e.target.value)}
+                              value={extendDaysByMember[member.id] ?? "30"}
+                              onChange={(e) =>
+                                setExtendDaysByMember((prev) => ({
+                                  ...prev,
+                                  [member.id]: e.target.value,
+                                }))
+                              }
                               className="w-16 px-2 py-1 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded text-xs dark:text-white"
                               placeholder="Days"
                             />
@@ -846,7 +866,9 @@ export default function TeamManager() {
                               onClick={() =>
                                 extendAccess(
                                   member.id,
-                                  parseInt(extendDays) || 30,
+                                  parseInt(
+                                    extendDaysByMember[member.id] ?? "30",
+                                  ) || 30,
                                 )
                               }
                               className="px-3 py-1.5 bg-blue-50 text-blue-700 text-[11px] font-medium rounded-lg flex items-center gap-1"
@@ -855,7 +877,7 @@ export default function TeamManager() {
                             </button>
                           </div>
                         )}
-                        {canRevoke && !isOwner && (
+                        {canRevoke && member.role !== "owner" && (
                           <button
                             onClick={() => {
                               if (
@@ -889,9 +911,9 @@ export default function TeamManager() {
                 >
                   <CheckCircle2 size={14} className="text-green-400" />
                   <span
-                    className={`px-2 py-0.5 rounded ${ROLE_LABELS[inv.role].color}`}
+                    className={`px-2 py-0.5 rounded ${getRoleLabel(inv.role).color}`}
                   >
-                    {ROLE_LABELS[inv.role].label}
+                    {getRoleLabel(inv.role).label}
                   </span>
                   <span>
                     used by <strong>{inv.usedBy}</strong> on{" "}
@@ -908,9 +930,9 @@ export default function TeamManager() {
                 >
                   <AlertTriangle size={14} className="text-amber-400" />
                   <span
-                    className={`px-2 py-0.5 rounded ${ROLE_LABELS[inv.role].color}`}
+                    className={`px-2 py-0.5 rounded ${getRoleLabel(inv.role).color}`}
                   >
-                    {ROLE_LABELS[inv.role].label}
+                    {getRoleLabel(inv.role).label}
                   </span>
                   <span>
                     expired on{" "}

@@ -4,15 +4,12 @@ import {
   Calendar,
   Clock,
   UserPlus,
-  CheckCircle2,
   AlertCircle,
   Sun,
   Moon,
   Sunrise,
-  Sunset,
   Download,
   Search,
-  ChevronDown,
 } from "lucide-react";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 import { useAuth } from "@/react-app/context/AuthContext";
@@ -223,6 +220,11 @@ export default function ShiftManagement() {
   };
 
   // Load from cloud on mount + real-time cross-device sync
+  const employeesRef = useRef(employees);
+  const shiftsRef = useRef(shifts);
+  employeesRef.current = employees;
+  shiftsRef.current = shifts;
+
   useEffect(() => {
     if (!user) return;
     cloudLoadCompleteRef.current = false;
@@ -243,21 +245,33 @@ export default function ShiftManagement() {
         setShifts(normalizeShifts(cloudShifts));
       if (!cancelled) {
         cloudLoadCompleteRef.current = true;
-        // After the initial load, flush any locally-modified state to cloud
-        // so it survives cross-device sync.
+        // Post-load flush: if local edits were made during the load window,
+        // re-push them to cloud so they survive cross-device sync.
+        if (localModifiedRef.current) {
+          cloudStorageService
+            .set("shift_employees", employeesRef.current, stationId)
+            .catch(() => {});
+          cloudStorageService
+            .set("shift_data", shiftsRef.current, stationId)
+            .catch(() => {});
+        }
       }
     })();
-    // Real-time: when another device updates shifts/employees, update instantly
+    // Real-time: when another device updates shifts/employees, update instantly.
+    // Guard with localModifiedRef so a push arriving mid-edit doesn't overwrite
+    // uncommitted local changes (R2/R4).
     const unsubs = [
       cloudStorageService.subscribe<unknown>(
         "shift_employees",
         stationId,
         (val) => {
-          if (Array.isArray(val)) setEmployees(normalizeEmployees(val));
+          if (Array.isArray(val) && !localModifiedRef.current)
+            setEmployees(normalizeEmployees(val));
         },
       ),
       cloudStorageService.subscribe<unknown>("shift_data", stationId, (val) => {
-        if (Array.isArray(val)) setShifts(normalizeShifts(val));
+        if (Array.isArray(val) && !localModifiedRef.current)
+          setShifts(normalizeShifts(val));
       }),
     ];
     return () => {
@@ -281,7 +295,7 @@ export default function ShiftManagement() {
       SHIFT_TEMPLATES.find((t) => t.type === newShift.shiftType) ||
       SHIFT_TEMPLATES[0];
     const shift: Shift = {
-      id: `shift_${Date.now()}`,
+      id: `shift_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       employeeName: emp.name,
       role: emp.role,
       date: selectedDate,
@@ -291,8 +305,7 @@ export default function ShiftManagement() {
       pumpAssigned: newShift.pumpAssigned || "Any",
       status: "scheduled",
       notes: newShift.notes,
-      employeeId: emp.id,
-    } as any;
+    };
     saveShifts([shift, ...shifts]);
     setShowAddShift(false);
   };
@@ -300,7 +313,7 @@ export default function ShiftManagement() {
   const addEmployee = () => {
     if (!newEmployee.name) return;
     const emp: Employee = {
-      id: `emp_${Date.now()}`,
+      id: `emp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       ...newEmployee,
       status: "active",
       joinDate: new Date().toISOString().split("T")[0],
@@ -308,6 +321,23 @@ export default function ShiftManagement() {
     saveEmployees([emp, ...employees]);
     setNewEmployee({ name: "", phone: "", role: "Attendant", hourlyRate: 200 });
     setShowAddEmployee(false);
+  };
+
+  const deleteShift = (id: string) => {
+    saveShifts((shifts || []).filter((s) => s.id !== id));
+  };
+
+  const deleteEmployee = (id: string) => {
+    if (!confirm("Remove this employee from the roster?")) return;
+    saveEmployees((employees || []).filter((e) => e.id !== id));
+  };
+
+  const markAbsent = (id: string) => {
+    saveShifts(
+      (shifts || []).map((s) =>
+        s.id === id ? { ...s, status: "absent" as const } : s,
+      ),
+    );
   };
 
   const toggleStatus = (id: string) => {
@@ -336,6 +366,30 @@ export default function ShiftManagement() {
       (e.name || "").toLowerCase().includes(searchEmp.toLowerCase()) ||
       (e.role || "").toLowerCase().includes(searchEmp.toLowerCase()),
   );
+
+  const exportCSV = () => {
+    const rows = [
+      ["Name", "Role", "Phone", "Rate/hr", "Status", "Join Date"],
+      ...(employees || []).map((e) => [
+        e.name,
+        e.role,
+        e.phone || "",
+        String(e.hourlyRate),
+        e.status,
+        e.joinDate,
+      ]),
+    ];
+    const csv = rows
+      .map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))
+      .join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `employees_${selectedDate}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="space-y-6">
@@ -399,6 +453,13 @@ export default function ShiftManagement() {
           className="px-4 py-2.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-xl text-sm font-medium flex items-center gap-2 dark:text-white"
         >
           <UserPlus size={16} /> Add Employee
+        </button>
+        <button
+          onClick={exportCSV}
+          className="px-4 py-2.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-xl text-sm font-medium flex items-center gap-2 dark:text-white"
+          title="Export employee roster to CSV"
+        >
+          <Download size={16} /> Export
         </button>
       </div>
 
@@ -470,7 +531,7 @@ export default function ShiftManagement() {
           <h3 className="text-sm font-semibold dark:text-white mb-3">
             Add Employee
           </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
             <input
               placeholder="Full Name *"
               value={newEmployee.name}
@@ -501,6 +562,18 @@ export default function ShiftManagement() {
               <option>Security</option>
               <option>Driver</option>
             </select>
+            <input
+              type="number"
+              placeholder={`Rate/hr (${currencySymbol})`}
+              value={newEmployee.hourlyRate || ""}
+              onChange={(e) =>
+                setNewEmployee({
+                  ...newEmployee,
+                  hourlyRate: parseInt(e.target.value) || 0,
+                })
+              }
+              className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+            />
             <div className="flex gap-2">
               <button
                 onClick={addEmployee}
@@ -560,16 +633,39 @@ export default function ShiftManagement() {
                   Checked out: {safeLocaleTime(shift.checkOut)}
                 </p>
               )}
-              <button
-                onClick={() => toggleStatus(shift.id)}
-                className={`mt-2 w-full py-1.5 rounded-lg text-xs font-medium transition-colors ${shift.status === "scheduled" ? "bg-green-600 hover:bg-green-700 text-white" : shift.status === "active" ? "bg-amber-600 hover:bg-amber-700 text-white" : "bg-gray-200 dark:bg-gray-700 text-gray-500 cursor-default"}`}
-              >
-                {shift.status === "scheduled"
-                  ? "Check In"
-                  : shift.status === "active"
-                    ? "Check Out"
-                    : "Done"}
-              </button>
+              {shift.notes && (
+                <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1 italic">
+                  &quot;{shift.notes}&quot;
+                </p>
+              )}
+              <div className="flex gap-1.5 mt-2">
+                <button
+                  onClick={() => toggleStatus(shift.id)}
+                  className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors ${shift.status === "scheduled" ? "bg-green-600 hover:bg-green-700 text-white" : shift.status === "active" ? "bg-amber-600 hover:bg-amber-700 text-white" : "bg-gray-200 dark:bg-gray-700 text-gray-500 cursor-default"}`}
+                >
+                  {shift.status === "scheduled"
+                    ? "Check In"
+                    : shift.status === "active"
+                      ? "Check Out"
+                      : "Done"}
+                </button>
+                {shift.status === "scheduled" && (
+                  <button
+                    onClick={() => markAbsent(shift.id)}
+                    className="px-2 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-xs font-medium"
+                    title="Mark as absent"
+                  >
+                    <AlertCircle size={12} />
+                  </button>
+                )}
+                <button
+                  onClick={() => deleteShift(shift.id)}
+                  className="px-2 py-1.5 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-500 rounded-lg text-xs font-medium"
+                  title="Delete shift"
+                >
+                  ✕
+                </button>
+              </div>
             </div>
           );
         })}
@@ -609,6 +705,7 @@ export default function ShiftManagement() {
                 <th className="text-left px-3 py-2">Phone</th>
                 <th className="text-right px-3 py-2">Rate/hr</th>
                 <th className="px-3 py-2">Status</th>
+                <th className="px-3 py-2"></th>
               </tr>
             </thead>
             <tbody>
@@ -632,6 +729,15 @@ export default function ShiftManagement() {
                     >
                       {e.status}
                     </span>
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    <button
+                      onClick={() => deleteEmployee(e.id)}
+                      className="text-red-500 hover:text-red-700 text-xs"
+                      title="Remove employee"
+                    >
+                      ✕
+                    </button>
                   </td>
                 </tr>
               ))}
