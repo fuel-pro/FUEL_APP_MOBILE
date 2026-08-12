@@ -193,6 +193,7 @@ export default function CustomerLoyalty() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [customPoints, setCustomPoints] = useState("");
   const [toast, setToast] = useState<string | null>(null);
+  const [synced, setSynced] = useState(false);
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
@@ -209,12 +210,14 @@ export default function CustomerLoyalty() {
   // Load from cloud on mount + real-time cross-device sync
   useEffect(() => {
     if (!user) return;
+    setSynced(false);
     (async () => {
       const cloudData = await cloudStorageService.get<Customer[]>(
         "loyalty_customers",
         stationId,
       );
       if (cloudData) setCustomers(normalizeLoyaltyCustomers(cloudData));
+      setSynced(true);
     })();
     // Real-time: when another device updates customers, update instantly
     const unsubs = [
@@ -223,6 +226,7 @@ export default function CustomerLoyalty() {
         stationId,
         (val) => {
           if (val) setCustomers(normalizeLoyaltyCustomers(val));
+          setSynced(true);
         },
       ),
     ];
@@ -314,9 +318,9 @@ export default function CustomerLoyalty() {
       showToast("Enter a valid points value");
       return;
     }
-    addPoints(id, pts);
     setCustomPoints("");
-    showToast(`${pts > 0 ? "Added" : "Deducted"} ${Math.abs(pts)} points`);
+    // addPoints already shows a toast — no duplicate here
+    addPoints(id, pts);
   };
 
   const exportCustomersCSV = () => {
@@ -360,7 +364,11 @@ export default function CustomerLoyalty() {
     a.download = `loyalty_customers_${new Date().toISOString().split("T")[0]}.csv`;
     a.click();
     URL.revokeObjectURL(url);
-    showToast(`Exported ${filtered.length} customers to CSV`);
+    showToast(
+      filtered.length === customers.length
+        ? `Exported ${filtered.length} customers to CSV`
+        : `Exported ${filtered.length} of ${customers.length} customers (filtered)`,
+    );
   };
 
   const addPoints = (id: string, points: number) => {
@@ -414,7 +422,13 @@ export default function CustomerLoyalty() {
               Customer Loyalty
             </h2>
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              Manage customers, points & rewards
+              Manage customers, points &amp; rewards
+              {synced && (
+                <span className="ml-2 inline-flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                  Synced
+                </span>
+              )}
             </p>
           </div>
         </div>
@@ -599,12 +613,26 @@ export default function CustomerLoyalty() {
             <div className="grid grid-cols-2 gap-3 text-sm mb-3">
               <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
                 <Phone size={14} />
-                {selectedCustomer.phone || ""}
+                {selectedCustomer.phone ? (
+                  <a
+                    href={`tel:${selectedCustomer.phone}`}
+                    className="hover:text-amber-600 dark:hover:text-amber-400 hover:underline"
+                  >
+                    {selectedCustomer.phone}
+                  </a>
+                ) : (
+                  ""
+                )}
               </div>
               {selectedCustomer.email && (
                 <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
                   <Mail size={14} />
-                  {selectedCustomer.email}
+                  <a
+                    href={`mailto:${selectedCustomer.email}`}
+                    className="hover:text-amber-600 dark:hover:text-amber-400 hover:underline break-all"
+                  >
+                    {selectedCustomer.email}
+                  </a>
                 </div>
               )}
               {selectedCustomer.vehicleReg && (
@@ -755,96 +783,125 @@ export default function CustomerLoyalty() {
 
       {/* Customers Table */}
       <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-gray-50 dark:bg-gray-700/50 border-b border-gray-200 dark:border-gray-700">
-                <th className="text-left px-4 py-3">Customer</th>
-                <th className="text-left px-4 py-3">Contact</th>
-                <th className="text-right px-4 py-3">Points</th>
-                <th className="text-right px-4 py-3">Spent</th>
-                <th className="text-center px-4 py-3">Tier</th>
-                <th className="text-right px-4 py-3">Visits</th>
-                <th className="text-center px-4 py-3">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(filtered || []).map((c) => (
-                <tr
-                  key={c.id}
-                  onClick={() => setSelectedCustomer(c)}
-                  className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/30 cursor-pointer transition-colors"
-                >
-                  <td className="px-4 py-3">
-                    <p className="font-medium dark:text-white">
-                      {c.name || ""}
-                    </p>
-                    <p className="text-[11px] text-gray-500">
-                      {c.vehicleReg || ""} {c.preferredFuel || ""}
-                    </p>
-                  </td>
-                  <td className="px-4 py-3 text-gray-600 dark:text-gray-400">
-                    {c.phone || ""}
-                  </td>
-                  <td className="px-4 py-3 text-right font-semibold text-amber-600 dark:text-amber-400">
-                    {formatNumber(c.loyaltyPoints || 0)}
-                  </td>
-                  <td className="px-4 py-3 text-right dark:text-white">
-                    {currencySymbol}
-                    {formatNumber(c.totalSpent || 0)}
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <span
-                      className={`text-[10px] px-2 py-0.5 rounded-full border ${tierColor(
-                        c.tier || "Bronze",
-                      )}`}
-                    >
-                      {c.tier || "Bronze"}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-right dark:text-white">
-                    {c.visits || 0}
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <div className="flex items-center justify-center gap-1">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedCustomer(c);
-                          setShowRewards(true);
-                        }}
-                        className="p-1.5 bg-amber-50 hover:bg-amber-100 dark:bg-amber-900/20 rounded-lg text-amber-600"
-                        title="Rewards"
-                      >
-                        <Gift size={14} />
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setEditingCustomer(c);
-                        }}
-                        className="p-1.5 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/20 rounded-lg text-blue-600"
-                        title="Edit"
-                      >
-                        <Edit2 size={14} />
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setDeleteId(c.id);
-                        }}
-                        className="p-1.5 bg-red-50 hover:bg-red-100 dark:bg-red-900/20 rounded-lg text-red-600"
-                        title="Delete"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  </td>
+        {filtered.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
+            <div className="w-16 h-16 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center mb-4">
+              <Users size={28} className="text-amber-500 dark:text-amber-400" />
+            </div>
+            <p className="text-sm font-semibold text-gray-700 dark:text-gray-200">
+              {customers.length === 0
+                ? "No customers yet"
+                : "No matching customers"}
+            </p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 mb-4">
+              {customers.length === 0
+                ? "Add your first customer to start tracking loyalty points and rewards."
+                : "Try adjusting your search terms."}
+            </p>
+            {customers.length === 0 && (
+              <button
+                onClick={() => setShowAdd(true)}
+                className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-sm font-semibold flex items-center gap-2 transition-colors"
+              >
+                <Plus size={16} /> Add Customer
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-50 dark:bg-gray-700/50 border-b border-gray-200 dark:border-gray-700">
+                  <th className="text-left px-4 py-3">Customer</th>
+                  <th className="text-left px-4 py-3">Contact</th>
+                  <th className="text-right px-4 py-3">Points</th>
+                  <th className="text-right px-4 py-3">Spent</th>
+                  <th className="text-center px-4 py-3">Tier</th>
+                  <th className="text-right px-4 py-3">Visits</th>
+                  <th className="text-center px-4 py-3">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {(filtered || []).map((c) => (
+                  <tr
+                    key={c.id}
+                    onClick={() => setSelectedCustomer(c)}
+                    className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/30 cursor-pointer transition-colors"
+                  >
+                    <td className="px-4 py-3">
+                      <p className="font-medium dark:text-white">
+                        {c.name || ""}
+                      </p>
+                      <p className="text-[11px] text-gray-500">
+                        {c.vehicleReg || ""}{" "}
+                        {c.preferredFuel === "Both"
+                          ? "Both"
+                          : getFuelLabel(c.preferredFuel)}
+                      </p>
+                    </td>
+                    <td className="px-4 py-3 text-gray-600 dark:text-gray-400">
+                      {c.phone || ""}
+                    </td>
+                    <td className="px-4 py-3 text-right font-semibold text-amber-600 dark:text-amber-400">
+                      {formatNumber(c.loyaltyPoints || 0)}
+                    </td>
+                    <td className="px-4 py-3 text-right dark:text-white">
+                      {currencySymbol}
+                      {formatNumber(c.totalSpent || 0)}
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <span
+                        className={`text-[10px] px-2 py-0.5 rounded-full border ${tierColor(
+                          c.tier || "Bronze",
+                        )}`}
+                      >
+                        {c.tier || "Bronze"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-right dark:text-white">
+                      {c.visits || 0}
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <div className="flex items-center justify-center gap-1">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedCustomer(c);
+                            setShowRewards(true);
+                          }}
+                          className="p-1.5 bg-amber-50 hover:bg-amber-100 dark:bg-amber-900/20 rounded-lg text-amber-600"
+                          title="Rewards"
+                        >
+                          <Gift size={14} />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingCustomer(c);
+                          }}
+                          className="p-1.5 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/20 rounded-lg text-blue-600"
+                          title="Edit"
+                        >
+                          <Edit2 size={14} />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDeleteId(c.id);
+                          }}
+                          className="p-1.5 bg-red-50 hover:bg-red-100 dark:bg-red-900/20 rounded-lg text-red-600"
+                          title="Delete"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Edit Customer Modal */}
