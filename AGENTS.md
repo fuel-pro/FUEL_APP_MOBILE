@@ -1685,3 +1685,74 @@ All three table containers changed from overflow-hidden (clips wide tables on ph
 - Cloudflare Pages: LIVE (preview https://62a6ff6e.fuel-app-mobile.pages.dev + main alias https://fuel-app-mobile.pages.dev, bundle index-BXNHje2B.js, 112 precache).
 - Vercel production: BLOCKED by api-deployments-free-per-day (100/100; prebuilt deploy also hit the limit). GitHub integration auto-deploys when quota resets (~24h). /api/* endpoints unchanged.
 - Verified live on Cloudflare: Founder sidebar drawer opens/closes at 375px; no 405 errors; overview grid spans full 351px; no horizontal overflow. Main app (non-founder) passes at all 8 sizes.
+
+## Phase 1 QA — login + currency + full data entry (2026-08-12, commits e26d05c + 3937abe)
+
+### "Invalid login credentials" — RESOLVED
+The QA user `qa.phase1.0811@gmail.com` (uid 23e1a8fd) can now sign in on
+both Vercel production and Cloudflare Pages. The user was created via
+Supabase admin API with a confirmed email + password set via
+`auth.admin.updateUserById`.
+
+### Currency display fix (showing USD instead of KES)
+**Symptom**: the currency selector showed "USD" instead of "KES"
+even for Kenyan stations. Root cause: `getCountryByCurrency()` received
+`undefined` as the currency arg because `companyData.currency` was empty
+(stations created via the wizard don't set it), and the fallback chain
+didn't reach the detected currency.
+
+**Fix** (2 commits):
+- `e26d05c`: Added a symbol-to-code map (`KSh->KES`, `USh->UGX`, `TSh->TZS`,
+  `NGN`, `R->ZAR`, etc.) so `getCountryByCurrency` resolves African
+  currencies correctly. `getStationCountry` now checks `companyData.currency`
+  first, then `companyData.companyCurrency`, then falls through to
+  `currentCountry` (from LocationContext) instead of returning a stale
+  cached value.
+- `3937abe`: Pass `companyCurrency` to `LocationProvider` as a prop so
+  `getStationCountry` is reactive — when the user changes currency, the
+  country flag updates immediately without a page reload.
+
+Verified live: currency selector shows "Kenya KES" on both
+fuel-app-mobile.vercel.app and fuel-app-mobile.pages.dev.
+
+### Full-site data entry — ALL tabs verified
+Navigated every tab as `qa.phase1.0811` and entered data. All saved to
+Supabase `app_kv` with the scoped `__ownerId` suffix (cross-user fix):
+
+| Tab | Data entered | Cloud key | Updated (UTC) |
+|-----|-------------|-----------|---------------|
+| Edit Info | Company profile (Equity Bank, PO Box, KRA) | compact blob | 05:12:54 |
+| Point of Sale | 20L petrol @ KSh 214.03 | pos_transactions | 05:06:16 |
+| Sales Tracking | Shift "QA Shift 1" + pump readings | shift_employees | 04:17:44 |
+| Invoice | Acme Transport Ltd, 500L @ 214.03 | compact blob | 05:12:54 |
+| Credit | John Mwangi, KSh 50k limit, 30 days | credit_accounts | 05:09:25 |
+| Payroll | Sarah Wanjiku, Cashier, KSh 45k | payroll_employees | 05:10:50 |
+| Delivery Tracker | Total Kenya, 10,000L | compact blob | 05:12:54 |
+| Fuel Offloading | Existing data (8,000L PMS) | compact blob | 05:12:54 |
+| Customers | David Otieno, KCE 456Z | compact blob | 05:12:54 |
+| Communication | Mary Achieng, VIP contact | comm_contacts | 04:16:45 |
+| Expenses | (from earlier session) | expenses_data | 04:19:19 |
+| Maintenance | (from earlier session) | maintenance_records | 04:20:25 |
+| Loyalty | (from earlier session) | loyalty_customers | 04:10:23 |
+
+### Founder panel cross-owner verification — CONFIRMED
+Logged in as founder (`founder.qa.fuelpro@gmail.com`, role=founder):
+- **Overview**: 22 Users, 12 Stations, Revenue KSh 0, 3 Secrets, 5 Feature Flags On
+- **All Users**: 22 total — `qa.phase1.0811@gmail.com` appears as "QA Phase1
+  Tester", role=user, Active
+- **All Stations**: 12 total — "Phase1 Test Station" (Kasarani, Nairobi)
+  shown with Owner: QA Phase1 Tester, Active
+
+The founder can see the QA user's station and data cross-owner. The
+scoped `__ownerId` app_kv keys prevent cross-user data leakage while the
+service_role founder queries see all data.
+
+### Deploy state 2026-08-12 (commit 3937abe)
+- GitHub main: 3937abe (pushed, synced with origin/main)
+- Vercel production: dpl_EFJyuoAp4d6YqHnZf6EeYsUJCFY1, READY+PROMOTED,
+  aliased to fuel-app-mobile.vercel.app (bundle index-UQhA7O5H.js,
+  prebuilt deploy). `companyCurrency` verified in live bundle.
+- Cloudflare Pages: LIVE (bundle index-SAwr-1Nt.js, main alias
+  fuel-app-mobile.pages.dev). `companyCurrency` verified in live bundle.
+- Supabase: no schema changes needed (frontend-only fixes). All app_kv
+  data for QA user verified with scoped `__ownerId` row ids.
