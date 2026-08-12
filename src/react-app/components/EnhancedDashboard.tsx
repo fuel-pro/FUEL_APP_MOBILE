@@ -23,7 +23,10 @@ import {
   fetchExpensesReport,
 } from "@/react-app/lib/pos-service";
 import { supabase } from "@/supabase/client";
-import { getCurrencySymbol, getDetectedCurrency } from "@/react-app/lib/currency";
+import {
+  getCurrencySymbol,
+  getDetectedCurrency,
+} from "@/react-app/lib/currency";
 
 // Format currency
 const formatMoney = (amount: number, currency = getDetectedCurrency()) => {

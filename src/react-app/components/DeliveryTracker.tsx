@@ -421,8 +421,10 @@ export default function DeliveryTracker() {
       .map((r) =>
         state.deliveryData.columns
           .map((col) => {
-            if (col.key === "amount") return `${currencySymbol}${formatNumber(r.amount)}`;
-            if (col.key === "debt") return `${currencySymbol}${formatNumber(r.debt)}`;
+            if (col.key === "amount")
+              return `${currencySymbol}${formatNumber(r.amount)}`;
+            if (col.key === "debt")
+              return `${currencySymbol}${formatNumber(r.debt)}`;
             return r[col.key] || "";
           })
           .join(" | "),

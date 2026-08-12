@@ -261,7 +261,10 @@ export default function PayrollSystem() {
     return Array.isArray(cached) ? normalizeEmployees(cached) : [];
   });
   const [settings, setSettings] = useState<PayrollSettings>(() => {
-    const cached = cloudStorageService.getCached<unknown>("payroll_settings", stationId);
+    const cached = cloudStorageService.getCached<unknown>(
+      "payroll_settings",
+      stationId,
+    );
     if (cached && typeof cached === "object" && !Array.isArray(cached)) {
       return { ...defaultSettings, ...(cached as Partial<PayrollSettings>) };
     }

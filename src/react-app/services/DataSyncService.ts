@@ -22,8 +22,7 @@ const KENYA_CITIES = BASE_CITIES;
  */
 function getBaselineExchangeRate(): number {
   const countryId = getDetectedCountryCode();
-  const profile =
-    getCountryById(countryId) || getCountryById("KE");
+  const profile = getCountryById(countryId) || getCountryById("KE");
   const usdPerLocal = profile?.currency?.exchangeRateToUSD;
   if (!usdPerLocal || usdPerLocal <= 0) return 130;
   return 1 / usdPerLocal;

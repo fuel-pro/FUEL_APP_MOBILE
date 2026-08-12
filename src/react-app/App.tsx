@@ -150,13 +150,16 @@ function MainAppLoader() {
     let cancelled = false;
     (async () => {
       try {
-        const { initAutomationEngine } = await import("@/react-app/lib/automation-engine");
+        const { initAutomationEngine } =
+          await import("@/react-app/lib/automation-engine");
         if (!cancelled) await initAutomationEngine(null);
       } catch (err) {
         console.warn("[automation] failed to init:", err);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [user]);
 
   // Add loading timeout - show error after 15 seconds

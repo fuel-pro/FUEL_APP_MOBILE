@@ -18,7 +18,11 @@ import {
   fetchExpenses,
   fetchExpenseCategories,
 } from "@/react-app/lib/pos-service";
-import { getCurrencySymbol, getDetectedCurrency, isKenyaStation } from "@/react-app/lib/currency";
+import {
+  getCurrencySymbol,
+  getDetectedCurrency,
+  isKenyaStation,
+} from "@/react-app/lib/currency";
 
 const formatMoney = (amount: number) =>
   new Intl.NumberFormat("en-KE", {

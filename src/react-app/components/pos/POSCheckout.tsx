@@ -6,7 +6,10 @@ import {
 } from "@/react-app/lib/pos/printer-service";
 import { paymentService } from "@/react-app/lib/pos/payment-service";
 import { silentPrintService } from "@/react-app/lib/silent-print-service";
-import { getCurrencySymbol, getDetectedCurrency } from "@/react-app/lib/currency";
+import {
+  getCurrencySymbol,
+  getDetectedCurrency,
+} from "@/react-app/lib/currency";
 import {
   CreditCard,
   Banknote,
@@ -256,14 +259,18 @@ export default function POSCheckout({
               <span>
                 {item.name} x{item.quantity}
               </span>
-              <span>{currencySymbol} {item.total.toLocaleString()}</span>
+              <span>
+                {currencySymbol} {item.total.toLocaleString()}
+              </span>
             </div>
           ))}
         </div>
         <div className="border-t mt-2 pt-2">
           <div className="flex justify-between font-bold">
             <span>Total</span>
-            <span>{currencySymbol} {sale.total.toLocaleString()}</span>
+            <span>
+              {currencySymbol} {sale.total.toLocaleString()}
+            </span>
           </div>
         </div>
       </div>

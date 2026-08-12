@@ -1305,8 +1305,7 @@ export default function ReportsCenter() {
 
               <div className="text-center">
                 <div className="text-3xl font-bold text-red-600">
-                  {currencySymbol}{" "}
-                  {formatNumber(periodData.totalExpenses)}
+                  {currencySymbol} {formatNumber(periodData.totalExpenses)}
                 </div>
                 <div className="text-sm text-gray-600 dark:text-gray-400">
                   from {periodData.transactionCount} transactions
@@ -1350,8 +1349,7 @@ export default function ReportsCenter() {
                   Revenue
                 </h6>
                 <div className="text-2xl font-bold text-green-600">
-                  {currencySymbol}{" "}
-                  {formatNumber(periodData.totalRevenue)}
+                  {currencySymbol} {formatNumber(periodData.totalRevenue)}
                 </div>
               </div>
 
@@ -1360,8 +1358,7 @@ export default function ReportsCenter() {
                   Expenses
                 </h6>
                 <div className="text-2xl font-bold text-red-600">
-                  {currencySymbol}{" "}
-                  {formatNumber(periodData.totalExpenses)}
+                  {currencySymbol} {formatNumber(periodData.totalExpenses)}
                 </div>
               </div>
 
@@ -1447,24 +1444,21 @@ export default function ReportsCenter() {
               <div className="flex justify-between items-center">
                 <span>Sales Revenue</span>
                 <span className="font-medium">
-                  {currencySymbol}{" "}
-                  {formatNumber(data.totalSalesRevenue)}
+                  {currencySymbol} {formatNumber(data.totalSalesRevenue)}
                 </span>
               </div>
               {data.totalPOSRevenue > 0 && (
                 <div className="flex justify-between items-center text-sm text-gray-500 dark:text-gray-400 pl-4">
                   <span>↳ POS Transactions</span>
                   <span>
-                    {currencySymbol}{" "}
-                    {formatNumber(data.totalPOSRevenue)}
+                    {currencySymbol} {formatNumber(data.totalPOSRevenue)}
                   </span>
                 </div>
               )}
               <div className="flex justify-between items-center">
                 <span>Delivery Revenue</span>
                 <span className="font-medium">
-                  {currencySymbol}{" "}
-                  {formatNumber(data.totalDeliveryRevenue)}
+                  {currencySymbol} {formatNumber(data.totalDeliveryRevenue)}
                 </span>
               </div>
               <div className="flex justify-between items-center border-t pt-2">
@@ -1486,15 +1480,13 @@ export default function ReportsCenter() {
               <div className="flex justify-between items-center">
                 <span>Operating Expenses</span>
                 <span className="font-medium">
-                  {currencySymbol}{" "}
-                  {formatNumber(data.totalExpenses)}
+                  {currencySymbol} {formatNumber(data.totalExpenses)}
                 </span>
               </div>
               <div className="flex justify-between items-center">
                 <span>Fuel Purchase Costs</span>
                 <span className="font-medium">
-                  {currencySymbol}{" "}
-                  {formatNumber(data.totalOffloadingCosts)}
+                  {currencySymbol} {formatNumber(data.totalOffloadingCosts)}
                 </span>
               </div>
               <div className="flex justify-between items-center border-t pt-2">
@@ -1540,8 +1532,7 @@ export default function ReportsCenter() {
             <div className="flex justify-between items-center">
               <span>Till/Mobile Payments</span>
               <span className="font-bold text-blue-600">
-                {currencySymbol}{" "}
-                {formatNumber(data.totalTillPayments)}
+                {currencySymbol} {formatNumber(data.totalTillPayments)}
               </span>
             </div>
             <div className="flex justify-between items-center mt-2">
@@ -1620,15 +1611,13 @@ export default function ReportsCenter() {
               <div className="flex justify-between items-center">
                 <span>Net Sales</span>
                 <span className="font-medium">
-                  {currencySymbol}{" "}
-                  {formatNumber(data.outputVAT.netAmount)}
+                  {currencySymbol} {formatNumber(data.outputVAT.netAmount)}
                 </span>
               </div>
               <div className="flex justify-between items-center border-t pt-2 bg-blue-50 dark:bg-blue-900/30 -mx-2 px-2 py-2 rounded">
                 <span className="font-semibold">VAT Collected (16%)</span>
                 <span className="font-bold text-blue-600 text-lg">
-                  {currencySymbol}{" "}
-                  {formatNumber(data.outputVAT.vatAmount)}
+                  {currencySymbol} {formatNumber(data.outputVAT.vatAmount)}
                 </span>
               </div>
             </div>
@@ -1644,22 +1633,19 @@ export default function ReportsCenter() {
               <div className="flex justify-between items-center">
                 <span>Gross Purchases (VAT Inclusive)</span>
                 <span className="font-medium">
-                  {currencySymbol}{" "}
-                  {formatNumber(data.inputVAT.inclusiveAmount)}
+                  {currencySymbol} {formatNumber(data.inputVAT.inclusiveAmount)}
                 </span>
               </div>
               <div className="flex justify-between items-center">
                 <span>Net Purchases</span>
                 <span className="font-medium">
-                  {currencySymbol}{" "}
-                  {formatNumber(data.inputVAT.netAmount)}
+                  {currencySymbol} {formatNumber(data.inputVAT.netAmount)}
                 </span>
               </div>
               <div className="flex justify-between items-center border-t pt-2 bg-orange-50 dark:bg-orange-900/30 -mx-2 px-2 py-2 rounded">
                 <span className="font-semibold">VAT Paid (16%)</span>
                 <span className="font-bold text-orange-600 text-lg">
-                  {currencySymbol}{" "}
-                  {formatNumber(data.inputVAT.vatAmount)}
+                  {currencySymbol} {formatNumber(data.inputVAT.vatAmount)}
                 </span>
               </div>
             </div>
@@ -1688,8 +1674,7 @@ export default function ReportsCenter() {
             <div
               className={`text-3xl font-bold ${data.netVATPayable >= 0 ? "text-red-600" : "text-green-600"}`}
             >
-              {currencySymbol}{" "}
-              {formatNumber(Math.abs(data.netVATPayable))}
+              {currencySymbol} {formatNumber(Math.abs(data.netVATPayable))}
             </div>
           </div>
         </div>
@@ -1761,8 +1746,7 @@ export default function ReportsCenter() {
                 <div className="text-right">
                   <span className="text-sm text-gray-500">Day Total:</span>
                   <span className="font-bold ml-2">
-                    {currencySymbol}{" "}
-                    {formatNumber(day.totals.grossAmount)}
+                    {currencySymbol} {formatNumber(day.totals.grossAmount)}
                   </span>
                 </div>
               </div>
@@ -1934,8 +1918,7 @@ export default function ReportsCenter() {
               Gross Sales
             </div>
             <div className="text-2xl font-bold text-green-600">
-              {currencySymbol}{" "}
-              {formatNumber(data.summary.totalGross)}
+              {currencySymbol} {formatNumber(data.summary.totalGross)}
             </div>
           </div>
           <div className="bg-orange-50 dark:bg-orange-900/20 p-4 rounded-lg border border-orange-200">
@@ -1957,15 +1940,13 @@ export default function ReportsCenter() {
             <div className="flex justify-between items-center py-2">
               <span>Output VAT (Sales @ 16%)</span>
               <span className="font-medium text-blue-600">
-                {currencySymbol}{" "}
-                {formatNumber(data.summary.totalVAT)}
+                {currencySymbol} {formatNumber(data.summary.totalVAT)}
               </span>
             </div>
             <div className="flex justify-between items-center py-2">
               <span>Less: Input VAT (Purchases @ 16%)</span>
               <span className="font-medium text-orange-600">
-                ({currencySymbol}{" "}
-                {formatNumber(data.summary.inputVAT)})
+                ({currencySymbol} {formatNumber(data.summary.inputVAT)})
               </span>
             </div>
             <div className="flex justify-between items-center py-3 border-t-2 border-gray-200 dark:border-gray-600">
@@ -1973,8 +1954,7 @@ export default function ReportsCenter() {
               <span
                 className={`font-bold text-xl ${data.summary.netVATPayable >= 0 ? "text-red-600" : "text-green-600"}`}
               >
-                {currencySymbol}{" "}
-                {formatNumber(data.summary.netVATPayable)}
+                {currencySymbol} {formatNumber(data.summary.netVATPayable)}
               </span>
             </div>
           </div>
@@ -1987,15 +1967,13 @@ export default function ReportsCenter() {
             <div>
               <div className="text-sm text-gray-500 mb-1">Gross Revenue</div>
               <div className="text-xl font-bold">
-                {currencySymbol}{" "}
-                {formatNumber(data.profitLoss.grossRevenue)}
+                {currencySymbol} {formatNumber(data.profitLoss.grossRevenue)}
               </div>
             </div>
             <div>
               <div className="text-sm text-gray-500 mb-1">Total Costs</div>
               <div className="text-xl font-bold text-red-600">
-                {currencySymbol}{" "}
-                {formatNumber(data.profitLoss.totalCosts)}
+                {currencySymbol} {formatNumber(data.profitLoss.totalCosts)}
               </div>
             </div>
             <div>
@@ -2003,8 +1981,7 @@ export default function ReportsCenter() {
               <div
                 className={`text-xl font-bold ${data.profitLoss.netProfit >= 0 ? "text-green-600" : "text-red-600"}`}
               >
-                {currencySymbol}{" "}
-                {formatNumber(data.profitLoss.netProfit)}
+                {currencySymbol} {formatNumber(data.profitLoss.netProfit)}
               </div>
             </div>
             <div>
@@ -2062,9 +2039,9 @@ export default function ReportsCenter() {
               : []),
           ].map((report) => {
             const Icon = report.icon;
-            const isKRA = isKenya && ["vat-return", "daily-sales", "kra-summary"].includes(
-              report.id,
-            );
+            const isKRA =
+              isKenya &&
+              ["vat-return", "daily-sales", "kra-summary"].includes(report.id);
             return (
               <button
                 key={report.id}

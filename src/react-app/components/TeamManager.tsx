@@ -30,6 +30,7 @@ import {
   DEFAULT_ROLE_TABS,
 } from "@/react-app/context/PermissionContext";
 import { useStations } from "@/react-app/context/StationContext";
+import { useFuel } from "@/react-app/context/FuelContext";
 import SubTabBar from "@/react-app/components/SubTabBar";
 import ShiftManagement from "@/react-app/components/ShiftManagement";
 
@@ -86,6 +87,7 @@ function makeInviteLink(inv: any, station: any): string {
 export default function TeamManager() {
   const { user, bindings, terminateRole } = useAuth();
   const { currentStation } = useStations();
+  const { state } = useFuel();
   const {
     role,
     team,
@@ -160,6 +162,47 @@ export default function TeamManager() {
   const canSetLimits = hasPermission("canSetTimeLimits");
   const canAssign =
     hasPermission("canAssignPumps") || hasPermission("canAssignShifts");
+
+  // Derive the real pump options from the station's configured pumps so pump
+  // assignments reference actual pumps (not the old hardcoded PMS-/AGO-/IK-
+  // list which rarely matched a station's real pumps). Falls back to sensible
+  // defaults only when no pumps are configured yet (pre-setup wizard).
+  const pumpOptions: { id: string; label: string }[] = (() => {
+    const out: { id: string; label: string }[] = [];
+    const addPumps = (
+      pumps: { id: string; name?: string }[] | undefined,
+      fallbackPrefix: string,
+    ) => {
+      if (pumps && pumps.length > 0) {
+        pumps.forEach((p, i) =>
+          out.push({
+            id: p.id || `${fallbackPrefix}-${i + 1}`,
+            label: p.name || `${fallbackPrefix.toUpperCase()} Pump ${i + 1}`,
+          }),
+        );
+      }
+    };
+    addPumps(state.pmsPumps as { id: string; name?: string }[], "pms");
+    addPumps(state.agoPumps as { id: string; name?: string }[], "ago");
+    // Fallback when the station has no pumps configured yet.
+    if (out.length === 0) {
+      return [
+        { id: "pms-1", label: "PMS Pump 1" },
+        { id: "pms-2", label: "PMS Pump 2" },
+        { id: "ago-1", label: "AGO Pump 1" },
+        { id: "ago-2", label: "AGO Pump 2" },
+      ];
+    }
+    return out;
+  })();
+
+  // Shift options — match the ShiftManagement module's templates so a member's
+  // assigned shift can be cross-referenced with the live shift schedule.
+  const shiftOptions = [
+    "Morning (06:00-14:00)",
+    "Afternoon (14:00-22:00)",
+    "Night (22:00-06:00)",
+  ];
 
   const handleCreateInvite = () => {
     const r = inviteRole;
@@ -733,25 +776,32 @@ export default function TeamManager() {
                               <Fuel size={10} /> Assigned Pumps
                             </label>
                             <div className="flex flex-wrap gap-1">
-                              {["PMS-1", "PMS-2", "AGO-1", "AGO-2", "IK-1"].map(
-                                (p) => (
+                              {pumpOptions.length === 0 && (
+                                <span className="text-[10px] text-gray-400">
+                                  No pumps configured for this station.
+                                </span>
+                              )}
+                              {pumpOptions.map((p) => {
+                                const selected = member.assignedPumps.includes(
+                                  p.id,
+                                );
+                                return (
                                   <button
-                                    key={p}
+                                    key={p.id}
                                     onClick={() => {
-                                      const next =
-                                        member.assignedPumps.includes(p)
-                                          ? member.assignedPumps.filter(
-                                              (x: string) => x !== p,
-                                            )
-                                          : [...member.assignedPumps, p];
+                                      const next = selected
+                                        ? member.assignedPumps.filter(
+                                            (x: string) => x !== p.id,
+                                          )
+                                        : [...member.assignedPumps, p.id];
                                       assignPumps(member.id, next);
                                     }}
-                                    className={`text-[10px] px-2 py-1 rounded-full border transition-all ${member.assignedPumps.includes(p) ? "bg-green-100 text-green-700 border-green-300" : "bg-gray-50 text-gray-500 border-gray-200"}`}
+                                    className={`text-[10px] px-2 py-1 rounded-full border transition-all ${selected ? "bg-green-100 text-green-700 border-green-300" : "bg-gray-50 text-gray-500 border-gray-200"}`}
                                   >
-                                    {p}
+                                    {p.label}
                                   </button>
-                                ),
-                              )}
+                                );
+                              })}
                             </div>
                           </div>
                           <div>
@@ -759,11 +809,7 @@ export default function TeamManager() {
                               <Calendar size={10} /> Assigned Shifts
                             </label>
                             <div className="flex flex-wrap gap-1">
-                              {[
-                                "Morning (6AM-2PM)",
-                                "Afternoon (2PM-10PM)",
-                                "Night (10PM-6AM)",
-                              ].map((s) => (
+                              {shiftOptions.map((s) => (
                                 <button
                                   key={s}
                                   onClick={() => {

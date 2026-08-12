@@ -6,7 +6,10 @@ import React, {
   useEffect,
   useRef,
 } from "react";
-import { getDetectedCurrency, getDetectedCountryCode } from "@/react-app/lib/currency";
+import {
+  getDetectedCurrency,
+  getDetectedCountryCode,
+} from "@/react-app/lib/currency";
 import { currencySymbolFor, getVATRate } from "@/react-app/config/pricing";
 import { getRegionalConfig } from "@/react-app/config/regions";
 import { supabase, supabaseUrl, supabaseAnonKey } from "@/supabase/client";
@@ -505,20 +508,24 @@ function stationRowToStation(
     theme: row.theme || "dark",
     logo: row.logo || "",
     description: row.description || "",
-    country: row.country || (() => {
-      try {
-        return getDetectedCountryCode() || "";
-      } catch {
-        return "";
-      }
-    })(),
-    currency: correctedCurrency || (() => {
-      try {
-        return getDetectedCurrency() || "USD";
-      } catch {
-        return "USD";
-      }
-    })(),
+    country:
+      row.country ||
+      (() => {
+        try {
+          return getDetectedCountryCode() || "";
+        } catch {
+          return "";
+        }
+      })(),
+    currency:
+      correctedCurrency ||
+      (() => {
+        try {
+          return getDetectedCurrency() || "USD";
+        } catch {
+          return "USD";
+        }
+      })(),
     currencySymbol:
       correctedSymbol ||
       currencySymbolFor(
@@ -531,14 +538,16 @@ function stationRowToStation(
             }
           })(),
       ),
-    timezone: correctedTimezone || (() => {
-      try {
-        const cc = row.country || getDetectedCountryCode();
-        return getRegionalConfig(cc)?.timeZone || "UTC";
-      } catch {
-        return "UTC";
-      }
-    })(),
+    timezone:
+      correctedTimezone ||
+      (() => {
+        try {
+          const cc = row.country || getDetectedCountryCode();
+          return getRegionalConfig(cc)?.timeZone || "UTC";
+        } catch {
+          return "UTC";
+        }
+      })(),
     createdAt: row.created_at || new Date().toISOString(),
     updatedAt: row.updated_at || new Date().toISOString(),
     data: dataBlob !== undefined ? dataBlob : (cached?.data ?? {}),

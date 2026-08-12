@@ -18,14 +18,42 @@ import { supabase } from "@/supabase/client";
 
 export type DomainEvent =
   | { type: "product:created"; productId: string; stationId: string; data: any }
-  | { type: "product:updated"; productId: string; stationId: string; data: any; prev?: any }
+  | {
+      type: "product:updated";
+      productId: string;
+      stationId: string;
+      data: any;
+      prev?: any;
+    }
   | { type: "product:deleted"; productId: string; stationId: string }
-  | { type: "stock:adjusted"; productId: string; stationId: string; newQty: number; reason: string }
-  | { type: "stock:transfer"; productId: string; fromStationId: string; toStationId: string; qty: number }
+  | {
+      type: "stock:adjusted";
+      productId: string;
+      stationId: string;
+      newQty: number;
+      reason: string;
+    }
+  | {
+      type: "stock:transfer";
+      productId: string;
+      fromStationId: string;
+      toStationId: string;
+      qty: number;
+    }
   | { type: "stock:wastage"; productId: string; stationId: string; qty: number }
   | { type: "sale:completed"; stationId: string; total: number; items: any[] }
-  | { type: "expense:created"; stationId: string; amount: number; category: string }
-  | { type: "price:changed"; stationId: string; fuelType: string; newPrice: number }
+  | {
+      type: "expense:created";
+      stationId: string;
+      amount: number;
+      category: string;
+    }
+  | {
+      type: "price:changed";
+      stationId: string;
+      fuelType: string;
+      newPrice: number;
+    }
   | { type: "shift:opened"; stationId: string; shiftId: string }
   | { type: "shift:closed"; stationId: string; shiftId: string; totals: any }
   | { type: "station:switched"; stationId: string };
@@ -121,12 +149,23 @@ let cachedPrefs: AutomationPreferences | null = null;
 export async function getAutomationPrefs(): Promise<AutomationPreferences> {
   if (cachedPrefs) return cachedPrefs;
   const data = await cloudStorageService.get<AutomationPreferences>(PREFS_KEY);
-  const prefs = data ? { ...DEFAULT_PREFS, ...data, notifications: { ...DEFAULT_PREFS.notifications, ...(data.notifications || {}) } } : DEFAULT_PREFS;
+  const prefs = data
+    ? {
+        ...DEFAULT_PREFS,
+        ...data,
+        notifications: {
+          ...DEFAULT_PREFS.notifications,
+          ...(data.notifications || {}),
+        },
+      }
+    : DEFAULT_PREFS;
   cachedPrefs = prefs;
   return prefs;
 }
 
-export async function saveAutomationPrefs(prefs: AutomationPreferences): Promise<void> {
+export async function saveAutomationPrefs(
+  prefs: AutomationPreferences,
+): Promise<void> {
   cachedPrefs = prefs;
   await cloudStorageService.set(PREFS_KEY, prefs);
   emit({ type: "station:switched", stationId: "" }); // nudge listeners to re-evaluate
@@ -152,9 +191,10 @@ async function logEvent(event: DomainEvent): Promise<void> {
     timestamp: Date.now(),
     eventType: event.type,
     summary: JSON.stringify(event).slice(0, 500),
-    stationId: ("stationId" in event ? event.stationId : undefined),
+    stationId: "stationId" in event ? event.stationId : undefined,
   };
-  const log = (await cloudStorageService.get<AutomationLogEntry[]>(LOG_KEY)) || [];
+  const log =
+    (await cloudStorageService.get<AutomationLogEntry[]>(LOG_KEY)) || [];
   log.unshift(entry);
   if (log.length > MAX_LOG_ENTRIES) log.length = MAX_LOG_ENTRIES;
   await cloudStorageService.set(LOG_KEY, log);
@@ -174,7 +214,9 @@ export async function clearAutomationLog(): Promise<void> {
  * Register the default automation reactions. Called once at app boot.
  * Each reaction checks the user's preferences before acting.
  */
-export async function initAutomationEngine(stationId: string | null): Promise<void> {
+export async function initAutomationEngine(
+  stationId: string | null,
+): Promise<void> {
   const prefs = await getAutomationPrefs();
 
   // ── Reaction 1: When a product is created/updated with stock, auto-record
@@ -183,7 +225,13 @@ export async function initAutomationEngine(stationId: string | null): Promise<vo
     on("product:created", async (event) => {
       const e = event as Extract<DomainEvent, { type: "product:created" }>;
       if (e.data.stock_quantity > 0) {
-        await recordInventoryTxn(e.stationId, e.productId, 0, e.data.stock_quantity, "Initial stock (auto)");
+        await recordInventoryTxn(
+          e.stationId,
+          e.productId,
+          0,
+          e.data.stock_quantity,
+          "Initial stock (auto)",
+        );
       }
     });
 
@@ -192,7 +240,13 @@ export async function initAutomationEngine(stationId: string | null): Promise<vo
       const prevQty = e.prev?.stock_quantity ?? 0;
       const newQty = e.data.stock_quantity ?? 0;
       if (newQty !== prevQty) {
-        await recordInventoryTxn(e.stationId, e.productId, prevQty, newQty, "Product edit (auto)");
+        await recordInventoryTxn(
+          e.stationId,
+          e.productId,
+          prevQty,
+          newQty,
+          "Product edit (auto)",
+        );
       }
     });
   }
@@ -207,7 +261,12 @@ export async function initAutomationEngine(stationId: string | null): Promise<vo
   on("product:updated", async (event) => {
     if (!prefs.autoReorderEnabled) return;
     const e = event as Extract<DomainEvent, { type: "product:updated" }>;
-    await checkAndCreateReorder(e.stationId, e.productId, e.data.stock_quantity ?? 0, prefs);
+    await checkAndCreateReorder(
+      e.stationId,
+      e.productId,
+      e.data.stock_quantity ?? 0,
+      prefs,
+    );
   });
 
   // ── Reaction 3: When a sale completes, emit a stock adjustment for each item
@@ -216,7 +275,13 @@ export async function initAutomationEngine(stationId: string | null): Promise<vo
     const e = event as Extract<DomainEvent, { type: "sale:completed" }>;
     for (const item of e.items || []) {
       if (item.productId) {
-        emit({ type: "stock:adjusted", productId: item.productId, stationId: e.stationId, newQty: -(item.quantity || 0), reason: `Sale (auto)` });
+        emit({
+          type: "stock:adjusted",
+          productId: item.productId,
+          stationId: e.stationId,
+          newQty: -(item.quantity || 0),
+          reason: `Sale (auto)`,
+        });
       }
     }
   });
@@ -289,14 +354,20 @@ async function checkAndCreateReorder(
       .single();
     if (!product) return;
 
-    const threshold = (product.reorder_level || 10) * prefs.autoReorderThresholdMultiplier;
-    const effectiveQty = currentQty < 0 ? (product.stock_quantity || 0) + currentQty : currentQty;
+    const threshold =
+      (product.reorder_level || 10) * prefs.autoReorderThresholdMultiplier;
+    const effectiveQty =
+      currentQty < 0 ? (product.stock_quantity || 0) + currentQty : currentQty;
 
     if (effectiveQty <= threshold) {
       // Check if there's already a pending reorder for this product
-      const existing = (await cloudStorageService.get<any[]>("auto_reorders")) || [];
+      const existing =
+        (await cloudStorageService.get<any[]>("auto_reorders")) || [];
       const hasPending = existing.some(
-        (r: any) => r.productId === productId && r.stationId === stationId && r.status === "pending",
+        (r: any) =>
+          r.productId === productId &&
+          r.stationId === stationId &&
+          r.status === "pending",
       );
       if (hasPending) return;
 
@@ -307,7 +378,10 @@ async function checkAndCreateReorder(
         productName: product.name,
         currentStock: effectiveQty,
         reorderLevel: product.reorder_level || 10,
-        suggestedQty: Math.max((product.reorder_level || 10) * 2 - effectiveQty, 1),
+        suggestedQty: Math.max(
+          (product.reorder_level || 10) * 2 - effectiveQty,
+          1,
+        ),
         status: "pending",
         createdAt: Date.now(),
       };
@@ -329,7 +403,12 @@ async function checkAndCreateReorder(
 
       // Optionally auto-create an expense
       if (prefs.autoCreateExpenseOnReorder) {
-        emit({ type: "expense:created", stationId, amount: reorder.suggestedQty * 10, category: "Inventory Reorder (auto)" });
+        emit({
+          type: "expense:created",
+          stationId,
+          amount: reorder.suggestedQty * 10,
+          category: "Inventory Reorder (auto)",
+        });
       }
     }
   } catch (err) {
@@ -351,7 +430,8 @@ export async function fulfillReorder(
   reorderId: string,
   receivedQty: number,
 ): Promise<void> {
-  const reorders = (await cloudStorageService.get<any[]>("auto_reorders")) || [];
+  const reorders =
+    (await cloudStorageService.get<any[]>("auto_reorders")) || [];
   const idx = reorders.findIndex((r: any) => r.id === reorderId);
   if (idx < 0) return;
   reorders[idx].status = "fulfilled";

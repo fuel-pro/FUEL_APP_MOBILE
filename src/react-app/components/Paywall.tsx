@@ -491,7 +491,8 @@ export default function Paywall({ onClose }: PaywallProps) {
                     gap: 6,
                   }}
                 >
-                  <CreditCard size={15} /> Pay with Card <ArrowRight size={15} />
+                  <CreditCard size={15} /> Pay with Card{" "}
+                  <ArrowRight size={15} />
                 </button>
               )}
             </div>
@@ -711,7 +712,9 @@ export default function Paywall({ onClose }: PaywallProps) {
                   style={{ color: "#f59e0b", marginTop: 1, flexShrink: 0 }}
                 />
                 <div>
-                  <p style={{ fontSize: 13, fontWeight: 700, color: "#fbbf24" }}>
+                  <p
+                    style={{ fontSize: 13, fontWeight: 700, color: "#fbbf24" }}
+                  >
                     M-PESA is available in Kenya only
                   </p>
                   <p

@@ -94,7 +94,9 @@ export default function IntegrationsSettings() {
             <>
               {/* M-PESA */}
               <IntegrationCard
-                icon={<Smartphone className="text-green-600 dark:text-green-400" />}
+                icon={
+                  <Smartphone className="text-green-600 dark:text-green-400" />
+                }
                 iconBg="bg-green-100 dark:bg-green-900/30"
                 name="M-PESA"
                 category="Payment"
@@ -104,7 +106,9 @@ export default function IntegrationsSettings() {
               />
               {/* Kopo Kopo */}
               <IntegrationCard
-                icon={<Building2 className="text-blue-600 dark:text-blue-400" />}
+                icon={
+                  <Building2 className="text-blue-600 dark:text-blue-400" />
+                }
                 iconBg="bg-blue-100 dark:bg-blue-900/30"
                 name="Kopo Kopo"
                 category="Payment"
@@ -308,213 +312,219 @@ function MpesaSetup({
       )}
 
       {isKenya && (
-      <>
-      <Section
-        title="Integration Details"
-        subtitle="Basic information about this integration"
-      >
-        <Field label="Integration Name" required>
-          <input
-            type="text"
-            value={config.name}
-            onChange={(e) => update({ name: e.target.value })}
-            placeholder="M-PESA"
-            className={inputCls}
-          />
-        </Field>
-        <Field
-          label="Type"
-          required
-          hint="Choose between Buy Goods or Paybill integration"
-        >
-          <select
-            value={config.type}
-            onChange={(e) =>
-              update({ type: e.target.value as "buy_goods" | "paybill" })
-            }
-            className={inputCls}
+        <>
+          <Section
+            title="Integration Details"
+            subtitle="Basic information about this integration"
           >
-            <option value="buy_goods">Buy Goods (Till Number)</option>
-            <option value="paybill">Paybill</option>
-          </select>
-        </Field>
-      </Section>
+            <Field label="Integration Name" required>
+              <input
+                type="text"
+                value={config.name}
+                onChange={(e) => update({ name: e.target.value })}
+                placeholder="M-PESA"
+                className={inputCls}
+              />
+            </Field>
+            <Field
+              label="Type"
+              required
+              hint="Choose between Buy Goods or Paybill integration"
+            >
+              <select
+                value={config.type}
+                onChange={(e) =>
+                  update({ type: e.target.value as "buy_goods" | "paybill" })
+                }
+                className={inputCls}
+              >
+                <option value="buy_goods">Buy Goods (Till Number)</option>
+                <option value="paybill">Paybill</option>
+              </select>
+            </Field>
+          </Section>
 
-      {/* API Credentials */}
-      <Section
-        title="API Credentials"
-        subtitle="Your M-PESA API credentials from Safaricom Daraja"
-      >
-        <Field label="Consumer Key" required>
-          <input
-            type={showSecret ? "text" : "password"}
-            value={config.consumerKey}
-            onChange={(e) => update({ consumerKey: e.target.value })}
-            placeholder="Enter your Consumer Key"
-            className={inputCls}
-          />
-        </Field>
-        <Field label="Consumer Secret" required>
-          <div className="relative">
-            <input
-              type={showSecret ? "text" : "password"}
-              value={config.consumerSecret}
-              onChange={(e) => update({ consumerSecret: e.target.value })}
-              placeholder="Enter your Consumer Secret"
-              className={inputCls + " pr-10"}
-            />
-            <button
-              type="button"
-              onClick={() => setShowSecret(!showSecret)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-            >
-              {showSecret ? <EyeOff size={16} /> : <Eye size={16} />}
-            </button>
-          </div>
-        </Field>
-        <Field label="Passkey" required hint="Used for STK Push transactions">
-          <div className="relative">
-            <input
-              type={showPass ? "text" : "password"}
-              value={config.passkey}
-              onChange={(e) => update({ passkey: e.target.value })}
-              placeholder="Enter your Passkey"
-              className={inputCls + " pr-10"}
-            />
-            <button
-              type="button"
-              onClick={() => setShowPass(!showPass)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-            >
-              {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
-            </button>
-          </div>
-        </Field>
-        <Field
-          label="Initiator Name"
-          required
-          hint="Username for initiating transactions"
-        >
-          <input
-            type="text"
-            value={config.initiatorName}
-            onChange={(e) => update({ initiatorName: e.target.value })}
-            placeholder="Enter Initiator Name"
-            className={inputCls}
-          />
-        </Field>
-        <Field
-          label="Initiator Password"
-          required
-          hint="Password for the initiator"
-        >
-          <div className="relative">
-            <input
-              type={showInitPass ? "text" : "password"}
-              value={config.initiatorPassword}
-              onChange={(e) => update({ initiatorPassword: e.target.value })}
-              placeholder="Enter Initiator Password"
-              className={inputCls + " pr-10"}
-            />
-            <button
-              type="button"
-              onClick={() => setShowInitPass(!showInitPass)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-            >
-              {showInitPass ? <EyeOff size={16} /> : <Eye size={16} />}
-            </button>
-          </div>
-        </Field>
-        <Field label="Business Shortcode" required>
-          <input
-            type="text"
-            value={config.shortcode}
-            onChange={(e) => update({ shortcode: e.target.value })}
-            placeholder="Enter your Business Shortcode"
-            className={inputCls}
-          />
-        </Field>
-        <Field
-          label="Account Reference"
-          required
-          hint="Alpha-numeric identifier displayed to customers in STK Pin prompt. Maximum 12 characters."
-        >
-          <input
-            type="text"
-            maxLength={12}
-            value={config.accountReference}
-            onChange={(e) => update({ accountReference: e.target.value })}
-            placeholder="Enter Account Reference"
-            className={inputCls}
-          />
-        </Field>
-      </Section>
-
-      {/* Configuration */}
-      <Section title="Configuration" subtitle="Integration settings">
-        <Field
-          label="Environment"
-          required
-          hint="Use sandbox for testing, production for live transactions"
-        >
-          <select
-            value={config.environment}
-            onChange={(e) =>
-              update({
-                environment: e.target.value as "sandbox" | "production",
-              })
-            }
-            className={inputCls}
+          {/* API Credentials */}
+          <Section
+            title="API Credentials"
+            subtitle="Your M-PESA API credentials from Safaricom Daraja"
           >
-            <option value="sandbox">Sandbox (Testing)</option>
-            <option value="production">Production (Live)</option>
-          </select>
-        </Field>
-        <Field
-          label="Status"
-          hint="When enabled, M-PESA will be available for processing payments"
-        >
-          <label className="flex items-center gap-3 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={config.enabled}
-              onChange={(e) => update({ enabled: e.target.checked })}
-              className="w-5 h-5 rounded text-green-600 focus:ring-green-500"
-            />
-            <span className="text-sm text-gray-700 dark:text-gray-300">
-              Enable this integration
-            </span>
-          </label>
-        </Field>
-      </Section>
+            <Field label="Consumer Key" required>
+              <input
+                type={showSecret ? "text" : "password"}
+                value={config.consumerKey}
+                onChange={(e) => update({ consumerKey: e.target.value })}
+                placeholder="Enter your Consumer Key"
+                className={inputCls}
+              />
+            </Field>
+            <Field label="Consumer Secret" required>
+              <div className="relative">
+                <input
+                  type={showSecret ? "text" : "password"}
+                  value={config.consumerSecret}
+                  onChange={(e) => update({ consumerSecret: e.target.value })}
+                  placeholder="Enter your Consumer Secret"
+                  className={inputCls + " pr-10"}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowSecret(!showSecret)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  {showSecret ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+            </Field>
+            <Field
+              label="Passkey"
+              required
+              hint="Used for STK Push transactions"
+            >
+              <div className="relative">
+                <input
+                  type={showPass ? "text" : "password"}
+                  value={config.passkey}
+                  onChange={(e) => update({ passkey: e.target.value })}
+                  placeholder="Enter your Passkey"
+                  className={inputCls + " pr-10"}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPass(!showPass)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+            </Field>
+            <Field
+              label="Initiator Name"
+              required
+              hint="Username for initiating transactions"
+            >
+              <input
+                type="text"
+                value={config.initiatorName}
+                onChange={(e) => update({ initiatorName: e.target.value })}
+                placeholder="Enter Initiator Name"
+                className={inputCls}
+              />
+            </Field>
+            <Field
+              label="Initiator Password"
+              required
+              hint="Password for the initiator"
+            >
+              <div className="relative">
+                <input
+                  type={showInitPass ? "text" : "password"}
+                  value={config.initiatorPassword}
+                  onChange={(e) =>
+                    update({ initiatorPassword: e.target.value })
+                  }
+                  placeholder="Enter Initiator Password"
+                  className={inputCls + " pr-10"}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowInitPass(!showInitPass)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  {showInitPass ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+            </Field>
+            <Field label="Business Shortcode" required>
+              <input
+                type="text"
+                value={config.shortcode}
+                onChange={(e) => update({ shortcode: e.target.value })}
+                placeholder="Enter your Business Shortcode"
+                className={inputCls}
+              />
+            </Field>
+            <Field
+              label="Account Reference"
+              required
+              hint="Alpha-numeric identifier displayed to customers in STK Pin prompt. Maximum 12 characters."
+            >
+              <input
+                type="text"
+                maxLength={12}
+                value={config.accountReference}
+                onChange={(e) => update({ accountReference: e.target.value })}
+                placeholder="Enter Account Reference"
+                className={inputCls}
+              />
+            </Field>
+          </Section>
 
-      {error && (
-        <div className="flex items-center gap-2 text-sm text-red-600 dark:text-red-400">
-          <AlertTriangle size={16} /> {error}
-        </div>
-      )}
-      {saved && (
-        <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
-          <CheckCircle2 size={16} /> Integration saved successfully!
-        </div>
-      )}
+          {/* Configuration */}
+          <Section title="Configuration" subtitle="Integration settings">
+            <Field
+              label="Environment"
+              required
+              hint="Use sandbox for testing, production for live transactions"
+            >
+              <select
+                value={config.environment}
+                onChange={(e) =>
+                  update({
+                    environment: e.target.value as "sandbox" | "production",
+                  })
+                }
+                className={inputCls}
+              >
+                <option value="sandbox">Sandbox (Testing)</option>
+                <option value="production">Production (Live)</option>
+              </select>
+            </Field>
+            <Field
+              label="Status"
+              hint="When enabled, M-PESA will be available for processing payments"
+            >
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={config.enabled}
+                  onChange={(e) => update({ enabled: e.target.checked })}
+                  className="w-5 h-5 rounded text-green-600 focus:ring-green-500"
+                />
+                <span className="text-sm text-gray-700 dark:text-gray-300">
+                  Enable this integration
+                </span>
+              </label>
+            </Field>
+          </Section>
 
-      <button
-        onClick={handleSave}
-        disabled={saving}
-        className="w-full py-3 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white font-medium rounded-xl flex items-center justify-center gap-2 transition-colors"
-      >
-        {saving ? (
-          <>
-            <Zap size={18} className="animate-pulse" /> Saving…
-          </>
-        ) : (
-          <>
-            <Save size={18} /> Save Integration
-          </>
-        )}
-      </button>
-      </>
+          {error && (
+            <div className="flex items-center gap-2 text-sm text-red-600 dark:text-red-400">
+              <AlertTriangle size={16} /> {error}
+            </div>
+          )}
+          {saved && (
+            <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
+              <CheckCircle2 size={16} /> Integration saved successfully!
+            </div>
+          )}
+
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="w-full py-3 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white font-medium rounded-xl flex items-center justify-center gap-2 transition-colors"
+          >
+            {saving ? (
+              <>
+                <Zap size={18} className="animate-pulse" /> Saving…
+              </>
+            ) : (
+              <>
+                <Save size={18} /> Save Integration
+              </>
+            )}
+          </button>
+        </>
       )}
     </div>
   );
@@ -616,185 +626,185 @@ function KopokopoSetup({
             </h3>
             <p className="text-sm text-amber-700 dark:text-amber-400/80 mt-1">
               Kopo Kopo is a Kenya-specific mobile money payment method and
-              cannot be configured for the detected station country. Switch
-              your station to Kenya to configure Kopo Kopo.
+              cannot be configured for the detected station country. Switch your
+              station to Kenya to configure Kopo Kopo.
             </p>
           </div>
         </div>
       )}
 
       {isKenya && (
-      <>
-      {/* Integration Details */}
-      <Section
-        title="Integration Details"
-        subtitle="Basic information about this integration"
-      >
-        <Field label="Integration Name" required>
-          <input
-            type="text"
-            value={config.name}
-            onChange={(e) => update({ name: e.target.value })}
-            placeholder="Kopo Kopo"
-            className={inputCls}
-          />
-        </Field>
-      </Section>
-
-      {/* API Credentials */}
-      <Section
-        title="API Credentials"
-        subtitle="Your OAuth application credentials from the Kopo Kopo developer portal"
-      >
-        <Field label="Client ID" required>
-          <input
-            type="text"
-            value={config.clientId}
-            onChange={(e) => update({ clientId: e.target.value })}
-            placeholder="Enter your Client ID"
-            className={inputCls}
-          />
-        </Field>
-        <Field label="Client Secret" required>
-          <div className="relative">
-            <input
-              type={showClientSecret ? "text" : "password"}
-              value={config.clientSecret}
-              onChange={(e) => update({ clientSecret: e.target.value })}
-              placeholder="Enter your Client Secret"
-              className={inputCls + " pr-10"}
-            />
-            <button
-              type="button"
-              onClick={() => setShowClientSecret(!showClientSecret)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-            >
-              {showClientSecret ? <EyeOff size={16} /> : <Eye size={16} />}
-            </button>
-          </div>
-        </Field>
-        <Field
-          label="Till Number"
-          required
-          hint="Your Kopo Kopo till number (e.g. K000000 or 000000)"
-        >
-          <input
-            type="text"
-            value={config.tillNumber}
-            onChange={(e) => update({ tillNumber: e.target.value })}
-            placeholder="K000000"
-            className={inputCls}
-          />
-        </Field>
-        <Field
-          label="API Key"
-          required
-          hint="Used to verify the HMAC signature on incoming webhook notifications"
-        >
-          <div className="relative">
-            <input
-              type={showApiKey ? "text" : "password"}
-              value={config.apiKey}
-              onChange={(e) => update({ apiKey: e.target.value })}
-              placeholder="Enter your API Key"
-              className={inputCls + " pr-10"}
-            />
-            <button
-              type="button"
-              onClick={() => setShowApiKey(!showApiKey)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-            >
-              {showApiKey ? <EyeOff size={16} /> : <Eye size={16} />}
-            </button>
-          </div>
-        </Field>
-      </Section>
-
-      {/* Configuration */}
-      <Section title="Configuration" subtitle="Integration settings">
-        <Field
-          label="Environment"
-          required
-          hint="Use sandbox for testing, production for live transactions"
-        >
-          <select
-            value={config.environment}
-            onChange={(e) =>
-              update({
-                environment: e.target.value as "sandbox" | "production",
-              })
-            }
-            className={inputCls}
+        <>
+          {/* Integration Details */}
+          <Section
+            title="Integration Details"
+            subtitle="Basic information about this integration"
           >
-            <option value="sandbox">Sandbox (Testing)</option>
-            <option value="production">Production (Live)</option>
-          </select>
-        </Field>
-        <Field
-          label="Transaction Search Window"
-          required
-          hint="How far back cashiers can search for transactions"
-        >
-          <select
-            value={config.searchWindowHours}
-            onChange={(e) =>
-              update({ searchWindowHours: parseInt(e.target.value) })
-            }
-            className={inputCls}
+            <Field label="Integration Name" required>
+              <input
+                type="text"
+                value={config.name}
+                onChange={(e) => update({ name: e.target.value })}
+                placeholder="Kopo Kopo"
+                className={inputCls}
+              />
+            </Field>
+          </Section>
+
+          {/* API Credentials */}
+          <Section
+            title="API Credentials"
+            subtitle="Your OAuth application credentials from the Kopo Kopo developer portal"
           >
-            <option value={6}>Last 6 hours</option>
-            <option value={12}>Last 12 hours</option>
-            <option value={24}>Last 24 hours</option>
-            <option value={48}>Last 48 hours</option>
-            <option value={72}>Last 3 days</option>
-            <option value={168}>Last 7 days</option>
-          </select>
-        </Field>
-        <Field
-          label="Status"
-          hint="When enabled, Kopo Kopo will be available for processing payments"
-        >
-          <label className="flex items-center gap-3 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={config.enabled}
-              onChange={(e) => update({ enabled: e.target.checked })}
-              className="w-5 h-5 rounded text-blue-600 focus:ring-blue-500"
-            />
-            <span className="text-sm text-gray-700 dark:text-gray-300">
-              Enable this integration
-            </span>
-          </label>
-        </Field>
-      </Section>
+            <Field label="Client ID" required>
+              <input
+                type="text"
+                value={config.clientId}
+                onChange={(e) => update({ clientId: e.target.value })}
+                placeholder="Enter your Client ID"
+                className={inputCls}
+              />
+            </Field>
+            <Field label="Client Secret" required>
+              <div className="relative">
+                <input
+                  type={showClientSecret ? "text" : "password"}
+                  value={config.clientSecret}
+                  onChange={(e) => update({ clientSecret: e.target.value })}
+                  placeholder="Enter your Client Secret"
+                  className={inputCls + " pr-10"}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowClientSecret(!showClientSecret)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  {showClientSecret ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+            </Field>
+            <Field
+              label="Till Number"
+              required
+              hint="Your Kopo Kopo till number (e.g. K000000 or 000000)"
+            >
+              <input
+                type="text"
+                value={config.tillNumber}
+                onChange={(e) => update({ tillNumber: e.target.value })}
+                placeholder="K000000"
+                className={inputCls}
+              />
+            </Field>
+            <Field
+              label="API Key"
+              required
+              hint="Used to verify the HMAC signature on incoming webhook notifications"
+            >
+              <div className="relative">
+                <input
+                  type={showApiKey ? "text" : "password"}
+                  value={config.apiKey}
+                  onChange={(e) => update({ apiKey: e.target.value })}
+                  placeholder="Enter your API Key"
+                  className={inputCls + " pr-10"}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowApiKey(!showApiKey)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  {showApiKey ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+            </Field>
+          </Section>
 
-      {error && (
-        <div className="flex items-center gap-2 text-sm text-red-600 dark:text-red-400">
-          <AlertTriangle size={16} /> {error}
-        </div>
-      )}
-      {saved && (
-        <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
-          <CheckCircle2 size={16} /> Integration saved successfully!
-        </div>
-      )}
+          {/* Configuration */}
+          <Section title="Configuration" subtitle="Integration settings">
+            <Field
+              label="Environment"
+              required
+              hint="Use sandbox for testing, production for live transactions"
+            >
+              <select
+                value={config.environment}
+                onChange={(e) =>
+                  update({
+                    environment: e.target.value as "sandbox" | "production",
+                  })
+                }
+                className={inputCls}
+              >
+                <option value="sandbox">Sandbox (Testing)</option>
+                <option value="production">Production (Live)</option>
+              </select>
+            </Field>
+            <Field
+              label="Transaction Search Window"
+              required
+              hint="How far back cashiers can search for transactions"
+            >
+              <select
+                value={config.searchWindowHours}
+                onChange={(e) =>
+                  update({ searchWindowHours: parseInt(e.target.value) })
+                }
+                className={inputCls}
+              >
+                <option value={6}>Last 6 hours</option>
+                <option value={12}>Last 12 hours</option>
+                <option value={24}>Last 24 hours</option>
+                <option value={48}>Last 48 hours</option>
+                <option value={72}>Last 3 days</option>
+                <option value={168}>Last 7 days</option>
+              </select>
+            </Field>
+            <Field
+              label="Status"
+              hint="When enabled, Kopo Kopo will be available for processing payments"
+            >
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={config.enabled}
+                  onChange={(e) => update({ enabled: e.target.checked })}
+                  className="w-5 h-5 rounded text-blue-600 focus:ring-blue-500"
+                />
+                <span className="text-sm text-gray-700 dark:text-gray-300">
+                  Enable this integration
+                </span>
+              </label>
+            </Field>
+          </Section>
 
-      <button
-        onClick={handleSave}
-        disabled={saving}
-        className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-medium rounded-xl flex items-center justify-center gap-2 transition-colors"
-      >
-        {saving ? (
-          <>
-            <Zap size={18} className="animate-pulse" /> Saving…
-          </>
-        ) : (
-          <>
-            <Save size={18} /> Save Integration
-          </>
-        )}
-      </button>
-      </>
+          {error && (
+            <div className="flex items-center gap-2 text-sm text-red-600 dark:text-red-400">
+              <AlertTriangle size={16} /> {error}
+            </div>
+          )}
+          {saved && (
+            <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
+              <CheckCircle2 size={16} /> Integration saved successfully!
+            </div>
+          )}
+
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-medium rounded-xl flex items-center justify-center gap-2 transition-colors"
+          >
+            {saving ? (
+              <>
+                <Zap size={18} className="animate-pulse" /> Saving…
+              </>
+            ) : (
+              <>
+                <Save size={18} /> Save Integration
+              </>
+            )}
+          </button>
+        </>
       )}
     </div>
   );

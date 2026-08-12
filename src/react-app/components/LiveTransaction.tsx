@@ -30,7 +30,10 @@ import { useFuel } from "@/react-app/context/FuelContext";
 import { useAuth } from "@/react-app/context/AuthContext";
 import { useStations } from "@/react-app/context/StationContext";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
-import { getCurrencySymbol, getDetectedCurrency } from "@/react-app/lib/currency";
+import {
+  getCurrencySymbol,
+  getDetectedCurrency,
+} from "@/react-app/lib/currency";
 import {
   getTransactions,
   addTransaction,
@@ -1145,7 +1148,11 @@ export default function LiveTransaction() {
 
                 <div>
                   <label className="block text-sm text-gray-300 mb-1">
-                    Amount ({getCurrencySymbol(state.companyData.currency || getDetectedCurrency())}) *
+                    Amount (
+                    {getCurrencySymbol(
+                      state.companyData.currency || getDetectedCurrency(),
+                    )}
+                    ) *
                   </label>
                   <input
                     type="number"

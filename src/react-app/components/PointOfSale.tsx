@@ -731,8 +731,8 @@ export default function PointOfSale() {
             <p className="text-sm text-yellow-800 dark:text-yellow-200 flex items-center gap-2">
               <QrCode size={16} />
               <span>
-                <strong>KRA eTIMS Setup Required:</strong> Configure your KRA PIN
-                and ETR details in Settings for tax-compliant receipts.
+                <strong>KRA eTIMS Setup Required:</strong> Configure your KRA
+                PIN and ETR details in Settings for tax-compliant receipts.
               </span>
             </p>
           </div>
@@ -1031,7 +1031,11 @@ export default function PointOfSale() {
                 type="text"
                 value={customerPin}
                 onChange={(e) => setCustomerPin(e.target.value.toUpperCase())}
-                placeholder={kenyaStation ? "Customer KRA PIN (for B2B)" : "Customer Tax ID (for B2B)"}
+                placeholder={
+                  kenyaStation
+                    ? "Customer KRA PIN (for B2B)"
+                    : "Customer Tax ID (for B2B)"
+                }
                 className="w-full px-3 py-2 text-sm rounded-lg border dark:bg-gray-800 dark:border-gray-600"
               />
             </div>
@@ -1044,27 +1048,37 @@ export default function PointOfSale() {
             <div className="space-y-1 mb-4 text-sm">
               <div className="flex justify-between text-gray-600 dark:text-gray-400">
                 <span>Taxable (A-{(VAT_RATE * 100).toFixed(0)}%):</span>
-                <span>{currencySymbol} {formatNumber(taxableA)}</span>
+                <span>
+                  {currencySymbol} {formatNumber(taxableA)}
+                </span>
               </div>
               <div className="flex justify-between text-gray-600 dark:text-gray-400">
                 <span>VAT ({(VAT_RATE * 100).toFixed(0)}%):</span>
-                <span>{currencySymbol} {formatNumber(vatA)}</span>
+                <span>
+                  {currencySymbol} {formatNumber(vatA)}
+                </span>
               </div>
               {taxableB > 0 && (
                 <div className="flex justify-between text-gray-600 dark:text-gray-400">
                   <span>Zero-rated (B-0%):</span>
-                  <span>{currencySymbol} {formatNumber(taxableB)}</span>
+                  <span>
+                    {currencySymbol} {formatNumber(taxableB)}
+                  </span>
                 </div>
               )}
               {exemptE > 0 && (
                 <div className="flex justify-between text-gray-600 dark:text-gray-400">
                   <span>Exempt (E):</span>
-                  <span>{currencySymbol} {formatNumber(exemptE)}</span>
+                  <span>
+                    {currencySymbol} {formatNumber(exemptE)}
+                  </span>
                 </div>
               )}
               <div className="flex justify-between text-xl font-bold border-t pt-2">
                 <span>Total:</span>
-                <span>{currencySymbol} {formatNumber(total)}</span>
+                <span>
+                  {currencySymbol} {formatNumber(total)}
+                </span>
               </div>
             </div>
 
@@ -1205,7 +1219,11 @@ export default function PointOfSale() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-900 rounded-lg max-w-lg w-full max-h-[90vh] overflow-y-auto">
             <div className="p-4 border-b dark:border-gray-700 flex justify-between items-center">
-              <h3 className="font-semibold">{kenyaStation ? "KRA eTIMS / ETR Configuration" : "Tax / VAT Configuration"}</h3>
+              <h3 className="font-semibold">
+                {kenyaStation
+                  ? "KRA eTIMS / ETR Configuration"
+                  : "Tax / VAT Configuration"}
+              </h3>
               <button
                 onClick={() => setShowSettings(false)}
                 className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded"
@@ -1493,7 +1511,9 @@ export default function PointOfSale() {
                   <div key={idx}>
                     <div className="flex justify-between text-xs">
                       <span className="font-medium">{item.name}</span>
-                      <span>{currencySymbol} {formatNumber(item.total)}</span>
+                      <span>
+                        {currencySymbol} {formatNumber(item.total)}
+                      </span>
                     </div>
                     <div className="text-[10px] text-gray-600 ml-2">
                       {item.litres
@@ -1554,13 +1574,17 @@ export default function PointOfSale() {
                 </div>
                 <div className="flex justify-between">
                   <span>Total VAT:</span>
-                  <span>{currencySymbol} {formatNumber(currentTransaction.totalVat)}</span>
+                  <span>
+                    {currencySymbol} {formatNumber(currentTransaction.totalVat)}
+                  </span>
                 </div>
               </div>
 
               <div className="flex justify-between text-lg font-bold border-t-2 border-b-2 border-black py-2 my-3">
                 <span>TOTAL:</span>
-                <span>{currencySymbol} {formatNumber(currentTransaction.total)}</span>
+                <span>
+                  {currencySymbol} {formatNumber(currentTransaction.total)}
+                </span>
               </div>
 
               {/* ETR/KRA Section */}
@@ -1596,9 +1620,13 @@ export default function PointOfSale() {
                 )}
 
                 <p className="mt-2 text-[9px] font-bold">
-                  {kenyaStation ? "*KRA eTIMS COMPLIANT INVOICE*" : "*TAX COMPLIANT INVOICE*"}
+                  {kenyaStation
+                    ? "*KRA eTIMS COMPLIANT INVOICE*"
+                    : "*TAX COMPLIANT INVOICE*"}
                 </p>
-                <p className="text-[8px]">{kenyaStation ? "Powered by TIMS" : "Powered by FuelPro"}</p>
+                <p className="text-[8px]">
+                  {kenyaStation ? "Powered by TIMS" : "Powered by FuelPro"}
+                </p>
               </div>
 
               {/* Footer */}

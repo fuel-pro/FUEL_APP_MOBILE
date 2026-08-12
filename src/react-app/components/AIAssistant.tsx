@@ -14,7 +14,10 @@ import {
   Lightbulb,
 } from "lucide-react";
 import { getGeminiUrl } from "@/utils/apiConfig";
-import { getCurrencySymbol, getDetectedCurrency } from "@/react-app/lib/currency";
+import {
+  getCurrencySymbol,
+  getDetectedCurrency,
+} from "@/react-app/lib/currency";
 
 interface ChatMessage {
   role: "user" | "assistant";
