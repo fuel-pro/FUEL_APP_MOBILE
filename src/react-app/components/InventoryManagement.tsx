@@ -37,12 +37,13 @@ import {
   completeStockTransfer,
   processStockCount,
   recordWastage,
-  fetchProducts,
+  fetchAllProducts,
   fetchInventoryTransactions,
 } from "@/react-app/lib/pos-service";
 import {
   getCurrencySymbol,
   getDetectedCurrency,
+  getDetectedCountryCode,
 } from "@/react-app/lib/currency";
 import {
   automation,
@@ -51,13 +52,18 @@ import {
   getAutoReorders,
   fulfillReorder,
 } from "@/react-app/lib/automation-engine";
+import { switchToTab } from "@/react-app/lib/mpesa-integration-service";
+import { getVATRate } from "@/react-app/config/pricing";
 
-// Format currency
+// Format currency — country-aware (uses the detected/station currency symbol).
+// Previously hardcoded en-US with no symbol; getCurrencySymbol/getDetectedCurrency
+// were imported but never used (dead imports).
 const formatMoney = (amount: number) => {
-  return new Intl.NumberFormat("en-US", {
+  const symbol = getCurrencySymbol(getDetectedCurrency());
+  return `${symbol} ${new Intl.NumberFormat("en-US", {
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
-  }).format(amount || 0);
+  }).format(amount || 0)}`;
 };
 
 // Default categories (adjustable via user preferences, but kept here as fallback)
@@ -69,7 +75,10 @@ const DEFAULT_CATEGORIES = [
   "Other",
 ];
 
-// Product form initial state
+// Product form initial state. tax_rate is country-aware (was hardcoded 16% —
+// a Kenya VAT rate — which made every new product taxable at 16% even for
+// stations in countries with no VAT or a different rate, silently inflating
+// POS sale totals for non-Kenyan stations).
 const INITIAL_PRODUCT = {
   sku: "",
   name: "",
@@ -81,7 +90,7 @@ const INITIAL_PRODUCT = {
   selling_price: 0,
   reorder_level: 10,
   stock_quantity: 0,
-  tax_rate: 16,
+  tax_rate: getVATRate(getDetectedCountryCode()),
   is_active: true,
   is_taxable: true,
 };
@@ -305,6 +314,7 @@ const TransferForm = ({
   stations,
   onSubmit,
   isLoading,
+  onTransferChanged,
 }: {
   products: any[];
   stations: any[];
@@ -315,6 +325,7 @@ const TransferForm = ({
     notes: string;
   }) => void;
   isLoading: boolean;
+  onTransferChanged?: () => void;
 }) => {
   const [formData, setFormData] = useState({
     productId: "",
@@ -432,12 +443,12 @@ const TransferForm = ({
           </button>
         </div>
       </div>
-      <TransfersList />
+      <TransfersList onComplete={onTransferChanged} />
     </div>
   );
 };
 
-const TransfersList = () => {
+const TransfersList = ({ onComplete }: { onComplete?: () => void }) => {
   const { currentStation } = useStations();
   const [transfers, setTransfers] = useState<any[]>([]);
   useEffect(() => {
@@ -463,6 +474,10 @@ const TransfersList = () => {
       return;
     }
     setTransfers(transfers.filter((t) => t.id !== id));
+    // Refresh the parent Products list so stock reflects the completed
+    // transfer (completeStockTransfer moves stock on both stations). Without
+    // this, the Products tab showed stale stock after completing a transfer.
+    onComplete?.();
   };
 
   if (transfers.length === 0) {
@@ -863,7 +878,7 @@ const HistoryTable = () => {
               </td>
               <td className="px-4 py-3">
                 <span className="text-xs px-2 py-1 rounded-full bg-blue-500/20 text-blue-300 capitalize">
-                  {tx.transaction_type.replace("_", " ")}
+                  {(tx.transaction_type || "unknown").replace("_", " ")}
                 </span>
               </td>
               <td
@@ -1420,13 +1435,23 @@ const ProductsPanel = ({
         <p className="text-gray-400 text-sm">
           {filtered.length} product{filtered.length !== 1 ? "s" : ""}
         </p>
-        <button
-          onClick={onAdd}
-          className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl transition-colors"
-        >
-          <Plus size={20} />
-          Add Product
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => switchToTab("pos")}
+            className="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white rounded-xl transition-colors text-sm border border-white/10"
+            title="Open Point of Sale to sell these products"
+          >
+            <Package size={18} />
+            Sell in POS
+          </button>
+          <button
+            onClick={onAdd}
+            className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl transition-colors"
+          >
+            <Plus size={20} />
+            Add Product
+          </button>
+        </div>
       </div>
       <div className="flex flex-col sm:flex-row gap-4 mb-6">
         <div className="relative flex-1">
@@ -1498,9 +1523,16 @@ const ProductsPanel = ({
 };
 
 // Auto-Reorders panel — shows automation-generated reorder suggestions
-const ReordersPanel = ({ refreshKey }: { refreshKey: number }) => {
+const ReordersPanel = ({
+  refreshKey,
+  onFulfilled,
+}: {
+  refreshKey: number;
+  onFulfilled?: () => void;
+}) => {
   const [reorders, setReorders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -1518,9 +1550,27 @@ const ReordersPanel = ({ refreshKey }: { refreshKey: number }) => {
   }, [refreshKey]);
 
   const handleFulfill = async (id: string, qty: number) => {
-    await fulfillReorder(id, qty);
-    const r = await getAutoReorders();
-    setReorders(r.filter((x: any) => x.status === "pending"));
+    setBusy(true);
+    try {
+      // fulfillReorder now restocks the product + records a transaction +
+      // returns {success, error}. Previously it returned void and gave the
+      // user no feedback (and never moved stock).
+      const result = await fulfillReorder(id, qty);
+      if (!result.success) {
+        alert(
+          "Failed to fulfill reorder: " + (result.error || "Unknown error"),
+        );
+        return;
+      }
+      const r = await getAutoReorders();
+      setReorders(r.filter((x: any) => x.status === "pending"));
+      // Refresh the parent Products list so the new stock shows up.
+      onFulfilled?.();
+    } catch (error: any) {
+      alert("Failed to fulfill reorder: " + (error?.message || error));
+    } finally {
+      setBusy(false);
+    }
   };
 
   if (loading)
@@ -1532,12 +1582,20 @@ const ReordersPanel = ({ refreshKey }: { refreshKey: number }) => {
 
   return (
     <div>
-      <div className="flex items-center gap-2 mb-4 text-amber-400 text-sm">
+      <div className="flex flex-wrap items-center gap-2 mb-4 text-amber-400 text-sm">
         <Bell size={16} />
         <span>
           Auto-generated reorder suggestions (updates in real-time as stock
           changes)
         </span>
+        <button
+          onClick={() => switchToTab("suppliers")}
+          className="ml-2 flex items-center gap-1 px-3 py-1 bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white rounded-lg border border-white/10 text-xs"
+          title="Open Supplier Management to create a purchase order"
+        >
+          <ArrowRight size={12} />
+          Create PO
+        </button>
       </div>
       {reorders.length === 0 ? (
         <div className="text-center py-12">
@@ -1564,9 +1622,14 @@ const ReordersPanel = ({ refreshKey }: { refreshKey: number }) => {
               </div>
               <button
                 onClick={() => handleFulfill(r.id, r.suggestedQty)}
-                className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-sm flex items-center gap-2"
+                disabled={busy}
+                className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-sm flex items-center gap-2 disabled:opacity-50"
               >
-                <CheckCircle size={16} />
+                {busy ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <CheckCircle size={16} />
+                )}
                 Mark Fulfilled
               </button>
             </div>
@@ -1598,13 +1661,18 @@ export default function InventoryManagement() {
     setLoading(true);
     try {
       const [productsData, stationsData] = await Promise.all([
-        fetchProducts(currentStation.id),
+        // fetchAllProducts returns ALL products (incl. inactive) so they can
+        // be viewed/re-activated/edited/deleted. fetchProducts (is_active=true)
+        // made inactive products permanently unmanageable ghost rows.
+        fetchAllProducts(currentStation.id),
         supabase
           .from("stations")
           .select("id, name")
           .neq("id", currentStation.id),
       ]);
       setProducts(productsData);
+      const { error: stErr } = stationsData;
+      if (stErr) console.error("Stations query error:", stErr.message);
       setStations(stationsData.data || []);
       const cats = new Set(
         productsData.map((p: any) => p.category).filter(Boolean),
@@ -1620,6 +1688,49 @@ export default function InventoryManagement() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // ── Realtime: refresh products when another device inserts/updates/deletes
+  // a product in this station. Without this, cross-device product changes
+  // were invisible until a manual tab switch / refresh.
+  useEffect(() => {
+    if (!currentStation?.id) return;
+    const channel = supabase
+      .channel(`inventory-products-${currentStation.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "products",
+          filter: `station_id=eq.${currentStation.id}`,
+        },
+        () => loadData(),
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "inventory_transactions",
+          filter: `station_id=eq.${currentStation.id}`,
+        },
+        () => setReorderRefresh((k) => k + 1),
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "stock_transfers",
+          filter: `from_station_id=eq.${currentStation.id}`,
+        },
+        () => loadData(),
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentStation?.id, loadData]);
 
   // ── Automation wiring: listen for events that should refresh our data ──
   useEffect(() => {
@@ -1775,13 +1886,22 @@ export default function InventoryManagement() {
     if (!currentStation?.id) return;
     setProcessing(true);
     try {
-      await createStockTransfer({
+      const result = await createStockTransfer({
         productId: data.productId,
         fromStationId: currentStation.id,
         toStationId: data.toStationId,
         quantity: data.quantity,
         notes: data.notes,
       });
+      // createStockTransfer returns {success, error} — checking it prevents a
+      // false "Transfer created" notice when the insert actually failed (RLS,
+      // constraint, etc.). Previously the result was ignored.
+      if (!result.success) {
+        alert(
+          "Failed to create transfer: " + (result.error || "Unknown error"),
+        );
+        return;
+      }
       emit({
         type: "stock:transfer",
         productId: data.productId,
@@ -1791,8 +1911,8 @@ export default function InventoryManagement() {
       });
       showNotice("Transfer created");
       loadData();
-    } catch {
-      alert("Failed");
+    } catch (error: any) {
+      alert("Failed: " + (error?.message || error));
     } finally {
       setProcessing(false);
     }
@@ -1924,6 +2044,7 @@ export default function InventoryManagement() {
             stations={stations}
             onSubmit={handleTransfer}
             isLoading={processing}
+            onTransferChanged={loadData}
           />
         )}
         {activeTab === "counts" && (
@@ -1941,7 +2062,7 @@ export default function InventoryManagement() {
           />
         )}
         {activeTab === "reorders" && (
-          <ReordersPanel refreshKey={reorderRefresh} />
+          <ReordersPanel refreshKey={reorderRefresh} onFulfilled={loadData} />
         )}
         {activeTab === "history" && <HistoryTable />}
       </div>

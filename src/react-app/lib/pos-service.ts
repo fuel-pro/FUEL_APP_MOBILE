@@ -1007,12 +1007,33 @@ export async function closeTerminalSession(
 // ─── Fetch Data ──────────────────────────────────────────────────────────────
 
 export async function fetchProducts(stationId: string): Promise<any[]> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("products")
     .select("*")
     .eq("station_id", stationId)
     .eq("is_active", true)
     .order("name");
+  if (error) {
+    console.error("fetchProducts error:", error.message);
+  }
+  return data || [];
+}
+
+/**
+ * Fetch ALL products for a station INCLUDING inactive ones. Used by the
+ * Stock Management Products sub-tab so inactive products can be viewed,
+ * re-activated, edited, and deleted (fetchProducts filters is_active=true,
+ * which made inactive products permanently unmanageable/ghost rows).
+ */
+export async function fetchAllProducts(stationId: string): Promise<any[]> {
+  const { data, error } = await supabase
+    .from("products")
+    .select("*")
+    .eq("station_id", stationId)
+    .order("name");
+  if (error) {
+    console.error("fetchAllProducts error:", error.message);
+  }
   return data || [];
 }
 
@@ -1111,7 +1132,10 @@ export async function fetchInventoryTransactions(
     query = query.eq("product_id", productId);
   }
 
-  const { data } = await query;
+  const { data, error } = await query;
+  if (error) {
+    console.error("fetchInventoryTransactions error:", error.message);
+  }
   return data || [];
 }
 
