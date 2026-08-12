@@ -1,4 +1,4 @@
-import React, { useCallback } from "react";
+import React, { useCallback, useRef } from "react";
 import { useState, useEffect } from "react";
 import {
   Crown,
@@ -399,6 +399,15 @@ export default function FounderAccess() {
   }, [checkCloudStatus]);
 
   /* ─── Password check on mount ─── */
+  // Runs ONCE on mount. `logAudit` is intentionally omitted from the deps
+  // because it is a useCallback whose identity changes whenever the tRPC
+  // mutation result object changes (idle→pending→success). Including it
+  // causes this effect to re-fire on every mutation, which re-logs
+  // "Session Resumed", which triggers another mutation → infinite render
+  // loop that breaks section navigation. The ref keeps the latest fn
+  // without re-subscribing.
+  const logAuditRef = useRef(logAudit);
+  logAuditRef.current = logAudit;
   useEffect(() => {
     try {
       const sessionStr = localStorage.getItem(FOUNDER_SESSION_KEY);
@@ -408,7 +417,7 @@ export default function FounderAccess() {
         if (session?.active && session.loginTime) {
           if (Date.now() - session.loginTime < 8 * 60 * 60 * 1000) {
             setIsAuthenticated(true);
-            logAudit("Session Resumed", "Founder session restored", "info");
+            logAuditRef.current("Session Resumed", "Founder session restored", "info");
           } else {
             localStorage.removeItem(FOUNDER_SESSION_KEY);
           }
@@ -418,7 +427,8 @@ export default function FounderAccess() {
       // Handle corrupted localStorage data gracefully
       localStorage.removeItem(FOUNDER_SESSION_KEY);
     }
-  }, [logAudit]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /* ─── Load real users and stations from backend when authenticated ─── */
   useEffect(() => {

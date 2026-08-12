@@ -47,6 +47,14 @@ export function useFounderBackend() {
     // This prevents potential cascade effects from invalidating multiple queries
   });
 
+  // `mutate` is guaranteed stable by React Query; depending on it (instead of
+  // the whole `logMutation` result object, whose identity changes whenever the
+  // mutation's isPending/data state flips) keeps `logAudit` referentially
+  // stable. Without this, any effect that lists `logAudit` in its deps
+  // re-fires on every mutation state transition, which re-logs and triggers
+  // another mutation — an infinite render loop that breaks navigation.
+  const { mutate: logMutate } = logMutation;
+
   const logAudit = useCallback(
     (event: string, detail: string, severity: AuditSeverity = "info") => {
       // Always write to localStorage for immediate UI and offline support
@@ -73,10 +81,10 @@ export function useFounderBackend() {
 
       // Also persist to backend (non-blocking) - only if not static mode
       if (!isStatic) {
-        logMutation.mutate({ event, detail, severity });
+        logMutate({ event, detail, severity });
       }
     },
-    [logMutation, isStatic],
+    [logMutate, isStatic],
   );
 
   /* ─── Audit Log List ─── */
