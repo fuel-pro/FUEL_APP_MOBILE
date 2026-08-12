@@ -2124,3 +2124,98 @@ Verified: `npm ci`, `tsc --noEmit`, `vite build`, `prettier --check`,
   (~24h). /api/* endpoints unchanged.
 - **Supabase**: no schema changes needed (uses existing `app_kv` table +
   scoped row ids from the cross-user fix).
+
+## Point of Sale tab audit (DEPLOYED LIVE 2026-08-12, PR #109, commit f0ac137)
+
+Deep audit of `src/react-app/components/PointOfSale.tsx` (the "Point of Sale"
+top-level tab). Found and fixed a CRITICAL cross-device data-loss bug plus
+multiple hardcoded values. All fixes verified live on Cloudflare Pages and
+via direct Supabase REST API (fresh-device simulation).
+
+### CRITICAL — POS cross-device data loss (localStorage was source of truth)
+
+**Symptom**: `processPayment` read transactions from
+`localStorage.getItem("fuelpro_pos_transactions")`, pushed the new
+transaction onto the local array, wrote it back to localStorage, THEN synced
+the merged list to cloud. On a NEW device with empty localStorage, the cloud
+was overwritten with an array containing ONLY the single new transaction —
+destroying every prior sale from every other device. This was the exact
+"never use local storage" anti-pattern the user flagged.
+
+**Fix** (`PointOfSale.tsx` `processPayment` + `transactions` useState):
+
+- Cloud (`app_kv`) is now the source of truth. `processPayment` merges the
+  new transaction into the cloud-backed `transactions` state (loaded on
+  mount), persists the merged list to cloud via `cloudStorageService.set`,
+  then mirrors to localStorage ONLY as a read-through cache (wrapped in
+  try/catch so a quota error never blocks the sale).
+- The `transactions` useState initializer now seeds from the synchronous
+  in-memory cache (`cloudStorageService.getCached`) / localStorage for an
+  INSTANT first render (no blank flash); the mount effect refreshes from
+  the authoritative cloud source on user/station change.
+- `localStorage.setItem` is kept ONLY as a read-through cache — never the
+  source of truth.
+
+### Hardcoded values fixed
+
+1. **`"Cashier 1"`** → `user?.name || user.email.split("@")[0] ||
+currentStation?.name || "Cashier"`. The receipt now shows the real
+   logged-in user's name (e.g. "Founder QA Test").
+2. **`"en-KE"` locale** for `formatDate` → derives the locale from the
+   station's country profile (`new Intl.Locale(countryCode)` with a
+   browser-default fallback). A US station now shows `08/12/2026, 09:12:03
+AM` (mm/dd/yyyy + 12-hour) instead of the Kenya format.
+3. **`"A-16.00%"` / VAT labels** (receipt + payment summary) → uses the
+   country-aware `vatPercent` = `(getVATRate(countryCode) * 100).toFixed(2)`.
+   A US station (0% VAT) shows `A-0.00%`; a Kenya station shows `A-16.00%`.
+4. **QR verification URL** hardcoded to `itax.kra.go.ke` → country-aware
+   (KRA for Kenya, generic FuelPro `/verify` for others).
+5. **Card & bank payments wrongly treated as debt** —
+   `addToDeliveryTracking` was called for ALL non-cash/non-mpesa payments,
+   so card and bank sales created spurious debt rows. Now only true credit
+   sales (bank/card WITH a customer name) create a debt row; cash and M-Pesa
+   are settled on the spot.
+6. **Null-price crashes** — `formatNumber(undefined)` rendered "NaN" and
+   `undefined.toFixed(2)` crashed. Added `?? 0` terminal fallbacks on every
+   fuel-price chain (quick-sale buttons, live preview, `addFuelToCart`).
+7. **Unused vars + exhaustive-deps** — removed `customers`/
+   `loyaltyLookupMode`; wrapped `lookupLoyaltyCustomer` in `useCallback`.
+
+### Verification (live, 2026-08-12)
+
+- `npx tsc -b` — 0 errors ✅
+- `npx eslint src/react-app/components/PointOfSale.tsx` — 0 errors, 0
+  warnings ✅
+- `npx prettier --check` — all pass ✅
+- `npm run build` — success (112 precache entries) ✅
+- **Phase 1 (live on Cloudflare preview 7e081a68)**: logged in as
+  `founder.qa.fuelpro@gmail.com` (US station, 0% VAT). POS tab rendered
+  with `Taxable (A-0.00%)` / `VAT (0.00%)` (was hardcoded 16.00%). Added
+  20L petrol (KSh 4,280.60), completed cash sale. Receipt showed:
+  `Cashier: Founder QA Test` (not "Cashier 1"), `A-0.00%` VAT summary,
+  `08/12/2026, 09:12:03 AM` date (US locale), `Super Petrol` canonical
+  label. Recent Transactions listed INV20260812000001.
+- **Cloud persistence verified**: Supabase Management API query confirmed
+  the transaction is in `app_kv` row
+  `pos_transactions__87e6502b...__52c24393...` (owner-scoped), updated
+  09:12:03, stored as a proper JSONB array of length 1, with
+  invoice=INV20260812000001, total=4280.6, cashier="Founder QA Test",
+  payment=cash.
+- **Phase 2 (cross-device sync verified)**: simulated a fresh-device login
+  via the Supabase auth REST API (password grant → fresh access_token), then
+  queried `app_kv` via PostgREST with that token (exactly what
+  `cloudStorageService.get` does on mount). RLS correctly returned ONLY this
+  user's `pos_transactions` rows (2 rows, both owner=87e6502b). The most
+  recent row's `data` array was retrieved with length=1 and the correct
+  transaction. **A fresh device with empty localStorage WILL load this sale
+  from cloud** — the cross-device data-loss bug is fixed.
+
+### Deploy state 2026-08-12 (commit f0ac137, PR #109 merged)
+
+- GitHub main: f0ac137 merged (squash) ✅
+- Cloudflare Pages: LIVE (preview https://7e081a68.fuel-app-mobile.pages.dev
+  - main alias https://fuel-app-mobile.pages.dev) ✅
+- Vercel production: BLOCKED by `api-deployments-free-per-day`
+  (100/day exhausted; GitHub integration auto-deploys commit f0ac137 when
+  quota resets ~24h). /api/* endpoints unchanged. ⏳
+- Supabase: no schema changes (uses existing `app_kv` + scoped row ids). ✅
