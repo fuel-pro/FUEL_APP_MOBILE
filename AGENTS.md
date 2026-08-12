@@ -2096,3 +2096,33 @@ publication).
 Verified: `tsc -b` 0 errors, `eslint` 0 errors, `prettier` clean,
 `npm run build` success, 3 unit tests pass.
 
+
+## Developer Control Center + Overview/Users/Stations enhancements (ADDED 2026-08-12, commit a83a821)
+
+### NEW: Developer Control Center section
+
+New section `devcontrol` in Development nav group with 5 sub-tabs (all cloud-backed via useFounderAdvancedStore):
+1. Live Event Stream - real-time feed with filter/pause/clear, subscribes to all founder_console_* keys
+2. Cloud KV Inspector - inspect/delete any app_kv row by key, 12 quick-access buttons
+3. Batch Operations - bulk actions across 20 datasets (count/export/enable/disable/clear)
+4. System Diagnostics - 8 stat cards + connection diagnostics + dataset health breakdown
+5. Deploy Manager - Cloudflare/Vercel/GitHub status + recent releases + pending migrations
+
+### Enhanced Overview
+- 8-card stats grid (was 4), Quick Actions panel (12 buttons), advanced stats row (6 cards)
+
+### Enhanced Users
+- CSV/JSON export, role stats, role change action, details view, last active column
+
+### Enhanced Stations
+- CSV export, aggregate stats, station details, responsive grid
+
+### Bug fix: salesHistory echo overwrite (FuelContext.tsx)
+LOAD_FROM_STORAGE now guards salesHistory/debtHistory/invoices/clients against stale real-time echoes
+
+### Deploy state 2026-08-12
+- GitHub: commit a83a821 on founder-console-enhancement branch
+- Cloudflare: LIVE https://0cd6d2d2.fuel-app-mobile.pages.dev
+- Vercel: BLOCKED (api-deployments-free-per-day 100/100; auto-deploys when quota resets)
+- Supabase: no schema changes
+- Verified live: all 5 sub-tabs render, tsc -b 0 errors, build 112 precache success
