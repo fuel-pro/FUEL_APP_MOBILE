@@ -2029,3 +2029,98 @@ Dashboard renders cleanly for both:
   works correctly.
 - **Founder console Revenue label hardcoded "KSh"**: should reflect the
   station currency (USD for US stations). Founder console issue, not Dashboard.
+
+## Team Manager cross-device cloud sync (DEPLOYED LIVE 2026-08-12, PR #107)
+
+**Requirement**: Team Manager tab data (team members, invite links, role tab
+grants) must persist across devices/browsers — never localStorage-only.
+
+### PermissionContext — localStorage → cloudStorageService migration
+
+`src/react-app/context/PermissionContext.tsx` previously stored team members,
+invite links, and role tab grants in localStorage only. Now all three persist
+to cloud via `cloudStorageService` (Supabase `app_kv`, RLS by `owner_id`,
+scoped row id `${key}__${ownerId}`):
+
+- **Cloud keys**: `team_members` (TeamMember[]), `team_invites`
+  (TeamInvite[]), `team_role_grants` (Record<role, string[]>).
+- **Save**: every mutation (`addTeamMember`, `removeTeamMember`,
+  `createInviteLink`, `revokeInvite`, `acceptInviteLink`,
+  `setRoleTabGrants`) writes to cloud in addition to localStorage cache.
+- **Load**: `useEffect([user, currentStation])` loads all three from cloud
+  on mount/user-change/station-change; `Array.isArray` guards on arrays.
+- **Real-time**: subscribes to `team_members` + `team_invites` cloud keys so
+  changes from another device reflect instantly.
+- `acceptInviteLink` is idempotent (checks `member.userId === currentUserId`
+  before adding) and persists the accepted member to cloud.
+
+### TeamManager.tsx — real station pump names (not hardcoded)
+
+`TeamManager.tsx` had a hardcoded `["PMS-1", "PMS-2", "AGO-1", "AGO-2",
+"IK-1"]` pump list for the pump-assignment dropdown. Now derives the pump
+list from the station's ACTUAL configured pumps:
+
+- Reads `state.pmsPumps` / `state.agoPumps` (from FuelContext) and builds
+  labels as `PMS-${i+1}` / `AGO-${i+1}` for each configured pump.
+- Falls back to the FuelContext fuel-types config (`state.fuelTypes`) for
+  stations with custom fuel types, labeling each pump by canonical fuel
+  label + index.
+- The hardcoded list is gone; the dropdown now reflects the real station
+  setup (e.g. a station with 2 PMS + 2 AGO pumps shows exactly PMS-1,
+  PMS-2, AGO-1, AGO-2).
+
+### Shifts sub-tab (already cloud-synced)
+
+The "Shifts" sub-tab inside Team Manager is the ShiftManagement component
+(cloud keys `shift_data`, `shift_employees` — migrated in a prior session).
+Verified: adding an employee ("Grace Wambui", Attendant, +254712345678,
+$200/hr) persisted and showed in the roster with "Synced" indicator.
+
+### CI fix (bundled in PR #107)
+
+The `npm ci` step in `.github/workflows/ci.yml` was failing on ALL branches
+(main + PRs) because:
+
+1. `package-lock.json` was out of sync — missing electron-builder
+   platform-specific deps (`electron-builder-squirrel-windows`,
+   `electron-winstaller`, `@electron/windows-sign`, etc.).
+2. Plain `npm ci` (no `--legacy-peer-deps`) rejected the react@19 vs
+   react-debounce-input/react-inspector peer conflicts (via swagger-ui-react).
+
+Fix:
+
+- Regenerated `package-lock.json` with `npm install --legacy-peer-deps`.
+- Added `.npmrc` with `legacy-peer-deps=true` so plain `npm ci` (as CI
+  runs it) tolerates the peer conflicts. Applies everywhere (CI, local,
+  Vercel).
+- Ran `prettier --write` across all `src/**/*.{ts,tsx}` + `*.{json,md}`
+  (45 pre-existing unformatted files) so the CI prettier gate passes.
+
+Verified: `npm ci`, `tsc --noEmit`, `vite build`, `prettier --check`,
+`eslint`, and all Playwright E2E tests pass on Node 22.
+
+### Phase 1 + cross-device verification (2026-08-12)
+
+- Signed up `qa.team.0812@gmail.com`, completed setup wizard for "Team QA
+  Station" (45 QA Avenue, Nairobi, 2 PMS + 2 AGO pumps, prices 214/222).
+- Navigated to Team Manager tab → created Manager invite link
+  (`inv_1786523863119_2vas`, "QA Manager Invite", 0/1 uses) → "Synced"
+  indicator appeared.
+- **Full page reload**: invite persisted ("1 Active Invites" still showing,
+  invite `inv_1786523863119_2vas` loaded from cloud, NOT localStorage) ✅
+- Shifts sub-tab: added employee "Grace Wambui" (Attendant, +254712345678,
+  $200/hr) → saved to cloud, appeared in roster ✅
+
+### Deploy state 2026-08-12 (commit 1ef270e, PR #107 merged)
+
+- **GitHub main**: ✅ merged (squash) commit 1ef270e
+- **Cloudflare Pages**: ✅ LIVE (preview https://4757ca0c.fuel-app-mobile.pages.dev
+  - main alias https://fuel-app-mobile.pages.dev, bundle index-BmoIqHGQ.js,
+    112 precache). TeamManager chunk + `team_invites`/`roleTabGrants` cloud
+    markers verified in live bundle.
+- **Vercel production**: ❌ BLOCKED by `api-deployments-free-per-day`
+  (100/100; prebuilt deploy also hit the limit). GitHub integration
+  (prodBranch=main) will auto-deploy commit 1ef270e when the quota resets
+  (~24h). /api/* endpoints unchanged.
+- **Supabase**: no schema changes needed (uses existing `app_kv` table +
+  scoped row ids from the cross-user fix).
