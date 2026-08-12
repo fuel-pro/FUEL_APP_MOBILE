@@ -3587,3 +3587,13 @@ Verified via direct chunk fetch that Vercel production
 - AdvancedAnalytics: `AdvancedAnalytics-Dd9PHYnk.js` — "Export CSV",
   "Live (Supabase)", "Record a Sale" ✅
 - PayrollSystem: `PayrollSystem-CKCdTAcW.js` — "SHA" (net-pay calc) ✅
+
+## Logo in ALL generated/exported documents (DEPLOYED LIVE 2026-08-12, PR #129, commit e0af120)
+
+**Requirement**: Include the user uploaded company logo in EVERY document created/generated/exported by the system — PDF, print, thermal receipts, TXT.
+
+**Root cause**: All PDF export functions used synchronous doc.addImage(new Image(), "PNG", ...) WITHOUT awaiting image load. For external URLs (Supabase Storage public URLs), the image had not loaded by the time addImage was called, so the logo was silently skipped. The Invoice export had an explicit console.warn saying "External logo URLs not supported in PDF export."
+
+**Fix** (src/react-app/utils/exportUtils.ts): new loadLogoAsDataURL() + addLogoToPDF() helpers that fetch external URLs and convert to base64 via canvas (with fetch+FileReader fallback for tainted canvases). All 4 PDF exports are now async + await logo loading. Components fixed: ReportsCenter, PayrollSystem, FuelOffloading, PointOfSale (receipt), Compliance (print), Invoice/SalesTracking/DeliveryTracker/DebtReminder (async handlers). Receipt infra: printer-service.ts ReceiptData gains stationPhone, stationEmail, logoUrl; hardcoded +1-555-000-0000 replaced with station phone; silent-print-service.ts generateReceiptHTML includes logo + real phone. Excel: SheetJS community edition does not support image embedding (company name already in header row). TXT: includes logo URL reference line.
+
+**Deploy**: GitHub main commit 73cbc99 (PR #129 merged). Cloudflare Pages LIVE (preview https://8cc4d29d.fuel-app-mobile.pages.dev). Verified in bundles: exportUtils chunk has crossOrigin+toDataURL; hardcoded 1-555-000-0000 completely gone; stationPhone in index chunk. Vercel BLOCKED by api-deployments-free-per-day (100/100; auto-deploys when quota resets ~24h). tsc 0 errors, build 111 precache, prettier all pass.
