@@ -1953,3 +1953,79 @@ resets.
 
 adminAPI.ts default company phone was +1 555 000 1234 (US format) even for
 Kenya-based stations. Now uses +254 700 000 000 for Kenya, empty for others.
+
+## Dashboard tab deep audit + fix (DEPLOYED 2026-08-12, PR #108, commit 7c07a21)
+
+Deep audit of the Dashboard tab (`src/react-app/components/Dashboard.tsx`).
+Found and fixed multiple bugs/hardcoded items/missing links. Verified live on
+Cloudflare Pages (preview 64e299a3 + main alias fuel-app-mobile.pages.dev).
+
+### Bugs fixed
+
+1. **KPI cards stuck at 0 after cloud load** — the animate-KPI `useEffect`
+   depended only on `[hasBackendData, backendStats]`. When sales data arrived
+   from cloud AFTER mount (the normal non-founder path), the cards never
+   re-animated with the real totals. Added `totalRevenue/netProfit/
+totalFuelSold/totalDebt` to the deps and moved the totals `useMemo` above
+   the effect so the values are in scope.
+2. **Null price crashes on `.toFixed(2)`** — `displayPmsPrice`/
+   `displayAgoPrice` could be null/undefined → `Cannot read properties of
+null` crash + "undefined" rendered. Added `?? 0` terminal fallback to
+   every price chain.
+3. **Hardcoded locale `"en-KE"`** for the live clock — wrong for non-Kenya
+   stations. Now derives a locale from the station's country profile
+   (language + country id) via `Intl.Locale`, falling back to the browser
+   default. Same for the minimum-wage `.toLocaleString()`. Verified: US
+   station shows "Wed, Aug 12, 2026, 08:50:15 AM"; Kenya shows
+   "Wed, 12 Aug 2026".
+4. **Hardcoded tank capacity divisor (5000)** — tank-level bar used magic
+   `closing/(closing+5000)` heuristic. Replaced with `tankFillPercent(opening,
+closing)` using the period opening reading (known-full level) as the true
+   denominator.
+5. **Hardcoded `"PMS Pumps"`/`"AGO Pumps"` labels** → `CANONICAL_FUEL_TYPES`
+   labels. Diesel price card label hardcoded "Diesel" → canonical label.
+6. **`transportSurcharge.toFixed(2)` + `currentLocation.longitude.toFixed(4)`
+   crashes** on null/undefined — guarded.
+7. **Missing kerosene price visibility** — kerosene price was computed but
+   never displayed. Added a third price card (responsive 3-column grid).
+8. **Unused imports/vars** — removed `TrendingUpIcon`, `Info`,
+   `getApiBaseAsync`; prefixed remaining intentionally-unused `useAutoSync`
+   fields with `_`.
+9. **`backendLoading` not surfaced** — now shown as a subtle "syncing stats…"
+   indicator in the header.
+
+### Deploy status 2026-08-12 (commit 7c07a21, PR #108 merged)
+
+- GitHub main: ✅ 7c07a21 (squash-merged from PR #108)
+- Cloudflare Pages: ✅ LIVE (preview https://64e299a3.fuel-app-mobile.pages.dev
+  - main alias https://fuel-app-mobile.pages.dev, bundle 112 precache)
+- Vercel production: ❌ BLOCKED by `api-deployments-free-per-day`
+  (100/100; ALL deploy paths blocked: prebuilt, git-source API). GitHub
+  integration auto-deploys commit 7c07a21 when the quota resets (~24h).
+  /api/* endpoints unchanged. Until then Vercel production serves the
+  previous commit; the Cloudflare mirror has the fixed frontend NOW.
+- Supabase: no schema changes needed (frontend-only fixes).
+
+### Live verification (Cloudflare preview)
+
+Logged in as founder QA user (`founder.qa.fuelpro@gmail.com`, uid 87e6502b).
+Dashboard renders cleanly for both:
+
+- US station ("Founder Admin Station", USD): "Wed, Aug 12, 2026, 08:50:15 AM",
+  Super Petrol $3.45 / Diesel $3.85 / Kerosene $3.20 (3-column grid),
+  "Super Petrol Pumps"/"Diesel Pumps" (canonical labels), no "undefined".
+- Kenya station ("THE PUBLICAN ENERGY", KES): "Wed, 12 Aug 2026", EPRA prices
+  (Super Petrol KSh 218.53 / Diesel KSh 227.14 / Kerosene KSh 192.31),
+  16% VAT, NSSF 6%, Housing Levy 1.5%, Excise Duty KSh 21.95, Min Wage
+  KSh 15,120.
+
+### Known out-of-scope issues (NOT Dashboard, not addressed here)
+
+- **Founder console nav section-switch regression**: clicking sidebar nav
+  items (Users, Stations, etc.) sometimes doesn't change `activeSection`
+  (header stays "Super Admin | Overview"). This was previously fixed in
+  commit ae5f31f (infinite render loop) but appears to have regressed. It's
+  a FounderAccess.tsx issue, NOT a Dashboard issue. The Dashboard tab itself
+  works correctly.
+- **Founder console Revenue label hardcoded "KSh"**: should reflect the
+  station currency (USD for US stations). Founder console issue, not Dashboard.
