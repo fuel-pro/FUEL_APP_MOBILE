@@ -336,10 +336,16 @@ export function navigateToTab(tabId: string, payload?: unknown): void {
         new CustomEvent("tabPayload", { detail: { tab: tabId, payload } }),
       );
     };
-    // First dispatch — may fire before the lazy component mounts.
+    // Dispatch multiple times to handle the lazy-load race: the target tab's
+    // component may not be mounted yet when early dispatches fire (React.lazy
+    // + Suspense). Later dispatches ensure the listener catches the payload
+    // once the component renders. The receiver's onTabPayload callback is
+    // idempotent (it uses functional setState, so duplicate applications are
+    // safe).
     setTimeout(dispatch, 50);
-    // Second dispatch — ensures the listener catches it after mount.
-    setTimeout(dispatch, 300);
+    setTimeout(dispatch, 200);
+    setTimeout(dispatch, 500);
+    setTimeout(dispatch, 1000);
   }
 }
 
