@@ -1823,3 +1823,35 @@ The app is now confirmed world-wide (not Kenya-centric):
   - Shifts: Sarah Johnson (morning shift)
 - Currency detection: `getDetectedCurrency()` resolves USD for US; the app
   supports all countries via the browser's locale/timezone.
+
+
+## Founder panel token fix (DEPLOYED 2026-08-11, commit 0875742)
+
+**Symptom**: the Founder Console always showed "All Users 1, All Stations 1"
+instead of the real cross-owner counts (22 users, 12 stations), even after
+the `/api/founder-stats` endpoint was added in a prior session.
+
+**Root cause**: `useFounderBackend.ts` `loadStats()` called
+`getSupabaseClient().auth.getSession()` to get the Bearer token for the
+`/api/founder-stats` request. But the shared Supabase client session is
+the APP user session (e.g. a regular QA user), NOT the founder session.
+The endpoint returned 403 (not a founder) and the hook silently ignored
+it, falling back to the localStorage-scanned single-user count (1).
+
+**Fix**: `loadStats()` now prefers
+`localStorage.getItem("fuelpro_founder_token")` (stored by loginFounder)
+which is always the founder access token. Falls back to getSession() only
+if the founder token is absent.
+
+**Verified live** on Cloudflare preview (432b5d5e): founder login shows
+All Users 22, All Stations 12. The All Stations view lists all 12 stations
+worldwide with correct owner names.
+
+**Deploy status**: Cloudflare LIVE. Vercel BLOCKED by
+api-deployments-free-per-day; GitHub integration auto-deploys when quota
+resets.
+
+## Hardcoded phone placeholder fix (DEPLOYED 2026-08-11, commit f3ba175)
+
+adminAPI.ts default company phone was +1 555 000 1234 (US format) even for
+Kenya-based stations. Now uses +254 700 000 000 for Kenya, empty for others.
