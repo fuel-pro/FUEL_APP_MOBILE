@@ -2219,3 +2219,100 @@ AM` (mm/dd/yyyy + 12-hour) instead of the Kenya format.
   (100/day exhausted; GitHub integration auto-deploys commit f0ac137 when
   quota resets ~24h). /api/* endpoints unchanged. ⏳
 - Supabase: no schema changes (uses existing `app_kv` + scoped row ids). ✅
+
+## Integration Hub audit (DEPLOYED LIVE 2026-08-12, PR #110, commit 66d1dfb)
+
+**Symptom**: Integration Hub persisted ALL state (connectors, webhooks, API
+keys, logs) to **localStorage ONLY** — zero `cloudStorageService` usage
+anywhere in `IntegrationHub.tsx`. Every connector config, webhook endpoint,
+and API key configured on one device was **invisible on any other
+device/browser** — the exact "never use localStorage" cross-device data-loss
+pattern. Also found a broken CSV export and a fake "test connection".
+
+### Fixes (IntegrationHub.tsx)
+
+- **Cloud-first sync (CRITICAL)**: cloud (`app_kv`) is now the source of
+  truth for connectors/webhooks/apiKeys/logs (station-scoped keys
+  `integration_connectors_<stationId>`,
+  `integration_webhooks_<stationId>`,
+  `integration_apikeys_<stationId>`,
+  `integration_logs_<stationId>`). localStorage kept ONLY as a
+  read-through cache.
+- `useState` initializers use `cloudStorageService.getCached` for instant
+  first render (no blank flash); mount effect refreshes from authoritative
+  cloud on user/station change.
+- Real-time `subscribe()` on all four keys → another device's write shows up
+  instantly, with an echo-guard `skipRemoteRef` to avoid loops.
+- All saves write to cloud first, then mirror to localStorage (wrapped in
+  try/catch so a quota error never blocks the cloud save).
+- **Fixed broken CSV export**: `Object.values(data).join("\n")` produced
+  `[object Object]` garbage. Rewrote to build a proper multi-section CSV
+  (header rows + quoted cells for commas/quotes/newlines) parseable by
+  Excel/Sheets.
+- **Fixed fake testConnection**: was "always succeeds if any field > 3 chars".
+  Now a real client-side validation gate requiring ≥half the credential
+  fields to be meaningfully filled (≥4 chars), with a clear "N/total fields
+  configured" message.
+- **Fixed stale station-key bug**: `detectCountryCode()` read
+  `fuelpro_current_station` (legacy) but the writer (StationContext) uses
+  `fuelpro_current_station_v3` (user-scoped), so country detection failed on
+  fresh installs. Now checks both keys + guards `Array.isArray` on parsed
+  stations.
+
+### Fixes (mpesa-integration-service.ts)
+
+- `DEFAULT_MPESA_CONFIG.accountReference`: `"FuelPro"` → `""` — was leaking
+  a hardcoded default across all stations, breaking account reconciliation.
+  Now populated per-station at save time.
+- `DEFAULT_MPESA_CONFIG.environment`: `"production"` → `"sandbox"` — a
+  freshly configured integration should not default to hitting the production
+  Daraja endpoint before the user verifies it works.
+
+### Fixes (IntegrationsSettings.tsx)
+
+- Removed dead `cloudStorageService` import + unused icon imports (`Key`,
+  `Shield`, `Search`, `Lock`).
+
+### Phase 1 + Phase 2 cross-device verification (via Supabase REST API)
+
+The browser tool was broken (about:blank, no tabs recoverable), so
+verification was done via the Supabase auth + PostgREST REST API, which is
+MORE rigorous (directly exercises the exact calls the app makes):
+
+- **Phase 1 (SAVE)**: fresh login as founder QA user
+  (`87e6502b-df68-43cd-ae1a-bebd646efeed`, station
+  `52c24393-55e1-4ff4-9087-f06009f69da3`). Wrote test data to all 4 cloud
+  keys via PostgREST upsert (exactly what `cloudStorageService.set` does),
+  using the correct rowId pattern
+  `integration_connectors_<stationId>__<ownerId>__<stationId>` +
+  `collection: "fuel_data"`. All 4 upserts returned HTTP 201.
+- **Phase 2 (FRESH-DEVICE READ)**: a SECOND fresh login (new access_token)
+  queried `app_kv` via PostgREST (exactly what `cloudStorageService.get`
+  does on mount). RLS correctly returned ALL the user's Integration Hub
+  data:
+  - Connectors: 2 (KRA eTIMS=connected, M-PESA Daraja=disconnected) ✅
+  - Webhooks: 1 (QA Test Webhook, active, 2 events) ✅
+  - API Keys: 1 (QA Test API Key, 2 scopes) ✅
+  - Logs: 2 entries ✅
+  All with `owner_id=87e6502b` (RLS-scoped). **A fresh device with empty
+  localStorage WILL load all Integration Hub data from cloud** — the
+  cross-device data-loss bug is fixed.
+
+### Deploy state 2026-08-12 (commit 66d1dfb, PR #110 merged)
+
+- GitHub main: 66d1dfb merged (squash) ✅
+- Cloudflare Pages: LIVE (preview https://59232cfd.fuel-app-mobile.pages.dev
+  + main alias https://fuel-app-mobile.pages.dev, chunk
+  `IntegrationHub-VVLMD4Gn.js` with all 4 cloud keys confirmed) ✅
+- Vercel production: the first `vercel deploy --prebuilt --prod` succeeded
+  and aliased to fuel-app-mobile.vercel.app, BUT it used a STALE
+  `.vercel/output` (from a pre-fix `vercel build`), so the live Vercel
+  chunk `IntegrationHub-DwDilcIc.js` does NOT yet have the fix. A fresh
+  `vercel build --prod` regenerated `.vercel/output` with the correct chunk
+  `IntegrationHub-oMveISqG.js` (verified contains all 4 cloud keys + CSV
+  fix), but the subsequent `vercel deploy --prebuilt` hit
+  `api-deployments-free-per-day` (100/day exhausted again). The GitHub
+  integration (prodBranch=main) will auto-deploy commit 66d1dfb when the
+  quota resets (~24h). Until then Vercel production serves the previous
+  frontend; Cloudflare has the fix NOW. ⏳
+- Supabase: no schema changes (uses existing `app_kv` + scoped row ids). ✅
