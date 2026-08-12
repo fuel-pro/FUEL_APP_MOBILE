@@ -1908,4 +1908,16 @@ signed-in founder device, with zero polling.
   (5 pre-existing warnings only, down from 13).
 - **No Supabase schema changes** — uses the existing `app_kv` table + RLS
   (owner-scoped) + realtime publication.
+- **Deploy status 2026-08-12 (commit cc30e20)**: PR #106 opened (branch
+  `founder-console-enhancement`). Cloudflare Pages LIVE
+  (https://d471978e.fuel-app-mobile.pages.dev + main alias
+  fuel-app-mobile.pages.dev, bundle founder-B44OHBm3.js). Vercel production
+  deployed via git-source API (`POST /v13/deployments` with gitSource.repoId
+  + ref=<sha>), dpl_13bta1JZbxrd4CEHGLj6UySPbSFW READY, aliased to
+  fuel-app-mobile.vercel.app (bundle founder-FMhl0GbJ.js). The prebuilt /
+  deploy bucket was rate-limited (100/day), but the git-source deploy uses the
+  separate GitHub-integration quota and succeeded. Verified live on BOTH hosts:
+  the founder chunk contains `founder_console_secrets/_flags/_audit/_settings`,
+  "Console Settings", "Real-time synced", "Rotate", `bulkSetFlags`. No Supabase
+  changes were needed.
 
