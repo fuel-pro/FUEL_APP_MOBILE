@@ -322,16 +322,24 @@ export function switchToTab(tabId: string): void {
  * Target components listen via `onTabPayload` (below) and apply the payload
  * once on activation. This is the backbone of the inter-tab linking layer
  * connecting Credit ↔ Live Transaction ↔ Invoice ↔ Dashboard quick actions.
+ *
+ * The payload is dispatched after a short delay AND re-dispatched once. This
+ * handles the lazy-load race: the target tab's component may not be mounted
+ * yet when the first dispatch fires (React.lazy + Suspense), so a second
+ * dispatch ensures the listener catches it once the component renders.
  */
 export function navigateToTab(tabId: string, payload?: unknown): void {
   window.dispatchEvent(new CustomEvent("changeTab", { detail: tabId }));
   if (payload !== undefined) {
-    // Fire after the tab switch so the target component is mounted.
-    setTimeout(() => {
+    const dispatch = () => {
       window.dispatchEvent(
         new CustomEvent("tabPayload", { detail: { tab: tabId, payload } }),
       );
-    }, 0);
+    };
+    // First dispatch — may fire before the lazy component mounts.
+    setTimeout(dispatch, 50);
+    // Second dispatch — ensures the listener catches it after mount.
+    setTimeout(dispatch, 300);
   }
 }
 
