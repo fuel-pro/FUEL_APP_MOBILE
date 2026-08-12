@@ -8,6 +8,8 @@
 import {
   getCountryByCode,
   getCountryFromLocation,
+  normalizeCurrencyCode,
+  getCountryByCurrency,
 } from "./world-country-utils";
 import { REGIONAL_PRICES } from "@/react-app/config/pricing";
 
@@ -17,11 +19,13 @@ Object.entries(REGIONAL_PRICES).forEach(([code, config]) => {
   UNIFIED_SYMBOLS[code] = config.currencySymbol;
 });
 
-const CURRENCY_CACHE: Record<string, string> = {};
-
 export function getDetectedCurrency(): string {
-  const cacheKey = "_default";
-  if (CURRENCY_CACHE[cacheKey]) return CURRENCY_CACHE[cacheKey];
+  // NOTE: the cache is intentionally keyed per-call-site (not a single global
+  // "_default") so that a stale "USD" result from an early render (before
+  // cloud data loaded) does NOT poison all subsequent calls. We only cache
+  // NON-USD results; "USD" is the last-resort fallback and must be
+  // re-evaluated every time so that late-arriving station/companyData can
+  // upgrade the detection.
 
   // 1. Try station data (highest priority)
   try {
@@ -39,14 +43,14 @@ export function getDetectedCurrency(): string {
       // currency code (e.g. "KES"); resolve whichever is present.
       if (current) {
         if (current.currency) {
-          CURRENCY_CACHE[cacheKey] = current.currency;
-          return current.currency;
+          const code =
+            normalizeCurrencyCode(current.currency) || current.currency;
+          if (code !== "USD") return code;
         }
         const cc = current.country || current.countryCode;
         if (cc) {
           const country = getCountryByCode(cc);
           if (country?.currency) {
-            CURRENCY_CACHE[cacheKey] = country.currency;
             return country.currency;
           }
         }
@@ -58,8 +62,29 @@ export function getDetectedCurrency(): string {
         if (current.location) {
           const country = getCountryFromLocation(current.location);
           if (country?.currency) {
-            CURRENCY_CACHE[cacheKey] = country.currency;
             return country.currency;
+          }
+        }
+      }
+    }
+  } catch {
+    /* */
+  }
+
+  // 1b. Try FuelContext companyData (saved to localStorage as
+  //     user_*_compactcompanyData or fuelpro_cloud_*companyData).
+  //     This catches the common case where the station record has empty
+  //     currency but the companyData (set via Edit Info) has "KSh" or "KES".
+  try {
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const key = localStorage.key(i);
+      if (key && key.endsWith("companyData")) {
+        const raw = localStorage.getItem(key);
+        if (raw) {
+          const cd = JSON.parse(raw);
+          if (cd?.currency) {
+            const code = normalizeCurrencyCode(cd.currency) || cd.currency;
+            if (code !== "USD") return code;
           }
         }
       }
@@ -77,10 +102,9 @@ export function getDetectedCurrency(): string {
         const parsed = JSON.parse(saved);
         const cc =
           parsed.countryCode || parsed.currentCountry || parsed.country;
-        if (cc) {
+        if (cc && cc.toUpperCase() !== "US") {
           const country = getCountryByCode(cc);
           if (country?.currency) {
-            CURRENCY_CACHE[cacheKey] = country.currency;
             return country.currency;
           }
         }
@@ -99,19 +123,15 @@ export function getDetectedCurrency(): string {
     tz.includes("Kigali") ||
     tz.includes("Addis")
   ) {
-    CURRENCY_CACHE[cacheKey] = "KES";
     return "KES";
   }
   if (tz.includes("Lagos") || tz.includes("Accra")) {
-    CURRENCY_CACHE[cacheKey] = "NGN";
     return "NGN";
   }
   if (tz.includes("Johannesburg")) {
-    CURRENCY_CACHE[cacheKey] = "ZAR";
     return "ZAR";
   }
   if (tz.includes("London")) {
-    CURRENCY_CACHE[cacheKey] = "GBP";
     return "GBP";
   }
   if (
@@ -120,11 +140,9 @@ export function getDetectedCurrency(): string {
     tz.includes("Rome") ||
     tz.includes("Madrid")
   ) {
-    CURRENCY_CACHE[cacheKey] = "EUR";
     return "EUR";
   }
 
-  CURRENCY_CACHE[cacheKey] = "USD";
   return "USD";
 }
 
@@ -133,11 +151,7 @@ export function getDetectedCurrency(): string {
  * Mirrors getDetectedCurrency() but returns the country code so components
  * can gate country-specific features (e.g. KRA eTIMS for Kenya only).
  */
-const COUNTRY_CACHE: Record<string, string> = {};
 export function getDetectedCountryCode(): string {
-  const cacheKey = "_default";
-  if (COUNTRY_CACHE[cacheKey]) return COUNTRY_CACHE[cacheKey];
-
   // 1. Station data
   try {
     const stationsJson = localStorage.getItem("fuelpro_stations_v3");
@@ -150,15 +164,44 @@ export function getDetectedCountryCode(): string {
       const current = stationList?.find((s: any) => s.id === currentStationId);
       if (current) {
         const cc = current.country || current.countryCode;
-        if (cc) {
-          COUNTRY_CACHE[cacheKey] = cc.toUpperCase();
+        if (cc && cc.toUpperCase() !== "US") {
           return cc.toUpperCase();
+        }
+        if (current.currency) {
+          const code = normalizeCurrencyCode(current.currency);
+          if (code && code !== "USD") {
+            const country = getCountryByCode(getCountryByCurrency(code) || "");
+            if (country?.code) return country.code;
+          }
         }
         if (current.location) {
           const country = getCountryFromLocation(current.location);
           if (country?.code) {
-            COUNTRY_CACHE[cacheKey] = country.code.toUpperCase();
             return country.code.toUpperCase();
+          }
+        }
+      }
+    }
+  } catch {
+    /* */
+  }
+
+  // 1b. FuelContext companyData
+  try {
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const key = localStorage.key(i);
+      if (key && key.endsWith("companyData")) {
+        const raw = localStorage.getItem(key);
+        if (raw) {
+          const cd = JSON.parse(raw);
+          if (cd?.currency) {
+            const code = normalizeCurrencyCode(cd.currency);
+            if (code && code !== "USD") {
+              const country = getCountryByCode(
+                getCountryByCurrency(code) || "",
+              );
+              if (country?.code) return country.code;
+            }
           }
         }
       }
@@ -175,8 +218,7 @@ export function getDetectedCountryCode(): string {
         const parsed = JSON.parse(saved);
         const cc =
           parsed.countryCode || parsed.currentCountry || parsed.country;
-        if (cc) {
-          COUNTRY_CACHE[cacheKey] = cc.toUpperCase();
+        if (cc && cc.toUpperCase() !== "US") {
           return cc.toUpperCase();
         }
       }
@@ -188,21 +230,34 @@ export function getDetectedCountryCode(): string {
   // 3. Timezone fallback
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const tzMap: Record<string, string> = {
-    Nairobi: "KE", Kampala: "UG", "Dar_es_Salaam": "TZ", Kigali: "RW",
-    Lagos: "NG", Accra: "GH", Johannesburg: "ZA", London: "GB",
-    Berlin: "DE", Paris: "FR", Rome: "IT", Madrid: "ES",
-    "New_York": "US", Chicago: "US", "Los_Angeles": "US",
-    Tokyo: "JP", Shanghai: "CN", Kolkata: "IN", Mumbai: "IN",
-    Sao_Paulo: "BR", Sydney: "AU",
+    Nairobi: "KE",
+    Kampala: "UG",
+    Dar_es_Salaam: "TZ",
+    Kigali: "RW",
+    Lagos: "NG",
+    Accra: "GH",
+    Johannesburg: "ZA",
+    London: "GB",
+    Berlin: "DE",
+    Paris: "FR",
+    Rome: "IT",
+    Madrid: "ES",
+    New_York: "US",
+    Chicago: "US",
+    Los_Angeles: "US",
+    Tokyo: "JP",
+    Shanghai: "CN",
+    Kolkata: "IN",
+    Mumbai: "IN",
+    Sao_Paulo: "BR",
+    Sydney: "AU",
   };
   for (const [frag, cc] of Object.entries(tzMap)) {
     if (tz.includes(frag)) {
-      COUNTRY_CACHE[cacheKey] = cc;
       return cc;
     }
   }
 
-  COUNTRY_CACHE[cacheKey] = "US";
   return "US";
 }
 

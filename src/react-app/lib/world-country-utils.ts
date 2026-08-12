@@ -169,8 +169,50 @@ export const CURRENCY_TO_COUNTRY: Record<string, string> = {
 };
 
 /** Resolve a country from a currency code (e.g. "KES" → "KE"). */
+/** Reverse map of currency symbols → ISO currency codes */
+const CURRENCY_SYMBOL_TO_CODE: Record<string, string> = {
+  KSh: "KES",
+  USh: "UGX",
+  TSh: "TZS",
+  "\u20A6": "NGN", // Naira sign
+  R: "ZAR",
+  "GH\u20B5": "GHS",
+  RF: "RWF",
+  FBu: "BIF",
+  $: "USD",
+  "\u00A3": "GBP", // Pound sign
+  "\u20AC": "EUR", // Euro sign
+  "\u00A5": "JPY", // Yen sign
+  "\u20B9": "INR", // Rupee sign
+  A$: "AUD",
+  C$: "CAD",
+  CHF: "CHF",
+  R$: "BRL",
+  K: "ZMW",
+  P: "BWP",
+  MT: "MZN",
+};
+
+/** Normalize a currency string that may be a symbol (KSh, $) or code (KES, USD) */
+export function normalizeCurrencyCode(currency: string): string | undefined {
+  if (!currency) return undefined;
+  const upper = currency.toUpperCase();
+  // Already a code
+  if (CURRENCY_TO_COUNTRY[upper]) return upper;
+  // Try symbol → code (case-sensitive for symbols like "KSh")
+  const fromSymbol = CURRENCY_SYMBOL_TO_CODE[currency];
+  if (fromSymbol) return fromSymbol;
+  // Try uppercased symbol
+  const fromSymbolUpper = CURRENCY_SYMBOL_TO_CODE[upper];
+  if (fromSymbolUpper) return fromSymbolUpper;
+  return undefined;
+}
+
 export function getCountryByCurrency(currency: string): string | undefined {
   if (!currency) return undefined;
+  // Accept both codes (KES) and symbols (KSh)
+  const code = normalizeCurrencyCode(currency);
+  if (code) return CURRENCY_TO_COUNTRY[code];
   return CURRENCY_TO_COUNTRY[currency.toUpperCase()];
 }
 
