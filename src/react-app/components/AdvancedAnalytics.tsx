@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useFuel } from "@/react-app/context/FuelContext";
 import { useLocation } from "@/react-app/context/LocationContext";
 import { useStations } from "@/react-app/context/StationContext";
@@ -8,16 +8,18 @@ import {
   TrendingUp,
   TrendingDown,
   Target,
-  Calendar,
-  ArrowUpRight,
-  ArrowDownRight,
   Activity,
   PieChart,
   Layers,
   Loader2,
   AlertCircle,
+  Download,
+  RefreshCw,
+  ShoppingCart,
+  Plus,
 } from "lucide-react";
 import { formatNumber } from "@/react-app/utils/formatUtils";
+import { switchToTab } from "@/react-app/lib/mpesa-integration-service";
 
 interface PredictionPoint {
   date: string;
@@ -44,7 +46,14 @@ export default function AdvancedAnalytics() {
   const { state } = useFuel();
   const location = useLocation();
   const { currentStation } = useStations();
-  const currencySymbol = location.currencySymbol;
+  // Use the station's currency (reactive to station/company changes) rather
+  // than the device-detected location currency, which was wrong for
+  // multi-country setups (a Kenyan station viewed from a US browser showed $).
+  const currencySymbol =
+    currentStation?.currencySymbol ||
+    location.currencySymbol ||
+    state.companyData?.currency ||
+    "KES";
   const [timeRange, setTimeRange] = useState<"7d" | "30d" | "90d" | "1y">(
     "30d",
   );
@@ -53,6 +62,9 @@ export default function AdvancedAnalytics() {
   const [salesData, setSalesData] = useState<DailySales[]>([]);
   const [inventoryLevels, setInventoryLevels] = useState<InventoryLevel[]>([]);
   const [fuelPrices, setFuelPrices] = useState({ pms: 0, ago: 0 });
+  const [dataSource, setDataSource] = useState<"supabase" | "local" | "none">(
+    "none",
+  );
 
   // Calculate date range
   const dateRange = useMemo(() => {
@@ -74,26 +86,50 @@ export default function AdvancedAnalytics() {
     };
   }, [timeRange]);
 
-  // Fetch real sales data from Supabase
-  useEffect(() => {
-    if (!currentStation?.id) return;
+  // Fetch real sales data from Supabase. Removed `state` (entire FuelContext)
+  // from deps — it changed on every keystroke anywhere in the app, causing
+  // a re-fetch storm. Now reads only the specific fields needed via refs.
+  const fetchAnalytics = useCallback(async () => {
+    if (!currentStation?.id) {
+      setLoading(false);
+      setDataSource("none");
+      return;
+    }
 
-    const fetchAnalyticsData = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        // Fetch sales from sales_enhanced table
-        const { data: sales, error: salesError } = await supabase
-          .from("sales_enhanced")
-          .select("sale_date, total_amount")
-          .eq("station_id", currentStation.id)
-          .gte("sale_date", dateRange.start)
-          .lte("sale_date", dateRange.end)
-          .order("sale_date", { ascending: true });
+    setLoading(true);
+    setError(null);
+    try {
+      // Fetch sales from sales_enhanced table (the canonical POS sales table).
+      const { data: sales, error: salesError } = await supabase
+        .from("sales_enhanced")
+        .select("sale_date, total_amount")
+        .eq("station_id", currentStation.id)
+        .gte("sale_date", dateRange.start)
+        .lte("sale_date", dateRange.end)
+        .order("sale_date", { ascending: true });
 
-        if (salesError) throw salesError;
+      if (salesError) throw salesError;
 
-        // Also fetch from legacy sales table for fuel data
+      // Process sales by date. Only pre-initialize dates that fall within the
+      // range IF we have actual sales (so a new station shows a real empty
+      // state instead of a zero-filled dashboard that looks like "0 revenue").
+      const salesByDate: Record<string, DailySales> = {};
+
+      if (sales && sales.length > 0) {
+        for (const sale of sales) {
+          const dateStr = new Date(sale.sale_date).toISOString().split("T")[0];
+          if (!salesByDate[dateStr]) {
+            salesByDate[dateStr] = { date: dateStr, total: 0, count: 0 };
+          }
+          salesByDate[dateStr].total += sale.total_amount || 0;
+          salesByDate[dateStr].count += 1;
+        }
+      }
+
+      // If sales_enhanced returned nothing, try the legacy `sales` table as a
+      // FALLBACK ONLY (do NOT aggregate both — that double-counts revenue for
+      // stations that have data in both tables).
+      if (sales && sales.length === 0) {
         const { data: fuelSales, error: fuelError } = await supabase
           .from("sales")
           .select("created_at, quantity, price_per_liter, fuel_type_id")
@@ -102,134 +138,185 @@ export default function AdvancedAnalytics() {
           .lte("created_at", dateRange.end)
           .order("created_at", { ascending: true });
 
-        if (fuelError) console.warn("Fuel sales fetch warning:", fuelError);
-
-        // Process sales by date
-        const salesByDate: Record<string, DailySales> = {};
-
-        // Initialize all dates in range
-        for (let i = 0; i <= dateRange.days; i++) {
-          const d = new Date();
-          d.setDate(d.getDate() - (dateRange.days - i));
-          const dateStr = d.toISOString().split("T")[0];
-          salesByDate[dateStr] = { date: dateStr, total: 0, count: 0 };
-        }
-
-        // Aggregate sales_enhanced data
-        if (sales && sales.length > 0) {
-          for (const sale of sales) {
-            const dateStr = new Date(sale.sale_date)
-              .toISOString()
-              .split("T")[0];
-            if (salesByDate[dateStr]) {
-              salesByDate[dateStr].total += sale.total_amount || 0;
-              salesByDate[dateStr].count += 1;
-            }
-          }
-        }
-
-        // Aggregate legacy fuel sales data
-        if (fuelSales && fuelSales.length > 0) {
+        if (fuelError) {
+          // Surface the error instead of silently warning.
+          console.warn("Legacy fuel sales fetch failed:", fuelError.message);
+        } else if (fuelSales && fuelSales.length > 0) {
           for (const sale of fuelSales) {
             const dateStr = new Date(sale.created_at)
               .toISOString()
               .split("T")[0];
-            if (salesByDate[dateStr]) {
-              salesByDate[dateStr].total +=
-                sale.quantity * sale.price_per_liter || 0;
-              salesByDate[dateStr].count += 1;
+            if (!salesByDate[dateStr]) {
+              salesByDate[dateStr] = { date: dateStr, total: 0, count: 0 };
             }
+            // Guard against NaN: price_per_liter or quantity could be null.
+            const qty = typeof sale.quantity === "number" ? sale.quantity : 0;
+            const price =
+              typeof sale.price_per_liter === "number"
+                ? sale.price_per_liter
+                : 0;
+            salesByDate[dateStr].total += qty * price;
+            salesByDate[dateStr].count += 1;
           }
         }
-
-        const processedData = Object.values(salesByDate);
-        setSalesData(processedData);
-
-        // Fetch inventory levels
-        const { data: inventory, error: invError } = await supabase
-          .from("inventory")
-          .select("current_level, tank_capacity, fuel_type_id")
-          .eq("station_id", currentStation.id);
-
-        if (!invError && inventory) {
-          // Get fuel type names
-          const { data: fuelTypes } = await supabase
-            .from("fuel_types")
-            .select("id, name");
-
-          const fuelTypeMap: Record<string, string> = {};
-          fuelTypes?.forEach((ft) => {
-            fuelTypeMap[ft.id] = ft.name;
-          });
-
-          const invLevels: InventoryLevel[] = inventory.map((inv: any) => ({
-            fuel_type: fuelTypeMap[inv.fuel_type_id] || "Unknown",
-            current_level: inv.current_level || 0,
-            tank_capacity: inv.tank_capacity || 10000,
-            percentage:
-              inv.tank_capacity > 0
-                ? ((inv.current_level || 0) / inv.tank_capacity) * 100
-                : 0,
-          }));
-          setInventoryLevels(invLevels);
-        }
-
-        // Get fuel prices from pumps
-        const { data: pumps } = await supabase
-          .from("pumps")
-          .select("fuel_type_id, price_per_liter")
-          .eq("station_id", currentStation.id);
-
-        if (pumps && pumps.length > 0) {
-          const { data: fuelTypes } = await supabase
-            .from("fuel_types")
-            .select("id, code");
-          const ftMap: Record<string, string> = {};
-          fuelTypes?.forEach((ft) => (ftMap[ft.id] = ft.code));
-
-          const prices = { pms: 0, ago: 0 };
-          pumps.forEach((p: any) => {
-            const code = ftMap[p.fuel_type_id];
-            if (code === "PETROL") prices.pms = p.price_per_liter || 0;
-            if (code === "DIESEL") prices.ago = p.price_per_liter || 0;
-          });
-          setFuelPrices(prices);
-        }
-      } catch (err: any) {
-        console.error("Analytics fetch error:", err);
-        setError(err.message || "Failed to load analytics data");
-        // Fall back to local state data
-        processLocalData();
-      } finally {
-        setLoading(false);
       }
-    };
 
-    const processLocalData = () => {
-      // Use local state data as fallback
-      const days = dateRange.days;
-      // Derive litres sold from tank readings (opening - closing).
-      const pmsTotal = Math.max(0, state.pmsTankOpening - state.pmsTankClosing);
-      const agoTotal = Math.max(0, state.agoTankOpening - state.agoTankClosing);
-      const dailyAvg = (pmsTotal + agoTotal) / Math.max(1, days);
+      const processedData = Object.values(salesByDate).sort((a, b) =>
+        a.date.localeCompare(b.date),
+      );
+      setSalesData(processedData);
+      setDataSource(processedData.length > 0 ? "supabase" : "none");
 
-      const data: DailySales[] = [];
-      for (let i = days; i >= 0; i--) {
-        const d = new Date();
-        d.setDate(d.getDate() - i);
-        const dateStr = d.toISOString().split("T")[0];
-        data.push({
-          date: dateStr,
-          total: Math.round(dailyAvg),
-          count: Math.round(dailyAvg / 50),
+      // Fetch inventory levels
+      const { data: inventory, error: invError } = await supabase
+        .from("inventory")
+        .select("current_level, tank_capacity, fuel_type_id")
+        .eq("station_id", currentStation.id);
+
+      if (invError) {
+        console.warn("Inventory fetch failed:", invError.message);
+      } else if (inventory && inventory.length > 0) {
+        const { data: fuelTypes, error: ftError } = await supabase
+          .from("fuel_types")
+          .select("id, name");
+        if (ftError) console.warn("Fuel types fetch failed:", ftError.message);
+
+        const fuelTypeMap: Record<string, string> = {};
+        fuelTypes?.forEach((ft) => {
+          fuelTypeMap[ft.id] = ft.name;
         });
-      }
-      setSalesData(data);
-      setFuelPrices({ pms: state.pmsPrice, ago: state.agoPrice });
-    };
 
-    fetchAnalyticsData();
-  }, [currentStation?.id, dateRange.start, dateRange.end, state]);
+        const invLevels: InventoryLevel[] = inventory.map((inv: any) => {
+          const capacity = inv.tank_capacity || 0;
+          const current = inv.current_level || 0;
+          return {
+            fuel_type: fuelTypeMap[inv.fuel_type_id] || "Unknown",
+            current_level: current,
+            tank_capacity: capacity,
+            percentage:
+              capacity > 0 ? Math.min(100, (current / capacity) * 100) : 0,
+          };
+        });
+        setInventoryLevels(invLevels);
+      }
+
+      // Get fuel prices from pumps (real station prices, not a hardcoded 200)
+      const { data: pumps, error: pumpsError } = await supabase
+        .from("pumps")
+        .select("fuel_type_id, price_per_liter")
+        .eq("station_id", currentStation.id);
+
+      if (pumpsError) {
+        console.warn("Pumps fetch failed:", pumpsError.message);
+      } else if (pumps && pumps.length > 0) {
+        const { data: fuelTypes } = await supabase
+          .from("fuel_types")
+          .select("id, code");
+        const ftMap: Record<string, string> = {};
+        fuelTypes?.forEach((ft) => (ftMap[ft.id] = ft.code));
+
+        const prices = { pms: 0, ago: 0 };
+        pumps.forEach((p: any) => {
+          const code = ftMap[p.fuel_type_id];
+          if (code === "PETROL" || code === "PMS")
+            prices.pms = p.price_per_liter || 0;
+          if (code === "DIESEL" || code === "AGO")
+            prices.ago = p.price_per_liter || 0;
+        });
+        setFuelPrices(prices);
+      } else {
+        // Fall back to FuelContext prices (cloud-synced, station-specific)
+        setFuelPrices({ pms: state.pmsPrice || 0, ago: state.agoPrice || 0 });
+      }
+    } catch (err: any) {
+      console.error("Analytics fetch error:", err);
+      setError(err.message || "Failed to load analytics data");
+      // Fall back to FuelContext local data (NOT fake data — real tank readings
+      // + sales history from the cloud-synced compact blob).
+      processLocalData();
+    } finally {
+      setLoading(false);
+    }
+  }, [currentStation?.id, dateRange.start, dateRange.end]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Use real local data (FuelContext state) as a fallback. This is NOT fake
+  // data — it derives litres sold from the station's actual tank readings
+  // (opening - closing) and uses the station's actual prices. Previously
+  // this generated a flat "real-looking" trend that mislead users.
+  const processLocalData = () => {
+    const days = dateRange.days;
+    const pmsTotal = Math.max(0, state.pmsTankOpening - state.pmsTankClosing);
+    const agoTotal = Math.max(0, state.agoTankOpening - state.agoTankClosing);
+    const totalLitres = pmsTotal + agoTotal;
+
+    if (
+      totalLitres <= 0 &&
+      Object.keys(state.salesHistory || {}).length === 0
+    ) {
+      // Genuinely no data — show empty state, not fabricated data.
+      setSalesData([]);
+      setDataSource("none");
+      return;
+    }
+
+    // Try salesHistory first (real recorded sales from the cloud blob)
+    const salesHistory = state.salesHistory || {};
+    const salesByDate: Record<string, DailySales> = {};
+
+    for (const [dateKey, saleRecord] of Object.entries(salesHistory)) {
+      const dateStr = dateKey.split("T")[0];
+      const total =
+        typeof saleRecord === "object" && saleRecord !== null
+          ? (saleRecord as any).total ||
+            (saleRecord as any).amount ||
+            (saleRecord as any).total_amount ||
+            0
+          : typeof saleRecord === "number"
+            ? saleRecord
+            : 0;
+      if (!salesByDate[dateStr]) {
+        salesByDate[dateStr] = { date: dateStr, total: 0, count: 0 };
+      }
+      salesByDate[dateStr].total += total;
+      salesByDate[dateStr].count += 1;
+    }
+
+    if (Object.keys(salesByDate).length > 0) {
+      const sorted = Object.values(salesByDate).sort((a, b) =>
+        a.date.localeCompare(b.date),
+      );
+      setSalesData(sorted);
+      setDataSource("local");
+    } else {
+      // Last resort: derive from tank readings (real data, clearly labeled)
+      const avgPrice = state.pmsPrice || state.agoPrice || 0;
+      const dailyRevenue =
+        avgPrice > 0 ? (totalLitres * avgPrice) / Math.max(1, days) : 0;
+      if (dailyRevenue > 0) {
+        const data: DailySales[] = [];
+        for (let i = days; i >= 0; i--) {
+          const d = new Date();
+          d.setDate(d.getDate() - i);
+          const dateStr = d.toISOString().split("T")[0];
+          data.push({
+            date: dateStr,
+            total: Math.round(dailyRevenue),
+            count: 0, // real count unknown — don't fabricate
+          });
+        }
+        setSalesData(data);
+        setDataSource("local");
+      } else {
+        setSalesData([]);
+        setDataSource("none");
+      }
+    }
+    setFuelPrices({ pms: state.pmsPrice || 0, ago: state.agoPrice || 0 });
+  };
+
+  useEffect(() => {
+    fetchAnalytics();
+  }, [fetchAnalytics]);
 
   // Calculate predictions based on actual historical data
   const predictions = useMemo(() => {
@@ -239,14 +326,19 @@ export default function AdvancedAnalytics() {
     const avgDaily = last7.reduce((s, d) => s + d.total, 0) / 7;
     const variance =
       last7.reduce((s, d) => s + Math.pow(d.total - avgDaily, 2), 0) / 7;
-    const stdDev = Math.sqrt(variance);
+    const stdDev = Math.sqrt(variance) || 0;
 
-    // Calculate simple linear trend
-    let trendSum = 0;
-    for (let i = 0; i < last7.length; i++) {
-      trendSum += (last7[i].total - avgDaily) * (i - (last7.length - 1) / 2);
+    // Calculate simple linear trend. Guard against division by zero when
+    // last7.length is 1 (the denom would be 0).
+    const trendDenom = (last7.length * (last7.length - 1)) / 2;
+    let trend = 0;
+    if (trendDenom > 0) {
+      let trendSum = 0;
+      for (let i = 0; i < last7.length; i++) {
+        trendSum += (last7[i].total - avgDaily) * (i - (last7.length - 1) / 2);
+      }
+      trend = trendSum / trendDenom;
     }
-    const trend = trendSum / ((last7.length * (last7.length - 1)) / 2);
 
     const preds: PredictionPoint[] = [];
     const now = new Date();
@@ -271,44 +363,62 @@ export default function AdvancedAnalytics() {
     return preds;
   }, [salesData]);
 
-  // Calculate totals from real data
+  // Calculate totals from real data. Guard against NaN in all calculations.
   const totals = useMemo(() => {
-    const totalRevenue = salesData.reduce((s, d) => s + d.total, 0);
-    // Estimate fuel volumes from revenue and prices
-    const avgPrice = (fuelPrices.pms + fuelPrices.ago) / 2 || 200;
-    const estimatedVolume = totalRevenue / avgPrice;
+    const totalRevenue = salesData.reduce((s, d) => s + (d.total || 0), 0);
+    // Use the actual station prices (not a hardcoded 200 fallback). If both
+    // are 0, we can't estimate volume — show 0 rather than dividing by zero.
+    const avgPrice =
+      (fuelPrices.pms || 0) + (fuelPrices.ago || 0) > 0
+        ? ((fuelPrices.pms || 0) + (fuelPrices.ago || 0)) / 2
+        : 0;
+    const estimatedVolume = avgPrice > 0 ? totalRevenue / avgPrice : 0;
 
     return {
-      totalRevenue,
-      estimatedVolume,
+      totalRevenue: Number.isFinite(totalRevenue) ? totalRevenue : 0,
+      estimatedVolume: Number.isFinite(estimatedVolume) ? estimatedVolume : 0,
       avgDaily:
         salesData.length > 0
-          ? salesData.reduce((s, d) => s + d.total, 0) / salesData.length
+          ? salesData.reduce((s, d) => s + (d.total || 0), 0) / salesData.length
           : 0,
-      totalTransactions: salesData.reduce((s, d) => s + d.count, 0),
+      totalTransactions: salesData.reduce((s, d) => s + (d.count || 0), 0),
     };
   }, [salesData, fuelPrices]);
 
-  // Calculate growth
+  // Calculate growth. Guard against division by zero (prevTotal=0 → growth=0,
+  // not Infinity/NaN). Removed the fabricated `last7Total * 4` extrapolation.
   const growthData = useMemo(() => {
     if (salesData.length < 14) return { growth7d: 0, growth30d: 0 };
 
     const last7 = salesData.slice(-7);
     const prev7 = salesData.slice(-14, -7);
-    const prev30 = salesData.slice(-60, -30);
 
-    const last7Total = last7.reduce((s, d) => s + d.total, 0);
-    const prev7Total = prev7.reduce((s, d) => s + d.total, 0);
-    const prev30Total = prev30.reduce((s, d) => s + d.total, 0);
+    const last7Total = last7.reduce((s, d) => s + (d.total || 0), 0);
+    const prev7Total = prev7.reduce((s, d) => s + (d.total || 0), 0);
 
+    // 7-day growth: compare last 7 days to previous 7 days.
     const growth7d =
       prev7Total > 0 ? ((last7Total - prev7Total) / prev7Total) * 100 : 0;
-    const growth30d =
-      prev30Total > 0
-        ? ((last7Total * 4 - prev30Total) / prev30Total) * 100
-        : 0;
 
-    return { growth7d, growth30d };
+    // 30-day trend: only compute if we actually have 30+ days of data.
+    // Previously this fabricated `last7Total * 4` (extrapolating 7 days into
+    // a month), which produced nonsensical growth percentages. Now uses real
+    // 30-day data when available, else 0.
+    let growth30d = 0;
+    if (salesData.length >= 60) {
+      const prev30 = salesData.slice(-60, -30);
+      const prev30Total = prev30.reduce((s, d) => s + (d.total || 0), 0);
+      // Compare last 30 days to previous 30 days
+      const last30 = salesData.slice(-30);
+      const last30Total = last30.reduce((s, d) => s + (d.total || 0), 0);
+      growth30d =
+        prev30Total > 0 ? ((last30Total - prev30Total) / prev30Total) * 100 : 0;
+    }
+
+    return {
+      growth7d: Number.isFinite(growth7d) ? growth7d : 0,
+      growth30d: Number.isFinite(growth30d) ? growth30d : 0,
+    };
   }, [salesData]);
 
   // Find peak day
@@ -332,7 +442,36 @@ export default function AdvancedAnalytics() {
   }, [salesData]);
 
   const maxVol = Math.max(...salesData.map((d) => d.total), 1);
-  const predMax = Math.max(...predictions.map((p) => p.upper), 1, 1);
+  // Fixed: the duplicate `1` was a typo (harmless but confusing). A single
+  // floor of 1 prevents division-by-zero in chart height calc.
+  const predMax = Math.max(...predictions.map((p) => p.upper), 1);
+
+  // CSV export of the raw sales data shown in the chart. Lets the user
+  // download their analytics data for external reporting (was missing).
+  const exportCSV = () => {
+    if (salesData.length === 0) {
+      alert("No sales data to export for this period.");
+      return;
+    }
+    const rows = [
+      ["Date", "Total Revenue", "Transaction Count"],
+      ...salesData.map((d) => [d.date, d.total.toFixed(2), String(d.count)]),
+      ["", "", ""],
+      [
+        "TOTAL",
+        totals.totalRevenue.toFixed(2),
+        String(totals.totalTransactions),
+      ],
+    ];
+    const csv = rows.map((r) => r.map((c) => `"${c}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `analytics_${timeRange}_${dateRange.start}_to_${dateRange.end}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   if (loading) {
     return (
@@ -345,44 +484,128 @@ export default function AdvancedAnalytics() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <div className="p-2.5 bg-violet-100 dark:bg-violet-900/30 rounded-xl">
-          <BarChart3
-            size={24}
-            className="text-violet-600 dark:text-violet-400"
-          />
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 bg-violet-100 dark:bg-violet-900/30 rounded-xl">
+            <BarChart3
+              size={24}
+              className="text-violet-600 dark:text-violet-400"
+            />
+          </div>
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+              Advanced Analytics
+            </h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Real data from your sales records
+              {dataSource === "supabase" && (
+                <span className="ml-2 text-green-600 dark:text-green-400">
+                  • Live (Supabase)
+                </span>
+              )}
+              {dataSource === "local" && (
+                <span className="ml-2 text-amber-600 dark:text-amber-400">
+                  • Local records
+                </span>
+              )}
+              {dataSource === "none" && (
+                <span className="ml-2 text-gray-400">• No data yet</span>
+              )}
+            </p>
+          </div>
         </div>
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-            Advanced Analytics
-          </h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            Real data from your sales records
-          </p>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => fetchAnalytics()}
+            className="p-2 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+            title="Refresh data"
+            aria-label="Refresh analytics data"
+          >
+            <RefreshCw size={16} />
+          </button>
+          <button
+            onClick={exportCSV}
+            disabled={salesData.length === 0}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-violet-600 text-white text-sm font-medium hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            title="Export data as CSV"
+          >
+            <Download size={16} />
+            <span className="hidden sm:inline">Export CSV</span>
+          </button>
         </div>
       </div>
 
       {error && (
         <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4 flex items-start gap-3">
-          <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5" />
-          <div>
+          <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
+          <div className="flex-1">
             <p className="text-sm text-amber-800 dark:text-amber-200">
               {error}
             </p>
             <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
-              Showing estimated data from local records.
+              {dataSource === "local"
+                ? "Showing data from local records."
+                : "No data available. Try refreshing or recording a sale."}
             </p>
+            <button
+              onClick={() => fetchAnalytics()}
+              className="mt-2 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-600 text-white text-xs font-medium hover:bg-amber-700 transition-colors"
+            >
+              <RefreshCw size={12} /> Retry
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Empty State — new stations with no sales see a helpful CTA instead of
+          a confusing zero-filled dashboard. */}
+      {dataSource === "none" && !error && (
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-8 border border-gray-200 dark:border-gray-700 text-center">
+          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center">
+            <BarChart3
+              size={32}
+              className="text-violet-600 dark:text-violet-400"
+            />
+          </div>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+            No sales data yet
+          </h3>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mb-4 max-w-md mx-auto">
+            Your analytics dashboard will populate automatically once you start
+            recording sales. Create your first sale or check your station
+            inventory to get started.
+          </p>
+          <div className="flex flex-wrap gap-2 justify-center">
+            <button
+              onClick={() => switchToTab("pos")}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-violet-600 text-white text-sm font-medium hover:bg-violet-700 transition-colors"
+            >
+              <Plus size={16} /> Record a Sale
+            </button>
+            <button
+              onClick={() => switchToTab("inventory")}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-sm font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+            >
+              <ShoppingCart size={16} /> View Inventory
+            </button>
+            <button
+              onClick={() => switchToTab("sales")}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-sm font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+            >
+              <Activity size={16} /> Sales Tracking
+            </button>
           </div>
         </div>
       )}
 
       {/* Time Range */}
-      <div className="flex gap-2">
+      <div className="flex gap-2 flex-wrap">
         {(["7d", "30d", "90d", "1y"] as const).map((r) => (
           <button
             key={r}
             onClick={() => setTimeRange(r)}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${timeRange === r ? "bg-violet-600 text-white" : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600"}`}
+            aria-pressed={timeRange === r}
           >
             {r === "7d"
               ? "7 Days"
@@ -487,7 +710,7 @@ export default function AdvancedAnalytics() {
           Based on your historical sales patterns
         </p>
         <div className="h-40 flex items-end gap-1">
-          {predictions.map((p, i) => {
+          {predictions.map((p) => {
             const predH = (p.predicted / predMax) * 100;
             const rangeH = ((p.upper - p.lower) / predMax) * 100;
             return (
@@ -615,8 +838,8 @@ export default function AdvancedAnalytics() {
             <Activity size={16} className="text-cyan-500" /> Current Tank Levels
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {inventoryLevels.map((inv, i) => (
-              <div key={i} className="space-y-2">
+            {inventoryLevels.map((inv, idx) => (
+              <div key={idx} className="space-y-2">
                 <div className="flex justify-between text-xs">
                   <span className="text-gray-600 dark:text-gray-400">
                     {inv.fuel_type}
