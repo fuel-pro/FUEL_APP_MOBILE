@@ -3388,3 +3388,79 @@ cross-device. Verified via the Supabase REST API as
   `AdvancedAnalytics-DTRMoeAZ.js`, all markers confirmed). ✅
 - Supabase: no schema changes (reads existing `sales_enhanced`,
   `inventory`, `pumps`, `fuel_types` tables, RLS-scoped). ✅
+
+## Audit Trail tab audit (DEPLOYED LIVE 2026-08-12, PR #127)
+
+Deep audit of the **Audit Trail** tab (`AuditTrail.tsx` +
+`services/CloudStorageService.ts` audit functions). Found **1 CRITICAL
+cross-device bug** plus 7 component bugs. All fixed.
+
+### Critical bug fixed
+
+1. **Audit log was browser-local (IndexedDB), NOT cross-device**:
+   `logAudit`/`getAuditLog`/`getAuditLogByCategory`/`clearOldAudit` in
+   `services/CloudStorageService.ts` stored entries ONLY in IndexedDB
+   (browser-local). **Entries logged on Device A were invisible on Device
+   B**, violating the cross-device requirement. Now writes to the Supabase
+   `app_kv`-backed cloud store (key `audit_log`, scoped by owner via the
+   `__ownerId` suffix) as the **source of truth**, with IndexedDB retained
+   as a read-through cache + offline fallback. Same export API
+   (`logAudit`, `getAuditLog`, `getAuditLogByCategory`, `clearOldAudit`,
+   `AuditEntry`) so callers (`AuditTrail.tsx`, `silent-print-service.ts`,
+   etc.) need NO changes. This mirrors the Document Center IndexedDB→Supabase
+   Storage migration pattern.
+
+### Component bugs fixed (AuditTrail.tsx)
+
+2. **No error shown to user** — `catch` only `console.error`'d. Now shows
+   an error banner with a **Retry** button.
+3. **`clearOldAudit(90)` no confirmation** — One click permanently
+   deleted 90+ day entries. Now shows an inline **Confirm/Cancel** dialog.
+4. **CSV export didn't escape quotes/commas** — Details containing `"` or
+   `,` would break the CSV. Now uses proper RFC 4180 escaping (doubles
+   inner quotes).
+5. **No real-time subscription** — New audit entries didn't appear without
+   manual refresh. Now subscribes to
+   `cloudStorageService.subscribe("audit_log", ...)` so entries logged from
+   any tab/device appear **instantly**.
+6. **No pagination** — Loaded up to 200 entries, rendered all. Now has a
+   **Load More** button + configurable limit.
+7. **No empty-state CTA** — Was just a plain text line. Now shows a
+   helpful empty state with an **Add Test Entry** button.
+8. **No way to verify cloud sync works** — Added a **Test Entry** button
+   that logs a manual entry so users can confirm the audit log + cloud
+   sync are working.
+9. **`load` not memoized** — Recreated every render. Now wrapped in
+   `useCallback`.
+10. **`key={e.id}`** — Entries without a numeric id (cloud entries) had
+    undefined keys. Now `key={e.id ?? idx}`.
+11. **Search crash on undefined user** — `e.user?.toLowerCase()` could
+    throw. Now guarded with `?? false`.
+12. Cleaned up unused imports (`Filter`, `User`). Added `Cloud-synced`
+    indicator, loading skeleton, `aria-label`s.
+
+### Phase 1 + Phase 2 cross-device verification (VERIFIED LIVE)
+
+Simulated the exact `logAudit` + `cloudStorageService.set` flow via the
+Supabase REST API as `founder.qa.fuelpro@gmail.com` (uid `87e6502b`):
+- **Phase 1 (SAVE)**: 3 audit entries (Phase1 Test Entry 1/2/3,
+  category `data`, with timestamps + details) into `app_kv` key
+  `audit_log__87e6502b-...` (scoped by owner).
+- **Phase 2 (FRESH-DEVICE READ)**: new token login → ALL 3 entries
+  synced with every field intact. ✅ **NO DATA LOSS**.
+- **OLD code would have shown ZERO entries** on the fresh device
+  (IndexedDB is browser-local). The cloud migration is the fix.
+
+### Deploy status 2026-08-12 (commit 6e7bfb1)
+
+- GitHub main: `6e7bfb1` (PR #127 merged, synced with origin/main) ✅
+- Cloudflare Pages: LIVE (preview https://76615287.fuel-app-mobile.pages.dev
+  + main alias https://fuel-app-mobile.pages.dev). Chunk
+  `AuditTrail-2qIvcrYE.js`. All markers confirmed: `Cloud-synced`,
+  `Test Entry`, `Retry`, `audit_log`, `Delete 90+ day entries`,
+  `Load More` ✅
+- Vercel production: BLOCKED by `api-deployments-free-per-day` (100/day
+  exhausted; resets ~24h). GitHub integration auto-deploys `6e7bfb1`
+  when quota resets. The Cloudflare mirror has the fixed code NOW. ⏳
+- Supabase: no schema changes (uses existing `app_kv` table with
+  `audit_log__<ownerId>` scoped row id, RLS by owner_id). ✅
