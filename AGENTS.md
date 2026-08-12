@@ -3599,3 +3599,52 @@ Verified via direct chunk fetch that Vercel production
 
 **Deploy**: GitHub main commit 73cbc99 (PR #129 merged). Cloudflare Pages LIVE (preview https://8cc4d29d.fuel-app-mobile.pages.dev). Verified in bundles: exportUtils chunk has crossOrigin+toDataURL; hardcoded 1-555-000-0000 completely gone; stationPhone in index chunk. Vercel BLOCKED by api-deployments-free-per-day (100/100; auto-deploys when quota resets ~24h). tsc 0 errors, build 111 precache, prettier all pass.
 
+
+## POS tab deep audit — country-aware tax regime (DEPLOYED LIVE 2026-08-12, commits 8513ec4 + 80719b8 + f3c10a6)
+
+The Point of Sale tab forced the Kenya KRA eTIMS tax regime on ALL stations
+because `kenyaStation` was true whenever a KRA PIN was present — even for a
+US/EU station carrying a leftover KRA PIN. The receipts, Tax Settings modal,
+and currency all showed Kenya-specific labels. Now fully country-aware.
+
+### Fix 1 — station country overrides KRA PIN for tax regime (commit 8513ec4)
+
+`PointOfSale.tsx` `kenyaStation` now uses `isKenyaStation()` (timezone +
+station-data detection) OR (the station's `country` field is "KE"). A
+leftover KRA PIN on a US station no longer forces 16% VAT. `countryCode`
+resolves from the station's `country` field, not forced "KE" by the KRA PIN.
+
+### Fix 2 — Tax Settings modal + receipt country-aware labels (commit 80719b8)
+
+Tax Settings modal: KRA note (itax.kra.go.ke) + ETR/CU fields Kenya-only;
+"County" -> "State / Province"; "P000000000X" -> "EIN / VAT No" for non-Kenya.
+Receipt: "PIN:" -> "Tax ID:", "Buyer PIN:" -> "Customer Tax ID:",
+"ELECTRONIC TAX REGISTER" / ETR/CU/Signature section Kenya-only (non-Kenya
+shows "RECEIPT" + "Receipt No" + "Transaction ID"); "KRA eTIMS COMPLIANT"
+-> "TAX COMPLIANT"; "Powered by TIMS" -> "Powered by FuelPro".
+
+### Fix 3 — currency fallback country-aware (commit f3c10a6)
+
+Unified M-PESA transaction record `currency` defaulted to "KES". Now uses
+`getCurrencyByCountry(countryCode)` so a US station's M-PESA sale is USD.
+
+### Live verification (2026-08-12, Cloudflare preview 214d8b0d)
+
+QA user qa.delivery.audit.0812@gmail.com (US station, USD, leftover
+kra_pin=P051234567X). 4 POS sales completed + verified:
+- Petrol 20L cash $4,280.60 (INV20260812000001MMX8) receipt "Tax ID:",
+  "RECEIPT", 0% VAT.
+- Diesel 15L card w/ customer "Acme Logistics Inc" Tax ID "US123456789"
+  $3,342.90 (INV202608120000034PG4) "Customer Tax ID:".
+- Custom item "Engine Oil Filter" $25.99 cash (INV20260812000004C6RZ).
+- Edit Fuels opens Fuel Type Manager modal (4 sub-tabs).
+- Cross-device sync: all 4 transactions load from cloud on fresh preview.
+- Supabase: pos_transactions__<ownerId>__<stationId> updated 17:52:21 UTC.
+
+### Deploy state 2026-08-12
+
+- GitHub main: commit f3c10a6 (pushed).
+- Cloudflare Pages: LIVE (preview 214d8b0d + main alias).
+- Vercel: BLOCKED by api-deployments-free-per-day (100/100; GitHub
+  integration auto-deploys when quota resets ~24h).
+- Supabase: no schema changes (frontend-only).
