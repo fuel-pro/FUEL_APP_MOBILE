@@ -550,10 +550,7 @@ export default function AIChatbot() {
       // Build comprehensive context from all business data
       const businessContext = buildBusinessContext();
 
-      // Simulate processing delay for realistic feel
-      await new Promise((r) => setTimeout(r, 800 + Math.random() * 600));
-
-      // Generate local AI response
+      // Generate local AI response — no artificial delay
       const response = generateLocalResponse(message, businessContext);
 
       const assistantMessage: Message = {

@@ -329,8 +329,7 @@ export default function Invoice() {
         date: invoiceDate,
       };
 
-      // Local AI analysis for invoice
-      await new Promise((r) => setTimeout(r, 800));
+      // Local AI analysis for invoice — computed instantly, no artificial delay
       const items = state.invoiceItems;
       const itemSummary = items
         .map(

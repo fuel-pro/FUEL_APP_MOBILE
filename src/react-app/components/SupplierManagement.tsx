@@ -175,8 +175,22 @@ export default function SupplierManagement() {
     return merged;
   }, [fuelTypeApi.activeFuelTypes]);
 
-  const [suppliers, setSuppliers] = useState<Supplier[]>(loadSuppliers);
-  const [orders, setOrders] = useState<PurchaseOrder[]>(loadOrders);
+  const [suppliers, setSuppliers] = useState<Supplier[]>(() => {
+    const cloudCached = cloudStorageService.getCached<unknown[]>(
+      "suppliers_data",
+      stationId,
+    );
+    if (Array.isArray(cloudCached)) return normalizeSuppliers(cloudCached);
+    return loadSuppliers();
+  });
+  const [orders, setOrders] = useState<PurchaseOrder[]>(() => {
+    const cloudCached = cloudStorageService.getCached<unknown[]>(
+      "purchase_orders",
+      stationId,
+    );
+    if (Array.isArray(cloudCached)) return normalizeOrders(cloudCached);
+    return loadOrders();
+  });
   const [activeView, setActiveView] = useState<
     "suppliers" | "orders" | "purchases"
   >("suppliers");

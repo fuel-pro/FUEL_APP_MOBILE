@@ -155,7 +155,7 @@ async function convertFile(
   }
   onProgress(30);
 
-  await new Promise((r) => setTimeout(r, 200)); // Simulate processing
+  // Conversion is local — no artificial delay
   onProgress(60);
 
   let resultData: string | Blob = "";

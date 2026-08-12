@@ -320,9 +320,7 @@ export function useFuelPrices() {
   const refreshPrices = useCallback(async () => {
     setIsLoading(true);
     try {
-      // Simulate network delay for realistic UX
-      await new Promise((resolve) => setTimeout(resolve, 500));
-
+      // Prices are computed locally — no artificial delay
       const locationPrices = getLocationBasedPrices();
       setPrices(locationPrices);
       savePricesToCache(locationPrices);

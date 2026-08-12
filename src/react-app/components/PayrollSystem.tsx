@@ -219,6 +219,30 @@ function normalizePayrollSettings(
   };
 }
 
+const defaultSettings: PayrollSettings = {
+  organizationName: "",
+  organizationAddress: "",
+  organizationPhone: "",
+  organizationEmail: "",
+  organizationLogo: null,
+  payrollMonth: new Date().getMonth() + 1,
+  payrollYear: new Date().getFullYear(),
+  paymentMethod: "bank",
+  currency: getCurrencySymbol(),
+  enableSha: true,
+  enableNssf: true,
+  enableTax: true,
+  enableUnion: true,
+  theme: "blue",
+  customRoles: [],
+  originatorAccount: "",
+  branchDao: "4021",
+  origCode: "",
+  reference: "",
+  shaPercentage: 2.75,
+  nssfAmount: 480,
+};
+
 export default function PayrollSystem() {
   // Get auth context
   const { user } = useAuth();
@@ -227,30 +251,21 @@ export default function PayrollSystem() {
   const { state: fuelState } = useFuel();
   const isKenya = isKenyaStation();
 
-  // State
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [settings, setSettings] = useState<PayrollSettings>({
-    organizationName: "",
-    organizationAddress: "",
-    organizationPhone: "",
-    organizationEmail: "",
-    organizationLogo: null,
-    payrollMonth: new Date().getMonth() + 1,
-    payrollYear: new Date().getFullYear(),
-    paymentMethod: "bank",
-    currency: getCurrencySymbol(),
-    enableSha: true,
-    enableNssf: true,
-    enableTax: true,
-    enableUnion: true,
-    theme: "blue",
-    customRoles: [],
-    originatorAccount: "",
-    branchDao: "4021",
-    origCode: "",
-    reference: "",
-    shaPercentage: 2.75,
-    nssfAmount: 480,
+  // State — initialize from the synchronous cache so the FIRST render shows
+  // data instantly (no blank flash while the async cloud get resolves).
+  const [employees, setEmployees] = useState<Employee[]>(() => {
+    const cached = cloudStorageService.getCached<unknown[]>(
+      "payroll_employees",
+      stationId,
+    );
+    return Array.isArray(cached) ? normalizeEmployees(cached) : [];
+  });
+  const [settings, setSettings] = useState<PayrollSettings>(() => {
+    const cached = cloudStorageService.getCached<unknown>("payroll_settings", stationId);
+    if (cached && typeof cached === "object" && !Array.isArray(cached)) {
+      return { ...defaultSettings, ...(cached as Partial<PayrollSettings>) };
+    }
+    return defaultSettings;
   });
 
   const [columnNames, setColumnNames] = useState<ColumnNames>({
@@ -2793,7 +2808,7 @@ export default function PayrollSystem() {
                 setSaving(true);
                 try {
                   for (const employee of employees) {
-                    await new Promise((resolve) => setTimeout(resolve, 500)); // Delay to prevent browser blocking
+                    await new Promise((resolve) => setTimeout(resolve, 50)); // Small yield to prevent browser blocking
                     exportEmployeePayslip(employee);
                   }
                 } finally {

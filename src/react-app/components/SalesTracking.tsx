@@ -174,14 +174,10 @@ export default function SalesTracking() {
     setShowScanPanel(true);
 
     try {
-      // Simulate upload delay
-      await new Promise((r) => setTimeout(r, 600));
+      // Upload is local (no server) — skip straight to analysis
       setScanStep("analyzing");
 
-      // Simulate AI processing time
-      await new Promise((r) => setTimeout(r, 1500));
-
-      // Use local extraction instead of API call
+      // Local extraction is synchronous — no artificial delay needed
       const extractedData = simulateAIExtraction(file.name);
 
       setScanResult(extractedData);

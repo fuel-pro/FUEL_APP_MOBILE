@@ -79,15 +79,72 @@ function coerceJson<T = Json>(raw: unknown): T | null {
   return raw as T;
 }
 
-/** Current authenticated user id, or null. */
+/**
+ * Current authenticated user id, or null.
+ *
+ * SYNCHRONOUS FAST-PATH: reads from localStorage (`fuelpro_auth_identity`,
+ * written by AuthContext on login) BEFORE making any network call. This
+ * eliminates the 200-500ms `auth.getUser()` round-trip that previously
+ * blocked EVERY `get()`/`set()` call — the single biggest source of latency
+ * in the entire data-loading pipeline. Falls back to the Supabase client
+ * only when localStorage doesn't have it (first render before AuthContext
+ * persists).
+ */
+let cachedUserId: string | null = null;
+let userIdCacheTs = 0;
+const USER_ID_CACHE_TTL = 30_000; // 30 seconds
+
+function readUserIdFromStorage(): string | null {
+  try {
+    const raw = localStorage.getItem("fuelpro_auth_identity");
+    if (raw) {
+      const identity = JSON.parse(raw);
+      if (identity?.id) return identity.id;
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
 async function currentUserId(): Promise<string | null> {
+  // 1. In-memory cache (fastest).
+  if (cachedUserId && Date.now() - userIdCacheTs < USER_ID_CACHE_TTL) {
+    return cachedUserId;
+  }
+  // 2. localStorage (synchronous, no network).
+  const stored = readUserIdFromStorage();
+  if (stored) {
+    cachedUserId = stored;
+    userIdCacheTs = Date.now();
+    return stored;
+  }
+  // 3. Supabase client (network call, slowest).
   try {
     const client = getSupabaseClient();
     const { data } = await client.auth.getUser();
-    return data.user?.id ?? null;
+    const id = data.user?.id ?? null;
+    if (id) {
+      cachedUserId = id;
+      userIdCacheTs = Date.now();
+    }
+    return id;
   } catch {
     return null;
   }
+}
+
+/**
+ * SYNCHRONOUS user id — for instant renders. Reads from the in-memory cache
+ * or localStorage. Returns null if no user is known yet (first paint before
+ * AuthContext persists). Callers that need a definitive answer should still
+ * use the async `currentUserId()`.
+ */
+function currentUserIdSync(): string | null {
+  if (cachedUserId && Date.now() - userIdCacheTs < USER_ID_CACHE_TTL) {
+    return cachedUserId;
+  }
+  return readUserIdFromStorage();
 }
 
 /** Read-through cache helper. */
@@ -118,11 +175,37 @@ function clearCache(key: string): void {
 
 class CloudStorageService {
   private memoryCache = new Map<string, { value: unknown; ts: number }>();
-  private memTtlMs = 5_000;
+  private memTtlMs = 60_000; // 60 seconds — data rarely changes faster than this
 
   /** Whether Supabase auth is available (client configured + user signed in). */
   async isAvailable(): Promise<boolean> {
     return (await currentUserId()) !== null;
+  }
+
+  /**
+   * SYNCHRONOUS cached read — returns data from the in-memory cache or the
+   * localStorage read-through cache with ZERO network calls. Use this in
+   * useState initializers so the FIRST render shows data instantly (before
+   * the async `get()` resolves). Returns null if no cache exists yet.
+   *
+   * The async `get()` should still be called on mount to sync from cloud,
+   * but `getCached()` eliminates the blank-state flash on cross-device login
+   * and on every tab switch/navigation.
+   */
+  getCached<T = Json>(key: string, stationId?: string): T | null {
+    const ck = stationId ? `${key}__${stationId}` : key;
+    // 1. In-memory cache (instant).
+    const mem = this.memoryCache.get(ck);
+    if (mem && Date.now() - mem.ts < this.memTtlMs) {
+      return mem.value as T;
+    }
+    // 2. localStorage read-through cache (instant, no network).
+    return readCache<T>(ck);
+  }
+
+  /** Whether a value is cached (memory or localStorage) for instant access. */
+  hasCached(key: string, stationId?: string): boolean {
+    return this.getCached(key, stationId) != null;
   }
 
   /**

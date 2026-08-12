@@ -145,12 +145,23 @@ export default function CreditManagement() {
   const [activeView, setActiveView] = useState<"accounts" | "reminders">(
     "accounts",
   );
-  const [accounts, setAccounts] = useState<CreditAccount[]>(() =>
-    loadAccounts(),
-  );
-  const [transactions, setTransactions] = useState<CreditTransaction[]>(() =>
-    loadTransactions(),
-  );
+  const [accounts, setAccounts] = useState<CreditAccount[]>(() => {
+    const cloudCached = cloudStorageService.getCached<unknown[]>(
+      "credit_accounts",
+      stationId,
+    );
+    if (Array.isArray(cloudCached)) return normalizeCreditAccounts(cloudCached);
+    return loadAccounts();
+  });
+  const [transactions, setTransactions] = useState<CreditTransaction[]>(() => {
+    const cloudCached = cloudStorageService.getCached<unknown[]>(
+      "credit_transactions",
+      stationId,
+    );
+    if (Array.isArray(cloudCached))
+      return normalizeCreditTransactions(cloudCached);
+    return loadTransactions();
+  });
   const [search, setSearch] = useState("");
   const [showAdd, setShowAdd] = useState(false);
   const [showPay, setShowPay] = useState<string | null>(null);

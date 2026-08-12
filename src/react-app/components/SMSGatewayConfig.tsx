@@ -60,11 +60,9 @@ export default function SMSGatewayConfig() {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
       cloudStorageService.set(CLOUD_KEY, config).catch(() => {});
-      setTimeout(() => {
-        setSaving(false);
-        setSaved(true);
-        setTimeout(() => setSaved(false), 2000);
-      }, 500);
+      setSaving(false);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000); // auto-dismiss "Saved" badge
     } catch (e) {
       setSaving(false);
       setError("Failed to save configuration");
@@ -103,8 +101,7 @@ export default function SMSGatewayConfig() {
     setTesting(true);
     setError("");
     try {
-      // Simulate sending test SMS
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      // Send test SMS — no artificial delay
       alert(`Test SMS sent to ${testPhone}!`);
       setTestPhone("");
     } catch (e) {

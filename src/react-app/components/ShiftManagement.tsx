@@ -154,6 +154,12 @@ export default function ShiftManagement() {
   const { currentStation } = useStations();
   const stationId = currentStation?.id;
   const [employees, setEmployees] = useState<Employee[]>(() => {
+    // Cloud cache first (freshest cross-device data), then localStorage
+    const cloudCached = cloudStorageService.getCached<unknown[]>(
+      "shift_employees",
+      stationId,
+    );
+    if (Array.isArray(cloudCached)) return normalizeEmployees(cloudCached);
     try {
       return normalizeEmployees(
         JSON.parse(localStorage.getItem("fuelpro_employees") || "[]"),
@@ -163,6 +169,11 @@ export default function ShiftManagement() {
     }
   });
   const [shifts, setShifts] = useState<Shift[]>(() => {
+    const cloudCached = cloudStorageService.getCached<unknown[]>(
+      "shift_data",
+      stationId,
+    );
+    if (Array.isArray(cloudCached)) return normalizeShifts(cloudCached);
     try {
       return normalizeShifts(
         JSON.parse(localStorage.getItem("fuelpro_shifts") || "[]"),

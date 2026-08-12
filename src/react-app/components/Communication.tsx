@@ -136,13 +136,33 @@ export default function Communication() {
   const stationId = currentStation?.id;
   const { state } = useFuel();
 
-  // State management
+  // State management — initialize from the synchronous cache so the FIRST
+  // render shows data instantly (no blank flash while the async cloud get
+  // resolves).
   const [activeTab, setActiveTab] = useState<
     "contacts" | "messages" | "templates"
   >("contacts");
-  const [contacts, setContacts] = useState<Contact[]>([]);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [templates, setTemplates] = useState<MessageTemplate[]>([]);
+  const [contacts, setContacts] = useState<Contact[]>(() => {
+    const cached = cloudStorageService.getCached<unknown[]>(
+      "comm_contacts",
+      stationId,
+    );
+    return Array.isArray(cached) ? normalizeContacts(cached) : [];
+  });
+  const [messages, setMessages] = useState<Message[]>(() => {
+    const cached = cloudStorageService.getCached<unknown[]>(
+      "comm_messages",
+      stationId,
+    );
+    return Array.isArray(cached) ? normalizeMessages(cached) : [];
+  });
+  const [templates, setTemplates] = useState<MessageTemplate[]>(() => {
+    const cached = cloudStorageService.getCached<unknown[]>(
+      "comm_templates",
+      stationId,
+    );
+    return Array.isArray(cached) ? normalizeTemplates(cached) : [];
+  });
 
   // UI state
   const [searchTerm, setSearchTerm] = useState("");

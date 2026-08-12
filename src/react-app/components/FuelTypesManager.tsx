@@ -312,7 +312,14 @@ export default function FuelTypesManager() {
   const { state } = useFuel();
   const currencySymbol = getCurrencySymbol(state.companyData?.currency);
   const stationId = currentStation?.id;
-  const [fuelTypes, setFuelTypes] = useState<CustomFuelType[]>(loadFuelTypes);
+  const [fuelTypes, setFuelTypes] = useState<CustomFuelType[]>(() => {
+    const cloudCached = cloudStorageService.getCached<unknown[]>(
+      "fuel_types_config",
+      stationId,
+    );
+    if (Array.isArray(cloudCached)) return normalizeCustomFuelTypes(cloudCached);
+    return loadFuelTypes();
+  });
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);

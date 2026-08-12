@@ -170,8 +170,23 @@ export default function PriceBoard() {
   const { currentStation } = useStations();
   const stationId = currentStation?.id;
   const { syncPriceToFuelTypes } = useFuel();
-  const [prices, setPrices] = useState<PriceEntry[]>(loadPrices);
-  const [history, setHistory] = useState<PriceHistory[]>(loadHistory);
+  const [prices, setPrices] = useState<PriceEntry[]>(() => {
+    const cloudCached = cloudStorageService.getCached<unknown[]>(
+      "priceboard_data",
+      stationId,
+    );
+    if (Array.isArray(cloudCached)) return normalizePriceEntries(cloudCached);
+    return loadPrices();
+  });
+  const [history, setHistory] = useState<PriceHistory[]>(() => {
+    const cloudCached = cloudStorageService.getCached<unknown[]>(
+      "price_history_data",
+      stationId,
+    );
+    if (Array.isArray(cloudCached))
+      return normalizePriceHistoryList(cloudCached);
+    return loadHistory();
+  });
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showPreview, setShowPreview] = useState(false);

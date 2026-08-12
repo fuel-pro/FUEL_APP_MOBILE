@@ -529,8 +529,10 @@ export class AdminAPI {
   // Firebase-powered API - Real-time data from Firestore
   // Fallback to API calls when Firebase is not available
 
-  static async simulateResponse<T>(data: T, delay = 300): Promise<T> {
-    await new Promise((resolve) => setTimeout(resolve, delay));
+  static async simulateResponse<T>(data: T, delay = 0): Promise<T> {
+    if (delay > 0) {
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
     return data;
   }
 

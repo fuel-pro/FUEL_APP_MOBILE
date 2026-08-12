@@ -134,7 +134,15 @@ export default function MaintenanceTracker() {
   const { user } = useAuth();
   const { currentStation } = useStations();
   const stationId = currentStation?.id;
-  const [records, setRecords] = useState<MaintenanceRecord[]>(loadRecords);
+  const [records, setRecords] = useState<MaintenanceRecord[]>(() => {
+    const cloudCached = cloudStorageService.getCached<unknown[]>(
+      "maintenance_records",
+      stationId,
+    );
+    if (Array.isArray(cloudCached))
+      return normalizeMaintenanceRecords(cloudCached);
+    return loadRecords();
+  });
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");

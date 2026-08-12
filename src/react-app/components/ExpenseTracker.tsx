@@ -120,7 +120,14 @@ export default function ExpenseTracker() {
   const { user } = useAuth();
   const { currentStation } = useStations();
   const stationId = currentStation?.id;
-  const [expenses, setExpenses] = useState<Expense[]>(loadExpenses);
+  const [expenses, setExpenses] = useState<Expense[]>(() => {
+    const cloudCached = cloudStorageService.getCached<unknown[]>(
+      "expenses_data",
+      stationId,
+    );
+    if (Array.isArray(cloudCached)) return normalizeExpenses(cloudCached);
+    return loadExpenses();
+  });
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");

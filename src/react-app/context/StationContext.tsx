@@ -637,72 +637,65 @@ async function syncStationsWithSupabase(
 ): Promise<Station[] | null> {
   let userId: string | null = null;
 
-  // Primary: Supabase client session (works when the client detected the
-  // session via detectSessionInUrl or recovered it from localStorage).
-  // Try getSession first — it reads from localStorage synchronously and is
-  // faster than getUser (which makes a network call). If getSession returns
-  // a session, getUser will use the same token.
-  const { data: sessionData } = await supabase.auth.getSession();
-  if (sessionData?.session?.user?.id) {
-    userId = sessionData.session.user.id;
+  // FAST-PATH: read the auth identity from localStorage FIRST (synchronous,
+  // no network call). AuthContext persists it on login. This eliminates the
+  // 200-500ms auth.getUser() round-trip that previously blocked every station
+  // sync — the single biggest source of "stations not loading" latency.
+  try {
+    const identityRaw = localStorage.getItem("fuelpro_auth_identity");
+    if (identityRaw) {
+      const identity = JSON.parse(identityRaw);
+      if (identity?.id) userId = identity.id;
+    }
+  } catch {
+    // ignore parse errors
   }
 
+  // Fallback: Supabase client session (works when AuthContext hasn't
+  // persisted yet, e.g. first render after a hash-route login).
   if (!userId) {
-    // Try getUser (makes a network call to /auth/v1/user with the token
-    // from localStorage, if the client recovered it).
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (sessionData?.session?.user?.id) {
+      userId = sessionData.session.user.id;
+    }
+  }
+
+  // Last resort: network call to /auth/v1/user.
+  if (!userId) {
     const { data: userData } = await supabase.auth.getUser();
     if (userData?.user?.id) {
       userId = userData.user.id;
     }
   }
 
-  // Fallback: read the auth identity + token that AuthContext persists. This
-  // covers the cross-device case where the Supabase JS client hasn't finished
-  // initializing its session (or detectSessionInUrl didn't fire because the
-  // hash router consumed the URL params) but the app already knows the user
-  // from its own localStorage cache. Without this, syncFromBackend returns
-  // null and the user is stranded on the "create station" screen.
-  if (!userId) {
+  // If the Supabase JS client hasn't finished initializing its session
+  // (detectSessionInUrl didn't fire because the hash router consumed the URL
+  // params), inject the session explicitly from localStorage so RLS-scoped
+  // queries work. Without this, .from() calls use the anon key → RLS blocks
+  // them → empty results → user stranded on wizard.
+  if (userId) {
     try {
-      const identityRaw = localStorage.getItem("fuelpro_auth_identity");
-      if (identityRaw) {
-        const identity = JSON.parse(identityRaw);
-        if (identity?.id) {
-          userId = identity.id;
-          console.log(
-            "[StationContext] Supabase auth.getUser() returned no session, falling back to fuelpro_auth_identity for user:",
-            userId,
-          );
-
-          // The Supabase JS client may not have recovered the session from
-          // localStorage yet (detectSessionInUrl didn't fire, or
-          // _recoverAndRefresh hasn't completed). Without a session, all
-          // .from() calls use the anon key → RLS blocks them → empty
-          // results → user stranded on wizard. Inject the session explicitly
-          // from the sb-auth-token localStorage key so RLS-scoped queries work.
-          const sbTokenRaw = localStorage.getItem(
-            "sb-ojjscjwatikixlpshmub-auth-token",
-          );
-          if (sbTokenRaw) {
-            const sbToken = JSON.parse(sbTokenRaw);
-            if (sbToken.access_token && sbToken.refresh_token) {
-              try {
-                await supabase.auth.setSession({
-                  access_token: sbToken.access_token,
-                  refresh_token: sbToken.refresh_token,
-                });
-                console.log(
-                  "[StationContext] Injected Supabase session from localStorage for RLS queries",
-                );
-              } catch (e) {
-                console.warn("[StationContext] Failed to inject session:", e);
-              }
-            }
+      const sbTokenRaw = localStorage.getItem(
+        "sb-ojjscjwatikixlpshmub-auth-token",
+      );
+      if (sbTokenRaw) {
+        const sbToken = JSON.parse(sbTokenRaw);
+        if (sbToken.access_token && sbToken.refresh_token) {
+          // Only inject if the client doesn't already have a session.
+          const { data: existing } = await supabase.auth.getSession();
+          if (!existing.session) {
+            await supabase.auth.setSession({
+              access_token: sbToken.access_token,
+              refresh_token: sbToken.refresh_token,
+            });
+            console.log(
+              "[StationContext] Injected Supabase session from localStorage for RLS queries",
+            );
           }
         }
       }
-    } catch {
-      // ignore parse errors
+    } catch (e) {
+      console.warn("[StationContext] Failed to inject session:", e);
     }
   }
 

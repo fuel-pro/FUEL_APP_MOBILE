@@ -66,7 +66,6 @@ export default function CacheControl() {
     type: "localStorage" | "sessionStorage" | "all",
   ) => {
     setClearing(type);
-    await new Promise((resolve) => setTimeout(resolve, 500));
 
     try {
       if (type === "localStorage" || type === "all") {

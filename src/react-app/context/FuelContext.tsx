@@ -1717,10 +1717,9 @@ export function FuelProvider({ children }: { children: ReactNode }) {
 
   // INSTANT LOCAL AUTO-SAVE - saves to browser storage immediately for zero data loss
   useEffect(() => {
-    // Save to localStorage on EVERY state change with minimal debounce
     const timeoutId = setTimeout(() => {
-      saveToStorage(); // Always save, even empty states
-    }, 300); // Reduced to 300ms for near-instant local saves
+      saveToStorage();
+    }, 100); // 100ms — near-instant, batches only rapid keystrokes
 
     return () => clearTimeout(timeoutId);
   }, [state]);
@@ -1729,21 +1728,11 @@ export function FuelProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!user) return;
 
-    // Immediate cloud save on ANY data change (with short debounce to batch rapid changes)
     const immediateCloudSave = setTimeout(() => {
-      // Save to cloud for ANY state change (including empty states to sync deletions)
       saveToCloud();
-    }, 1500); // Reduced to 1.5 seconds for faster cloud sync
+    }, 500); // 500ms — fast cloud sync, batches rapid edits
 
-    // Frequent periodic saves every 15 seconds for maximum reliability
-    const cloudSaveInterval = setInterval(() => {
-      saveToCloud();
-    }, 15000); // Save every 15 seconds regardless of changes
-
-    return () => {
-      clearTimeout(immediateCloudSave);
-      clearInterval(cloudSaveInterval);
-    };
+    return () => clearTimeout(immediateCloudSave);
   }, [user, state]);
 
   // Load data on mount AND when user changes.
@@ -1756,34 +1745,28 @@ export function FuelProvider({ children }: { children: ReactNode }) {
   // updated elsewhere vanished. It also broke cross-device sync entirely.
   useEffect(() => {
     let cancelled = false;
-    const timer = setTimeout(async () => {
-      if (cancelled) return;
-      // First, hydrate instantly from the local cache so the UI is never blank.
-      loadFromStorage();
+    // HYDRATE INSTANTLY from localStorage — no setTimeout delay. The UI shows
+    // cached data on the very first paint, then cloud data updates it.
+    loadFromStorage();
 
-      if (user) {
+    if (user) {
+      (async () => {
         try {
           await loadFromCloud();
           if (!cancelled) {
-            // Mirror the freshly-loaded cloud state into the local cache so the
-            // next mount is instant and offline-capable.
             saveToStorage();
           }
         } catch (error) {
           console.warn("Failed to load from cloud, using local cache:", error);
         } finally {
-          // Unblock cloud saves. Whether loadFromCloud succeeded, found no
-          // data, or failed, the initial cloud consultation is now done and
-          // subsequent saves are legitimate user edits (not default-state
-          // overwrites). Without this, the auto-save effect would keep
-          // skipping forever and real edits would never sync.
           if (!cancelled) cloudLoadCompleteRef.current = true;
         }
-      }
-    }, 100);
+      })();
+    } else {
+      cloudLoadCompleteRef.current = true;
+    }
     return () => {
       cancelled = true;
-      clearTimeout(timer);
     };
   }, [user, loadFromCloud, loadFromStorage, saveToStorage]);
 
@@ -1810,9 +1793,8 @@ export function FuelProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     // Block saves until the new station's data is loaded.
     cloudLoadCompleteRef.current = false;
-    const timer = setTimeout(async () => {
-      if (cancelled) return;
-      loadFromStorage();
+    loadFromStorage();
+    (async () => {
       try {
         await loadFromCloud();
         if (!cancelled) saveToStorage();
@@ -1821,10 +1803,9 @@ export function FuelProvider({ children }: { children: ReactNode }) {
       } finally {
         if (!cancelled) cloudLoadCompleteRef.current = true;
       }
-    }, 100);
+    })();
     return () => {
       cancelled = true;
-      clearTimeout(timer);
     };
   }, [user, stationId, loadFromCloud, loadFromStorage, saveToStorage]);
 

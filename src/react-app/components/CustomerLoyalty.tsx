@@ -162,6 +162,13 @@ export default function CustomerLoyalty() {
   const { currentStation } = useStations();
   const stationId = currentStation?.id;
   const [customers, setCustomers] = useState<Customer[]>(() => {
+    // Cloud cache first (freshest cross-device data), then localStorage
+    const cloudCached = cloudStorageService.getCached<unknown[]>(
+      "loyalty_customers",
+      stationId,
+    );
+    if (Array.isArray(cloudCached))
+      return normalizeLoyaltyCustomers(cloudCached);
     try {
       return normalizeLoyaltyCustomers(
         JSON.parse(localStorage.getItem("fuelpro_customers") || "[]"),

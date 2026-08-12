@@ -2471,23 +2471,22 @@ export default function FounderAccess() {
     if (!instruction || editorExecuting) return;
     setEditorExecuting(true);
     setEditorOutput("");
-    setTimeout(() => {
-      const output = generateAIResponse(instruction);
-      setEditorOutput(output);
-      setEditorHistory((prev) =>
-        [
-          { instruction, output, timestamp: new Date().toISOString() },
-          ...prev,
-        ].slice(0, 50),
-      );
-      setEditorExecuting(false);
-      setEditorInstruction("");
-      logAudit(
-        "AI Editor Used",
-        `Instruction: ${instruction.slice(0, 100)}`,
-        "info",
-      );
-    }, 1500);
+    // Generate AI response immediately — no artificial delay
+    const output = generateAIResponse(instruction);
+    setEditorOutput(output);
+    setEditorHistory((prev) =>
+      [
+        { instruction, output, timestamp: new Date().toISOString() },
+        ...prev,
+      ].slice(0, 50),
+    );
+    setEditorExecuting(false);
+    setEditorInstruction("");
+    logAudit(
+      "AI Editor Used",
+      `Instruction: ${instruction.slice(0, 100)}`,
+      "info",
+    );
   }
 
   /* ─── File upload handler ─── */
