@@ -1824,7 +1824,6 @@ The app is now confirmed world-wide (not Kenya-centric):
 - Currency detection: `getDetectedCurrency()` resolves USD for US; the app
   supports all countries via the browser's locale/timezone.
 
-
 ## Founder panel token fix (DEPLOYED 2026-08-11, commit 0875742)
 
 **Symptom**: the Founder Console always showed "All Users 1, All Stations 1"
@@ -1855,3 +1854,58 @@ resets.
 
 adminAPI.ts default company phone was +1 555 000 1234 (US format) even for
 Kenya-based stations. Now uses +254 700 000 000 for Kenya, empty for others.
+
+## Founder Access Global Console — real-time cloud enhancement (ADDED 2026-08-12)
+
+The Founder Console's Secrets, Feature Flags, Audit Log, and Console Settings
+were localStorage-only (`fuelpro_founder_secrets` / `_flags` / `_audit`) → a
+change made on one device NEVER reached another device. Now ALL four datasets
+are cloud-backed via `useFounderConsoleStore` (Supabase `app_kv` + Supabase
+Realtime), so any change in the Founder Console reflects INSTANTLY on every
+signed-in founder device, with zero polling.
+
+- **`src/react-app/hooks/useFounderConsoleStore.ts`** (NEW): cloud-backed,
+  real-time store. Loads secrets/flags/audit/settings from `app_kv` on mount,
+  subscribes to `postgres_changes` per key (echo-guarded via `skipEcho` ref),
+  exposes `upsertSecret/deleteSecret/rotateSecret/upsertFlag/toggleFlag/
+  deleteFlag/bulkSetFlags/addAudit/clearAudit/updateSettings/reload`.
+  Migrates legacy localStorage arrays to cloud on first load. Keys:
+  `founder_console_secrets`, `founder_console_flags`, `founder_console_audit`
+  (capped to `settings.auditRetention`, default 500), `founder_console_settings`.
+- **`SecretsManagerSection.tsx`** (NEW, replaces inline Secrets): cloud real-time
+  + live search/filter by category + category tagging + edit-in-place (upsert
+  by key) + rotate-value (crypto.getRandomValues 32-byte) + export/import JSON
+  + bulk delete (checkbox select-all) + last-rotated indicator + "Real-time
+  synced" badge.
+- **`FeatureFlagsManagerSection.tsx`** (NEW, replaces inline Flags): cloud
+  real-time + add/edit/delete custom flag + description/category/environment
+  (all/dev/staging/prod) editing + bulk enable/disable all + search + category
+  & environment filtering + per-flag edit/delete + updated-at timestamp.
+- **`AuditLogManagerSection.tsx`** (NEW, replaces inline Audit): cloud real-time
+  + severity summary chips (click to filter) + filter by severity/user/date
+  range + search + export JSON & CSV + clear (with confirm) + manual refresh +
+  last-sync display.
+- **`SystemHealthManagerSection.tsx`** (NEW, replaces inline System Health):
+  live metrics (recomputed on refresh) + real browser performance APIs
+  (navigation load time, JS heap memory used/total/limit via
+  `performance.memory`) + CPU cores + top-8 localStorage keys + clear-local-cache
+  developer action + export diagnostics JSON + manual refresh button.
+- **`ConsoleSettingsSection.tsx`** (NEW, nav "Console Settings" in
+  Administration group): global control panel — auto-refresh audit toggle,
+  compact mode, advanced-controls visibility, audit retention size, editable
+  flag & secret category lists (add/remove), live sync-status indicator.
+- **`FounderAccess.tsx`**: wired `useFounderConsoleStore`; `secrets`/`
+  featureFlags`/`auditLog`/`consoleSettings` now alias the store; removed the
+  localStorage save effects + legacy `loadSecrets/loadAuditLog/loadFeatureFlags`
+  loaders + dead `addSecret/deleteSecret/copySecretValue/toggleFlag` handlers +
+  unused `Secret/AuditEntry/FeatureFlag/FAConfig` interfaces + unused icon &
+  `useCloudSync*` imports. Added `consolesettings` to `SectionId` + navGroups +
+  render. Inline Secrets/Audit/Flags/System Health sections replaced with the
+  new components. `logAudit` (backend MySQL) kept; new sections log to
+  `consoleStore.addAudit` (real-time cloud channel).
+- **Verification**: `npx tsc -b` 0 errors; `npm run build` success (founder
+  chunk founder-B44OHBm3.js, 112 precache); `vitest` 3/3 pass; `eslint` 0 errors
+  (5 pre-existing warnings only, down from 13).
+- **No Supabase schema changes** — uses the existing `app_kv` table + RLS
+  (owner-scoped) + realtime publication.
+

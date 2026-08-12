@@ -7,15 +7,10 @@ import {
   Shield,
   Activity,
   Server,
-  HardDrive,
-  Wifi,
-  WifiOff,
   Clock,
   Search,
   Eye,
   EyeOff,
-  Trash2,
-  Plus,
   Lock,
   CheckCircle2,
   AlertTriangle,
@@ -24,17 +19,12 @@ import {
   Settings,
   ToggleRight,
   RefreshCw,
-  Database,
   Radio,
   Zap,
-  Globe,
   ArrowLeft,
   Layers,
-  Save,
   X,
   Menu,
-  Copy,
-  Check,
   Sparkles,
   Upload,
   Wand2,
@@ -79,16 +69,14 @@ import {
   PerformanceSection,
   PaywallControlSection,
   PaymentMethodsSection,
+  SecretsManagerSection,
+  FeatureFlagsManagerSection,
+  AuditLogManagerSection,
+  ConsoleSettingsSection,
+  SystemHealthManagerSection,
 } from "./founder-sections";
 import { useFounderBackend } from "@/react-app/hooks/useFounderBackend";
-import {
-  useCloudSync,
-  useCloudUsers,
-  useCloudStations,
-  useCloudAuditLog,
-  useCloudSecrets,
-  useCloudFeatureFlags,
-} from "@/react-app/hooks/useCloudSync";
+import { useFounderConsoleStore } from "@/react-app/hooks/useFounderConsoleStore";
 import { checkApiStatus } from "@/react-app/lib/restApiSync";
 import { getBackendUrl } from "@/utils/apiConfig";
 import {
@@ -120,34 +108,7 @@ interface StationRecord {
   revenue: number;
 }
 
-interface Secret {
-  key: string;
-  value: string;
-  createdAt: string;
-}
-
-interface AuditEntry {
-  id: string;
-  event: string;
-  detail: string;
-  user: string;
-  severity: "success" | "warning" | "danger" | "info";
-  timestamp: string;
-}
-
-interface FeatureFlag {
-  id: string;
-  name: string;
-  description: string;
-  enabled: boolean;
-}
-
 /* ─── Founder Password Storage ─── */
-
-interface FAConfig {
-  enabled?: boolean;
-  secret?: string;
-}
 
 interface StationData {
   id: string;
@@ -162,122 +123,6 @@ interface StationData {
 
 const FOUNDER_SESSION_KEY = "fuelpro_founder_session";
 const FOUNDER_2FA_KEY = "fuelpro_founder_2fa";
-
-function loadSecrets(): Secret[] {
-  try {
-    const stored = localStorage.getItem("fuelpro_founder_secrets");
-    if (stored) return JSON.parse(stored);
-  } catch {
-    /* ignore */
-  }
-  return [
-    {
-      key: "ADMIN_SECRET_CODE",
-      value: "***CONFIGURED***",
-      createdAt: new Date().toISOString(),
-    },
-    {
-      key: "ADMIN_USERNAME",
-      value: "***CONFIGURED***",
-      createdAt: new Date().toISOString(),
-    },
-    {
-      key: "ADMIN_PASSWORD",
-      value: "***CONFIGURED***",
-      createdAt: new Date().toISOString(),
-    },
-  ];
-}
-
-function loadAuditLog(): AuditEntry[] {
-  try {
-    const stored = localStorage.getItem("fuelpro_founder_audit");
-    if (stored) return JSON.parse(stored);
-  } catch {
-    /* ignore */
-  }
-  return [
-    {
-      id: "1",
-      event: "System Initialized",
-      detail: "FuelPro admin panel created",
-      user: "SYSTEM",
-      severity: "info",
-      timestamp: new Date().toISOString(),
-    },
-  ];
-}
-
-function loadFeatureFlags(): FeatureFlag[] {
-  try {
-    const stored = localStorage.getItem("fuelpro_founder_flags");
-    if (stored) return JSON.parse(stored);
-  } catch {
-    /* ignore */
-  }
-  return [
-    {
-      id: "pos_system",
-      name: "POS System",
-      description: "Point of Sale module",
-      enabled: true,
-    },
-    {
-      id: "mpesa_live",
-      name: "M-PESA Live",
-      description: "Real-time M-PESA transactions",
-      enabled: true,
-    },
-    {
-      id: "ai_chatbot",
-      name: "AI Chatbot",
-      description: "AI assistant for fuel management",
-      enabled: true,
-    },
-    {
-      id: "cloud_sync",
-      name: "Cloud Sync",
-      description: "Cross-device data synchronization",
-      enabled: true,
-    },
-    {
-      id: "integration_hub",
-      name: "Integration Hub",
-      description: "KRA, ETR, POS, Payroll connectors",
-      enabled: true,
-    },
-    {
-      id: "regional_compliance",
-      name: "Regional Compliance",
-      description: "Multi-country compliance features",
-      enabled: true,
-    },
-    {
-      id: "advanced_analytics",
-      name: "Advanced Analytics",
-      description: "Deep analytics and forecasting",
-      enabled: true,
-    },
-    {
-      id: "customer_loyalty",
-      name: "Customer Loyalty",
-      description: "Loyalty program management",
-      enabled: true,
-    },
-    {
-      id: "fuel_quality",
-      name: "Fuel Quality Testing",
-      description: "Quality control and testing",
-      enabled: true,
-    },
-    {
-      id: "credit_management",
-      name: "Credit Management",
-      description: "Credit and debt tracking",
-      enabled: true,
-    },
-  ];
-}
 
 type SectionId =
   | "overview"
@@ -306,7 +151,8 @@ type SectionId =
   | "trialanalytics"
   | "performance"
   | "paywall"
-  | "paymentmethods";
+  | "paymentmethods"
+  | "consolesettings";
 
 export default function FounderAccess() {
   /* ─── Cloud Sync State ─── */
@@ -322,7 +168,6 @@ export default function FounderAccess() {
   const {
     logAudit,
     auditLog: backendAuditLog,
-    auditLoading: auditBackendLoading,
     stationCount: backendStationCount,
     salesAnalytics,
     allBackendUsers,
@@ -330,6 +175,13 @@ export default function FounderAccess() {
     allBackendStations,
     allStationsLoading,
   } = useFounderBackend();
+
+  /* ─── Founder Console Store (cloud-backed, real-time synced) ───
+   * Secrets, Feature Flags, Audit Log, and Console Settings are persisted to
+   * Supabase app_kv and synced in real time to every founder device via
+   * Supabase Realtime. This replaces the old localStorage-only arrays so a
+   * change made on one device reflects instantly on all others. */
+  const consoleStore = useFounderConsoleStore();
 
   /* ─── Auth State ─── */
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -356,14 +208,19 @@ export default function FounderAccess() {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [users, setUsers] = useState<AppUser[]>([]);
   const [stations, setStations] = useState<StationRecord[]>([]);
-  const [secrets, setSecrets] = useState<Secret[]>(loadSecrets);
-  const [featureFlags, setFeatureFlags] =
-    useState<FeatureFlag[]>(loadFeatureFlags);
-  // Use backend audit log if available, otherwise fallback to localStorage
+  // Secrets, Feature Flags and the Audit Log are now sourced from the
+  // cloud-backed, real-time Founder Console store (useFounderConsoleStore).
+  // The legacy localStorage state is kept only as a fallback display shape
+  // for the (now-replaced) inline sections; the new section components read
+  // directly from consoleStore.
+  const secrets = consoleStore.secrets;
+  const featureFlags = consoleStore.flags;
+  // Audit log: prefer the backend (MySQL) audit log when it has entries,
+  // otherwise use the cloud-synced console store audit log.
   const auditLog =
-    backendAuditLog.length > 1 ? backendAuditLog : loadAuditLog();
+    backendAuditLog.length > 1 ? backendAuditLog : consoleStore.audit;
+  const consoleSettings = consoleStore.settings;
   const [searchQuery, setSearchQuery] = useState("");
-  const [showAddSecret, setShowAddSecret] = useState(false);
 
   // AI Website Editor state
   const [editorInstruction, setEditorInstruction] = useState("");
@@ -378,12 +235,6 @@ export default function FounderAccess() {
   const [uploadedFiles, setUploadedFiles] = useState<
     { name: string; type: string; content: string; size: number }[]
   >([]);
-  const [newSecretKey, setNewSecretKey] = useState("");
-  const [newSecretValue, setNewSecretValue] = useState("");
-  const [visibleSecrets, setVisibleSecrets] = useState<Record<string, boolean>>(
-    {},
-  );
-  const [copiedSecret, setCopiedSecret] = useState("");
   const [loading, setLoading] = useState(true);
 
   /* ─── Cloud Status Check ─── */
@@ -567,14 +418,12 @@ export default function FounderAccess() {
     allStationsLoading,
   ]);
 
-  /* ─── Save secrets & flags ─── */
-  useEffect(() => {
-    localStorage.setItem("fuelpro_founder_secrets", JSON.stringify(secrets));
-  }, [secrets]);
-  useEffect(() => {
-    localStorage.setItem("fuelpro_founder_flags", JSON.stringify(featureFlags));
-  }, [featureFlags]);
-  // Audit log now persisted via backend (useFounderBackend.logAudit) — no localStorage sync needed
+  /* ─── Persistence ───
+   * Secrets & Feature Flags are now persisted by the cloud-backed
+   * useFounderConsoleStore (Supabase app_kv + realtime sync), so the old
+   * localStorage-only save effects are intentionally removed. The store
+   * handles cross-device real-time propagation. Audit log is persisted via
+   * the backend (useFounderBackend.logAudit) and/or the console store. */
 
   /* ─── Login Handler ───
    * SECURITY: This previously fell back to a hardcoded default credential
@@ -797,85 +646,10 @@ export default function FounderAccess() {
     window.location.reload();
   };
 
-  // logAudit now comes from useFounderBackend (syncs to MySQL + localStorage)
-
-  /* ─── Secret Management ─── */
-  const addSecret = () => {
-    if (!newSecretKey.trim() || !newSecretValue) return;
-    if (secrets.some((s) => s.key === newSecretKey.trim())) {
-      setSecrets((prev) =>
-        prev.map((s) =>
-          s.key === newSecretKey.trim()
-            ? {
-                ...s,
-                value: btoa(newSecretValue),
-                createdAt: new Date().toISOString(),
-              }
-            : s,
-        ),
-      );
-      logAudit(
-        "Secret Updated",
-        `Secret "${newSecretKey.trim()}" updated`,
-        "success",
-      );
-    } else {
-      setSecrets((prev) => [
-        ...prev,
-        {
-          key: newSecretKey.trim(),
-          value: btoa(newSecretValue),
-          createdAt: new Date().toISOString(),
-        },
-      ]);
-      logAudit(
-        "Secret Created",
-        `Secret "${newSecretKey.trim()}" added`,
-        "success",
-      );
-    }
-    setNewSecretKey("");
-    setNewSecretValue("");
-    setShowAddSecret(false);
-  };
-
-  const deleteSecret = (key: string) => {
-    if (!confirm(`Delete secret "${key}"?`)) return;
-    setSecrets((prev) => prev.filter((s) => s.key !== key));
-    logAudit("Secret Deleted", `Secret "${key}" removed`, "warning");
-  };
-
-  const copySecretValue = (key: string, encodedValue: string) => {
-    try {
-      navigator.clipboard?.writeText(atob(encodedValue));
-    } catch {
-      navigator.clipboard?.writeText(encodedValue);
-    }
-    setCopiedSecret(key);
-    setTimeout(() => setCopiedSecret(""), 2000);
-  };
-
-  const toggleSecretVisibility = (key: string) => {
-    setVisibleSecrets((prev) => ({ ...prev, [key]: !prev[key] }));
-  };
-
-  /* ─── Feature Flag Toggle ─── */
-  const toggleFlag = (id: string) => {
-    setFeatureFlags((prev) =>
-      prev.map((f) => {
-        if (f.id === id) {
-          const updated = { ...f, enabled: !f.enabled };
-          logAudit(
-            "Feature Flag Toggled",
-            `"${f.name}" is now ${updated.enabled ? "enabled" : "disabled"}`,
-            updated.enabled ? "success" : "warning",
-          );
-          return updated;
-        }
-        return f;
-      }),
-    );
-  };
+  // logAudit now comes from useFounderBackend (syncs to MySQL + localStorage).
+  // The new section components log directly to consoleStore.addAudit (the
+  // real-time cloud audit channel) so audit entries sync to all founder
+  // devices instantly.
 
   const filteredUsers = users.filter(
     (u) =>
@@ -1211,6 +985,11 @@ export default function FounderAccess() {
           label: "Feature Flags",
           icon: ToggleRight,
           count: featureFlags.length,
+        },
+        {
+          id: "consolesettings" as SectionId,
+          label: "Console Settings",
+          icon: Settings,
         },
         { id: "system" as SectionId, label: "System Health", icon: Server },
       ],
@@ -1809,358 +1588,53 @@ export default function FounderAccess() {
 
           {/* ══════ SECRETS ══════ */}
           {activeSection === "secrets" && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-lg font-medium text-white">Secrets</h2>
-                  <p className="text-xs text-gray-500 mt-0.5">
-                    Securely manage API keys and sensitive values
-                  </p>
-                </div>
-                <button
-                  onClick={() => setShowAddSecret(!showAddSecret)}
-                  className="flex items-center gap-2 px-3 py-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 text-xs rounded-lg transition-colors border border-amber-500/20"
-                >
-                  {showAddSecret ? <X size={14} /> : <Plus size={14} />}{" "}
-                  {showAddSecret ? "Cancel" : "Add Secret"}
-                </button>
-              </div>
-              {showAddSecret && (
-                <div className="bg-[#161618] border border-white/[0.06] rounded-xl p-5">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-[11px] text-gray-400 mb-1 block">
-                        Key
-                      </label>
-                      <input
-                        value={newSecretKey}
-                        onChange={(e) => setNewSecretKey(e.target.value)}
-                        placeholder="API_KEY"
-                        className="w-full px-3 py-2.5 bg-white/[0.03] border border-white/[0.08] rounded-lg text-sm text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/30"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[11px] text-gray-400 mb-1 block">
-                        Value
-                      </label>
-                      <input
-                        value={newSecretValue}
-                        onChange={(e) => setNewSecretValue(e.target.value)}
-                        placeholder="Enter value"
-                        className="w-full px-3 py-2.5 bg-white/[0.03] border border-white/[0.08] rounded-lg text-sm text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/30"
-                      />
-                    </div>
-                  </div>
-                  <button
-                    onClick={addSecret}
-                    className="mt-3 px-4 py-2 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 text-xs rounded-lg transition-colors border border-amber-500/20"
-                  >
-                    <Save size={13} className="inline mr-1.5" /> Save Secret
-                  </button>
-                </div>
-              )}
-              <div className="bg-[#161618] border border-white/[0.06] rounded-xl overflow-x-auto -mx-3 sm:mx-0">
-                <table className="w-full min-w-[480px]">
-                  <thead>
-                    <tr className="border-b border-white/[0.06]">
-                      <th className="text-left text-[11px] text-gray-500 font-medium px-5 py-3 w-1/2">
-                        Key
-                      </th>
-                      <th className="text-left text-[11px] text-gray-500 font-medium px-5 py-3">
-                        Value
-                      </th>
-                      <th className="text-right text-[11px] text-gray-500 font-medium px-5 py-3 w-20"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {secrets.map((s) => (
-                      <tr
-                        key={s.key}
-                        className="border-b border-white/[0.04] hover:bg-white/[0.02]"
-                      >
-                        <td className="px-5 py-3">
-                          <code className="text-sm text-gray-300 font-mono">
-                            {s.key}
-                          </code>
-                        </td>
-                        <td className="px-5 py-3">
-                          {visibleSecrets[s.key] ? (
-                            <span className="text-sm text-gray-300 font-mono">
-                              {atob(s.value)}
-                            </span>
-                          ) : (
-                            <span className="text-sm text-gray-600 font-mono tracking-widest">
-                              {".".repeat(32)}
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-5 py-3">
-                          <div className="flex items-center gap-1 justify-end">
-                            <button
-                              onClick={() => toggleSecretVisibility(s.key)}
-                              className="p-1.5 text-gray-500 hover:text-gray-300 transition-colors"
-                            >
-                              {visibleSecrets[s.key] ? (
-                                <EyeOff size={14} />
-                              ) : (
-                                <Eye size={14} />
-                              )}
-                            </button>
-                            <button
-                              onClick={() => copySecretValue(s.key, s.value)}
-                              className="p-1.5 text-gray-500 hover:text-gray-300 transition-colors"
-                            >
-                              {copiedSecret === s.key ? (
-                                <Check size={14} className="text-green-400" />
-                              ) : (
-                                <Copy size={14} />
-                              )}
-                            </button>
-                            <button
-                              onClick={() => deleteSecret(s.key)}
-                              className="p-1.5 text-gray-500 hover:text-red-400 transition-colors"
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                    {secrets.length === 0 && (
-                      <tr>
-                        <td
-                          colSpan={3}
-                          className="text-center text-gray-600 py-12"
-                        >
-                          No secrets configured
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            <SecretsManagerSection
+              secrets={consoleStore.secrets}
+              settings={consoleSettings}
+              onUpsert={consoleStore.upsertSecret}
+              onDelete={consoleStore.deleteSecret}
+              onRotate={consoleStore.rotateSecret}
+              logAudit={consoleStore.addAudit}
+            />
           )}
 
           {/* ══════ AUDIT LOG ══════ */}
           {activeSection === "audit" && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg font-medium text-white">
-                  Security Audit Log
-                </h2>
-                <div className="flex items-center gap-2">
-                  {auditBackendLoading && (
-                    <span className="text-[10px] text-amber-400 animate-pulse">
-                      Syncing from DB...
-                    </span>
-                  )}
-                  <span className="text-xs text-gray-500">
-                    {auditLog.length} events
-                  </span>
-                </div>
-              </div>
-              <div className="bg-[#161618] border border-white/[0.06] rounded-xl overflow-x-auto -mx-3 sm:mx-0">
-                <table className="w-full min-w-[640px]">
-                  <thead>
-                    <tr className="border-b border-white/[0.06]">
-                      {["Status", "Event", "Detail", "User", "Time"].map(
-                        (h) => (
-                          <th
-                            key={h}
-                            className="text-left text-[11px] text-gray-500 font-medium px-4 py-3"
-                          >
-                            {h}
-                          </th>
-                        ),
-                      )}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {auditLog.map((a) => (
-                      <tr
-                        key={a.id}
-                        className="border-b border-white/[0.04] hover:bg-white/[0.02]"
-                      >
-                        <td className="px-4 py-3">
-                          {a.severity === "success" ? (
-                            <CheckCircle2
-                              size={13}
-                              className="text-emerald-400"
-                            />
-                          ) : a.severity === "warning" ? (
-                            <AlertTriangle
-                              size={13}
-                              className="text-amber-400"
-                            />
-                          ) : a.severity === "danger" ? (
-                            <XCircle size={13} className="text-red-400" />
-                          ) : (
-                            <Activity size={13} className="text-blue-400" />
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-white">
-                          {a.event}
-                        </td>
-                        <td className="px-4 py-3 text-xs text-gray-400">
-                          {a.detail}
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className="text-[10px] px-2 py-0.5 bg-white/5 rounded text-gray-400">
-                            {a.user}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-[11px] text-gray-500">
-                          {new Date(a.timestamp).toLocaleString()}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            <AuditLogManagerSection
+              audit={consoleStore.audit}
+              loading={consoleStore.loading}
+              lastSync={consoleStore.lastSync}
+              onClear={consoleStore.clearAudit}
+              onReload={consoleStore.reload}
+              logAudit={consoleStore.addAudit}
+            />
           )}
 
           {/* ══════ FEATURE FLAGS ══════ */}
           {activeSection === "flags" && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg font-medium text-white">
-                  Feature Flags
-                </h2>
-                <span className="text-xs text-gray-500">
-                  {featureFlags.filter((f) => f.enabled).length} of{" "}
-                  {featureFlags.length} enabled
-                </span>
-              </div>
-              <div className="space-y-2">
-                {featureFlags.map((f) => (
-                  <div
-                    key={f.id}
-                    className="bg-[#161618] border border-white/[0.06] rounded-xl p-4 flex items-center justify-between"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div
-                        className={`w-2 h-2 rounded-full ${f.enabled ? "bg-green-400" : "bg-gray-600"}`}
-                      />
-                      <div>
-                        <p className="text-sm text-white">{f.name}</p>
-                        <p className="text-[11px] text-gray-500">
-                          {f.description}
-                        </p>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => toggleFlag(f.id)}
-                      className={`relative w-11 h-6 rounded-full transition-colors ${f.enabled ? "bg-green-500" : "bg-gray-600"}`}
-                    >
-                      <div
-                        className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${f.enabled ? "translate-x-5" : "translate-x-0.5"}`}
-                      />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <FeatureFlagsManagerSection
+              flags={consoleStore.flags}
+              settings={consoleSettings}
+              onUpsert={consoleStore.upsertFlag}
+              onToggle={consoleStore.toggleFlag}
+              onDelete={consoleStore.deleteFlag}
+              onBulkSet={consoleStore.bulkSetFlags}
+              logAudit={consoleStore.addAudit}
+            />
           )}
 
           {/* ══════ SYSTEM HEALTH ══════ */}
           {activeSection === "system" && (
-            <div className="space-y-4">
-              <h2 className="text-lg font-medium text-white">System Health</h2>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                {[
-                  {
-                    label: "Storage Used",
-                    value: `${(JSON.stringify(localStorage).length / 1024).toFixed(1)} KB`,
-                    icon: HardDrive,
-                    status: "healthy" as const,
-                  },
-                  {
-                    label: "Local Storage Keys",
-                    value: `${localStorage.length}`,
-                    icon: Database,
-                    status: "healthy" as const,
-                  },
-                  {
-                    label: "Network",
-                    value: navigator.onLine ? "Online" : "Offline",
-                    icon: Wifi,
-                    status: navigator.onLine
-                      ? ("healthy" as const)
-                      : ("warning" as const),
-                  },
-                  {
-                    label: "App Version",
-                    value: "v3.0.0",
-                    icon: Layers,
-                    status: "healthy" as const,
-                  },
-                  {
-                    label: "Platform",
-                    value: navigator.platform,
-                    icon: Zap,
-                    status: "healthy" as const,
-                  },
-                  {
-                    label: "Language",
-                    value: navigator.language,
-                    icon: Globe,
-                    status: "healthy" as const,
-                  },
-                ].map((m) => (
-                  <div
-                    key={m.label}
-                    className="bg-[#161618] border border-white/[0.06] rounded-xl p-5"
-                  >
-                    <div className="flex items-center gap-2 mb-2">
-                      <m.icon
-                        size={14}
-                        className={
-                          m.status === "healthy"
-                            ? "text-emerald-400"
-                            : "text-amber-400"
-                        }
-                      />
-                      <span className="text-[11px] text-gray-500">
-                        {m.label}
-                      </span>
-                    </div>
-                    <p className="text-lg font-semibold text-white">
-                      {m.value}
-                    </p>
-                  </div>
-                ))}
-              </div>
-              <div className="bg-[#161618] border border-white/[0.06] rounded-xl p-5">
-                <h3 className="text-sm font-medium text-gray-300 mb-3">
-                  Storage Breakdown
-                </h3>
-                <div className="space-y-2 max-h-48 overflow-y-auto">
-                  {Array.from({ length: localStorage.length }, (_, i) =>
-                    localStorage.key(i),
-                  )
-                    .filter(Boolean)
-                    .sort()
-                    .map((key) => {
-                      const val = localStorage.getItem(key!) || "";
-                      return (
-                        <div
-                          key={key}
-                          className="flex items-center justify-between text-xs"
-                        >
-                          <span className="text-gray-400 font-mono truncate max-w-[60%]">
-                            {key}
-                          </span>
-                          <span className="text-gray-600">
-                            {(val.length / 1024).toFixed(2)} KB
-                          </span>
-                        </div>
-                      );
-                    })}
-                </div>
-              </div>
-            </div>
+            <SystemHealthManagerSection
+              logAudit={(event, detail, severity) =>
+                consoleStore.addAudit(
+                  event,
+                  detail,
+                  severity ?? "info",
+                  "FOUNDER",
+                )
+              }
+            />
           )}
 
           {/* ══════ AI WEBSITE EDITOR ══════ */}
@@ -2437,6 +1911,16 @@ export default function FounderAccess() {
           )}
           {activeSection === "datamgmt" && (
             <DataManagementSection logAudit={logAudit} />
+          )}
+
+          {/* ══════ CONSOLE SETTINGS ══════ */}
+          {activeSection === "consolesettings" && (
+            <ConsoleSettingsSection
+              settings={consoleSettings}
+              lastSync={consoleStore.lastSync}
+              onUpdate={consoleStore.updateSettings}
+              logAudit={consoleStore.addAudit}
+            />
           )}
 
           {/* ══════ MONETIZATION ══════ */}

@@ -18,3 +18,8 @@ export { default as TrialAnalyticsSection } from "./TrialAnalyticsSection";
 export { default as PerformanceSection } from "./PerformanceSection";
 export { default as PaywallControlSection } from "./PaywallControlSection";
 export { default as PaymentMethodsSection } from "./PaymentMethodsSection";
+export { default as SecretsManagerSection } from "./SecretsManagerSection";
+export { default as FeatureFlagsManagerSection } from "./FeatureFlagsManagerSection";
+export { default as AuditLogManagerSection } from "./AuditLogManagerSection";
+export { default as ConsoleSettingsSection } from "./ConsoleSettingsSection";
+export { default as SystemHealthManagerSection } from "./SystemHealthManagerSection";
