@@ -1921,3 +1921,111 @@ signed-in founder device, with zero polling.
   "Console Settings", "Real-time synced", "Rotate", `bulkSetFlags`. No Supabase
   changes were needed.
 
+## Founder Access Global Console — 100+ real-time cloud-backed controls (ADDED 2026-08-12, commit 56aa329)
+
+The Founder Access Global Console now has 14 NEW cloud-backed real-time
+datasets (via `useFounderAdvancedStore`) + 14 new/enhanced section
+components, plus deep enhancements to 4 existing sections. ANY change made
+in the console on any device reflects INSTANTLY on every signed-in founder
+device via Supabase `app_kv` + Realtime (echo-guarded with
+`skipRemoteUpdateRef`).
+
+### New store: `useFounderAdvancedStore.ts`
+
+14 owner-scoped, real-time-synced datasets, all persisted in `app_kv`
+(keys prefixed `founder_console_*`) with Supabase Realtime subscriptions:
+webhooks, apikeys, announcements, maintwindows, blocklist, cors, envvars,
+scheduledjobs, experiments, healthchecks, localization, cache, command
+palette, dbquery (SQL audit log). Provides `add`/`update`/`remove`/
+`toggle`/`clear` + per-dataset `save` that writes cloud + broadcasts.
+
+### 14 new section components (`src/react-app/pages/founder-sections/`)
+
+1. WebhooksManagerSection — CRUD, event picker, retry/timeout, signing-secret
+   (`whsec_...`) rotate, test-send, enable/disable, last-status.
+2. ApiKeysManagerSection — CRUD, scope picker, rate limit, expiry, reveal/
+   mask, copy, rotate, enable/disable, usage tracking.
+3. AnnouncementsSection — CRUD, type/target/schedule, dismissible, live
+   preview, live/scheduled/inactive status.
+4. MaintenanceWindowsSection — CRUD, schedule, affected services, banner
+   preview, active/upcoming/active-now status.
+5. BlocklistSection — IP ban CRUD, reason, expiry, bulk import, search,
+   unban, clear-all.
+6. CorsConfigSection — origins CRUD, per-origin methods + credentials,
+   wildcard, regex validation, test-origin, quick presets.
+7. EnvVarsSection — key/value CRUD, masked secrets, categorize, search,
+   export/import JSON, copy.
+8. ScheduledJobsSection — list cron jobs, enable/disable, run-now, last-run
+   status + duration, add/edit/delete.
+9. ExperimentsSection — A/B CRUD, variants, traffic-split sliders,
+   normalize, metric, status lifecycle, duplicate.
+10. HealthChecksSection — monitor CRUD, URL, expected status, interval,
+    run-check-now, latency + up/down, up/active stats.
+11. LocalizationSection — languages CRUD, active/default toggle, coverage
+    sliders, search.
+12. CacheManagementSection — inspect localStorage, clear individual/
+    category/all, invalidate cloud in-memory cache, sizes, refresh.
+13. CommandPaletteSection — searchable keyboard-navigable command center
+    that jumps to any section.
+14. DatabaseQuerySection — read-only SQL runner with safety guard
+    (SELECT/WITH only, destructive keywords blocked), sample queries. Uses
+    the authenticated client + RPC `exec_sql_select` (NOTE: this RPC does
+    NOT exist on the live project yet — the section handles the no-RPC case
+    gracefully by surfacing the error. To enable live SQL execution, create
+    `exec_sql_select(sql text)` SECURITY DEFINER returning `jsonb` via the
+    Management API. The section still renders + logs the attempt to the
+    audit trail even without the RPC.)
+
+### Enhanced existing sections
+
+- FeatureFlagsManagerSection: + rollout % (per-flag slider + creation),
+  dependency graph, env compare view (enabled/total per env with progress
+  bars), 8 flag templates, copy-from-existing. New `ConsoleFeatureFlag`
+  fields: `rolloutPercentage`, `dependsOn`.
+- SecretsManagerSection: + expiry date, tags, rotation reminders, expired/
+  expiring-soon/rotation-due badges, tag filter. New `ConsoleSecret`
+  fields: `expiresAt`, `tags`, `rotationReminderDays`.
+- AuditLogManagerSection: + live tail (NEW badges on entries <3s old),
+  auto-archive on retention threshold, show-more pagination, retention
+  indicator. Now accepts `retentionLimit` prop.
+- ConsoleSettingsSection: + accent color (picker + hex), default language,
+  cache TTL, confirm-dangerous toggle, email-notifications toggle, max API
+  keys, default webhook timeout. New `ConsoleSettings` fields:
+  `accentColor`, `defaultLanguage`, `cacheTtlSec`, `confirmDangerousActions`,
+  `emailNotifications`, `maxApiKeysPerUser`, `webhookTimeoutDefaultMs`.
+
+### FounderAccess.tsx wiring
+
+- New nav groups: "Developer Tools" (Command Palette, Webhooks, API Keys,
+  Scheduled Jobs, A/B Experiments, Health Checks, Database Query, Cache
+  Manager) + "Platform Control" (Announcements, Maint. Windows, IP
+  Blocklist, CORS Config, Env Variables, Localization). Each nav item
+  shows a live count badge from the advanced store.
+- New `SectionId` values: commandpalette, webhooks, apikeys, jobs,
+  experiments, healthchecks, dbquery, cachemgmt, announcements,
+  maintwindows, blocklist, cors, envvars, localization.
+- All new section render blocks pass `advancedStore` +
+  `consoleStore.addAudit`.
+
+### Deploy state 2026-08-12
+
+- GitHub: branch `founder-console-enhancement`, commit `56aa329` pushed.
+- Cloudflare Pages: LIVE (https://8dc444c8.fuel-app-mobile.pages.dev +
+  main alias https://fuel-app-mobile.pages.dev). Verified in the deployed
+  `founder-C4mzGZIn.js` chunk: `founder_console_webhooks`,
+  `founder_console_apikeys`, `founder_console_announcements`,
+  `founder_console_blocklist`, `founder_console_cors`,
+  `founder_console_experiments`, `founder_console_health_checks`,
+  `founder_console_localization`, `exec_sql_select`, "Command Palette",
+  "Rollout Percentage", "Env Compare", `whsec_`.
+- Vercel production: BLOCKED by `api-deployments-free-per-day` (100/100
+  exhausted, resets ~2026-08-12 19:50 UTC). ALL deploy paths blocked
+  (git-source API now also counts against the quota). GitHub integration
+  auto-deploys when quota resets.
+- Supabase: NO schema changes needed — all new datasets use the existing
+  `app_kv` table (owner-scoped row ids via `cloud-storage-service.ts`) +
+  existing Realtime publication. Only optional schema addition is the
+  `exec_sql_select` RPC for the Database Query section.
+- Verified: `tsc -b` 0 errors, `eslint` 0 errors, `prettier` clean, build
+  success (founder chunk 880 KB), 3 unit tests pass.
+
