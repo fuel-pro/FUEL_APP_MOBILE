@@ -3648,3 +3648,31 @@ kra_pin=P051234567X). 4 POS sales completed + verified:
 - Vercel: BLOCKED by api-deployments-free-per-day (100/100; GitHub
   integration auto-deploys when quota resets ~24h).
 - Supabase: no schema changes (frontend-only).
+
+## POS dynamic Quick Fuel Sale (DEPLOYED LIVE 2026-08-12, commit c7cac7b)
+
+The POS "Quick Fuel Sale" section had hardcoded Petrol + Diesel buttons. A
+station with Kerosene, LPG, V-Power, or any custom fuel type configured in
+Fuel Type Manager could NOT sell those fuels from POS — only Petrol/Diesel.
+Now the buttons render DYNAMICALLY from the station's active fuel types
+(fuel_types_config via useStationFuelTypes).
+
+- `quickSaleType` (`"petrol"|"diesel"|"custom"`) → `quickSaleFuel` (string =
+  selected fuel's canonical display label, e.g. "Super Petrol", "Diesel",
+  "Kerosene", "LPG"). Defaults to the canonical petrol label for first render.
+- Buttons map over `fuelTypeApi.activeFuelTypes`; each shows the canonical
+  label + live price. Falls back to canonical Petrol + Diesel buttons when
+  the station has no configured fuel types yet (first run / before cloud
+  hydration) so POS is never empty.
+- `addFuelToCart` resolves the price from `fuelTypeApi.getPriceFor(label)`,
+  the fuel code from the configured entry (PMS/AGO/IK/LPG…) with a canonical
+  fallback, and the HS code from the canonical type.
+- Price preview uses `fuelTypeApi.getPriceFor(quickSaleFuel)`.
+
+Verified live (Cloudflare preview 832e1cb7): Super Petrol 10L cash sale
+INV20260812000005ZGIX $2,140.30 — receipt shows "Super Petrol" (canonical
+label, not hardcoded "Petrol"), "10 L | VAT-A | HS:2710.12.10",
+"RECEIPT", "Tax ID:", persisted to cloud 18:00:33 UTC.
+
+Deploy: GitHub commit c7cac7b, Cloudflare LIVE (832e1cb7 + main alias).
+Vercel BLOCKED by api-deployments-free-per-day (auto-deploys on reset).
