@@ -1854,6 +1854,99 @@ service_role founder queries see all data.
 - Supabase: no schema changes needed (frontend-only fixes). All app_kv
   data for QA user verified with scoped `__ownerId` row ids.
 
+## Credit Management tab deep audit + fix (DEPLOYED LIVE 2026-08-12, PR #119, commit 3f05436)
+
+Deep audit of `src/react-app/components/CreditManagement.tsx` (the "Credit"
+top-level tab, which now hosts two inner sub-tabs: "Credit Accounts" +
+"Debt Payment Reminders" via SubTabBar). Found and fixed multiple bugs +
+hardcoded values + missing features. All fixes verified live on Cloudflare
+Pages (preview adc43cbd + main alias fuel-app-mobile.pages.dev) and via
+direct Supabase REST API (fresh-device simulation).
+
+### Bugs fixed
+
+1. **Hardcoded "+ Purchase" button** — clicking "+ Purchase" instantly added
+   a hardcoded $5,000 "Fuel purchase" transaction with no user input. Now
+   opens a modal form with Amount + Description inputs + validation
+   (`amount > 0` required). The entered amount/description is saved as a
+   real `CreditTransaction` with `recordedBy` = logged-in user name.
+2. **Transaction history saved but never displayed** — `CreditTransaction`s
+   were persisted to cloud (`credit_transactions` key) but the UI never
+   showed them. Added an expandable "Transaction History" panel per account
+   (toggle via "History" button) that lists all transactions with type
+   badge (Purchase=red, Payment=green), amount, description, date, and
+   `recordedBy` user.
+3. **No delete account** — there was no way to delete a credit account. Added
+   a "Delete" button with a confirmation modal (shows account name +
+   balance warning). Deleting removes the account AND all its transactions
+   from both state and cloud.
+4. **No status management** — account status was fixed at "active". Added a
+   status selector dropdown (Active/Suspended/Blacklisted) that persists to
+   cloud. The badge color reflects the status.
+5. **No UX feedback** — added toast notifications for all actions (purchase,
+   payment, delete, status change) so the user knows the operation
+   succeeded.
+
+### DebtReminder.tsx fixes (the "Reminders" sub-tab)
+
+6. **Amount stored as formatted string** — `saveDebtReminder` called
+   `formatNumber(parseNumberFromFormatted(debtAmount))` which stored the
+   amount as a string like "12,000.00" instead of a number. Downstream
+   calculations and displays broke. Fixed: stores raw number via
+   `parseNumberFromFormatted(debtAmount) || 0`.
+7. **loadDebt null-guards** — loading a saved reminder set form fields to
+   `undefined` if the saved data was missing a field (crash on
+   `.replace()` etc.). Now all fields are null-guarded with `|| ""`.
+8. **History display amount formatting** — the amount in the history list
+   was shown raw. Now formatted with `formatNumber`, handling both legacy
+   string amounts and new number amounts.
+9. **Delete modal + toast** — added a delete confirmation modal (was
+   instant delete) and toast notification.
+
+### Cloud sync verification (cross-device)
+
+- **Phase 1** (same session): created account "Metro Logistics Corp" ($50K
+  limit), added $15K purchase via modal (desc "100L Super Petrol @ $150/L"),
+  recorded $8K payment (desc "Partial payment - bank transfer"). Verified
+  in Supabase `app_kv`: `credit_accounts` balance=$12K, totalPayments=$8K,
+  totalPurchases=$20K; `credit_transactions` has 3 entries (1 payment +
+  2 purchases, all with correct `recordedBy`).
+- **Phase 2** (fresh browser session, different Cloudflare preview URL,
+  no localStorage): logged in as same user → Credit tab loaded account
+  from cloud with balance **$12,000.00** (synced), History panel showed
+  all 3 transactions (synced), Debt Payment Reminders sub-tab showed
+  saved reminder "Metro Logistics Corp" (synced). **Cross-device sync
+  confirmed working.**
+
+### Deploy state 2026-08-12 (commit 3f05436)
+
+- **GitHub main**: ✅ merged (squash) commit 3f05436
+- **Cloudflare Pages**: ✅ LIVE (preview
+  https://adc43cbd.fuel-app-mobile.pages.dev + main alias
+  https://fuel-app-mobile.pages.dev, bundle 112 precache). CreditManagement
+  + DebtReminder chunks with all fixes verified in live bundle.
+- **Vercel production**: ❌ BLOCKED by `api-deployments-free-per-day`
+  (100/100; prebuilt deploy also hit the limit). GitHub integration
+  (prodBranch=main) will auto-deploy commit 3f05436 when the quota resets
+  (~24h). /api/* endpoints unchanged. ⏳
+- **Supabase**: no schema changes needed (uses existing `app_kv` table +
+  scoped row ids `credit_accounts__<uid>__<stationId>` and
+  `credit_transactions__<uid>__<stationId>`). ✅
+
+### Interlinks (already present, verified working)
+
+- **Credit → Live Transaction**: "Collect via M-PESA" button calls
+  `navigateToTab("livetransaction", {phone, amount, account_reference,
+  openStkPush:true})` — opens STK Push modal pre-filled.
+- **Credit → Invoice**: "Create Invoice" button calls
+  `navigateToTab("invoice", {customerName, amount, description})` — opens
+  invoice form pre-filled.
+- **Live Transaction → Credit**: completed shared transactions have "Apply
+  to Credit Account" button that calls `navigateToTab("credit",
+  {customerName, amount})`.
+- **Overdue accounts → Reminders**: overdue credit accounts show "Send
+  Reminder" button that switches to the Reminders sub-tab.
+
 ## Cross-device double-encoded JSON auto-heal (DEPLOYED LIVE 2026-08-11, commit df9daf0)
 
 **Symptom**: ALL per-component cloud data (suppliers, expenses, priceboard,
