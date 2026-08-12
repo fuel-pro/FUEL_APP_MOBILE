@@ -355,7 +355,8 @@ export default function CustomerLoyaltyPortal({
                         </span>
                         {reward.minPurchaseAmount && (
                           <span className="text-gray-500">
-                            Min: {getCurrencySymbol()} {reward.minPurchaseAmount.toLocaleString()}
+                            Min: {getCurrencySymbol()}{" "}
+                            {reward.minPurchaseAmount.toLocaleString()}
                           </span>
                         )}
                       </div>

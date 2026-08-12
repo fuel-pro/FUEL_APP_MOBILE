@@ -19,7 +19,10 @@ import {
 } from "lucide-react";
 import { useStations } from "@/react-app/context/StationContext";
 import { supabase } from "@/supabase/client";
-import { getCurrencySymbol, getDetectedCurrency } from "@/react-app/lib/currency";
+import {
+  getCurrencySymbol,
+  getDetectedCurrency,
+} from "@/react-app/lib/currency";
 
 // Format currency
 const formatMoney = (amount: number) => {

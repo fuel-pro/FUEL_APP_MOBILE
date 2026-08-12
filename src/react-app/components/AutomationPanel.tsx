@@ -283,7 +283,8 @@ export default function AutomationPanel() {
                     onClick={() => handleFulfillReorder(r.id, r.suggestedQty)}
                     className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-sm flex items-center gap-2"
                   >
-                    <Package size={16} />Fulfill
+                    <Package size={16} />
+                    Fulfill
                   </button>
                 </div>
               ))}
@@ -303,7 +304,8 @@ export default function AutomationPanel() {
               onClick={handleClearLog}
               className="flex items-center gap-2 px-3 py-1.5 bg-white/5 hover:bg-red-500/20 text-gray-400 hover:text-red-400 rounded-lg text-sm transition-colors"
             >
-              <Trash2 size={14} />Clear Log
+              <Trash2 size={14} />
+              Clear Log
             </button>
           </div>
           {log.length === 0 ? (

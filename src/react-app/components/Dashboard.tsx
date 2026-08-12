@@ -139,7 +139,8 @@ export default function Dashboard() {
     getCountryById(stationCountry.toUpperCase()) || location.currentCountry;
 
   // Use precise location-based fuel prices (auto-synced with GPS)
-  const stationCity = currentStation?.location || stationCountryProfile?.capital || "—";
+  const stationCity =
+    currentStation?.location || stationCountryProfile?.capital || "—";
   // The useAutoSync hook's `fuelPrice` state can lag the synced cache during a
   // country switch (the station loads from cloud AFTER the hook's initial KE
   // sync). Read the persisted synced price for the STATION's country directly
@@ -693,10 +694,7 @@ export default function Dashboard() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <SyncStatusIndicator
-            countryCode={stationCountry}
-            compact
-          />
+          <SyncStatusIndicator countryCode={stationCountry} compact />
           <div className="flex items-center gap-3 bg-white dark:bg-gray-800 rounded-xl px-4 py-2.5 shadow-sm border border-gray-200 dark:border-gray-700">
             <Clock size={18} className="text-blue-500" />
             <span className="text-sm font-mono text-gray-700 dark:text-gray-300">
@@ -957,19 +955,22 @@ export default function Dashboard() {
                 <div>
                   <p className="text-[9px] text-gray-500">Landed Cost</p>
                   <p className="text-xs font-semibold text-gray-700 dark:text-gray-300">
-                    {currencySymbol} {effectiveFuelPrice.breakdown.landedCost.toFixed(2)}
+                    {currencySymbol}{" "}
+                    {effectiveFuelPrice.breakdown.landedCost.toFixed(2)}
                   </p>
                 </div>
                 <div>
                   <p className="text-[9px] text-gray-500">Taxes</p>
                   <p className="text-xs font-semibold text-gray-700 dark:text-gray-300">
-                    {currencySymbol} {effectiveFuelPrice.breakdown.taxes.toFixed(2)}
+                    {currencySymbol}{" "}
+                    {effectiveFuelPrice.breakdown.taxes.toFixed(2)}
                   </p>
                 </div>
                 <div>
                   <p className="text-[9px] text-gray-500">Margins</p>
                   <p className="text-xs font-semibold text-gray-700 dark:text-gray-300">
-                    {currencySymbol} {effectiveFuelPrice.breakdown.margins.toFixed(2)}
+                    {currencySymbol}{" "}
+                    {effectiveFuelPrice.breakdown.margins.toFixed(2)}
                   </p>
                 </div>
               </div>

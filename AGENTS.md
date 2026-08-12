@@ -1040,8 +1040,8 @@ async cloud loads resolve.
    read localStorage. The async cloud `get()` ran in a separate `useEffect`
    that fired AFTER the first render — causing a blank flash then a re-render.
    **Fix**: all now use `useState(() => { const cached =
-   cloudStorageService.getCached(key, stationId); if (cached) return
-   normalize(cached); return loadFromLocalStorage(); })` — INSTANT first
+cloudStorageService.getCached(key, stationId); if (cached) return
+normalize(cached); return loadFromLocalStorage(); })` — INSTANT first
    render from the cloud/localStorage cache, no blank flash.
 
 5. **Artificial delays (total ~5s dead time per user flow)**:
@@ -1071,8 +1071,8 @@ the cache for the next render.
 
 - **GitHub main**: ✅ commit 74d9cb7 pushed
 - **Cloudflare Pages**: ✅ LIVE (preview https://b661595a.fuel-app-mobile.pages.dev
-  + main alias https://fuel-app-mobile.pages.dev). Verified: `getCached` is
-  present in the deployed `reports-BSaoPwf5.js` chunk.
+  - main alias https://fuel-app-mobile.pages.dev). Verified: `getCached` is
+    present in the deployed `reports-BSaoPwf5.js` chunk.
 - **Vercel production**: ❌ BLOCKED by `api-deployments-free-per-day`
   (100/day exhausted; ALL deploy paths blocked: git-source API, prebuilt,
   CLI deploy, preview). The GitHub integration (prodBranch=main) will
@@ -1657,18 +1657,23 @@ Applied site-wide to all 78 native `<select>` elements across 36 files:
 ## Automation engine + Products->Stock Management merge (ADDED 2026-08-11, commit afadee0)
 
 ### Products tab merged into Stock Management
+
 The standalone "Products Catalog" top-level tab has been REMOVED. Its full CRUD is now a "Products" sub-tab inside InventoryManagement.tsx (label "Stock Management"). 7 sub-tabs: Products, Adjustments, Transfers, Counts, Wastage, Auto-Reorders, History.
 
 ### Automation engine (NEW)
+
 `src/react-app/lib/automation-engine.ts`: cloud-backed domain-event bus + automation reaction system. Initialized on app boot. Auto-reorder, auto-record-stock, auto-refresh, cloud-backed prefs + log. AutomationPanel.tsx (tab "automation" order 35): Settings/Reorders/Log.
 
 ### Cross-component wiring
+
 PointOfSale emits sale:completed. PriceBoard emits price:changed. ExpenseTracker emits expense:created. Dashboard + InventoryManagement listen + auto-refresh.
 
 ### User-adjustable preferences (NEW, cloud-backed)
+
 `src/react-app/lib/user-preferences.ts`: everything previously hardcoded is per-user + cloud-synced. Currency, VAT label/rate (65+ countries), categories, units, fuel types, payment methods, receipt footer, invoice prefix. SettingsPanel.tsx new "Site Preferences" card.
 
 ### Deploy 2026-08-11
+
 GitHub: pushed (afadee0). Cloudflare: LIVE 841189f4.fuel-app-mobile.pages.dev. Vercel: BLOCKED (quota resets 2026-08-12 19:44 UTC).
 
 ## Founder Console infinite render loop breaking navigation (FIXED 2026-08-12, commit ae5f31f)
@@ -1680,6 +1685,7 @@ stayed "Super Admin | Overview". The Audit Log badge showed 1000 (all
 "Session Resumed" entries).
 
 **Root cause — infinite render loop**:
+
 - `useFounderBackend.logAudit` was a `useCallback` with deps
   `[logMutation, isStatic]`. The tRPC `logMutation` RESULT OBJECT identity
   changes on every mutation state transition (idle→pending→success), so
@@ -1695,6 +1701,7 @@ stayed "Super Admin | Overview". The Audit Log badge showed 1000 (all
   render storm.
 
 **Fix** (2 parts):
+
 - `useFounderBackend.ts`: depend on the stable `mutate` fn (destructured from
   `logMutation`) instead of the whole mutation result object, so `logAudit`
   is referentially stable across renders.
@@ -1726,9 +1733,11 @@ the username must match exactly — `FOUNDER` ≠ `founder`). Then
 Full multi-device responsive audit across phone/tablet/laptop/TV aspect ratios. All fixes verified at 8 device sizes (320px small phone -> 4K TV) with zero horizontal overflow and zero HTTP errors.
 
 ### Founder Console sidebar (biggest issue)
+
 FounderAccess.tsx had a FIXED w-60 (240px) sidebar always visible. On a 320px phone this left only 80px for content and crushed the Overview 4-col stat grid to ~0px per card. Fix: sidebar is now a slide-in drawer on <lg (1024px) with backdrop overlay; persistent rail on lg+. Hamburger button in header (hidden on lg+) opens it. Nav-item click auto-closes. Verified: aside x=-240 (off-screen) on load, x=0 after hamburger, x=-240 after nav selection.
 
 ### Global CSS (src/react-app/index.css)
+
 - .main-content + body min-height: 100dvh (100vh fallback) fixes mobile address-bar cutoff that hid the fixed MobileBottomNav.
 - Compaction media queries: raised .btn/input min-height floor from 24-28px -> 32-40px (was below WCAG touch-target minimum).
 - Added .h-screen-dvh/.min-h-screen-dvh/.max-h-screen-dvh/.h-screen-svh utility classes (dynamic viewport units).
@@ -1739,23 +1748,29 @@ FounderAccess.tsx had a FIXED w-60 (240px) sidebar always visible. On a 320px ph
 - .break-anywhere utility for long emails/UUIDs/receipt numbers.
 
 ### index.html viewport
+
 - Removed maximum-scale=1.0, user-scalable=no (re-enables user zoom, WCAG 1.4.4). Added viewport-fit=cover for notch safe areas.
 
 ### tRPC 405 errors - /undefined/api/trpc bug (FIXED)
+
 Symptom: every tRPC query/mutation POSTed to /undefined/api/trpc/* and /api/auth/founder-login returning 405 on Cloudflare Pages (no /api/* serverless fns). Root cause (src/providers/trpc.tsx getApiUrl()): the expression import.meta.env.VITE_BACKEND_URL + "/api/trpc" evaluated to the STRING "undefined/api/trpc" when VITE_BACKEND_URL was unset (JS coerces undefined to "undefined" in string concatenation). Because that string is truthy, the || "" fallback never fired. httpBatchLink POSTed the relative path which resolved to the page origin -> 405. Also pages.dev was NOT in the static-deployment host list. Fix: getApiUrl() guards each env var explicitly (returns "" in Supabase-only mode). httpBatchLink fetch rejects immediately when apiUrl is empty. On Vercel the relative /api/trpc path is still used. Founder console falls back to Supabase-direct auth when tRPC fails.
 
 ### FounderAccess login
+
 completeLogin skips /api/auth/founder-login + /api/trpc/founderAuth.login fetches when getBackendUrl() returns "" (no backend) - was 405-ing the static host on every founder login on Cloudflare. Local Supabase auth handles the session.
 
 ### Founder Console tables (Users, Secrets, Audit Log)
+
 All three table containers changed from overflow-hidden (clips wide tables on phones) to overflow-x-auto + -mx-3 sm:mx-0 (edge-to-edge on phones, inset on sm+), with min-w-[480-640px] on the table so it scrolls horizontally instead of crushing columns.
 
 ### Responsive grids in Founder Console
+
 - Overview 4-col stat grid: grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 (2 on phone, 4 on desktop; was crushing to 0px on 320px).
 - System Health 3-col grid: grid-cols-1 sm:grid-cols-3.
 - Header: search input hidden on <sm, cloud-status label hidden on <md (icon-only); responsive padding px-3 sm:px-6.
 
 ### Deploy status 2026-08-12
+
 - GitHub main: commit ac3bb58 (pushed 469afbc incl. audit scripts).
 - Cloudflare Pages: LIVE (preview https://62a6ff6e.fuel-app-mobile.pages.dev + main alias https://fuel-app-mobile.pages.dev, bundle index-BXNHje2B.js, 112 precache).
 - Vercel production: BLOCKED by api-deployments-free-per-day (100/100; prebuilt deploy also hit the limit). GitHub integration auto-deploys when quota resets (~24h). /api/* endpoints unchanged.
@@ -1764,12 +1779,14 @@ All three table containers changed from overflow-hidden (clips wide tables on ph
 ## Phase 1 QA — login + currency + full data entry (2026-08-12, commits e26d05c + 3937abe)
 
 ### "Invalid login credentials" — RESOLVED
+
 The QA user `qa.phase1.0811@gmail.com` (uid 23e1a8fd) can now sign in on
 both Vercel production and Cloudflare Pages. The user was created via
 Supabase admin API with a confirmed email + password set via
 `auth.admin.updateUserById`.
 
 ### Currency display fix (showing USD instead of KES)
+
 **Symptom**: the currency selector showed "USD" instead of "KES"
 even for Kenyan stations. Root cause: `getCountryByCurrency()` received
 `undefined` as the currency arg because `companyData.currency` was empty
@@ -1777,6 +1794,7 @@ even for Kenyan stations. Root cause: `getCountryByCurrency()` received
 didn't reach the detected currency.
 
 **Fix** (2 commits):
+
 - `e26d05c`: Added a symbol-to-code map (`KSh->KES`, `USh->UGX`, `TSh->TZS`,
   `NGN`, `R->ZAR`, etc.) so `getCountryByCurrency` resolves African
   currencies correctly. `getStationCountry` now checks `companyData.currency`
@@ -1791,27 +1809,30 @@ Verified live: currency selector shows "Kenya KES" on both
 fuel-app-mobile.vercel.app and fuel-app-mobile.pages.dev.
 
 ### Full-site data entry — ALL tabs verified
+
 Navigated every tab as `qa.phase1.0811` and entered data. All saved to
 Supabase `app_kv` with the scoped `__ownerId` suffix (cross-user fix):
 
-| Tab | Data entered | Cloud key | Updated (UTC) |
-|-----|-------------|-----------|---------------|
-| Edit Info | Company profile (Equity Bank, PO Box, KRA) | compact blob | 05:12:54 |
-| Point of Sale | 20L petrol @ KSh 214.03 | pos_transactions | 05:06:16 |
-| Sales Tracking | Shift "QA Shift 1" + pump readings | shift_employees | 04:17:44 |
-| Invoice | Acme Transport Ltd, 500L @ 214.03 | compact blob | 05:12:54 |
-| Credit | John Mwangi, KSh 50k limit, 30 days | credit_accounts | 05:09:25 |
-| Payroll | Sarah Wanjiku, Cashier, KSh 45k | payroll_employees | 05:10:50 |
-| Delivery Tracker | Total Kenya, 10,000L | compact blob | 05:12:54 |
-| Fuel Offloading | Existing data (8,000L PMS) | compact blob | 05:12:54 |
-| Customers | David Otieno, KCE 456Z | compact blob | 05:12:54 |
-| Communication | Mary Achieng, VIP contact | comm_contacts | 04:16:45 |
-| Expenses | (from earlier session) | expenses_data | 04:19:19 |
-| Maintenance | (from earlier session) | maintenance_records | 04:20:25 |
-| Loyalty | (from earlier session) | loyalty_customers | 04:10:23 |
+| Tab              | Data entered                               | Cloud key           | Updated (UTC) |
+| ---------------- | ------------------------------------------ | ------------------- | ------------- |
+| Edit Info        | Company profile (Equity Bank, PO Box, KRA) | compact blob        | 05:12:54      |
+| Point of Sale    | 20L petrol @ KSh 214.03                    | pos_transactions    | 05:06:16      |
+| Sales Tracking   | Shift "QA Shift 1" + pump readings         | shift_employees     | 04:17:44      |
+| Invoice          | Acme Transport Ltd, 500L @ 214.03          | compact blob        | 05:12:54      |
+| Credit           | John Mwangi, KSh 50k limit, 30 days        | credit_accounts     | 05:09:25      |
+| Payroll          | Sarah Wanjiku, Cashier, KSh 45k            | payroll_employees   | 05:10:50      |
+| Delivery Tracker | Total Kenya, 10,000L                       | compact blob        | 05:12:54      |
+| Fuel Offloading  | Existing data (8,000L PMS)                 | compact blob        | 05:12:54      |
+| Customers        | David Otieno, KCE 456Z                     | compact blob        | 05:12:54      |
+| Communication    | Mary Achieng, VIP contact                  | comm_contacts       | 04:16:45      |
+| Expenses         | (from earlier session)                     | expenses_data       | 04:19:19      |
+| Maintenance      | (from earlier session)                     | maintenance_records | 04:20:25      |
+| Loyalty          | (from earlier session)                     | loyalty_customers   | 04:10:23      |
 
 ### Founder panel cross-owner verification — CONFIRMED
+
 Logged in as founder (`founder.qa.fuelpro@gmail.com`, role=founder):
+
 - **Overview**: 22 Users, 12 Stations, Revenue KSh 0, 3 Secrets, 5 Feature Flags On
 - **All Users**: 22 total — `qa.phase1.0811@gmail.com` appears as "QA Phase1
   Tester", role=user, Active
@@ -1823,6 +1844,7 @@ scoped `__ownerId` app_kv keys prevent cross-user data leakage while the
 service_role founder queries see all data.
 
 ### Deploy state 2026-08-12 (commit 3937abe)
+
 - GitHub main: 3937abe (pushed, synced with origin/main)
 - Vercel production: dpl_EFJyuoAp4d6YqHnZf6EeYsUJCFY1, READY+PROMOTED,
   aliased to fuel-app-mobile.vercel.app (bundle index-UQhA7O5H.js,
@@ -1871,6 +1893,7 @@ proper lists/dicts. The `coerceJson` fix is a safety net for any future
 double-encoding.
 
 **Deploy state 2026-08-11 (commit df9daf0)**:
+
 - GitHub main: df9daf0 (pushed, synced with origin/main)
 - Vercel production: dpl_APNW9gxJ6r8SifQwRhnrQzXhNgnW, READY, aliased to
   fuel-app-mobile.vercel.app (bundle index-C9vUOFes.js, reports-CmmZTPUJ.js)
@@ -1883,6 +1906,7 @@ double-encoding.
 ## Worldwide (non-Kenya-centric) station (DEPLOYED LIVE 2026-08-11)
 
 The app is now confirmed world-wide (not Kenya-centric):
+
 - Worldwide user: `worldwide.test.0811@gmail.com` (uid c27fc92a)
 - Station: "Global Energy Worldwide Station", 100 Worldwide Boulevard, New York
 - Country: US, Currency: USD, code: global-energy-wo-9d6p9
@@ -1898,7 +1922,6 @@ The app is now confirmed world-wide (not Kenya-centric):
   - Shifts: Sarah Johnson (morning shift)
 - Currency detection: `getDetectedCurrency()` resolves USD for US; the app
   supports all countries via the browser's locale/timezone.
-
 
 ## Founder panel token fix (DEPLOYED 2026-08-11, commit 0875742)
 

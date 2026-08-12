@@ -106,7 +106,8 @@ const LocalizationContext = createContext<LocalizationContextType>({
   config: buildLocalization(resolveCountryKey()),
   countryKey: resolveCountryKey(),
   refresh: () => {},
-  formatCurrency: (a) => `${buildLocalization(resolveCountryKey()).currencySymbol}${a.toFixed(2)}`,
+  formatCurrency: (a) =>
+    `${buildLocalization(resolveCountryKey()).currencySymbol}${a.toFixed(2)}`,
   formatNumber: (n) => n.toLocaleString(),
   formatDate: (d) => String(d),
   formatTime: (d) => String(d),

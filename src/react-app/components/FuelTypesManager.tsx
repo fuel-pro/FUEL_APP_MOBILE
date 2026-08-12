@@ -317,7 +317,8 @@ export default function FuelTypesManager() {
       "fuel_types_config",
       stationId,
     );
-    if (Array.isArray(cloudCached)) return normalizeCustomFuelTypes(cloudCached);
+    if (Array.isArray(cloudCached))
+      return normalizeCustomFuelTypes(cloudCached);
     return loadFuelTypes();
   });
   const [showAddForm, setShowAddForm] = useState(false);

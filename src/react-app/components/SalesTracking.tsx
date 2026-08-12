@@ -952,7 +952,9 @@ export default function SalesTracking() {
                             className="w-24 px-2 py-1 rounded border text-xs"
                             placeholder="Sales"
                           />
-                          <span className="text-xs text-gray-500">{currencySymbol}</span>
+                          <span className="text-xs text-gray-500">
+                            {currencySymbol}
+                          </span>
                         </div>
                       ))}
                     </div>
@@ -994,7 +996,9 @@ export default function SalesTracking() {
                               className="w-24 px-2 py-1 rounded border text-xs"
                               placeholder="Amount"
                             />
-                            <span className="text-xs text-gray-500">{currencySymbol}</span>
+                            <span className="text-xs text-gray-500">
+                              {currencySymbol}
+                            </span>
                           </div>
                         ))}
                       </div>

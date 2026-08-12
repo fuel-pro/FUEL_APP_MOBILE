@@ -64,8 +64,7 @@ export default function AIChatbot() {
     {
       id: "1",
       type: "assistant",
-      content:
-        `Hello! I'm your FuelPro AI Assistant powered by Google Gemini. I have access to all your business data - sales, deliveries, invoices, ${mobilePayTerm} transactions, payroll, and more. Ask me anything about your fuel station operations!`,
+      content: `Hello! I'm your FuelPro AI Assistant powered by Google Gemini. I have access to all your business data - sales, deliveries, invoices, ${mobilePayTerm} transactions, payroll, and more. Ask me anything about your fuel station operations!`,
       timestamp: new Date(),
     },
   ]);
@@ -773,8 +772,7 @@ export default function AIChatbot() {
                 {
                   id: "1",
                   type: "assistant",
-                  content:
-                    `Hello! I'm your FuelPro AI Assistant powered by Google Gemini. I have access to all your business data - sales, deliveries, invoices, ${mobilePayTerm} transactions, payroll, and more. Ask me anything about your fuel station operations!`,
+                  content: `Hello! I'm your FuelPro AI Assistant powered by Google Gemini. I have access to all your business data - sales, deliveries, invoices, ${mobilePayTerm} transactions, payroll, and more. Ask me anything about your fuel station operations!`,
                   timestamp: new Date(),
                 },
               ]);

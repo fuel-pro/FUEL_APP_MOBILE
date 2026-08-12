@@ -282,12 +282,13 @@ async function scrapeFuelPrices(location: LocationData): Promise<FuelPrices> {
   // If no price data exists for this country, return a NEUTRAL empty (0)
   // baseline in USD rather than fabricating Kenyan KSh prices for a
   // non-Kenya station.
-  const prices = regional || world || {
-    petrol: 0,
-    diesel: 0,
-    currencySymbol: "$",
-    currency: "USD",
-  };
+  const prices = regional ||
+    world || {
+      petrol: 0,
+      diesel: 0,
+      currencySymbol: "$",
+      currency: "USD",
+    };
   const currencySymbols: Record<string, string> = {
     KE: "KSh",
     UG: "USh",

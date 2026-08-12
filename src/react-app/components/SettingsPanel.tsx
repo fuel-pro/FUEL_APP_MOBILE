@@ -457,7 +457,9 @@ export default function SettingsPanel() {
                     <Zap size={18} className="text-amber-400" />
                   </div>
                   <div>
-                    <p className="text-white font-medium">Configure Automation</p>
+                    <p className="text-white font-medium">
+                      Configure Automation
+                    </p>
                     <p className="text-gray-500 text-xs">
                       Auto-reorder, stock edits, dashboards & more
                     </p>

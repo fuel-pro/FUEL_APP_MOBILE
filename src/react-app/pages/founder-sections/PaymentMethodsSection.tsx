@@ -21,7 +21,10 @@ import {
   Phone,
   Check,
 } from "lucide-react";
-import { getDetectedCurrency, getCurrencySymbol } from "@/react-app/lib/currency";
+import {
+  getDetectedCurrency,
+  getCurrencySymbol,
+} from "@/react-app/lib/currency";
 const CUR = () => getCurrencySymbol(getDetectedCurrency());
 import {
   COUNTRY_CONFIGS,

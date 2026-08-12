@@ -13,7 +13,11 @@
 import { useState, useEffect, useCallback } from "react";
 import { cloudStorageService } from "@/react-app/lib/cloud-storage-service";
 import { useAuth } from "@/react-app/context/AuthContext";
-import { getDetectedCurrency, getCurrencySymbol, getDetectedCountryCode } from "@/react-app/lib/currency";
+import {
+  getDetectedCurrency,
+  getCurrencySymbol,
+  getDetectedCountryCode,
+} from "@/react-app/lib/currency";
 import { getVATRate } from "@/react-app/config/pricing";
 
 export interface UserPreferences {
@@ -116,18 +120,67 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
 
 function getDefaultTaxLabel(countryCode: string): string {
   const map: Record<string, string> = {
-    GB: "VAT", DE: "MwSt", FR: "TVA", IT: "IVA", ES: "IVA",
-    NL: "BTW", BE: "BTW", AT: "USt", IE: "VAT", PT: "IVA",
-    GR: "ΦΠΑ", PL: "VAT", SE: "Moms", DK: "Moms", NO: "MVA",
-    FI: "ALV", CZ: "DPH", HU: "ÁFA", RO: "TVA", BG: "ДДС",
-    US: "Sales Tax", CA: "GST", AU: "GST", NZ: "GST",
-    JP: "消費税", KR: "VAT", CN: "增值税", IN: "GST",
-    SG: "GST", MY: "SST", TH: "VAT", ID: "PPN", PH: "VAT", VN: "VAT",
-    AE: "VAT", SA: "VAT", QA: "VAT", BH: "VAT", OM: "VAT",
-    BR: "ICMS", MX: "IVA", AR: "IVA", CL: "IVA", CO: "IVA", PE: "IGV",
-    TR: "KDV", IL: "מע\"ם", EG: "VAT", MA: "TVA", TN: "TVA",
-    KE: "VAT", UG: "VAT", TZ: "VAT", NG: "VAT", ZA: "VAT",
-    GH: "VAT", RW: "VAT", ET: "VAT", PK: "GST", BD: "VAT", LK: "VAT",
+    GB: "VAT",
+    DE: "MwSt",
+    FR: "TVA",
+    IT: "IVA",
+    ES: "IVA",
+    NL: "BTW",
+    BE: "BTW",
+    AT: "USt",
+    IE: "VAT",
+    PT: "IVA",
+    GR: "ΦΠΑ",
+    PL: "VAT",
+    SE: "Moms",
+    DK: "Moms",
+    NO: "MVA",
+    FI: "ALV",
+    CZ: "DPH",
+    HU: "ÁFA",
+    RO: "TVA",
+    BG: "ДДС",
+    US: "Sales Tax",
+    CA: "GST",
+    AU: "GST",
+    NZ: "GST",
+    JP: "消費税",
+    KR: "VAT",
+    CN: "增值税",
+    IN: "GST",
+    SG: "GST",
+    MY: "SST",
+    TH: "VAT",
+    ID: "PPN",
+    PH: "VAT",
+    VN: "VAT",
+    AE: "VAT",
+    SA: "VAT",
+    QA: "VAT",
+    BH: "VAT",
+    OM: "VAT",
+    BR: "ICMS",
+    MX: "IVA",
+    AR: "IVA",
+    CL: "IVA",
+    CO: "IVA",
+    PE: "IGV",
+    TR: "KDV",
+    IL: 'מע"ם',
+    EG: "VAT",
+    MA: "TVA",
+    TN: "TVA",
+    KE: "VAT",
+    UG: "VAT",
+    TZ: "VAT",
+    NG: "VAT",
+    ZA: "VAT",
+    GH: "VAT",
+    RW: "VAT",
+    ET: "VAT",
+    PK: "GST",
+    BD: "VAT",
+    LK: "VAT",
   };
   return map[countryCode] || "VAT";
 }
@@ -137,7 +190,8 @@ const listeners = new Set<(p: UserPreferences) => void>();
 
 export async function getUserPrefs(): Promise<UserPreferences> {
   if (cachedPrefs) return cachedPrefs;
-  const stored = await cloudStorageService.get<Partial<UserPreferences>>(PREFS_KEY);
+  const stored =
+    await cloudStorageService.get<Partial<UserPreferences>>(PREFS_KEY);
   const prefs = stored
     ? deepMerge(DEFAULT_PREFERENCES, stored)
     : { ...DEFAULT_PREFERENCES };
@@ -150,16 +204,22 @@ export async function saveUserPrefs(prefs: UserPreferences): Promise<void> {
   await cloudStorageService.set(PREFS_KEY, prefs);
   listeners.forEach((fn) => fn(prefs));
   // Nudge the app so components that read prefs re-render
-  window.dispatchEvent(new CustomEvent("user-prefs:changed", { detail: prefs }));
+  window.dispatchEvent(
+    new CustomEvent("user-prefs:changed", { detail: prefs }),
+  );
 }
 
-export function updateUserPrefs(patch: Partial<UserPreferences>): Promise<void> {
+export function updateUserPrefs(
+  patch: Partial<UserPreferences>,
+): Promise<void> {
   const current = cachedPrefs || DEFAULT_PREFERENCES;
   const merged = deepMerge(current, patch);
   return saveUserPrefs(merged);
 }
 
-export function onUserPrefsChanged(fn: (p: UserPreferences) => void): () => void {
+export function onUserPrefsChanged(
+  fn: (p: UserPreferences) => void,
+): () => void {
   listeners.add(fn);
   return () => listeners.delete(fn);
 }
@@ -169,7 +229,12 @@ function deepMerge<T>(base: T, patch: Partial<T>): T {
   const result = { ...base };
   for (const key in patch) {
     const v = (patch as any)[key];
-    if (v && typeof v === "object" && !Array.isArray(v) && typeof (result as any)[key] === "object") {
+    if (
+      v &&
+      typeof v === "object" &&
+      !Array.isArray(v) &&
+      typeof (result as any)[key] === "object"
+    ) {
       (result as any)[key] = { ...(result as any)[key], ...v };
     } else if (v !== undefined) {
       (result as any)[key] = v;
@@ -221,14 +286,19 @@ export function useUserPrefs(): {
 
 // ─── Formatting helpers (use prefs when available) ────────────────────────
 
-export function formatCurrency(amount: number, prefs?: UserPreferences | null): string {
+export function formatCurrency(
+  amount: number,
+  prefs?: UserPreferences | null,
+): string {
   const p = prefs || cachedPrefs || DEFAULT_PREFERENCES;
   const symbol = p.currencySymbol || getCurrencySymbol(p.currency);
   const formatted = new Intl.NumberFormat("en-US", {
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   }).format(amount || 0);
-  return p.currencyPosition === "after" ? `${formatted} ${symbol}` : `${symbol} ${formatted}`;
+  return p.currencyPosition === "after"
+    ? `${formatted} ${symbol}`
+    : `${symbol} ${formatted}`;
 }
 
 export function getTaxLabel(prefs?: UserPreferences | null): string {

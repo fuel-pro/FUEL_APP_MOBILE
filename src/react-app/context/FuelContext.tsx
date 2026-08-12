@@ -18,7 +18,10 @@ import {
 } from "@/react-app/config/pricing";
 // Cross-device cloud storage (Supabase app_kv-backed) — replaces /api/user-data
 import { cloudStorageService } from "@/react-app/lib/cloud-storage-service";
-import { getDetectedCountryCode, getCurrencySymbol } from "@/react-app/lib/currency";
+import {
+  getDetectedCountryCode,
+  getCurrencySymbol,
+} from "@/react-app/lib/currency";
 // Fuel interlink bus — in-device pub/sub for instant price/type propagation
 import {
   emitFuelPriceChange,
@@ -483,9 +486,17 @@ const initialState: FuelState = {
       { key: "reg", label: "Reg No", editable: true },
       { key: "fuel", label: "Fuel Type", editable: true },
       { key: "litres", label: "Litres", editable: true },
-      { key: "amount", label: `Amount (${getCurrencySymbol()})`, editable: true },
+      {
+        key: "amount",
+        label: `Amount (${getCurrencySymbol()})`,
+        editable: true,
+      },
       { key: "name", label: "Name", editable: true },
-      { key: "debt", label: `Balance/Debt (${getCurrencySymbol()})`, editable: true },
+      {
+        key: "debt",
+        label: `Balance/Debt (${getCurrencySymbol()})`,
+        editable: true,
+      },
     ],
     rows: [],
     totals: {

@@ -44,17 +44,27 @@ export function exportDeliveryPDF(state: any) {
   y += 8;
   doc.text(`YEAR: ${state.deliveryYear || "2025"}`, 14, y);
   y += 8;
-  doc.text(`Petrol Price: ${currencySymbol} ${state.petrolPrice || "180"} /L`, 14, y);
+  doc.text(
+    `Petrol Price: ${currencySymbol} ${state.petrolPrice || "180"} /L`,
+    14,
+    y,
+  );
   y += 8;
-  doc.text(`Diesel Price: ${currencySymbol} ${state.dieselPrice || "170"} /L`, 14, y);
+  doc.text(
+    `Diesel Price: ${currencySymbol} ${state.dieselPrice || "170"} /L`,
+    14,
+    y,
+  );
   y += 8;
 
   // Create table data
   const headers = state.deliveryData.columns.map((col: any) => col.label);
   const data = state.deliveryData.rows.map((r: any) =>
     state.deliveryData.columns.map((col: any) => {
-      if (col.key === "amount") return `${currencySymbol} ${formatNumber(r.amount)}`;
-      if (col.key === "debt") return `${currencySymbol} ${formatNumber(r.debt)}`;
+      if (col.key === "amount")
+        return `${currencySymbol} ${formatNumber(r.amount)}`;
+      if (col.key === "debt")
+        return `${currencySymbol} ${formatNumber(r.debt)}`;
       return r[col.key] || "";
     }),
   );
@@ -817,7 +827,9 @@ export function exportInvoiceExcel(invoiceData: any) {
   // Totals data
   const totalsData = [
     [],
-    [` Total Due: ${currencySymbol}${formatNumber(invoiceData.totalDue || 0, 0)}`],
+    [
+      ` Total Due: ${currencySymbol}${formatNumber(invoiceData.totalDue || 0, 0)}`,
+    ],
     [],
     ["Payment Should Be Made Through"],
   ];
@@ -908,8 +920,12 @@ export function exportInvoiceTXT(invoiceData: any) {
     invoiceData.invoiceItems.forEach((item: any) => {
       const desc = (item.desc || "").padEnd(40);
       const qty = (item.qty || 0).toString().padEnd(12);
-      const price = `${currencySymbol}${formatNumber(item.price, 0)}`.padEnd(15);
-      const total = `${currencySymbol}${formatNumber(item.total, 0)}`.padEnd(15);
+      const price = `${currencySymbol}${formatNumber(item.price, 0)}`.padEnd(
+        15,
+      );
+      const total = `${currencySymbol}${formatNumber(item.total, 0)}`.padEnd(
+        15,
+      );
       txt += `${desc} ${qty} ${price} ${total}\n`;
     });
   } else {

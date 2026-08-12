@@ -6,7 +6,10 @@ import React, { useState, useEffect, useCallback } from "react";
 import { Search, Calendar, Download, X, FileText, Loader2 } from "lucide-react";
 import { useStations } from "@/react-app/context/StationContext";
 import { fetchSales } from "@/react-app/lib/pos-service";
-import { getCurrencySymbol, getDetectedCurrency } from "@/react-app/lib/currency";
+import {
+  getCurrencySymbol,
+  getDetectedCurrency,
+} from "@/react-app/lib/currency";
 
 const formatMoney = (amount: number) =>
   new Intl.NumberFormat("en-KE", {

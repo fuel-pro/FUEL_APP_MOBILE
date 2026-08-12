@@ -27,7 +27,11 @@ import {
 } from "../services/FuelPriceService";
 import { getCountryFromLocation } from "../lib/world-country-utils";
 import { getCurrencySymbol as getCurrencySymbolForCode } from "../lib/currency";
-import { getCountryPrice, getVATRate, currencySymbolFor } from "../config/pricing";
+import {
+  getCountryPrice,
+  getVATRate,
+  currencySymbolFor,
+} from "../config/pricing";
 import { getRegionalConfig } from "../config/regions";
 import SearchableCountryDropdown from "./SearchableCountryDropdown";
 import { resolveCountryFromBrowser } from "../lib/geo-utils";

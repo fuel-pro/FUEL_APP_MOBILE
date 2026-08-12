@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { Mail, Save, Eye, Edit3, CheckCircle2, RefreshCw } from "lucide-react";
-import { getDetectedCurrency, getCurrencySymbol } from "@/react-app/lib/currency";
+import {
+  getDetectedCurrency,
+  getCurrencySymbol,
+} from "@/react-app/lib/currency";
 const CUR = () => getCurrencySymbol(getDetectedCurrency());
 
 interface Template {

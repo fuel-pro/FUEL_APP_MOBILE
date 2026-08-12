@@ -16,7 +16,10 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { trpc } from "@/providers/trpc";
-import { getDetectedCurrency, getCurrencySymbol } from "@/react-app/lib/currency";
+import {
+  getDetectedCurrency,
+  getCurrencySymbol,
+} from "@/react-app/lib/currency";
 
 const CUR = () => getCurrencySymbol(getDetectedCurrency());
 

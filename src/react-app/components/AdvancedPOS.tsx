@@ -30,7 +30,11 @@ import {
   openTerminalSession,
 } from "@/react-app/lib/pos-service";
 import type { POSItem, POSCart } from "@/react-app/lib/pos-service";
-import { getCurrencySymbol, getDetectedCurrency, isKenyaStation } from "@/react-app/lib/currency";
+import {
+  getCurrencySymbol,
+  getDetectedCurrency,
+  isKenyaStation,
+} from "@/react-app/lib/currency";
 
 // Format currency
 const formatMoney = (amount: number) => {
