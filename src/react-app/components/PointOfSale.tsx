@@ -83,17 +83,26 @@ export default function PointOfSale() {
   const { currentStation } = useStations();
   const stationId = currentStation?.id;
   const currencySymbol = getCurrencySymbol(state.companyData?.currency);
-  // A station is treated as Kenyan (KRA eTIMS / 16% VAT) when EITHER the
-  // timezone+station-data detector resolves Kenya OR the station carries a KRA
-  // PIN. The KRA-PIN check is essential because isKenyaStation() reads
-  // localStorage synchronously and returns false on a fresh device before the
-  // cloud station data hydrates into localStorage — yet the React-context
-  // currentStation (with its kraPin) IS already available. Without this, the
-  // VAT rate (16%) and the KRA banner ("Tax Settings") would disagree.
+  // A station is treated as Kenyan (KRA eTIMS / 16% VAT) when the
+  // timezone+station-data detector resolves Kenya OR the station explicitly
+  // carries a KRA PIN AND is in Kenya. The country gate on the KRA-PIN check
+  // is essential: a US/EU station may have a leftover KRA PIN in its data
+  // (e.g. from a template or migration) but must NOT be forced into the Kenya
+  // tax regime. isKenyaStation() reads localStorage synchronously and may
+  // return false on a fresh device before cloud station data hydrates, so we
+  // also check currentStation.country directly as a fast path.
+  const stationCountry = (
+    currentStation?.country ||
+    state.companyData?.country ||
+    ""
+  ).toUpperCase();
   const hasKraPin = Boolean(
     currentStation?.kraPin || state.companyData?.kraPin,
   );
-  const kenyaStation = isKenyaStation() || hasKraPin;
+  const kenyaStation =
+    isKenyaStation() ||
+    stationCountry === "KE" ||
+    (hasKraPin && stationCountry !== "US" && stationCountry !== "GB" && stationCountry !== "DE" && stationCountry !== "EU");
   const fuelTypeApi = useStationFuelTypes(stationId);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [paymentMethod, setPaymentMethod] = useState<
@@ -265,20 +274,20 @@ export default function PointOfSale() {
   // Country-aware VAT rate: resolve the station's ISO country code and look it
   // up in the unified TAX_RATES table. Defaults to 0% only when the country is
   // genuinely unknown. Resolution order:
-  //   1. If the station has a KRA PIN (Kenya tax ID), force KE — a Kenyan tax
-  //      registration always means 16% VAT regardless of the (often mis-set)
-  //      station.country field.
+  //   1. The station's explicit country field (authoritative — set by the
+  //      user during setup/wizard). A KRA PIN alone does NOT override a
+  //      non-Kenyan country: a US/EU station may carry a leftover KRA PIN
+  //      from a template but must use its own tax regime.
   //   2. If isKenyaStation() (timezone + station data detection) → KE.
-  //   3. The station's stored country code.
-  //   4. The browser/timezone-detected country code.
-  //   5. "KE" as a final default (the app's primary market) — never 0% by
+  //   3. The browser/timezone-detected country code.
+  //   4. "KE" as a final default (the app's primary market) — never 0% by
   //      accident, which would produce non-compliant receipts.
   const detectedCountryCode = getDetectedCountryCode();
-  const countryCode = hasKraPin
-    ? "KE"
+  const countryCode = currentStation?.country
+    ? currentStation.country
     : kenyaStation
       ? "KE"
-      : currentStation?.country || detectedCountryCode || "KE";
+      : detectedCountryCode || "KE";
   const VAT_RATE = getVATRate(countryCode);
   const vatPercent = (VAT_RATE * 100).toFixed(2);
 
