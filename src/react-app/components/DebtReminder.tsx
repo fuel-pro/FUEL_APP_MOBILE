@@ -83,7 +83,7 @@ export default function DebtReminder() {
 
     const data = {
       name: debtCustomerName,
-      amount: formatNumber(parseNumberFromFormatted(debtAmount) || 0),
+      amount: parseNumberFromFormatted(debtAmount) || 0,
       till: buyGoodsNo,
       bank: bankName,
       acName: accountName,
@@ -108,15 +108,19 @@ export default function DebtReminder() {
     const item = state.debtHistory[key];
     if (!item) return;
 
-    setDebtCustomerName(item.name);
-    setDebtAmount(item.amount);
-    setBuyGoodsNo(item.till);
-    setBankName(item.bank);
-    setAccountName(item.acName);
-    setAccountNo(item.acNo);
-    setWhatsappNo(item.contact);
-    setManagerName(item.manager);
-    setContactMethod(item.method);
+    setDebtCustomerName(item.name || "");
+    setDebtAmount(
+      typeof item.amount === "number"
+        ? formatNumber(item.amount)
+        : String(item.amount || ""),
+    );
+    setBuyGoodsNo(item.till || "");
+    setBankName(item.bank || "");
+    setAccountName(item.acName || "");
+    setAccountNo(item.acNo || "");
+    setWhatsappNo(item.contact || "");
+    setManagerName(item.manager || "");
+    setContactMethod(item.method || "WhatsApp");
   };
 
   const deleteDebt = (key: string) => {
@@ -304,7 +308,12 @@ export default function DebtReminder() {
               return (
                 <div key={key} className="history-item">
                   <span>
-                    {item.name} - {currencySymbol} {item.amount}
+                    {item.name} - {currencySymbol}{" "}
+                    {formatNumber(
+                      typeof item.amount === "number"
+                        ? item.amount
+                        : parseNumberFromFormatted(String(item.amount)) || 0,
+                    )}
                   </span>
                   <div className="flex gap-2">
                     <button onClick={() => loadDebt(key)} className="text-xs">
