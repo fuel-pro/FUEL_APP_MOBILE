@@ -3168,3 +3168,122 @@ Cross-device sync verified end-to-end; 12 bugs fixed across both files.
   with `__ownerId` scoped row IDs). ✅
 - `npx tsc --noEmit` (0 errors), `npm run build` (112 precache), `eslint`
   (0 errors), `prettier --check` (all pass). ✅
+
+## Payroll System tab audit (DEPLOYED LIVE 2026-08-12, PR #123)
+
+Deep audit of the **Payroll System** tab (`PayrollSystem.tsx`, 3340 lines).
+Found **4 CRITICAL data-loss/calc bugs** plus silent failures, missing
+validation, hardcoded Kenya defaults, and search/pagination bugs. All fixed.
+
+### Critical bugs fixed
+
+1. **Cloud-load race (settings wiped on fresh device)**: `saveSettings`
+   fired from the `companyData` sync effect BEFORE `fetchSettings`
+   returned, persisting default/empty settings to cloud and overwriting
+   the user's real settings. Added `cloudLoadCompleteRef` guard:
+   `saveSettings` early-returns until the initial cloud load completes
+   (same class of bug fixed in FuelContext). Also fixed `saveSettings`
+   using the wrong busy flag (`setImporting` → `setSaving`), and
+   `applyShaToAll`/`applyNssfToAll` not calling `saveSettings` to persist
+   the updated `shaPercentage`/`nssfAmount`.
+
+2. **`applyShaToAll` net-pay calc bug**: the old code computed `net_pay`
+   using `emp.sha_amount` (the OLD value) instead of the NEW `sha_amount`
+   it just set. So after "Apply SHA to All", every employee's `net_pay`
+   was wrong (did NOT subtract the newly-applied SHA). Verified: John
+   (basic 45000, SHA 1237.5) — OLD net=45000 (wrong, SHA not deducted),
+   NEW net=43762.5 (correct). Now computes the new SHA first, then
+   derives `net_pay` via `calcNetPay`. Also `applyShaToAll`'s catch only
+   `console.error`'d (no alert) — now alerts.
+
+3. **Delete no-op on id=0**: `confirmDeleteEmployee` set
+   `employeeToDelete = employee.id || 0`. A real employee with `id=0`
+   (first in a fresh list) set 0, then `if (employeeToDelete)` was
+   falsy → delete silently no-op'd. Now also stores the stable
+   `employeeId` string (`employeeToDeleteId`) and matches by BOTH `id`
+   AND `employee_id`.
+
+4. **`saveEmployee` edit-match by empty employeeId**: editing a new
+   employee (`employeeId=""`) matched cloudData by `employee_id === ""`
+   → `idx=-1` → appended a duplicate instead of updating. Now matches
+   by both `employee_id` AND numeric `id`.
+
+### Hardcoded Kenya bank defaults removed
+
+5. `bankName: "KCB LODWAR"` and `bankCode: "01144"` were hardcoded as
+   form defaults (openAddEmployeeModal, openEditEmployeeModal) and import
+   fallbacks for ALL stations (including non-Kenya). Now empty strings
+   (station fills its own bank).
+
+### Import improvements
+
+6. `importing` flag now set (button was not disabled → double-import risk).
+7. **De-duplicates by `employee_id`** (re-importing the same file created
+   duplicates every time). Reports skipped count.
+8. Integer ids (was `Date.now() + Math.random()` — a FLOAT — breaks
+   cloud lookups that compare with `===`).
+9. `catch { /* */ }` silently swallowed cloud write failures while
+   showing "Successfully imported". Now surfaces the error.
+10. Uses `calcNetPay` for imported `net_pay`.
+
+### Search/pagination
+
+11. `currentPage` not reset on search → after filtering to 1 result on
+    page 3, the table showed an empty page. Now resets to page 1 on
+    search change.
+12. Search only matched name/role/department/no/idNo/employeeId. Now
+    also matches **phone, email, kraPin, bankAccount**.
+13. `totalPages` was 0 when empty → "1 of 0" shown. Now
+    `Math.max(..., 1)`.
+14. `safePage` clamps `currentPage` to `totalPages` so the table never
+    shows empty.
+
+### NaN/Infinity guards
+
+15. `formatNumber` returned "NaN" for non-finite numbers. Now returns
+    "0.00".
+16. Added `calcNetPay` helper (single source of truth) with
+    `Number.isFinite` guards on all inputs. Replaces 4 duplicated inline
+    calcs (saveEmployee, applyShaToAll, applyNssfToAll, updateCell).
+17. Summary totals (totalGross/totalSha/totalNssf/totalAdvances/totalNet)
+    now use `safeNum` to guard against NaN from corrupt cloud records.
+
+### Required-field validation
+
+18. `saveEmployee` had no validation — a user could save an employee
+    with no name, producing a blank row in the table + cloud. Now
+    requires at least a first/last name and a role.
+19. Auto-generates a stable `employee_id` (`EMP-<base36>`) if missing.
+
+### Phase 1 + Phase 2 cross-device verification (VERIFIED LIVE)
+
+Simulated the exact `saveEmployee` + `cloudStorageService.set` flow via
+the Supabase REST API as `founder.qa.fuelpro@gmail.com` (uid
+`87e6502b`):
+
+- **Phase 1 (SAVE)**: 2 employees (John Mwangi basic 45000, Sarah
+  Wanjiku basic 85000 + advance 5000) + settings (shaPercentage 2.75,
+  nssfAmount 480, currency KES) into scoped `app_kv` keys
+  (`payroll_employees__<uid>`, `payroll_settings__<uid>`).
+- **Phase 2 (FRESH-DEVICE READ)**: new token login → ALL 2 employees +
+  settings synced with every field intact (basic_salary, sha_amount,
+  advance_amount, net_pay, phone, email, kra_pin, role, department).
+  ✅ NO DATA LOSS.
+- **`applyShaToAll` bug verified**: John (basic 45000, SHA 1237.5) —
+  OLD net=45000 (wrong, SHA not deducted), NEW net=43762.5 (correct).
+  Sarah (basic 85000, SHA 2337.5) — OLD net=80000 (wrong), NEW
+  net=77662.5 (correct).
+
+### Deploy status 2026-08-12 (commit b77ffba)
+
+- GitHub main: `b77ffba` (PR #123 merged, synced with origin/main) ✅
+- Cloudflare Pages: LIVE (preview https://8dcda6c6.fuel-app-mobile.pages.dev
+  + main alias https://fuel-app-mobile.pages.dev). Chunk
+  `PayrollSystem-Cm3yN0dn.js`. All markers confirmed: `Please enter at
+  least a first name`, `already exist (matched by Employee ID)`,
+  `Failed to apply SHA`, `EMP-` ✅
+- Vercel production: BLOCKED by `api-deployments-free-per-day`
+  (100/day exhausted; resets ~24h). GitHub integration auto-deploys
+  commit `b77ffba` when quota resets. ⏳
+- Supabase: no schema changes (uses existing `payroll_employees` +
+  `payroll_settings` cloud keys in `app_kv`, scoped by owner). ✅
