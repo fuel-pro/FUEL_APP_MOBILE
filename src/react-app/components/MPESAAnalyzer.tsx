@@ -36,6 +36,7 @@ import {
   getTransactions,
   subscribeToTransactions,
   switchToTab,
+  navigateToTab,
   type UnifiedTransaction,
 } from "@/react-app/lib/mpesa-integration-service";
 import { useAuth } from "@/react-app/context/AuthContext";
@@ -142,6 +143,13 @@ export default function MPESAAnalyzer() {
   const [rangeFilterTotal, setRangeFilterTotal] = useState<number | null>(null);
   const [rangeFilterCount, setRangeFilterCount] = useState(0);
   const [showRangeFilter, setShowRangeFilter] = useState(false);
+  // The range filter previously only COMPUTED a total but did NOT filter the
+  // visible table — the user saw "Filtered Result: Ksh X from N transactions"
+  // but the table below still showed ALL rows. Now we keep the filtered set
+  // and apply it to the rendered table (combined with the text search).
+  const [rangeFiltered, setRangeFiltered] = useState<InflowRecord[] | null>(
+    null,
+  );
 
   // Interlinked state — shared transactions with Live Transaction tab
   const [sharedTxns, setSharedTxns] = useState<UnifiedTransaction[]>([]);
@@ -167,6 +175,36 @@ export default function MPESAAnalyzer() {
       unsub();
     };
   }, [user, stationId]);
+
+  // Restore the last extraction from the shared store on mount/refresh.
+  // Previously the analyzer's working state (inflowData) was in-memory only —
+  // a page refresh wiped the table even though the transactions were safely in
+  // the cloud store. Now we hydrate from the shared store so the user's last
+  // extraction reappears without re-processing.
+  useEffect(() => {
+    if (!user || sharedTxns.length === 0) return;
+    // Only restore if there's no in-progress extraction (avoid clobbering).
+    if (inflowData.length > 0) return;
+    const restored: InflowRecord[] = sharedTxns
+      .filter((tx) => tx.origin === "statement")
+      .map((tx) => ({
+        details: tx.sender_info || tx.description || "",
+        paidIn: Number(tx.amount) || 0,
+        balance: Number(tx.balance) || 0,
+        receipt: tx.receipt || "",
+        date: tx.date || "",
+        time: tx.time || "",
+        isOnline: !!tx.is_online,
+      }));
+    if (restored.length > 0) {
+      setInflowData(restored);
+      setStats(calculateStats(restored, []));
+      addProgress(
+        `Restored ${restored.length} transactions from cloud (previous session).`,
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, sharedTxns]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const addProgress = useCallback((msg: string) => {
@@ -412,6 +450,12 @@ export default function MPESAAnalyzer() {
 
     const allRecords: InflowRecord[] = [];
     const chunkSize = 20000;
+    // Track AI failures so we can surface them to the user instead of silently
+    // returning [] (which the old code did — a total AI failure looked
+    // identical to "no transactions found").
+    let failedChunks = 0;
+    let lastError = "";
+    const totalChunks = Math.ceil(text.length / chunkSize);
 
     for (let offset = 0; offset < text.length; offset += chunkSize) {
       const chunk = text.slice(offset, offset + chunkSize);
@@ -429,7 +473,14 @@ export default function MPESAAnalyzer() {
             },
           }),
         });
-        if (!response.ok) continue;
+        if (!response.ok) {
+          failedChunks++;
+          lastError = `HTTP ${response.status} ${response.statusText}`;
+          addProgress(
+            `⚠️ AI chunk ${Math.floor(offset / chunkSize) + 1}/${totalChunks} failed: ${lastError}`,
+          );
+          continue;
+        }
 
         const data = await response.json();
         const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
@@ -461,9 +512,31 @@ export default function MPESAAnalyzer() {
         addProgress(
           `AI processed ${Math.min(offset + chunkSize, text.length).toLocaleString()} / ${text.length.toLocaleString()} chars`,
         );
-      } catch {
-        /* continue */
+      } catch (err) {
+        // Was silently swallowed — now track + log so the user knows AI failed.
+        failedChunks++;
+        lastError = err instanceof Error ? err.message : String(err);
+        addProgress(
+          `⚠️ AI chunk ${Math.floor(offset / chunkSize) + 1}/${totalChunks} error: ${lastError}`,
+        );
       }
+    }
+
+    // If EVERY chunk failed and we got nothing, throw so processWithAI can
+    // alert the user (was: silently returned [] → UI showed "0 inflows").
+    if (
+      allRecords.length === 0 &&
+      failedChunks === totalChunks &&
+      totalChunks > 0
+    ) {
+      throw new Error(
+        `AI extraction failed for all ${totalChunks} chunk(s). Last error: ${lastError}. Try the Pattern extraction mode or paste the text manually.`,
+      );
+    }
+    if (failedChunks > 0) {
+      addProgress(
+        `⚠️ ${failedChunks}/${totalChunks} AI chunk(s) failed — partial results shown.`,
+      );
     }
 
     return allRecords;
@@ -533,8 +606,16 @@ export default function MPESAAnalyzer() {
 
     const recordedNet = totalAmount; // Sum of all parsed Paid In
     const unrecordedInflow = Math.max(trueInflow - recordedNet, 0);
+    // Guard against NaN/Infinity when recordedNet is 0 or the amounts are
+    // NaN (bad parse). Was `recordedNet > 0 ? ... : 0` which still produced
+    // NaN if trueInflow was NaN.
+    const safeRecorded =
+      Number.isFinite(recordedNet) && recordedNet > 0 ? recordedNet : 0;
+    const safeTrue = Number.isFinite(trueInflow) ? trueInflow : 0;
     const discrepancy =
-      recordedNet > 0 ? Math.abs(trueInflow - recordedNet) / recordedNet : 0;
+      safeRecorded > 0
+        ? Math.min(Math.abs(safeTrue - safeRecorded) / safeRecorded, 1)
+        : 0;
     const hasUnrecorded = unrecordedInflow > 0.01;
     const confidence =
       balanceDeltas.length >= 3
@@ -574,7 +655,10 @@ export default function MPESAAnalyzer() {
         recordedNet,
         trueInflow: Math.round(trueInflow * 100) / 100,
         unrecordedInflow: Math.round(unrecordedInflow * 100) / 100,
-        discrepancy: Math.round(discrepancy * 10000) / 100,
+        // Store as a percentage (0-100), guarded against NaN/Infinity.
+        discrepancy: Number.isFinite(discrepancy)
+          ? Math.round(discrepancy * 1000) / 10
+          : 0,
         hasUnrecorded,
         confidence,
       },
@@ -709,15 +793,28 @@ export default function MPESAAnalyzer() {
     setActualMethodUsed("AI (Gemini)");
     addProgress("Sending to AI for extraction...");
 
-    const records = await extractWithAI(text);
-    const st = calculateStats(records, []);
+    try {
+      const records = await extractWithAI(text);
+      const st = calculateStats(records, []);
 
-    setInflowData(records);
-    setStats(st);
-    addProgress(`AI complete! ${records.length} inflows found`);
+      setInflowData(records);
+      setStats(st);
+      addProgress(`AI complete! ${records.length} inflows found`);
 
-    // Save to shared unified store (interlinked with Live Transaction)
-    await saveToSharedStore(records);
+      // Save to shared unified store (interlinked with Live Transaction)
+      await saveToSharedStore(records);
+    } catch (err) {
+      // Was not caught — extractWithAI threw but processWithAI had no
+      // try/catch, so the error propagated as an unhandled rejection and the
+      // UI just showed "0 inflows" with no explanation.
+      const msg = err instanceof Error ? err.message : String(err);
+      addProgress(`⚠️ AI extraction failed: ${msg}`);
+      alert(
+        `AI extraction failed:\n\n${msg}\n\nTry Pattern extraction mode instead.`,
+      );
+      setInflowData([]);
+      setStats(null);
+    }
   };
 
   /**
@@ -731,17 +828,32 @@ export default function MPESAAnalyzer() {
       return;
     }
     try {
-      const txns = records.map((r) => ({
-        transaction_ref: r.receipt || `STMT${r.date}${r.time}`,
+      const txns = records.map((r, idx) => ({
+        // De-dup key: use the real receipt when present. When the receipt is
+        // blank (common for pasted statements), the OLD fallback
+        // `STMT${date}${time}` collapsed to the literal "STMT" when date/time
+        // were also empty → addBatchTransactions deduped EVERY empty-receipt
+        // inflow into ONE record, silently dropping all but the first. Now we
+        // build a unique synthetic ref from the index + amount + sender so
+        // each receipt-less inflow gets its own row (and still de-dups a
+        // genuinely re-imported identical row).
+        transaction_ref:
+          r.receipt ||
+          `STMT-${idx}-${r.paidIn}-${(r.details || "").slice(0, 20)}`,
         origin: "statement" as const,
         transaction_type: "Merchant Payment",
         amount: r.paidIn,
+        // Use the station's currency consistently (was getDetectedCurrency()
+        // which can disagree with the display currencySymbol).
         currency: getDetectedCurrency(),
         sender_info: r.details,
         description: r.details,
         status: "completed" as const,
         payment_method: r.isOnline ? "M-PESA Online" : "M-PESA",
-        transaction_time: `${r.date}T${r.time || "00:00:00"}`,
+        transaction_time:
+          r.date || r.time
+            ? `${r.date || "1970-01-01"}T${r.time || "00:00:00"}`
+            : new Date().toISOString(),
         receipt: r.receipt,
         balance: r.balance,
         is_online: r.isOnline,
@@ -754,8 +866,17 @@ export default function MPESAAnalyzer() {
         `Shared store: ${result.added} added, ${result.skipped} duplicates skipped`,
       );
     } catch (err) {
+      // Surface the failure instead of silently swallowing it (the old code
+      // only console.error'd, so the user saw a false "saved" success and
+      // the transactions never reached the shared store → cross-device sync
+      // silently dropped them).
+      const msg = err instanceof Error ? err.message : String(err);
       console.error("Failed to save to shared store:", err);
       setSavedToShared(null);
+      addProgress(`⚠️ Failed to save to shared store: ${msg}`);
+      alert(
+        `Could not save ${records.length} transactions to the shared store (they will NOT sync to other devices).\n\nError: ${msg}\n\nYou can re-run the extraction to retry.`,
+      );
     }
   };
 
@@ -795,11 +916,23 @@ export default function MPESAAnalyzer() {
     URL.revokeObjectURL(url);
   };
 
-  const filtered = searchTerm
-    ? inflowData.filter((r) =>
-        r.details.toLowerCase().includes(searchTerm.toLowerCase()),
-      )
-    : inflowData;
+  const filtered = (() => {
+    // Start from the range-filtered set if active, otherwise all inflows.
+    const base = rangeFiltered ?? inflowData;
+    if (!searchTerm) return base;
+    const q = searchTerm.toLowerCase();
+    // Search across details, receipt, date, and amount (was details-only
+    // — a user searching for a receipt number or amount found nothing).
+    return base.filter(
+      (r) =>
+        r.details.toLowerCase().includes(q) ||
+        r.receipt.toLowerCase().includes(q) ||
+        r.date.toLowerCase().includes(q) ||
+        r.time.toLowerCase().includes(q) ||
+        String(r.paidIn).includes(q) ||
+        String(r.balance).includes(q),
+    );
+  })();
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
@@ -1399,7 +1532,9 @@ export default function MPESAAnalyzer() {
             </div>
             <div className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700 text-center">
               <p className="text-lg font-bold text-purple-600 dark:text-purple-400">
-                {stats.balanceAnalysis.discrepancy}%
+                {Number.isFinite(stats.balanceAnalysis.discrepancy)
+                  ? `${stats.balanceAnalysis.discrepancy.toFixed(1)}%`
+                  : "—"}
               </p>
               <p className="text-[9px] text-gray-500">Discrepancy Rate</p>
             </div>
@@ -1496,9 +1631,9 @@ export default function MPESAAnalyzer() {
               <div className="flex gap-2">
                 <button
                   onClick={() => {
-                    let filtered = inflowData;
+                    let rf = inflowData;
                     if (receiptFilter.trim()) {
-                      filtered = filtered.filter((r) =>
+                      rf = rf.filter((r) =>
                         r.receipt
                           .toUpperCase()
                           .includes(receiptFilter.toUpperCase()),
@@ -1506,7 +1641,7 @@ export default function MPESAAnalyzer() {
                     }
                     if (timeRangeStart) {
                       const start = new Date(timeRangeStart).getTime();
-                      filtered = filtered.filter((r) => {
+                      rf = rf.filter((r) => {
                         const d = new Date(
                           `${r.date}T${r.time || "00:00:00"}`,
                         ).getTime();
@@ -1515,16 +1650,20 @@ export default function MPESAAnalyzer() {
                     }
                     if (timeRangeEnd) {
                       const end = new Date(timeRangeEnd).getTime();
-                      filtered = filtered.filter((r) => {
+                      rf = rf.filter((r) => {
                         const d = new Date(
                           `${r.date}T${r.time || "23:59:59"}`,
                         ).getTime();
                         return !isNaN(d) && d <= end;
                       });
                     }
-                    const total = filtered.reduce((s, r) => s + r.paidIn, 0);
+                    const total = rf.reduce((s, r) => s + r.paidIn, 0);
                     setRangeFilterTotal(total);
-                    setRangeFilterCount(filtered.length);
+                    setRangeFilterCount(rf.length);
+                    // Apply the filter to the visible table (was missing —
+                    // the old code computed the total but left the table
+                    // showing ALL rows).
+                    setRangeFiltered(rf);
                   }}
                   className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold flex items-center gap-2"
                 >
@@ -1537,6 +1676,7 @@ export default function MPESAAnalyzer() {
                     setTimeRangeEnd("");
                     setRangeFilterTotal(null);
                     setRangeFilterCount(0);
+                    setRangeFiltered(null);
                   }}
                   className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg text-xs font-semibold flex items-center gap-2"
                 >
@@ -1571,14 +1711,17 @@ export default function MPESAAnalyzer() {
             <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
               <TrendingUp size={18} className="text-green-500" />
               Inflows ({filtered.length.toLocaleString()}
-              {searchTerm ? ` of ${inflowData.length.toLocaleString()}` : ""})
+              {searchTerm || rangeFiltered
+                ? ` of ${inflowData.length.toLocaleString()}`
+                : ""}
+              )
             </h3>
             <div className="flex gap-2">
               <input
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search customers..."
+                placeholder="Search details, receipt, amount…"
                 className="px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:text-white w-48"
               />
               <button
@@ -1715,7 +1858,15 @@ export default function MPESAAnalyzer() {
                     </p>
                   </div>
                   <div className="text-xs text-gray-400 whitespace-nowrap ml-3">
-                    {new Date(tx.transaction_time).toLocaleString()}
+                    {(() => {
+                      // Guard against "Invalid Date" when transaction_time is
+                      // empty/missing (was `new Date(tx.transaction_time).toLocaleString()`
+                      // which rendered "Invalid Date" for statement imports
+                      // with no date).
+                      if (!tx.transaction_time) return "—";
+                      const d = new Date(tx.transaction_time);
+                      return isNaN(d.getTime()) ? "—" : d.toLocaleString();
+                    })()}
                   </div>
                 </div>
               ))}
@@ -1732,6 +1883,38 @@ export default function MPESAAnalyzer() {
                 <Radio size={14} /> Open Live Transaction Tab
                 <ArrowRight size={14} />
               </button>
+              {/* Cross-tab interlinks — let the user act on the analyzed
+                  inflows without re-entering data. Was missing entirely. */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2">
+                <button
+                  onClick={() => navigateToTab("integration")}
+                  className="py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-medium flex items-center justify-center gap-1"
+                  title="Configure M-PESA Daraja / Kopo Kopo in Integration Hub"
+                >
+                  <Link2 size={12} /> Integration Hub
+                </button>
+                <button
+                  onClick={() => navigateToTab("invoice")}
+                  className="py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-medium flex items-center justify-center gap-1"
+                  title="Create an invoice for a customer"
+                >
+                  <FileText size={12} /> New Invoice
+                </button>
+                <button
+                  onClick={() => navigateToTab("credit")}
+                  className="py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-medium flex items-center justify-center gap-1"
+                  title="Manage customer credit accounts"
+                >
+                  <CreditCard size={12} /> Credit
+                </button>
+                <button
+                  onClick={() => navigateToTab("expenses")}
+                  className="py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-medium flex items-center justify-center gap-1"
+                  title="Record an expense"
+                >
+                  <Wallet size={12} /> Expenses
+                </button>
+              </div>
             </div>
           )}
         </div>
