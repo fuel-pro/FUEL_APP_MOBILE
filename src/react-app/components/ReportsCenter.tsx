@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   BarChart3,
   TrendingUp,
@@ -13,6 +13,9 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import { useFuel } from "@/react-app/context/FuelContext";
+import { useAuth } from "@/react-app/context/AuthContext";
+import { useStations } from "@/react-app/context/StationContext";
+import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 import {
   getCurrencySymbol,
   getDetectedCountryCode,
@@ -63,6 +66,52 @@ export default function ReportsCenter() {
   const [endDate, setEndDate] = useState(
     new Date().toISOString().split("T")[0],
   );
+
+  // Expenses recorded via the Expenses tab live in a SEPARATE cloud store
+  // (key `expenses_data`, written by ExpenseTracker), NOT inside
+  // state.salesHistory[sale].expenses. Load them here so the Expenses,
+  // Profit & Loss, and Overall reports reflect the real expenses a user
+  // actually recorded — otherwise every cost line shows $0 even when the
+  // Expenses tab has data.
+  const { user } = useAuth();
+  const { currentStation } = useStations();
+  const stationId = currentStation?.id;
+  const [cloudExpenses, setCloudExpenses] = useState<any[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      const cached = cloudStorageService.getCached<unknown>(
+        "expenses_data",
+        stationId,
+      );
+      if (!cancelled && Array.isArray(cached)) setCloudExpenses(cached as any[]);
+      const cloud = await cloudStorageService.get<unknown>(
+        "expenses_data",
+        stationId,
+      );
+      if (!cancelled && Array.isArray(cloud)) setCloudExpenses(cloud as any[]);
+    };
+    load();
+    const unsub = cloudStorageService.subscribe<unknown>(
+      "expenses_data",
+      stationId,
+      (val) => {
+        if (Array.isArray(val)) setCloudExpenses(val as any[]);
+      },
+    );
+    return () => {
+      cancelled = true;
+      unsub?.();
+    };
+  }, [user, stationId]);
+
+  // Filter cloud expenses by the active report date range + period, summed
+  // per period (mirrors the groupByPeriod structure the report renderers use).
+  const cloudExpensesByPeriod = () => {
+    const filtered = filterByDateRange(cloudExpenses);
+    return groupByPeriod(filtered);
+  };
 
   // Helper function to filter data by date range
   const filterByDateRange = (data: any[], dateField: string = "date") => {
@@ -339,6 +388,10 @@ export default function ReportsCenter() {
     const filteredSales = filterByDateRange(salesHistory);
     const groupedSales = groupByPeriod(filteredSales);
 
+    // Cloud expenses from the Expenses tab (expenses_data) — grouped by the
+    // same period key so they merge into the legacy salesHistory breakdown.
+    const cloudByPeriod = cloudExpensesByPeriod();
+
     const expensesData = Object.entries(groupedSales).map(
       ([period, sales]: [string, any[]]) => {
         const totalExpenses = sales.reduce((sum, sale) => {
@@ -370,7 +423,49 @@ export default function ReportsCenter() {
       },
     );
 
-    return expensesData.sort((a, b) => a.period.localeCompare(b.period));
+    // Merge cloud expenses (Expenses tab) into the report. Add a row for any
+    // period that has cloud expenses but no salesHistory expenses.
+    const cloudPeriods = Object.entries(cloudByPeriod).map(
+      ([period, exps]: [string, any[]]) => {
+        const breakdown: Record<string, number> = {};
+        let totalExpenses = 0;
+        exps.forEach((exp: any) => {
+          const label = exp.description || exp.category || "Uncategorized";
+          breakdown[label] = (breakdown[label] || 0) + (exp.amount || 0);
+          totalExpenses += exp.amount || 0;
+        });
+        return {
+          period,
+          totalExpenses,
+          breakdown,
+          transactionCount: exps.length,
+        };
+      },
+    );
+
+    const merged = [...expensesData, ...cloudPeriods].reduce(
+      (acc: Record<string, any>, entry) => {
+        if (!acc[entry.period]) {
+          acc[entry.period] = {
+            ...entry,
+            breakdown: { ...entry.breakdown },
+          };
+        } else {
+          acc[entry.period].totalExpenses += entry.totalExpenses;
+          acc[entry.period].transactionCount += entry.transactionCount;
+          Object.entries(entry.breakdown).forEach(([k, v]) => {
+            acc[entry.period].breakdown[k] =
+              (acc[entry.period].breakdown[k] || 0) + (v as number);
+          });
+        }
+        return acc;
+      },
+      {},
+    );
+
+    return Object.values(merged).sort((a: any, b: any) =>
+      a.period.localeCompare(b.period),
+    );
   };
 
   // Calculate profit & loss report
@@ -378,6 +473,16 @@ export default function ReportsCenter() {
     const salesHistory = Object.values(state.salesHistory);
     const filteredSales = filterByDateRange(salesHistory);
     const groupedSales = groupByPeriod(filteredSales);
+
+    // Cloud expenses from the Expenses tab, grouped per period.
+    const cloudByPeriod = cloudExpensesByPeriod();
+    const cloudExpenseTotalByPeriod: Record<string, number> = {};
+    Object.entries(cloudByPeriod).forEach(([period, exps]: [string, any[]]) => {
+      cloudExpenseTotalByPeriod[period] = exps.reduce(
+        (sum: number, exp: any) => sum + (exp.amount || 0),
+        0,
+      );
+    });
 
     const profitLossData = Object.entries(groupedSales).map(
       ([period, sales]: [string, any[]]) => {
@@ -396,15 +501,16 @@ export default function ReportsCenter() {
           return sum + pmsRevenue + agoRevenue + posRevenue;
         }, 0);
 
-        const totalExpenses = sales.reduce((sum, sale) => {
-          return (
-            sum +
-            (sale.expenses || []).reduce(
-              (expSum: number, exp: any) => expSum + (exp.amount || 0),
-              0,
-            )
-          );
-        }, 0);
+        const totalExpenses =
+          sales.reduce((sum, sale) => {
+            return (
+              sum +
+              (sale.expenses || []).reduce(
+                (expSum: number, exp: any) => expSum + (exp.amount || 0),
+                0,
+              )
+            );
+          }, 0) + (cloudExpenseTotalByPeriod[period] || 0);
 
         const tillPayments = sales.reduce(
           (sum, sale) => sum + (sale.tillPayment || 0),
@@ -426,6 +532,21 @@ export default function ReportsCenter() {
         };
       },
     );
+
+    // Add periods that have cloud expenses but no sales (still a cost period).
+    Object.entries(cloudExpenseTotalByPeriod).forEach(([period, expTotal]) => {
+      if (!groupedSales[period]) {
+        profitLossData.push({
+          period,
+          totalRevenue: 0,
+          totalExpenses: expTotal,
+          tillPayments: 0,
+          grossProfit: -expTotal,
+          netProfit: -expTotal,
+          profitMargin: 0,
+        });
+      }
+    });
 
     return profitLossData.sort((a, b) => a.period.localeCompare(b.period));
   };
@@ -459,15 +580,21 @@ export default function ReportsCenter() {
       );
     }, 0);
 
-    const totalExpenses = filteredSales.reduce((sum, sale) => {
-      return (
-        sum +
-        (sale.expenses || []).reduce(
-          (expSum: number, exp: any) => expSum + (exp.amount || 0),
-          0,
-        )
+    const totalExpenses =
+      filteredSales.reduce((sum, sale) => {
+        return (
+          sum +
+          (sale.expenses || []).reduce(
+            (expSum: number, exp: any) => expSum + (exp.amount || 0),
+            0,
+          )
+        );
+      }, 0) +
+      // Plus real expenses recorded via the Expenses tab (expenses_data).
+      filterByDateRange(cloudExpenses).reduce(
+        (sum, exp: any) => sum + (exp.amount || 0),
+        0,
       );
-    }, 0);
 
     const totalDeliveryRevenue = deliveryRecords.reduce(
       (sum, delivery) => sum + (delivery.amount || 0),
