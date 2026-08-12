@@ -1401,21 +1401,32 @@ export default function PointOfSale() {
               </button>
             </div>
             <div className="p-4 space-y-2">
-              <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg text-sm text-blue-800 dark:text-blue-200">
-                <p>
-                  <strong>Note:</strong> To enable full KRA eTIMS compliance,
-                  you must register with KRA at{" "}
-                  <a
-                    href="https://itax.kra.go.ke"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="underline"
-                  >
-                    itax.kra.go.ke
-                  </a>{" "}
-                  and obtain your ETR device credentials.
-                </p>
-              </div>
+              {kenyaStation && (
+                <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg text-sm text-blue-800 dark:text-blue-200">
+                  <p>
+                    <strong>Note:</strong> To enable full KRA eTIMS compliance,
+                    you must register with KRA at{" "}
+                    <a
+                      href="https://itax.kra.go.ke"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline"
+                    >
+                      itax.kra.go.ke
+                    </a>{" "}
+                    and obtain your ETR device credentials.
+                  </p>
+                </div>
+              )}
+              {!kenyaStation && (
+                <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg text-sm text-blue-800 dark:text-blue-200">
+                  <p>
+                    <strong>Note:</strong> Configure your tax registration
+                    details for compliant receipts. The VAT rate is
+                    auto-detected from your station's country.
+                  </p>
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="col-span-2">
@@ -1439,7 +1450,7 @@ export default function PointOfSale() {
                     onChange={(e) =>
                       updateCompanyData("kraPin", e.target.value.toUpperCase())
                     }
-                    placeholder="P000000000X"
+                    placeholder={kenyaStation ? "P000000000X" : "EIN / VAT No"}
                     className="w-full px-3 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600"
                   />
                 </div>
@@ -1480,7 +1491,7 @@ export default function PointOfSale() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1">
-                    County
+                    {kenyaStation ? "County" : "State / Province"}
                   </label>
                   <input
                     type="text"
@@ -1491,34 +1502,38 @@ export default function PointOfSale() {
                     className="w-full px-3 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600"
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">
-                    ETR Serial No.
-                  </label>
-                  <input
-                    type="text"
-                    value={state.companyData.etrSerialNo}
-                    onChange={(e) =>
-                      updateCompanyData("etrSerialNo", e.target.value)
-                    }
-                    placeholder="ETR-00000000"
-                    className="w-full px-3 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">
-                    CU Serial No.
-                  </label>
-                  <input
-                    type="text"
-                    value={state.companyData.cuSerialNo}
-                    onChange={(e) =>
-                      updateCompanyData("cuSerialNo", e.target.value)
-                    }
-                    placeholder="CU-00000000"
-                    className="w-full px-3 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600"
-                  />
-                </div>
+                {kenyaStation && (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">
+                        ETR Serial No.
+                      </label>
+                      <input
+                        type="text"
+                        value={state.companyData.etrSerialNo}
+                        onChange={(e) =>
+                          updateCompanyData("etrSerialNo", e.target.value)
+                        }
+                        placeholder="ETR-00000000"
+                        className="w-full px-3 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">
+                        CU Serial No.
+                      </label>
+                      <input
+                        type="text"
+                        value={state.companyData.cuSerialNo}
+                        onChange={(e) =>
+                          updateCompanyData("cuSerialNo", e.target.value)
+                        }
+                        placeholder="CU-00000000"
+                        className="w-full px-3 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600"
+                      />
+                    </div>
+                  </>
+                )}
                 <div>
                   <label className="block text-sm font-medium mb-1">
                     Invoice Prefix
@@ -1617,7 +1632,8 @@ export default function PointOfSale() {
                   <p className="text-xs">{etrConfig.email}</p>
                 )}
                 <p className="text-xs mt-1">
-                  <strong>PIN:</strong> {etrConfig.kraPin}
+                  <strong>{kenyaStation ? "PIN:" : "Tax ID:"}</strong>{" "}
+                  {etrConfig.kraPin}
                 </p>
                 {etrConfig.vatRegNo && (
                   <p className="text-xs">
@@ -1667,7 +1683,9 @@ export default function PointOfSale() {
                 {currentTransaction.customerPin && (
                   <div className="flex justify-between">
                     <span>
-                      <strong>Buyer PIN:</strong>
+                      <strong>
+                        {kenyaStation ? "Buyer PIN:" : "Customer Tax ID:"}
+                      </strong>
                     </span>
                     <span>{currentTransaction.customerPin}</span>
                   </div>
@@ -1766,20 +1784,36 @@ export default function PointOfSale() {
 
               {/* ETR/KRA Section */}
               <div className="etr-section mt-4 pt-3 border-t border-dashed border-gray-400 text-center">
-                <p className="font-bold text-xs">ELECTRONIC TAX REGISTER</p>
-                <p className="text-[10px] mt-1">
-                  ETR S/N: {etrConfig.etrSerialNo}
-                </p>
-                <p className="text-[10px]">CU S/N: {etrConfig.cuSerialNo}</p>
-                <p className="text-[10px]">
-                  CU Invoice No: {currentTransaction.cuInvoiceNo}
-                </p>
-                <p className="text-[10px]">
-                  Fiscal Counter: #{currentTransaction.fiscalCounter}
-                </p>
-                <div className="mt-2 text-[9px] font-mono break-all bg-gray-100 p-1 rounded">
-                  <strong>Signature:</strong> {currentTransaction.cuSignature}
-                </div>
+                {kenyaStation ? (
+                  <>
+                    <p className="font-bold text-xs">
+                      ELECTRONIC TAX REGISTER
+                    </p>
+                    <p className="text-[10px] mt-1">
+                      ETR S/N: {etrConfig.etrSerialNo}
+                    </p>
+                    <p className="text-[10px]">CU S/N: {etrConfig.cuSerialNo}</p>
+                    <p className="text-[10px]">
+                      CU Invoice No: {currentTransaction.cuInvoiceNo}
+                    </p>
+                    <p className="text-[10px]">
+                      Fiscal Counter: #{currentTransaction.fiscalCounter}
+                    </p>
+                    <div className="mt-2 text-[9px] font-mono break-all bg-gray-100 p-1 rounded">
+                      <strong>Signature:</strong> {currentTransaction.cuSignature}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <p className="font-bold text-xs">RECEIPT</p>
+                    <p className="text-[10px] mt-1">
+                      Receipt No: {currentTransaction.invoiceNumber}
+                    </p>
+                    <p className="text-[10px]">
+                      Transaction ID: #{currentTransaction.fiscalCounter}
+                    </p>
+                  </>
+                )}
 
                 {/* QR Code */}
                 {qrCodeUrl && (
