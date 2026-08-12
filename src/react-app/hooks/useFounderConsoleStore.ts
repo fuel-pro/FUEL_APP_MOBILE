@@ -35,6 +35,9 @@ export interface ConsoleSecret {
   updatedAt?: string;
   category?: string;
   lastRotated?: string;
+  expiresAt?: string; // when the secret expires
+  tags?: string[];
+  rotationReminderDays?: number; // remind to rotate every N days
 }
 
 export interface ConsoleFeatureFlag {
@@ -44,6 +47,8 @@ export interface ConsoleFeatureFlag {
   enabled: boolean;
   category?: string;
   environment?: "all" | "dev" | "staging" | "production";
+  rolloutPercentage?: number; // 0-100 gradual rollout
+  dependsOn?: string[]; // ids of flags that must be enabled first
   updatedAt?: string;
 }
 
@@ -66,6 +71,13 @@ export interface ConsoleSettings {
   secretCategories: string[];
   compactMode: boolean;
   showAdvancedControls: boolean;
+  accentColor?: string; // hex color for console accent
+  defaultLanguage?: string; // default language code
+  cacheTtlSec?: number; // cloud cache TTL in seconds
+  confirmDangerousActions?: boolean; // require confirm on destructive ops
+  emailNotifications?: boolean; // email founders on critical events
+  maxApiKeysPerUser?: number;
+  webhookTimeoutDefaultMs?: number;
   lastSettingsUpdate?: string;
 }
 
@@ -189,6 +201,13 @@ const DEFAULT_SETTINGS: ConsoleSettings = {
   ],
   compactMode: false,
   showAdvancedControls: true,
+  accentColor: "#f59e0b",
+  defaultLanguage: "en",
+  cacheTtlSec: 300,
+  confirmDangerousActions: true,
+  emailNotifications: true,
+  maxApiKeysPerUser: 10,
+  webhookTimeoutDefaultMs: 10000,
 };
 
 /** Migrate legacy localStorage arrays into the cloud on first use. */

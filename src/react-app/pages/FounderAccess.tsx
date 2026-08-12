@@ -45,6 +45,16 @@ import {
   CreditCard,
   Cloud,
   CloudOff,
+  Command,
+  Webhook,
+  KeyRound,
+  FlaskConical,
+  HeartPulse,
+  Megaphone,
+  ShieldBan,
+  Globe,
+  Languages,
+  Database,
 } from "lucide-react";
 import { loginFounder } from "@/react-app/lib/founder-auth";
 import { requestPasswordReset } from "@/react-app/lib/founder-auth";
@@ -74,9 +84,24 @@ import {
   AuditLogManagerSection,
   ConsoleSettingsSection,
   SystemHealthManagerSection,
+  WebhooksManagerSection,
+  ApiKeysManagerSection,
+  AnnouncementsSection,
+  MaintenanceWindowsSection,
+  BlocklistSection,
+  CorsConfigSection,
+  EnvVarsSection,
+  ScheduledJobsSection,
+  ExperimentsSection,
+  HealthChecksSection,
+  LocalizationSection,
+  CacheManagementSection,
+  CommandPaletteSection,
+  DatabaseQuerySection,
 } from "./founder-sections";
 import { useFounderBackend } from "@/react-app/hooks/useFounderBackend";
 import { useFounderConsoleStore } from "@/react-app/hooks/useFounderConsoleStore";
+import { useFounderAdvancedStore } from "@/react-app/hooks/useFounderAdvancedStore";
 import { checkApiStatus } from "@/react-app/lib/restApiSync";
 import { getBackendUrl } from "@/utils/apiConfig";
 import {
@@ -152,7 +177,21 @@ type SectionId =
   | "performance"
   | "paywall"
   | "paymentmethods"
-  | "consolesettings";
+  | "consolesettings"
+  | "webhooks"
+  | "apikeys"
+  | "announcements"
+  | "maintwindows"
+  | "blocklist"
+  | "cors"
+  | "envvars"
+  | "jobs"
+  | "experiments"
+  | "healthchecks"
+  | "localization"
+  | "cachemgmt"
+  | "commandpalette"
+  | "dbquery";
 
 export default function FounderAccess() {
   /* ─── Cloud Sync State ─── */
@@ -182,6 +221,7 @@ export default function FounderAccess() {
    * Supabase Realtime. This replaces the old localStorage-only arrays so a
    * change made on one device reflects instantly on all others. */
   const consoleStore = useFounderConsoleStore();
+  const advancedStore = useFounderAdvancedStore();
 
   /* ─── Auth State ─── */
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -1075,6 +1115,97 @@ export default function FounderAccess() {
         },
       ],
     },
+    {
+      label: "Developer Tools",
+      items: [
+        {
+          id: "commandpalette" as SectionId,
+          label: "Command Palette",
+          icon: Command,
+        },
+        {
+          id: "webhooks" as SectionId,
+          label: "Webhooks",
+          icon: Webhook,
+          count: advancedStore.webhooks.length,
+        },
+        {
+          id: "apikeys" as SectionId,
+          label: "API Keys",
+          icon: KeyRound,
+          count: advancedStore.apiKeys.length,
+        },
+        {
+          id: "jobs" as SectionId,
+          label: "Scheduled Jobs",
+          icon: Clock,
+          count: advancedStore.jobs.length,
+        },
+        {
+          id: "experiments" as SectionId,
+          label: "A/B Experiments",
+          icon: FlaskConical,
+          count: advancedStore.experiments.length,
+        },
+        {
+          id: "healthchecks" as SectionId,
+          label: "Health Checks",
+          icon: HeartPulse,
+          count: advancedStore.healthChecks.length,
+        },
+        {
+          id: "dbquery" as SectionId,
+          label: "Database Query",
+          icon: Database,
+        },
+        {
+          id: "cachemgmt" as SectionId,
+          label: "Cache Manager",
+          icon: DatabaseBackup,
+        },
+      ],
+    },
+    {
+      label: "Platform Control",
+      items: [
+        {
+          id: "announcements" as SectionId,
+          label: "Announcements",
+          icon: Megaphone,
+          count: advancedStore.announcements.length,
+        },
+        {
+          id: "maintwindows" as SectionId,
+          label: "Maint. Windows",
+          icon: Wrench,
+          count: advancedStore.maintenanceWindows.length,
+        },
+        {
+          id: "blocklist" as SectionId,
+          label: "IP Blocklist",
+          icon: ShieldBan,
+          count: advancedStore.blocklist.length,
+        },
+        {
+          id: "cors" as SectionId,
+          label: "CORS Config",
+          icon: Globe,
+          count: advancedStore.corsOrigins.length,
+        },
+        {
+          id: "envvars" as SectionId,
+          label: "Env Variables",
+          icon: Settings,
+          count: advancedStore.envVars.length,
+        },
+        {
+          id: "localization" as SectionId,
+          label: "Localization",
+          icon: Languages,
+          count: advancedStore.languages.length,
+        },
+      ],
+    },
   ];
 
   const NavItem = ({
@@ -1607,6 +1738,7 @@ export default function FounderAccess() {
               onClear={consoleStore.clearAudit}
               onReload={consoleStore.reload}
               logAudit={consoleStore.addAudit}
+              retentionLimit={consoleSettings.auditRetention}
             />
           )}
 
@@ -1943,6 +2075,96 @@ export default function FounderAccess() {
           )}
           {activeSection === "paymentmethods" && (
             <PaymentMethodsSection logAudit={logAudit} />
+          )}
+
+          {/* ══════ DEVELOPER TOOLS ══════ */}
+          {activeSection === "commandpalette" && (
+            <CommandPaletteSection
+              commands={navGroups.flatMap((g) =>
+                g.items.map((it) => ({
+                  id: it.id,
+                  label: it.label,
+                  group: g.label,
+                  keywords: it.label.toLowerCase(),
+                  icon: it.icon,
+                })),
+              )}
+              onRun={(id) => setActiveSection(id as SectionId)}
+            />
+          )}
+          {activeSection === "webhooks" && (
+            <WebhooksManagerSection
+              store={advancedStore}
+              logAudit={consoleStore.addAudit}
+            />
+          )}
+          {activeSection === "apikeys" && (
+            <ApiKeysManagerSection
+              store={advancedStore}
+              logAudit={consoleStore.addAudit}
+            />
+          )}
+          {activeSection === "jobs" && (
+            <ScheduledJobsSection
+              store={advancedStore}
+              logAudit={consoleStore.addAudit}
+            />
+          )}
+          {activeSection === "experiments" && (
+            <ExperimentsSection
+              store={advancedStore}
+              logAudit={consoleStore.addAudit}
+            />
+          )}
+          {activeSection === "healthchecks" && (
+            <HealthChecksSection
+              store={advancedStore}
+              logAudit={consoleStore.addAudit}
+            />
+          )}
+          {activeSection === "dbquery" && (
+            <DatabaseQuerySection logAudit={consoleStore.addAudit} />
+          )}
+          {activeSection === "cachemgmt" && (
+            <CacheManagementSection logAudit={consoleStore.addAudit} />
+          )}
+
+          {/* ══════ PLATFORM CONTROL ══════ */}
+          {activeSection === "announcements" && (
+            <AnnouncementsSection
+              store={advancedStore}
+              logAudit={consoleStore.addAudit}
+            />
+          )}
+          {activeSection === "maintwindows" && (
+            <MaintenanceWindowsSection
+              store={advancedStore}
+              logAudit={consoleStore.addAudit}
+            />
+          )}
+          {activeSection === "blocklist" && (
+            <BlocklistSection
+              store={advancedStore}
+              logAudit={consoleStore.addAudit}
+            />
+          )}
+          {activeSection === "cors" && (
+            <CorsConfigSection
+              store={advancedStore}
+              logAudit={consoleStore.addAudit}
+            />
+          )}
+          {activeSection === "envvars" && (
+            <EnvVarsSection
+              store={advancedStore}
+              logAudit={consoleStore.addAudit}
+            />
+          )}
+          {activeSection === "localization" && (
+            <LocalizationSection
+              store={advancedStore}
+              logAudit={consoleStore.addAudit}
+            />
           )}
         </div>
       </main>

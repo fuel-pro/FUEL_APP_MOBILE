@@ -136,6 +136,46 @@ export default function ConsoleSettingsSection({
                 />
               </button>
             </label>
+            <label className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-white">Confirm dangerous actions</p>
+                <p className="text-[11px] text-gray-500">
+                  Require confirmation on deletes/clears
+                </p>
+              </div>
+              <button
+                onClick={() =>
+                  onUpdate({
+                    confirmDangerousActions: !settings.confirmDangerousActions,
+                  })
+                }
+                className={`relative w-11 h-6 rounded-full transition-colors ${settings.confirmDangerousActions ? "bg-green-500" : "bg-gray-600"}`}
+              >
+                <div
+                  className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${settings.confirmDangerousActions ? "translate-x-5" : "translate-x-0.5"}`}
+                />
+              </button>
+            </label>
+            <label className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-white">Email notifications</p>
+                <p className="text-[11px] text-gray-500">
+                  Email founders on critical events
+                </p>
+              </div>
+              <button
+                onClick={() =>
+                  onUpdate({
+                    emailNotifications: !settings.emailNotifications,
+                  })
+                }
+                className={`relative w-11 h-6 rounded-full transition-colors ${settings.emailNotifications ? "bg-green-500" : "bg-gray-600"}`}
+              >
+                <div
+                  className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${settings.emailNotifications ? "translate-x-5" : "translate-x-0.5"}`}
+                />
+              </button>
+            </label>
             <div>
               <label className="text-[11px] text-gray-400 mb-1 block">
                 Audit log retention (max entries)
@@ -148,6 +188,90 @@ export default function ConsoleSettingsSection({
                 value={settings.auditRetention}
                 onChange={(e) =>
                   onUpdate({ auditRetention: Number(e.target.value) || 500 })
+                }
+                className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.08] rounded-lg text-sm text-white focus:outline-none focus:border-amber-500/30"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Advanced config */}
+        <div className="bg-[#161618] border border-white/[0.06] rounded-xl p-5">
+          <h3 className="text-sm font-medium text-gray-300 mb-4">
+            Advanced Configuration
+          </h3>
+          <div className="space-y-3">
+            <div>
+              <label className="text-[11px] text-gray-400 mb-1 block">
+                Console accent color
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={settings.accentColor || "#f59e0b"}
+                  onChange={(e) => onUpdate({ accentColor: e.target.value })}
+                  className="w-12 h-10 rounded cursor-pointer bg-transparent border border-white/10"
+                />
+                <input
+                  value={settings.accentColor || "#f59e0b"}
+                  onChange={(e) => onUpdate({ accentColor: e.target.value })}
+                  className="flex-1 px-3 py-2 bg-white/[0.03] border border-white/[0.08] rounded-lg text-sm text-white font-mono focus:outline-none focus:border-amber-500/30"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="text-[11px] text-gray-400 mb-1 block">
+                Default language
+              </label>
+              <input
+                value={settings.defaultLanguage || "en"}
+                onChange={(e) => onUpdate({ defaultLanguage: e.target.value })}
+                placeholder="en"
+                className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.08] rounded-lg text-sm text-white font-mono focus:outline-none focus:border-amber-500/30"
+              />
+            </div>
+            <div>
+              <label className="text-[11px] text-gray-400 mb-1 block">
+                Cloud cache TTL (seconds)
+              </label>
+              <input
+                type="number"
+                min={0}
+                max={3600}
+                value={settings.cacheTtlSec ?? 300}
+                onChange={(e) =>
+                  onUpdate({ cacheTtlSec: Number(e.target.value) })
+                }
+                className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.08] rounded-lg text-sm text-white focus:outline-none focus:border-amber-500/30"
+              />
+            </div>
+            <div>
+              <label className="text-[11px] text-gray-400 mb-1 block">
+                Max API keys per user
+              </label>
+              <input
+                type="number"
+                min={1}
+                max={100}
+                value={settings.maxApiKeysPerUser ?? 10}
+                onChange={(e) =>
+                  onUpdate({ maxApiKeysPerUser: Number(e.target.value) })
+                }
+                className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.08] rounded-lg text-sm text-white focus:outline-none focus:border-amber-500/30"
+              />
+            </div>
+            <div>
+              <label className="text-[11px] text-gray-400 mb-1 block">
+                Default webhook timeout (ms)
+              </label>
+              <input
+                type="number"
+                min={1000}
+                max={60000}
+                step={1000}
+                value={settings.webhookTimeoutDefaultMs ?? 10000}
+                onChange={(e) =>
+                  onUpdate({ webhookTimeoutDefaultMs: Number(e.target.value) })
                 }
                 className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.08] rounded-lg text-sm text-white focus:outline-none focus:border-amber-500/30"
               />

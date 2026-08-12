@@ -8,7 +8,7 @@
  * display.
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Shield,
   Search,
@@ -19,6 +19,8 @@ import {
   AlertTriangle,
   XCircle,
   Activity,
+  Radio,
+  Archive,
 } from "lucide-react";
 import type {
   ConsoleAuditEntry,
@@ -37,6 +39,7 @@ interface Props {
     severity?: AuditSeverity,
     user?: string,
   ) => void;
+  retentionLimit?: number;
 }
 
 const SEVERITY_META: Record<
@@ -56,12 +59,34 @@ export default function AuditLogManagerSection({
   onClear,
   onReload,
   logAudit,
+  retentionLimit = 500,
 }: Props) {
   const [search, setSearch] = useState("");
   const [filterSeverity, setFilterSeverity] = useState<string>("all");
   const [filterUser, setFilterUser] = useState<string>("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [liveTail, setLiveTail] = useState(true);
+  const [visibleCount, setVisibleCount] = useState(50);
+
+  // Auto-export when approaching retention threshold.
+  useEffect(() => {
+    if (audit.length >= retentionLimit * 0.9) {
+      const content = JSON.stringify(audit, null, 2);
+      const blob = new Blob([content], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `fuelpro-audit-archive-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      logAudit(
+        "Audit Auto-Archive",
+        `Threshold reached (${audit.length}/${retentionLimit}); exported archive`,
+        "warning",
+      );
+    }
+  }, [audit.length, retentionLimit]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const users = useMemo(() => {
     const set = new Set<string>();
@@ -168,6 +193,13 @@ export default function AuditLogManagerSection({
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <button
+            onClick={() => setLiveTail((v) => !v)}
+            title="Toggle live tail (newest events first, auto-scroll)"
+            className={`flex items-center gap-1.5 px-3 py-2 text-xs rounded-lg transition-colors border ${liveTail ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/20" : "bg-white/[0.03] text-gray-300 border-white/[0.08]"}`}
+          >
+            <Radio size={13} className={liveTail ? "animate-pulse" : ""} /> Live
+          </button>
+          <button
             onClick={onReload}
             title="Reload from cloud"
             className="flex items-center gap-1.5 px-3 py-2 bg-white/[0.03] hover:bg-white/[0.06] text-gray-300 text-xs rounded-lg transition-colors border border-white/[0.08]"
@@ -196,6 +228,15 @@ export default function AuditLogManagerSection({
           </button>
         </div>
       </div>
+
+      {/* Retention indicator */}
+      {audit.length >= retentionLimit * 0.8 && (
+        <div className="flex items-center gap-2 rounded-lg bg-amber-500/10 border border-amber-500/30 px-3 py-2 text-xs text-amber-300">
+          <Archive size={14} />
+          Retention: {audit.length}/{retentionLimit} entries. Auto-archive will
+          trigger at {Math.round(retentionLimit * 0.9)}.
+        </div>
+      )}
 
       {/* Severity summary chips */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -308,13 +349,15 @@ export default function AuditLogManagerSection({
             </tr>
           </thead>
           <tbody>
-            {filtered.map((a) => {
+            {filtered.slice(0, liveTail ? visibleCount : undefined).map((a) => {
               const meta = SEVERITY_META[a.severity] || SEVERITY_META.info;
               const Icon = meta.icon;
+              const isNew =
+                liveTail && Date.now() - new Date(a.timestamp).getTime() < 3000;
               return (
                 <tr
                   key={a.id}
-                  className="border-b border-white/[0.04] hover:bg-white/[0.02]"
+                  className={`border-b border-white/[0.04] hover:bg-white/[0.02] ${isNew ? "bg-emerald-500/5" : ""}`}
                 >
                   <td className="px-4 py-3">
                     <Icon size={13} className={meta.color} />
@@ -330,6 +373,11 @@ export default function AuditLogManagerSection({
                   </td>
                   <td className="px-4 py-3 text-[11px] text-gray-500">
                     {new Date(a.timestamp).toLocaleString()}
+                    {isNew && (
+                      <span className="ml-1 text-[9px] px-1 py-0.5 rounded bg-emerald-500/20 text-emerald-400">
+                        NEW
+                      </span>
+                    )}
                   </td>
                 </tr>
               );
@@ -346,6 +394,14 @@ export default function AuditLogManagerSection({
           </tbody>
         </table>
       </div>
+      {liveTail && filtered.length > visibleCount && (
+        <button
+          onClick={() => setVisibleCount((c) => c + 50)}
+          className="w-full py-2 rounded-lg bg-white/[0.03] hover:bg-white/[0.06] text-gray-300 text-xs"
+        >
+          Show more ({filtered.length - visibleCount} hidden)
+        </button>
+      )}
       <p className="text-[10px] text-gray-600 flex items-center gap-2">
         {filtered.length} shown of {audit.length} total
         {lastSync && (

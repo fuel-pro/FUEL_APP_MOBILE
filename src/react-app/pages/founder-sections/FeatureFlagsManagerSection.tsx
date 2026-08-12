@@ -18,6 +18,7 @@ import {
   CheckCircle2,
   Zap,
   Edit3,
+  Layers,
 } from "lucide-react";
 import type {
   ConsoleFeatureFlag,
@@ -78,6 +79,58 @@ export default function FeatureFlagsManagerSection({
   );
   const [draftEnv, setDraftEnv] =
     useState<ConsoleFeatureFlag["environment"]>("all");
+  const [draftRollout, setDraftRollout] = useState(100);
+  const [draftDependsOn, setDraftDependsOn] = useState<string[]>([]);
+  const [showCompare, setShowCompare] = useState(false);
+  const [showTemplates, setShowTemplates] = useState(false);
+  const [copyFromId, setCopyFromId] = useState("");
+
+  const FLAG_TEMPLATES: {
+    name: string;
+    description: string;
+    category: string;
+  }[] = [
+    {
+      name: "New Reporting Module",
+      description: "Advanced analytics dashboard",
+      category: "Analytics",
+    },
+    {
+      name: "Beta Feature",
+      description: "Experimental feature for early adopters",
+      category: "Core",
+    },
+    {
+      name: "Maintenance Mode",
+      description: "Put the app in read-only mode",
+      category: "Operations",
+    },
+    {
+      name: "AI Assistant",
+      description: "Enable the AI chat assistant",
+      category: "AI",
+    },
+    {
+      name: "Beta Pricing Plan",
+      description: "Show new pricing tiers",
+      category: "Sales",
+    },
+    {
+      name: "Force Update",
+      description: "Require users to update the app",
+      category: "Core",
+    },
+    {
+      name: "Debug Logging",
+      description: "Enable verbose debug logs",
+      category: "Operations",
+    },
+    {
+      name: "Compliance Check",
+      description: "Run additional compliance validation",
+      category: "Compliance",
+    },
+  ];
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
@@ -102,6 +155,8 @@ export default function FeatureFlagsManagerSection({
     setDraftDesc("");
     setDraftCategory(settings.flagCategories[0] || "Core");
     setDraftEnv("all");
+    setDraftRollout(100);
+    setDraftDependsOn([]);
     setShowAdd(true);
   };
 
@@ -111,6 +166,8 @@ export default function FeatureFlagsManagerSection({
     setDraftDesc(f.description);
     setDraftCategory(f.category || "Core");
     setDraftEnv(f.environment || "all");
+    setDraftRollout(f.rolloutPercentage ?? 100);
+    setDraftDependsOn(f.dependsOn ?? []);
     setShowAdd(true);
   };
 
@@ -125,16 +182,69 @@ export default function FeatureFlagsManagerSection({
         : true,
       category: draftCategory,
       environment: draftEnv,
+      rolloutPercentage: draftRollout,
+      dependsOn: draftDependsOn,
     };
     onUpsert(flag);
     logAudit(
       editingId ? "Flag Updated" : "Flag Created",
-      `"${flag.name}" (${draftCategory})`,
+      `"${flag.name}" (${draftCategory}, rollout ${draftRollout}%)`,
       "success",
     );
     setShowAdd(false);
     setEditingId(null);
   };
+
+  const applyTemplate = (t: {
+    name: string;
+    description: string;
+    category: string;
+  }) => {
+    setDraftName(t.name);
+    setDraftDesc(t.description);
+    setDraftCategory(t.category);
+    setDraftRollout(100);
+    setDraftDependsOn([]);
+    setShowTemplates(false);
+    setShowAdd(true);
+  };
+
+  const copyFrom = () => {
+    const src = flags.find((f) => f.id === copyFromId);
+    if (!src) return;
+    setDraftName(`${src.name} (copy)`);
+    setDraftDesc(src.description);
+    setDraftCategory(src.category || "Core");
+    setDraftEnv(src.environment || "all");
+    setDraftRollout(src.rolloutPercentage ?? 100);
+    setDraftDependsOn(src.dependsOn ?? []);
+    setCopyFromId("");
+    setShowAdd(true);
+  };
+
+  const toggleDependsOn = (id: string) =>
+    setDraftDependsOn((p) =>
+      p.includes(id) ? p.filter((x) => x !== id) : [...p, id],
+    );
+
+  const setRollout = (id: string, pct: number) => {
+    const f = flags.find((x) => x.id === id);
+    if (f) onUpsert({ ...f, rolloutPercentage: pct });
+  };
+
+  const envStats = {
+    dev: { total: 0, enabled: 0 },
+    staging: { total: 0, enabled: 0 },
+    production: { total: 0, enabled: 0 },
+    all: { total: 0, enabled: 0 },
+  } as Record<string, { total: number; enabled: number }>;
+  flags.forEach((f) => {
+    const env = f.environment || "all";
+    envStats[env].total++;
+    if (f.enabled) envStats[env].enabled++;
+    envStats.all.total++;
+    if (f.enabled) envStats.all.enabled++;
+  });
 
   const handleToggle = (f: ConsoleFeatureFlag) => {
     onToggle(f.id);
@@ -177,6 +287,18 @@ export default function FeatureFlagsManagerSection({
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <button
+            onClick={() => setShowCompare((v) => !v)}
+            className="flex items-center gap-1.5 px-3 py-2 bg-white/[0.03] hover:bg-white/[0.06] text-gray-300 text-xs rounded-lg transition-colors border border-white/[0.08]"
+          >
+            <Layers size={13} /> Env Compare
+          </button>
+          <button
+            onClick={() => setShowTemplates((v) => !v)}
+            className="flex items-center gap-1.5 px-3 py-2 bg-white/[0.03] hover:bg-white/[0.06] text-gray-300 text-xs rounded-lg transition-colors border border-white/[0.08]"
+          >
+            <Plus size={13} /> Templates
+          </button>
+          <button
             onClick={() => handleBulk(true)}
             className="flex items-center gap-1.5 px-3 py-2 bg-green-500/10 hover:bg-green-500/20 text-green-300 text-xs rounded-lg transition-colors border border-green-500/20"
           >
@@ -197,6 +319,89 @@ export default function FeatureFlagsManagerSection({
           </button>
         </div>
       </div>
+
+      {/* Environment comparison view */}
+      {showCompare && (
+        <div className="bg-[#161618] border border-white/[0.06] rounded-xl p-4">
+          <h3 className="text-sm font-medium text-white mb-3 flex items-center gap-2">
+            <Layers size={14} className="text-amber-400" /> Environment
+            Comparison
+          </h3>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {["all", "dev", "staging", "production"].map((env) => (
+              <div
+                key={env}
+                className="bg-white/[0.03] rounded-lg p-3 border border-white/[0.06]"
+              >
+                <p className="text-xs text-gray-400 capitalize">
+                  {env === "all" ? "All Envs" : env}
+                </p>
+                <p className="text-lg text-white font-medium mt-1">
+                  {envStats[env].enabled}
+                  <span className="text-sm text-gray-500">
+                    /{envStats[env].total}
+                  </span>
+                </p>
+                <div className="h-1.5 rounded-full bg-black/30 mt-2 overflow-hidden">
+                  <div
+                    className="h-full bg-amber-500"
+                    style={{
+                      width: `${envStats[env].total ? (envStats[env].enabled / envStats[env].total) * 100 : 0}%`,
+                    }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Templates view */}
+      {showTemplates && (
+        <div className="bg-[#161618] border border-white/[0.06] rounded-xl p-4">
+          <h3 className="text-sm font-medium text-white mb-3">
+            Flag Templates — click to apply
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+            {FLAG_TEMPLATES.map((t) => (
+              <button
+                key={t.name}
+                onClick={() => applyTemplate(t)}
+                className="text-left p-3 rounded-lg bg-white/[0.03] hover:bg-amber-500/10 border border-white/[0.06] hover:border-amber-500/20 transition-colors"
+              >
+                <p className="text-sm text-white">{t.name}</p>
+                <p className="text-[11px] text-gray-500 mt-0.5">
+                  {t.description}
+                </p>
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 text-gray-400 mt-1.5 inline-block">
+                  {t.category}
+                </span>
+              </button>
+            ))}
+          </div>
+          <div className="mt-3 flex items-center gap-2">
+            <select
+              value={copyFromId}
+              onChange={(e) => setCopyFromId(e.target.value)}
+              className="px-3 py-2 bg-white/[0.03] border border-white/[0.08] rounded-lg text-sm text-white"
+            >
+              <option value="">Copy from existing flag...</option>
+              {flags.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.name}
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={copyFrom}
+              disabled={!copyFromId}
+              className="px-3 py-2 bg-amber-500/15 hover:bg-amber-500/25 disabled:opacity-40 text-amber-300 text-xs rounded-lg border border-amber-500/20"
+            >
+              Copy
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Stats + filters */}
       <div className="flex items-center gap-2 flex-wrap">
@@ -304,6 +509,52 @@ export default function FeatureFlagsManagerSection({
               </select>
             </div>
           </div>
+          {/* Rollout percentage */}
+          <div className="mt-3">
+            <label className="text-[11px] text-gray-400 mb-1 block">
+              Rollout Percentage: {draftRollout}%
+            </label>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              value={draftRollout}
+              onChange={(e) => setDraftRollout(Number(e.target.value))}
+              className="w-full accent-amber-500"
+            />
+            <p className="text-[10px] text-gray-500 mt-0.5">
+              Percentage of users who see this feature when enabled (100% = all
+              users)
+            </p>
+          </div>
+          {/* Dependencies */}
+          <div className="mt-3">
+            <label className="text-[11px] text-gray-400 mb-1 block">
+              Dependencies (flags that must be enabled first)
+            </label>
+            <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
+              {flags
+                .filter((f) => f.id !== editingId)
+                .map((f) => (
+                  <button
+                    key={f.id}
+                    onClick={() => toggleDependsOn(f.id)}
+                    className={`px-2 py-0.5 rounded-full text-[11px] ${
+                      draftDependsOn.includes(f.id)
+                        ? "bg-amber-500 text-black"
+                        : "bg-white/5 text-gray-400 hover:bg-white/10"
+                    }`}
+                  >
+                    {f.name}
+                  </button>
+                ))}
+              {flags.filter((f) => f.id !== editingId).length === 0 && (
+                <span className="text-[11px] text-gray-600">
+                  No other flags to depend on
+                </span>
+              )}
+            </div>
+          </div>
           <div className="flex gap-2 mt-3">
             <button
               onClick={saveDraft}
@@ -347,10 +598,43 @@ export default function FeatureFlagsManagerSection({
                       {ENV_LABELS[f.environment] || f.environment}
                     </span>
                   )}
+                  {f.rolloutPercentage !== undefined &&
+                    f.rolloutPercentage < 100 && (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-300">
+                        {f.rolloutPercentage}% rollout
+                      </span>
+                    )}
+                  {f.dependsOn && f.dependsOn.length > 0 && (
+                    <span
+                      className="text-[9px] px-1.5 py-0.5 rounded bg-orange-500/15 text-orange-300"
+                      title={`Depends on: ${f.dependsOn.map((d) => flags.find((x) => x.id === d)?.name || d).join(", ")}`}
+                    >
+                      ↳ {f.dependsOn.length} dep
+                    </span>
+                  )}
                 </div>
                 <p className="text-[11px] text-gray-500 truncate">
                   {f.description}
                 </p>
+                {f.enabled &&
+                  f.rolloutPercentage !== undefined &&
+                  f.rolloutPercentage < 100 && (
+                    <div className="flex items-center gap-2 mt-1">
+                      <input
+                        type="range"
+                        min={0}
+                        max={100}
+                        value={f.rolloutPercentage}
+                        onChange={(e) =>
+                          setRollout(f.id, Number(e.target.value))
+                        }
+                        className="w-24 accent-amber-500"
+                      />
+                      <span className="text-[10px] text-gray-500">
+                        {f.rolloutPercentage}%
+                      </span>
+                    </div>
+                  )}
                 {f.updatedAt && (
                   <p className="text-[9px] text-gray-600 mt-0.5">
                     Updated {new Date(f.updatedAt).toLocaleString()}

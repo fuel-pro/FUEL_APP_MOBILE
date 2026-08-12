@@ -57,10 +57,14 @@ export default function SecretsManagerSection({
   const [newCategory, setNewCategory] = useState(
     settings.secretCategories[0] || "Other",
   );
+  const [newExpiresAt, setNewExpiresAt] = useState("");
+  const [newTags, setNewTags] = useState("");
+  const [newRotationDays, setNewRotationDays] = useState(0);
   const [visible, setVisible] = useState<Record<string, boolean>>({});
   const [copied, setCopied] = useState("");
   const [search, setSearch] = useState("");
   const [filterCategory, setFilterCategory] = useState("all");
+  const [filterTag, setFilterTag] = useState("all");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -70,12 +74,39 @@ export default function SecretsManagerSection({
       const matchesQ =
         !q ||
         s.key.toLowerCase().includes(q) ||
-        (s.category || "").toLowerCase().includes(q);
+        (s.category || "").toLowerCase().includes(q) ||
+        (s.tags || []).some((t) => t.toLowerCase().includes(q));
       const matchesCat =
         filterCategory === "all" || (s.category || "Other") === filterCategory;
-      return matchesQ && matchesCat;
+      const matchesTag =
+        filterTag === "all" || (s.tags || []).includes(filterTag);
+      return matchesQ && matchesCat && matchesTag;
     });
-  }, [secrets, search, filterCategory]);
+  }, [secrets, search, filterCategory, filterTag]);
+
+  const allTags = useMemo(
+    () => Array.from(new Set(secrets.flatMap((s) => s.tags || []))).sort(),
+    [secrets],
+  );
+
+  const needsRotation = (s: ConsoleSecret) => {
+    if (!s.rotationReminderDays || s.rotationReminderDays <= 0) return false;
+    const last = s.lastRotated || s.createdAt;
+    if (!last) return false;
+    const days =
+      (Date.now() - new Date(last).getTime()) / (1000 * 60 * 60 * 24);
+    return days >= s.rotationReminderDays;
+  };
+
+  const isExpired = (s: ConsoleSecret) =>
+    s.expiresAt ? new Date(s.expiresAt) < new Date() : false;
+
+  const expiringSoon = (s: ConsoleSecret) => {
+    if (!s.expiresAt) return false;
+    const days =
+      (new Date(s.expiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24);
+    return days >= 0 && days <= 7;
+  };
 
   const allSelected =
     filtered.length > 0 && filtered.every((s) => selected.has(s.key));
@@ -104,6 +135,12 @@ export default function SecretsManagerSection({
       value: btoa(newValue),
       createdAt: new Date().toISOString(),
       category: newCategory,
+      expiresAt: newExpiresAt || undefined,
+      tags: newTags
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean),
+      rotationReminderDays: newRotationDays > 0 ? newRotationDays : undefined,
     };
     onUpsert(secret);
     logAudit(
@@ -116,6 +153,9 @@ export default function SecretsManagerSection({
     setNewKey("");
     setNewValue("");
     setNewCategory(settings.secretCategories[0] || "Other");
+    setNewExpiresAt("");
+    setNewTags("");
+    setNewRotationDays(0);
     setShowAdd(false);
   };
 
@@ -297,6 +337,20 @@ export default function SecretsManagerSection({
             </option>
           ))}
         </select>
+        {allTags.length > 0 && (
+          <select
+            value={filterTag}
+            onChange={(e) => setFilterTag(e.target.value)}
+            className="px-3 py-2 bg-white/[0.03] border border-white/[0.08] rounded-lg text-sm text-white focus:outline-none focus:border-amber-500/30"
+          >
+            <option value="all">All tags</option>
+            {allTags.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </select>
+        )}
         {selected.size > 0 && (
           <button
             onClick={bulkDelete}
@@ -349,6 +403,42 @@ export default function SecretsManagerSection({
               </select>
             </div>
           </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
+            <div>
+              <label className="text-[11px] text-gray-400 mb-1 block">
+                Expires (optional)
+              </label>
+              <input
+                type="date"
+                value={newExpiresAt}
+                onChange={(e) => setNewExpiresAt(e.target.value)}
+                className="w-full px-3 py-2.5 bg-white/[0.03] border border-white/[0.08] rounded-lg text-sm text-white focus:outline-none focus:border-amber-500/30"
+              />
+            </div>
+            <div>
+              <label className="text-[11px] text-gray-400 mb-1 block">
+                Tags (comma-separated)
+              </label>
+              <input
+                value={newTags}
+                onChange={(e) => setNewTags(e.target.value)}
+                placeholder="production, critical"
+                className="w-full px-3 py-2.5 bg-white/[0.03] border border-white/[0.08] rounded-lg text-sm text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/30"
+              />
+            </div>
+            <div>
+              <label className="text-[11px] text-gray-400 mb-1 block">
+                Rotate reminder (days, 0 = off)
+              </label>
+              <input
+                type="number"
+                value={newRotationDays}
+                onChange={(e) => setNewRotationDays(Number(e.target.value))}
+                placeholder="0"
+                className="w-full px-3 py-2.5 bg-white/[0.03] border border-white/[0.08] rounded-lg text-sm text-white focus:outline-none focus:border-amber-500/30"
+              />
+            </div>
+          </div>
           <button
             onClick={saveSecret}
             className="mt-3 px-4 py-2 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 text-xs rounded-lg transition-colors border border-amber-500/20"
@@ -375,6 +465,9 @@ export default function SecretsManagerSection({
               </th>
               <th className="text-left text-[11px] text-gray-500 font-medium px-3 py-3">
                 Category
+              </th>
+              <th className="text-left text-[11px] text-gray-500 font-medium px-3 py-3">
+                Tags
               </th>
               <th className="text-left text-[11px] text-gray-500 font-medium px-3 py-3">
                 Value
@@ -410,6 +503,18 @@ export default function SecretsManagerSection({
                   </span>
                 </td>
                 <td className="px-3 py-3">
+                  <div className="flex flex-wrap gap-1">
+                    {(s.tags || []).map((t) => (
+                      <span
+                        key={t}
+                        className="text-[9px] px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-300"
+                      >
+                        {t}
+                      </span>
+                    ))}
+                  </div>
+                </td>
+                <td className="px-3 py-3">
                   {visible[s.key] ? (
                     <span className="text-sm text-gray-300 font-mono break-all">
                       {(() => {
@@ -436,6 +541,24 @@ export default function SecretsManagerSection({
                       title={`Last rotated ${new Date(s.lastRotated).toLocaleString()}`}
                     >
                       ⟳
+                    </span>
+                  )}
+                  {isExpired(s) && (
+                    <span className="block text-[9px] text-red-400 mt-0.5">
+                      Expired
+                    </span>
+                  )}
+                  {expiringSoon(s) && (
+                    <span className="block text-[9px] text-amber-400 mt-0.5">
+                      Expires soon
+                    </span>
+                  )}
+                  {needsRotation(s) && (
+                    <span
+                      className="block text-[9px] text-orange-400 mt-0.5"
+                      title={`Rotate every ${s.rotationReminderDays} days`}
+                    >
+                      Rotation due
                     </span>
                   )}
                 </td>
@@ -483,7 +606,7 @@ export default function SecretsManagerSection({
             ))}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={6} className="text-center text-gray-600 py-12">
+                <td colSpan={7} className="text-center text-gray-600 py-12">
                   {secrets.length === 0
                     ? "No secrets configured"
                     : "No secrets match your filter"}
