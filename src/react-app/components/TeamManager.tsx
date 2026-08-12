@@ -4,7 +4,6 @@ import {
   Link2,
   Plus,
   Clock,
-  ShieldCheck,
   UserCheck,
   User,
   Eye,
@@ -19,62 +18,172 @@ import {
   Ban,
   Mail,
   MessageCircle,
-  LayoutDashboard,
   ToggleLeft,
   ToggleRight,
+  Crown,
+  KeyRound,
+  Settings2,
+  Trash2,
+  BadgeCheck,
+  ShieldAlert,
 } from "lucide-react";
 import { useAuth } from "@/react-app/context/AuthContext";
 import {
   usePermissions,
   type UserRole,
+  type BaseUserRole,
+  type CustomRole,
+  type PermissionConfig,
   DEFAULT_ROLE_TABS,
+  rankOf,
 } from "@/react-app/context/PermissionContext";
 import { useStations } from "@/react-app/context/StationContext";
 import { useFuel } from "@/react-app/context/FuelContext";
 import SubTabBar from "@/react-app/components/SubTabBar";
 import ShiftManagement from "@/react-app/components/ShiftManagement";
 
+const BASE_ROLES: BaseUserRole[] = ["manager", "staff", "auditor"];
+
 const ROLE_LABELS: Record<
-  UserRole,
+  string,
   { label: string; color: string; desc: string }
 > = {
   owner: {
     label: "Owner",
-    color: "bg-purple-100 text-purple-700",
-    desc: "Full access, cannot be revoked",
+    color:
+      "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300",
+    desc: "Full access, cannot be revoked. Root authority.",
   },
   manager: {
     label: "Manager",
-    color: "bg-blue-100 text-blue-700",
-    desc: "Operational control, can invite Staff/Auditor",
+    color: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
+    desc: "Operational control, can invite Staff/Auditor (if delegated).",
   },
   staff: {
     label: "Staff",
-    color: "bg-green-100 text-green-700",
-    desc: "Daily tasks, assigned pumps/shifts",
+    color:
+      "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
+    desc: "Daily tasks, assigned pumps/shifts.",
   },
   auditor: {
     label: "Auditor",
-    color: "bg-amber-100 text-amber-700",
-    desc: "Read-only audit and reports",
+    color:
+      "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300",
+    desc: "Read-only audit and reports.",
   },
 };
 
-const ROLE_ICONS: Record<UserRole, any> = {
-  owner: ShieldCheck,
+const ROLE_ICONS: Record<string, any> = {
+  owner: Crown,
   manager: UserCheck,
   staff: User,
   auditor: Eye,
 };
 
 // Safe accessors with fallback so an unknown/custom role never crashes the UI.
-const getRoleIcon = (role: string): any => ROLE_ICONS[role as UserRole] || User;
+const getRoleIcon = (role: string): any => ROLE_ICONS[role] || BadgeCheck;
 const getRoleLabel = (role: string) =>
-  ROLE_LABELS[role as UserRole] || {
+  ROLE_LABELS[role] || {
     label: role.charAt(0).toUpperCase() + role.slice(1),
-    color: "bg-gray-100 text-gray-700",
-    desc: "",
+    color: "bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-300",
+    desc: "Custom role defined by the Owner.",
   };
+
+// Human-readable labels for the PermissionConfig booleans (grouped).
+const PERMISSION_GROUPS: {
+  group: string;
+  perms: { key: keyof PermissionConfig; label: string }[];
+}[] = [
+  {
+    group: "Sales & POS",
+    perms: [
+      { key: "canViewSales", label: "View Sales" },
+      { key: "canCreateSales", label: "Create Sales" },
+      { key: "canEditSales", label: "Edit Sales" },
+      { key: "canViewPOS", label: "View POS" },
+      { key: "canUsePOS", label: "Use POS" },
+      { key: "canViewLiveTransactions", label: "Live Transactions" },
+    ],
+  },
+  {
+    group: "Inventory & Fuel",
+    perms: [
+      { key: "canViewInventory", label: "View Inventory" },
+      { key: "canManageInventory", label: "Manage Inventory" },
+      { key: "canViewFuelPrices", label: "View Fuel Prices" },
+      { key: "canEditFuelPrices", label: "Edit Fuel Prices" },
+      { key: "canChangePumpCount", label: "Change Pump Count" },
+      { key: "canManageFuelTypes", label: "Manage Fuel Types" },
+    ],
+  },
+  {
+    group: "Money & Payments",
+    perms: [
+      { key: "canViewMpesa", label: "View M-PESA" },
+      { key: "canProcessMpesa", label: "Process M-PESA" },
+      { key: "canViewCredit", label: "View Credit" },
+      { key: "canManageCredit", label: "Manage Credit" },
+      { key: "canViewDebt", label: "View Debts" },
+      { key: "canManageDebt", label: "Manage Debts" },
+      { key: "canViewLoyalty", label: "View Loyalty" },
+      { key: "canManageLoyalty", label: "Manage Loyalty" },
+    ],
+  },
+  {
+    group: "People & HR",
+    perms: [
+      { key: "canViewEmployees", label: "View Team" },
+      { key: "canManageEmployees", label: "Manage Team" },
+      { key: "canViewPayroll", label: "View Payroll" },
+      { key: "canRunPayroll", label: "Run Payroll" },
+      { key: "canViewShifts", label: "View Shifts" },
+      { key: "canManageShifts", label: "Manage Shifts" },
+      { key: "canAssignPumps", label: "Assign Pumps" },
+      { key: "canAssignShifts", label: "Assign Shifts" },
+    ],
+  },
+  {
+    group: "Reports & Audit",
+    perms: [
+      { key: "canViewReports", label: "View Reports" },
+      { key: "canExportReports", label: "Export Reports" },
+      { key: "canViewAnalytics", label: "View Analytics" },
+      { key: "canViewAudit", label: "View Audit Trail" },
+      { key: "canManageAudit", label: "Manage Audit Trail" },
+    ],
+  },
+  {
+    group: "System & Documents",
+    perms: [
+      { key: "canViewDocuments", label: "View Documents" },
+      { key: "canManageDocuments", label: "Upload/Manage Docs" },
+      { key: "canViewSettings", label: "View Settings" },
+      { key: "canManageSettings", label: "Manage Settings" },
+      { key: "canViewIntegrations", label: "View Integrations" },
+      { key: "canManageIntegrations", label: "Manage Integrations" },
+      { key: "canViewCloud", label: "View Cloud Data" },
+      { key: "canManageCloud", label: "Manage Cloud Data" },
+      { key: "canViewRegional", label: "Regional/Compliance" },
+      { key: "canViewCommunication", label: "Communication" },
+      { key: "canViewNews", label: "News" },
+      { key: "canViewAI", label: "View AI" },
+      { key: "canUseAI", label: "Use AI" },
+    ],
+  },
+  {
+    group: "Delegation & Invite Power",
+    perms: [
+      { key: "canInviteManager", label: "Invite Managers" },
+      { key: "canInviteStaff", label: "Invite Staff" },
+      { key: "canInviteAuditor", label: "Invite Auditors" },
+      { key: "canCreateSubUsers", label: "Create Sub-Users (delegation)" },
+      { key: "canGrantPermissions", label: "Grant Permissions (delegation)" },
+      { key: "canRevokeAccess", label: "Revoke Access" },
+      { key: "canSetTimeLimits", label: "Set Time Limits" },
+      { key: "canManageTabs", label: "Manage Tab Access" },
+    ],
+  },
+];
 
 function makeInviteLink(inv: any, station: any): string {
   const payload = JSON.stringify({
@@ -83,8 +192,14 @@ function makeInviteLink(inv: any, station: any): string {
     stationName: station?.name || "Fuel Station",
     stationId: station?.id || "default",
     createdBy: inv.createdBy,
+    createdByName: inv.createdByName,
+    createdByUniqueId: inv.createdByUniqueId,
     expiresAt: inv.expiresAt,
     maxUses: inv.maxUses,
+    canCreateSubUsers: inv.canCreateSubUsers,
+    canGrantPermissions: inv.canGrantPermissions,
+    permissionsSnapshot: inv.permissionsSnapshot,
+    tabGrants: inv.tabGrants,
   });
   const base64 = btoa(payload)
     .replace(/\+/g, "-")
@@ -101,9 +216,10 @@ export default function TeamManager() {
     role,
     team,
     invites,
+    customRoles,
     hasPermission,
     isOwner,
-    isManager,
+    canInviteRole,
     createInvite,
     revokeMember,
     extendAccess,
@@ -113,11 +229,21 @@ export default function TeamManager() {
     setRoleTabGrants,
     grantTabToRole,
     revokeTabFromRole,
+    setRolePermission,
+    createCustomRole,
+    deleteCustomRole,
+    updateCustomRole,
+    resolvePermissions,
+    resolveTabGrants,
+    outranks,
   } = usePermissions();
   const [showCreate, setShowCreate] = useState(false);
   const [inviteRole, setInviteRole] = useState<UserRole>("staff");
   const [expireDays, setExpireDays] = useState("");
   const [maxUses, setMaxUses] = useState("1");
+  const [inviteCanCreateSubUsers, setInviteCanCreateSubUsers] = useState(false);
+  const [inviteCanGrantPermissions, setInviteCanGrantPermissions] =
+    useState(false);
   const [copiedId, setCopiedId] = useState("");
   const [expandedMember, setExpandedMember] = useState<string | null>(null);
   // Per-member extend-days state so editing one member doesn't change another's.
@@ -126,9 +252,18 @@ export default function TeamManager() {
   >({});
   const [showTerminateConfirm, setShowTerminateConfirm] = useState(false);
   const [showFeatureGrant, setShowFeatureGrant] = useState(false);
+  // Custom role creator state
+  const [showRoleCreator, setShowRoleCreator] = useState(false);
+  const [newRoleName, setNewRoleName] = useState("");
+  const [newRoleLabel, setNewRoleLabel] = useState("");
+  const [newRoleBase, setNewRoleBase] = useState<BaseUserRole>("staff");
+  // Per-role permission editor state: which role's permission panel is open
+  const [permEditorRole, setPermEditorRole] = useState<string | null>(null);
   // Inner sub-tab: "Team" (this component) vs "Shifts" (the formerly-standalone
   // ShiftManagement module, now hosted here).
-  const [activeView, setActiveView] = useState<"team" | "shifts">("team");
+  const [activeView, setActiveView] = useState<"team" | "shifts" | "roles">(
+    "team",
+  );
 
   // Tab ID to human-readable label mapping
   const tabIdToLabel: Record<string, string> = {
@@ -165,15 +300,17 @@ export default function TeamManager() {
     (b) => b.active && b.authId === user?.authId,
   );
 
-  const canCreateManager = isOwner && hasPermission("canInviteManager");
-  const canCreateStaff =
-    (isOwner || isManager) && hasPermission("canInviteStaff");
-  const canCreateAuditor =
-    (isOwner || isManager) && hasPermission("canInviteAuditor");
-  const canRevoke = hasPermission("canRevokeAccess");
-  const canSetLimits = hasPermission("canSetTimeLimits");
+  // The current user can manage permissions if they are the Owner OR have the
+  // canGrantPermissions delegation flag.
+  const canManagePermissions = isOwner || hasPermission("canGrantPermissions");
+  const canRevoke = isOwner || hasPermission("canRevokeAccess");
+  const canSetLimits = isOwner || hasPermission("canSetTimeLimits");
   const canAssign =
-    hasPermission("canAssignPumps") || hasPermission("canAssignShifts");
+    isOwner ||
+    hasPermission("canAssignPumps") ||
+    hasPermission("canAssignShifts");
+  // Can create custom roles: Owner, or a delegated role with canCreateSubUsers.
+  const canCreateRoles = isOwner || hasPermission("canCreateSubUsers");
 
   // Derive the real pump options from the station's configured pumps so pump
   // assignments reference actual pumps (not the old hardcoded PMS-/AGO-/IK-
@@ -218,12 +355,20 @@ export default function TeamManager() {
 
   const handleCreateInvite = () => {
     const r = inviteRole;
-    if (r === "manager" && !canCreateManager) return;
-    if (r === "staff" && !canCreateStaff) return;
-    if (r === "auditor" && !canCreateAuditor) return;
+    // Escalation guard: the context's createInvite also guards, but we check
+    // here so the UI can disable the button.
+    if (!canInviteRole(r)) return;
     const days = expireDays ? parseInt(expireDays) : undefined;
     const uses = parseInt(maxUses) || 1;
-    createInvite(r, days, uses);
+    // Pass the delegation options. The context clamps them to what the
+    // inviter is actually allowed to grant (escalation guard).
+    createInvite(r, days, uses, {
+      canCreateSubUsers: inviteCanCreateSubUsers,
+      canGrantPermissions: inviteCanGrantPermissions,
+    });
+    // Reset delegation toggles for the next invite.
+    setInviteCanCreateSubUsers(false);
+    setInviteCanGrantPermissions(false);
     setShowCreate(false);
   };
 
@@ -286,10 +431,19 @@ export default function TeamManager() {
     window.open(`mailto:?subject=${subject}&body=${body}`, "_blank");
   };
 
-  const availableRoles: UserRole[] = [];
-  if (canCreateManager) availableRoles.push("manager");
-  if (canCreateStaff) availableRoles.push("staff");
-  if (canCreateAuditor) availableRoles.push("auditor");
+  // Build the list of roles the current user can invite into. Uses the
+  // escalation-aware canInviteRole helper so a delegated Manager sees only
+  // roles below their rank (staff/auditor/custom), and the Owner sees all.
+  const availableRoles: { id: string; label: string }[] = [];
+  for (const r of BASE_ROLES) {
+    if (canInviteRole(r))
+      availableRoles.push({ id: r, label: getRoleLabel(r).label });
+  }
+  for (const cr of customRoles) {
+    if (canInviteRole(cr.name)) {
+      availableRoles.push({ id: cr.name, label: cr.label });
+    }
+  }
 
   const activeInvites = invites.filter(
     (i) => !i.usedBy && (!i.expiresAt || new Date(i.expiresAt) > new Date()),
@@ -320,14 +474,45 @@ export default function TeamManager() {
       <SubTabBar
         tabs={[
           { id: "team", label: "Team Access", icon: Users },
+          { id: "roles", label: "Roles & Permissions", icon: KeyRound },
           { id: "shifts", label: "Shifts", icon: Calendar },
         ]}
         active={activeView}
-        onChange={(id) => setActiveView(id as "team" | "shifts")}
+        onChange={(id) => setActiveView(id as "team" | "shifts" | "roles")}
       />
 
       {activeView === "shifts" ? (
         <ShiftManagement />
+      ) : activeView === "roles" ? (
+        <RolesAndPermissionsView
+          isOwner={isOwner}
+          canManagePermissions={canManagePermissions}
+          canCreateRoles={canCreateRoles}
+          customRoles={customRoles}
+          resolvePermissions={resolvePermissions}
+          resolveTabGrants={resolveTabGrants}
+          roleTabGrants={roleTabGrants}
+          setRolePermission={setRolePermission}
+          grantTabToRole={grantTabToRole}
+          revokeTabFromRole={revokeTabFromRole}
+          setRoleTabGrants={setRoleTabGrants}
+          createCustomRole={createCustomRole}
+          deleteCustomRole={deleteCustomRole}
+          updateCustomRole={updateCustomRole}
+          outranks={outranks}
+          hasPermission={hasPermission}
+          tabIdToLabel={tabIdToLabel}
+          permEditorRole={permEditorRole}
+          setPermEditorRole={setPermEditorRole}
+          showRoleCreator={showRoleCreator}
+          setShowRoleCreator={setShowRoleCreator}
+          newRoleName={newRoleName}
+          setNewRoleName={setNewRoleName}
+          newRoleLabel={newRoleLabel}
+          setNewRoleLabel={setNewRoleLabel}
+          newRoleBase={newRoleBase}
+          setNewRoleBase={setNewRoleBase}
+        />
       ) : (
         <>
           {/* Current User Badge */}
@@ -443,19 +628,19 @@ export default function TeamManager() {
                     <label className="text-xs text-gray-600 dark:text-gray-400 block mb-2">
                       Role
                     </label>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                       {availableRoles.map((r) => (
                         <button
-                          key={r}
-                          onClick={() => setInviteRole(r)}
-                          className={`px-4 py-2 rounded-lg text-xs font-medium transition-all ${inviteRole === r ? ROLE_LABELS[r].color + " ring-2 ring-offset-1" : "bg-white dark:bg-gray-800 text-gray-600"}`}
+                          key={r.id}
+                          onClick={() => setInviteRole(r.id)}
+                          className={`px-4 py-2 rounded-lg text-xs font-medium transition-all ${inviteRole === r.id ? getRoleLabel(r.id).color + " ring-2 ring-offset-1 ring-indigo-400" : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700"}`}
                         >
-                          {ROLE_LABELS[r].label}
+                          {r.label}
                         </button>
                       ))}
                     </div>
                     <p className="text-xs text-gray-500 mt-1">
-                      {ROLE_LABELS[inviteRole].desc}
+                      {getRoleLabel(inviteRole).desc}
                     </p>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
@@ -484,6 +669,46 @@ export default function TeamManager() {
                       />
                     </div>
                   </div>
+                  {/* Delegation toggles — only shown if the inviter may grant
+                      them. The context clamps to what the inviter actually has. */}
+                  {(isOwner || hasPermission("canCreateSubUsers")) && (
+                    <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3 space-y-2">
+                      <p className="text-xs font-semibold text-amber-800 dark:text-amber-300 flex items-center gap-1">
+                        <ShieldAlert size={12} /> Delegation (optional)
+                      </p>
+                      <label className="flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={inviteCanCreateSubUsers}
+                          onChange={(e) =>
+                            setInviteCanCreateSubUsers(e.target.checked)
+                          }
+                          disabled={
+                            !isOwner && !hasPermission("canCreateSubUsers")
+                          }
+                        />
+                        Allow this sub-user to create further sub-users
+                      </label>
+                      <label className="flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={inviteCanGrantPermissions}
+                          onChange={(e) =>
+                            setInviteCanGrantPermissions(e.target.checked)
+                          }
+                          disabled={
+                            !isOwner && !hasPermission("canGrantPermissions")
+                          }
+                        />
+                        Allow this sub-user to grant permissions to others
+                      </label>
+                      {!isOwner && (
+                        <p className="text-[10px] text-amber-600 dark:text-amber-400">
+                          You can only delegate powers you yourself hold.
+                        </p>
+                      )}
+                    </div>
+                  )}
                   <div className="flex gap-2">
                     <button
                       onClick={handleCreateInvite}
@@ -598,8 +823,8 @@ export default function TeamManager() {
             </div>
           )}
 
-          {/* Feature Access Control — Owner Only */}
-          {isOwner && (
+          {/* Feature Access Control — Owner or delegated canGrantPermissions */}
+          {canManagePermissions && (
             <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
               <button
                 onClick={() => setShowFeatureGrant(!showFeatureGrant)}
@@ -607,7 +832,7 @@ export default function TeamManager() {
               >
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg flex items-center justify-center">
-                    <LayoutDashboard
+                    <Settings2
                       size={16}
                       className="text-indigo-600 dark:text-indigo-400"
                     />
@@ -644,55 +869,56 @@ export default function TeamManager() {
                     </span>
                   </div>
 
-                  {/* Roles to manage */}
-                  {(["manager", "staff", "auditor"] as UserRole[]).map(
-                    (targetRole) => (
-                      <div key={targetRole}>
-                        <h4
-                          className={`text-xs font-semibold mb-2 px-2 py-1 rounded inline-block ${getRoleLabel(targetRole).color.replace("text-", "text-opacity-100 ")}`}
-                        >
-                          {getRoleLabel(targetRole).label} Access
-                        </h4>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
-                          {Object.keys(tabIdToLabel).map((tabId) => {
-                            const isAllowed =
-                              roleTabGrants[targetRole]?.includes(tabId) ??
-                              false;
-                            const isDefault =
-                              DEFAULT_ROLE_TABS[targetRole]?.includes(tabId) ??
-                              false;
-                            return (
-                              <button
-                                key={tabId}
-                                onClick={() => {
-                                  if (isAllowed)
-                                    revokeTabFromRole(targetRole, tabId);
-                                  else grantTabToRole(targetRole, tabId);
-                                }}
-                                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-all ${
-                                  isAllowed
-                                    ? "bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800"
-                                    : "bg-gray-50 dark:bg-gray-900 text-gray-400 border border-gray-200 dark:border-gray-700"
-                                }`}
-                              >
-                                {isAllowed ? (
-                                  <ToggleRight size={16} />
-                                ) : (
-                                  <ToggleLeft size={16} />
-                                )}
-                                <span>{tabIdToLabel[tabId]}</span>
-                                {!isAllowed && isDefault && (
-                                  <span className="text-[9px] text-amber-500 ml-auto">
-                                    was on
-                                  </span>
-                                )}
-                              </button>
-                            );
-                          })}
-                        </div>
+                  {/* Roles to manage: base roles (manager/staff/auditor) +
+                      any custom roles the current user outranks. */}
+                  {(
+                    [
+                      ...BASE_ROLES,
+                      ...customRoles
+                        .filter((c) => outranks(c.name))
+                        .map((c) => c.name),
+                    ] as string[]
+                  ).map((targetRole) => (
+                    <div key={targetRole}>
+                      <h4
+                        className={`text-xs font-semibold mb-2 px-2 py-1 rounded inline-block ${getRoleLabel(targetRole).color}`}
+                      >
+                        {getRoleLabel(targetRole).label} Access
+                      </h4>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                        {Object.keys(tabIdToLabel).map((tabId) => {
+                          const isAllowed =
+                            resolveTabGrants(targetRole).includes(tabId);
+                          return (
+                            <button
+                              key={tabId}
+                              onClick={() => {
+                                if (isAllowed)
+                                  revokeTabFromRole(
+                                    targetRole as UserRole,
+                                    tabId,
+                                  );
+                                else
+                                  grantTabToRole(targetRole as UserRole, tabId);
+                              }}
+                              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-all ${
+                                isAllowed
+                                  ? "bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800"
+                                  : "bg-gray-50 dark:bg-gray-900 text-gray-400 border border-gray-200 dark:border-gray-700"
+                              }`}
+                            >
+                              {isAllowed ? (
+                                <ToggleRight size={16} />
+                              ) : (
+                                <ToggleLeft size={16} />
+                              )}
+                              <span>{tabIdToLabel[tabId]}</span>
+                            </button>
+                          );
+                        })}
                       </div>
-                    ),
-                  )}
+                    </div>
+                  ))}
 
                   {/* Reset to defaults */}
                   <button
@@ -763,9 +989,27 @@ export default function TeamManager() {
                         )}
                       </div>
                       <p className="text-xs text-gray-500">
-                        Invited by {member.invitedBy} on{" "}
-                        {new Date(member.invitedAt).toLocaleDateString()}
+                        Invited by {member.invitedBy}
+                        {member.invitedByUniqueId && (
+                          <span className="text-gray-400">
+                            {" "}
+                            (ID: {member.invitedByUniqueId})
+                          </span>
+                        )}{" "}
+                        on {new Date(member.invitedAt).toLocaleDateString()}
                       </p>
+                      {(member.email || member.uniqueId) && (
+                        <p className="text-[10px] text-gray-400 truncate">
+                          {member.email && (
+                            <span className="flex items-center gap-1">
+                              <Mail size={9} /> {member.email}
+                            </span>
+                          )}
+                          {member.uniqueId && (
+                            <span className="ml-2">ID: {member.uniqueId}</span>
+                          )}
+                        </p>
+                      )}
                     </div>
                     <div className="flex items-center gap-2">
                       {member.expiresAt && (
@@ -946,6 +1190,347 @@ export default function TeamManager() {
           )}
         </>
       )}
+    </div>
+  );
+}
+
+// =============================================================================
+// Roles & Permissions View — full per-role permission editor + custom role
+// creator. This is the heart of the hierarchy/delegation system: the Owner
+// (or a delegated canGrantPermissions role) can toggle every boolean in the
+// PermissionConfig for each role, create custom roles (accountant, cashier,
+// ...), and the escalation guard prevents granting powers the granter doesn't
+// hold themselves.
+// =============================================================================
+
+interface RolesAndPermissionsViewProps {
+  isOwner: boolean;
+  canManagePermissions: boolean;
+  canCreateRoles: boolean;
+  customRoles: CustomRole[];
+  resolvePermissions: (roleName: string) => PermissionConfig;
+  resolveTabGrants: (roleName: string) => string[];
+  roleTabGrants: Record<string, string[]>;
+  setRolePermission: (
+    targetRole: UserRole,
+    perm: keyof PermissionConfig,
+    value: boolean,
+  ) => void;
+  grantTabToRole: (targetRole: UserRole, tabId: string) => void;
+  revokeTabFromRole: (targetRole: UserRole, tabId: string) => void;
+  setRoleTabGrants: (grants: Record<string, string[]>) => void;
+  createCustomRole: (
+    slug: string,
+    label: string,
+    baseRole?: BaseUserRole,
+    rank?: number,
+  ) => CustomRole | null;
+  deleteCustomRole: (slug: string) => void;
+  updateCustomRole: (slug: string, updates: Partial<CustomRole>) => void;
+  outranks: (otherRole: string) => boolean;
+  hasPermission: (key: keyof PermissionConfig) => boolean;
+  tabIdToLabel: Record<string, string>;
+  permEditorRole: string | null;
+  setPermEditorRole: (r: string | null) => void;
+  showRoleCreator: boolean;
+  setShowRoleCreator: (v: boolean) => void;
+  newRoleName: string;
+  setNewRoleName: (v: string) => void;
+  newRoleLabel: string;
+  setNewRoleLabel: (v: string) => void;
+  newRoleBase: BaseUserRole;
+  setNewRoleBase: (v: BaseUserRole) => void;
+}
+
+function RolesAndPermissionsView(props: RolesAndPermissionsViewProps) {
+  const {
+    isOwner,
+    canManagePermissions,
+    canCreateRoles,
+    customRoles,
+    resolvePermissions,
+    setRolePermission,
+    createCustomRole,
+    deleteCustomRole,
+    outranks,
+    hasPermission,
+    permEditorRole,
+    setPermEditorRole,
+    showRoleCreator,
+    setShowRoleCreator,
+    newRoleName,
+    setNewRoleName,
+    newRoleLabel,
+    setNewRoleLabel,
+    newRoleBase,
+    setNewRoleBase,
+    // tabIdToLabel is intentionally not destructured — the per-role tab
+    // grants grid lives in the Feature Access Control panel (Team Access
+    // sub-tab), not here. Kept on the props interface for future use.
+  } = props;
+
+  // All roles the current user can edit: base roles they outrank + custom roles
+  // they outrank. Owner outranks everything.
+  const allRoles: { id: string; label: string; isCustom: boolean }[] = [];
+  for (const r of ["manager", "staff", "auditor"]) {
+    if (outranks(r))
+      allRoles.push({ id: r, label: getRoleLabel(r).label, isCustom: false });
+  }
+  for (const cr of customRoles) {
+    if (outranks(cr.name)) {
+      allRoles.push({ id: cr.name, label: cr.label, isCustom: true });
+    }
+  }
+
+  const handleCreateRole = () => {
+    if (!newRoleName.trim()) return;
+    const created = createCustomRole(newRoleName, newRoleLabel, newRoleBase);
+    if (created) {
+      setNewRoleName("");
+      setNewRoleLabel("");
+      setShowRoleCreator(false);
+      setPermEditorRole(created.name);
+    } else {
+      alert(
+        "Could not create role. The name may be reserved (owner/manager/staff/auditor) or already exists.",
+      );
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Header banner */}
+      <div className="bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 rounded-xl border border-indigo-200 dark:border-indigo-800 p-4">
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/40 rounded-lg flex items-center justify-center flex-shrink-0">
+            <KeyRound
+              size={20}
+              className="text-indigo-600 dark:text-indigo-400"
+            />
+          </div>
+          <div>
+            <h2 className="text-sm font-bold text-gray-900 dark:text-white">
+              Roles &amp; Permissions Hierarchy
+            </h2>
+            <p className="text-xs text-gray-500 mt-1">
+              Owner &gt; Manager &gt; Staff &gt; Auditor (+ custom roles).
+              {isOwner
+                ? " You have full control as the Owner."
+                : " You can only manage roles below your rank and grant powers you yourself hold."}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Custom role creator */}
+      {canCreateRoles && (
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+          {!showRoleCreator ? (
+            <button
+              onClick={() => setShowRoleCreator(true)}
+              className="w-full py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-semibold flex items-center justify-center gap-2 transition-colors"
+            >
+              <Plus size={16} /> Create Custom Role
+            </button>
+          ) : (
+            <div className="space-y-3">
+              <h3 className="text-sm font-bold text-gray-900 dark:text-white">
+                New Custom Role
+              </h3>
+              <p className="text-xs text-gray-500">
+                Custom roles (e.g. Accountant, Cashier) inherit from a base role
+                and can be finely tuned below. They always rank below the Owner.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="text-xs text-gray-500 block mb-1">
+                    Slug (internal name)
+                  </label>
+                  <input
+                    value={newRoleName}
+                    onChange={(e) => setNewRoleName(e.target.value)}
+                    placeholder="accountant"
+                    className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 block mb-1">
+                    Display label
+                  </label>
+                  <input
+                    value={newRoleLabel}
+                    onChange={(e) => setNewRoleLabel(e.target.value)}
+                    placeholder="Accountant"
+                    className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 block mb-1">
+                    Inherit from
+                  </label>
+                  <select
+                    value={newRoleBase}
+                    onChange={(e) =>
+                      setNewRoleBase(e.target.value as BaseUserRole)
+                    }
+                    className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+                  >
+                    <option value="manager">Manager</option>
+                    <option value="staff">Staff</option>
+                    <option value="auditor">Auditor</option>
+                  </select>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleCreateRole}
+                  className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-medium rounded-lg flex items-center gap-1.5"
+                >
+                  <Plus size={14} /> Create Role
+                </button>
+                <button
+                  onClick={() => setShowRoleCreator(false)}
+                  className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-xs font-medium rounded-lg"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Permission editors per role */}
+      {allRoles.length === 0 && (
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-8 text-center text-sm text-gray-400">
+          No roles available for you to manage.
+        </div>
+      )}
+      {allRoles.map((r) => {
+        const isOpen = permEditorRole === r.id;
+        const perms = resolvePermissions(r.id);
+        const cr = customRoles.find((c) => c.name === r.id);
+        return (
+          <div
+            key={r.id}
+            className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden"
+          >
+            <button
+              onClick={() => setPermEditorRole(isOpen ? null : r.id)}
+              className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <div
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${getRoleLabel(r.id).color}`}
+                >
+                  {r.label}
+                </div>
+                {r.isCustom && (
+                  <span className="text-[10px] px-2 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-full">
+                    Custom
+                  </span>
+                )}
+                <span className="text-xs text-gray-500">
+                  Rank {rankOf(r.id)}
+                </span>
+              </div>
+              {isOpen ? (
+                <ChevronUp size={16} className="text-gray-400" />
+              ) : (
+                <ChevronDown size={16} className="text-gray-400" />
+              )}
+            </button>
+            {isOpen && (
+              <div className="border-t border-gray-100 dark:border-gray-700 p-4 space-y-4">
+                {r.isCustom && canManagePermissions && (
+                  <div className="flex justify-end">
+                    <button
+                      onClick={() => {
+                        if (
+                          confirm(
+                            `Delete the custom role "${r.label}"? This cannot be undone.`,
+                          )
+                        ) {
+                          deleteCustomRole(r.id);
+                          setPermEditorRole(null);
+                        }
+                      }}
+                      className="px-3 py-1.5 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-xs font-medium rounded-lg flex items-center gap-1.5 hover:bg-red-100 dark:hover:bg-red-900/40"
+                    >
+                      <Trash2 size={12} /> Delete Role
+                    </button>
+                  </div>
+                )}
+                {PERMISSION_GROUPS.map((group) => (
+                  <div key={group.group}>
+                    <h4 className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                      {group.group}
+                    </h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                      {group.perms.map((p) => {
+                        const value = Boolean(perms[p.key]);
+                        // Escalation guard: the granter must hold the permission
+                        // themselves to grant it. The context double-checks.
+                        const canToggle =
+                          canManagePermissions &&
+                          (isOwner ||
+                            p.key === "canViewDashboard" || // view-dashboard is safe
+                            hasPermission(p.key));
+                        return (
+                          <label
+                            key={String(p.key)}
+                            className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs border cursor-pointer transition-all ${
+                              value
+                                ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-green-700 dark:text-green-300"
+                                : "bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-500"
+                            } ${!canToggle ? "opacity-50 cursor-not-allowed" : ""}`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={value}
+                              disabled={!canToggle}
+                              onChange={(e) =>
+                                setRolePermission(
+                                  r.id as UserRole,
+                                  p.key,
+                                  e.target.checked,
+                                )
+                              }
+                              className="sr-only"
+                            />
+                            {value ? (
+                              <ToggleRight
+                                size={16}
+                                className="flex-shrink-0"
+                              />
+                            ) : (
+                              <ToggleLeft size={16} className="flex-shrink-0" />
+                            )}
+                            <span>{p.label}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+                {!canManagePermissions && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                    <ShieldAlert size={12} /> You need the &quot;Grant
+                    Permissions&quot; power to edit these settings.
+                  </p>
+                )}
+                {/* Rank display for custom roles */}
+                {cr && (
+                  <div className="text-xs text-gray-400 pt-2 border-t border-gray-100 dark:border-gray-700">
+                    Base: {cr.label} · Rank: {cr.rank} · Created{" "}
+                    {new Date(cr.createdAt).toLocaleDateString()}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

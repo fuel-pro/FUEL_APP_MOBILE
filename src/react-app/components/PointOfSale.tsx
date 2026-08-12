@@ -93,8 +93,8 @@ export default function PointOfSale() {
   // return false on a fresh device before cloud station data hydrates, so we
   // also check currentStation.country directly as a fast path.
   const stationCountry = (
-    currentStation?.country ||
-    state.companyData?.country ||
+    (currentStation as { country?: string })?.country ||
+    state.companyData?.county ||
     ""
   ).toUpperCase();
   const hasKraPin = Boolean(
