@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Plus,
   Save,
@@ -8,11 +8,17 @@ import {
   FileText,
   Calendar,
   X,
+  Search,
+  ArrowRight,
+  Edit,
 } from "lucide-react";
 import ExportDropdown from "@/react-app/components/ExportDropdown";
 import { useFuel } from "@/react-app/context/FuelContext";
 import { useStationFuelTypes } from "@/react-app/hooks/useStationFuelTypes";
 import { getFuelLabel, getFuelCode } from "@/react-app/config/pricing";
+import { switchToTab } from "@/react-app/lib/mpesa-integration-service";
+import { cloudStorageService } from "@/react-app/lib/cloud-storage-service";
+import { useStations } from "@/react-app/context/StationContext";
 import type { OffloadingRecord } from "@/react-app/context/FuelContext";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -23,11 +29,12 @@ const formatNumber = (num: number): string => {
   return new Intl.NumberFormat("en-US", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
-  }).format(num);
+  }).format(num || 0);
 };
 
 export default function FuelOffloading() {
   const { state, dispatch } = useFuel();
+  const { currentStation } = useStations();
   // Unified station fuel types so the offloading fuel-type dropdown reflects
   // the station's actual configured fuels (from Fuel Type Manager).
   const fuelTypeApi = useStationFuelTypes();
@@ -35,13 +42,40 @@ export default function FuelOffloading() {
     null,
   );
   const [showForm, setShowForm] = useState(false);
+  const [suppliers, setSuppliers] = useState<string[]>([]);
+
+  // Search/filter state (was missing — no way to find a record by date/truck/
+  // supplier/fuel type in a long list).
+  const [search, setSearch] = useState("");
+  const [fuelFilter, setFuelFilter] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+
+  // Build the fuel-type option list ONCE per render (avoids recomputing inside
+  // the JSX map which re-renders the <select> on every keystroke and resets
+  // its value).
+  const fuelOptions = useMemo(() => {
+    return fuelTypeApi.activeFuelTypes.length > 0
+      ? fuelTypeApi.activeFuelTypes.map((ft) => ({
+          value: getFuelCode(ft.name) || ft.name,
+          label: getFuelLabel(ft.name),
+        }))
+      : [
+          { value: "PMS", label: "Super Petrol" },
+          { value: "AGO", label: "Diesel" },
+        ];
+  }, [fuelTypeApi.activeFuelTypes]);
+
+  // Default to the FIRST active fuel type instead of the hardcoded "PMS"
+  // (which made no sense for a diesel-only or kerosene station).
+  const defaultFuelType = fuelOptions[0]?.value || "PMS";
 
   const [formData, setFormData] = useState<Partial<OffloadingRecord>>({
     date: new Date().toISOString().split("T")[0],
     time: new Date().toTimeString().slice(0, 5),
     truckReg: "",
     driverName: "",
-    fuelType: "PMS",
+    fuelType: defaultFuelType,
     quantity: 0,
     rate: 0,
     totalAmount: 0,
@@ -49,6 +83,31 @@ export default function FuelOffloading() {
     invoiceNo: "",
     remarks: "",
   });
+
+  // Load saved supplier names from the cloud (Supplier Management module) so
+  // the supplier field offers an autocomplete instead of forcing the user to
+  // retype the same supplier name every offload (cross-device: works from any
+  // browser because it reads from cloud, not localStorage).
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const data = await cloudStorageService.get<unknown[]>(
+        "suppliers_data",
+        currentStation?.id,
+      );
+      if (cancelled) return;
+      if (Array.isArray(data)) {
+        const names = data
+          .map((s: any) => s?.name)
+          .filter((n: any) => typeof n === "string" && n.trim())
+          .sort((a: string, b: string) => a.localeCompare(b));
+        setSuppliers(Array.from(new Set(names)) as string[]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentStation?.id]);
 
   const generateId = () => {
     return "OFF" + Date.now().toString().slice(-8);
@@ -141,7 +200,7 @@ export default function FuelOffloading() {
       time: new Date().toTimeString().slice(0, 5),
       truckReg: "",
       driverName: "",
-      fuelType: "PMS",
+      fuelType: defaultFuelType,
       quantity: 0,
       rate: 0,
       totalAmount: 0,
@@ -151,29 +210,49 @@ export default function FuelOffloading() {
     });
   };
 
-  // Calculate totals
-  const totals = {
-    totalQuantity: state.offloadingRecords.reduce(
-      (sum, record) => sum + record.quantity,
-      0,
-    ),
-    totalAmount: state.offloadingRecords.reduce(
-      (sum, record) => sum + record.totalAmount,
-      0,
-    ),
-    pmsQuantity: state.offloadingRecords
-      .filter((r) => r.fuelType === "PMS")
-      .reduce((sum, record) => sum + record.quantity, 0),
-    agoQuantity: state.offloadingRecords
-      .filter((r) => r.fuelType === "AGO")
-      .reduce((sum, record) => sum + record.quantity, 0),
-    pmsAmount: state.offloadingRecords
-      .filter((r) => r.fuelType === "PMS")
-      .reduce((sum, record) => sum + record.totalAmount, 0),
-    agoAmount: state.offloadingRecords
-      .filter((r) => r.fuelType === "AGO")
-      .reduce((sum, record) => sum + record.totalAmount, 0),
-  };
+  // Calculate totals. Previously ONLY PMS and AGO were counted (hardcoded);
+  // any other fuel type (kerosene, LPG, V-Power, CNG…) was silently excluded
+  // from the summary cards AND the exports. Now we compute a per-fuel-type
+  // breakdown dynamically so EVERY offloaded fuel is represented.
+  const totals = useMemo(() => {
+    const records = state.offloadingRecords;
+    const byFuel: Record<string, { quantity: number; amount: number }> = {};
+    let totalQuantity = 0;
+    let totalAmount = 0;
+    for (const r of records) {
+      const ft = r.fuelType || "UNKNOWN";
+      if (!byFuel[ft]) byFuel[ft] = { quantity: 0, amount: 0 };
+      byFuel[ft].quantity += r.quantity || 0;
+      byFuel[ft].amount += r.totalAmount || 0;
+      totalQuantity += r.quantity || 0;
+      totalAmount += r.totalAmount || 0;
+    }
+    return { totalQuantity, totalAmount, byFuel };
+  }, [state.offloadingRecords]);
+
+  // Apply search + filters (was missing entirely).
+  const filteredRecords = useMemo(() => {
+    return state.offloadingRecords
+      .filter((r) => {
+        if (!search) return true;
+        const q = search.toLowerCase();
+        return (
+          r.truckReg?.toLowerCase().includes(q) ||
+          r.driverName?.toLowerCase().includes(q) ||
+          r.supplier?.toLowerCase().includes(q) ||
+          r.invoiceNo?.toLowerCase().includes(q) ||
+          r.fuelType?.toLowerCase().includes(q)
+        );
+      })
+      .filter((r) => !fuelFilter || r.fuelType === fuelFilter)
+      .filter((r) => !dateFrom || r.date >= dateFrom)
+      .filter((r) => !dateTo || r.date <= dateTo)
+      .sort(
+        (a, b) =>
+          new Date(b.date + " " + b.time).getTime() -
+          new Date(a.date + " " + a.time).getTime(),
+      );
+  }, [state.offloadingRecords, search, fuelFilter, dateFrom, dateTo]);
 
   // Export functions
   const exportToPDF = () => {
@@ -231,7 +310,7 @@ export default function FuelOffloading() {
 
     const finalY = (doc as any).lastAutoTable.finalY + 15;
 
-    // Add totals
+    // Add totals — dynamic per-fuel-type breakdown (was hardcoded PMS/AGO only).
     doc.setFont("helvetica", "bold");
     doc.text(
       `Total Quantity: ${formatNumber(totals.totalQuantity)} L`,
@@ -243,16 +322,15 @@ export default function FuelOffloading() {
       14,
       finalY + 8,
     );
-    doc.text(
-      `PMS: ${formatNumber(totals.pmsQuantity)} L (${state.companyData.currency} ${formatNumber(totals.pmsAmount)})`,
-      14,
-      finalY + 16,
-    );
-    doc.text(
-      `AGO: ${formatNumber(totals.agoQuantity)} L (${state.companyData.currency} ${formatNumber(totals.agoAmount)})`,
-      14,
-      finalY + 24,
-    );
+    let lineOffset = 16;
+    Object.entries(totals.byFuel).forEach(([ft, v]) => {
+      doc.text(
+        `${getFuelLabel(ft)} (${ft}): ${formatNumber(v.quantity)} L (${state.companyData.currency} ${formatNumber(v.amount)})`,
+        14,
+        finalY + lineOffset,
+      );
+      lineOffset += 8;
+    });
 
     doc.save("Fuel_Offloading_Report.pdf");
   };
@@ -295,12 +373,9 @@ export default function FuelOffloading() {
       [
         `Total Amount: ${state.companyData.currency} ${formatNumber(totals.totalAmount)}`,
       ],
-      [
-        `PMS: ${formatNumber(totals.pmsQuantity)} L (${state.companyData.currency} ${formatNumber(totals.pmsAmount)})`,
-      ],
-      [
-        `AGO: ${formatNumber(totals.agoQuantity)} L (${state.companyData.currency} ${formatNumber(totals.agoAmount)})`,
-      ],
+      ...Object.entries(totals.byFuel).map(([ft, v]) => [
+        `${getFuelLabel(ft)} (${ft}): ${formatNumber(v.quantity)} L (${state.companyData.currency} ${formatNumber(v.amount)})`,
+      ]),
     ];
 
     const ws = XLSX.utils.aoa_to_sheet(ws_data);
@@ -324,11 +399,20 @@ export default function FuelOffloading() {
     txt += `\nTOTALS:\n`;
     txt += `Total Quantity: ${formatNumber(totals.totalQuantity)} L\n`;
     txt += `Total Amount: ${state.companyData.currency} ${formatNumber(totals.totalAmount)}\n`;
-    txt += `PMS: ${formatNumber(totals.pmsQuantity)} L (${state.companyData.currency} ${formatNumber(totals.pmsAmount)})\n`;
-    txt += `AGO: ${formatNumber(totals.agoQuantity)} L (${state.companyData.currency} ${formatNumber(totals.agoAmount)})`;
+    Object.entries(totals.byFuel).forEach(([ft, v]) => {
+      txt += `${getFuelLabel(ft)} (${ft}): ${formatNumber(v.quantity)} L (${state.companyData.currency} ${formatNumber(v.amount)})\n`;
+    });
 
     const blob = new Blob([txt], { type: "text/plain" });
     saveAs(blob, "Fuel_Offloading_Report.txt");
+  };
+
+  // Build a compact fuel-breakdown summary string (used by WhatsApp + email).
+  const fuelBreakdownSummary = () => {
+    const parts = Object.entries(totals.byFuel).map(
+      ([ft, v]) => `${getFuelLabel(ft)}: ${formatNumber(v.quantity)} L`,
+    );
+    return parts.length > 0 ? `\n${parts.join("\n")}` : "";
   };
 
   const exportHandlers = {
@@ -336,13 +420,13 @@ export default function FuelOffloading() {
     excel: exportToExcel,
     txt: exportToTXT,
     whatsapp: () => {
-      const msg = `*${state.companyData.name}*\n\n*Fuel Offloading Summary*\n\nTotal Quantity: ${formatNumber(totals.totalQuantity)} L\nTotal Amount: ${state.companyData.currency} ${formatNumber(totals.totalAmount)}\n\nPMS: ${formatNumber(totals.pmsQuantity)} L\nAGO: ${formatNumber(totals.agoQuantity)} L\n\nRecords: ${state.offloadingRecords.length}`;
+      const msg = `*${state.companyData.name}*\n\n*Fuel Offloading Summary*\n\nTotal Quantity: ${formatNumber(totals.totalQuantity)} L\nTotal Amount: ${state.companyData.currency} ${formatNumber(totals.totalAmount)}${fuelBreakdownSummary()}\n\nRecords: ${state.offloadingRecords.length}`;
       const url = `https://wa.me/?text=${encodeURIComponent(msg)}`;
       window.open(url, "_blank");
     },
     email: () => {
       const subject = "Fuel Offloading Report";
-      const body = `${state.companyData.name}\n\nFuel Offloading Summary\n\nTotal Quantity: ${formatNumber(totals.totalQuantity)} L\nTotal Amount: ${state.companyData.currency} ${formatNumber(totals.totalAmount)}\n\nPMS: ${formatNumber(totals.pmsQuantity)} L\nAGO: ${formatNumber(totals.agoQuantity)} L\n\nRecords: ${state.offloadingRecords.length}`;
+      const body = `${state.companyData.name}\n\nFuel Offloading Summary\n\nTotal Quantity: ${formatNumber(totals.totalQuantity)} L\nTotal Amount: ${state.companyData.currency} ${formatNumber(totals.totalAmount)}${fuelBreakdownSummary()}\n\nRecords: ${state.offloadingRecords.length}`;
       window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
     },
   };
@@ -368,8 +452,10 @@ export default function FuelOffloading() {
           </div>
         </div>
 
-        {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        {/* Summary Cards — Total Quantity, Total Value, then ONE card per fuel
+            type that has been offloaded (was hardcoded to ONLY PMS + AGO, so
+            kerosene/LPG/V-Power/CNG offloads were invisible in the summary). */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-700">
             <div className="flex items-center gap-2 mb-2">
               <Fuel size={20} className="text-blue-600" />
@@ -394,40 +480,106 @@ export default function FuelOffloading() {
             </div>
           </div>
 
-          <div className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-lg border border-yellow-200 dark:border-yellow-700">
-            <div className="flex items-center gap-2 mb-2">
-              <Fuel size={20} className="text-indigo-500" />
-              <span className="text-sm font-medium text-yellow-700 dark:text-yellow-300">
-                PMS
-              </span>
+          {Object.entries(totals.byFuel).map(([ft, v]) => (
+            <div
+              key={ft}
+              className="bg-amber-50 dark:bg-amber-900/20 p-4 rounded-lg border border-amber-200 dark:border-amber-700"
+            >
+              <div className="flex items-center gap-2 mb-2">
+                <Fuel size={20} className="text-amber-600" />
+                <span className="text-sm font-medium text-amber-700 dark:text-amber-300">
+                  {getFuelLabel(ft)} ({ft})
+                </span>
+              </div>
+              <div className="text-lg font-bold text-amber-600">
+                {formatNumber(v.quantity)} L
+              </div>
+              <div className="text-sm text-amber-600">
+                {state.companyData.currency} {formatNumber(v.amount)}
+              </div>
             </div>
-            <div className="text-lg font-bold text-yellow-600">
-              {formatNumber(totals.pmsQuantity)} L
-            </div>
-            <div className="text-sm text-yellow-600">
-              {state.companyData.currency} {formatNumber(totals.pmsAmount)}
-            </div>
-          </div>
+          ))}
+        </div>
 
-          <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg border border-purple-200 dark:border-purple-700">
-            <div className="flex items-center gap-2 mb-2">
-              <Fuel size={20} className="text-indigo-500" />
-              <span className="text-sm font-medium text-purple-700 dark:text-purple-300">
-                AGO
-              </span>
-            </div>
-            <div className="text-lg font-bold text-purple-600">
-              {formatNumber(totals.agoQuantity)} L
-            </div>
-            <div className="text-sm text-purple-600">
-              {state.companyData.currency} {formatNumber(totals.agoAmount)}
-            </div>
+        {/* Cross-tab links — connect offloading to Delivery Tracker + Supplier
+            Management (same domain: fuel delivery). */}
+        <div className="flex flex-wrap gap-2 mb-4">
+          <button
+            onClick={() => switchToTab("delivery")}
+            className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/50 border border-blue-200 dark:border-blue-700"
+          >
+            <ArrowRight size={12} />
+            Delivery Tracker
+          </button>
+          <button
+            onClick={() => switchToTab("suppliers")}
+            className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/50 border border-purple-200 dark:border-purple-700"
+          >
+            <ArrowRight size={12} />
+            Suppliers
+          </button>
+        </div>
+
+        {/* Search + filter bar (was missing — no way to find a record in a
+            long list by date/truck/supplier/fuel type). */}
+        <div className="flex flex-col md:flex-row gap-3 mb-4">
+          <div className="relative flex-1">
+            <Search
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+              size={16}
+            />
+            <input
+              type="text"
+              placeholder="Search truck, driver, supplier, invoice, fuel…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-9 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm"
+            />
           </div>
+          <select
+            value={fuelFilter}
+            onChange={(e) => setFuelFilter(e.target.value)}
+            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm"
+          >
+            <option value="">All Fuels</option>
+            {fuelOptions.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label} ({opt.value})
+              </option>
+            ))}
+          </select>
+          <input
+            type="date"
+            value={dateFrom}
+            onChange={(e) => setDateFrom(e.target.value)}
+            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm"
+            title="From date"
+          />
+          <input
+            type="date"
+            value={dateTo}
+            onChange={(e) => setDateTo(e.target.value)}
+            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm"
+            title="To date"
+          />
+          {(search || fuelFilter || dateFrom || dateTo) && (
+            <button
+              onClick={() => {
+                setSearch("");
+                setFuelFilter("");
+                setDateFrom("");
+                setDateTo("");
+              }}
+              className="px-3 py-2 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white border border-gray-300 dark:border-gray-600 rounded-lg"
+            >
+              Clear
+            </button>
+          )}
         </div>
 
         {/* Records Table */}
-        <div className="table-container">
-          <table>
+        <div className="table-container overflow-x-auto">
+          <table className="w-full">
             <thead>
               <tr>
                 <th>Date/Time</th>
@@ -455,70 +607,76 @@ export default function FuelOffloading() {
                     </p>
                   </td>
                 </tr>
+              ) : filteredRecords.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={9}
+                    className="text-center py-8 text-gray-500 dark:text-gray-400"
+                  >
+                    <Search size={48} className="mx-auto mb-2 opacity-30" />
+                    <p>No records match your filters</p>
+                  </td>
+                </tr>
               ) : (
-                state.offloadingRecords
-                  .sort(
-                    (a, b) =>
-                      new Date(b.date + " " + b.time).getTime() -
-                      new Date(a.date + " " + a.time).getTime(),
-                  )
-                  .map((record) => (
-                    <tr key={record.id}>
-                      <td>
-                        <div className="flex items-center gap-1">
-                          <Calendar size={14} className="text-gray-400" />
-                          <div>
-                            <div className="font-medium">{record.date}</div>
-                            <div className="text-sm text-gray-500">
-                              {record.time}
-                            </div>
+                filteredRecords.map((record) => (
+                  <tr key={record.id}>
+                    <td>
+                      <div className="flex items-center gap-1">
+                        <Calendar size={14} className="text-gray-400" />
+                        <div>
+                          <div className="font-medium">{record.date}</div>
+                          <div className="text-sm text-gray-500">
+                            {record.time}
                           </div>
                         </div>
-                      </td>
-                      <td className="font-mono font-medium">
-                        {record.truckReg}
-                      </td>
-                      <td>{record.driverName}</td>
-                      <td>
-                        <span
-                          className={`px-2 py-1 rounded text-xs font-medium ${
-                            record.fuelType === "PMS"
-                              ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300"
-                              : "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300"
-                          }`}
+                      </div>
+                    </td>
+                    <td className="font-mono font-medium">{record.truckReg}</td>
+                    <td>{record.driverName}</td>
+                    <td>
+                      <span
+                        className={`px-2 py-1 rounded text-xs font-medium ${
+                          record.fuelType === "PMS"
+                            ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300"
+                            : record.fuelType === "AGO"
+                              ? "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300"
+                              : "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
+                        }`}
+                      >
+                        {record.fuelType}
+                      </span>
+                    </td>
+                    <td className="font-mono">
+                      {formatNumber(record.quantity)}
+                    </td>
+                    <td className="font-mono">
+                      {state.companyData.currency} {formatNumber(record.rate)}
+                    </td>
+                    <td className="font-mono font-medium">
+                      {state.companyData.currency}{" "}
+                      {formatNumber(record.totalAmount)}
+                    </td>
+                    <td>{record.supplier}</td>
+                    <td>
+                      <div className="flex gap-1">
+                        <button
+                          onClick={() => editRecord(record)}
+                          className="btn btn-outline p-1"
+                          title="Edit"
                         >
-                          {record.fuelType}
-                        </span>
-                      </td>
-                      <td className="font-mono">
-                        {formatNumber(record.quantity)}
-                      </td>
-                      <td className="font-mono">
-                        {state.companyData.currency} {formatNumber(record.rate)}
-                      </td>
-                      <td className="font-mono font-medium">
-                        {state.companyData.currency}{" "}
-                        {formatNumber(record.totalAmount)}
-                      </td>
-                      <td>{record.supplier}</td>
-                      <td>
-                        <div className="flex gap-1">
-                          <button
-                            onClick={() => editRecord(record)}
-                            className="btn btn-outline p-1"
-                            title="Edit"
-                          ></button>
-                          <button
-                            onClick={() => deleteRecord(record.id)}
-                            className="btn btn-outline p-1 text-red-600"
-                            title="Delete"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
+                          <Edit size={14} />
+                        </button>
+                        <button
+                          onClick={() => deleteRecord(record.id)}
+                          className="btn btn-outline p-1 text-red-600"
+                          title="Delete"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
               )}
             </tbody>
           </table>
@@ -599,16 +757,7 @@ export default function FuelOffloading() {
                   }
                   required
                 >
-                  {(fuelTypeApi.activeFuelTypes.length > 0
-                    ? fuelTypeApi.activeFuelTypes.map((ft) => ({
-                        value: getFuelCode(ft.name) || ft.name,
-                        label: getFuelLabel(ft.name),
-                      }))
-                    : [
-                        { value: "PMS", label: "Super Petrol" },
-                        { value: "AGO", label: "Diesel" },
-                      ]
-                  ).map((opt) => (
+                  {fuelOptions.map((opt) => (
                     <option key={opt.value} value={opt.value}>
                       {opt.value} ({opt.label})
                     </option>
@@ -678,6 +827,7 @@ export default function FuelOffloading() {
                 <label>Supplier *</label>
                 <input
                   type="text"
+                  list="offloading-suppliers"
                   value={formData.supplier}
                   onChange={(e) =>
                     handleInputChange("supplier", e.target.value)
@@ -685,6 +835,16 @@ export default function FuelOffloading() {
                   placeholder="Supplier company name"
                   required
                 />
+                {/* Autocomplete from cloud-saved suppliers (Supplier Management).
+                    A native datalist keeps this simple + accessible; the user
+                    can still type any free-text name. */}
+                {suppliers.length > 0 && (
+                  <datalist id="offloading-suppliers">
+                    {suppliers.map((s) => (
+                      <option key={s} value={s} />
+                    ))}
+                  </datalist>
+                )}
               </div>
 
               <div className="form-group">
