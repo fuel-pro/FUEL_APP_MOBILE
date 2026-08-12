@@ -1595,3 +1595,53 @@ PointOfSale emits sale:completed. PriceBoard emits price:changed. ExpenseTracker
 
 ### Deploy 2026-08-11
 GitHub: pushed (afadee0). Cloudflare: LIVE 841189f4.fuel-app-mobile.pages.dev. Vercel: BLOCKED (quota resets 2026-08-12 19:44 UTC).
+
+## Founder Console infinite render loop breaking navigation (FIXED 2026-08-12, commit ae5f31f)
+
+**Symptom**: The Founder Access Global Console (`/#/founder`) was stuck on
+the Overview section. Clicking any sidebar nav item (Users, Stations,
+Secrets, etc.) re-rendered but `activeSection` never changed — the header
+stayed "Super Admin | Overview". The Audit Log badge showed 1000 (all
+"Session Resumed" entries).
+
+**Root cause — infinite render loop**:
+- `useFounderBackend.logAudit` was a `useCallback` with deps
+  `[logMutation, isStatic]`. The tRPC `logMutation` RESULT OBJECT identity
+  changes on every mutation state transition (idle→pending→success), so
+  `logAudit` was recreated every render.
+- The "Password check on mount" effect in `FounderAccess.tsx` listed
+  `logAudit` in its deps. So it re-fired on every render. Each fire called
+  `logAudit("Session Resumed", ...)` → `logMutation.mutate()` → mutation
+  state transition → `logAudit` recreated → effect deps changed → re-fire →
+  loop.
+- The loop spammed the audit log (1000 "Session Resumed") and kept the
+  component re-rendering continuously, so `setActiveSection(id)` from nav
+  clicks never produced a STABLE render — the section change was lost in the
+  render storm.
+
+**Fix** (2 parts):
+- `useFounderBackend.ts`: depend on the stable `mutate` fn (destructured from
+  `logMutation`) instead of the whole mutation result object, so `logAudit`
+  is referentially stable across renders.
+- `FounderAccess.tsx`: the mount effect now runs ONCE (`[]` deps) and reads
+  the latest `logAudit` via a `logAuditRef` (assigned every render), so it
+  no longer re-fires on mutation state changes.
+
+**Also noted**: the app uses `HashRouter` (App.tsx imports
+`HashRouter as Router`). The founder console is at `/#/founder`, NOT
+`/founder`. Navigating to `/founder` (no hash) matches the catch-all → `/` →
+MainAppLoader → AuthLogin. This is correct router behavior, not a bug —
+just easy to miss when testing (it was the first red herring).
+
+**Verified live** (Cloudflare preview `8129b134.fuel-app-mobile.pages.dev`):
+logged in as founder (username `FOUNDER` → resolves to
+`leonibuyanawose@gmail.com` via `profiles.username`), Audit Log shows 1
+entry ("Login Successful"), nav switches Overview → Users (22-user table) →
+Secrets (3 secrets) correctly. `npx tsc --noEmit` clean.
+
+**Founder login details**: `loginFounder(username, password)` resolves
+username → email via `profiles.username` (case-SENSITIVE `text` column, so
+the username must match exactly — `FOUNDER` ≠ `founder`). Then
+`signInWithPassword` + role check in the `users` table (NOT `profiles`).
+`leonibuyanawose@gmail.com`: `users.role='founder'`,
+`profiles.username='FOUNDER'`, password `FuelPro@2026!`.
