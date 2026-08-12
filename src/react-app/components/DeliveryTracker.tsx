@@ -513,7 +513,9 @@ export default function DeliveryTracker() {
   };
 
   const exportHandlers = {
-    pdf: () => exportDeliveryPDF(state),
+    pdf: async () => {
+      await exportDeliveryPDF(state);
+    },
     excel: () => exportDeliveryExcel(state),
     txt: () => exportDeliveryTXT(state),
     whatsapp: () => {

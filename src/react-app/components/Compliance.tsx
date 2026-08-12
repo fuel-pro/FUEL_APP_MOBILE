@@ -25,8 +25,12 @@ import {
   type ComplianceConfig,
 } from "@/react-app/config/compliance";
 import SearchableCountryDropdown from "@/react-app/components/SearchableCountryDropdown";
+import { useFuel } from "@/react-app/context/FuelContext";
 
 export default function Compliance() {
+  const { state } = useFuel();
+  const companyLogo = state?.companyData?.logo;
+  const companyName = state?.companyData?.name;
   const [selectedCountryCode, setSelectedCountryCode] = useState(() => {
     try {
       const saved = localStorage.getItem("fuelpro_location_country");
@@ -84,6 +88,19 @@ export default function Compliance() {
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
+      {/* Print-only header with logo */}
+      <div className="hidden print:block text-center mb-4">
+        {companyLogo && (
+          <img
+            src={companyLogo}
+            alt="Logo"
+            className="mx-auto mb-2 max-h-20 max-w-[150px] object-contain"
+            crossOrigin="anonymous"
+          />
+        )}
+        {companyName && <h1 className="text-xl font-bold">{companyName}</h1>}
+      </div>
+
       {/* Header */}
       <div className="flex items-center gap-3 flex-wrap">
         <div className="p-2.5 bg-blue-100 dark:bg-blue-900/30 rounded-xl">

@@ -24,6 +24,7 @@ import {
 } from "@/react-app/lib/mpesa-integration-service";
 import { getVATRate } from "@/react-app/config/pricing";
 import { formatNumber } from "@/react-app/utils/formatUtils";
+import { loadLogoAsDataURL } from "@/react-app/utils/exportUtils";
 import ExportDropdown from "@/react-app/components/ExportDropdown";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -521,18 +522,21 @@ export default function ReportsCenter() {
   };
 
   // Export functions
-  const exportToPDF = () => {
+  const exportToPDF = async () => {
     const doc = new jsPDF();
     const reportTitle = getReportTitle();
     const pageWidth = doc.internal.pageSize.getWidth();
     const currency = getCurrencySymbol(state.companyData.currency);
 
+    // Pre-load the logo as a base64 data URL (handles Supabase Storage URLs).
+    const logoDataUrl = await loadLogoAsDataURL(state.companyData?.logo);
+
     // Professional Header with KRA Compliance
     const addProfessionalHeader = (y: number) => {
       // Company Logo
-      if (state.companyData.logo) {
+      if (logoDataUrl) {
         try {
-          doc.addImage(state.companyData.logo, "PNG", 15, 10, 35, 15);
+          doc.addImage(logoDataUrl, "PNG", 15, 10, 35, 15);
         } catch (e) {
           /* Skip if logo fails */
         }

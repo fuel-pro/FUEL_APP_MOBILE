@@ -5,18 +5,92 @@ import { saveAs } from "file-saver";
 import { formatNumber } from "./formatUtils";
 import { getCurrencySymbol } from "@/react-app/lib/currency";
 
-export function exportDeliveryPDF(state: any) {
+/**
+ * Load a logo image (data URL or external URL) as a base64 data URL so it can
+ * be embedded into a jsPDF document via `doc.addImage`. External URLs are
+ * fetched and drawn to an off-screen canvas to bypass CORS/tainting issues.
+ * Returns null if the image cannot be loaded (the caller simply omits it).
+ */
+export async function loadLogoAsDataURL(
+  logoSrc: string | undefined | null,
+): Promise<string | null> {
+  if (!logoSrc || typeof logoSrc !== "string" || logoSrc.trim() === "") {
+    return null;
+  }
+  // Already a data URL — use directly.
+  if (logoSrc.startsWith("data:")) {
+    return logoSrc;
+  }
+  try {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    const loaded = await new Promise<HTMLImageElement | null>((resolve) => {
+      img.onload = () => resolve(img);
+      img.onerror = () => resolve(null);
+      img.src = logoSrc;
+    });
+    if (!loaded) return null;
+    const canvas = document.createElement("canvas");
+    canvas.width = loaded.naturalWidth || loaded.width;
+    canvas.height = loaded.naturalHeight || loaded.height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+    ctx.drawImage(loaded, 0, 0);
+    try {
+      return canvas.toDataURL("image/png");
+    } catch {
+      // Canvas tainted by cross-origin image — fall back to fetching as blob.
+      try {
+        const resp = await fetch(logoSrc, { mode: "cors" });
+        const blob = await resp.blob();
+        return await new Promise<string | null>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () =>
+            resolve(typeof reader.result === "string" ? reader.result : null);
+          reader.onerror = () => resolve(null);
+          reader.readAsDataURL(blob);
+        });
+      } catch {
+        return null;
+      }
+    }
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Add the company logo to a jsPDF document at the given position. Returns the
+ * new Y coordinate after the logo (so subsequent text doesn't overlap).
+ * If the logo cannot be loaded, returns the original Y (no logo drawn).
+ */
+export async function addLogoToPDF(
+  doc: jsPDF,
+  logoSrc: string | undefined | null,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+): Promise<number> {
+  const dataUrl = await loadLogoAsDataURL(logoSrc);
+  if (!dataUrl) return y;
+  try {
+    doc.addImage(dataUrl, "PNG", x, y, w, h);
+    return y + h + 5;
+  } catch {
+    return y;
+  }
+}
+
+export async function exportDeliveryPDF(state: any) {
   const doc = new jsPDF();
 
   // WORLDWIDE: derive the currency symbol from the company/station currency.
   const currencySymbol = getCurrencySymbol(state.companyData?.currency);
 
   let y = 20;
-  if (state.companyData.logo) {
-    const img = new Image();
-    img.src = state.companyData.logo;
-    doc.addImage(img, "PNG", 80, 10, 50, 20);
-    y = 40;
+  if (state.companyData?.logo) {
+    y = await addLogoToPDF(doc, state.companyData.logo, 80, 10, 50, 20);
   }
 
   // Company name in gold with bold styling
@@ -191,7 +265,7 @@ export function exportDeliveryTXT(state: any) {
   saveAs(blob, `Delivery_Report_${state.deliveredTo || "Client"}.txt`);
 }
 
-export function exportDebtPDF(state: any) {
+export async function exportDebtPDF(state: any) {
   const data = state.debtData;
   const doc = new jsPDF();
 
@@ -199,11 +273,8 @@ export function exportDebtPDF(state: any) {
   const currencySymbol = getCurrencySymbol(state.companyData?.currency);
 
   let y = 20;
-  if (state.companyData.logo) {
-    const img = new Image();
-    img.src = state.companyData.logo;
-    doc.addImage(img, "PNG", 80, 10, 50, 20);
-    y = 40;
+  if (state.companyData?.logo) {
+    y = await addLogoToPDF(doc, state.companyData.logo, 80, 10, 50, 20);
   }
 
   doc.setFontSize(16);
@@ -305,18 +376,15 @@ export function exportDebtTXT(state: any) {
   saveAs(blob, `Fuel_Debt_Reminder_${data.name}.txt`);
 }
 
-export function exportSalesPDF(state: any) {
+export async function exportSalesPDF(state: any) {
   const doc = new jsPDF();
 
   // WORLDWIDE: derive the currency symbol from the company/station currency.
   const currencySymbol = getCurrencySymbol(state.companyData?.currency);
 
   let y = 20;
-  if (state.companyData.logo) {
-    const img = new Image();
-    img.src = state.companyData.logo;
-    doc.addImage(img, "PNG", 80, 10, 50, 20);
-    y = 40;
+  if (state.companyData?.logo) {
+    y = await addLogoToPDF(doc, state.companyData.logo, 80, 10, 50, 20);
   }
 
   doc.setFontSize(16);
@@ -584,7 +652,7 @@ export function exportSalesTXT(state: any) {
 }
 
 // Enhanced Invoice Export Functions - Matching CAR HIRE INVOICE Format Exactly
-export function exportInvoicePDF(invoiceData: any) {
+export async function exportInvoicePDF(invoiceData: any) {
   const doc = new jsPDF();
 
   let y = 20;
@@ -595,29 +663,19 @@ export function exportInvoicePDF(invoiceData: any) {
     invoiceData.companyData?.currency || invoiceData.currency,
   );
 
-  // Company logo at the very top (max 150px wide) - Enhanced loading
+  // Company logo at the top-left (max 50x30). Logos are stored as Supabase
+  // Storage public URLs — loadLogoAsDataURL fetches + converts to base64 so
+  // jsPDF can embed them. Data URLs are used directly.
   if (invoiceData.companyData?.logo) {
-    try {
-      // Create a new image and wait for it to load before adding to PDF
-      const img = new Image();
-      img.crossOrigin = "anonymous";
-
-      // Convert logo to base64 if it's a URL, or use directly if already base64
-      const logoSrc = invoiceData.companyData.logo;
-
-      // Add image synchronously if it's already a data URL
-      if (logoSrc.startsWith("data:")) {
-        doc.addImage(logoSrc, "PNG", 15, 10, 50, 30);
-        y = 50;
-      } else {
-        // For external URLs, we'll skip for now to avoid CORS issues
-        console.warn(
-          "External logo URLs not supported in PDF export. Please upload logo as file.",
-        );
-      }
-    } catch (error) {
-      console.warn("Could not load company logo for PDF:", error);
-    }
+    const logoY = await addLogoToPDF(
+      doc,
+      invoiceData.companyData.logo,
+      15,
+      10,
+      50,
+      30,
+    );
+    if (logoY > 10) y = logoY;
   }
 
   // INVOICE title (after logo, before company info)
@@ -885,6 +943,9 @@ export function exportInvoiceTXT(invoiceData: any) {
   // Company info (only if provided)
   if (invoiceData.companyData?.name) {
     txt += `${invoiceData.companyData.name}\n`;
+  }
+  if (invoiceData.companyData?.logo) {
+    txt += `[Company Logo: ${invoiceData.companyData.logo}]\n`;
   }
 
   // P.O. Box and contacts on same line

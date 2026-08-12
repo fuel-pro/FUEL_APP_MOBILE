@@ -563,7 +563,9 @@ export default function SalesTracking() {
   };
 
   const exportHandlers = {
-    pdf: () => exportSalesPDF({ ...state, summary }),
+    pdf: async () => {
+      await exportSalesPDF({ ...state, summary });
+    },
     excel: () => exportSalesExcel({ ...state, summary }),
     txt: () => exportSalesTXT({ ...state, summary }),
     whatsapp: () => {

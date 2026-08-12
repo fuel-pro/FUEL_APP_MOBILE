@@ -1582,6 +1582,14 @@ export default function PointOfSale() {
             >
               {/* Receipt Header */}
               <div className="receipt-header text-center mb-4 pb-4 border-b border-dashed border-gray-400">
+                {state.companyData?.logo && (
+                  <img
+                    src={state.companyData.logo}
+                    alt="Logo"
+                    className="mx-auto mb-2 max-h-16 max-w-[120px] object-contain"
+                    crossOrigin="anonymous"
+                  />
+                )}
                 <h2 className="text-lg font-bold">{etrConfig.businessName}</h2>
                 {etrConfig.address && (
                   <p className="text-xs">{etrConfig.address}</p>
