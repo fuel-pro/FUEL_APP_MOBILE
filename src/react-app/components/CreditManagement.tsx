@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { useLocation } from "@/react-app/context/LocationContext";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 import { useAuth } from "@/react-app/context/AuthContext";
@@ -8,17 +8,12 @@ import {
   Plus,
   Search,
   AlertTriangle,
-  TrendingUp,
-  User,
-  Clock,
-  CheckCircle2,
-  XCircle,
-  DollarSign,
-  Receipt,
   BellRing,
-  Wallet,
   Smartphone,
   FileText,
+  Trash2,
+  History,
+  CheckCircle2,
 } from "lucide-react";
 import { formatNumber } from "@/react-app/utils/formatUtils";
 import SubTabBar from "@/react-app/components/SubTabBar";
@@ -165,6 +160,10 @@ export default function CreditManagement() {
   const [search, setSearch] = useState("");
   const [showAdd, setShowAdd] = useState(false);
   const [showPay, setShowPay] = useState<string | null>(null);
+  const [showPurchase, setShowPurchase] = useState<string | null>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [historyId, setHistoryId] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
   const [newAcc, setNewAcc] = useState({
     customerName: "",
     phone: "",
@@ -174,6 +173,17 @@ export default function CreditManagement() {
     notes: "",
   });
   const [payForm, setPayForm] = useState({ amount: 0, description: "" });
+  const [purchaseForm, setPurchaseForm] = useState({
+    amount: 0,
+    description: "",
+  });
+
+  const showToast = useCallback((msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 3000);
+  }, []);
+
+  const recorderName = user?.name || user?.email?.split("@")[0] || "System";
 
   // Interlink receiver: Live Transaction Monitor calls
   // navigateToTab("credit", <CreditPrefill>) from a completed payment's
@@ -283,9 +293,12 @@ export default function CreditManagement() {
   });
 
   const addAccount = () => {
-    if (!newAcc.customerName) return;
+    if (!newAcc.customerName.trim()) {
+      showToast("Please enter a customer name");
+      return;
+    }
     const acc: CreditAccount = {
-      id: `ca_${Date.now()}`,
+      id: `ca_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       ...newAcc,
       balanceUsed: 0,
       status: "active",
@@ -296,6 +309,7 @@ export default function CreditManagement() {
     };
     saveAcc([acc, ...accounts]);
     setShowAdd(false);
+    showToast(`Credit account created for ${acc.customerName}`);
     setNewAcc({
       customerName: "",
       phone: "",
@@ -306,16 +320,32 @@ export default function CreditManagement() {
     });
   };
 
+  const deleteAccount = (accountId: string) => {
+    const acc = accounts.find((a) => a.id === accountId);
+    saveAcc(accounts.filter((a) => a.id !== accountId));
+    saveTx(transactions.filter((t) => t.accountId !== accountId));
+    setDeleteId(null);
+    showToast(`Deleted account: ${acc?.customerName || "Unknown"}`);
+  };
+
+  const setStatus = (accountId: string, status: CreditAccount["status"]) => {
+    saveAcc(accounts.map((a) => (a.id === accountId ? { ...a, status } : a)));
+    showToast(`Account status set to ${status}`);
+  };
+
   const addPayment = (accountId: string) => {
-    if (payForm.amount <= 0) return;
+    if (payForm.amount <= 0) {
+      showToast("Please enter a valid payment amount");
+      return;
+    }
     const tx: CreditTransaction = {
-      id: `ctx_${Date.now()}`,
+      id: `ctx_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       accountId,
       type: "payment",
       amount: payForm.amount,
       description: payForm.description || "Payment received",
       date: new Date().toISOString(),
-      recordedBy: "System",
+      recordedBy: recorderName,
     };
     saveTx([tx, ...transactions]);
     saveAcc(
@@ -336,17 +366,22 @@ export default function CreditManagement() {
     );
     setShowPay(null);
     setPayForm({ amount: 0, description: "" });
+    showToast("Payment recorded");
   };
 
-  const addPurchase = (accountId: string, amount: number, desc: string) => {
+  const addPurchase = (accountId: string) => {
+    if (purchaseForm.amount <= 0) {
+      showToast("Please enter a valid purchase amount");
+      return;
+    }
     const tx: CreditTransaction = {
-      id: `ctx_${Date.now()}`,
+      id: `ctx_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       accountId,
       type: "purchase",
-      amount,
-      description: desc,
+      amount: purchaseForm.amount,
+      description: purchaseForm.description || "Fuel purchase",
       date: new Date().toISOString(),
-      recordedBy: "System",
+      recordedBy: recorderName,
     };
     saveTx([tx, ...transactions]);
     saveAcc(
@@ -358,12 +393,15 @@ export default function CreditManagement() {
         return a.id === accountId
           ? {
               ...a,
-              balanceUsed: curBalance + amount,
-              totalPurchases: curPurchases + amount,
+              balanceUsed: curBalance + purchaseForm.amount,
+              totalPurchases: curPurchases + purchaseForm.amount,
             }
           : a;
       }),
     );
+    setShowPurchase(null);
+    setPurchaseForm({ amount: 0, description: "" });
+    showToast("Purchase recorded on credit");
   };
 
   return (
@@ -502,6 +540,14 @@ export default function CreditManagement() {
                   }
                   className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                 />
+                <input
+                  placeholder="Notes (optional)"
+                  value={newAcc.notes}
+                  onChange={(e) =>
+                    setNewAcc({ ...newAcc, notes: e.target.value })
+                  }
+                  className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:col-span-3"
+                />
                 <div className="flex gap-2">
                   <button
                     onClick={addAccount}
@@ -522,6 +568,14 @@ export default function CreditManagement() {
 
           {/* Accounts */}
           <div className="space-y-3">
+            {filtered.length === 0 && (
+              <div className="text-center py-12 text-gray-400">
+                <CreditCard size={32} className="mx-auto mb-2 opacity-50" />
+                <p className="text-sm">
+                  No credit accounts yet. Click "New Account" to create one.
+                </p>
+              </div>
+            )}
             {filtered.map((acc) => {
               const balanceUsed =
                 typeof acc.balanceUsed === "number" ? acc.balanceUsed : 0;
@@ -563,6 +617,11 @@ export default function CreditManagement() {
                       <p className="text-xs text-gray-500">
                         {acc.phone || ""} {acc.vehicleReg || ""}
                       </p>
+                      {acc.notes && (
+                        <p className="text-xs text-gray-400 mt-0.5 italic">
+                          {acc.notes}
+                        </p>
+                      )}
                       <div className="mt-2">
                         <div className="flex justify-between text-xs mb-1">
                           <span className="text-gray-500">
@@ -591,14 +650,21 @@ export default function CreditManagement() {
                       </button>
                       {acc.status === "active" && (
                         <button
-                          onClick={() =>
-                            addPurchase(acc.id, 5000, "Fuel purchase")
-                          }
+                          onClick={() => setShowPurchase(acc.id)}
                           className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[11px] font-medium"
                         >
                           + Purchase
                         </button>
                       )}
+                      <button
+                        onClick={() =>
+                          setHistoryId(historyId === acc.id ? null : acc.id)
+                        }
+                        className="px-3 py-1.5 bg-gray-600 hover:bg-gray-700 text-white rounded-lg text-[11px] font-medium flex items-center gap-1"
+                        title="View transaction history"
+                      >
+                        <History size={12} /> History
+                      </button>
                       {isDue && (
                         <button
                           onClick={() => setActiveView("reminders")}
@@ -640,12 +706,36 @@ export default function CreditManagement() {
                           <FileText size={12} /> Create Invoice
                         </button>
                       )}
+                      <select
+                        value={acc.status}
+                        onChange={(e) =>
+                          setStatus(
+                            acc.id,
+                            e.target.value as CreditAccount["status"],
+                          )
+                        }
+                        className="px-2 py-1 border rounded-lg text-[11px] dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                        title="Change account status"
+                      >
+                        <option value="active">Active</option>
+                        <option value="suspended">Suspended</option>
+                        <option value="blacklisted">Blacklisted</option>
+                      </select>
+                      <button
+                        onClick={() => setDeleteId(acc.id)}
+                        className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-[11px] font-medium flex items-center gap-1"
+                        title="Delete account"
+                      >
+                        <Trash2 size={12} /> Delete
+                      </button>
                     </div>
                   </div>
                   {showPay === acc.id && (
                     <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700 flex gap-2">
                       <input
                         type="number"
+                        min="0"
+                        step="0.01"
                         placeholder="Amount"
                         value={payForm.amount || ""}
                         onChange={(e) =>
@@ -681,11 +771,135 @@ export default function CreditManagement() {
                       </button>
                     </div>
                   )}
+                  {showPurchase === acc.id && (
+                    <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700 flex gap-2">
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        placeholder="Purchase amount"
+                        value={purchaseForm.amount || ""}
+                        onChange={(e) =>
+                          setPurchaseForm({
+                            ...purchaseForm,
+                            amount: parseFloat(e.target.value) || 0,
+                          })
+                        }
+                        className="flex-1 px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                      />
+                      <input
+                        placeholder="Description (e.g. 50L Super Petrol)"
+                        value={purchaseForm.description}
+                        onChange={(e) =>
+                          setPurchaseForm({
+                            ...purchaseForm,
+                            description: e.target.value,
+                          })
+                        }
+                        className="flex-1 px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                      />
+                      <button
+                        onClick={() => addPurchase(acc.id)}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm"
+                      >
+                        Add
+                      </button>
+                      <button
+                        onClick={() => setShowPurchase(null)}
+                        className="px-3 py-2 bg-gray-200 dark:bg-gray-700 rounded-lg text-sm dark:text-white"
+                      >
+                        X
+                      </button>
+                    </div>
+                  )}
+                  {historyId === acc.id && (
+                    <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                      <h4 className="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1">
+                        <History size={12} /> Transaction History
+                      </h4>
+                      {transactions.filter((t) => t.accountId === acc.id)
+                        .length === 0 ? (
+                        <p className="text-xs text-gray-400">
+                          No transactions recorded yet.
+                        </p>
+                      ) : (
+                        <div className="space-y-1 max-h-40 overflow-y-auto">
+                          {transactions
+                            .filter((t) => t.accountId === acc.id)
+                            .map((t) => (
+                              <div
+                                key={t.id}
+                                className="flex items-center justify-between text-xs py-1 px-2 rounded bg-gray-50 dark:bg-gray-700/50"
+                              >
+                                <div className="flex-1">
+                                  <span
+                                    className={`font-medium ${t.type === "payment" ? "text-green-600" : "text-blue-600"}`}
+                                  >
+                                    {t.type === "payment"
+                                      ? "Payment"
+                                      : "Purchase"}
+                                  </span>{" "}
+                                  — {currencySymbol}
+                                  {formatNumber(t.amount)}
+                                  <span className="text-gray-400 ml-2">
+                                    {t.description || ""}
+                                  </span>
+                                </div>
+                                <span className="text-gray-400">
+                                  {new Date(t.date).toLocaleDateString()} by{" "}
+                                  {t.recordedBy || "?"}
+                                </span>
+                              </div>
+                            ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               );
             })}
           </div>
         </>
+      )}
+
+      {/* Delete confirmation modal */}
+      {deleteId && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 max-w-sm w-full shadow-2xl">
+            <div className="flex items-center gap-2 mb-4">
+              <AlertTriangle className="text-red-500" size={20} />
+              <h3 className="text-lg font-semibold dark:text-white">
+                Delete Account?
+              </h3>
+            </div>
+            <p className="text-sm text-gray-500 mb-4">
+              This will permanently delete the credit account and all its
+              transaction history. This cannot be undone.
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setDeleteId(null)}
+                className="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded-lg text-sm dark:text-white"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => deleteAccount(deleteId)}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toast notification */}
+      {toast && (
+        <div className="fixed bottom-6 right-6 bg-gray-900 dark:bg-gray-700 text-white px-4 py-3 rounded-xl shadow-2xl text-sm font-medium z-50 flex items-center gap-2">
+          <CheckCircle2 size={16} className="text-green-400" />
+          {toast}
+        </div>
       )}
     </div>
   );
