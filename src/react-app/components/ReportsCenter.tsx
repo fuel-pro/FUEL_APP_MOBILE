@@ -86,7 +86,8 @@ export default function ReportsCenter() {
         "expenses_data",
         stationId,
       );
-      if (!cancelled && Array.isArray(cached)) setCloudExpenses(cached as any[]);
+      if (!cancelled && Array.isArray(cached))
+        setCloudExpenses(cached as any[]);
       const cloud = await cloudStorageService.get<unknown>(
         "expenses_data",
         stationId,
