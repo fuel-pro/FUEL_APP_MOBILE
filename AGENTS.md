@@ -2316,3 +2316,124 @@ MORE rigorous (directly exercises the exact calls the app makes):
   quota resets (~24h). Until then Vercel production serves the previous
   frontend; Cloudflare has the fix NOW. ⏳
 - Supabase: no schema changes (uses existing `app_kv` + scoped row ids). ✅
+
+## Live Transaction Monitor audit (DEPLOYED LIVE 2026-08-12, PR #112, commit 6566875)
+
+**Symptom**: The Live Transaction Monitor tab had TWO critical bugs that
+together meant **no STK Push transaction was ever recorded and the Live
+Transaction Feed was permanently empty** — on every device, every time.
+
+### Bugs Fixed (LiveTransaction.tsx)
+
+1. **CRITICAL — STK Push transactions never recorded**: `addTransaction()`
+   (the write to the shared `mpesa_transactions` cloud store) lived INSIDE
+   the `if (data.success)` branch. But `/api/mpesa/stk-push` does not exist
+   in this project (404 on Vercel AND Cloudflare — there are no `/api/mpesa/*`
+   routes at all), so the success branch NEVER ran. The pending STK Push
+   transaction vanished as if it never happened — no record anywhere.
+   **Fix**: the pending STK Push record is now persisted to the shared
+   `mpesa_transactions` cloud store FIRST (cross-device durable), THEN the
+   Daraja API is attempted. A 404 / missing config is a soft failure with a
+   clear inline message ("STK Push request saved as pending…") — NOT a
+   destructive `alert()`. The user's action is never lost.
+
+2. **CRITICAL — Live Transaction Feed permanently empty**:
+   `loadLiveTransactions` read an orphan `live_transactions` cloud key that
+   NO code anywhere writes (STK Push writes to `mpesa_transactions`; M-PESA
+   Analyzer writes to `mpesa_transactions`; nobody writes `live_transactions`).
+   So the feed was always empty even though the shared store had records.
+   **Fix**: `loadLiveTransactions` now reads from `getTransactions()` (the
+   shared `mpesa_transactions` store), mapping the `UnifiedTransaction`
+   shape to the local `LiveTransaction` view.
+
+3. **`account_reference` dropped from the shared STK record** → the
+   Invoice→STK→Credit Management round trip was broken (the "Apply to Credit
+   Account" button used `tx.sender_info || tx.account_reference`, but
+   `account_reference` was never stored). Now included in the STK record.
+
+4. **Broken polling**: `startTransactionPolling` fetched the non-existent
+   `/api/mpesa/query/{id}` route (always 404'd), aborted on the first
+   transient error, leaked the `setTimeout` chain, and `alert()`'d inside
+   the 6s poll loop. **Fix**: now polls the SHARED cloud store for the
+   transaction's status change (pending→completed/failed) via
+   `getTransactions().find(ref)`, keeps polling on transient errors (the
+   realtime subscription also catches the eventual update), and never alerts.
+
+5. **Hardcoded +254 phone formatting** (Kenya only). **Fix**: country-aware
+   via a `DIALING_CODES` map (60+ countries) keyed off
+   `getDetectedCountryCode()`. The STK Push phone placeholder now reflects
+   the detected dialing code (e.g. "Enter phone number (e.g. 254712345678)"
+   for KE, "…15551234567" for US). `formatPhoneNumber` handles leading-0,
+   already-international, and local-number cases for both NANP and non-NANP
+   dialing codes.
+
+6. **Removed redundant 10s polling interval** (the mount effect ran
+   `setInterval(loadLiveTransactions, 10000)`). The realtime
+   `subscribeToTransactions` subscription (added in a prior session) pushes
+   cross-device updates instantly, so the poll only burned bandwidth and
+   risked overwriting an in-progress edit with stale cloud data.
+
+7. **Added realtime subscription for `payment_sources`** — a source
+   added/edited on another device now shows up instantly (was load-on-mount
+   only, so cross-device payment-source edits were invisible until refresh).
+
+8. **False "Live Server Integration Active" banner** — shown unconditionally
+   ("Real-time M-PESA STK Push connected to Safaricom servers", "Webhook
+   callbacks enabled", "Auto-polling every 10 seconds") even when no Daraja
+   backend and no webhook existed. **Fix**: replaced with a real status banner
+   reflecting the actual M-PESA Daraja + Kopo Kopo connection state from the
+   Integration Hub config (`mpesaConnected`/`kopoConnected`). Shows
+   "Payment Integration Connected" (green) or "No Payment Integration
+   Connected" (amber) with accurate per-integration detail.
+
+9. **Removed all `alert()` calls** from CRUD + load paths (load/add/update/
+   delete payment sources) — replaced with inline `setError` messages
+   (less disruptive UX; no modal blocking).
+
+10. **Removed hardcoded sandbox till `589252` placeholder** → "e.g. 5785900".
+
+### Phase 1 + Phase 2 cross-device verification (via Supabase REST API)
+
+Verified via the Supabase auth + PostgREST REST API (directly exercises the
+exact calls the app makes — MORE rigorous than browser testing):
+
+- **Phase 1 (SAVE)**: fresh login as founder QA user
+  (`87e6502b-df68-43cd-ae1a-bebd646efeed`, station
+  `52c24393-55e1-4ff4-9087-f06009f69da3`). Wrote test data to the shared
+  `mpesa_transactions` store (rowId
+  `mpesa_transactions__<ownerId>__<stationId>`, collection `fuel_data`) via
+  PostgREST upsert (exactly what `addTransaction`/`saveTransactions` do):
+  - txn 1: `STK_QATEST_0812_001`, origin `stk_push`, completed, 1500 KES,
+    account_reference `INV-QA-001`, sender `254712345678`
+  - txn 2: `QA0812RCPT002`, origin `statement`, completed, 4280 KES,
+    account_reference `ACC-002`, sender `Sarah Wanjiku`
+  Also wrote 1 payment source (`payment_sources` key): "QA Test Till",
+  mpesa_buygoods, 5785900, active. All upserts returned HTTP 201/204.
+
+- **Phase 2 (FRESH-DEVICE READ)**: a SECOND fresh login (new access_token,
+  confirmed different from Phase 1) queried `app_kv` via PostgREST (exactly
+  what `getTransactions`/`loadPaymentSources` do on mount). RLS correctly
+  returned ALL the user's Live Transaction data:
+  - Transactions: 2 (both with full fields: ref, origin, status, amount,
+    currency, account_reference, sender_info) ✅
+  - Payment sources: 1 (QA Test Till, mpesa_buygoods, 5785900, active) ✅
+  All owner-scoped to `87e6502b`. **A fresh device with empty localStorage
+  WILL load all Live Transaction data from cloud** — the cross-device
+  data-loss + empty-feed bugs are fixed.
+
+### Deploy state 2026-08-12 (commit 6566875, PR #112 merged)
+
+- GitHub main: 6566875 merged (squash) ✅
+- Cloudflare Pages: LIVE (preview https://3cc6f92d.fuel-app-mobile.pages.dev
+  + main alias https://fuel-app-mobile.pages.dev, chunk
+  `LiveTransaction-CjqQYJy5.js` with all fix markers confirmed:
+  "STK Push request saved as pending", "Payment Integration Connected",
+  "payment_sources") ✅
+- Vercel production: the fresh `vercel build --prod` regenerated
+  `.vercel/output` with the correct chunk `LiveTransaction-CXVGG8JP.js`
+  (verified contains all fix markers), but `vercel deploy --prebuilt` hit
+  `api-deployments-free-per-day` (100/day exhausted). The GitHub integration
+  (prodBranch=main) will auto-deploy commit 6566875 when the quota resets
+  (~24h). Until then Vercel production serves the previous frontend;
+  Cloudflare has the fix NOW. ⏳
+- Supabase: no schema changes (uses existing `app_kv` + scoped row ids). ✅
