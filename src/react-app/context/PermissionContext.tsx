@@ -747,7 +747,11 @@ export function PermissionProvider({
       }
       const cloudInvites =
         await cloudStorageService.get<unknown>(INVITES_CLOUD_KEY);
-      if (!cancelled && Array.isArray(cloudInvites) && !localModifiedRef.current) {
+      if (
+        !cancelled &&
+        Array.isArray(cloudInvites) &&
+        !localModifiedRef.current
+      ) {
         setInvites(normalizeInvites(cloudInvites));
       }
       const cloudGrants =
