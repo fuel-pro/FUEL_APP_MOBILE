@@ -3167,6 +3167,7 @@ Cross-device sync verified end-to-end; 12 bugs fixed across both files.
 - Supabase: no schema changes (all data uses existing `app_kv` cloud keys
   with `__ownerId` scoped row IDs). Ôťů
 - `npx tsc --noEmit` (0 errors), `npm run build` (112 precache), `eslint`
+
   (0 errors), `prettier --check` (all pass). Ôťů
 
 ## Payroll System tab audit (DEPLOYED LIVE 2026-08-12, PR #123)
@@ -3597,3 +3598,4 @@ Verified via direct chunk fetch that Vercel production
 **Fix** (src/react-app/utils/exportUtils.ts): new loadLogoAsDataURL() + addLogoToPDF() helpers that fetch external URLs and convert to base64 via canvas (with fetch+FileReader fallback for tainted canvases). All 4 PDF exports are now async + await logo loading. Components fixed: ReportsCenter, PayrollSystem, FuelOffloading, PointOfSale (receipt), Compliance (print), Invoice/SalesTracking/DeliveryTracker/DebtReminder (async handlers). Receipt infra: printer-service.ts ReceiptData gains stationPhone, stationEmail, logoUrl; hardcoded +1-555-000-0000 replaced with station phone; silent-print-service.ts generateReceiptHTML includes logo + real phone. Excel: SheetJS community edition does not support image embedding (company name already in header row). TXT: includes logo URL reference line.
 
 **Deploy**: GitHub main commit 73cbc99 (PR #129 merged). Cloudflare Pages LIVE (preview https://8cc4d29d.fuel-app-mobile.pages.dev). Verified in bundles: exportUtils chunk has crossOrigin+toDataURL; hardcoded 1-555-000-0000 completely gone; stationPhone in index chunk. Vercel BLOCKED by api-deployments-free-per-day (100/100; auto-deploys when quota resets ~24h). tsc 0 errors, build 111 precache, prettier all pass.
+
