@@ -151,6 +151,10 @@ export function useFounderBackend() {
       utils.audit.getFounderSession.invalidate();
     },
   });
+  // Stable mutate fn (same rationale as logMutate above) so saveFounderSession
+  // is referentially stable and won't trigger re-fires in any effect that
+  // depends on it.
+  const { mutate: upsertSessionMutate } = upsertSessionMutation;
 
   const founderSession: FounderSessionData = useMemo(() => {
     if (dbFounderSession) {
@@ -191,7 +195,7 @@ export function useFounderBackend() {
     (data: Partial<FounderSessionData>) => {
       // Persist to backend only in non-static mode
       if (!isStatic) {
-        upsertSessionMutation.mutate({
+        upsertSessionMutate({
           twoFactorEnabled: data.twoFactorEnabled,
           twoFactorSecret: data.twoFactorSecret,
           contactEmail: data.contactEmail,
@@ -243,7 +247,7 @@ export function useFounderBackend() {
         }
       }
     },
-    [upsertSessionMutation, isStatic],
+    [upsertSessionMutate, isStatic],
   );
 
   /* ─── Stations (from backend) ─── */
