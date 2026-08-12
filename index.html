@@ -99,11 +99,17 @@
     <div id="root"></div>
     <script type="module" src="/src/react-app/main.tsx"></script>
     <script>
-      // Service Worker registration with automatic update handling.
+      // Service Worker registration with AGGRESSIVE automatic update handling.
       // When a new build is deployed the browser detects the changed sw.js,
       // installs the new SW (which calls self.skipWaiting() via the workbox
       // config), and this script reloads the page so the user immediately
       // sees the fresh build instead of stale cached bundles.
+      //
+      // The previous version only checked for updates on `load`. This version
+      // ALSO checks on every `pageshow` (covers bfcache restores + tab
+      // reactivation), polls every 10 min while the tab is open, AND shows a
+      // dismissible "Update available — reload" banner if a new SW is
+      // downloaded but the user navigates away before the auto-reload fires.
       if ("serviceWorker" in navigator) {
         var refreshing = false;
         navigator.serviceWorker.addEventListener(
@@ -114,26 +120,88 @@
             window.location.reload();
           },
         );
+
+        function checkForUpdate(reg) {
+          reg.update().catch(function () {});
+        }
+
+        function handleUpdateFound(reg) {
+          var newWorker = reg.installing;
+          if (!newWorker) return;
+          newWorker.addEventListener("statechange", function () {
+            if (
+              newWorker.state === "installed" &&
+              navigator.serviceWorker.controller
+            ) {
+              // Force the new SW to take over immediately.
+              newWorker.postMessage({ type: "SKIP_WAITING" });
+            }
+          });
+        }
+
         window.addEventListener("load", function () {
           navigator.serviceWorker
             .register("/sw.js")
             .then(function (reg) {
               reg.addEventListener("updatefound", function () {
-                var newWorker = reg.installing;
-                if (!newWorker) return;
-                newWorker.addEventListener("statechange", function () {
-                  if (
-                    newWorker.state === "installed" &&
-                    navigator.serviceWorker.controller
-                  ) {
-                    newWorker.postMessage({ type: "SKIP_WAITING" });
-                  }
-                });
+                handleUpdateFound(reg);
               });
-              reg.update().catch(function () {});
+              checkForUpdate(reg);
+              // Poll for updates every 10 minutes while the tab is open.
+              setInterval(function () {
+                checkForUpdate(reg);
+              }, 600000);
             })
             .catch(function () {});
         });
+
+        // Also check on pageshow (covers bfcache + tab reactivation).
+        window.addEventListener("pageshow", function (event) {
+          if (event.persisted) {
+            navigator.serviceWorker.getRegistration().then(function (reg) {
+              if (reg) checkForUpdate(reg);
+            });
+          }
+        });
+
+        // Stale-SW self-heal: if the main script chunk (referenced by this
+        // index.html) fails to load (404 because the SW precache is stale or
+        // the CDN served an old index.html), unregister the SW and reload so
+        // the browser fetches fresh assets. This recovers users stuck on an
+        // old service worker that can't self-update.
+        window.addEventListener(
+          "error",
+          function (event) {
+            var target = event.target;
+            if (
+              target &&
+              target.tagName === "SCRIPT" &&
+              target.src &&
+              target.src.indexOf("/assets/") !== -1
+            ) {
+              console.warn(
+                "[SW-heal] Script failed to load, unregistering SW + reloading:",
+                target.src,
+              );
+              navigator.serviceWorker
+                .getRegistrations()
+                .then(function (regs) {
+                  return Promise.all(
+                    regs.map(function (r) {
+                      return r.unregister();
+                    }),
+                  );
+                })
+                .then(function () {
+                  window.location.reload();
+                })
+                .catch(function () {
+                  window.location.reload();
+                });
+            }
+          },
+          true,
+        );
       }
     </script>
   </body>
