@@ -3168,3 +3168,40 @@ Cross-device sync verified end-to-end; 12 bugs fixed across both files.
   with `__ownerId` scoped row IDs). ✅
 - `npx tsc --noEmit` (0 errors), `npm run build` (112 precache), `eslint`
   (0 errors), `prettier --check` (all pass). ✅
+
+## Reports Center expenses-data link fix (DEPLOYED LIVE 2026-08-12, PR #124, commit 483e754)
+
+**Symptom**: Reports Center Overall Report, Profit & Loss, and Expenses Report
+all showed **$0.00 Operating Expenses** even when the user recorded expenses
+via the Expenses tab. Net Profit was overstated (no costs deducted).
+
+**Root cause**: `ReportsCenter.tsx` read expenses ONLY from `sale.expenses`
+inside `state.salesHistory` (a legacy field almost never populated). It
+ignored the real expenses recorded via the Expenses tab, which live in a
+separate cloud store — the `expenses_data` key written by
+`ExpenseTracker.tsx` via `cloudStorageService`. The two stores were
+disconnected → every cost line showed $0.
+
+**Fix** (`src/react-app/components/ReportsCenter.tsx`):
+- Added imports: `useEffect`, `useAuth`, `useStations`, `cloudStorageService`.
+- `cloudExpenses` state + `useEffect` loads `expenses_data` from cloud on
+  mount/user/station change + real-time subscription (cross-device instant
+  reflect).
+- `calculateExpensesReport` merges cloud expenses per period into the
+  breakdown (legacy `sale.expenses` + cloud).
+- `calculateProfitLossReport` adds cloud expenses per period to
+  `totalExpenses`; includes cost-only periods as negative-profit rows.
+- `calculateOverallReport` adds date-filtered cloud expenses to
+  `totalExpenses` so Net Profit + Profit Margin are correct.
+- Exports (PDF/Excel/Text) call these calculators → reflect merged data.
+
+**Verified live** (Cloudflare preview `61067a1b`, QA user
+`qa.delivery.audit.0812@gmail.com`): Overall Report Operating Expenses
+$10,500 (was $0), Net Profit $575,050 (was $585,550). Expenses Report shows
+both periods with per-line breakdown. Phase 2: fresh auth token returns the
+`expenses_data` row (3 expenses) via RLS query → fresh devices load them.
+
+**Deploy state**: Cloudflare Pages LIVE (preview 61067a1b + main alias).
+GitHub pushed (commit 483e754, PR #124). Vercel BLOCKED by
+`api-deployments-free-per-day` (auto-deploys when quota resets ~24h).
+Supabase: no schema changes. tsc/build/eslint/prettier all pass.
