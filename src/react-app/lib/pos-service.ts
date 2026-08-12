@@ -1069,13 +1069,24 @@ export async function fetchSales(
     .order("created_at", { ascending: false });
 
   if (startDate) {
+    // startDate is a bare date (YYYY-MM-DD); gte against midnight is correct.
     query = query.gte("created_at", startDate);
   }
   if (endDate) {
-    query = query.lte("created_at", endDate);
+    // endDate is a bare date (YYYY-MM-DD). A timestamp like
+    // "2026-08-12T15:30:00" sorts AFTER "2026-08-12" lexicographically, so a
+    // plain `lte` would EXCLUDE every sale later than midnight on the end
+    // date. Append T23:59:59 so the entire end day is included.
+    query = query.lte("created_at", `${endDate}T23:59:59`);
   }
 
-  const { data } = await query;
+  const { data, error } = await query;
+  if (error) {
+    // Surface the error instead of silently returning [] (which the UI
+    // rendered as "No sales found" — indistinguishable from a real empty
+    // result and hid RLS/table-missing/network failures).
+    throw error;
+  }
   return data || [];
 }
 
