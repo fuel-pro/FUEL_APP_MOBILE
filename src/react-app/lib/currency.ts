@@ -186,17 +186,24 @@ export function getDetectedCountryCode(): string {
       const stationList = Array.isArray(parsed) ? parsed : parsed?.stations;
       const current = stationList?.find((s: any) => s.id === currentStationId);
       if (current) {
+        // RESPECT the station's explicit country setting — even if it's "US".
+        // The old code skipped "US" and fell through to location/currency/timezone
+        // detection, which caused a US station with a "Nairobi" location to be
+        // misdetected as Kenya (16% VAT, KRA eTIMS). If the user explicitly set
+        // country=US (or any other code), honour it.
         const cc = current.country || current.countryCode;
-        if (cc && cc.toUpperCase() !== "US") {
+        if (cc) {
           return cc.toUpperCase();
         }
+        // Only use currency to infer country when no explicit country is set.
         if (current.currency) {
           const code = normalizeCurrencyCode(current.currency);
-          if (code && code !== "USD") {
+          if (code) {
             const country = getCountryByCode(getCountryByCurrency(code) || "");
             if (country?.code) return country.code;
           }
         }
+        // Location-based detection is a last resort when no country/currency.
         if (current.location) {
           const country = getCountryFromLocation(current.location);
           if (country?.code) {
@@ -219,7 +226,7 @@ export function getDetectedCountryCode(): string {
           const cd = JSON.parse(raw);
           if (cd?.currency) {
             const code = normalizeCurrencyCode(cd.currency);
-            if (code && code !== "USD") {
+            if (code) {
               const country = getCountryByCode(
                 getCountryByCurrency(code) || "",
               );
@@ -241,7 +248,7 @@ export function getDetectedCountryCode(): string {
         const parsed = JSON.parse(saved);
         const cc =
           parsed.countryCode || parsed.currentCountry || parsed.country;
-        if (cc && cc.toUpperCase() !== "US") {
+        if (cc) {
           return cc.toUpperCase();
         }
       }
