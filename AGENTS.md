@@ -3464,3 +3464,92 @@ Supabase REST API as `founder.qa.fuelpro@gmail.com` (uid `87e6502b`):
   when quota resets. The Cloudflare mirror has the fixed code NOW. ⏳
 - Supabase: no schema changes (uses existing `app_kv` table with
   `audit_log__<ownerId>` scoped row id, RLS by owner_id). ✅
+
+## Communication tab audit (DEPLOYED LIVE 2026-08-12, PR #128)
+
+Deep audit of the **Communication** tab (`Communication.tsx`, 1230 lines).
+Found **2 CRITICAL data-loss bugs** plus 7 high/medium bugs. All fixed,
+deployed to BOTH Cloudflare + Vercel, cross-device verified.
+
+### Critical bugs fixed
+
+1. **Cloud-load race wipes data on fresh device**: `saveContact`/
+   `deleteContact`/`sendMessage`/`saveTemplate`/`deleteTemplate`/
+   `toggleStarContact` all re-fetched from cloud then wrote back. On a
+   fresh device (empty cache), the re-fetch returned `[]` before the
+   initial load completed, so any save **wiped ALL data**. Added
+   `cloudLoadCompleteRef` guard (same pattern as FuelContext +
+   PayrollSystem): reset on user/station change, set true after
+   `Promise.all(loadContacts+loadMessages+loadTemplates)` resolves. All
+   save/delete functions early-return with a friendly message if the
+   guard is false. All save/delete functions now operate on the LATEST
+   state via refs (`contactsRef`/`messagesRef`/`templatesRef`) instead
+   of a stale re-fetch.
+
+2. **Bulk send ignored all but first recipient**: `sendMessage` created
+   ONE message with `contactId=selectedContacts[0]`, silently dropping
+   all other recipients. Now creates one message per recipient (correct
+   bulk behavior).
+
+### High-severity bugs fixed
+
+3. **ID collision on rapid double-save**: `ct_`/`msg_`/`tpl_` +
+   `Date.now()` only collided if two saves happened in the same
+   millisecond. Added random suffix.
+4. **No `deleteMessage` function**: Messages could not be deleted (only
+   contacts + templates). Added `deleteMessage` with the same cloud-load
+   guard + ref-based operation.
+5. **Orphaned messages on contact delete**: Deleting a contact left its
+   messages orphaned (shown as "Unknown"). Now cascades: deletes the
+   contact's messages too.
+6. **No validation**: `saveContact`/`saveTemplate`/`sendMessage` had no
+   required-field checks. Now validates: contact name, template
+   name+content, message content + at least one recipient.
+7. **`sendMessage` misleading "sent" status**: Status was "sent" but the
+   message was only stored, not actually sent via a gateway. Now
+   "pending" + toast clarifies: "Configure an SMS/email gateway in
+   Integration Hub to actually send."
+
+### Medium-severity bugs fixed
+
+8. **`sentBy` hardcoded "user"**: Now uses `user?.email || user?.id ||
+   "user"` for accountability.
+9. **`lastContact` overwritten on edit**: Editing a contact reset
+   `lastContact` to now. Now preserves the existing value on edit (only
+   sets on create).
+10. **No CSV export**: Added `exportContactsCSV` with RFC 4180 escaping.
+11. **No edit template**: Templates could only be created, not edited
+    (`saveTemplate` always appended). Added `openEditTemplate` +
+    `_editingId` flag so `saveTemplate` updates instead of duplicating.
+12. **alert vs toast inconsistency**: Save/delete now consistently use
+    `toastSuccess` for success.
+13. **Messages empty state no CTA**: Added "New Message" button in the
+    empty state.
+
+### Phase 1 + Phase 2 cross-device verification (VERIFIED LIVE)
+
+Simulated the exact `saveContact` + `sendMessage` + `saveTemplate` flow
+via the Supabase REST API as `founder.qa.fuelpro@gmail.com` (uid
+`87e6502b`):
+- **Phase 1 (SAVE)**: 1 contact (`Phase1 Test Contact`, +254712345678,
+  tags VIP/Bulk Buyer, balance 5000, starred), 1 message (SMS, status
+  `pending`, sentBy `founder.qa.fuelpro@gmail.com`), 1 template (`Order
+  Ready Notification`) into `app_kv` keys `comm_contacts`/`comm_messages`/
+  `comm_templates` (scoped by owner).
+- **Phase 2 (FRESH-DEVICE READ)**: new token login → ALL 3 collections
+  synced with every field intact, including the fixed `sentBy` field
+  (now shows the user's email, was hardcoded "user" before). ✅ **NO
+  DATA LOSS**.
+
+### Deploy status 2026-08-12 (commit fa1b158)
+
+- GitHub main: `fa1b158` (PR #128 merged, synced with origin/main) ✅
+- Cloudflare Pages: LIVE (preview https://df8ccc55.fuel-app-mobile.pages.dev
+  + main alias https://fuel-app-mobile.pages.dev). Chunk
+  `Communication-DRlaLeSE.js`. Markers confirmed: `Contact name is
+  required`, `Message queued for`, `Still loading your contacts` ✅
+- Vercel production: LIVE (prebuilt deploy, index chunk
+  `index-CHSulFqC.js` matches local build, aliased to
+  fuel-app-mobile.vercel.app). ✅
+- Supabase: no schema changes (uses existing `app_kv` table with
+  `comm_*__<ownerId>` scoped row ids, RLS by owner_id). ✅
