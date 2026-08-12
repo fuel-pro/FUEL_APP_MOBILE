@@ -22,7 +22,6 @@ import {
   type FuelPricePrefill,
 } from "@/react-app/lib/mpesa-integration-service";
 import { useStationFuelTypes } from "@/react-app/hooks/useStationFuelTypes";
-import { useLocation } from "@/react-app/context/LocationContext";
 import { useAuth } from "@/react-app/context/AuthContext";
 import { useStations } from "@/react-app/context/StationContext";
 import { formatNumber } from "@/react-app/utils/formatUtils";
@@ -38,6 +37,10 @@ import { useLoyalty } from "@/react-app/lib/useLoyalty";
 import { LoyaltyCustomer, TIER_COLORS } from "@/react-app/lib/loyaltyProgram";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 import { emit } from "@/react-app/lib/automation-engine";
+import {
+  addTransaction,
+  type UnifiedTransaction,
+} from "@/react-app/lib/mpesa-integration-service";
 
 interface CartItem {
   id: string;
@@ -76,12 +79,21 @@ interface POSTransaction {
 
 export default function PointOfSale() {
   const { state, dispatch } = useFuel();
-  const location = useLocation();
   const { user } = useAuth();
   const { currentStation } = useStations();
   const stationId = currentStation?.id;
   const currencySymbol = getCurrencySymbol(state.companyData?.currency);
-  const kenyaStation = isKenyaStation();
+  // A station is treated as Kenyan (KRA eTIMS / 16% VAT) when EITHER the
+  // timezone+station-data detector resolves Kenya OR the station carries a KRA
+  // PIN. The KRA-PIN check is essential because isKenyaStation() reads
+  // localStorage synchronously and returns false on a fresh device before the
+  // cloud station data hydrates into localStorage — yet the React-context
+  // currentStation (with its kraPin) IS already available. Without this, the
+  // VAT rate (16%) and the KRA banner ("Tax Settings") would disagree.
+  const hasKraPin = Boolean(
+    currentStation?.kraPin || state.companyData?.kraPin,
+  );
+  const kenyaStation = isKenyaStation() || hasKraPin;
   const fuelTypeApi = useStationFuelTypes(stationId);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [paymentMethod, setPaymentMethod] = useState<
@@ -129,7 +141,10 @@ export default function PointOfSale() {
   const receiptRef = useRef<HTMLDivElement>(null);
 
   // ─── Loyalty Integration ───
-  const loyaltyStationId = location.currentLocation?.stationId || "default";
+  // Use the REAL station id (not a LocationContext-derived value that may be
+  // "default" / mismatched) so loyalty customers are scoped to the actual
+  // station and cross-device cloud data resolves correctly.
+  const loyaltyStationId = stationId || "default";
   const {
     earnPoints,
     findCustomerByPhone,
@@ -177,10 +192,29 @@ export default function PointOfSale() {
         "pos_transactions",
         stationId,
       );
-      if (!cancelled && cloud && Array.isArray(cloud)) setTransactions(cloud);
+      if (!cancelled && cloud && Array.isArray(cloud)) {
+        setTransactions(cloud);
+        // Seed the fiscal counter from the persisted sale history so invoice
+        // numbers never collide across sessions/devices (a fresh device would
+        // otherwise reset to #1 and re-generate today's invoice numbers).
+        setFiscalCounter((prev) => Math.max(prev, cloud.length + 1));
+      }
     })();
+    // Real-time cross-device sync: a sale completed on another device appears
+    // in "Recent Transactions" instantly without a page reload.
+    const unsub = cloudStorageService.subscribe<POSTransaction[]>(
+      "pos_transactions",
+      stationId,
+      (val) => {
+        if (val && Array.isArray(val)) {
+          setTransactions(val);
+          setFiscalCounter((prev) => Math.max(prev, val.length + 1));
+        }
+      },
+    );
     return () => {
       cancelled = true;
+      unsub();
     };
   }, [user, stationId]);
 
@@ -228,12 +262,23 @@ export default function PointOfSale() {
     email: state.companyData.email || "",
   };
 
-  // Country-aware VAT rate: resolve the station's ISO country code (from the
-  // current station, falling back to location/timezone detection) and look it
-  // up in the unified TAX_RATES table. Defaults to 0% only when the country
-  // is genuinely unknown.
-  const countryCode =
-    currentStation?.country || getDetectedCountryCode() || "KE";
+  // Country-aware VAT rate: resolve the station's ISO country code and look it
+  // up in the unified TAX_RATES table. Defaults to 0% only when the country is
+  // genuinely unknown. Resolution order:
+  //   1. If the station has a KRA PIN (Kenya tax ID), force KE — a Kenyan tax
+  //      registration always means 16% VAT regardless of the (often mis-set)
+  //      station.country field.
+  //   2. If isKenyaStation() (timezone + station data detection) → KE.
+  //   3. The station's stored country code.
+  //   4. The browser/timezone-detected country code.
+  //   5. "KE" as a final default (the app's primary market) — never 0% by
+  //      accident, which would produce non-compliant receipts.
+  const detectedCountryCode = getDetectedCountryCode();
+  const countryCode = hasKraPin
+    ? "KE"
+    : kenyaStation
+      ? "KE"
+      : currentStation?.country || detectedCountryCode || "KE";
   const VAT_RATE = getVATRate(countryCode);
   const vatPercent = (VAT_RATE * 100).toFixed(2);
 
@@ -254,14 +299,18 @@ export default function PointOfSale() {
     return undefined; // browser default
   }, [countryCode]);
 
-  // Generate unique invoice number in KRA format
+  // Generate unique invoice number. The counter gives a human-readable
+  // sequence; a short random suffix guarantees global uniqueness across
+  // devices/sessions (two devices loading the same counter seed and selling
+  // concurrently would otherwise collide on the same day).
   const generateInvoiceNumber = () => {
     const date = new Date();
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, "0");
     const day = String(date.getDate()).padStart(2, "0");
     const counter = String(fiscalCounter).padStart(6, "0");
-    return `${etrConfig.invoicePrefix}${year}${month}${day}${counter}`;
+    const suffix = Math.random().toString(36).slice(2, 6).toUpperCase();
+    return `${etrConfig.invoicePrefix}${year}${month}${day}${counter}${suffix}`;
   };
 
   // Generate CU Invoice Number (Control Unit format)
@@ -555,6 +604,35 @@ export default function PointOfSale() {
       (paymentMethod === "bank" || paymentMethod === "card")
     ) {
       addToDeliveryTracking(cart, customerName, timestamp);
+    }
+
+    // ─── Interlink: M-Pesa POS sale → shared unified transaction store ───
+    // An M-Pesa sale completed at the POS is a real digital inflow, so mirror
+    // it into the shared `mpesa_transactions` cloud store. It then appears in
+    // the Live Transaction feed + M-PESA Analyzer (cross-device) just like an
+    // STK Push / statement inflow, keeping all payment records in one place.
+    if (paymentMethod === "mpesa") {
+      const unified: UnifiedTransaction = {
+        id: transaction.id,
+        transaction_ref: receiptNumber,
+        origin: "stk_push",
+        transaction_type: "POS M-Pesa Sale",
+        amount: total,
+        currency: state.companyData?.currency || "KES",
+        sender_info: customerPhone || "",
+        description: `POS sale ${invoiceNumber} (${cart
+          .map((i) => i.name)
+          .join(", ")})`,
+        status: "completed",
+        payment_method: "M-PESA",
+        transaction_time: timestamp,
+        receipt: receiptNumber,
+        is_online: true,
+        date: timestamp.split("T")[0],
+        time: new Date(timestamp).toLocaleTimeString(),
+        account_reference: currentStation?.code || undefined,
+      };
+      addTransaction(unified, currentStation?.id).catch(() => {});
     }
 
     setCurrentTransaction(transaction);
@@ -1696,7 +1774,9 @@ export default function PointOfSale() {
                       style={{ width: "100px", height: "100px" }}
                     />
                     <p className="text-[8px] mt-1">
-                      Scan to verify at KRA iTax
+                      {kenyaStation
+                        ? "Scan to verify at KRA iTax"
+                        : "Scan to verify this invoice"}
                     </p>
                   </div>
                 )}

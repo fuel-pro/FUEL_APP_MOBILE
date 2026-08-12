@@ -19,6 +19,29 @@ Object.entries(REGIONAL_PRICES).forEach(([code, config]) => {
   UNIFIED_SYMBOLS[code] = config.currencySymbol;
 });
 
+/**
+ * Resolve the current station's localStorage JSON, checking the USER-SCOPED
+ * key (`fuelpro_stations_v3_<userId>`, written by StationContext since the
+ * cross-user isolation fix) first, then the legacy bare `fuelpro_stations_v3`
+ * key. The bare key is empty for accounts created after the isolation fix, so
+ * without checking the user-scoped key, country/currency detection silently
+ * falls through to the (often inaccurate) timezone fallback. The user id is
+ * read from `fuelpro_auth_identity` (written synchronously by AuthContext on
+ * login — same source as cloudStorageService.currentUserIdSync).
+ */
+function readStationsJson(): string | null {
+  try {
+    const userId = localStorage.getItem("fuelpro_auth_identity");
+    if (userId) {
+      const scoped = localStorage.getItem(`fuelpro_stations_v3_${userId}`);
+      if (scoped) return scoped;
+    }
+  } catch {
+    /* */
+  }
+  return localStorage.getItem("fuelpro_stations_v3");
+}
+
 export function getDetectedCurrency(): string {
   // NOTE: the cache is intentionally keyed per-call-site (not a single global
   // "_default") so that a stale "USD" result from an early render (before
@@ -29,7 +52,7 @@ export function getDetectedCurrency(): string {
 
   // 1. Try station data (highest priority)
   try {
-    const stationsJson = localStorage.getItem("fuelpro_stations_v3");
+    const stationsJson = readStationsJson();
     // The current-station key is fuelpro_current_station_v3 (the older
     // fuelpro_current_station key is no longer written anywhere).
     const currentStationId =
@@ -154,7 +177,7 @@ export function getDetectedCurrency(): string {
 export function getDetectedCountryCode(): string {
   // 1. Station data
   try {
-    const stationsJson = localStorage.getItem("fuelpro_stations_v3");
+    const stationsJson = readStationsJson();
     const currentStationId =
       localStorage.getItem("fuelpro_current_station_v3") ||
       localStorage.getItem("fuelpro_current_station");
