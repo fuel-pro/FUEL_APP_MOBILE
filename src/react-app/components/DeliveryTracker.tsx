@@ -24,7 +24,7 @@ import {
 import { formatNumber } from "@/react-app/utils/formatUtils";
 import { getCurrencySymbol } from "@/react-app/lib/currency";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
-import { getFuelLabel, normalizeFuelType } from "@/react-app/config/pricing";
+import { normalizeFuelType } from "@/react-app/config/pricing";
 
 /** Generate a unique row id (stable across devices/sessions). */
 function rowId(): string {
@@ -113,10 +113,11 @@ export default function DeliveryTracker() {
   const [filterFuel, setFilterFuel] = useState("");
 
   // ─── Station fuel types (replaces hardcoded Petrol/Diesel) ───
-  const stationFuelOptions = useMemo(() => {
+  const stationFuelOptions = useMemo<string[]>(() => {
     const fromConfig = (state.fuelTypes || [])
-      .filter((ft: any) => ft.isActive !== false)
-      .map((ft: any) => ft.localName || getFuelLabel(ft.canonical || ft.name));
+      .filter((ft) => ft.active !== false)
+      .map((ft) => ft.localName || ft.name || "")
+      .filter((label): label is string => Boolean(label));
     const unique = [...new Set(fromConfig)];
     if (unique.length > 0) return unique;
     // Fallback to the two legacy fuels if no fuel types configured yet

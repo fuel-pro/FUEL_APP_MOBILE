@@ -318,6 +318,8 @@ export interface FuelState {
   agoPrice: number;
   petrolPrice: number;
   dieselPrice: number;
+  kerosenePrice: number;
+  fuelTypes: CustomFuelType[];
   deliveredTo: string;
   totalOrder: string;
   deliveryYear: number;
@@ -532,6 +534,8 @@ const initialState: FuelState = {
   agoPrice: DEFAULTAGO_PRICE,
   petrolPrice: DEFAULT_PMS_PRICE,
   dieselPrice: DEFAULTAGO_PRICE,
+  kerosenePrice: 0,
+  fuelTypes: [],
   deliveredTo: "",
   totalOrder: "",
   deliveryYear: new Date().getFullYear(), // Auto-set to current year

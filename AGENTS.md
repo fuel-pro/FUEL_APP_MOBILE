@@ -1924,7 +1924,7 @@ direct Supabase REST API (fresh-device simulation).
 - **Cloudflare Pages**: ✅ LIVE (preview
   https://adc43cbd.fuel-app-mobile.pages.dev + main alias
   https://fuel-app-mobile.pages.dev, bundle 112 precache). CreditManagement
-  + DebtReminder chunks with all fixes verified in live bundle.
+  - DebtReminder chunks with all fixes verified in live bundle.
 - **Vercel production**: ❌ BLOCKED by `api-deployments-free-per-day`
   (100/100; prebuilt deploy also hit the limit). GitHub integration
   (prodBranch=main) will auto-deploy commit 3f05436 when the quota resets
@@ -1937,13 +1937,13 @@ direct Supabase REST API (fresh-device simulation).
 
 - **Credit → Live Transaction**: "Collect via M-PESA" button calls
   `navigateToTab("livetransaction", {phone, amount, account_reference,
-  openStkPush:true})` — opens STK Push modal pre-filled.
+openStkPush:true})` — opens STK Push modal pre-filled.
 - **Credit → Invoice**: "Create Invoice" button calls
   `navigateToTab("invoice", {customerName, amount, description})` — opens
   invoice form pre-filled.
 - **Live Transaction → Credit**: completed shared transactions have "Apply
   to Credit Account" button that calls `navigateToTab("credit",
-  {customerName, amount})`.
+{customerName, amount})`.
 - **Overdue accounts → Reminders**: overdue credit accounts show "Send
   Reminder" button that switches to the Reminders sub-tab.
 
@@ -2387,16 +2387,16 @@ MORE rigorous (directly exercises the exact calls the app makes):
   - Webhooks: 1 (QA Test Webhook, active, 2 events) ✅
   - API Keys: 1 (QA Test API Key, 2 scopes) ✅
   - Logs: 2 entries ✅
-  All with `owner_id=87e6502b` (RLS-scoped). **A fresh device with empty
-  localStorage WILL load all Integration Hub data from cloud** — the
-  cross-device data-loss bug is fixed.
+    All with `owner_id=87e6502b` (RLS-scoped). **A fresh device with empty
+    localStorage WILL load all Integration Hub data from cloud** — the
+    cross-device data-loss bug is fixed.
 
 ### Deploy state 2026-08-12 (commit 66d1dfb, PR #110 merged)
 
 - GitHub main: 66d1dfb merged (squash) ✅
 - Cloudflare Pages: LIVE (preview https://59232cfd.fuel-app-mobile.pages.dev
-  + main alias https://fuel-app-mobile.pages.dev, chunk
-  `IntegrationHub-VVLMD4Gn.js` with all 4 cloud keys confirmed) ✅
+  - main alias https://fuel-app-mobile.pages.dev, chunk
+    `IntegrationHub-VVLMD4Gn.js` with all 4 cloud keys confirmed) ✅
 - Vercel production: the first `vercel deploy --prebuilt --prod` succeeded
   and aliased to fuel-app-mobile.vercel.app, BUT it used a STALE
   `.vercel/output` (from a pre-fix `vercel build`), so the live Vercel
@@ -2500,8 +2500,8 @@ exact calls the app makes — MORE rigorous than browser testing):
     account_reference `INV-QA-001`, sender `254712345678`
   - txn 2: `QA0812RCPT002`, origin `statement`, completed, 4280 KES,
     account_reference `ACC-002`, sender `Sarah Wanjiku`
-  Also wrote 1 payment source (`payment_sources` key): "QA Test Till",
-  mpesa_buygoods, 5785900, active. All upserts returned HTTP 201/204.
+    Also wrote 1 payment source (`payment_sources` key): "QA Test Till",
+    mpesa_buygoods, 5785900, active. All upserts returned HTTP 201/204.
 
 - **Phase 2 (FRESH-DEVICE READ)**: a SECOND fresh login (new access_token,
   confirmed different from Phase 1) queried `app_kv` via PostgREST (exactly
@@ -2510,18 +2510,18 @@ exact calls the app makes — MORE rigorous than browser testing):
   - Transactions: 2 (both with full fields: ref, origin, status, amount,
     currency, account_reference, sender_info) ✅
   - Payment sources: 1 (QA Test Till, mpesa_buygoods, 5785900, active) ✅
-  All owner-scoped to `87e6502b`. **A fresh device with empty localStorage
-  WILL load all Live Transaction data from cloud** — the cross-device
-  data-loss + empty-feed bugs are fixed.
+    All owner-scoped to `87e6502b`. **A fresh device with empty localStorage
+    WILL load all Live Transaction data from cloud** — the cross-device
+    data-loss + empty-feed bugs are fixed.
 
 ### Deploy state 2026-08-12 (commit 6566875, PR #112 merged)
 
 - GitHub main: 6566875 merged (squash) ✅
 - Cloudflare Pages: LIVE (preview https://3cc6f92d.fuel-app-mobile.pages.dev
-  + main alias https://fuel-app-mobile.pages.dev, chunk
-  `LiveTransaction-CjqQYJy5.js` with all fix markers confirmed:
-  "STK Push request saved as pending", "Payment Integration Connected",
-  "payment_sources") ✅
+  - main alias https://fuel-app-mobile.pages.dev, chunk
+    `LiveTransaction-CjqQYJy5.js` with all fix markers confirmed:
+    "STK Push request saved as pending", "Payment Integration Connected",
+    "payment_sources") ✅
 - Vercel production: the fresh `vercel build --prod` regenerated
   `.vercel/output` with the correct chunk `LiveTransaction-CXVGG8JP.js`
   (verified contains all fix markers), but `vercel deploy --prebuilt` hit
@@ -2616,10 +2616,10 @@ exact calls the app makes):
   - Discontinued Filter (**INACTIVE**, stock=2, tax=0%, cost=120/sell=250) —
     the key bug: the old `fetchProducts` (is_active=true) would have hidden
     this product.
-  Created 1 pending auto-reorder (Castrol, current=5, reorder=20, suggested=35)
-  in `app_kv` (key `auto_reorders__<ownerId>__<stationId>`). Created 1 pending
-  stock transfer (TRF-QA-..., qty=10) in the `stock_transfers` table. All
-  inserts returned HTTP 201.
+    Created 1 pending auto-reorder (Castrol, current=5, reorder=20, suggested=35)
+    in `app_kv` (key `auto_reorders__<ownerId>__<stationId>`). Created 1 pending
+    stock transfer (TRF-QA-..., qty=10) in the `stock_transfers` table. All
+    inserts returned HTTP 201.
 
 - **Phase 2 (FRESH-DEVICE READ)**: a SECOND fresh login (new access_token,
   confirmed different) queried via PostgREST (exactly what the sub-tabs do
@@ -2644,9 +2644,9 @@ exact calls the app makes):
 - GitHub main: ce43e89 (reference_id UUID fix) on top of 71eee0e
   (PR #113 squash merge) ✅
 - Cloudflare Pages: LIVE (preview https://850ba39e.fuel-app-mobile.pages.dev
-  + main alias https://fuel-app-mobile.pages.dev, chunk
-  `InventoryManagement-CrT87xGp.js` with "Sell in POS", "Create PO",
-  "Failed to fulfill reorder" all confirmed) ✅
+  - main alias https://fuel-app-mobile.pages.dev, chunk
+    `InventoryManagement-CrT87xGp.js` with "Sell in POS", "Create PO",
+    "Failed to fulfill reorder" all confirmed) ✅
 - Vercel production: the fresh `vercel build --prod` regenerated
   `.vercel/output` with the correct chunk
   `InventoryManagement-Dzim6M4y.js` (verified with all fix markers), but
@@ -2731,7 +2731,7 @@ exact calls the app makes):
   `No records match` confirmed) ✅
 - Vercel production: prebuilt output verified correct
   (`FuelOffloading-Bw1IJZDH.js` with all markers), but `vercel deploy
-  --prebuilt` hit `api-deployments-free-per-day` (100/day exhausted). GitHub
+--prebuilt` hit `api-deployments-free-per-day` (100/day exhausted). GitHub
   integration auto-deploys when quota resets (~24h). ⏳
 - Supabase: no schema changes (offloading records persist in the FuelContext
   compact blob in `app_kv`). ✅
@@ -2859,7 +2859,7 @@ Station" (45 QA Avenue, Nairobi, KRA PIN P051234567X):
 
 - GitHub main: pending push (this commit)
 - Cloudflare Pages: LIVE (preview https://b57e82c0.fuel-app-mobile.pages.dev
-  + main alias https://fuel-app-mobile.pages.dev)
+  - main alias https://fuel-app-mobile.pages.dev)
 - Vercel production: deploy attempted via prebuilt method (quota permitting);
   GitHub integration auto-deploys when `api-deployments-free-per-day` resets
 - Supabase: no schema changes (uses existing `app_kv` + scoped row ids)
@@ -3017,7 +3017,7 @@ crashes, and missing cross-tab interlinks. All fixed.
    filtered set (`rangeFiltered`) and the rendered table uses it (combined
    with the text search). Reset clears it too.
 7. **Search only matched `details`**: now searches details + receipt + date
-   + time + paidIn + balance.
+   - time + paidIn + balance.
 8. **Invalid Date crash**: shared feed rendered
    `new Date(tx.transaction_time).toLocaleString()` → "Invalid Date" when
    `transaction_time` empty. Now guarded (shows "—").
@@ -3053,12 +3053,12 @@ the Supabase REST API as `founder.qa.fuelpro@gmail.com` (uid
 
 - GitHub main: `0f82f2e` (PR #120 merged, synced with origin/main) ✅
 - Cloudflare Pages: LIVE (preview https://189c34f7.fuel-app-mobile.pages.dev
-  + main alias https://fuel-app-mobile.pages.dev). Chunk
-  `MPESAAnalyzer-p4hILA43.js` (MD5 `54cfa78...` match). All markers
-  confirmed: `STMT-`, `Restored ... transactions from cloud`, `Search
-  details, receipt, amount`, `AI extraction failed`, `Integration Hub`,
-  `Could not save ... transactions to the shared store`, `partial results
-  shown` ✅
+  - main alias https://fuel-app-mobile.pages.dev). Chunk
+    `MPESAAnalyzer-p4hILA43.js` (MD5 `54cfa78...` match). All markers
+    confirmed: `STMT-`, `Restored ... transactions from cloud`, `Search
+details, receipt, amount`, `AI extraction failed`, `Integration Hub`,
+    `Could not save ... transactions to the shared store`, `partial results
+shown` ✅
 - Vercel production: LIVE (prebuilt deploy, chunk
   `MPESAAnalyzer-BM7gnttg.js` 43097 bytes, all markers confirmed). ✅
 - Supabase: no schema changes (uses existing `mpesa_transactions` cloud key
