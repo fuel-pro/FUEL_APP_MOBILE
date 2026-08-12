@@ -63,6 +63,9 @@ export default function Invoice() {
   const lastDispatchedLabel = useRef(state.invoiceSettings.quantityLabel);
   const [isPrinting, setIsPrinting] = useState(false);
   const [printError, setPrintError] = useState<string | null>(null);
+  // Search across saved invoices (was missing — a flat grid of every saved
+  // invoice with no way to find one by number/customer).
+  const [invoiceSearch, setInvoiceSearch] = useState("");
 
   useEffect(() => {
     // Auto-fill today's date
@@ -78,21 +81,42 @@ export default function Invoice() {
       const p = (raw || {}) as InvoicePrefill;
       if (Object.keys(p).length === 0) return;
       setActiveView("invoice");
-      if (p.customerName) setCustomerName(p.customerName);
+
+      // Prevent draft-overwrite data loss: only replace the items array if the
+      // current draft is empty/all-blank. If the user was mid-edit on another
+      // invoice, we preserve their items and just append the prefill as a new
+      // line (or only set customer fields that are empty). Previously this
+      // REPLACED the entire items array + customer fields, destroying an
+      // in-progress draft the user had not yet saved.
+      const draftHasContent = state.invoiceItems.some(
+        (it) => (it.desc && it.desc.trim()) || it.qty > 0 || it.price > 0,
+      );
+
+      if (p.customerName && (!customerName || !draftHasContent)) {
+        setCustomerName(p.customerName);
+      }
       if (p.amount || p.description) {
-        dispatch({
-          type: "SET_INVOICE_ITEMS",
-          payload: [
-            {
-              desc: p.description || "Outstanding balance",
-              qty: 1,
-              price: p.amount ?? 0,
-              total: p.amount ?? 0,
-            },
-          ],
-        });
+        const prefillItem = {
+          desc: p.description || "Outstanding balance",
+          qty: 1,
+          price: p.amount ?? 0,
+          total: p.amount ?? 0,
+        };
+        if (draftHasContent) {
+          // Append to the existing draft instead of clobbering it.
+          dispatch({
+            type: "SET_INVOICE_ITEMS",
+            payload: [...state.invoiceItems, prefillItem],
+          });
+        } else {
+          dispatch({
+            type: "SET_INVOICE_ITEMS",
+            payload: [prefillItem],
+          });
+        }
       }
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dispatch]);
 
   useEffect(() => {
@@ -174,6 +198,15 @@ export default function Invoice() {
       alert("Please add customer details and invoice items before saving.");
       return;
     }
+    // Reject empty all-blank items (a user who clicked "Add Item" but never
+    // filled the description) so the saved invoice is always meaningful.
+    const hasContent = state.invoiceItems.some(
+      (it) => (it.desc && it.desc.trim()) || it.qty > 0 || it.price > 0,
+    );
+    if (!hasContent) {
+      alert("Please add at least one item with a description before saving.");
+      return;
+    }
 
     const invNum = getInvoiceNumber();
     const invoiceData = {
@@ -185,8 +218,17 @@ export default function Invoice() {
       date: invoiceDate,
       items: [...state.invoiceItems],
       quantityLabel: quantityLabel,
-      total: `${currencySymbol}${formatNumber(totalDue, 0)}`,
+      // Store the NUMERIC total + the currency CODE (not the symbol) so a
+      // currency change later or a different detected currency on another
+      // device renders correctly. The symbol is resolved at display time.
+      // Previously the symbol was frozen into the string AND cents were
+      // dropped via formatNumber(x, 0) → a 1,234.56 invoice saved as
+      // "Ksh 1,234", permanently losing the 0.56 AND the wrong currency on
+      // cross-device/cross-currency reload.
+      currency: state.companyData?.currency || getDetectedCurrency(),
       totalAmount: totalDue,
+      status: "unpaid" as const,
+      createdAt: new Date().toISOString(),
     };
 
     dispatch({
@@ -286,6 +328,35 @@ export default function Invoice() {
     }
   };
 
+  // Toggle an invoice's payment status (was missing — no way to mark a saved
+  // invoice as paid). The status is stored on the invoice object and persists
+  // to the cloud blob with the rest of the invoice data.
+  const markInvoicePaid = (num: string, paid: boolean) => {
+    const inv = state.invoices[num];
+    if (!inv) return;
+    dispatch({
+      type: "SET_INVOICES",
+      payload: {
+        ...state.invoices,
+        [num]: { ...inv, status: paid ? "paid" : "unpaid" },
+      },
+    });
+  };
+
+  // Collect payment for a SAVED invoice (was missing — the "Collect via M-PESA"
+  // card only worked for the in-progress draft, not for saved invoices).
+  const collectSavedInvoice = (num: string) => {
+    const inv = state.invoices[num];
+    if (!inv) return;
+    navigateToTab("livetransaction", {
+      phone: inv.customer?.phone || "",
+      amount: inv.totalAmount || 0,
+      account_reference: inv.customer?.name || num,
+      transaction_desc: `Invoice ${num} payment`,
+      openStkPush: true,
+    } satisfies StkPushPrefill);
+  };
+
   const editBankInfo = () => {
     const bankName =
       prompt("Bank Name:", state.companyData.bankName) ||
@@ -321,24 +392,24 @@ export default function Invoice() {
     setAiResponse("");
 
     try {
-      const invoiceContext = {
-        invoiceNumber: getInvoiceNumber(),
-        customer: customerName,
-        items: state.invoiceItems,
-        total: totalDue,
-        date: invoiceDate,
-      };
-
       // Local AI analysis for invoice — computed instantly, no artificial delay
       const items = state.invoiceItems;
       const itemSummary = items
         .map(
           (item: any, i: number) =>
-            `${i + 1}. ${item.name}: ${item.qty} x ${currencySymbol} ${item.price?.toLocaleString()} = ${currencySymbol} ${(item.qty * item.price)?.toLocaleString()}`,
+            // BUGFIX: items use `desc`, not `name` — previously printed
+            // "undefined: 1 x Ksh 200 = Ksh 200".
+            `${i + 1}. ${item.desc || "(no description)"}: ${item.qty || 0} ${quantityLabel} x ${currencySymbol}${formatNumber(item.price || 0)} = ${currencySymbol}${formatNumber((item.qty || 0) * (item.price || 0))}`,
         )
         .join("\n");
-      const vatTotal = items.reduce((s: number, i: any) => s + (i.vat || 0), 0);
-      const localResponse = `**Invoice Analysis**\n\n**Invoice #${getInvoiceNumber()}**\n**Customer:** ${customerName || "Walk-in"}\n**Date:** ${invoiceDate}\n\n**Items (${items.length}):**\n${itemSummary}\n\n**Totals:**\n• Subtotal: ${currencySymbol} ${(totalDue - vatTotal)?.toLocaleString()}\n• VAT: ${currencySymbol} ${vatTotal?.toLocaleString()}\n• **Total Due: ${currencySymbol} ${totalDue?.toLocaleString()}**\n\n💡 *Add more items or proceed to save this invoice.*`;
+      // There is no per-item VAT field; compute the analysis subtotal as the
+      // sum of item totals (which already equals totalDue). Previously the
+      // code referenced a non-existent `item.vat`, always showing "VAT: 0".
+      const subtotal = items.reduce(
+        (s: number, i: any) => s + (i.total || (i.qty || 0) * (i.price || 0)),
+        0,
+      );
+      const localResponse = `**Invoice Analysis**\n\n**Invoice #${getInvoiceNumber()}**\n**Customer:** ${customerName || "Walk-in"}\n**Date:** ${invoiceDate}\n\n**Items (${items.length}):**\n${itemSummary}\n\n**Totals:**\n• Subtotal: ${currencySymbol}${formatNumber(subtotal)}\n• **Total Due: ${currencySymbol}${formatNumber(totalDue)}**\n\n💡 *Add more items or proceed to save this invoice.*`;
       setAiResponse(localResponse);
       /*
       const response = await fetch('/api/chat', {
@@ -457,11 +528,11 @@ export default function Invoice() {
     const itemsList = state.invoiceItems
       .map(
         (i) =>
-          `${i.desc} | ${i.qty} ${quantityLabel.replace("Qty ", "").replace("(", "").replace(")", "")} | ${currencySymbol}${formatNumber(i.price, 0)} | ${currencySymbol}${formatNumber(i.total, 0)}`,
+          `${i.desc} | ${i.qty} ${quantityLabel.replace("Qty ", "").replace("(", "").replace(")", "")} | ${currencySymbol}${formatNumber(i.price)} | ${currencySymbol}${formatNumber(i.total)}`,
       )
       .join("\n");
 
-    return `Bill To: ${customerName}\nInvoice #: ${getInvoiceNumber()}\nDate: ${invoiceDate}\n\nDescription | ${quantityLabel} | Unit Price | Total\n${itemsList}\n\n Total Due: ${currencySymbol}${formatNumber(totalDue, 0)}`;
+    return `Bill To: ${customerName}\nInvoice #: ${getInvoiceNumber()}\nDate: ${invoiceDate}\n\nDescription | ${quantityLabel} | Unit Price | Total\n${itemsList}\n\n Total Due: ${currencySymbol}${formatNumber(totalDue)}`;
   };
 
   return (
@@ -674,7 +745,7 @@ export default function Invoice() {
                       </td>
                       <td className="border border-gray-300 p-3 text-right font-medium">
                         {currencySymbol}
-                        {formatNumber(item.total, 0)}
+                        {formatNumber(item.total)}
                       </td>
                       <td className="border border-gray-300 p-3 text-center">
                         <div className="flex items-center justify-center gap-1">
@@ -713,7 +784,7 @@ export default function Invoice() {
                 <div className="text-right">
                   <div className="text-2xl font-bold text-blue-900">
                     Total Due: {currencySymbol}
-                    {formatNumber(totalDue, 0)}
+                    {formatNumber(totalDue)}
                   </div>
                 </div>
               </div>
@@ -819,7 +890,7 @@ export default function Invoice() {
                 </button>
               </div>
               <div className="text-sm text-gray-600">
-                Send the invoice total ({formatNumber(totalDue, 0)}{" "}
+                Send the invoice total ({formatNumber(totalDue)}{" "}
                 {currencySymbol}) as an M-PESA STK Push to the customer's phone
                 via the Live Transaction Monitor.
               </div>
@@ -940,38 +1011,83 @@ export default function Invoice() {
           {/* Saved Invoices */}
           {Object.keys(state.invoices).length > 0 && (
             <div className="card">
-              <h3 className="text-xl font-bold mb-4">Saved Invoices</h3>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                <h3 className="text-xl font-bold">Saved Invoices</h3>
+                <input
+                  type="text"
+                  value={invoiceSearch}
+                  onChange={(e) => setInvoiceSearch(e.target.value)}
+                  placeholder="Search by invoice # or customer…"
+                  className="w-full sm:w-64 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-sm"
+                />
+              </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {Object.keys(state.invoices).map((key) => (
-                  <div
-                    key={key}
-                    className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50"
-                  >
-                    <div className="font-semibold text-blue-900 mb-2">
-                      {key}
-                    </div>
-                    <div className="text-sm text-gray-600 mb-2">
-                      Customer: {state.invoices[key].customer?.name || "N/A"}
-                    </div>
-                    <div className="text-sm font-medium text-green-600 mb-3">
-                      {state.invoices[key].total || `${currencySymbol}0`}
-                    </div>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => loadInvoice(key)}
-                        className="btn btn-sm btn-outline flex-1"
+                {Object.keys(state.invoices)
+                  .filter((key) => {
+                    if (!invoiceSearch) return true;
+                    const q = invoiceSearch.toLowerCase();
+                    const inv = state.invoices[key];
+                    return (
+                      key.toLowerCase().includes(q) ||
+                      inv.customer?.name?.toLowerCase().includes(q)
+                    );
+                  })
+                  .map((key) => {
+                    const inv = state.invoices[key];
+                    const paid = inv.status === "paid";
+                    return (
+                      <div
+                        key={key}
+                        className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50"
                       >
-                        Load
-                      </button>
-                      <button
-                        onClick={() => deleteInvoice(key)}
-                        className="btn btn-sm btn-outline text-red-600 hover:bg-red-50"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                        <div className="flex justify-between items-start mb-2">
+                          <div className="font-semibold text-blue-900">
+                            {key}
+                          </div>
+                          <span
+                            className={`text-xs px-2 py-1 rounded-full ${paid ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}
+                          >
+                            {paid ? "Paid" : "Unpaid"}
+                          </span>
+                        </div>
+                        <div className="text-sm text-gray-600 mb-2">
+                          Customer: {inv.customer?.name || "N/A"}
+                        </div>
+                        <div className="text-sm font-medium text-green-600 mb-3">
+                          {currencySymbol}
+                          {formatNumber(inv.totalAmount ?? 0)}
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            onClick={() => loadInvoice(key)}
+                            className="btn btn-sm btn-outline flex-1"
+                          >
+                            Load
+                          </button>
+                          <button
+                            onClick={() => collectSavedInvoice(key)}
+                            className="btn btn-sm btn-outline text-emerald-600 hover:bg-emerald-50"
+                            title="Collect via M-PESA STK Push"
+                          >
+                            Collect
+                          </button>
+                          <button
+                            onClick={() => markInvoicePaid(key, !paid)}
+                            className={`btn btn-sm btn-outline ${paid ? "text-amber-600 hover:bg-amber-50" : "text-green-600 hover:bg-green-50"}`}
+                            title={paid ? "Mark as unpaid" : "Mark as paid"}
+                          >
+                            {paid ? "Unpaid" : "Paid"}
+                          </button>
+                          <button
+                            onClick={() => deleteInvoice(key)}
+                            className="btn btn-sm btn-outline text-red-600 hover:bg-red-50"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
               </div>
             </div>
           )}
