@@ -226,6 +226,51 @@ type SectionId =
   | "ratelimits"
   | "devcontrol";
 
+// NavItem must be defined at MODULE scope (outside the component) so it is a
+// STABLE component type across re-renders. When it was defined inside the
+// FounderAccess body, every re-render created a new NavItem function → React
+// unmounted/remounted ALL nav buttons on every state change from the store
+// hooks (useFounderConsoleStore, useFounderAdvancedStore, useFounderBackend)
+// → click handlers were lost during the unmount/remount cycle → section
+// switching silently never worked.
+function NavItem({
+  id,
+  label,
+  icon: Icon,
+  count,
+  active,
+  onSelect,
+}: {
+  id: SectionId;
+  label: string;
+  icon: React.ElementType;
+  count?: number;
+  active: boolean;
+  onSelect: (id: SectionId) => void;
+}) {
+  return (
+    <button
+      data-section-id={id}
+      onClick={() => onSelect(id)}
+      className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-left transition-all ${
+        active
+          ? "bg-amber-500/15 text-amber-300 border-l-2 border-amber-400"
+          : "text-gray-400 hover:text-gray-200 hover:bg-white/[0.03]"
+      }`}
+    >
+      <Icon size={17} />
+      <span className="text-[13px]">{label}</span>
+      {count !== undefined && (
+        <span
+          className={`ml-auto text-[10px] px-1.5 py-0.5 rounded ${active ? "bg-amber-500/20 text-amber-300" : "bg-white/5 text-gray-500"}`}
+        >
+          {count}
+        </span>
+      )}
+    </button>
+  );
+}
+
 export default function FounderAccess() {
   /* ─── Cloud Sync State ─── */
   const [cloudStatus, setCloudStatus] = useState<{
@@ -278,10 +323,59 @@ export default function FounderAccess() {
   const [founderUserId, setFounderUserId] = useState<string | null>(null);
 
   /* ─── Admin State ─── */
-  const [activeSection, setActiveSection] = useState<SectionId>("overview");
+  // activeSection is tracked via the URL hash query param (`#/founder?s=users`)
+  // instead of React state. React state/refs were unreliable here because the
+  // component has a massive render tree (useFounderConsoleStore +
+  // useFounderAdvancedStore + useFounderBackend) that causes concurrent-mode
+  // render cancellation — the state update from setActiveSection was being
+  // torn before it committed, falling back to "overview". The URL is outside
+  // React's reconciliation, so updating it always takes effect immediately.
+  // The `hashTick` state forces a re-render when the hash changes (since the
+  // hash is read inline during render, not via a router hook).
+  const [, setHashTick] = useState(0);
+  useEffect(() => {
+    const onHash = () => setHashTick((n) => n + 1);
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
+  const activeSection: SectionId = (() => {
+    try {
+      const hash = window.location.hash;
+      const qIdx = hash.indexOf("?");
+      if (qIdx >= 0) {
+        const params = new URLSearchParams(hash.slice(qIdx + 1));
+        const s = params.get("s");
+        if (s) return s as SectionId;
+      }
+    } catch {
+      /* */
+    }
+    return "overview";
+  })();
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [users, setUsers] = useState<AppUser[]>([]);
   const [stations, setStations] = useState<StationRecord[]>([]);
+
+  // Navigate to a section by updating the URL hash query param. This is the
+  // ONLY mechanism for section switching — no React state involved, so it
+  // cannot be cancelled/teared by concurrent-mode re-renders. The hashchange
+  // event listener above triggers the re-render.
+  const handleSetActiveSection = useCallback((id: SectionId) => {
+    try {
+      const hash = window.location.hash;
+      const base = hash.split("?")[0];
+      const newHash = `${base}?s=${id}`;
+      if (hash !== newHash) {
+        window.location.hash = newHash;
+      } else {
+        // Same hash — manually trigger a re-render
+        setHashTick((n) => n + 1);
+      }
+    } catch {
+      /* */
+    }
+  }, []);
+
   // Secrets, Feature Flags and the Audit Log are now sourced from the
   // cloud-backed, real-time Founder Console store (useFounderConsoleStore).
   // The legacy localStorage state is kept only as a fallback display shape
@@ -529,7 +623,16 @@ export default function FounderAccess() {
     }
 
     setLoginError("");
-    const result = await loginFounder(loginUsername.trim(), loginPassword);
+    let result;
+    try {
+      result = await loginFounder(loginUsername.trim(), loginPassword);
+    } catch (err) {
+      console.error("[LoginDebug] loginFounder threw:", err);
+      setLoginError(
+        "Login error: " + (err instanceof Error ? err.message : "unknown"),
+      );
+      return;
+    }
 
     if (result.success) {
       setFounderUserId(result.userId || null);
@@ -584,6 +687,9 @@ export default function FounderAccess() {
   };
 
   const completeLogin = async () => {
+    console.log(
+      "[LoginDebug] completeLogin called, setting isAuthenticated=true",
+    );
     setIsAuthenticated(true);
 
     // Get founder token from backend via REST API
@@ -1362,39 +1468,7 @@ export default function FounderAccess() {
     },
   ];
 
-  const NavItem = ({
-    id,
-    label,
-    icon: Icon,
-    count,
-  }: {
-    id: SectionId;
-    label: string;
-    icon: React.ElementType;
-    count?: number;
-  }) => (
-    <button
-      onClick={() => {
-        setActiveSection(id);
-        setMobileSidebarOpen(false);
-      }}
-      className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-left transition-all ${
-        activeSection === id
-          ? "bg-amber-500/15 text-amber-300 border-l-2 border-amber-400"
-          : "text-gray-400 hover:text-gray-200 hover:bg-white/[0.03]"
-      }`}
-    >
-      <Icon size={17} />
-      <span className="text-[13px]">{label}</span>
-      {count !== undefined && (
-        <span
-          className={`ml-auto text-[10px] px-1.5 py-0.5 rounded ${activeSection === id ? "bg-amber-500/20 text-amber-300" : "bg-white/5 text-gray-500"}`}
-        >
-          {count}
-        </span>
-      )}
-    </button>
-  );
+  // NavItem is now a module-level component (stable type across re-renders).
 
   return (
     <div className="min-h-screen min-h-screen-dvh bg-[#0c0c0e] text-white flex">
@@ -1443,6 +1517,11 @@ export default function FounderAccess() {
                   label={item.label}
                   icon={item.icon}
                   count={item.count}
+                  active={activeSection === item.id}
+                  onSelect={(id) => {
+                    handleSetActiveSection(id);
+                    setMobileSidebarOpen(false);
+                  }}
                 />
               ))}
             </div>
@@ -1553,56 +1632,56 @@ export default function FounderAccess() {
                         : users.length,
                     icon: Users,
                     color: "text-blue-400",
-                    onClick: () => setActiveSection("users"),
+                    onClick: () => handleSetActiveSection("users"),
                   },
                   {
                     label: "Stations",
                     value: effectiveStationCount,
                     icon: Building2,
                     color: "text-green-400",
-                    onClick: () => setActiveSection("stations"),
+                    onClick: () => handleSetActiveSection("stations"),
                   },
                   {
                     label: "Revenue",
                     value: `${getCurrencySymbol(globalCurrency)} ${effectiveRevenue.toLocaleString()}`,
                     icon: DollarSign,
                     color: "text-amber-400",
-                    onClick: () => setActiveSection("analytics"),
+                    onClick: () => handleSetActiveSection("analytics"),
                   },
                   {
                     label: "Secrets",
                     value: secrets.length,
                     icon: Key,
                     color: "text-purple-400",
-                    onClick: () => setActiveSection("secrets"),
+                    onClick: () => handleSetActiveSection("secrets"),
                   },
                   {
                     label: "Feature Flags",
                     value: featureFlags.length,
                     icon: ToggleRight,
                     color: "text-indigo-400",
-                    onClick: () => setActiveSection("flags"),
+                    onClick: () => handleSetActiveSection("flags"),
                   },
                   {
                     label: "Audit Events",
                     value: auditLog.length,
                     icon: Shield,
                     color: "text-cyan-400",
-                    onClick: () => setActiveSection("audit"),
+                    onClick: () => handleSetActiveSection("audit"),
                   },
                   {
                     label: "Webhooks",
                     value: advancedStore.webhooks.length,
                     icon: Webhook,
                     color: "text-pink-400",
-                    onClick: () => setActiveSection("webhooks"),
+                    onClick: () => handleSetActiveSection("webhooks"),
                   },
                   {
                     label: "API Keys",
                     value: advancedStore.apiKeys.length,
                     icon: KeyRound,
                     color: "text-orange-400",
-                    onClick: () => setActiveSection("apikeys"),
+                    onClick: () => handleSetActiveSection("apikeys"),
                   },
                 ].map((s) => (
                   <div
@@ -1698,7 +1777,7 @@ export default function FounderAccess() {
                   ].map((a) => (
                     <button
                       key={a.label}
-                      onClick={() => setActiveSection(a.section)}
+                      onClick={() => handleSetActiveSection(a.section)}
                       className="flex flex-col items-center gap-1.5 p-3 bg-white/[0.02] hover:bg-white/[0.05] rounded-lg text-xs text-gray-400 hover:text-white transition-colors"
                     >
                       <a.icon size={16} className="text-gray-500" />
@@ -1762,7 +1841,7 @@ export default function FounderAccess() {
                 ].map((s) => (
                   <div
                     key={s.label}
-                    onClick={() => setActiveSection(s.section)}
+                    onClick={() => handleSetActiveSection(s.section)}
                     className="bg-[#161618] border border-white/[0.06] rounded-xl p-3 hover:border-white/[0.12] cursor-pointer transition-colors"
                   >
                     <div className="flex items-center gap-2 mb-2">
@@ -2727,7 +2806,7 @@ export default function FounderAccess() {
                   icon: it.icon,
                 })),
               )}
-              onRun={(id) => setActiveSection(id as SectionId)}
+              onRun={(id) => handleSetActiveSection(id as SectionId)}
             />
           )}
           {activeSection === "webhooks" && (
