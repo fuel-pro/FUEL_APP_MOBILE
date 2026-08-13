@@ -25,7 +25,11 @@ import { useStationFuelTypes } from "@/react-app/hooks/useStationFuelTypes";
 import { useAuth } from "@/react-app/context/AuthContext";
 import { useStations } from "@/react-app/context/StationContext";
 import { formatNumber } from "@/react-app/utils/formatUtils";
-import { CANONICAL_FUEL_TYPES, getVATRate } from "@/react-app/config/pricing";
+import {
+  CANONICAL_FUEL_TYPES,
+  getVATRate,
+  normalizeFuelType,
+} from "@/react-app/config/pricing";
 import {
   getCurrencySymbol,
   getCurrencyByCountry,
@@ -49,7 +53,10 @@ interface CartItem {
   quantity: number;
   unitPrice: number;
   total: number;
-  fuelType?: "PMS" | "AGO";
+  /** Canonical fuel-type label (e.g. "Super Petrol", "Diesel", "Kerosene",
+   * "LPG"). Widened from "PMS"|"AGO" so ANY configured fuel type can be sold
+   * and tracked — not just Petrol/Diesel. */
+  fuelType?: string;
   litres?: number;
   vatCategory: "A" | "B" | "E"; // A=standard-rated, B=0%, E=Exempt
   hsCode?: string;
@@ -425,7 +432,7 @@ export default function PointOfSale() {
     // machine-readable fuel identifier for unknown custom fuels.
     const canonical = fuelTypeApi.canonicalOf(label);
     const configuredCode = fuelTypeApi.findFuelType(label)?.code;
-    const fuelCode =
+    const _fuelCode =
       configuredCode ||
       (canonical ? CANONICAL_FUEL_TYPES[canonical]?.code : undefined) ||
       (canonical === "diesel" ? "AGO" : "PMS");
@@ -436,7 +443,11 @@ export default function PointOfSale() {
       quantity: 1,
       unitPrice: total,
       total: total,
-      fuelType: (fuelCode === "AGO" ? "AGO" : "PMS") as "PMS" | "AGO",
+      // Store the canonical fuel-type LABEL (e.g. "Super Petrol", "Kerosene",
+      // "LPG") so the receipt groups fuels correctly by their real type —
+      // NOT collapsed into "PMS"/"AGO". This is the key fix: a Kerosene/LPG
+      // sale no longer masquerades as Petrol/Diesel on the receipt.
+      fuelType: label,
       litres: litres,
       vatCategory: "A", // Fuel is standard-rated (VAT-able)
       hsCode: canonical === "diesel" ? "2710.19.20" : "2710.12.10",
@@ -684,23 +695,39 @@ export default function PointOfSale() {
     const shift = new Date(timestamp).getHours() < 14 ? "Day" : "Night";
     const key = `${date}_${shift}`;
 
-    // Calculate fuel totals from POS items
+    // Calculate fuel totals from POS items. Group by canonical fuel type so
+    // Kerosene/LPG/V-Power sales are tracked under their own fuel, not
+    // collapsed into PMS/AGO. Petrol→pmsLitres, Diesel→agoLitres for legacy
+    // backward compatibility; other fuels tracked in posSales.byType.
     let pmsLitres = 0,
       pmsAmount = 0;
     let agoLitres = 0,
       agoAmount = 0;
+    const byTypeLitres: Record<string, number> = {};
+    const byTypeAmount: Record<string, number> = {};
 
     items.forEach((item) => {
-      if (item.fuelType === "PMS") {
-        pmsLitres += item.litres || item.quantity;
+      if (!item.fuelType) return;
+      const canonical = normalizeFuelType(item.fuelType);
+      const litres = item.litres || item.quantity;
+      byTypeLitres[item.fuelType] = (byTypeLitres[item.fuelType] || 0) + litres;
+      byTypeAmount[item.fuelType] =
+        (byTypeAmount[item.fuelType] || 0) + item.total;
+      if (canonical === "petrol") {
+        pmsLitres += litres;
         pmsAmount += item.total;
-      } else if (item.fuelType === "AGO") {
-        agoLitres += item.litres || item.quantity;
+      } else if (canonical === "diesel") {
+        agoLitres += litres;
         agoAmount += item.total;
       }
     });
 
-    if (pmsLitres === 0 && agoLitres === 0) return;
+    if (
+      pmsLitres === 0 &&
+      agoLitres === 0 &&
+      Object.keys(byTypeLitres).length === 0
+    )
+      return;
 
     // Get existing sales data or create new
     const existingSales = state.salesHistory[key] || {
@@ -708,15 +735,24 @@ export default function PointOfSale() {
       shift,
       pmsPumps: state.pmsPumps,
       agoPumps: state.agoPumps,
+      fuelPumpsByType: state.fuelPumpsByType,
       expenses: [],
       tillPayment: 0,
       pmsPrice: state.pmsPrice,
       agoPrice: state.agoPrice,
+      fuelPricesByType: state.fuelPricesByType,
       pmsTankOpening: state.pmsTankOpening,
       pmsTankClosing: state.pmsTankClosing,
       agoTankOpening: state.agoTankOpening,
       agoTankClosing: state.agoTankClosing,
-      posSales: { pmsLitres: 0, pmsAmount: 0, agoLitres: 0, agoAmount: 0 },
+      posSales: {
+        pmsLitres: 0,
+        pmsAmount: 0,
+        agoLitres: 0,
+        agoAmount: 0,
+        byTypeLitres: {},
+        byTypeAmount: {},
+      },
     };
 
     // Accumulate POS sales
@@ -725,11 +761,25 @@ export default function PointOfSale() {
       pmsAmount: 0,
       agoLitres: 0,
       agoAmount: 0,
+      byTypeLitres: {},
+      byTypeAmount: {},
     };
     posSales.pmsLitres += pmsLitres;
     posSales.pmsAmount += pmsAmount;
     posSales.agoLitres += agoLitres;
     posSales.agoAmount += agoAmount;
+    posSales.byTypeLitres = {
+      ...(posSales.byTypeLitres || {}),
+    };
+    posSales.byTypeAmount = {
+      ...(posSales.byTypeAmount || {}),
+    };
+    for (const ft of Object.keys(byTypeLitres)) {
+      posSales.byTypeLitres[ft] =
+        (posSales.byTypeLitres[ft] || 0) + byTypeLitres[ft];
+      posSales.byTypeAmount[ft] =
+        (posSales.byTypeAmount[ft] || 0) + byTypeAmount[ft];
+    }
 
     // Update till payment for M-Pesa transactions
     const tillPayment =

@@ -1,5 +1,11 @@
-import { useState, useRef, useCallback } from "react";
-import { KENYA_BASE_PRICES } from "@/react-app/config/pricing";
+import { useState, useRef, useCallback, useMemo } from "react";
+import {
+  KENYA_BASE_PRICES,
+  normalizeFuelType,
+  getFuelLabel,
+  getFuelCode,
+  type CanonicalFuelType,
+} from "@/react-app/config/pricing";
 import {
   Plus,
   Save,
@@ -19,6 +25,7 @@ import {
   Tag,
 } from "lucide-react";
 import { useFuel } from "@/react-app/context/FuelContext";
+import { useStationFuelTypes } from "@/react-app/hooks/useStationFuelTypes";
 import ExportDropdown from "@/react-app/components/ExportDropdown";
 import {
   exportSalesPDF,
@@ -60,8 +67,35 @@ interface ScanResultData {
 type ScanStep = "idle" | "uploading" | "analyzing" | "review" | "error";
 
 export default function SalesTracking() {
-  const { state, dispatch } = useFuel();
+  const { state, dispatch, syncPriceToFuelTypes } = useFuel();
   const currencySymbol = getCurrencySymbol(state.companyData?.currency);
+  // Dynamic fuel-type support: read the station's configured fuel types so
+  // the pump tables, pricing inputs, and per-fuel summaries are NOT hardcoded
+  // to PMS/AGO. A station with Kerosene/LPG/V-Power etc. gets its own pump
+  // table per fuel type.
+  const stationId = state.currentStationId ?? undefined;
+  const fuelTypeApi = useStationFuelTypes(stationId);
+
+  /**
+   * The fuel types this station tracks pumps for. Built from the configured
+   * fuel_types_config (canonical-normalized). Always includes petrol + diesel
+   * (via the static baseline) so a station that hasn't configured fuel types
+   * yet still sees the legacy two tables — no regression.
+   */
+  const trackedFuelTypes: CanonicalFuelType[] = useMemo(() => {
+    const active = fuelTypeApi.activeFuelTypes;
+    const set = new Set<CanonicalFuelType>();
+    for (const ft of active) {
+      const c = fuelTypeApi.canonicalOf(ft.name);
+      if (c) set.add(c);
+    }
+    // Always include petrol + diesel baseline so pumps never disappear for
+    // stations that haven't configured fuel types.
+    set.add("petrol");
+    set.add("diesel");
+    return Array.from(set);
+  }, [fuelTypeApi]);
+
   const [scanStep, setScanStep] = useState<ScanStep>("idle");
   const [scanResult, setScanResult] = useState<ScanResultData | null>(null);
   const [editableResult, setEditableResult] = useState<ScanResultData | null>(
@@ -264,16 +298,19 @@ export default function SalesTracking() {
       dispatch({ type: "SET_SHIFT", payload: data.shift });
     }
 
-    // Handle new pump format (pumps array with fuelType)
+    // Handle new pump format (pumps array with fuelType). Use canonical
+    // normalization so Kerosene/LPG/V-Power etc. are NOT dropped (the old
+    // code only matched literal "petrol"/"diesel").
     if (data.pumps && data.pumps.length > 0) {
-      const pmsPumps = data.pumps
-        .filter(
-          (p: any) =>
-            p.fuelType?.toLowerCase() === "petrol" ||
-            p.name?.toLowerCase().includes("petrol"),
-        )
-        .map((p: any, i: number) => ({
-          id: p.name || `PMS-${i + 1}`,
+      const byType: Record<string, typeof state.pmsPumps> = {};
+      for (const p of data.pumps as any[]) {
+        const raw = p.fuelType || p.name || "";
+        const canonical =
+          normalizeFuelType(raw) ||
+          (String(raw).toLowerCase().includes("diesel") ? "diesel" : "petrol");
+        const arr = byType[canonical] ?? [];
+        arr.push({
+          id: p.name || `${getFuelCode(canonical)}-${arr.length + 1}`,
           openingKsh: p.openingReading || 0,
           closingKsh: p.closingReading || 0,
           openingL: 0,
@@ -282,29 +319,21 @@ export default function SalesTracking() {
           salesKsh:
             p.salesAmount ||
             Math.max(0, (p.closingReading || 0) - (p.openingReading || 0)),
-        }));
-      const agoPumps = data.pumps
-        .filter(
-          (p: any) =>
-            p.fuelType?.toLowerCase() === "diesel" ||
-            p.name?.toLowerCase().includes("diesel"),
-        )
-        .map((p: any, i: number) => ({
-          id: p.name || `AGO-${i + 1}`,
-          openingKsh: p.openingReading || 0,
-          closingKsh: p.closingReading || 0,
-          openingL: 0,
-          closingL: 0,
-          salesL: 0,
-          salesKsh:
-            p.salesAmount ||
-            Math.max(0, (p.closingReading || 0) - (p.openingReading || 0)),
-        }));
-      if (pmsPumps.length > 0) {
-        dispatch({ type: "SET_PMS_PUMPS", payload: pmsPumps });
+        });
+        byType[canonical] = arr;
       }
-      if (agoPumps.length > 0) {
-        dispatch({ type: "SET_AGO_PUMPS", payload: agoPumps });
+      if (byType.petrol?.length > 0)
+        dispatch({ type: "SET_PMS_PUMPS", payload: byType.petrol });
+      if (byType.diesel?.length > 0)
+        dispatch({ type: "SET_AGO_PUMPS", payload: byType.diesel });
+      const extraTypes = { ...byType };
+      delete extraTypes.petrol;
+      delete extraTypes.diesel;
+      if (Object.keys(extraTypes).length > 0) {
+        dispatch({
+          type: "SET_FUEL_PUMPS_BY_TYPE",
+          payload: { ...state.fuelPumpsByType, ...extraTypes },
+        });
       }
     }
     // Fallback for old format
@@ -358,10 +387,34 @@ export default function SalesTracking() {
     alert("Data applied successfully! Review and adjust as needed.");
   };
 
-  const addPump = (type: "pms" | "ago") => {
-    const pumps = type === "pms" ? state.pmsPumps : state.agoPumps;
-    const pumpId = `${type.toUpperCase()}-${pumps.length + 1}`;
+  const pumpsForType = (type: CanonicalFuelType): typeof state.pmsPumps => {
+    if (type === "petrol") return state.pmsPumps;
+    if (type === "diesel") return state.agoPumps;
+    return state.fuelPumpsByType?.[type] ?? [];
+  };
 
+  const setPumpsForType = (
+    type: CanonicalFuelType,
+    pumps: typeof state.pmsPumps,
+  ) => {
+    if (type === "petrol") {
+      dispatch({ type: "SET_PMS_PUMPS", payload: pumps });
+    } else if (type === "diesel") {
+      dispatch({ type: "SET_AGO_PUMPS", payload: pumps });
+    } else {
+      dispatch({
+        type: "SET_FUEL_PUMPS_BY_TYPE",
+        payload: { ...state.fuelPumpsByType, [type]: pumps },
+      });
+    }
+  };
+
+  const addPump = (type: CanonicalFuelType) => {
+    const pumps = [...pumpsForType(type)];
+    const code = getFuelCode(type) || type.toUpperCase();
+    const pumpId = `${code}-${pumps.length + 1}-${Math.random()
+      .toString(36)
+      .slice(2, 6)}`;
     const pump = {
       id: pumpId,
       openingKsh: 0,
@@ -371,52 +424,54 @@ export default function SalesTracking() {
       salesL: 0,
       salesKsh: 0,
     };
-
-    if (type === "pms") {
-      dispatch({ type: "SET_PMS_PUMPS", payload: [...state.pmsPumps, pump] });
-    } else {
-      dispatch({ type: "SET_AGO_PUMPS", payload: [...state.agoPumps, pump] });
-    }
+    setPumpsForType(type, [...pumps, pump]);
   };
 
   const calculateSales = (
     index: number,
-    type: "pms" | "ago",
+    type: CanonicalFuelType,
     field: string,
     value: number,
   ) => {
-    const pumps = type === "pms" ? [...state.pmsPumps] : [...state.agoPumps];
+    const pumps = [...pumpsForType(type)];
     const pump = pumps[index];
-
     (pump as any)[field] = value;
-
     // Calculate sales
     pump.salesL = Math.max(0, pump.closingL - pump.openingL);
     pump.salesKsh = Math.max(0, pump.closingKsh - pump.openingKsh);
+    setPumpsForType(type, pumps);
+  };
 
-    if (type === "pms") {
-      dispatch({ type: "SET_PMS_PUMPS", payload: pumps });
-    } else {
-      dispatch({ type: "SET_AGO_PUMPS", payload: pumps });
+  const removePump = (index: number, type: CanonicalFuelType) => {
+    if (confirm("Delete this pump?")) {
+      const pumps = [...pumpsForType(type)];
+      pumps.splice(index, 1);
+      setPumpsForType(type, pumps);
     }
   };
 
-  const removePump = (index: number, type: "pms" | "ago") => {
-    if (confirm("Delete this pump?")) {
-      const pumps = type === "pms" ? [...state.pmsPumps] : [...state.agoPumps];
-      pumps.splice(index, 1);
+  const priceForType = (type: CanonicalFuelType): number => {
+    const dynamic = fuelTypeApi.getPriceFor(type);
+    if (dynamic && dynamic > 0) return dynamic;
+    if (type === "petrol") return state.pmsPrice ?? 0;
+    if (type === "diesel") return state.agoPrice ?? 0;
+    return state.fuelPricesByType?.[type] ?? 0;
+  };
 
-      // Update pump IDs
-      pumps.forEach((pump, i) => {
-        pump.id = `${type.toUpperCase()}-${i + 1}`;
+  const setPriceForType = (type: CanonicalFuelType, value: number) => {
+    if (type === "petrol") {
+      dispatch({ type: "SET_PRICES", payload: { pmsPrice: value } });
+    } else if (type === "diesel") {
+      dispatch({ type: "SET_PRICES", payload: { agoPrice: value } });
+    } else {
+      dispatch({
+        type: "SET_FUEL_PRICES_BY_TYPE",
+        payload: { [type]: value },
       });
-
-      if (type === "pms") {
-        dispatch({ type: "SET_PMS_PUMPS", payload: pumps });
-      } else {
-        dispatch({ type: "SET_AGO_PUMPS", payload: pumps });
-      }
     }
+    // Propagate to the canonical fuel-types config so the price shows up on
+    // the Dashboard / POS / Price Board instantly.
+    if (syncPriceToFuelTypes) syncPriceToFuelTypes(type, value);
   };
 
   const addExpense = () => {
@@ -442,25 +497,27 @@ export default function SalesTracking() {
   };
 
   const calculateSummary = () => {
-    const totalPmsSalesKsh = state.pmsPumps.reduce(
-      (sum, pump) => sum + pump.salesKsh,
-      0,
-    );
-    const totalAgoSalesKsh = state.agoPumps.reduce(
-      (sum, pump) => sum + pump.salesKsh,
-      0,
-    );
-    const totalRevenue = totalPmsSalesKsh + totalAgoSalesKsh;
+    // Sum pump sales across ALL tracked fuel types (not just PMS/AGO).
+    const salesByType: Record<string, number> = {};
+    let totalRevenue = 0;
+    for (const ft of trackedFuelTypes) {
+      const pumps = pumpsForType(ft) ?? [];
+      const sales = pumps.reduce((sum, pump) => sum + (pump.salesKsh || 0), 0);
+      salesByType[ft] = sales;
+      totalRevenue += sales;
+    }
     const totalExpenses = state.expenses.reduce(
-      (sum, expense) => sum + expense.amount,
+      (sum, expense) => sum + (expense.amount || 0),
       0,
     );
-    const cashInHand = totalRevenue - totalExpenses - state.tillPayment;
-    const netIncome = state.tillPayment + cashInHand;
+    const cashInHand = totalRevenue - totalExpenses - (state.tillPayment || 0);
+    const netIncome = (state.tillPayment || 0) + cashInHand;
 
     return {
-      totalPmsSalesKsh,
-      totalAgoSalesKsh,
+      ...salesByType,
+      totalPmsSalesKsh: salesByType.petrol ?? 0,
+      totalAgoSalesKsh: salesByType.diesel ?? 0,
+      salesByType,
       totalRevenue,
       totalExpenses,
       cashInHand,
@@ -474,6 +531,17 @@ export default function SalesTracking() {
     if (confirm("Clear all sales data?")) {
       dispatch({ type: "SET_PMS_PUMPS", payload: [] });
       dispatch({ type: "SET_AGO_PUMPS", payload: [] });
+      // Clear dynamic fuel-type pumps too.
+      const cleared: Record<string, typeof state.pmsPumps> = {};
+      for (const ft of trackedFuelTypes) {
+        if (ft !== "petrol" && ft !== "diesel") cleared[ft] = [];
+      }
+      if (Object.keys(cleared).length > 0) {
+        dispatch({
+          type: "SET_FUEL_PUMPS_BY_TYPE",
+          payload: { ...state.fuelPumpsByType, ...cleared },
+        });
+      }
       dispatch({ type: "SET_EXPENSES", payload: [] });
       dispatch({ type: "SET_TILL_PAYMENT", payload: 0 });
       dispatch({
@@ -508,6 +576,8 @@ export default function SalesTracking() {
       shift: state.shift,
       pmsPumps: [...state.pmsPumps],
       agoPumps: [...state.agoPumps],
+      fuelPumpsByType: { ...(state.fuelPumpsByType || {}) },
+      fuelPricesByType: { ...(state.fuelPricesByType || {}) },
       expenses: [...state.expenses],
       tillPayment: state.tillPayment,
       pmsPrice: state.pmsPrice,
@@ -534,6 +604,16 @@ export default function SalesTracking() {
     dispatch({ type: "SET_SHIFT", payload: data.shift });
     dispatch({ type: "SET_PMS_PUMPS", payload: data.pmsPumps || [] });
     dispatch({ type: "SET_AGO_PUMPS", payload: data.agoPumps || [] });
+    if (data.fuelPumpsByType)
+      dispatch({
+        type: "SET_FUEL_PUMPS_BY_TYPE",
+        payload: data.fuelPumpsByType,
+      });
+    if (data.fuelPricesByType)
+      dispatch({
+        type: "SET_FUEL_PRICES_BY_TYPE",
+        payload: data.fuelPricesByType,
+      });
     dispatch({ type: "SET_EXPENSES", payload: data.expenses || [] });
     dispatch({ type: "SET_TILL_PAYMENT", payload: data.tillPayment || 0 });
     dispatch({
@@ -583,7 +663,34 @@ export default function SalesTracking() {
   };
 
   const getSalesData = () => {
-    return `Date: ${state.salesDate}\nShift: ${state.shift}\n\nFuel Tank Inventory:\nPetrol (PMS) Tank: Opening: ${formatNumber(state.pmsTankOpening)} L, Closing: ${formatNumber(state.pmsTankClosing)} L\nDiesel (AGO) Tank: Opening: ${formatNumber(state.agoTankOpening)} L, Closing: ${formatNumber(state.agoTankClosing)} L\n\nFuel Pricing:\nPetrol (PMS): ${state.companyData.currency} ${state.pmsPrice}/L\nDiesel (AGO): ${state.companyData.currency} ${state.agoPrice}/L\n\nPetrol (PMS) Pumps:\n${state.pmsPumps.map((p) => `${p.id}: Sales: ${formatNumber(p.salesL)} L, ${formatNumber(p.salesKsh)} ${state.companyData.currency}`).join("\n")}\n\nDiesel (AGO) Pumps:\n${state.agoPumps.map((p) => `${p.id}: Sales: ${formatNumber(p.salesL)} L, ${formatNumber(p.salesKsh)} ${state.companyData.currency}`).join("\n")}\n\nDaily Expenses:\n${state.expenses.map((e) => `${e.desc}: ${formatNumber(e.amount)} ${state.companyData.currency}`).join("\n")}\n\nTill/Mobile Payment: ${formatNumber(state.tillPayment)} ${state.companyData.currency}\n\nDaily Summary:\nTotal Petrol Sales: ${state.companyData.currency} ${formatNumber(summary.totalPmsSalesKsh, 2)}\nTotal Diesel Sales: ${state.companyData.currency} ${formatNumber(summary.totalAgoSalesKsh, 2)}\nTotal Revenue: ${state.companyData.currency} ${formatNumber(summary.totalRevenue, 2)}\nTill/Mobile Payment: ${state.companyData.currency} ${formatNumber(state.tillPayment, 2)}\nCash In Hand: ${state.companyData.currency} ${formatNumber(summary.cashInHand, 2)}\nTotal Expenses: ${state.companyData.currency} ${formatNumber(summary.totalExpenses, 2)}\nNet Income: ${state.companyData.currency} ${formatNumber(summary.netIncome, 2)}`;
+    const fuelLines: string[] = [];
+    const summaryLines: string[] = [];
+    for (const ft of trackedFuelTypes) {
+      const label = getFuelLabel(ft);
+      const code = getFuelCode(ft);
+      const pumps = pumpsForType(ft) ?? [];
+      const price = priceForType(ft);
+      fuelLines.push(
+        `${label} (${code}) Price: ${currencySymbol} ${formatNumber(price)}/L`,
+      );
+      fuelLines.push(
+        `${label} (${code}) Pumps:\n${
+          pumps
+            .map(
+              (p) =>
+                `${p.id}: Sales: ${formatNumber(p.salesL)} L, ${formatNumber(
+                  p.salesKsh,
+                )} ${currencySymbol}`,
+            )
+            .join("\n") || "  (no pumps)"
+        }`,
+      );
+      const sales = (summary.salesByType as Record<string, number>)?.[ft] ?? 0;
+      summaryLines.push(
+        `Total ${label} Sales: ${currencySymbol} ${formatNumber(sales, 2)}`,
+      );
+    }
+    return `Date: ${state.salesDate}\nShift: ${state.shift}\n\nFuel Tank Inventory:\nPetrol (PMS) Tank: Opening: ${formatNumber(state.pmsTankOpening)} L, Closing: ${formatNumber(state.pmsTankClosing)} L\nDiesel (AGO) Tank: Opening: ${formatNumber(state.agoTankOpening)} L, Closing: ${formatNumber(state.agoTankClosing)} L\n\nFuel Pricing & Pumps:\n${fuelLines.join("\n")}\n\nDaily Expenses:\n${state.expenses.map((e) => `${e.desc}: ${formatNumber(e.amount)} ${currencySymbol}`).join("\n")}\n\nTill/Mobile Payment: ${formatNumber(state.tillPayment)} ${currencySymbol}\n\nDaily Summary:\n${summaryLines.join("\n")}\nTotal Revenue: ${currencySymbol} ${formatNumber(summary.totalRevenue, 2)}\nTill/Mobile Payment: ${currencySymbol} ${formatNumber(state.tillPayment, 2)}\nCash In Hand: ${currencySymbol} ${formatNumber(summary.cashInHand, 2)}\nTotal Expenses: ${currencySymbol} ${formatNumber(summary.totalExpenses, 2)}\nNet Income: ${currencySymbol} ${formatNumber(summary.netIncome, 2)}`;
   };
 
   return (
@@ -1184,261 +1291,155 @@ export default function SalesTracking() {
           </div>
         </div>
 
-        {/* Fuel Pricing */}
+        {/* Fuel Pricing — dynamic per fuel type */}
         <div className="mb-6">
           <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
             <Tag size={20} className="text-indigo-500" />
             Fuel Pricing
           </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="form-group">
-              <label>Petrol (PMS) Price ({state.companyData.currency}/L)</label>
-              <input
-                type="number"
-                value={state.pmsPrice}
-                onChange={(e) =>
-                  dispatch({
-                    type: "SET_PRICES",
-                    payload: { pmsPrice: parseFloat(e.target.value) || 0 },
-                  })
-                }
-                step="0.1"
-              />
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {trackedFuelTypes.map((ft) => {
+              const label = getFuelLabel(ft);
+              const code = getFuelCode(ft);
+              return (
+                <div className="form-group" key={ft}>
+                  <label>
+                    {label} ({code}) Price (
+                    {state.companyData.currency || currencySymbol}/L)
+                  </label>
+                  <input
+                    type="number"
+                    value={priceForType(ft)}
+                    onChange={(e) =>
+                      setPriceForType(ft, parseFloat(e.target.value) || 0)
+                    }
+                    step="0.1"
+                  />
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Pumps — dynamic per fuel type. A station with N fuel types gets N
+            pump tables (was hardcoded to only Petrol (PMS) Pumps + Diesel
+            (AGO) Pumps). */}
+        {trackedFuelTypes.map((ft) => {
+          const label = getFuelLabel(ft);
+          const code = getFuelCode(ft);
+          const pumps = pumpsForType(ft);
+          return (
+            <div className="mb-6" key={ft}>
+              <div className="flex justify-between items-center mb-3">
+                <h3 className="text-lg font-semibold">
+                  {label} ({code}) Pumps
+                </h3>
+                <button onClick={() => addPump(ft)} className="btn btn-primary">
+                  <Plus size={16} />
+                  Add {label} Pump
+                </button>
+              </div>
+
+              <div className="table-container">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Pump ID</th>
+                      <th>Opening Meter ({state.companyData.currency})</th>
+                      <th>Closing Meter ({state.companyData.currency})</th>
+                      <th>Opening Meter (L)</th>
+                      <th>Closing Meter (L)</th>
+                      <th>Sales (L)</th>
+                      <th>Sales ({state.companyData.currency})</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pumps.map((pump, index) => (
+                      <tr key={pump.id || index}>
+                        <td>{pump.id}</td>
+                        <td>
+                          <input
+                            type="number"
+                            value={pump.openingKsh}
+                            onChange={(e) =>
+                              calculateSales(
+                                index,
+                                ft,
+                                "openingKsh",
+                                parseFloat(e.target.value) || 0,
+                              )
+                            }
+                            step="0.1"
+                            className="w-full bg-transparent border-none outline-none"
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="number"
+                            value={pump.closingKsh}
+                            onChange={(e) =>
+                              calculateSales(
+                                index,
+                                ft,
+                                "closingKsh",
+                                parseFloat(e.target.value) || 0,
+                              )
+                            }
+                            step="0.1"
+                            className="w-full bg-transparent border-none outline-none"
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="number"
+                            value={pump.openingL}
+                            onChange={(e) =>
+                              calculateSales(
+                                index,
+                                ft,
+                                "openingL",
+                                parseFloat(e.target.value) || 0,
+                              )
+                            }
+                            step="0.1"
+                            className="w-full bg-transparent border-none outline-none"
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="number"
+                            value={pump.closingL}
+                            onChange={(e) =>
+                              calculateSales(
+                                index,
+                                ft,
+                                "closingL",
+                                parseFloat(e.target.value) || 0,
+                              )
+                            }
+                            step="0.1"
+                            className="w-full bg-transparent border-none outline-none"
+                          />
+                        </td>
+                        <td>{formatNumber(pump.salesL)}</td>
+                        <td>{formatNumber(pump.salesKsh)}</td>
+                        <td>
+                          <button
+                            onClick={() => removePump(index, ft)}
+                            className="btn btn-outline p-1"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
-            <div className="form-group">
-              <label>Diesel (AGO) Price ({state.companyData.currency}/L)</label>
-              <input
-                type="number"
-                value={state.agoPrice}
-                onChange={(e) =>
-                  dispatch({
-                    type: "SET_PRICES",
-                    payload: { agoPrice: parseFloat(e.target.value) || 0 },
-                  })
-                }
-                step="0.1"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* PMS Pumps */}
-        <div className="mb-6">
-          <div className="flex justify-between items-center mb-3">
-            <h3 className="text-lg font-semibold">Petrol (PMS) Pumps</h3>
-            <button onClick={() => addPump("pms")} className="btn btn-primary">
-              <Plus size={16} />
-              Add Petrol Pump
-            </button>
-          </div>
-
-          <div className="table-container">
-            <table>
-              <thead>
-                <tr>
-                  <th>Pump ID</th>
-                  <th>Opening Meter ({state.companyData.currency})</th>
-                  <th>Closing Meter ({state.companyData.currency})</th>
-                  <th>Opening Meter (L)</th>
-                  <th>Closing Meter (L)</th>
-                  <th>Sales (L)</th>
-                  <th>Sales ({state.companyData.currency})</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {state.pmsPumps.map((pump, index) => (
-                  <tr key={index}>
-                    <td>{pump.id}</td>
-                    <td>
-                      <input
-                        type="number"
-                        value={pump.openingKsh}
-                        onChange={(e) =>
-                          calculateSales(
-                            index,
-                            "pms",
-                            "openingKsh",
-                            parseFloat(e.target.value) || 0,
-                          )
-                        }
-                        step="0.1"
-                        className="w-full bg-transparent border-none outline-none"
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="number"
-                        value={pump.closingKsh}
-                        onChange={(e) =>
-                          calculateSales(
-                            index,
-                            "pms",
-                            "closingKsh",
-                            parseFloat(e.target.value) || 0,
-                          )
-                        }
-                        step="0.1"
-                        className="w-full bg-transparent border-none outline-none"
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="number"
-                        value={pump.openingL}
-                        onChange={(e) =>
-                          calculateSales(
-                            index,
-                            "pms",
-                            "openingL",
-                            parseFloat(e.target.value) || 0,
-                          )
-                        }
-                        step="0.1"
-                        className="w-full bg-transparent border-none outline-none"
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="number"
-                        value={pump.closingL}
-                        onChange={(e) =>
-                          calculateSales(
-                            index,
-                            "pms",
-                            "closingL",
-                            parseFloat(e.target.value) || 0,
-                          )
-                        }
-                        step="0.1"
-                        className="w-full bg-transparent border-none outline-none"
-                      />
-                    </td>
-                    <td>{formatNumber(pump.salesL)}</td>
-                    <td>{formatNumber(pump.salesKsh)}</td>
-                    <td>
-                      <button
-                        onClick={() => removePump(index, "pms")}
-                        className="btn btn-outline p-1"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* AGO Pumps */}
-        <div className="mb-6">
-          <div className="flex justify-between items-center mb-3">
-            <h3 className="text-lg font-semibold">Diesel (AGO) Pumps</h3>
-            <button onClick={() => addPump("ago")} className="btn btn-primary">
-              <Plus size={16} />
-              Add Diesel Pump
-            </button>
-          </div>
-
-          <div className="table-container">
-            <table>
-              <thead>
-                <tr>
-                  <th>Pump ID</th>
-                  <th>Opening Meter ({state.companyData.currency})</th>
-                  <th>Closing Meter ({state.companyData.currency})</th>
-                  <th>Opening Meter (L)</th>
-                  <th>Closing Meter (L)</th>
-                  <th>Sales (L)</th>
-                  <th>Sales ({state.companyData.currency})</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {state.agoPumps.map((pump, index) => (
-                  <tr key={index}>
-                    <td>{pump.id}</td>
-                    <td>
-                      <input
-                        type="number"
-                        value={pump.openingKsh}
-                        onChange={(e) =>
-                          calculateSales(
-                            index,
-                            "ago",
-                            "openingKsh",
-                            parseFloat(e.target.value) || 0,
-                          )
-                        }
-                        step="0.1"
-                        className="w-full bg-transparent border-none outline-none"
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="number"
-                        value={pump.closingKsh}
-                        onChange={(e) =>
-                          calculateSales(
-                            index,
-                            "ago",
-                            "closingKsh",
-                            parseFloat(e.target.value) || 0,
-                          )
-                        }
-                        step="0.1"
-                        className="w-full bg-transparent border-none outline-none"
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="number"
-                        value={pump.openingL}
-                        onChange={(e) =>
-                          calculateSales(
-                            index,
-                            "ago",
-                            "openingL",
-                            parseFloat(e.target.value) || 0,
-                          )
-                        }
-                        step="0.1"
-                        className="w-full bg-transparent border-none outline-none"
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="number"
-                        value={pump.closingL}
-                        onChange={(e) =>
-                          calculateSales(
-                            index,
-                            "ago",
-                            "closingL",
-                            parseFloat(e.target.value) || 0,
-                          )
-                        }
-                        step="0.1"
-                        className="w-full bg-transparent border-none outline-none"
-                      />
-                    </td>
-                    <td>{formatNumber(pump.salesL)}</td>
-                    <td>{formatNumber(pump.salesKsh)}</td>
-                    <td>
-                      <button
-                        onClick={() => removePump(index, "ago")}
-                        className="btn btn-outline p-1"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+          );
+        })}
 
         {/* Daily Expenses */}
         <div className="mb-6">
@@ -1520,52 +1521,55 @@ export default function SalesTracking() {
           </div>
         </div>
 
-        {/* Daily Summary */}
+        {/* Daily Summary — per-fuel-type sales + totals */}
         <div className="sales-summary">
-          <div className="summary-item">
-            <div className="summary-label">Total Petrol Sales</div>
-            <div className="summary-value">
-              {state.companyData.currency}{" "}
-              {formatNumber(summary.totalPmsSalesKsh, 2)}
-            </div>
-          </div>
-          <div className="summary-item">
-            <div className="summary-label">Total Diesel Sales</div>
-            <div className="summary-value">
-              {state.companyData.currency}{" "}
-              {formatNumber(summary.totalAgoSalesKsh, 2)}
-            </div>
-          </div>
+          {trackedFuelTypes.map((ft) => {
+            const label = getFuelLabel(ft);
+            const sales =
+              (summary.salesByType as Record<string, number>)?.[ft] ?? 0;
+            return (
+              <div className="summary-item" key={ft}>
+                <div className="summary-label">Total {label} Sales</div>
+                <div className="summary-value">
+                  {state.companyData.currency || currencySymbol}{" "}
+                  {formatNumber(sales, 2)}
+                </div>
+              </div>
+            );
+          })}
           <div className="summary-item">
             <div className="summary-label">Total Revenue</div>
             <div className="summary-value">
-              {state.companyData.currency}{" "}
+              {state.companyData.currency || currencySymbol}{" "}
               {formatNumber(summary.totalRevenue, 2)}
             </div>
           </div>
           <div className="summary-item">
             <div className="summary-label">Till/Mobile Payment</div>
             <div className="summary-value">
-              {state.companyData.currency} {formatNumber(state.tillPayment, 2)}
+              {state.companyData.currency || currencySymbol}{" "}
+              {formatNumber(state.tillPayment, 2)}
             </div>
           </div>
           <div className="summary-item">
             <div className="summary-label">Cash In Hand</div>
             <div className="summary-value">
-              {state.companyData.currency} {formatNumber(summary.cashInHand, 2)}
+              {state.companyData.currency || currencySymbol}{" "}
+              {formatNumber(summary.cashInHand, 2)}
             </div>
           </div>
           <div className="summary-item">
             <div className="summary-label">Total Expenses</div>
             <div className="summary-value">
-              {state.companyData.currency}{" "}
+              {state.companyData.currency || currencySymbol}{" "}
               {formatNumber(summary.totalExpenses, 2)}
             </div>
           </div>
           <div className="summary-item">
             <div className="summary-label">Net Income</div>
             <div className="summary-value">
-              {state.companyData.currency} {formatNumber(summary.netIncome, 2)}
+              {state.companyData.currency || currencySymbol}{" "}
+              {formatNumber(summary.netIncome, 2)}
             </div>
           </div>
         </div>

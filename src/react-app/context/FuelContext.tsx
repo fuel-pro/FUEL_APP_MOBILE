@@ -306,6 +306,17 @@ export interface FuelState {
   salesHistory: Record<string, any>;
   pmsPumps: Pump[];
   agoPumps: Pump[];
+  /**
+   * Dynamic per-fuel-type pump store keyed by canonical fuel type
+   * ("petrol" | "diesel" | "kerosene" | "vpower" | "premium_diesel" |
+   * "lpg" | "cng") plus any custom raw fuel-type name. This is the single
+   * source of truth for pumps of fuels beyond PMS/AGO; the legacy
+   * pmsPumps/agoPumps arrays are kept in sync for backward compatibility
+   * (they mirror the "petrol"/"diesel" entries here).
+   */
+  fuelPumpsByType: Record<string, Pump[]>;
+  /** Dynamic per-fuel-type prices keyed by canonical fuel type. */
+  fuelPricesByType: Record<string, number>;
   expenses: Expense[];
   tillPayment: number;
   salesDate: string;
@@ -361,6 +372,17 @@ type FuelAction =
   | { type: "SET_SALES_HISTORY"; payload: Record<string, any> }
   | { type: "SET_PMS_PUMPS"; payload: Pump[] }
   | { type: "SET_AGO_PUMPS"; payload: Pump[] }
+  | {
+      type: "SET_FUEL_PUMPS_BY_TYPE";
+      payload: Record<string, Pump[]>;
+    }
+  | { type: "ADD_FUEL_PUMP"; payload: { fuelType: string; pump: Pump } }
+  | { type: "UPDATE_FUEL_PUMP"; payload: { fuelType: string; pump: Pump } }
+  | { type: "REMOVE_FUEL_PUMP"; payload: { fuelType: string; pumpId: string } }
+  | {
+      type: "SET_FUEL_PRICES_BY_TYPE";
+      payload: Record<string, number>;
+    }
   | { type: "SET_EXPENSES"; payload: Expense[] }
   | { type: "SET_TILL_PAYMENT"; payload: number }
   | { type: "SET_SALES_DATE"; payload: string }
@@ -522,6 +544,8 @@ const initialState: FuelState = {
   salesHistory: {},
   pmsPumps: [],
   agoPumps: [],
+  fuelPumpsByType: {},
+  fuelPricesByType: {},
   expenses: [],
   tillPayment: 0,
   salesDate: new Date().toISOString().split("T")[0],
@@ -914,9 +938,79 @@ function fuelReducer(state: FuelState, action: FuelAction): FuelState {
     case "SET_SALES_HISTORY":
       return { ...state, salesHistory: action.payload };
     case "SET_PMS_PUMPS":
-      return { ...state, pmsPumps: action.payload };
+      return {
+        ...state,
+        pmsPumps: action.payload,
+        fuelPumpsByType: { ...state.fuelPumpsByType, petrol: action.payload },
+      };
     case "SET_AGO_PUMPS":
-      return { ...state, agoPumps: action.payload };
+      return {
+        ...state,
+        agoPumps: action.payload,
+        fuelPumpsByType: { ...state.fuelPumpsByType, diesel: action.payload },
+      };
+    case "SET_FUEL_PUMPS_BY_TYPE": {
+      const byType = { ...action.payload };
+      // Keep legacy pmsPumps/agoPumps in sync with the petrol/diesel entries.
+      const pms = byType.petrol ?? state.pmsPumps;
+      const ago = byType.diesel ?? state.agoPumps;
+      return {
+        ...state,
+        fuelPumpsByType: byType,
+        pmsPumps: pms,
+        agoPumps: ago,
+      };
+    }
+    case "ADD_FUEL_PUMP": {
+      const { fuelType, pump } = action.payload;
+      const list = state.fuelPumpsByType[fuelType] ?? [];
+      const next = [...list, pump];
+      const byType = { ...state.fuelPumpsByType, [fuelType]: next };
+      const updates: Partial<FuelState> = {};
+      if (fuelType === "petrol") updates.pmsPumps = next;
+      if (fuelType === "diesel") updates.agoPumps = next;
+      return { ...state, fuelPumpsByType: byType, ...updates };
+    }
+    case "UPDATE_FUEL_PUMP": {
+      const { fuelType, pump } = action.payload;
+      const list = state.fuelPumpsByType[fuelType] ?? [];
+      const next = list.map((p) => (p.id === pump.id ? pump : p));
+      const byType = { ...state.fuelPumpsByType, [fuelType]: next };
+      const updates: Partial<FuelState> = {};
+      if (fuelType === "petrol") updates.pmsPumps = next;
+      if (fuelType === "diesel") updates.agoPumps = next;
+      return { ...state, fuelPumpsByType: byType, ...updates };
+    }
+    case "REMOVE_FUEL_PUMP": {
+      const { fuelType, pumpId } = action.payload;
+      const list = state.fuelPumpsByType[fuelType] ?? [];
+      const next = list.filter((p) => p.id !== pumpId);
+      const byType = { ...state.fuelPumpsByType, [fuelType]: next };
+      const updates: Partial<FuelState> = {};
+      if (fuelType === "petrol") updates.pmsPumps = next;
+      if (fuelType === "diesel") updates.agoPumps = next;
+      return { ...state, fuelPumpsByType: byType, ...updates };
+    }
+    case "SET_FUEL_PRICES_BY_TYPE": {
+      const prices = { ...action.payload };
+      // Mirror petrol/diesel into legacy scalars for backward compatibility.
+      const updates: Partial<FuelState> = {};
+      if (typeof prices.petrol === "number") {
+        updates.pmsPrice = prices.petrol;
+        updates.petrolPrice = prices.petrol;
+      }
+      if (typeof prices.diesel === "number") {
+        updates.agoPrice = prices.diesel;
+        updates.dieselPrice = prices.diesel;
+      }
+      if (typeof prices.kerosene === "number")
+        updates.kerosenePrice = prices.kerosene;
+      return {
+        ...state,
+        fuelPricesByType: { ...state.fuelPricesByType, ...prices },
+        ...updates,
+      };
+    }
     case "SET_EXPENSES":
       return { ...state, expenses: action.payload };
     case "SET_TILL_PAYMENT":
@@ -1251,6 +1345,10 @@ export function FuelProvider({ children }: { children: ReactNode }) {
       if (s.tillPayment !== 0) compactData.tillPayment = s.tillPayment;
       if (s.pmsPumps?.length > 0) compactData.pmsPumps = s.pmsPumps;
       if (s.agoPumps?.length > 0) compactData.agoPumps = s.agoPumps;
+      if (s.fuelPumpsByType && Object.keys(s.fuelPumpsByType).length > 0)
+        compactData.fuelPumpsByType = s.fuelPumpsByType;
+      if (s.fuelPricesByType && Object.keys(s.fuelPricesByType).length > 0)
+        compactData.fuelPricesByType = s.fuelPricesByType;
       if (s.expenses?.length > 0) compactData.expenses = s.expenses;
       if (s.salesDate !== new Date().toISOString().split("T")[0])
         compactData.salesDate = s.salesDate;
@@ -1372,6 +1470,10 @@ export function FuelProvider({ children }: { children: ReactNode }) {
       if (s.tillPayment !== 0) compactData.tillPayment = s.tillPayment;
       if (s.pmsPumps?.length > 0) compactData.pmsPumps = s.pmsPumps;
       if (s.agoPumps?.length > 0) compactData.agoPumps = s.agoPumps;
+      if (s.fuelPumpsByType && Object.keys(s.fuelPumpsByType).length > 0)
+        compactData.fuelPumpsByType = s.fuelPumpsByType;
+      if (s.fuelPricesByType && Object.keys(s.fuelPricesByType).length > 0)
+        compactData.fuelPricesByType = s.fuelPricesByType;
       if (s.expenses?.length > 0) compactData.expenses = s.expenses;
       if (s.salesDate !== new Date().toISOString().split("T")[0])
         compactData.salesDate = s.salesDate;
@@ -1903,6 +2005,19 @@ export function FuelProvider({ children }: { children: ReactNode }) {
         diesel.price !== s.agoPrice
       ) {
         updates.agoPrice = diesel.price;
+      }
+      // Mirror EVERY active fuel-type price into fuelPricesByType so the
+      // dynamic per-fuel price store stays in sync (kerosene, LPG, V-Power…).
+      const priceByType: Record<string, number> = {};
+      for (const ft of list) {
+        if (!ft.active) continue;
+        const canonical = normalizeFuelType(ft.name);
+        if (canonical && typeof ft.price === "number" && ft.price > 0) {
+          priceByType[canonical] = ft.price;
+        }
+      }
+      if (Object.keys(priceByType).length > 0) {
+        dispatch({ type: "SET_FUEL_PRICES_BY_TYPE", payload: priceByType });
       }
       if (Object.keys(updates).length > 0) {
         applyingFuelTypesRef.current = true;

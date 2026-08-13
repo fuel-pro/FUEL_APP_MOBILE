@@ -28,7 +28,7 @@ import {
   Minus,
   Lock,
 } from "lucide-react";
-import { useFuel } from "@/react-app/context/FuelContext";
+import { useFuel, type Pump } from "@/react-app/context/FuelContext";
 import { usePermissions } from "@/react-app/context/PermissionContext";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 import {
@@ -49,7 +49,9 @@ import {
   onTabPayload,
   navigateToTab,
 } from "@/react-app/lib/mpesa-integration-service";
-import { normalizeFuelType } from "@/react-app/config/pricing";
+import { normalizeFuelType, getFuelLabel } from "@/react-app/config/pricing";
+import type { CanonicalFuelType } from "@/react-app/config/pricing";
+import { useStationFuelTypes } from "@/react-app/hooks/useStationFuelTypes";
 
 // ============================================================
 // CUSTOM FUEL TYPE MANAGER
@@ -877,8 +879,10 @@ export default function FuelTypesManager() {
 // reads pump prices/counts from FuelContext and writes back via dispatch.
 // ============================================================
 function PumpSettingsPanel() {
-  const { state, dispatch } = useFuel();
+  const { state, dispatch, syncPriceToFuelTypes } = useFuel();
   const { hasPermission, isOwner } = usePermissions();
+  const stationId = state.currentStationId ?? undefined;
+  const fuelTypeApi = useStationFuelTypes(stationId);
   // Resolve the detected country's own petrol/diesel prices so a non-Kenya
   // station never falls back to Kenyan KSh prices when FuelContext has none.
   const detectedCountry = (() => {
@@ -893,14 +897,80 @@ function PumpSettingsPanel() {
   const detectedDiesel =
     detectedCountry && getCountryPrice(detectedCountry, "diesel").price;
   const currencySymbol = getCurrencySymbol();
-  const [pmsPrice, setPmsPrice] = useState(
-    state.pmsPrice || detectedPetrol || 0,
-  );
-  const [agoPrice, setAgoPrice] = useState(
-    state.agoPrice || detectedDiesel || 0,
-  );
-  const [pmsPumpCount, setPmsPumpCount] = useState(state.pmsPumps?.length || 1);
-  const [agoPumpCount, setAgoPumpCount] = useState(state.agoPumps?.length || 1);
+
+  // ---- Dynamic per-fuel-type price + pump-count state ----
+  // Build a list of EVERY active fuel type the station sells (petrol, diesel,
+  // kerosene, LPG, V-Power, etc.) so the panel is no longer limited to only
+  // PMS & AGO. Each fuel gets its own price input + pump count.
+  const activeFuelTypes = fuelTypeApi.activeFuelTypes;
+  const fuelRows = activeFuelTypes.map((ft) => {
+    const canonical = fuelTypeApi.canonicalOf(ft.name) || "petrol";
+    const label = fuelTypeApi.labelOf(ft.name);
+    let defaultPrice = ft.price || 0;
+    if (canonical === "petrol")
+      defaultPrice = defaultPrice || state.pmsPrice || detectedPetrol || 0;
+    else if (canonical === "diesel")
+      defaultPrice = defaultPrice || state.agoPrice || detectedDiesel || 0;
+    let defaultCount = ft.pumpCount || 0;
+    if (canonical === "petrol")
+      defaultCount = defaultCount || state.pmsPumps?.length || 1;
+    else if (canonical === "diesel")
+      defaultCount = defaultCount || state.agoPumps?.length || 1;
+    defaultCount =
+      defaultCount || state.fuelPumpsByType?.[canonical]?.length || 0 || 1;
+    return { ft, canonical, label, defaultPrice, defaultCount };
+  });
+
+  // Local state: price + count per fuel row key (ft.id || canonical).
+  const [priceByRow, setPriceByRow] = useState<Record<string, number>>({});
+  const [countByRow, setCountByRow] = useState<Record<string, number>>({});
+  // Initialize from defaults on first render / when fuel list changes.
+  useEffect(() => {
+    const prices: Record<string, number> = {};
+    const counts: Record<string, number> = {};
+    for (const r of fuelRows) {
+      const key = r.ft.id || r.canonical;
+      prices[key] = r.defaultPrice;
+      counts[key] = r.defaultCount;
+    }
+    setPriceByRow(prices);
+    setCountByRow(counts);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeFuelTypes.length, state.pmsPrice, state.agoPrice]);
+
+  // Fallback rows when the station has NO configured fuel types yet (legacy
+  // stations / first run) so the panel is never empty.
+  const rows =
+    fuelRows.length > 0
+      ? fuelRows
+      : [
+          {
+            ft: {
+              id: "petrol",
+              name: "Super Petrol",
+              code: "PMS",
+              price: 0,
+              pumpCount: 0,
+            } as any,
+            canonical: "petrol" as const,
+            label: "Super Petrol",
+            defaultPrice: state.pmsPrice || detectedPetrol || 0,
+            defaultCount: state.pmsPumps?.length || 1,
+          },
+          {
+            ft: {
+              id: "diesel",
+              name: "Diesel",
+              code: "AGO",
+              price: 0,
+              pumpCount: 0,
+            } as any,
+            canonical: "diesel" as const,
+            label: "Diesel",
+            defaultPrice: state.agoPrice || detectedDiesel || 0,
+            defaultCount: state.agoPumps?.length || 1,
+          },
+        ];
 
   return (
     <div className="space-y-6">
@@ -914,52 +984,87 @@ function PumpSettingsPanel() {
         </div>
       )}
 
-      {/* Fuel Prices */}
+      {/* Fuel Prices — dynamic per fuel type */}
       <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg border border-gray-200 dark:border-gray-600">
         <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-4 flex items-center gap-2">
           <DollarSign size={18} className="text-green-500" />
           Pump Prices (per Litre)
         </h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {[
-            {
-              label: "PMS (Petrol)",
-              value: pmsPrice,
-              setter: setPmsPrice,
-              color: "red",
-            },
-            {
-              label: "AGO (Diesel)",
-              value: agoPrice,
-              setter: setAgoPrice,
-              color: "blue",
-            },
-          ].map((fuel) => (
-            <div
-              key={fuel.label}
-              className={`p-4 bg-${fuel.color}-50 dark:bg-${fuel.color}-900/20 rounded-lg border border-${fuel.color}-200 dark:border-${fuel.color}-700`}
-            >
-              <label className="text-xs text-gray-500 dark:text-gray-400 block mb-2">
-                {fuel.label}
-              </label>
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-500">{currencySymbol}</span>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={fuel.value}
-                  onChange={(e) => fuel.setter(parseFloat(e.target.value) || 0)}
-                  className="flex-1 px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white focus:ring-2 focus:ring-green-500 outline-none"
-                />
+          {rows.map((r) => {
+            const key = r.ft.id || r.canonical;
+            const val = priceByRow[key] ?? r.defaultPrice ?? 0;
+            return (
+              <div
+                key={key}
+                className="p-4 bg-gray-50 dark:bg-gray-900/20 rounded-lg border border-gray-200 dark:border-gray-700"
+              >
+                <label className="text-xs text-gray-500 dark:text-gray-400 block mb-2">
+                  {r.label}
+                </label>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-500">
+                    {currencySymbol}
+                  </span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={val}
+                    onChange={(e) =>
+                      setPriceByRow((prev) => ({
+                        ...prev,
+                        [key]: parseFloat(e.target.value) || 0,
+                      }))
+                    }
+                    className="flex-1 px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white focus:ring-2 focus:ring-green-500 outline-none"
+                  />
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
         <button
           onClick={() => {
-            dispatch({ type: "SET_PRICES", payload: { pmsPrice, agoPrice } });
+            // Dispatch prices for all fuel types. Petrol/Diesel use the legacy
+            // SET_PRICES (so the whole site picks them up); others use the
+            // dynamic fuelPricesByType store + the interlink bus.
+            let newPmsPrice = state.pmsPrice;
+            let newAgoPrice = state.agoPrice;
+            const extraPrices: Record<string, number> = {};
+            for (const r of rows) {
+              const key = r.ft.id || r.canonical;
+              const price = priceByRow[key] ?? r.defaultPrice ?? 0;
+              if (r.canonical === "petrol") newPmsPrice = price;
+              else if (r.canonical === "diesel") newAgoPrice = price;
+              else extraPrices[r.canonical] = price;
+            }
+            dispatch({
+              type: "SET_PRICES",
+              payload: { pmsPrice: newPmsPrice, agoPrice: newAgoPrice },
+            });
+            if (Object.keys(extraPrices).length > 0) {
+              dispatch({
+                type: "SET_FUEL_PRICES_BY_TYPE",
+                payload: { ...state.fuelPricesByType, ...extraPrices },
+              });
+              for (const [type, price] of Object.entries(extraPrices)) {
+                syncPriceToFuelTypes(
+                  getFuelLabel(type as CanonicalFuelType),
+                  price,
+                );
+              }
+            }
+            // Sync petrol/diesel via the interlink bus too.
+            syncPriceToFuelTypes("Super Petrol", newPmsPrice);
+            syncPriceToFuelTypes("Diesel", newAgoPrice);
             alert(
-              `Pump prices updated:\nPMS: ${currencySymbol} ${pmsPrice.toFixed(2)}\nAGO: ${currencySymbol} ${agoPrice.toFixed(2)}`,
+              `Pump prices updated:\n` +
+                rows
+                  .map(
+                    (r) =>
+                      `${r.label}: ${currencySymbol} ${(priceByRow[r.ft.id || r.canonical] ?? r.defaultPrice ?? 0).toFixed(2)}`,
+                  )
+                  .join("\n"),
             );
           }}
           className="mt-4 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium flex items-center gap-2 transition-colors"
@@ -968,7 +1073,7 @@ function PumpSettingsPanel() {
         </button>
       </div>
 
-      {/* Pump Count */}
+      {/* Pump Count — dynamic per fuel type */}
       {hasPermission("canChangePumpCount") && (
         <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg border border-gray-200 dark:border-gray-600">
           <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-4 flex items-center gap-2">
@@ -976,46 +1081,50 @@ function PumpSettingsPanel() {
             Number of Pumps
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {[
-              {
-                label: "PMS Pumps",
-                value: pmsPumpCount,
-                setter: setPmsPumpCount,
-                color: "red",
-              },
-              {
-                label: "AGO Pumps",
-                value: agoPumpCount,
-                setter: setAgoPumpCount,
-                color: "blue",
-              },
-            ].map((pump) => (
-              <div
-                key={pump.label}
-                className={`p-4 bg-${pump.color}-50 dark:bg-${pump.color}-900/20 rounded-lg border border-${pump.color}-200 dark:border-${pump.color}-700`}
-              >
-                <label className="text-xs text-gray-500 dark:text-gray-400 block mb-2">
-                  {pump.label}
-                </label>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => pump.setter(Math.max(0, pump.value - 1))}
-                    className="p-2 bg-gray-200 dark:bg-gray-700 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
-                  >
-                    <Minus size={14} />
-                  </button>
-                  <span className="text-2xl font-bold text-gray-900 dark:text-white w-12 text-center">
-                    {pump.value}
-                  </span>
-                  <button
-                    onClick={() => pump.setter(pump.value + 1)}
-                    className="p-2 bg-gray-200 dark:bg-gray-700 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
-                  >
-                    <Plus size={14} />
-                  </button>
+            {rows.map((r) => {
+              const key = r.ft.id || r.canonical;
+              const val = countByRow[key] ?? r.defaultCount ?? 1;
+              return (
+                <div
+                  key={key}
+                  className="p-4 bg-gray-50 dark:bg-gray-900/20 rounded-lg border border-gray-200 dark:border-gray-700"
+                >
+                  <label className="text-xs text-gray-500 dark:text-gray-400 block mb-2">
+                    {r.label} Pumps
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() =>
+                        setCountByRow((prev) => ({
+                          ...prev,
+                          [key]: Math.max(
+                            0,
+                            (prev[key] ?? r.defaultCount ?? 1) - 1,
+                          ),
+                        }))
+                      }
+                      className="p-2 bg-gray-200 dark:bg-gray-700 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                    >
+                      <Minus size={14} />
+                    </button>
+                    <span className="text-2xl font-bold text-gray-900 dark:text-white w-12 text-center">
+                      {val}
+                    </span>
+                    <button
+                      onClick={() =>
+                        setCountByRow((prev) => ({
+                          ...prev,
+                          [key]: (prev[key] ?? r.defaultCount ?? 1) + 1,
+                        }))
+                      }
+                      className="p-2 bg-gray-200 dark:bg-gray-700 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                    >
+                      <Plus size={14} />
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
           <button
             onClick={() => {
@@ -1029,23 +1138,47 @@ function PumpSettingsPanel() {
                 salesL: 0,
                 salesKsh: 0,
               });
-              const newPmsPumps = Array.from(
-                { length: pmsPumpCount },
-                (_, i) =>
-                  state.pmsPumps[i] ||
-                  makePump(`pms-${i + 1}`, `PMS Pump ${i + 1}`),
-              );
-              const newAgoPumps = Array.from(
-                { length: agoPumpCount },
-                (_, i) =>
-                  state.agoPumps[i] ||
-                  makePump(`ago-${i + 1}`, `AGO Pump ${i + 1}`),
-              );
+              let newPmsPumps = state.pmsPumps;
+              let newAgoPumps = state.agoPumps;
+              const extraPumps: Record<string, Pump[]> = {};
+              const summary: string[] = [];
+              for (const r of rows) {
+                const key = r.ft.id || r.canonical;
+                const count = countByRow[key] ?? r.defaultCount ?? 0;
+                summary.push(`${r.label}: ${count} pumps`);
+                if (r.canonical === "petrol") {
+                  newPmsPumps = Array.from(
+                    { length: count },
+                    (_, i) =>
+                      state.pmsPumps[i] ||
+                      makePump(`pms-${i + 1}`, `PMS Pump ${i + 1}`),
+                  );
+                } else if (r.canonical === "diesel") {
+                  newAgoPumps = Array.from(
+                    { length: count },
+                    (_, i) =>
+                      state.agoPumps[i] ||
+                      makePump(`ago-${i + 1}`, `AGO Pump ${i + 1}`),
+                  );
+                } else {
+                  const code = r.ft.code || r.canonical;
+                  extraPumps[r.canonical] = Array.from(
+                    { length: count },
+                    (_, i) =>
+                      (state.fuelPumpsByType?.[r.canonical]?.[i] as Pump) ||
+                      makePump(`${code}-${i + 1}`, `${r.label} Pump ${i + 1}`),
+                  );
+                }
+              }
               dispatch({ type: "SET_PMS_PUMPS", payload: newPmsPumps });
               dispatch({ type: "SET_AGO_PUMPS", payload: newAgoPumps });
-              alert(
-                `Pump count updated:\nPMS: ${pmsPumpCount} pumps\nAGO: ${agoPumpCount} pumps`,
-              );
+              if (Object.keys(extraPumps).length > 0) {
+                dispatch({
+                  type: "SET_FUEL_PUMPS_BY_TYPE",
+                  payload: { ...state.fuelPumpsByType, ...extraPumps },
+                });
+              }
+              alert(`Pump count updated:\n${summary.join("\n")}`);
             }}
             className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium flex items-center gap-2 transition-colors"
           >

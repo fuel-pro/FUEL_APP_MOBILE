@@ -2,6 +2,7 @@ import { useFuel } from "@/react-app/context/FuelContext";
 import { useLocation } from "@/react-app/context/LocationContext";
 import { useStations } from "@/react-app/context/StationContext";
 import { useAutoSync } from "@/react-app/hooks/useAutoSync";
+import { useStationFuelTypes } from "@/react-app/hooks/useStationFuelTypes";
 import {
   getSyncedFuelPrice,
   getPriceForCity,
@@ -107,6 +108,11 @@ export default function Dashboard() {
   const { state } = useFuel();
   const location = useLocation();
   const { currentStation } = useStations();
+  // Dynamic fuel-type support for the "Current Pump Prices" cards: read the
+  // station's configured fuel types so the cards reflect EVERY fuel the
+  // station sells (Kerosene, LPG, V-Power, etc.), not just Petrol/Diesel.
+  const stationId = state.currentStationId ?? currentStation?.id ?? undefined;
+  const fuelTypeApi = useStationFuelTypes(stationId);
   // The station's country is the authoritative source for pricing/tax/currency
   // — NOT the GPS-detected country (which may be a VPN/tourist location and
   // would otherwise show foreign prices on a station's dashboard). Fall back to
@@ -176,6 +182,80 @@ export default function Dashboard() {
   const priceCityName =
     locationPrice?.cityName || regionalPrice.cityName || stationCity;
   const isLocationBased = !!locationPrice;
+
+  /**
+   * Dynamic "Current Pump Prices" card list. Built from the station's
+   * configured fuel types (canonical-normalized) so a station selling
+   * Kerosene/LPG/V-Power etc. shows a card for EACH fuel — not just the
+   * hardcoded Petrol/Diesel/Kerosene. Falls back to the 3 legacy cards
+   * (petrol/diesel/kerosene) when the station hasn't configured fuel types
+   * yet, so there's no regression for existing stations.
+   */
+  const priceCards: Array<{
+    key: string;
+    label: string;
+    price: number;
+    color: string;
+  }> = useMemo(() => {
+    const active = fuelTypeApi.activeFuelTypes;
+    if (active.length > 0) {
+      // Map the configured fuel types to display prices. Prefer the
+      // location/regional/national resolved price for petrol/diesel/kerosene;
+      // for other fuels use the configured price (fuelTypeApi.getPriceFor) or
+      // the FuelContext dynamic price store.
+      return active.map((ft) => {
+        const canonical = fuelTypeApi.canonicalOf(ft.name);
+        const label = fuelTypeApi.labelOf(ft.name);
+        let price = 0;
+        if (canonical === "petrol") price = displayPmsPrice;
+        else if (canonical === "diesel") price = displayAgoPrice;
+        else if (canonical === "kerosene") price = displayKerosenePrice;
+        else {
+          price =
+            fuelTypeApi.getPriceFor(ft.name) ??
+            state.fuelPricesByType?.[canonical ?? ft.name] ??
+            ft.price ??
+            0;
+        }
+        const color =
+          canonical === "petrol"
+            ? "text-green-700 dark:text-green-400"
+            : canonical === "diesel"
+              ? "text-amber-700 dark:text-amber-400"
+              : canonical === "kerosene"
+                ? "text-rose-700 dark:text-rose-400"
+                : "text-indigo-700 dark:text-indigo-400";
+        return { key: ft.id || canonical || ft.name, label, price, color };
+      });
+    }
+    // Fallback: legacy 3 cards.
+    return [
+      {
+        key: "petrol",
+        label: CANONICAL_FUEL_TYPES.petrol.label,
+        price: displayPmsPrice,
+        color: "text-green-700 dark:text-green-400",
+      },
+      {
+        key: "diesel",
+        label: CANONICAL_FUEL_TYPES.diesel.label,
+        price: displayAgoPrice,
+        color: "text-amber-700 dark:text-amber-400",
+      },
+      {
+        key: "kerosene",
+        label: CANONICAL_FUEL_TYPES.kerosene.label,
+        price: displayKerosenePrice,
+        color: "text-rose-700 dark:text-rose-400",
+      },
+    ];
+  }, [
+    fuelTypeApi,
+    displayPmsPrice,
+    displayAgoPrice,
+    displayKerosenePrice,
+    state.fuelPricesByType,
+  ]);
   // Currency symbol must match the STATION's currency (e.g. "€" for a German
   // station), never the GPS/browser-detected currency. Fall back to the
   // location-derived symbol only if the station has no currency set.
@@ -839,8 +919,9 @@ export default function Dashboard() {
           <div className="flex items-center gap-1 mt-2">
             <Fuel size={14} className="text-blue-500" />
             <span className="text-xs text-gray-500 dark:text-gray-400">
-              PMS: {currencySymbol} {displayPmsPrice}/L | AGO: {currencySymbol}{" "}
-              {displayAgoPrice}/L
+              {priceCards
+                .map((c) => `${c.label}: ${currencySymbol} ${c.price ?? 0}/L`)
+                .join(" | ")}
             </span>
           </div>
         </div>
@@ -921,60 +1002,29 @@ export default function Dashboard() {
             </span>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            <div className="bg-white dark:bg-gray-800 rounded-lg p-3 text-center">
-              <p className="text-[10px] text-gray-500 uppercase tracking-wide">
-                {CANONICAL_FUEL_TYPES.petrol.label}
-              </p>
-              <p className="text-xl font-bold text-green-700 dark:text-green-400">
-                {currencySymbol} {displayPmsPrice.toFixed(2)}
-              </p>
-              <p className="text-[9px] text-gray-400">per litre</p>
-              {isLocationBased ? (
-                <p className="text-[9px] text-green-600 dark:text-green-400 mt-0.5">
-                  {priceCityName}
+            {priceCards.map((card) => (
+              <div
+                key={card.key}
+                className="bg-white dark:bg-gray-800 rounded-lg p-3 text-center"
+              >
+                <p className="text-[10px] text-gray-500 uppercase tracking-wide">
+                  {card.label}
                 </p>
-              ) : regionalPrice.isRegional ? (
-                <p className="text-[9px] text-green-600 dark:text-green-400 mt-0.5">
-                  {regionalPrice.cityName}
+                <p className={`text-xl font-bold ${card.color}`}>
+                  {currencySymbol} {(card.price ?? 0).toFixed(2)}
                 </p>
-              ) : null}
-            </div>
-            <div className="bg-white dark:bg-gray-800 rounded-lg p-3 text-center">
-              <p className="text-[10px] text-gray-500 uppercase tracking-wide">
-                {CANONICAL_FUEL_TYPES.diesel.label}
-              </p>
-              <p className="text-xl font-bold text-amber-700 dark:text-amber-400">
-                {currencySymbol} {displayAgoPrice.toFixed(2)}
-              </p>
-              <p className="text-[9px] text-gray-400">per litre</p>
-              {isLocationBased ? (
-                <p className="text-[9px] text-amber-600 dark:text-amber-400 mt-0.5">
-                  {priceCityName}
-                </p>
-              ) : regionalPrice.isRegional ? (
-                <p className="text-[9px] text-amber-600 dark:text-amber-400 mt-0.5">
-                  {regionalPrice.cityName}
-                </p>
-              ) : null}
-            </div>
-            <div className="bg-white dark:bg-gray-800 rounded-lg p-3 text-center col-span-2 sm:col-span-1">
-              <p className="text-[10px] text-gray-500 uppercase tracking-wide">
-                {CANONICAL_FUEL_TYPES.kerosene.label}
-              </p>
-              <p className="text-xl font-bold text-rose-700 dark:text-rose-400">
-                {currencySymbol} {displayKerosenePrice.toFixed(2)}
-              </p>
-              <p className="text-[9px] text-gray-400">per litre</p>
-              {isLocationBased ? (
-                <p className="text-[9px] text-rose-600 dark:text-rose-400 mt-0.5">
-                  {priceCityName}
-                </p>
-              ) : regionalPrice.isRegional ? (
-                <p className="text-[9px] text-rose-600 dark:text-rose-400 mt-0.5">
-                  {regionalPrice.cityName}
-                </p>
-              ) : null}
-            </div>
+                <p className="text-[9px] text-gray-400">per litre</p>
+                {isLocationBased ? (
+                  <p className={`text-[9px] mt-0.5 ${card.color}`}>
+                    {priceCityName}
+                  </p>
+                ) : regionalPrice.isRegional ? (
+                  <p className={`text-[9px] mt-0.5 ${card.color}`}>
+                    {regionalPrice.cityName}
+                  </p>
+                ) : null}
+              </div>
+            ))}
           </div>
           {/* Fuel price interlinks — jump to the editor/finder/price-board so
               a price change here is reflected everywhere, and vice-versa. */}
