@@ -100,16 +100,14 @@
     <script type="module" src="/src/react-app/main.tsx"></script>
     <script>
       // Service Worker registration with AGGRESSIVE automatic update handling.
-      // When a new build is deployed the browser detects the changed sw.js,
-      // installs the new SW (which calls self.skipWaiting() via the workbox
-      // config), and this script reloads the page so the user immediately
-      // sees the fresh build instead of stale cached bundles.
       //
-      // The previous version only checked for updates on `load`. This version
-      // ALSO checks on every `pageshow` (covers bfcache restores + tab
-      // reactivation), polls every 10 min while the tab is open, AND shows a
-      // dismissible "Update available — reload" banner if a new SW is
-      // downloaded but the user navigates away before the auto-reload fires.
+      // The custom public/sw.js is NETWORK-FIRST for navigations, so a fresh
+      // index.html is fetched on every page load — deploys are visible
+      // immediately. This script also:
+      //   - registers on DOMContentLoaded (not waiting for full load) for speed
+      //   - polls for SW updates every 2 min while the tab is open
+      //   - auto-reloads on controllerchange
+      //   - self-heals: if a script chunk 404s, unregisters the SW + reloads
       if ("serviceWorker" in navigator) {
         var refreshing = false;
         navigator.serviceWorker.addEventListener(
@@ -133,27 +131,33 @@
               newWorker.state === "installed" &&
               navigator.serviceWorker.controller
             ) {
-              // Force the new SW to take over immediately.
               newWorker.postMessage({ type: "SKIP_WAITING" });
             }
           });
         }
 
-        window.addEventListener("load", function () {
+        function registerSW() {
           navigator.serviceWorker
-            .register("/sw.js")
+            .register("/sw.js", { updateViaCache: "none" })
             .then(function (reg) {
               reg.addEventListener("updatefound", function () {
                 handleUpdateFound(reg);
               });
               checkForUpdate(reg);
-              // Poll for updates every 10 minutes while the tab is open.
+              // Poll for updates every 2 minutes while the tab is open.
               setInterval(function () {
                 checkForUpdate(reg);
-              }, 600000);
+              }, 120000);
             })
             .catch(function () {});
-        });
+        }
+
+        // Register as early as possible.
+        if (document.readyState === "loading") {
+          document.addEventListener("DOMContentLoaded", registerSW);
+        } else {
+          registerSW();
+        }
 
         // Also check on pageshow (covers bfcache + tab reactivation).
         window.addEventListener("pageshow", function (event) {
@@ -164,11 +168,8 @@
           }
         });
 
-        // Stale-SW self-heal: if the main script chunk (referenced by this
-        // index.html) fails to load (404 because the SW precache is stale or
-        // the CDN served an old index.html), unregister the SW and reload so
-        // the browser fetches fresh assets. This recovers users stuck on an
-        // old service worker that can't self-update.
+        // Stale-SW self-heal: if a script chunk fails to load, unregister the
+        // SW and reload so the browser fetches fresh assets.
         window.addEventListener(
           "error",
           function (event) {
