@@ -1180,7 +1180,7 @@ export default function SalesTracking() {
       <div className="card">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 pb-4 border-b border-gray-200 dark:border-gray-700">
           <h2 className="text-xl md:text-2xl font-bold text-blue-900 dark:text-blue-200">
-            Fuel Sales Tracking (PMS & AGO)
+            Fuel Sales Tracking
           </h2>
           <div className="flex gap-2 flex-wrap">
             <button onClick={saveSalesData} className="btn btn-primary">
