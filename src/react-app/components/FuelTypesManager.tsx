@@ -1,9 +1,5 @@
 import { useState, useEffect } from "react";
-import {
-  KENYA_SPECIALTY_PRICES,
-  CANONICAL_FUEL_TYPES,
-  getCountryPrice,
-} from "@/react-app/config/pricing";
+import { CANONICAL_FUEL_TYPES } from "@/react-app/config/pricing";
 import {
   Fuel,
   Plus,
@@ -16,25 +12,18 @@ import {
   Flame,
   Zap,
   Wind,
-  AlertTriangle,
-  CheckCircle2,
   Settings,
   ChevronDown,
   ChevronUp,
   Monitor,
   FlaskConical,
   Gauge,
-  DollarSign,
   Minus,
-  Lock,
 } from "lucide-react";
 import { useFuel, type Pump } from "@/react-app/context/FuelContext";
 import { usePermissions } from "@/react-app/context/PermissionContext";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
-import {
-  getCurrencySymbol,
-  getDetectedCountryCode,
-} from "@/react-app/lib/currency";
+import { getCurrencySymbol } from "@/react-app/lib/currency";
 import { useAuth } from "@/react-app/context/AuthContext";
 import { useStations } from "@/react-app/context/StationContext";
 import SubTabBar from "@/react-app/components/SubTabBar";
@@ -311,7 +300,8 @@ function saveFuelTypes(types: CustomFuelType[]) {
 export default function FuelTypesManager() {
   const { user } = useAuth();
   const { currentStation } = useStations();
-  const { state } = useFuel();
+  const { state, dispatch } = useFuel();
+  const { hasPermission } = usePermissions();
   const currencySymbol = getCurrencySymbol(state.companyData?.currency);
   const stationId = currentStation?.id;
   const [fuelTypes, setFuelTypes] = useState<CustomFuelType[]>(() => {
@@ -327,10 +317,12 @@ export default function FuelTypesManager() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [showPresets, setShowPresets] = useState(false);
-  // Inner sub-tab: hosts the formerly-standalone Pump Settings, Price Board,
-  // and Fuel Quality Testing tabs alongside the fuel-type catalog.
+  // Inner sub-tab: hosts the formerly-standalone Price Board and Fuel
+  // Quality Testing tabs alongside the fuel-type catalog. Pump Settings is
+  // now merged INTO the Fuel Types sub-tab as a per-fuel-type "Number of
+  // Pumps" action (see the expanded fuel-type card).
   const [activeView, setActiveView] = useState<
-    "fueltypes" | "pumps" | "priceboard" | "quality"
+    "fueltypes" | "priceboard" | "quality"
   >("fueltypes");
 
   // Form state
@@ -402,12 +394,7 @@ export default function FuelTypesManager() {
     return onTabPayload("fueltypes", (raw) => {
       const p = (raw || {}) as FuelPricePrefill;
       if (Object.keys(p).length === 0) return;
-      const validViews = [
-        "fueltypes",
-        "pumps",
-        "priceboard",
-        "quality",
-      ] as const;
+      const validViews = ["fueltypes", "priceboard", "quality"] as const;
       const target =
         p.view && (validViews as readonly string[]).includes(p.view)
           ? (p.view as (typeof validViews)[number])
@@ -478,6 +465,68 @@ export default function FuelTypesManager() {
     persist(fuelTypes.filter((f) => f.id !== id));
   };
 
+  // ---- Per-fuel-type "Number of Pumps" action (merged Pump Settings) ----
+  // Changing the pump count for a fuel type updates the fuel_types_config
+  // catalog (pumpCount) AND the FuelContext pump store (pmsPumps /
+  // agoPumps / fuelPumpsByType) so every tab (Dashboard, POS, SalesTracking,
+  // PriceBoard, Reports) reflects the new pump count immediately.
+  const handlePumpCountChange = (ft: CustomFuelType, nextCount: number) => {
+    const count = Math.max(0, Math.min(99, nextCount));
+    const canonical = normalizeFuelType(ft.name);
+    // 1. Persist the pumpCount into the fuel_types_config catalog.
+    persist(
+      fuelTypes.map((f) => (f.id === ft.id ? { ...f, pumpCount: count } : f)),
+    );
+    // 2. Sync the FuelContext pump store so the whole site picks it up.
+    const makePump = (id: string, name: string): Pump => ({
+      id,
+      name,
+      openingKsh: 0,
+      closingKsh: 0,
+      openingL: 0,
+      closingL: 0,
+      salesL: 0,
+      salesKsh: 0,
+    });
+    const code =
+      ft.code ||
+      (canonical ? canonical.toUpperCase().slice(0, 3) : ft.id.slice(0, 3));
+    const label = getFuelLabel(ft.name);
+    if (canonical === "petrol") {
+      const newPmsPumps = Array.from(
+        { length: count },
+        (_, i) =>
+          state.pmsPumps?.[i] || makePump(`pms-${i + 1}`, `PMS Pump ${i + 1}`),
+      );
+      dispatch({ type: "SET_PMS_PUMPS", payload: newPmsPumps });
+    } else if (canonical === "diesel") {
+      const newAgoPumps = Array.from(
+        { length: count },
+        (_, i) =>
+          state.agoPumps?.[i] || makePump(`ago-${i + 1}`, `AGO Pump ${i + 1}`),
+      );
+      dispatch({ type: "SET_AGO_PUMPS", payload: newAgoPumps });
+    } else if (canonical) {
+      const existing = state.fuelPumpsByType?.[canonical] || [];
+      const newPumps = Array.from(
+        { length: count },
+        (_, i) =>
+          existing[i] || makePump(`${code}-${i + 1}`, `${label} Pump ${i + 1}`),
+      );
+      dispatch({
+        type: "SET_FUEL_PUMPS_BY_TYPE",
+        payload: { ...state.fuelPumpsByType, [canonical]: newPumps },
+      });
+    }
+    // 3. Broadcast the fuel-type change so same-page consumers refresh.
+    emitFuelTypeChange({
+      id: ft.id,
+      fuelType: ft.name,
+      canonical,
+      source: "FuelTypesManager.handlePumpCountChange",
+    });
+  };
+
   const handleToggleActive = (id: string) => {
     persist(
       fuelTypes.map((f) => (f.id === id ? { ...f, active: !f.active } : f)),
@@ -513,17 +562,16 @@ export default function FuelTypesManager() {
         </div>
       </div>
 
-      {/* Sub-tab switcher: Fuel Types / Pump Settings / Price Board / Quality */}
+      {/* Sub-tab switcher: Fuel Types (incl. pump settings) / Price Board / Quality */}
       <SubTabBar
         tabs={[
           { id: "fueltypes", label: "Fuel Types", icon: Fuel },
-          { id: "pumps", label: "Pump Settings", icon: Gauge },
           { id: "priceboard", label: "Price Board", icon: Monitor },
           { id: "quality", label: "Fuel Quality", icon: FlaskConical },
         ]}
         active={activeView}
         onChange={(id) =>
-          setActiveView(id as "fueltypes" | "pumps" | "priceboard" | "quality")
+          setActiveView(id as "fueltypes" | "priceboard" | "quality")
         }
       />
 
@@ -531,8 +579,6 @@ export default function FuelTypesManager() {
         <PriceBoard />
       ) : activeView === "quality" ? (
         <FuelQualityTesting />
-      ) : activeView === "pumps" ? (
-        <PumpSettingsPanel />
       ) : (
         <>
           {/* Summary Cards */}
@@ -849,14 +895,73 @@ export default function FuelTypesManager() {
                           label="VAT Rate"
                           value={`${ft.taxRate || 0}%`}
                         />
-                        <InfoBox label="Pumps" value={`${ft.pumpCount || 0}`} />
                         <InfoBox
                           label="Levy Rate"
                           value={`${ft.levyRate || 0}%`}
                         />
                       </div>
+
+                      {/* Number of Pumps — inline Pump Settings action */}
+                      <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 border border-blue-200 dark:border-blue-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          <Gauge size={16} className="text-blue-500" />
+                          <div>
+                            <p className="text-xs font-semibold text-blue-900 dark:text-blue-200">
+                              Number of Pumps
+                            </p>
+                            <p className="text-[10px] text-blue-700 dark:text-blue-400">
+                              Customize how many {ft.localName || ft.name} pumps
+                              are at your station
+                            </p>
+                          </div>
+                        </div>
+                        {hasPermission("canChangePumpCount") ? (
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handlePumpCountChange(
+                                  ft,
+                                  (ft.pumpCount || 0) - 1,
+                                );
+                              }}
+                              className="p-2 bg-white dark:bg-gray-700 border border-blue-300 dark:border-blue-700 rounded-lg hover:bg-blue-100 dark:hover:bg-gray-600 transition-colors"
+                              aria-label="Decrease pump count"
+                            >
+                              <Minus
+                                size={14}
+                                className="text-blue-600 dark:text-blue-300"
+                              />
+                            </button>
+                            <span className="text-2xl font-bold text-blue-700 dark:text-blue-200 w-10 text-center">
+                              {ft.pumpCount || 0}
+                            </span>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handlePumpCountChange(
+                                  ft,
+                                  (ft.pumpCount || 0) + 1,
+                                );
+                              }}
+                              className="p-2 bg-white dark:bg-gray-700 border border-blue-300 dark:border-blue-700 rounded-lg hover:bg-blue-100 dark:hover:bg-gray-600 transition-colors"
+                              aria-label="Increase pump count"
+                            >
+                              <Plus
+                                size={14}
+                                className="text-blue-600 dark:text-blue-300"
+                              />
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-[10px] px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-500 rounded-full">
+                            Restricted
+                          </span>
+                        )}
+                      </div>
+
                       {ft.description && (
-                        <p className="text-xs text-gray-500 dark:text-gray-400 italic">
+                        <p className="text-xs text-gray-500 dark:text-gray-400 italic mt-3">
                           {ft.description}
                         </p>
                       )}
@@ -868,371 +973,6 @@ export default function FuelTypesManager() {
           </div>
         </>
       )}
-    </div>
-  );
-}
-
-// ============================================================
-// PumpSettingsPanel — formerly the "Pump Settings" sub-tab of the
-// Data Management Center. Moved here (task 6) so all fuel/pump
-// configuration lives under the Fuel Type Manager. Self-contained: it
-// reads pump prices/counts from FuelContext and writes back via dispatch.
-// ============================================================
-function PumpSettingsPanel() {
-  const { state, dispatch, syncPriceToFuelTypes } = useFuel();
-  const { hasPermission, isOwner } = usePermissions();
-  const stationId = state.currentStationId ?? undefined;
-  const fuelTypeApi = useStationFuelTypes(stationId);
-  // Resolve the detected country's own petrol/diesel prices so a non-Kenya
-  // station never falls back to Kenyan KSh prices when FuelContext has none.
-  const detectedCountry = (() => {
-    try {
-      return getDetectedCountryCode();
-    } catch {
-      return "";
-    }
-  })();
-  const detectedPetrol =
-    detectedCountry && getCountryPrice(detectedCountry, "petrol").price;
-  const detectedDiesel =
-    detectedCountry && getCountryPrice(detectedCountry, "diesel").price;
-  const currencySymbol = getCurrencySymbol();
-
-  // ---- Dynamic per-fuel-type price + pump-count state ----
-  // Build a list of EVERY active fuel type the station sells (petrol, diesel,
-  // kerosene, LPG, V-Power, etc.) so the panel is no longer limited to only
-  // PMS & AGO. Each fuel gets its own price input + pump count.
-  const activeFuelTypes = fuelTypeApi.activeFuelTypes;
-  const fuelRows = activeFuelTypes.map((ft) => {
-    const canonical = fuelTypeApi.canonicalOf(ft.name) || "petrol";
-    const label = fuelTypeApi.labelOf(ft.name);
-    let defaultPrice = ft.price || 0;
-    if (canonical === "petrol")
-      defaultPrice = defaultPrice || state.pmsPrice || detectedPetrol || 0;
-    else if (canonical === "diesel")
-      defaultPrice = defaultPrice || state.agoPrice || detectedDiesel || 0;
-    let defaultCount = ft.pumpCount || 0;
-    if (canonical === "petrol")
-      defaultCount = defaultCount || state.pmsPumps?.length || 1;
-    else if (canonical === "diesel")
-      defaultCount = defaultCount || state.agoPumps?.length || 1;
-    defaultCount =
-      defaultCount || state.fuelPumpsByType?.[canonical]?.length || 0 || 1;
-    return { ft, canonical, label, defaultPrice, defaultCount };
-  });
-
-  // Local state: price + count per fuel row key (ft.id || canonical).
-  const [priceByRow, setPriceByRow] = useState<Record<string, number>>({});
-  const [countByRow, setCountByRow] = useState<Record<string, number>>({});
-  // Initialize from defaults on first render / when fuel list changes.
-  useEffect(() => {
-    const prices: Record<string, number> = {};
-    const counts: Record<string, number> = {};
-    for (const r of fuelRows) {
-      const key = r.ft.id || r.canonical;
-      prices[key] = r.defaultPrice;
-      counts[key] = r.defaultCount;
-    }
-    setPriceByRow(prices);
-    setCountByRow(counts);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeFuelTypes.length, state.pmsPrice, state.agoPrice]);
-
-  // Fallback rows when the station has NO configured fuel types yet (legacy
-  // stations / first run) so the panel is never empty.
-  const rows =
-    fuelRows.length > 0
-      ? fuelRows
-      : [
-          {
-            ft: {
-              id: "petrol",
-              name: "Super Petrol",
-              code: "PMS",
-              price: 0,
-              pumpCount: 0,
-            } as any,
-            canonical: "petrol" as const,
-            label: "Super Petrol",
-            defaultPrice: state.pmsPrice || detectedPetrol || 0,
-            defaultCount: state.pmsPumps?.length || 1,
-          },
-          {
-            ft: {
-              id: "diesel",
-              name: "Diesel",
-              code: "AGO",
-              price: 0,
-              pumpCount: 0,
-            } as any,
-            canonical: "diesel" as const,
-            label: "Diesel",
-            defaultPrice: state.agoPrice || detectedDiesel || 0,
-            defaultCount: state.agoPumps?.length || 1,
-          },
-        ];
-
-  return (
-    <div className="space-y-6">
-      {!isOwner && (
-        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-3 flex items-center gap-2">
-          <AlertTriangle size={14} className="text-amber-500" />
-          <p className="text-xs text-amber-700 dark:text-amber-300">
-            You have <strong>Member</strong> access. Changes are tracked. Some
-            settings require Founder approval.
-          </p>
-        </div>
-      )}
-
-      {/* Fuel Prices — dynamic per fuel type */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg border border-gray-200 dark:border-gray-600">
-        <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-4 flex items-center gap-2">
-          <DollarSign size={18} className="text-green-500" />
-          Pump Prices (per Litre)
-        </h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {rows.map((r) => {
-            const key = r.ft.id || r.canonical;
-            const val = priceByRow[key] ?? r.defaultPrice ?? 0;
-            return (
-              <div
-                key={key}
-                className="p-4 bg-gray-50 dark:bg-gray-900/20 rounded-lg border border-gray-200 dark:border-gray-700"
-              >
-                <label className="text-xs text-gray-500 dark:text-gray-400 block mb-2">
-                  {r.label}
-                </label>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-500">
-                    {currencySymbol}
-                  </span>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={val}
-                    onChange={(e) =>
-                      setPriceByRow((prev) => ({
-                        ...prev,
-                        [key]: parseFloat(e.target.value) || 0,
-                      }))
-                    }
-                    className="flex-1 px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white focus:ring-2 focus:ring-green-500 outline-none"
-                  />
-                </div>
-              </div>
-            );
-          })}
-        </div>
-        <button
-          onClick={() => {
-            // Dispatch prices for all fuel types. Petrol/Diesel use the legacy
-            // SET_PRICES (so the whole site picks them up); others use the
-            // dynamic fuelPricesByType store + the interlink bus.
-            let newPmsPrice = state.pmsPrice;
-            let newAgoPrice = state.agoPrice;
-            const extraPrices: Record<string, number> = {};
-            for (const r of rows) {
-              const key = r.ft.id || r.canonical;
-              const price = priceByRow[key] ?? r.defaultPrice ?? 0;
-              if (r.canonical === "petrol") newPmsPrice = price;
-              else if (r.canonical === "diesel") newAgoPrice = price;
-              else extraPrices[r.canonical] = price;
-            }
-            dispatch({
-              type: "SET_PRICES",
-              payload: { pmsPrice: newPmsPrice, agoPrice: newAgoPrice },
-            });
-            if (Object.keys(extraPrices).length > 0) {
-              dispatch({
-                type: "SET_FUEL_PRICES_BY_TYPE",
-                payload: { ...state.fuelPricesByType, ...extraPrices },
-              });
-              for (const [type, price] of Object.entries(extraPrices)) {
-                syncPriceToFuelTypes(
-                  getFuelLabel(type as CanonicalFuelType),
-                  price,
-                );
-              }
-            }
-            // Sync petrol/diesel via the interlink bus too.
-            syncPriceToFuelTypes("Super Petrol", newPmsPrice);
-            syncPriceToFuelTypes("Diesel", newAgoPrice);
-            alert(
-              `Pump prices updated:\n` +
-                rows
-                  .map(
-                    (r) =>
-                      `${r.label}: ${currencySymbol} ${(priceByRow[r.ft.id || r.canonical] ?? r.defaultPrice ?? 0).toFixed(2)}`,
-                  )
-                  .join("\n"),
-            );
-          }}
-          className="mt-4 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium flex items-center gap-2 transition-colors"
-        >
-          <Save size={14} /> Save Prices
-        </button>
-      </div>
-
-      {/* Pump Count — dynamic per fuel type */}
-      {hasPermission("canChangePumpCount") && (
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg border border-gray-200 dark:border-gray-600">
-          <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-4 flex items-center gap-2">
-            <Fuel size={18} className="text-blue-500" />
-            Number of Pumps
-          </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {rows.map((r) => {
-              const key = r.ft.id || r.canonical;
-              const val = countByRow[key] ?? r.defaultCount ?? 1;
-              return (
-                <div
-                  key={key}
-                  className="p-4 bg-gray-50 dark:bg-gray-900/20 rounded-lg border border-gray-200 dark:border-gray-700"
-                >
-                  <label className="text-xs text-gray-500 dark:text-gray-400 block mb-2">
-                    {r.label} Pumps
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() =>
-                        setCountByRow((prev) => ({
-                          ...prev,
-                          [key]: Math.max(
-                            0,
-                            (prev[key] ?? r.defaultCount ?? 1) - 1,
-                          ),
-                        }))
-                      }
-                      className="p-2 bg-gray-200 dark:bg-gray-700 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
-                    >
-                      <Minus size={14} />
-                    </button>
-                    <span className="text-2xl font-bold text-gray-900 dark:text-white w-12 text-center">
-                      {val}
-                    </span>
-                    <button
-                      onClick={() =>
-                        setCountByRow((prev) => ({
-                          ...prev,
-                          [key]: (prev[key] ?? r.defaultCount ?? 1) + 1,
-                        }))
-                      }
-                      className="p-2 bg-gray-200 dark:bg-gray-700 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
-                    >
-                      <Plus size={14} />
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          <button
-            onClick={() => {
-              const makePump = (id: string, name: string) => ({
-                id,
-                name,
-                openingKsh: 0,
-                closingKsh: 0,
-                openingL: 0,
-                closingL: 0,
-                salesL: 0,
-                salesKsh: 0,
-              });
-              let newPmsPumps = state.pmsPumps;
-              let newAgoPumps = state.agoPumps;
-              const extraPumps: Record<string, Pump[]> = {};
-              const summary: string[] = [];
-              for (const r of rows) {
-                const key = r.ft.id || r.canonical;
-                const count = countByRow[key] ?? r.defaultCount ?? 0;
-                summary.push(`${r.label}: ${count} pumps`);
-                if (r.canonical === "petrol") {
-                  newPmsPumps = Array.from(
-                    { length: count },
-                    (_, i) =>
-                      state.pmsPumps[i] ||
-                      makePump(`pms-${i + 1}`, `PMS Pump ${i + 1}`),
-                  );
-                } else if (r.canonical === "diesel") {
-                  newAgoPumps = Array.from(
-                    { length: count },
-                    (_, i) =>
-                      state.agoPumps[i] ||
-                      makePump(`ago-${i + 1}`, `AGO Pump ${i + 1}`),
-                  );
-                } else {
-                  const code = r.ft.code || r.canonical;
-                  extraPumps[r.canonical] = Array.from(
-                    { length: count },
-                    (_, i) =>
-                      (state.fuelPumpsByType?.[r.canonical]?.[i] as Pump) ||
-                      makePump(`${code}-${i + 1}`, `${r.label} Pump ${i + 1}`),
-                  );
-                }
-              }
-              dispatch({ type: "SET_PMS_PUMPS", payload: newPmsPumps });
-              dispatch({ type: "SET_AGO_PUMPS", payload: newAgoPumps });
-              if (Object.keys(extraPumps).length > 0) {
-                dispatch({
-                  type: "SET_FUEL_PUMPS_BY_TYPE",
-                  payload: { ...state.fuelPumpsByType, ...extraPumps },
-                });
-              }
-              alert(`Pump count updated:\n${summary.join("\n")}`);
-            }}
-            className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium flex items-center gap-2 transition-colors"
-          >
-            <Save size={14} /> Save Pump Count
-          </button>
-        </div>
-      )}
-
-      {/* Access Level */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg border border-gray-200 dark:border-gray-600">
-        <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-4 flex items-center gap-2">
-          <Lock size={18} className="text-gray-500" />
-          Your Access Level
-        </h3>
-        <div className="space-y-2">
-          {[
-            {
-              label: "Edit Pump Prices",
-              allowed: hasPermission("canEditFuelPrices"),
-            },
-            {
-              label: "Change Pump Count",
-              allowed: hasPermission("canChangePumpCount"),
-            },
-            {
-              label: "Edit Fuel Prices",
-              allowed: hasPermission("canEditFuelPrices"),
-            },
-            {
-              label: "Manage Inventory",
-              allowed: hasPermission("canManageInventory"),
-            },
-            { label: "Founder Access", allowed: isOwner },
-          ].map((item) => (
-            <div
-              key={item.label}
-              className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-900 rounded-lg"
-            >
-              <span className="text-xs text-gray-700 dark:text-gray-300">
-                {item.label}
-              </span>
-              <span
-                className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
-                  item.allowed
-                    ? "bg-green-100 text-green-700"
-                    : "bg-red-100 text-red-700"
-                }`}
-              >
-                {item.allowed ? "Allowed" : "Restricted"}
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
     </div>
   );
 }

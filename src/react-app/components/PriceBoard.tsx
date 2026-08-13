@@ -5,6 +5,7 @@ import {
   CANONICAL_FUEL_TYPES,
   isSameFuelType,
 } from "@/react-app/config/pricing";
+import { useStationFuelTypes } from "@/react-app/hooks/useStationFuelTypes";
 import {
   Monitor,
   Plus,
@@ -79,7 +80,15 @@ const FUEL_GRADES: Record<string, string[]> = {
   [CANONICAL_FUEL_TYPES.lpg.label]: ["3kg", "6kg", "13kg", "25kg"],
 };
 
-const VALID_FUEL_TYPES = new Set(Object.keys(FUEL_GRADES));
+/**
+ * Resolve the grade list for a fuel type. Falls back to the canonical
+ * petrol grades when the fuel type is unknown (e.g. a custom fuel like
+ * "Shell V-Power" not in FUEL_GRADES) so the grade dropdown is never empty.
+ */
+function gradesFor(fuelType: string | undefined): string[] {
+  if (fuelType && FUEL_GRADES[fuelType]) return FUEL_GRADES[fuelType];
+  return FUEL_GRADES[CANONICAL_FUEL_TYPES.petrol.label];
+}
 
 /**
  * Normalize a price entry from cloud/localStorage so it always has every
@@ -93,12 +102,10 @@ function normalizePriceEntry(
 ): PriceEntry {
   const id =
     p?.id || `pb_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-  const fuelType =
-    p?.fuelType && VALID_FUEL_TYPES.has(p.fuelType)
-      ? p.fuelType
-      : CANONICAL_FUEL_TYPES.petrol.label;
-  const grades =
-    FUEL_GRADES[fuelType] || FUEL_GRADES[CANONICAL_FUEL_TYPES.petrol.label];
+  // Accept any non-empty fuel type (incl. custom fuels not in FUEL_GRADES);
+  // fall back to the canonical petrol label only when missing.
+  const fuelType = p?.fuelType || CANONICAL_FUEL_TYPES.petrol.label;
+  const grades = gradesFor(fuelType);
   const grade =
     p?.grade && grades.includes(p.grade) ? p.grade : grades[0] || "Regular";
   return {
@@ -170,6 +177,19 @@ export default function PriceBoard() {
   const { currentStation } = useStations();
   const stationId = currentStation?.id;
   const { syncPriceToFuelTypes } = useFuel();
+  // Derive the fuel-type options from the station's configured Fuel Types
+  // (fuel_types_config) so the Price Board is no longer limited to the
+  // hardcoded petrol/diesel/kerosene/LPG set. Any fuel the user added in
+  // Fuel Type Manager (V-Power, CNG, custom) appears here.
+  const fuelTypeApi = useStationFuelTypes(stationId);
+  const fuelTypeOptions = (() => {
+    const configured = fuelTypeApi.activeFuelTypes.map((ft) => ft.name);
+    if (configured.length > 0) return configured;
+    // Fallback to the canonical FUEL_GRADES keys when no fuel types are
+    // configured yet (legacy station / first run) so the dropdown is never
+    // empty.
+    return Object.keys(FUEL_GRADES);
+  })();
   const [prices, setPrices] = useState<PriceEntry[]>(() => {
     const cloudCached = cloudStorageService.getCached<unknown[]>(
       "priceboard_data",
@@ -812,12 +832,25 @@ export default function PriceBoard() {
                     </label>
                     <select
                       value={formData.fuelType}
-                      onChange={(e) =>
-                        setFormData({ ...formData, fuelType: e.target.value })
-                      }
+                      onChange={(e) => {
+                        const chosen = e.target.value;
+                        // Pre-fill the price from the station's configured
+                        // fuel type when the user hasn't entered one yet,
+                        // so Price Board stays in sync with Fuel Types.
+                        const configuredPrice = fuelTypeApi.getPriceFor(chosen);
+                        setFormData((prev) => ({
+                          ...prev,
+                          fuelType: chosen,
+                          grade: gradesFor(chosen)[0] || "Regular",
+                          price:
+                            !prev.price && configuredPrice
+                              ? configuredPrice
+                              : prev.price,
+                        }));
+                      }}
                       className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
                     >
-                      {Object.keys(FUEL_GRADES).map((t) => (
+                      {fuelTypeOptions.map((t) => (
                         <option key={t} value={t}>
                           {t}
                         </option>
@@ -835,11 +868,7 @@ export default function PriceBoard() {
                       }
                       className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
                     >
-                      {(
-                        FUEL_GRADES[
-                          formData.fuelType as keyof typeof FUEL_GRADES
-                        ] || []
-                      ).map((g) => (
+                      {gradesFor(formData.fuelType).map((g) => (
                         <option key={g} value={g}>
                           {g}
                         </option>
