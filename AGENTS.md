@@ -4342,3 +4342,56 @@ shows inline pump count (LPG: 1 pump, Kerosene: 1 pump, V-Power: 2 pumps).
 main alias). Vercel BLOCKED by api-deployments-free-per-day (100/100;
 GitHub integration auto-deploys when quota resets ~24h). Supabase
 migrations 016+017 applied live.
+=======
+## Dynamic fuel types across entire site (DEPLOYED LIVE 2026-08-13, commit 843c957)
+
+**Requirement**: The site was hardcoded to only PMS (Petrol) and AGO (Diesel) fuel types. Users with stations selling LPG, Kerosene, V-Power, CNG, or any custom fuel type could not use the system properly — Sales Tracking only showed PMS/AGO pump tables, POS only had PMS/Diesel quick sale buttons, Dashboard only showed PMS/AGO prices, etc.
+
+**Fix**: Removed ALL hardcoded PMS/AGO fuel type references across the entire site. Every component now adapts to the station's configured fuel types (from `fuel_types_config` cloud key via `useStationFuelTypes()` hook).
+
+### Components fixed (this session)
+
+- **AIChatbot.tsx**: fuel prices/tank levels/business overview now iterate `fuelTypeApi.activeFuelTypes` instead of hardcoded PMS/AGO.
+- **StationLoyaltyManager.tsx**: preferredFuel dropdown offers all station fuel types (was PMS/AGO/Both only).
+- **Documents.tsx**: sales history export uses `getFuelLabel()` for dynamic labels.
+- **DataManager.tsx**: summary/chart labels use `getFuelLabel()` (was "PMS Pumps"/"AGO Pumps").
+- **ReportsCenter.tsx**: POS/pump sales iterate all fuel types (was pmsAmount/agoAmount only); fixed crash with optional chaining.
+- **SetupWizard.tsx**: fallback fuel list includes IK/LPG/VPW (was PMS/AGO only); ExtraFuel interface expanded.
+- **FuelQualityTesting.tsx**: default test fuel = first active station fuel (was hardcoded "PMS").
+- **TeamManager.tsx**: fallback pump options include IK/LPG/VPW.
+- **CustomerLoyalty.tsx**: EditCustomerForm now uses `useStationFuelTypes` hook.
+
+### Pre-existing TS errors fixed
+
+- Dashboard.tsx: `Object.values().reduce()` returned `unknown` — added `as number` cast.
+- SetupWizard.tsx: `ExtraFuel` interface missing `label`, `pumpCount`, `code` — added optional properties.
+- PermissionContext.tsx: `TeamMember` interface missing `invitedByName` — added optional property.
+- FounderAccess.tsx: duplicate `RefreshCw` import from lucide-react — removed duplicate.
+
+### Components already dynamic (prior sessions, verified)
+
+Dashboard, PointOfSale, SalesTracking, FuelOffloading, DeliveryTracker, AdvancedAnalytics, CustomerLoyalty, FuelTypesManager, PriceBoard, InventoryManagement, FuelSalesReport — all use `useStationFuelTypes()` or canonical fuel type system from `config/pricing.ts`.
+
+### Canonical fuel type system (`config/pricing.ts`)
+
+- `CanonicalFuelType` union: petrol | diesel | kerosene | vpower | premium_diesel | lpg | cng
+- `CANONICAL_FUEL_TYPES` registry: maps each type to display label + industry code
+- `FUEL_ALIAS_MAP`: case-insensitive map of every known spelling (Super Petrol, PMS, AGO, IK, DPK, V-Power, LPG, CNG…) to canonical type
+- `normalizeFuelType(raw)`, `getFuelLabel(raw)`, `getFuelCode(raw)`, `isSameFuelType(a, b)`
+
+### Live verification (2026-08-13, Cloudflare preview 40e8f523)
+
+Tested as founder QA user (Founder Admin Station, US/USD) with 3 fuel types: LPG ($120/L), Kerosene ($5000/L), V-Power ($4800/L):
+- **Dashboard**: price cards, tank levels, pump status, fuel distribution all show LPG/Kerosene/V-Power (no PMS/AGO) ✅
+- **POS**: Quick Fuel Sale buttons for LPG ($120/L), Kerosene ($5000/L), V-Power ($4800/L) ✅. Completed LPG sale: 10L × $120 = $1,200, receipt shows "LPG", "10 L | VAT-A | HS:2710.12.10", cashier "Founder QA Test" ✅
+- **Sales Tracking**: dynamic fuel tank inventory (LPG/LPG Tank, Kerosene/IK Tank, V-Power/VPW Tank), dynamic pricing, dynamic pump tables ("Add LPG Pump", "Add Kerosene Pump", "Add V-Power Pump"), dynamic sales totals ✅
+- **Fuel Type Manager**: 3 fuel types, 3 active, 4 total pumps, correct prices/pump counts ✅
+
+### Deploy status 2026-08-13 (commit 843c957)
+
+- **GitHub main**: ✅ pushed (843c957)
+- **Cloudflare Pages**: ✅ LIVE (preview https://40e8f523.fuel-app-mobile.pages.dev + main alias https://fuel-app-mobile.pages.dev, 110 precache entries, version stamp 2026-08-13T18-42-39-286Z)
+- **Vercel production**: ❌ BLOCKED by `api-deployments-free-per-day` (100/100; resets ~24h). GitHub integration (prodBranch=main) will auto-deploy commit 843c957 when quota resets. The prebuilt output is built and ready.
+- **Supabase**: no schema changes needed (fuel types stored in `fuel_types_config` cloud key in `app_kv`, RLS by owner_id).
+- **TypeScript**: `npx tsc -p tsconfig.app.json --noEmit` — 0 errors ✅
+- **Build**: `npm run build` — success, 110 precache entries ✅
