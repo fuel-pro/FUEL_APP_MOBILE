@@ -19,6 +19,7 @@ import {
   getReceiptCurrency as getCurrencyInfo,
 } from "./pos/printer-service";
 import { getCurrencySymbol } from "./currency";
+import { getFuelLabel } from "@/react-app/config/pricing";
 
 const CloudStorage = cloudStorage;
 
@@ -480,8 +481,7 @@ class SilentPrintService {
         <div style="text-align: center; margin-bottom: 5mm;">
           ${logoHTML}
           <strong style="font-size: 14pt;">${receipt.stationName}</strong><br/>
-          ${receipt.stationLocation}<br/>
-          Tel: ${receipt.stationPhone || "+254 700 000 000"}
+          ${receipt.stationLocation}${receipt.stationPhone ? `<br/>Tel: ${receipt.stationPhone}` : ""}
           ${receipt.stationEmail ? `<br/>Email: ${receipt.stationEmail}` : ""}
         </div>
         <div style="border-top: 1px dashed #000; border-bottom: 1px dashed #000; padding: 3mm 0; margin: 3mm 0;">
@@ -629,21 +629,39 @@ class SilentPrintService {
   }
 
   /**
-   * Generate sales report HTML
+   * Generate sales report HTML — DYNAMIC fuel-type columns (was hardcoded
+   * Petrol Sales + Diesel Sales). Iterates reportData.fuelTypes if provided;
+   * otherwise falls back to reading entry.fuelSales keys from the first entry.
    */
   private generateSalesReportHTML(reportData: any): string {
+    const cur = reportData.currency || getCurrencySymbol();
+    // Derive the list of fuel types from the report data (dynamic).
+    const fuelTypes: string[] =
+      Array.isArray(reportData.fuelTypes) && reportData.fuelTypes.length > 0
+        ? reportData.fuelTypes
+        : (() => {
+            const first = (reportData.entries || []).find(
+              (e: any) => e.fuelSales && typeof e.fuelSales === "object",
+            );
+            return first ? Object.keys(first.fuelSales) : ["petrol", "diesel"];
+          })();
+    const fuelHeaders = fuelTypes
+      .map(
+        (ft) =>
+          `<th style="border: 1px solid #ddd; padding: 8px;">${getFuelLabel(ft)} Sales</th>`,
+      )
+      .join("");
     return `
       <div style="font-family: Arial, sans-serif; width: 210mm; padding: 20px; margin: 0 auto;">
         <div style="text-align: center; margin-bottom: 30px;">
-          <h1>${reportData.stationName || "FUELPRO"}</h1>
+          <h1>${reportData.stationName || ""}</h1>
           <h2>Sales Report - ${reportData.monthYear || reportData.period || ""}</h2>
         </div>
         <table style="width: 100%; border-collapse: collapse;">
           <thead>
             <tr style="background: #f0f0f0;">
               <th style="border: 1px solid #ddd; padding: 8px;">Date</th>
-              <th style="border: 1px solid #ddd; padding: 8px;">Petrol Sales</th>
-              <th style="border: 1px solid #ddd; padding: 8px;">Diesel Sales</th>
+              ${fuelHeaders}
               <th style="border: 1px solid #ddd; padding: 8px;">Total</th>
             </tr>
           </thead>
@@ -653,9 +671,13 @@ class SilentPrintService {
                 (entry: any) => `
               <tr>
                 <td style="border: 1px solid #ddd; padding: 8px;">${entry.date}</td>
-                <td style="border: 1px solid #ddd; padding: 8px;">${reportData.currency || getCurrencySymbol()} ${(entry.petrolSales || 0).toLocaleString()}</td>
-                <td style="border: 1px solid #ddd; padding: 8px;">${reportData.currency || getCurrencySymbol()} ${(entry.dieselSales || 0).toLocaleString()}</td>
-                <td style="border: 1px solid #ddd; padding: 8px;">${reportData.currency || getCurrencySymbol()} ${(entry.totalSales || 0).toLocaleString()}</td>
+                ${fuelTypes
+                  .map(
+                    (ft) =>
+                      `<td style="border: 1px solid #ddd; padding: 8px;">${cur} ${((entry.fuelSales && entry.fuelSales[ft]) || 0).toLocaleString()}</td>`,
+                  )
+                  .join("")}
+                <td style="border: 1px solid #ddd; padding: 8px;">${cur} ${(entry.totalSales || 0).toLocaleString()}</td>
               </tr>
             `,
               )
@@ -664,9 +686,13 @@ class SilentPrintService {
           <tfoot>
             <tr style="font-weight: bold; background: #e0e0e0;">
               <td style="border: 1px solid #ddd; padding: 8px;">TOTAL</td>
-              <td style="border: 1px solid #ddd; padding: 8px;">${reportData.currency || getCurrencySymbol()} ${(reportData.totals?.petrol || 0).toLocaleString()}</td>
-              <td style="border: 1px solid #ddd; padding: 8px;">${reportData.currency || getCurrencySymbol()} ${(reportData.totals?.diesel || 0).toLocaleString()}</td>
-              <td style="border: 1px solid #ddd; padding: 8px;">${reportData.currency || getCurrencySymbol()} ${(reportData.totals?.total || 0).toLocaleString()}</td>
+              ${fuelTypes
+                .map(
+                  (ft) =>
+                    `<td style="border: 1px solid #ddd; padding: 8px;">${cur} ${((reportData.totals && (reportData.totals[ft] || reportData.totals.fuelTotals?.[ft])) || 0).toLocaleString()}</td>`,
+                )
+                .join("")}
+              <td style="border: 1px solid #ddd; padding: 8px;">${cur} ${(reportData.totals?.total || 0).toLocaleString()}</td>
             </tr>
           </tfoot>
         </table>

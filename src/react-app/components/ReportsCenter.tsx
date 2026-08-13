@@ -180,8 +180,12 @@ export default function ReportsCenter() {
     const salesHistory = Object.values(state.salesHistory);
     const filteredSales = filterByDateRange(salesHistory);
 
-    // Output VAT (Sales)
+    // Output VAT (Sales) — DYNAMIC: iterate all configured fuel types via
+    // fuelPumpsByType (was hardcoded PMS/AGO only). Falls back to legacy
+    // pmsPumps/agoPumps for backward compatibility.
     const totalSalesRevenue = filteredSales.reduce((sum, sale) => {
+      let fuelRevenue = 0;
+      // Legacy PMS/AGO pumps
       const pmsRevenue = (sale.pmsPumps || []).reduce(
         (pmsSum: number, pump: any) => pmsSum + (pump.salesKsh || 0),
         0,
@@ -190,9 +194,29 @@ export default function ReportsCenter() {
         (agoSum: number, pump: any) => agoSum + (pump.salesKsh || 0),
         0,
       );
+      fuelRevenue += pmsRevenue + agoRevenue;
+      // Dynamic: all other fuel types (Kerosene, V-Power, LPG, …)
+      if (sale.fuelPumpsByType && typeof sale.fuelPumpsByType === "object") {
+        for (const [ft, pumps] of Object.entries(sale.fuelPumpsByType)) {
+          if (ft === "petrol" || ft === "diesel") continue; // already counted
+          fuelRevenue += (pumps as any[]).reduce(
+            (s: number, p: any) => s + (p.salesKsh || 0),
+            0,
+          );
+        }
+      }
       const posRevenue =
         (sale.posSales?.pmsAmount || 0) + (sale.posSales?.agoAmount || 0);
-      return sum + pmsRevenue + agoRevenue + posRevenue;
+      // Dynamic POS sales by fuel type
+      if (sale.posSales?.fuelAmountsByType) {
+        for (const [ft, amt] of Object.entries(
+          sale.posSales.fuelAmountsByType,
+        )) {
+          if (ft === "petrol" || ft === "diesel") continue;
+          fuelRevenue += (amt as number) || 0;
+        }
+      }
+      return sum + fuelRevenue + posRevenue;
     }, 0);
 
     const outputVAT = calculateVAT(totalSalesRevenue);
@@ -267,6 +291,34 @@ export default function ReportsCenter() {
               });
             }
           });
+
+          // DYNAMIC: all other configured fuel types (Kerosene, V-Power, LPG, …)
+          if (
+            sale.fuelPumpsByType &&
+            typeof sale.fuelPumpsByType === "object"
+          ) {
+            for (const [ft, pumps] of Object.entries(sale.fuelPumpsByType)) {
+              if (ft === "petrol" || ft === "diesel") continue;
+              (pumps as any[]).forEach((pump: any) => {
+                if (pump.salesKsh > 0) {
+                  const vat = calculateVAT(pump.salesKsh);
+                  items.push({
+                    receiptNo: `${state.companyData.etrInvoicePrefix || "ETR"}${String(receiptNo++).padStart(6, "0")}`,
+                    time: sale.date?.split("T")[1]?.substring(0, 5) || "00:00",
+                    description: `${getFuelLabel(ft)} - Pump ${pump.id}`,
+                    quantity: pump.salesL || 0,
+                    unit: "L",
+                    unitPrice:
+                      pump.salesL > 0 ? pump.salesKsh / pump.salesL : 0,
+                    grossAmount: pump.salesKsh,
+                    vatAmount: vat.vatAmount,
+                    netAmount: vat.netAmount,
+                    vatRate: `${(VAT_RATE * 100).toFixed(0)}%`,
+                  });
+                }
+              });
+            }
+          }
 
           // POS Sales
           if (sale.posSales) {
