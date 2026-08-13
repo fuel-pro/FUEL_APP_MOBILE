@@ -4293,3 +4293,52 @@ preferredFuel was typed "PMS"|"AGO"|"Both" with hardcoded dropdown. Now renders 
 
 ### Deploy state 2026-08-13 (commit a2cac45)
 - GitHub: PR #131 branch dynamic-fuel-types. Cloudflare: LIVE (index-Dv4tG-r7.js + CustomerLoyalty-DHYcc_nl.js with "All Fuels" confirmed). Vercel: prebuilt deploy aliased but stale; redeploy blocked by api-deployments-free-per-day (100/day). GitHub integration auto-deploys when quota resets. Supabase: no schema changes. tsc 0 errors, build 111 precache.
+
+
+## Session 2026-08-13 — Restored dynamic-fuel-types branch (28 commits of reverted work) + removed Pump Settings sub-tab
+
+**Root cause of the revert**: a parallel branch `origin/dynamic-fuel-types`
+(28 commits) diverged from main at `0f42e45` and was NEVER merged. It
+contained the COMPLETE version of the Pump Settings to Fuel Types merge
+(commit `61bb00b`) plus a large body of dynamic-fuel-types work that
+main never received. So the earlier complete work was effectively
+reverted by being left on an unmerged branch.
+
+**Fix**: merged `origin/dynamic-fuel-types` into main (commit `cb60344`
++ `5aa6bc3` + `843c957`). Resolved 5 conflicts:
+- FuelTypesManager.tsx: took branch version (complete Pump Settings
+  removal removes the standalone sub-tab + dead PumpSettingsPanel; each
+  fuel type card has an inline Number of Pumps stepper).
+- DeliveryTracker.tsx: took branch (dynamic fuel price lines in export).
+- FuelSalesReport.tsx: took branch (dynamic fuel types + no-data fixes).
+- SalesTracking.tsx: took branch (dynamic fuel types) + re-added main
+  switchToTab cross-tab nav buttons (Sell in POS / Reports).
+- AGENTS.md: kept both doc sections.
+
+**What was restored (the 28 commits)**:
+- Pump Settings sub-tab REMOVED; inline Number of Pumps per fuel type.
+- Dynamic fuel types beyond hardcoded PMS/AGO across Dashboard (dynamic
+  price cards, fuel distribution, pump status, tank levels per
+  configured fuel), POS, SalesTracking (dynamic tank inventory),
+  SetupWizard, PriceBoard, FuelQualityTesting.
+- Currency symbol resolution (resolveCurrencySymbol) replacing stale
+  companyData.currency leaks across all components.
+- SalesTracking save no longer destroys POS sales data; Dashboard Total
+  Revenue reflects POS sales + dynamic fuel types.
+- Dynamic fuel types in all export/print/download functions.
+- Migrations 016 (station_members RLS invited staff can READ their
+  station) + 017 (fix RLS recursion) APPLIED LIVE.
+- Team Manager invite acceptance cross-user flow + role-sync fixes.
+
+**Verified LIVE on Cloudflare preview bd0e6f97**: logged in as founder
+(US station with custom fuels LPG/Kerosene/V-Power). Dashboard now
+renders DYNAMIC fuel types (LPG, Kerosene, V-Power) in price cards,
+fuel distribution chart, tank levels, and pump status NOT hardcoded
+PMS/AGO. Fuel Type Manager SubTabBar shows only 3 tabs (Fuel Types /
+Price Board / Fuel Quality) Pump Settings is GONE. Each fuel type card
+shows inline pump count (LPG: 1 pump, Kerosene: 1 pump, V-Power: 2 pumps).
+
+**Deploy**: GitHub main 843c957. Cloudflare LIVE (preview bd0e6f97 +
+main alias). Vercel BLOCKED by api-deployments-free-per-day (100/100;
+GitHub integration auto-deploys when quota resets ~24h). Supabase
+migrations 016+017 applied live.
