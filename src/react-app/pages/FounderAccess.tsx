@@ -2108,9 +2108,14 @@ export default function FounderAccess() {
                           </span>
                         </td>
                         <td className="px-4 py-3 text-[11px] text-gray-500">
-                          {u.lastActive
-                            ? new Date(u.lastActive).toLocaleDateString()
-                            : "—"}
+                          {(() => {
+                            const d = u.lastActive ? new Date(u.lastActive) : null;
+                            return d && !isNaN(d.getTime())
+                              ? d.toLocaleDateString()
+                              : u.lastActive === "Never"
+                                ? "Never"
+                                : "—";
+                          })()}
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-1">
