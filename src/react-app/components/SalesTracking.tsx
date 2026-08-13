@@ -84,9 +84,10 @@ export default function SalesTracking() {
 
   /**
    * The fuel types this station tracks pumps for. Built from the configured
-   * fuel_types_config (canonical-normalized). Always includes petrol + diesel
-   * (via the static baseline) so a station that hasn't configured fuel types
-   * yet still sees the legacy two tables — no regression.
+   * fuel_types_config (canonical-normalized). A station with 3 fuel types
+   * (e.g. Kerosene, V-Power, LPG) gets exactly 3 pump tables — no hardcoded
+   * PMS/AGO. Petrol + diesel are included ONLY as a first-run fallback when
+   * the station has not yet configured ANY fuel types (legacy compatibility).
    */
   const trackedFuelTypes: CanonicalFuelType[] = useMemo(() => {
     const active = fuelTypeApi.activeFuelTypes;
@@ -95,10 +96,14 @@ export default function SalesTracking() {
       const c = fuelTypeApi.canonicalOf(ft.name);
       if (c) set.add(c);
     }
-    // Always include petrol + diesel baseline so pumps never disappear for
-    // stations that haven't configured fuel types.
-    set.add("petrol");
-    set.add("diesel");
+    // First-run fallback: if the station has NOT configured any fuel types
+    // yet, show the legacy petrol + diesel tables so the screen is never
+    // empty. Once fuel types ARE configured, ONLY those appear (the user's
+    // actual fuel mix — e.g. Kerosene/V-Power/LPG with no petrol/diesel).
+    if (set.size === 0) {
+      set.add("petrol");
+      set.add("diesel");
+    }
     return Array.from(set);
   }, [fuelTypeApi]);
 
@@ -696,7 +701,19 @@ export default function SalesTracking() {
         `Total ${label} Sales: ${currencySymbol} ${formatNumber(sales, 2)}`,
       );
     }
-    return `Date: ${state.salesDate}\nShift: ${state.shift}\n\nFuel Tank Inventory:\nPetrol (PMS) Tank: Opening: ${formatNumber(state.pmsTankOpening)} L, Closing: ${formatNumber(state.pmsTankClosing)} L\nDiesel (AGO) Tank: Opening: ${formatNumber(state.agoTankOpening)} L, Closing: ${formatNumber(state.agoTankClosing)} L\n\nFuel Pricing & Pumps:\n${fuelLines.join("\n")}\n\nDaily Expenses:\n${state.expenses.map((e) => `${e.desc}: ${formatNumber(e.amount)} ${currencySymbol}`).join("\n")}\n\nTill/Mobile Payment: ${formatNumber(state.tillPayment)} ${currencySymbol}\n\nDaily Summary:\n${summaryLines.join("\n")}\nTotal Revenue: ${currencySymbol} ${formatNumber(summary.totalRevenue, 2)}\nTill/Mobile Payment: ${currencySymbol} ${formatNumber(state.tillPayment, 2)}\nCash In Hand: ${currencySymbol} ${formatNumber(summary.cashInHand, 2)}\nTotal Expenses: ${currencySymbol} ${formatNumber(summary.totalExpenses, 2)}\nNet Income: ${currencySymbol} ${formatNumber(summary.netIncome, 2)}`;
+    // Dynamic tank inventory per fuel type (not hardcoded PMS/AGO).
+    const tankLines = trackedFuelTypes.map((ft) => {
+      const label = getFuelLabel(ft);
+      const code = getFuelCode(ft);
+      const tv =
+        ft === "petrol"
+          ? { opening: state.pmsTankOpening, closing: state.pmsTankClosing }
+          : ft === "diesel"
+            ? { opening: state.agoTankOpening, closing: state.agoTankClosing }
+            : (state.fuelTankValuesByType?.[ft] ?? { opening: 0, closing: 0 });
+      return `${label} (${code}) Tank: Opening: ${formatNumber(tv.opening)} L, Closing: ${formatNumber(tv.closing)} L`;
+    });
+    return `Date: ${state.salesDate}\nShift: ${state.shift}\n\nFuel Tank Inventory:\n${tankLines.join("\n")}\n\nFuel Pricing & Pumps:\n${fuelLines.join("\n")}\n\nDaily Expenses:\n${state.expenses.map((e) => `${e.desc}: ${formatNumber(e.amount)} ${currencySymbol}`).join("\n")}\n\nTill/Mobile Payment: ${formatNumber(state.tillPayment)} ${currencySymbol}\n\nDaily Summary:\n${summaryLines.join("\n")}\nTotal Revenue: ${currencySymbol} ${formatNumber(summary.totalRevenue, 2)}\nTill/Mobile Payment: ${currencySymbol} ${formatNumber(state.tillPayment, 2)}\nCash In Hand: ${currencySymbol} ${formatNumber(summary.cashInHand, 2)}\nTotal Expenses: ${currencySymbol} ${formatNumber(summary.totalExpenses, 2)}\nNet Income: ${currencySymbol} ${formatNumber(summary.netIncome, 2)}`;
   };
 
   return (
@@ -1209,92 +1226,95 @@ export default function SalesTracking() {
           </div>
         </div>
 
-        {/* Fuel Tank Inventory */}
+        {/* Fuel Tank Inventory — dynamic per fuel type. A station with N fuel
+            types gets N tank sections (was hardcoded to only Petrol (PMS) Tank
+            + Diesel (AGO) Tank). */}
         <div className="mb-6">
           <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
             <Fuel size={20} className="text-indigo-500" />
             Fuel Tank Inventory
           </h3>
 
-          <div className="mb-4">
-            <h4 className="font-medium mb-2 text-gray-700 dark:text-gray-300">
-              Petrol (PMS) Tank
-            </h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="form-group">
-                <label>Opening Meter (L)</label>
-                <input
-                  type="number"
-                  value={state.pmsTankOpening}
-                  onChange={(e) =>
-                    dispatch({
-                      type: "SET_TANK_VALUES",
-                      payload: {
-                        pmsTankOpening: parseFloat(e.target.value) || 0,
-                      },
-                    })
+          {trackedFuelTypes.map((ft) => {
+            const label = getFuelLabel(ft);
+            const code = getFuelCode(ft);
+            // petrol/diesel map to the legacy pmsTank/agoTank fields for
+            // backward compatibility; all other fuel types use the dynamic
+            // fuelTankValuesByType store.
+            const isPetrol = ft === "petrol";
+            const isDiesel = ft === "diesel";
+            const tankVal = isPetrol
+              ? {
+                  opening: state.pmsTankOpening,
+                  closing: state.pmsTankClosing,
+                }
+              : isDiesel
+                ? {
+                    opening: state.agoTankOpening,
+                    closing: state.agoTankClosing,
                   }
-                  step="0.1"
-                />
+                : (state.fuelTankValuesByType?.[ft] ?? {
+                    opening: 0,
+                    closing: 0,
+                  });
+            const setTank = (opening: number, closing: number) => {
+              if (isPetrol) {
+                dispatch({
+                  type: "SET_TANK_VALUES",
+                  payload: { pmsTankOpening: opening, pmsTankClosing: closing },
+                });
+              } else if (isDiesel) {
+                dispatch({
+                  type: "SET_TANK_VALUES",
+                  payload: { agoTankOpening: opening, agoTankClosing: closing },
+                });
+              } else {
+                dispatch({
+                  type: "SET_TANK_VALUES",
+                  payload: {
+                    fuelTankValuesByType: { [ft]: { opening, closing } },
+                  },
+                });
+              }
+            };
+            return (
+              <div className="mb-4" key={ft}>
+                <h4 className="font-medium mb-2 text-gray-700 dark:text-gray-300">
+                  {label} ({code}) Tank
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="form-group">
+                    <label>Opening Meter (L)</label>
+                    <input
+                      type="number"
+                      value={tankVal.opening}
+                      onChange={(e) =>
+                        setTank(
+                          parseFloat(e.target.value) || 0,
+                          tankVal.closing,
+                        )
+                      }
+                      step="0.1"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Closing Meter (L)</label>
+                    <input
+                      type="number"
+                      value={tankVal.closing}
+                      onChange={(e) =>
+                        setTank(
+                          tankVal.opening,
+                          parseFloat(e.target.value) || 0,
+                        )
+                      }
+                      step="0.1"
+                    />
+                  </div>
+                </div>
               </div>
-              <div className="form-group">
-                <label>Closing Meter (L)</label>
-                <input
-                  type="number"
-                  value={state.pmsTankClosing}
-                  onChange={(e) =>
-                    dispatch({
-                      type: "SET_TANK_VALUES",
-                      payload: {
-                        pmsTankClosing: parseFloat(e.target.value) || 0,
-                      },
-                    })
-                  }
-                  step="0.1"
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="mb-4">
-            <h4 className="font-medium mb-2 text-gray-700 dark:text-gray-300">
-              Diesel (AGO) Tank
-            </h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="form-group">
-                <label>Opening Meter (L)</label>
-                <input
-                  type="number"
-                  value={state.agoTankOpening}
-                  onChange={(e) =>
-                    dispatch({
-                      type: "SET_TANK_VALUES",
-                      payload: {
-                        agoTankOpening: parseFloat(e.target.value) || 0,
-                      },
-                    })
-                  }
-                  step="0.1"
-                />
-              </div>
-              <div className="form-group">
-                <label>Closing Meter (L)</label>
-                <input
-                  type="number"
-                  value={state.agoTankClosing}
-                  onChange={(e) =>
-                    dispatch({
-                      type: "SET_TANK_VALUES",
-                      payload: {
-                        agoTankClosing: parseFloat(e.target.value) || 0,
-                      },
-                    })
-                  }
-                  step="0.1"
-                />
-              </div>
-            </div>
-          </div>
+            );
+          })}
         </div>
 
         {/* Fuel Pricing — dynamic per fuel type */}

@@ -214,7 +214,8 @@ export default function Dashboard() {
       return active.map((ft) => {
         const canonical = fuelTypeApi.canonicalOf(ft.name);
         const label = fuelTypeApi.labelOf(ft.name);
-        const configured = typeof ft.price === "number" && ft.price > 0 ? ft.price : null;
+        const configured =
+          typeof ft.price === "number" && ft.price > 0 ? ft.price : null;
         let price = 0;
         if (configured != null) {
           price = configured;
@@ -338,6 +339,82 @@ export default function Dashboard() {
       },
     ];
   }, [fuelTypeApi, state.fuelPumpsByType, state.pmsPumps, state.agoPumps]);
+
+  // Tank Level cards — dynamic per fuel type (was hardcoded to only
+  // Super Petrol Tank + Diesel Tank). A station with Kerosene/V-Power/LPG
+  // etc. gets a tank card for each configured fuel type.
+  const tankLevelCards: Array<{
+    key: string;
+    label: string;
+    opening: number;
+    closing: number;
+    barClass: string;
+  }> = useMemo(() => {
+    const active = fuelTypeApi.activeFuelTypes;
+    const barPalette: Record<string, string> = {
+      petrol: "from-green-400 to-green-600",
+      diesel: "from-amber-400 to-amber-600",
+      kerosene: "from-rose-400 to-rose-600",
+    };
+    const fallbackBar = "from-indigo-400 to-indigo-600";
+    const build = (
+      key: string,
+      label: string,
+      opening: number,
+      closing: number,
+      canonical?: string | null,
+    ) => ({
+      key,
+      label,
+      opening,
+      closing,
+      barClass: (canonical && barPalette[canonical]) || fallbackBar,
+    });
+    if (active.length > 0) {
+      return active.map((ft) => {
+        const canonical = fuelTypeApi.canonicalOf(ft.name);
+        const tv =
+          canonical === "petrol"
+            ? { opening: state.pmsTankOpening, closing: state.pmsTankClosing }
+            : canonical === "diesel"
+              ? { opening: state.agoTankOpening, closing: state.agoTankClosing }
+              : (state.fuelTankValuesByType?.[canonical || ft.name] ?? {
+                  opening: 0,
+                  closing: 0,
+                });
+        return build(
+          ft.id || canonical || ft.name,
+          fuelTypeApi.labelOf(ft.name),
+          tv.opening,
+          tv.closing,
+          canonical,
+        );
+      });
+    }
+    return [
+      build(
+        "petrol",
+        CANONICAL_FUEL_TYPES.petrol.label,
+        state.pmsTankOpening,
+        state.pmsTankClosing,
+        "petrol",
+      ),
+      build(
+        "diesel",
+        CANONICAL_FUEL_TYPES.diesel.label,
+        state.agoTankOpening,
+        state.agoTankClosing,
+        "diesel",
+      ),
+    ];
+  }, [
+    fuelTypeApi,
+    state.fuelTankValuesByType,
+    state.pmsTankOpening,
+    state.pmsTankClosing,
+    state.agoTankOpening,
+    state.agoTankClosing,
+  ]);
 
   // Currency symbol must match the STATION's currency (e.g. "€" for a German
   // station), never the GPS/browser-detected currency. Fall back to the
@@ -1379,62 +1456,43 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Tank Levels */}
+      {/* Tank Levels — dynamic per fuel type (was hardcoded to only
+          Super Petrol Tank + Diesel Tank). */}
       <div className="bg-white dark:bg-gray-800 rounded-xl p-3 shadow-sm border border-gray-200 dark:border-gray-700">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
           <Fuel size={18} className="text-blue-500" />
           Tank Levels
         </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {/* PMS Tank */}
-          <div>
-            <div className="flex justify-between items-center mb-2">
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                {CANONICAL_FUEL_TYPES.petrol.label} Tank
-              </span>
-              <span className="text-xs text-gray-500 dark:text-gray-400">
-                {formatNumber(state.pmsTankClosing - state.pmsTankOpening, 0)} L
-                dispensed
-              </span>
-            </div>
-            <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-green-400 to-green-600 rounded-full transition-all duration-500"
-                style={{
-                  width: `${tankFillPercent(state.pmsTankOpening, state.pmsTankClosing)}%`,
-                }}
-              />
-            </div>
-            <div className="flex justify-between mt-1 text-xs text-gray-500 dark:text-gray-400">
-              <span>Opening: {formatNumber(state.pmsTankOpening)} L</span>
-              <span>Closing: {formatNumber(state.pmsTankClosing)} L</span>
-            </div>
-          </div>
-
-          {/* AGO Tank */}
-          <div>
-            <div className="flex justify-between items-center mb-2">
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                {CANONICAL_FUEL_TYPES.diesel.label} Tank
-              </span>
-              <span className="text-xs text-gray-500 dark:text-gray-400">
-                {formatNumber(state.agoTankClosing - state.agoTankOpening, 0)} L
-                dispensed
-              </span>
-            </div>
-            <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-amber-400 to-amber-600 rounded-full transition-all duration-500"
-                style={{
-                  width: `${tankFillPercent(state.agoTankOpening, state.agoTankClosing)}%`,
-                }}
-              />
-            </div>
-            <div className="flex justify-between mt-1 text-xs text-gray-500 dark:text-gray-400">
-              <span>Opening: {formatNumber(state.agoTankOpening)} L</span>
-              <span>Closing: {formatNumber(state.agoTankClosing)} L</span>
-            </div>
-          </div>
+        <div
+          className={`grid gap-3 ${tankLevelCards.length > 2 ? "grid-cols-1 md:grid-cols-3" : "grid-cols-1 md:grid-cols-2"}`}
+        >
+          {tankLevelCards.map((card) => {
+            const dispensed = card.closing - card.opening;
+            return (
+              <div key={card.key}>
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {card.label} Tank
+                  </span>
+                  <span className="text-xs text-gray-500 dark:text-gray-400">
+                    {formatNumber(dispensed, 0)} L dispensed
+                  </span>
+                </div>
+                <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full bg-gradient-to-r ${card.barClass} rounded-full transition-all duration-500`}
+                    style={{
+                      width: `${tankFillPercent(card.opening, card.closing)}%`,
+                    }}
+                  />
+                </div>
+                <div className="flex justify-between mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  <span>Opening: {formatNumber(card.opening)} L</span>
+                  <span>Closing: {formatNumber(card.closing)} L</span>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
 

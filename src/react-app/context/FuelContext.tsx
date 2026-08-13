@@ -317,6 +317,12 @@ export interface FuelState {
   fuelPumpsByType: Record<string, Pump[]>;
   /** Dynamic per-fuel-type prices keyed by canonical fuel type. */
   fuelPricesByType: Record<string, number>;
+  /**
+   * Dynamic per-fuel-type tank inventory (opening/closing litres) keyed by
+   * canonical fuel type. Replaces the hardcoded PMS/AGO-only tank fields for
+   * stations with other fuels (Kerosene, V-Power, LPG, etc.).
+   */
+  fuelTankValuesByType: Record<string, { opening: number; closing: number }>;
   expenses: Expense[];
   tillPayment: number;
   salesDate: string;
@@ -394,6 +400,10 @@ type FuelAction =
         pmsTankClosing?: number;
         agoTankOpening?: number;
         agoTankClosing?: number;
+        fuelTankValuesByType?: Record<
+          string,
+          { opening: number; closing: number }
+        >;
       };
     }
   | {
@@ -546,6 +556,7 @@ const initialState: FuelState = {
   agoPumps: [],
   fuelPumpsByType: {},
   fuelPricesByType: {},
+  fuelTankValuesByType: {},
   expenses: [],
   tillPayment: 0,
   salesDate: new Date().toISOString().split("T")[0],
@@ -1019,8 +1030,21 @@ function fuelReducer(state: FuelState, action: FuelAction): FuelState {
       return { ...state, salesDate: action.payload };
     case "SET_SHIFT":
       return { ...state, shift: action.payload };
-    case "SET_TANK_VALUES":
-      return { ...state, ...action.payload };
+    case "SET_TANK_VALUES": {
+      const { fuelTankValuesByType, ...rest } = action.payload;
+      return {
+        ...state,
+        ...rest,
+        ...(fuelTankValuesByType
+          ? {
+              fuelTankValuesByType: {
+                ...state.fuelTankValuesByType,
+                ...fuelTankValuesByType,
+              },
+            }
+          : {}),
+      };
+    }
     case "SET_PRICES":
       return { ...state, ...action.payload };
     case "SET_DELIVERY_INFO":
@@ -1069,6 +1093,20 @@ function fuelReducer(state: FuelState, action: FuelAction): FuelState {
         ...state,
         ...incoming,
         companyData: mergeCompanyData(state.companyData, incoming.companyData),
+        // Merge (not replace) the dynamic per-fuel-type stores so a stale
+        // cloud blob can't wipe pumps/prices/tank-values the user just set.
+        fuelPumpsByType: {
+          ...state.fuelPumpsByType,
+          ...(incoming.fuelPumpsByType || {}),
+        },
+        fuelPricesByType: {
+          ...state.fuelPricesByType,
+          ...(incoming.fuelPricesByType || {}),
+        },
+        fuelTankValuesByType: {
+          ...state.fuelTankValuesByType,
+          ...(incoming.fuelTankValuesByType || {}),
+        },
         invoiceItems,
       };
     }
@@ -1349,6 +1387,11 @@ export function FuelProvider({ children }: { children: ReactNode }) {
         compactData.fuelPumpsByType = s.fuelPumpsByType;
       if (s.fuelPricesByType && Object.keys(s.fuelPricesByType).length > 0)
         compactData.fuelPricesByType = s.fuelPricesByType;
+      if (
+        s.fuelTankValuesByType &&
+        Object.keys(s.fuelTankValuesByType).length > 0
+      )
+        compactData.fuelTankValuesByType = s.fuelTankValuesByType;
       if (s.expenses?.length > 0) compactData.expenses = s.expenses;
       if (s.salesDate !== new Date().toISOString().split("T")[0])
         compactData.salesDate = s.salesDate;
@@ -1474,6 +1517,11 @@ export function FuelProvider({ children }: { children: ReactNode }) {
         compactData.fuelPumpsByType = s.fuelPumpsByType;
       if (s.fuelPricesByType && Object.keys(s.fuelPricesByType).length > 0)
         compactData.fuelPricesByType = s.fuelPricesByType;
+      if (
+        s.fuelTankValuesByType &&
+        Object.keys(s.fuelTankValuesByType).length > 0
+      )
+        compactData.fuelTankValuesByType = s.fuelTankValuesByType;
       if (s.expenses?.length > 0) compactData.expenses = s.expenses;
       if (s.salesDate !== new Date().toISOString().split("T")[0])
         compactData.salesDate = s.salesDate;
