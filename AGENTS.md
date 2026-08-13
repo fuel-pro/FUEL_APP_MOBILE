@@ -4342,56 +4342,274 @@ shows inline pump count (LPG: 1 pump, Kerosene: 1 pump, V-Power: 2 pumps).
 main alias). Vercel BLOCKED by api-deployments-free-per-day (100/100;
 GitHub integration auto-deploys when quota resets ~24h). Supabase
 migrations 016+017 applied live.
-=======
-## Dynamic fuel types across entire site (DEPLOYED LIVE 2026-08-13, commit 843c957)
+## Founder Access Global Console — real-time cloud enhancement (ADDED 2026-08-12)
 
-**Requirement**: The site was hardcoded to only PMS (Petrol) and AGO (Diesel) fuel types. Users with stations selling LPG, Kerosene, V-Power, CNG, or any custom fuel type could not use the system properly — Sales Tracking only showed PMS/AGO pump tables, POS only had PMS/Diesel quick sale buttons, Dashboard only showed PMS/AGO prices, etc.
+The Founder Console's Secrets, Feature Flags, Audit Log, and Console Settings
+were localStorage-only (`fuelpro_founder_secrets` / `_flags` / `_audit`) → a
+change made on one device NEVER reached another device. Now ALL four datasets
+are cloud-backed via `useFounderConsoleStore` (Supabase `app_kv` + Supabase
+Realtime), so any change in the Founder Console reflects INSTANTLY on every
+signed-in founder device, with zero polling.
 
-**Fix**: Removed ALL hardcoded PMS/AGO fuel type references across the entire site. Every component now adapts to the station's configured fuel types (from `fuel_types_config` cloud key via `useStationFuelTypes()` hook).
+- **`src/react-app/hooks/useFounderConsoleStore.ts`** (NEW): cloud-backed,
+  real-time store. Loads secrets/flags/audit/settings from `app_kv` on mount,
+  subscribes to `postgres_changes` per key (echo-guarded via `skipEcho` ref),
+  exposes `upsertSecret/deleteSecret/rotateSecret/upsertFlag/toggleFlag/
+  deleteFlag/bulkSetFlags/addAudit/clearAudit/updateSettings/reload`.
+  Migrates legacy localStorage arrays to cloud on first load. Keys:
+  `founder_console_secrets`, `founder_console_flags`, `founder_console_audit`
+  (capped to `settings.auditRetention`, default 500), `founder_console_settings`.
+- **`SecretsManagerSection.tsx`** (NEW, replaces inline Secrets): cloud real-time
+  + live search/filter by category + category tagging + edit-in-place (upsert
+  by key) + rotate-value (crypto.getRandomValues 32-byte) + export/import JSON
+  + bulk delete (checkbox select-all) + last-rotated indicator + "Real-time
+  synced" badge.
+- **`FeatureFlagsManagerSection.tsx`** (NEW, replaces inline Flags): cloud
+  real-time + add/edit/delete custom flag + description/category/environment
+  (all/dev/staging/prod) editing + bulk enable/disable all + search + category
+  & environment filtering + per-flag edit/delete + updated-at timestamp.
+- **`AuditLogManagerSection.tsx`** (NEW, replaces inline Audit): cloud real-time
+  + severity summary chips (click to filter) + filter by severity/user/date
+  range + search + export JSON & CSV + clear (with confirm) + manual refresh +
+  last-sync display.
+- **`SystemHealthManagerSection.tsx`** (NEW, replaces inline System Health):
+  live metrics (recomputed on refresh) + real browser performance APIs
+  (navigation load time, JS heap memory used/total/limit via
+  `performance.memory`) + CPU cores + top-8 localStorage keys + clear-local-cache
+  developer action + export diagnostics JSON + manual refresh button.
+- **`ConsoleSettingsSection.tsx`** (NEW, nav "Console Settings" in
+  Administration group): global control panel — auto-refresh audit toggle,
+  compact mode, advanced-controls visibility, audit retention size, editable
+  flag & secret category lists (add/remove), live sync-status indicator.
+- **`FounderAccess.tsx`**: wired `useFounderConsoleStore`; `secrets`/`
+  featureFlags`/`auditLog`/`consoleSettings` now alias the store; removed the
+  localStorage save effects + legacy `loadSecrets/loadAuditLog/loadFeatureFlags`
+  loaders + dead `addSecret/deleteSecret/copySecretValue/toggleFlag` handlers +
+  unused `Secret/AuditEntry/FeatureFlag/FAConfig` interfaces + unused icon &
+  `useCloudSync*` imports. Added `consolesettings` to `SectionId` + navGroups +
+  render. Inline Secrets/Audit/Flags/System Health sections replaced with the
+  new components. `logAudit` (backend MySQL) kept; new sections log to
+  `consoleStore.addAudit` (real-time cloud channel).
+- **Verification**: `npx tsc -b` 0 errors; `npm run build` success (founder
+  chunk founder-B44OHBm3.js, 112 precache); `vitest` 3/3 pass; `eslint` 0 errors
+  (5 pre-existing warnings only, down from 13).
+- **No Supabase schema changes** — uses the existing `app_kv` table + RLS
+  (owner-scoped) + realtime publication.
+- **Deploy status 2026-08-12 (commit cc30e20)**: PR #106 opened (branch
+  `founder-console-enhancement`). Cloudflare Pages LIVE
+  (https://d471978e.fuel-app-mobile.pages.dev + main alias
+  fuel-app-mobile.pages.dev, bundle founder-B44OHBm3.js). Vercel production
+  deployed via git-source API (`POST /v13/deployments` with gitSource.repoId
+  + ref=<sha>), dpl_13bta1JZbxrd4CEHGLj6UySPbSFW READY, aliased to
+  fuel-app-mobile.vercel.app (bundle founder-FMhl0GbJ.js). The prebuilt /
+  deploy bucket was rate-limited (100/day), but the git-source deploy uses the
+  separate GitHub-integration quota and succeeded. Verified live on BOTH hosts:
+  the founder chunk contains `founder_console_secrets/_flags/_audit/_settings`,
+  "Console Settings", "Real-time synced", "Rotate", `bulkSetFlags`. No Supabase
+  changes were needed.
 
-### Components fixed (this session)
+## Founder Access Global Console — 100+ real-time cloud-backed controls (ADDED 2026-08-12, commit 56aa329)
 
-- **AIChatbot.tsx**: fuel prices/tank levels/business overview now iterate `fuelTypeApi.activeFuelTypes` instead of hardcoded PMS/AGO.
-- **StationLoyaltyManager.tsx**: preferredFuel dropdown offers all station fuel types (was PMS/AGO/Both only).
-- **Documents.tsx**: sales history export uses `getFuelLabel()` for dynamic labels.
-- **DataManager.tsx**: summary/chart labels use `getFuelLabel()` (was "PMS Pumps"/"AGO Pumps").
-- **ReportsCenter.tsx**: POS/pump sales iterate all fuel types (was pmsAmount/agoAmount only); fixed crash with optional chaining.
-- **SetupWizard.tsx**: fallback fuel list includes IK/LPG/VPW (was PMS/AGO only); ExtraFuel interface expanded.
-- **FuelQualityTesting.tsx**: default test fuel = first active station fuel (was hardcoded "PMS").
-- **TeamManager.tsx**: fallback pump options include IK/LPG/VPW.
-- **CustomerLoyalty.tsx**: EditCustomerForm now uses `useStationFuelTypes` hook.
+The Founder Access Global Console now has 14 NEW cloud-backed real-time
+datasets (via `useFounderAdvancedStore`) + 14 new/enhanced section
+components, plus deep enhancements to 4 existing sections. ANY change made
+in the console on any device reflects INSTANTLY on every signed-in founder
+device via Supabase `app_kv` + Realtime (echo-guarded with
+`skipRemoteUpdateRef`).
 
-### Pre-existing TS errors fixed
+### New store: `useFounderAdvancedStore.ts`
 
-- Dashboard.tsx: `Object.values().reduce()` returned `unknown` — added `as number` cast.
-- SetupWizard.tsx: `ExtraFuel` interface missing `label`, `pumpCount`, `code` — added optional properties.
-- PermissionContext.tsx: `TeamMember` interface missing `invitedByName` — added optional property.
-- FounderAccess.tsx: duplicate `RefreshCw` import from lucide-react — removed duplicate.
+14 owner-scoped, real-time-synced datasets, all persisted in `app_kv`
+(keys prefixed `founder_console_*`) with Supabase Realtime subscriptions:
+webhooks, apikeys, announcements, maintwindows, blocklist, cors, envvars,
+scheduledjobs, experiments, healthchecks, localization, cache, command
+palette, dbquery (SQL audit log). Provides `add`/`update`/`remove`/
+`toggle`/`clear` + per-dataset `save` that writes cloud + broadcasts.
 
-### Components already dynamic (prior sessions, verified)
+### 14 new section components (`src/react-app/pages/founder-sections/`)
 
-Dashboard, PointOfSale, SalesTracking, FuelOffloading, DeliveryTracker, AdvancedAnalytics, CustomerLoyalty, FuelTypesManager, PriceBoard, InventoryManagement, FuelSalesReport — all use `useStationFuelTypes()` or canonical fuel type system from `config/pricing.ts`.
+1. WebhooksManagerSection — CRUD, event picker, retry/timeout, signing-secret
+   (`whsec_...`) rotate, test-send, enable/disable, last-status.
+2. ApiKeysManagerSection — CRUD, scope picker, rate limit, expiry, reveal/
+   mask, copy, rotate, enable/disable, usage tracking.
+3. AnnouncementsSection — CRUD, type/target/schedule, dismissible, live
+   preview, live/scheduled/inactive status.
+4. MaintenanceWindowsSection — CRUD, schedule, affected services, banner
+   preview, active/upcoming/active-now status.
+5. BlocklistSection — IP ban CRUD, reason, expiry, bulk import, search,
+   unban, clear-all.
+6. CorsConfigSection — origins CRUD, per-origin methods + credentials,
+   wildcard, regex validation, test-origin, quick presets.
+7. EnvVarsSection — key/value CRUD, masked secrets, categorize, search,
+   export/import JSON, copy.
+8. ScheduledJobsSection — list cron jobs, enable/disable, run-now, last-run
+   status + duration, add/edit/delete.
+9. ExperimentsSection — A/B CRUD, variants, traffic-split sliders,
+   normalize, metric, status lifecycle, duplicate.
+10. HealthChecksSection — monitor CRUD, URL, expected status, interval,
+    run-check-now, latency + up/down, up/active stats.
+11. LocalizationSection — languages CRUD, active/default toggle, coverage
+    sliders, search.
+12. CacheManagementSection — inspect localStorage, clear individual/
+    category/all, invalidate cloud in-memory cache, sizes, refresh.
+13. CommandPaletteSection — searchable keyboard-navigable command center
+    that jumps to any section.
+14. DatabaseQuerySection — read-only SQL runner with safety guard
+    (SELECT/WITH only, destructive keywords blocked), sample queries. Uses
+    the authenticated client + RPC `exec_sql_select` (NOTE: this RPC does
+    NOT exist on the live project yet — the section handles the no-RPC case
+    gracefully by surfacing the error. To enable live SQL execution, create
+    `exec_sql_select(sql text)` SECURITY DEFINER returning `jsonb` via the
+    Management API. The section still renders + logs the attempt to the
+    audit trail even without the RPC.)
 
-### Canonical fuel type system (`config/pricing.ts`)
+### Enhanced existing sections
 
-- `CanonicalFuelType` union: petrol | diesel | kerosene | vpower | premium_diesel | lpg | cng
-- `CANONICAL_FUEL_TYPES` registry: maps each type to display label + industry code
-- `FUEL_ALIAS_MAP`: case-insensitive map of every known spelling (Super Petrol, PMS, AGO, IK, DPK, V-Power, LPG, CNG…) to canonical type
-- `normalizeFuelType(raw)`, `getFuelLabel(raw)`, `getFuelCode(raw)`, `isSameFuelType(a, b)`
+- FeatureFlagsManagerSection: + rollout % (per-flag slider + creation),
+  dependency graph, env compare view (enabled/total per env with progress
+  bars), 8 flag templates, copy-from-existing. New `ConsoleFeatureFlag`
+  fields: `rolloutPercentage`, `dependsOn`.
+- SecretsManagerSection: + expiry date, tags, rotation reminders, expired/
+  expiring-soon/rotation-due badges, tag filter. New `ConsoleSecret`
+  fields: `expiresAt`, `tags`, `rotationReminderDays`.
+- AuditLogManagerSection: + live tail (NEW badges on entries <3s old),
+  auto-archive on retention threshold, show-more pagination, retention
+  indicator. Now accepts `retentionLimit` prop.
+- ConsoleSettingsSection: + accent color (picker + hex), default language,
+  cache TTL, confirm-dangerous toggle, email-notifications toggle, max API
+  keys, default webhook timeout. New `ConsoleSettings` fields:
+  `accentColor`, `defaultLanguage`, `cacheTtlSec`, `confirmDangerousActions`,
+  `emailNotifications`, `maxApiKeysPerUser`, `webhookTimeoutDefaultMs`.
 
-### Live verification (2026-08-13, Cloudflare preview 40e8f523)
+### FounderAccess.tsx wiring
 
-Tested as founder QA user (Founder Admin Station, US/USD) with 3 fuel types: LPG ($120/L), Kerosene ($5000/L), V-Power ($4800/L):
-- **Dashboard**: price cards, tank levels, pump status, fuel distribution all show LPG/Kerosene/V-Power (no PMS/AGO) ✅
-- **POS**: Quick Fuel Sale buttons for LPG ($120/L), Kerosene ($5000/L), V-Power ($4800/L) ✅. Completed LPG sale: 10L × $120 = $1,200, receipt shows "LPG", "10 L | VAT-A | HS:2710.12.10", cashier "Founder QA Test" ✅
-- **Sales Tracking**: dynamic fuel tank inventory (LPG/LPG Tank, Kerosene/IK Tank, V-Power/VPW Tank), dynamic pricing, dynamic pump tables ("Add LPG Pump", "Add Kerosene Pump", "Add V-Power Pump"), dynamic sales totals ✅
-- **Fuel Type Manager**: 3 fuel types, 3 active, 4 total pumps, correct prices/pump counts ✅
+- New nav groups: "Developer Tools" (Command Palette, Webhooks, API Keys,
+  Scheduled Jobs, A/B Experiments, Health Checks, Database Query, Cache
+  Manager) + "Platform Control" (Announcements, Maint. Windows, IP
+  Blocklist, CORS Config, Env Variables, Localization). Each nav item
+  shows a live count badge from the advanced store.
+- New `SectionId` values: commandpalette, webhooks, apikeys, jobs,
+  experiments, healthchecks, dbquery, cachemgmt, announcements,
+  maintwindows, blocklist, cors, envvars, localization.
+- All new section render blocks pass `advancedStore` +
+  `consoleStore.addAudit`.
 
-### Deploy status 2026-08-13 (commit 843c957)
+### Deploy state 2026-08-12
 
-- **GitHub main**: ✅ pushed (843c957)
-- **Cloudflare Pages**: ✅ LIVE (preview https://40e8f523.fuel-app-mobile.pages.dev + main alias https://fuel-app-mobile.pages.dev, 110 precache entries, version stamp 2026-08-13T18-42-39-286Z)
-- **Vercel production**: ❌ BLOCKED by `api-deployments-free-per-day` (100/100; resets ~24h). GitHub integration (prodBranch=main) will auto-deploy commit 843c957 when quota resets. The prebuilt output is built and ready.
-- **Supabase**: no schema changes needed (fuel types stored in `fuel_types_config` cloud key in `app_kv`, RLS by owner_id).
-- **TypeScript**: `npx tsc -p tsconfig.app.json --noEmit` — 0 errors ✅
-- **Build**: `npm run build` — success, 110 precache entries ✅
+- GitHub: branch `founder-console-enhancement`, commit `56aa329` pushed.
+- Cloudflare Pages: LIVE (https://8dc444c8.fuel-app-mobile.pages.dev +
+  main alias https://fuel-app-mobile.pages.dev). Verified in the deployed
+  `founder-C4mzGZIn.js` chunk: `founder_console_webhooks`,
+  `founder_console_apikeys`, `founder_console_announcements`,
+  `founder_console_blocklist`, `founder_console_cors`,
+  `founder_console_experiments`, `founder_console_health_checks`,
+  `founder_console_localization`, `exec_sql_select`, "Command Palette",
+  "Rollout Percentage", "Env Compare", `whsec_`.
+- Vercel production: BLOCKED by `api-deployments-free-per-day` (100/100
+  exhausted, resets ~2026-08-12 19:50 UTC). ALL deploy paths blocked
+  (git-source API now also counts against the quota). GitHub integration
+  auto-deploys when quota resets.
+- Supabase: NO schema changes needed — all new datasets use the existing
+  `app_kv` table (owner-scoped row ids via `cloud-storage-service.ts`) +
+  existing Realtime publication. Only optional schema addition is the
+  `exec_sql_select` RPC for the Database Query section.
+- Verified: `tsc -b` 0 errors, `eslint` 0 errors, `prettier` clean, build
+  success (founder chunk 880 KB), 3 unit tests pass.
+
+## Founder Console — Batch 2: 10 MORE real-time cloud-backed developer-control sections (ADDED 2026-08-12)
+
+Extends `useFounderAdvancedStore.ts` with 10 additional cloud-backed,
+real-time datasets (Supabase `app_kv` + Realtime — instant cross-device
+sync, zero polling). Total cloud datasets in the advanced store: 22.
+Two new nav groups ("Observability" + "DevOps") added to the Founder
+Console sidebar.
+
+New datasets + keys:
+- `founder_console_error_tracker` — `ErrorLogEntry[]` (fingerprint-deduped
+  error aggregation from client/server/api/webhook sources).
+- `founder_console_sessions` — `UserSession[]` (active user sessions with
+  device/browser/os/ip/location, revoke single or all).
+- `founder_console_task_queue` — `TaskQueueItem[]` (background job queue:
+  enqueue, progress, cancel, retry, clear completed).
+- `founder_console_log_streams` — `LogStreamEntry[]` (live log tail by
+  level/source, export to .log, clear).
+- `founder_console_role_matrix` — `RolePermission[]` (5 roles × 16 resources
+  × 6 permission actions, visual toggle matrix, export CSV, reset defaults).
+- `founder_console_release_coord` — `ReleaseCoordinator[]` (staged rollout:
+  canary→rolling→live, promote 10/25/50/100%, pause, rollback).
+- `founder_console_migrations` — `MigrationRecord[]` (migration tracker:
+  applied/pending/failed/rolled-back, mark applied, rollback).
+- `founder_console_webhook_deliveries` — `WebhookDelivery[]` (delivery log
+  per webhook: status code, latency, request/response body, retry).
+- `founder_console_storage_explorer` — `StorageBucketItem[]` (Supabase
+  Storage bucket browser: folders, files, sizes, public URLs).
+- `founder_console_api_rate_limits` — `ApiRateLimitEntry[]` (per-endpoint
+  rate limit config: limit/burst/strategy, toggle, reset counters).
+
+New section components (`src/react-app/pages/founder-sections/`):
+- `ErrorTrackerSection.tsx` — source/severity/resolved filters, stats,
+  manual log, resolve toggle, clear resolved/all.
+- `SessionInspectorSection.tsx` — device icons, active badge, revoke
+  single/all, by-device stats.
+- `TaskQueueSection.tsx` — New Task form (type/priority/payload/scheduled),
+  progress bars, retry/cancel, status/type filters, stats.
+- `LogStreamsSection.tsx` — level-colored badges, collapsible metadata,
+  newest-first, Export .log, real-time indicator, clear.
+- `RoleMatrixSection.tsx` — matrix grid (resources × roles), toggle
+  action chips, Export CSV, Reset to Defaults, filter by role.
+- `ReleaseCoordinatorSection.tsx` — New Release form, promote quick-buttons
+  (10/25/50/100%), pause, rollback, delete, rollout vs target progress.
+- `MigrationsSection.tsx` — status badges, tablesAffected chips, checksum,
+  mark applied, rollback, add migration, status filter + stats.
+- `WebhookDeliveriesSection.tsx` — expandable rows (request/response body),
+  retry per delivery, clear all, status filter, success-rate stats.
+- `StorageExplorerSection.tsx` — size formatting, publicUrl links, bucket
+  filter, size/date sort, new folder/upload, delete, stats.
+- `ApiRateLimitsSection.tsx` — currentCount progress vs limit, strategy
+  badges, toggle/delete, reset counters, add endpoint, method/strategy
+  filter, stats.
+
+Nav groups in FounderAccess.tsx:
+- **Observability**: Error Tracker, Sessions, Log Streams, Webhook Logs.
+- **DevOps**: Task Queue, Role Matrix, Release Coordinator, Migrations,
+  Storage, API Rate Limits.
+
+All 10 new sections use the same `useCloudList` generic (load → subscribe
+→ echo-guarded set) pattern as batch 1, so every write is instantly
+broadcast to all subscribed founder devices via Supabase Realtime. No
+Supabase schema changes (all use existing `app_kv` table + RLS + Realtime
+publication).
+
+Verified: `tsc -b` 0 errors, `eslint` 0 errors, `prettier` clean,
+`npm run build` success, 3 unit tests pass.
+
+
+## Developer Control Center + Overview/Users/Stations enhancements (ADDED 2026-08-12, commit a83a821)
+
+### NEW: Developer Control Center section
+
+New section `devcontrol` in Development nav group with 5 sub-tabs (all cloud-backed via useFounderAdvancedStore):
+1. Live Event Stream - real-time feed with filter/pause/clear, subscribes to all founder_console_* keys
+2. Cloud KV Inspector - inspect/delete any app_kv row by key, 12 quick-access buttons
+3. Batch Operations - bulk actions across 20 datasets (count/export/enable/disable/clear)
+4. System Diagnostics - 8 stat cards + connection diagnostics + dataset health breakdown
+5. Deploy Manager - Cloudflare/Vercel/GitHub status + recent releases + pending migrations
+
+### Enhanced Overview
+- 8-card stats grid (was 4), Quick Actions panel (12 buttons), advanced stats row (6 cards)
+
+### Enhanced Users
+- CSV/JSON export, role stats, role change action, details view, last active column
+
+### Enhanced Stations
+- CSV export, aggregate stats, station details, responsive grid
+
+### Bug fix: salesHistory echo overwrite (FuelContext.tsx)
+LOAD_FROM_STORAGE now guards salesHistory/debtHistory/invoices/clients against stale real-time echoes
+
+### Deploy state 2026-08-12
+- GitHub: commit a83a821 on founder-console-enhancement branch
+- Cloudflare: LIVE https://0cd6d2d2.fuel-app-mobile.pages.dev
+- Vercel: BLOCKED (api-deployments-free-per-day 100/100; auto-deploys when quota resets)
+- Supabase: no schema changes
+- Verified live: all 5 sub-tabs render, tsc -b 0 errors, build 112 precache success

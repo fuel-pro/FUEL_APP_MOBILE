@@ -7,15 +7,10 @@ import {
   Shield,
   Activity,
   Server,
-  HardDrive,
-  Wifi,
-  WifiOff,
   Clock,
   Search,
   Eye,
   EyeOff,
-  Trash2,
-  Plus,
   Lock,
   CheckCircle2,
   AlertTriangle,
@@ -24,17 +19,12 @@ import {
   Settings,
   ToggleRight,
   RefreshCw,
-  Database,
   Radio,
   Zap,
-  Globe,
   ArrowLeft,
   Layers,
-  Save,
   X,
   Menu,
-  Copy,
-  Check,
   Sparkles,
   Upload,
   Wand2,
@@ -55,6 +45,24 @@ import {
   CreditCard,
   Cloud,
   CloudOff,
+  Command,
+  Webhook,
+  KeyRound,
+  FlaskConical,
+  HeartPulse,
+  Megaphone,
+  ShieldBan,
+  Globe,
+  Languages,
+  Database,
+  Monitor,
+  ListChecks,
+  Rocket,
+  Send,
+  HardDrive,
+  Gauge,
+  ArrowRight,
+  Download,
 } from "lucide-react";
 import { loginFounder } from "@/react-app/lib/founder-auth";
 import { requestPasswordReset } from "@/react-app/lib/founder-auth";
@@ -79,16 +87,40 @@ import {
   PerformanceSection,
   PaywallControlSection,
   PaymentMethodsSection,
+  SecretsManagerSection,
+  FeatureFlagsManagerSection,
+  AuditLogManagerSection,
+  ConsoleSettingsSection,
+  SystemHealthManagerSection,
+  WebhooksManagerSection,
+  ApiKeysManagerSection,
+  AnnouncementsSection,
+  MaintenanceWindowsSection,
+  BlocklistSection,
+  CorsConfigSection,
+  EnvVarsSection,
+  ScheduledJobsSection,
+  ExperimentsSection,
+  HealthChecksSection,
+  LocalizationSection,
+  CacheManagementSection,
+  CommandPaletteSection,
+  DatabaseQuerySection,
+  ErrorTrackerSection,
+  SessionInspectorSection,
+  TaskQueueSection,
+  LogStreamsSection,
+  RoleMatrixSection,
+  ReleaseCoordinatorSection,
+  MigrationsSection,
+  WebhookDeliveriesSection,
+  StorageExplorerSection,
+  ApiRateLimitsSection,
+  DeveloperControlCenterSection,
 } from "./founder-sections";
 import { useFounderBackend } from "@/react-app/hooks/useFounderBackend";
-import {
-  useCloudSync,
-  useCloudUsers,
-  useCloudStations,
-  useCloudAuditLog,
-  useCloudSecrets,
-  useCloudFeatureFlags,
-} from "@/react-app/hooks/useCloudSync";
+import { useFounderConsoleStore } from "@/react-app/hooks/useFounderConsoleStore";
+import { useFounderAdvancedStore } from "@/react-app/hooks/useFounderAdvancedStore";
 import { checkApiStatus } from "@/react-app/lib/restApiSync";
 import { getBackendUrl } from "@/utils/apiConfig";
 import {
@@ -123,34 +155,7 @@ interface StationRecord {
   code?: string;
 }
 
-interface Secret {
-  key: string;
-  value: string;
-  createdAt: string;
-}
-
-interface AuditEntry {
-  id: string;
-  event: string;
-  detail: string;
-  user: string;
-  severity: "success" | "warning" | "danger" | "info";
-  timestamp: string;
-}
-
-interface FeatureFlag {
-  id: string;
-  name: string;
-  description: string;
-  enabled: boolean;
-}
-
 /* ─── Founder Password Storage ─── */
-
-interface FAConfig {
-  enabled?: boolean;
-  secret?: string;
-}
 
 interface StationData {
   id: string;
@@ -165,122 +170,6 @@ interface StationData {
 
 const FOUNDER_SESSION_KEY = "fuelpro_founder_session";
 const FOUNDER_2FA_KEY = "fuelpro_founder_2fa";
-
-function loadSecrets(): Secret[] {
-  try {
-    const stored = localStorage.getItem("fuelpro_founder_secrets");
-    if (stored) return JSON.parse(stored);
-  } catch {
-    /* ignore */
-  }
-  return [
-    {
-      key: "ADMIN_SECRET_CODE",
-      value: "***CONFIGURED***",
-      createdAt: new Date().toISOString(),
-    },
-    {
-      key: "ADMIN_USERNAME",
-      value: "***CONFIGURED***",
-      createdAt: new Date().toISOString(),
-    },
-    {
-      key: "ADMIN_PASSWORD",
-      value: "***CONFIGURED***",
-      createdAt: new Date().toISOString(),
-    },
-  ];
-}
-
-function loadAuditLog(): AuditEntry[] {
-  try {
-    const stored = localStorage.getItem("fuelpro_founder_audit");
-    if (stored) return JSON.parse(stored);
-  } catch {
-    /* ignore */
-  }
-  return [
-    {
-      id: "1",
-      event: "System Initialized",
-      detail: "FuelPro admin panel created",
-      user: "SYSTEM",
-      severity: "info",
-      timestamp: new Date().toISOString(),
-    },
-  ];
-}
-
-function loadFeatureFlags(): FeatureFlag[] {
-  try {
-    const stored = localStorage.getItem("fuelpro_founder_flags");
-    if (stored) return JSON.parse(stored);
-  } catch {
-    /* ignore */
-  }
-  return [
-    {
-      id: "pos_system",
-      name: "POS System",
-      description: "Point of Sale module",
-      enabled: true,
-    },
-    {
-      id: "mpesa_live",
-      name: "M-PESA Live",
-      description: "Real-time M-PESA transactions",
-      enabled: true,
-    },
-    {
-      id: "ai_chatbot",
-      name: "AI Chatbot",
-      description: "AI assistant for fuel management",
-      enabled: true,
-    },
-    {
-      id: "cloud_sync",
-      name: "Cloud Sync",
-      description: "Cross-device data synchronization",
-      enabled: true,
-    },
-    {
-      id: "integration_hub",
-      name: "Integration Hub",
-      description: "KRA, ETR, POS, Payroll connectors",
-      enabled: true,
-    },
-    {
-      id: "regional_compliance",
-      name: "Regional Compliance",
-      description: "Multi-country compliance features",
-      enabled: true,
-    },
-    {
-      id: "advanced_analytics",
-      name: "Advanced Analytics",
-      description: "Deep analytics and forecasting",
-      enabled: true,
-    },
-    {
-      id: "customer_loyalty",
-      name: "Customer Loyalty",
-      description: "Loyalty program management",
-      enabled: true,
-    },
-    {
-      id: "fuel_quality",
-      name: "Fuel Quality Testing",
-      description: "Quality control and testing",
-      enabled: true,
-    },
-    {
-      id: "credit_management",
-      name: "Credit Management",
-      description: "Credit and debt tracking",
-      enabled: true,
-    },
-  ];
-}
 
 type SectionId =
   | "overview"
@@ -309,7 +198,33 @@ type SectionId =
   | "trialanalytics"
   | "performance"
   | "paywall"
-  | "paymentmethods";
+  | "paymentmethods"
+  | "consolesettings"
+  | "webhooks"
+  | "apikeys"
+  | "announcements"
+  | "maintwindows"
+  | "blocklist"
+  | "cors"
+  | "envvars"
+  | "jobs"
+  | "experiments"
+  | "healthchecks"
+  | "localization"
+  | "cachemgmt"
+  | "commandpalette"
+  | "dbquery"
+  | "errortracker"
+  | "sessions"
+  | "taskqueue"
+  | "logstreams"
+  | "rolematrix"
+  | "releasecoord"
+  | "migrations"
+  | "deliveries"
+  | "storage"
+  | "ratelimits"
+  | "devcontrol";
 
 export default function FounderAccess() {
   /* ─── Cloud Sync State ─── */
@@ -325,7 +240,6 @@ export default function FounderAccess() {
   const {
     logAudit,
     auditLog: backendAuditLog,
-    auditLoading: auditBackendLoading,
     stationCount: backendStationCount,
     salesAnalytics,
     allBackendUsers,
@@ -334,6 +248,14 @@ export default function FounderAccess() {
     allStationsLoading,
     statsTotalRevenue,
   } = useFounderBackend();
+
+  /* ─── Founder Console Store (cloud-backed, real-time synced) ───
+   * Secrets, Feature Flags, Audit Log, and Console Settings are persisted to
+   * Supabase app_kv and synced in real time to every founder device via
+   * Supabase Realtime. This replaces the old localStorage-only arrays so a
+   * change made on one device reflects instantly on all others. */
+  const consoleStore = useFounderConsoleStore();
+  const advancedStore = useFounderAdvancedStore();
 
   /* ─── Auth State ─── */
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -360,14 +282,19 @@ export default function FounderAccess() {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [users, setUsers] = useState<AppUser[]>([]);
   const [stations, setStations] = useState<StationRecord[]>([]);
-  const [secrets, setSecrets] = useState<Secret[]>(loadSecrets);
-  const [featureFlags, setFeatureFlags] =
-    useState<FeatureFlag[]>(loadFeatureFlags);
-  // Use backend audit log if available, otherwise fallback to localStorage
+  // Secrets, Feature Flags and the Audit Log are now sourced from the
+  // cloud-backed, real-time Founder Console store (useFounderConsoleStore).
+  // The legacy localStorage state is kept only as a fallback display shape
+  // for the (now-replaced) inline sections; the new section components read
+  // directly from consoleStore.
+  const secrets = consoleStore.secrets;
+  const featureFlags = consoleStore.flags;
+  // Audit log: prefer the backend (MySQL) audit log when it has entries,
+  // otherwise use the cloud-synced console store audit log.
   const auditLog =
-    backendAuditLog.length > 1 ? backendAuditLog : loadAuditLog();
+    backendAuditLog.length > 1 ? backendAuditLog : consoleStore.audit;
+  const consoleSettings = consoleStore.settings;
   const [searchQuery, setSearchQuery] = useState("");
-  const [showAddSecret, setShowAddSecret] = useState(false);
 
   // AI Website Editor state
   const [editorInstruction, setEditorInstruction] = useState("");
@@ -382,12 +309,6 @@ export default function FounderAccess() {
   const [uploadedFiles, setUploadedFiles] = useState<
     { name: string; type: string; content: string; size: number }[]
   >([]);
-  const [newSecretKey, setNewSecretKey] = useState("");
-  const [newSecretValue, setNewSecretValue] = useState("");
-  const [visibleSecrets, setVisibleSecrets] = useState<Record<string, boolean>>(
-    {},
-  );
-  const [copiedSecret, setCopiedSecret] = useState("");
   const [loading, setLoading] = useState(true);
 
   /* ─── Cloud Status Check ─── */
@@ -584,14 +505,12 @@ export default function FounderAccess() {
     allStationsLoading,
   ]);
 
-  /* ─── Save secrets & flags ─── */
-  useEffect(() => {
-    localStorage.setItem("fuelpro_founder_secrets", JSON.stringify(secrets));
-  }, [secrets]);
-  useEffect(() => {
-    localStorage.setItem("fuelpro_founder_flags", JSON.stringify(featureFlags));
-  }, [featureFlags]);
-  // Audit log now persisted via backend (useFounderBackend.logAudit) — no localStorage sync needed
+  /* ─── Persistence ───
+   * Secrets & Feature Flags are now persisted by the cloud-backed
+   * useFounderConsoleStore (Supabase app_kv + realtime sync), so the old
+   * localStorage-only save effects are intentionally removed. The store
+   * handles cross-device real-time propagation. Audit log is persisted via
+   * the backend (useFounderBackend.logAudit) and/or the console store. */
 
   /* ─── Login Handler ───
    * SECURITY: This previously fell back to a hardcoded default credential
@@ -814,85 +733,10 @@ export default function FounderAccess() {
     window.location.reload();
   };
 
-  // logAudit now comes from useFounderBackend (syncs to MySQL + localStorage)
-
-  /* ─── Secret Management ─── */
-  const addSecret = () => {
-    if (!newSecretKey.trim() || !newSecretValue) return;
-    if (secrets.some((s) => s.key === newSecretKey.trim())) {
-      setSecrets((prev) =>
-        prev.map((s) =>
-          s.key === newSecretKey.trim()
-            ? {
-                ...s,
-                value: btoa(newSecretValue),
-                createdAt: new Date().toISOString(),
-              }
-            : s,
-        ),
-      );
-      logAudit(
-        "Secret Updated",
-        `Secret "${newSecretKey.trim()}" updated`,
-        "success",
-      );
-    } else {
-      setSecrets((prev) => [
-        ...prev,
-        {
-          key: newSecretKey.trim(),
-          value: btoa(newSecretValue),
-          createdAt: new Date().toISOString(),
-        },
-      ]);
-      logAudit(
-        "Secret Created",
-        `Secret "${newSecretKey.trim()}" added`,
-        "success",
-      );
-    }
-    setNewSecretKey("");
-    setNewSecretValue("");
-    setShowAddSecret(false);
-  };
-
-  const deleteSecret = (key: string) => {
-    if (!confirm(`Delete secret "${key}"?`)) return;
-    setSecrets((prev) => prev.filter((s) => s.key !== key));
-    logAudit("Secret Deleted", `Secret "${key}" removed`, "warning");
-  };
-
-  const copySecretValue = (key: string, encodedValue: string) => {
-    try {
-      navigator.clipboard?.writeText(atob(encodedValue));
-    } catch {
-      navigator.clipboard?.writeText(encodedValue);
-    }
-    setCopiedSecret(key);
-    setTimeout(() => setCopiedSecret(""), 2000);
-  };
-
-  const toggleSecretVisibility = (key: string) => {
-    setVisibleSecrets((prev) => ({ ...prev, [key]: !prev[key] }));
-  };
-
-  /* ─── Feature Flag Toggle ─── */
-  const toggleFlag = (id: string) => {
-    setFeatureFlags((prev) =>
-      prev.map((f) => {
-        if (f.id === id) {
-          const updated = { ...f, enabled: !f.enabled };
-          logAudit(
-            "Feature Flag Toggled",
-            `"${f.name}" is now ${updated.enabled ? "enabled" : "disabled"}`,
-            updated.enabled ? "success" : "warning",
-          );
-          return updated;
-        }
-        return f;
-      }),
-    );
-  };
+  // logAudit now comes from useFounderBackend (syncs to MySQL + localStorage).
+  // The new section components log directly to consoleStore.addAudit (the
+  // real-time cloud audit channel) so audit entries sync to all founder
+  // devices instantly.
 
   const filteredUsers = users.filter(
     (u) =>
@@ -1257,6 +1101,11 @@ export default function FounderAccess() {
           icon: ToggleRight,
           count: featureFlags.length,
         },
+        {
+          id: "consolesettings" as SectionId,
+          label: "Console Settings",
+          icon: Settings,
+        },
         { id: "system" as SectionId, label: "System Health", icon: Server },
       ],
     },
@@ -1334,10 +1183,180 @@ export default function FounderAccess() {
         { id: "maintenance" as SectionId, label: "Maintenance", icon: Wrench },
         { id: "datamgmt" as SectionId, label: "Data Manager", icon: FolderCog },
         {
+          id: "devcontrol" as SectionId,
+          label: "Dev Control Center",
+          icon: Terminal,
+        },
+        {
           id: "editor" as SectionId,
           label: "AI Website Editor",
           icon: Sparkles,
           count: editorHistory.length,
+        },
+      ],
+    },
+    {
+      label: "Developer Tools",
+      items: [
+        {
+          id: "commandpalette" as SectionId,
+          label: "Command Palette",
+          icon: Command,
+        },
+        {
+          id: "webhooks" as SectionId,
+          label: "Webhooks",
+          icon: Webhook,
+          count: advancedStore.webhooks.length,
+        },
+        {
+          id: "apikeys" as SectionId,
+          label: "API Keys",
+          icon: KeyRound,
+          count: advancedStore.apiKeys.length,
+        },
+        {
+          id: "jobs" as SectionId,
+          label: "Scheduled Jobs",
+          icon: Clock,
+          count: advancedStore.jobs.length,
+        },
+        {
+          id: "experiments" as SectionId,
+          label: "A/B Experiments",
+          icon: FlaskConical,
+          count: advancedStore.experiments.length,
+        },
+        {
+          id: "healthchecks" as SectionId,
+          label: "Health Checks",
+          icon: HeartPulse,
+          count: advancedStore.healthChecks.length,
+        },
+        {
+          id: "dbquery" as SectionId,
+          label: "Database Query",
+          icon: Database,
+        },
+        {
+          id: "cachemgmt" as SectionId,
+          label: "Cache Manager",
+          icon: DatabaseBackup,
+        },
+      ],
+    },
+    {
+      label: "Platform Control",
+      items: [
+        {
+          id: "announcements" as SectionId,
+          label: "Announcements",
+          icon: Megaphone,
+          count: advancedStore.announcements.length,
+        },
+        {
+          id: "maintwindows" as SectionId,
+          label: "Maint. Windows",
+          icon: Wrench,
+          count: advancedStore.maintenanceWindows.length,
+        },
+        {
+          id: "blocklist" as SectionId,
+          label: "IP Blocklist",
+          icon: ShieldBan,
+          count: advancedStore.blocklist.length,
+        },
+        {
+          id: "cors" as SectionId,
+          label: "CORS Config",
+          icon: Globe,
+          count: advancedStore.corsOrigins.length,
+        },
+        {
+          id: "envvars" as SectionId,
+          label: "Env Variables",
+          icon: Settings,
+          count: advancedStore.envVars.length,
+        },
+        {
+          id: "localization" as SectionId,
+          label: "Localization",
+          icon: Languages,
+          count: advancedStore.languages.length,
+        },
+      ],
+    },
+    {
+      label: "Observability",
+      items: [
+        {
+          id: "errortracker" as SectionId,
+          label: "Error Tracker",
+          icon: AlertTriangle,
+          count: advancedStore.errorLog.filter((e) => !e.resolved).length,
+        },
+        {
+          id: "sessions" as SectionId,
+          label: "Sessions",
+          icon: Monitor,
+          count: advancedStore.sessions.filter((s) => s.active).length,
+        },
+        {
+          id: "logstreams" as SectionId,
+          label: "Log Streams",
+          icon: Radio,
+          count: advancedStore.logStreams.length,
+        },
+        {
+          id: "deliveries" as SectionId,
+          label: "Webhook Logs",
+          icon: Send,
+          count: advancedStore.webhookDeliveries.length,
+        },
+      ],
+    },
+    {
+      label: "DevOps",
+      items: [
+        {
+          id: "taskqueue" as SectionId,
+          label: "Task Queue",
+          icon: ListChecks,
+          count: advancedStore.taskQueue.filter(
+            (t) => t.status === "queued" || t.status === "running",
+          ).length,
+        },
+        {
+          id: "rolematrix" as SectionId,
+          label: "Role Matrix",
+          icon: ShieldCheck,
+        },
+        {
+          id: "releasecoord" as SectionId,
+          label: "Release Coord.",
+          icon: Rocket,
+          count: advancedStore.releases.filter(
+            (r) => r.status === "rolling" || r.status === "canary",
+          ).length,
+        },
+        {
+          id: "migrations" as SectionId,
+          label: "Migrations",
+          icon: Database,
+          count: advancedStore.migrations.filter((m) => m.status === "pending")
+            .length,
+        },
+        {
+          id: "storage" as SectionId,
+          label: "Storage",
+          icon: HardDrive,
+          count: advancedStore.storageItems.filter((s) => !s.isFolder).length,
+        },
+        {
+          id: "ratelimits" as SectionId,
+          label: "API Rate Limits",
+          icon: Gauge,
+          count: advancedStore.apiRateLimits.filter((r) => r.enabled).length,
         },
       ],
     },
@@ -1491,7 +1510,10 @@ export default function FounderAccess() {
               aria-label="Refresh data"
               title="Refresh data"
             >
-              <RefreshCw size={13} className={statsTotalRevenue > 0 ? "" : "animate-spin"} />
+              <RefreshCw
+                size={13}
+                className={statsTotalRevenue > 0 ? "" : "animate-spin"}
+              />
             </button>
             {/* Cloud Sync Status — collapse to icon-only on very small screens */}
             <div
@@ -1520,7 +1542,8 @@ export default function FounderAccess() {
           {/* ══════ OVERVIEW ══════ */}
           {activeSection === "overview" && (
             <div className="space-y-6">
-              <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+              {/* Extended stats grid — 8 cards with real-time data */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
                 {[
                   {
                     label: "Users",
@@ -1530,37 +1553,225 @@ export default function FounderAccess() {
                         : users.length,
                     icon: Users,
                     color: "text-blue-400",
+                    onClick: () => setActiveSection("users"),
                   },
                   {
                     label: "Stations",
                     value: effectiveStationCount,
                     icon: Building2,
                     color: "text-green-400",
+                    onClick: () => setActiveSection("stations"),
                   },
                   {
                     label: "Revenue",
                     value: `${getCurrencySymbol(globalCurrency)} ${effectiveRevenue.toLocaleString()}`,
                     icon: DollarSign,
                     color: "text-amber-400",
+                    onClick: () => setActiveSection("analytics"),
                   },
                   {
                     label: "Secrets",
                     value: secrets.length,
                     icon: Key,
                     color: "text-purple-400",
+                    onClick: () => setActiveSection("secrets"),
+                  },
+                  {
+                    label: "Feature Flags",
+                    value: featureFlags.length,
+                    icon: ToggleRight,
+                    color: "text-indigo-400",
+                    onClick: () => setActiveSection("flags"),
+                  },
+                  {
+                    label: "Audit Events",
+                    value: auditLog.length,
+                    icon: Shield,
+                    color: "text-cyan-400",
+                    onClick: () => setActiveSection("audit"),
+                  },
+                  {
+                    label: "Webhooks",
+                    value: advancedStore.webhooks.length,
+                    icon: Webhook,
+                    color: "text-pink-400",
+                    onClick: () => setActiveSection("webhooks"),
+                  },
+                  {
+                    label: "API Keys",
+                    value: advancedStore.apiKeys.length,
+                    icon: KeyRound,
+                    color: "text-orange-400",
+                    onClick: () => setActiveSection("apikeys"),
                   },
                 ].map((s) => (
                   <div
                     key={s.label}
-                    className="bg-[#161618] border border-white/[0.06] rounded-xl p-5"
+                    onClick={s.onClick}
+                    className="bg-[#161618] border border-white/[0.06] rounded-xl p-5 hover:border-white/[0.12] cursor-pointer transition-colors group"
                   >
-                    <div className="flex items-center gap-2 mb-3">
-                      <s.icon size={14} className={s.color} />
-                      <span className="text-[11px] text-gray-500">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <s.icon size={14} className={s.color} />
+                        <span className="text-[11px] text-gray-500">
+                          {s.label}
+                        </span>
+                      </div>
+                      <ArrowRight
+                        size={12}
+                        className="text-gray-700 group-hover:text-gray-400 transition-colors"
+                      />
+                    </div>
+                    <p className="text-xl font-bold text-white">{s.value}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Quick Actions panel */}
+              <div className="bg-[#161618] border border-white/[0.06] rounded-xl p-5">
+                <h3 className="text-sm font-medium text-gray-300 mb-4 flex items-center gap-2">
+                  <Zap size={14} className="text-amber-400" />
+                  Quick Actions
+                </h3>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+                  {[
+                    {
+                      label: "Add Secret",
+                      icon: Key,
+                      section: "secrets" as SectionId,
+                    },
+                    {
+                      label: "New Flag",
+                      icon: ToggleRight,
+                      section: "flags" as SectionId,
+                    },
+                    {
+                      label: "Add Webhook",
+                      icon: Webhook,
+                      section: "webhooks" as SectionId,
+                    },
+                    {
+                      label: "API Keys",
+                      icon: KeyRound,
+                      section: "apikeys" as SectionId,
+                    },
+                    {
+                      label: "Dev Center",
+                      icon: Terminal,
+                      section: "devcontrol" as SectionId,
+                    },
+                    {
+                      label: "Data Manager",
+                      icon: FolderCog,
+                      section: "datamgmt" as SectionId,
+                    },
+                    {
+                      label: "DB Query",
+                      icon: Database,
+                      section: "dbquery" as SectionId,
+                    },
+                    {
+                      label: "Schema",
+                      icon: HardDrive,
+                      section: "storage" as SectionId,
+                    },
+                    {
+                      label: "Migrations",
+                      icon: Database,
+                      section: "migrations" as SectionId,
+                    },
+                    {
+                      label: "Error Log",
+                      icon: AlertTriangle,
+                      section: "errortracker" as SectionId,
+                    },
+                    {
+                      label: "Sessions",
+                      icon: Monitor,
+                      section: "sessions" as SectionId,
+                    },
+                    {
+                      label: "Task Queue",
+                      icon: ListChecks,
+                      section: "taskqueue" as SectionId,
+                    },
+                  ].map((a) => (
+                    <button
+                      key={a.label}
+                      onClick={() => setActiveSection(a.section)}
+                      className="flex flex-col items-center gap-1.5 p-3 bg-white/[0.02] hover:bg-white/[0.05] rounded-lg text-xs text-gray-400 hover:text-white transition-colors"
+                    >
+                      <a.icon size={16} className="text-gray-500" />
+                      <span className="text-[10px]">{a.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Advanced stats row — developer datasets */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
+                {[
+                  {
+                    label: "Errors",
+                    value: advancedStore.errorLog.filter((e) => !e.resolved)
+                      .length,
+                    icon: AlertTriangle,
+                    color: "text-red-400",
+                    section: "errortracker" as SectionId,
+                  },
+                  {
+                    label: "Sessions",
+                    value: advancedStore.sessions.filter((s) => s.active)
+                      .length,
+                    icon: Monitor,
+                    color: "text-amber-400",
+                    section: "sessions" as SectionId,
+                  },
+                  {
+                    label: "Jobs",
+                    value: advancedStore.jobs.filter((j) => j.enabled).length,
+                    icon: Clock,
+                    color: "text-purple-400",
+                    section: "jobs" as SectionId,
+                  },
+                  {
+                    label: "Experiments",
+                    value: advancedStore.experiments.filter(
+                      (e) => e.status === "running",
+                    ).length,
+                    icon: FlaskConical,
+                    color: "text-green-400",
+                    section: "experiments" as SectionId,
+                  },
+                  {
+                    label: "Announcements",
+                    value: advancedStore.announcements.filter((a) => a.active)
+                      .length,
+                    icon: Megaphone,
+                    color: "text-cyan-400",
+                    section: "announcements" as SectionId,
+                  },
+                  {
+                    label: "Blocklist",
+                    value: advancedStore.blocklist.filter((b) => b.active)
+                      .length,
+                    icon: ShieldBan,
+                    color: "text-pink-400",
+                    section: "blocklist" as SectionId,
+                  },
+                ].map((s) => (
+                  <div
+                    key={s.label}
+                    onClick={() => setActiveSection(s.section)}
+                    className="bg-[#161618] border border-white/[0.06] rounded-xl p-3 hover:border-white/[0.12] cursor-pointer transition-colors"
+                  >
+                    <div className="flex items-center gap-2 mb-2">
+                      <s.icon size={12} className={s.color} />
+                      <span className="text-[10px] text-gray-500">
                         {s.label}
                       </span>
                     </div>
-                    <p className="text-xl font-bold text-white">{s.value}</p>
+                    <p className="text-lg font-bold text-white">{s.value}</p>
                   </div>
                 ))}
               </div>
@@ -1707,28 +1918,149 @@ export default function FounderAccess() {
           {/* ══════ USERS ══════ */}
           {activeSection === "users" && (
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between flex-wrap gap-3">
                 <h2 className="text-lg font-medium text-white">
                   All Registered Users
                 </h2>
-                <span className="text-xs text-gray-500">
-                  {filteredUsers.length} total
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-500">
+                    {filteredUsers.length} of{" "}
+                    {users.length + (allBackendUsers?.length || 0)} total
+                  </span>
+                  <button
+                    onClick={() => {
+                      const data = filteredUsers;
+                      const csv = [
+                        [
+                          "Name",
+                          "Email",
+                          "Auth Method",
+                          "Role",
+                          "Stations",
+                          "Status",
+                          "Last Active",
+                          "Created At",
+                        ].join(","),
+                        ...data.map((u) =>
+                          [
+                            u.name,
+                            u.email,
+                            u.authMethod,
+                            u.role,
+                            u.stations,
+                            "Active",
+                            u.lastActive,
+                            u.createdAt,
+                          ]
+                            .map(
+                              (v) =>
+                                `"${(v || "").toString().replace(/"/g, '""')}"`,
+                            )
+                            .join(","),
+                        ),
+                      ].join("\n");
+                      const blob = new Blob([csv], { type: "text/csv" });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement("a");
+                      a.href = url;
+                      a.download = `users_${Date.now()}.csv`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                      logAudit(
+                        "Export Users",
+                        `${data.length} users exported to CSV`,
+                        "info",
+                      );
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-white/[0.04] hover:bg-white/[0.08] text-gray-400 hover:text-white rounded-lg text-xs font-medium transition-colors"
+                  >
+                    <Download size={13} />
+                    Export CSV
+                  </button>
+                  <button
+                    onClick={() => {
+                      const data = filteredUsers;
+                      const json = JSON.stringify(data, null, 2);
+                      const blob = new Blob([json], {
+                        type: "application/json",
+                      });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement("a");
+                      a.href = url;
+                      a.download = `users_${Date.now()}.json`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                      logAudit(
+                        "Export Users",
+                        `${data.length} users exported to JSON`,
+                        "info",
+                      );
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-white/[0.04] hover:bg-white/[0.08] text-gray-400 hover:text-white rounded-lg text-xs font-medium transition-colors"
+                  >
+                    <FileCode size={13} />
+                    Export JSON
+                  </button>
+                </div>
               </div>
+
+              {/* User stats summary */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {[
+                  {
+                    label: "Total Users",
+                    value: filteredUsers.length,
+                    color: "text-blue-400",
+                  },
+                  {
+                    label: "Owners",
+                    value: filteredUsers.filter((u) => u.role === "owner")
+                      .length,
+                    color: "text-purple-400",
+                  },
+                  {
+                    label: "Managers",
+                    value: filteredUsers.filter((u) => u.role === "manager")
+                      .length,
+                    color: "text-indigo-400",
+                  },
+                  {
+                    label: "Staff",
+                    value: filteredUsers.filter((u) => u.role === "staff")
+                      .length,
+                    color: "text-green-400",
+                  },
+                ].map((s) => (
+                  <div
+                    key={s.label}
+                    className="bg-[#161618] border border-white/[0.06] rounded-xl p-3"
+                  >
+                    <p className="text-[10px] text-gray-500 mb-1">{s.label}</p>
+                    <p className={`text-lg font-bold ${s.color}`}>{s.value}</p>
+                  </div>
+                ))}
+              </div>
+
               <div className="bg-[#161618] border border-white/[0.06] rounded-xl overflow-x-auto -mx-3 sm:mx-0">
                 <table className="w-full min-w-[640px]">
                   <thead>
                     <tr className="border-b border-white/[0.06]">
-                      {["User", "Auth", "Role", "Stations", "Status", ""].map(
-                        (h) => (
-                          <th
-                            key={h}
-                            className="text-left text-[11px] text-gray-500 font-medium px-4 py-3"
-                          >
-                            {h}
-                          </th>
-                        ),
-                      )}
+                      {[
+                        "User",
+                        "Auth",
+                        "Role",
+                        "Stations",
+                        "Status",
+                        "Last Active",
+                        "Actions",
+                      ].map((h) => (
+                        <th
+                          key={h}
+                          className="text-left text-[11px] text-gray-500 font-medium px-4 py-3"
+                        >
+                          {h}
+                        </th>
+                      ))}
                     </tr>
                   </thead>
                   <tbody>
@@ -1759,7 +2091,9 @@ export default function FounderAccess() {
                                   ? "bg-blue-500/15 text-blue-300"
                                   : u.role === "staff"
                                     ? "bg-green-500/15 text-green-300"
-                                    : "bg-amber-500/15 text-amber-300"
+                                    : u.role === "founder" || u.role === "admin"
+                                      ? "bg-red-500/15 text-red-300"
+                                      : "bg-amber-500/15 text-amber-300"
                             }`}
                           >
                             {u.role}
@@ -1773,15 +2107,53 @@ export default function FounderAccess() {
                             <Radio size={10} /> Active
                           </span>
                         </td>
+                        <td className="px-4 py-3 text-[11px] text-gray-500">
+                          {u.lastActive
+                            ? new Date(u.lastActive).toLocaleDateString()
+                            : "—"}
+                        </td>
                         <td className="px-4 py-3">
-                          <Eye size={14} className="text-gray-600" />
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => {
+                                const newRole = prompt(
+                                  `Change role for ${u.name || u.email}?\nCurrent: ${u.role}\nEnter new role (owner/manager/staff):`,
+                                  u.role,
+                                );
+                                if (newRole && newRole !== u.role) {
+                                  logAudit(
+                                    "Role Change",
+                                    `${u.email}: ${u.role} → ${newRole}`,
+                                    "warning",
+                                  );
+                                  alert(
+                                    `Role change for ${u.email} from ${u.role} to ${newRole} has been logged. Use the Supabase admin API to apply this change.`,
+                                  );
+                                }
+                              }}
+                              className="p-1 text-gray-500 hover:text-indigo-400 transition-colors"
+                              title="Change role"
+                            >
+                              <Settings size={13} />
+                            </button>
+                            <button
+                              onClick={() => {
+                                const info = `User Details:\n\nName: ${u.name || "Anonymous"}\nEmail: ${u.email}\nAuth Method: ${u.authMethod}\nRole: ${u.role}\nStations: ${u.stations}\nLast Active: ${u.lastActive}\nCreated: ${u.createdAt}\nAuth ID: ${u.authId}`;
+                                alert(info);
+                              }}
+                              className="p-1 text-gray-500 hover:text-blue-400 transition-colors"
+                              title="View details"
+                            >
+                              <Eye size={13} />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
                     {filteredUsers.length === 0 && (
                       <tr>
                         <td
-                          colSpan={6}
+                          colSpan={7}
                           className="text-center text-gray-600 py-12"
                         >
                           No users found
@@ -1797,30 +2169,119 @@ export default function FounderAccess() {
           {/* ══════ STATIONS ══════ */}
           {activeSection === "stations" && (
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between flex-wrap gap-3">
                 <h2 className="text-lg font-medium text-white">
                   All Stations Worldwide
                 </h2>
-                <span className="text-xs text-gray-500">
-                  {filteredStations.length} total
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-500">
+                    {filteredStations.length} total
+                  </span>
+                  <button
+                    onClick={() => {
+                      const csv = [
+                        [
+                          "Name",
+                          "Location",
+                          "Owner",
+                          "Members",
+                          "Revenue",
+                          "Status",
+                          "Created",
+                          "Last Active",
+                        ].join(","),
+                        ...filteredStations.map((s) =>
+                          [
+                            s.name,
+                            s.location,
+                            s.ownerName,
+                            s.members,
+                            s.revenue,
+                            "Active",
+                            s.createdAt,
+                            s.lastActive,
+                          ]
+                            .map(
+                              (v) =>
+                                `"${(v || "").toString().replace(/"/g, '""')}"`,
+                            )
+                            .join(","),
+                        ),
+                      ].join("\n");
+                      const blob = new Blob([csv], { type: "text/csv" });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement("a");
+                      a.href = url;
+                      a.download = `stations_${Date.now()}.csv`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                      logAudit(
+                        "Export Stations",
+                        `${filteredStations.length} stations exported`,
+                        "info",
+                      );
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-white/[0.04] hover:bg-white/[0.08] text-gray-400 hover:text-white rounded-lg text-xs font-medium transition-colors"
+                  >
+                    <Download size={13} />
+                    Export CSV
+                  </button>
+                </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+
+              {/* Station stats */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {[
+                  {
+                    label: "Total Stations",
+                    value: filteredStations.length,
+                    color: "text-green-400",
+                  },
+                  {
+                    label: "Total Members",
+                    value: filteredStations.reduce(
+                      (s, st) => s + st.members,
+                      0,
+                    ),
+                    color: "text-blue-400",
+                  },
+                  {
+                    label: "Total Revenue",
+                    value: `${getCurrencySymbol(getDetectedCurrency())} ${(filteredStations.reduce((s, st) => s + st.revenue, 0) / 1000).toFixed(0)}K`,
+                    color: "text-amber-400",
+                  },
+                  {
+                    label: "Avg Revenue",
+                    value: `${getCurrencySymbol(getDetectedCurrency())} ${filteredStations.length > 0 ? (filteredStations.reduce((s, st) => s + st.revenue, 0) / filteredStations.length / 1000).toFixed(1) : 0}K`,
+                    color: "text-purple-400",
+                  },
+                ].map((s) => (
+                  <div
+                    key={s.label}
+                    className="bg-[#161618] border border-white/[0.06] rounded-xl p-3"
+                  >
+                    <p className="text-[10px] text-gray-500 mb-1">{s.label}</p>
+                    <p className={`text-lg font-bold ${s.color}`}>{s.value}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {filteredStations.map((s) => (
                   <div
                     key={s.id}
-                    className="bg-[#161618] border border-white/[0.06] rounded-xl p-5"
+                    className="bg-[#161618] border border-white/[0.06] rounded-xl p-5 hover:border-white/[0.12] transition-colors"
                   >
                     <div className="flex items-start justify-between mb-3">
-                      <div>
-                        <h3 className="text-sm font-semibold text-white">
+                      <div className="min-w-0">
+                        <h3 className="text-sm font-semibold text-white truncate">
                           {s.name}
                         </h3>
-                        <p className="text-[11px] text-gray-500">
+                        <p className="text-[11px] text-gray-500 truncate">
                           {s.location}
                         </p>
                       </div>
-                      <div className="w-7 h-7 bg-green-500/10 rounded-lg flex items-center justify-center">
+                      <div className="w-7 h-7 bg-green-500/10 rounded-lg flex items-center justify-center shrink-0">
                         <Building2 size={13} className="text-green-400" />
                       </div>
                     </div>
@@ -1868,6 +2329,16 @@ export default function FounderAccess() {
                         </span>
                       )}
                     </p>
+                    <button
+                      onClick={() => {
+                        const info = `Station Details:\n\nName: ${s.name}\nLocation: ${s.location}\nOwner: ${s.ownerName}\nMembers: ${s.members}\nRevenue: ${getCurrencySymbol(getDetectedCurrency())} ${s.revenue.toLocaleString()}\nID: ${s.id}\nOwner ID: ${s.ownerId}\nCreated: ${s.createdAt}\nLast Active: ${s.lastActive}`;
+                        alert(info);
+                      }}
+                      className="flex items-center gap-1 text-[10px] text-gray-500 hover:text-blue-400 transition-colors mt-2"
+                    >
+                      <Eye size={11} />
+                      Details
+                    </button>
                   </div>
                 ))}
                 {filteredStations.length === 0 && (
@@ -1881,358 +2352,54 @@ export default function FounderAccess() {
 
           {/* ══════ SECRETS ══════ */}
           {activeSection === "secrets" && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-lg font-medium text-white">Secrets</h2>
-                  <p className="text-xs text-gray-500 mt-0.5">
-                    Securely manage API keys and sensitive values
-                  </p>
-                </div>
-                <button
-                  onClick={() => setShowAddSecret(!showAddSecret)}
-                  className="flex items-center gap-2 px-3 py-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 text-xs rounded-lg transition-colors border border-amber-500/20"
-                >
-                  {showAddSecret ? <X size={14} /> : <Plus size={14} />}{" "}
-                  {showAddSecret ? "Cancel" : "Add Secret"}
-                </button>
-              </div>
-              {showAddSecret && (
-                <div className="bg-[#161618] border border-white/[0.06] rounded-xl p-5">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-[11px] text-gray-400 mb-1 block">
-                        Key
-                      </label>
-                      <input
-                        value={newSecretKey}
-                        onChange={(e) => setNewSecretKey(e.target.value)}
-                        placeholder="API_KEY"
-                        className="w-full px-3 py-2.5 bg-white/[0.03] border border-white/[0.08] rounded-lg text-sm text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/30"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[11px] text-gray-400 mb-1 block">
-                        Value
-                      </label>
-                      <input
-                        value={newSecretValue}
-                        onChange={(e) => setNewSecretValue(e.target.value)}
-                        placeholder="Enter value"
-                        className="w-full px-3 py-2.5 bg-white/[0.03] border border-white/[0.08] rounded-lg text-sm text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/30"
-                      />
-                    </div>
-                  </div>
-                  <button
-                    onClick={addSecret}
-                    className="mt-3 px-4 py-2 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 text-xs rounded-lg transition-colors border border-amber-500/20"
-                  >
-                    <Save size={13} className="inline mr-1.5" /> Save Secret
-                  </button>
-                </div>
-              )}
-              <div className="bg-[#161618] border border-white/[0.06] rounded-xl overflow-x-auto -mx-3 sm:mx-0">
-                <table className="w-full min-w-[480px]">
-                  <thead>
-                    <tr className="border-b border-white/[0.06]">
-                      <th className="text-left text-[11px] text-gray-500 font-medium px-5 py-3 w-1/2">
-                        Key
-                      </th>
-                      <th className="text-left text-[11px] text-gray-500 font-medium px-5 py-3">
-                        Value
-                      </th>
-                      <th className="text-right text-[11px] text-gray-500 font-medium px-5 py-3 w-20"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {secrets.map((s) => (
-                      <tr
-                        key={s.key}
-                        className="border-b border-white/[0.04] hover:bg-white/[0.02]"
-                      >
-                        <td className="px-5 py-3">
-                          <code className="text-sm text-gray-300 font-mono">
-                            {s.key}
-                          </code>
-                        </td>
-                        <td className="px-5 py-3">
-                          {visibleSecrets[s.key] ? (
-                            <span className="text-sm text-gray-300 font-mono">
-                              {atob(s.value)}
-                            </span>
-                          ) : (
-                            <span className="text-sm text-gray-600 font-mono tracking-widest">
-                              {".".repeat(32)}
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-5 py-3">
-                          <div className="flex items-center gap-1 justify-end">
-                            <button
-                              onClick={() => toggleSecretVisibility(s.key)}
-                              className="p-1.5 text-gray-500 hover:text-gray-300 transition-colors"
-                            >
-                              {visibleSecrets[s.key] ? (
-                                <EyeOff size={14} />
-                              ) : (
-                                <Eye size={14} />
-                              )}
-                            </button>
-                            <button
-                              onClick={() => copySecretValue(s.key, s.value)}
-                              className="p-1.5 text-gray-500 hover:text-gray-300 transition-colors"
-                            >
-                              {copiedSecret === s.key ? (
-                                <Check size={14} className="text-green-400" />
-                              ) : (
-                                <Copy size={14} />
-                              )}
-                            </button>
-                            <button
-                              onClick={() => deleteSecret(s.key)}
-                              className="p-1.5 text-gray-500 hover:text-red-400 transition-colors"
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                    {secrets.length === 0 && (
-                      <tr>
-                        <td
-                          colSpan={3}
-                          className="text-center text-gray-600 py-12"
-                        >
-                          No secrets configured
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            <SecretsManagerSection
+              secrets={consoleStore.secrets}
+              settings={consoleSettings}
+              onUpsert={consoleStore.upsertSecret}
+              onDelete={consoleStore.deleteSecret}
+              onRotate={consoleStore.rotateSecret}
+              logAudit={consoleStore.addAudit}
+            />
           )}
 
           {/* ══════ AUDIT LOG ══════ */}
           {activeSection === "audit" && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg font-medium text-white">
-                  Security Audit Log
-                </h2>
-                <div className="flex items-center gap-2">
-                  {auditBackendLoading && (
-                    <span className="text-[10px] text-amber-400 animate-pulse">
-                      Syncing from DB...
-                    </span>
-                  )}
-                  <span className="text-xs text-gray-500">
-                    {auditLog.length} events
-                  </span>
-                </div>
-              </div>
-              <div className="bg-[#161618] border border-white/[0.06] rounded-xl overflow-x-auto -mx-3 sm:mx-0">
-                <table className="w-full min-w-[640px]">
-                  <thead>
-                    <tr className="border-b border-white/[0.06]">
-                      {["Status", "Event", "Detail", "User", "Time"].map(
-                        (h) => (
-                          <th
-                            key={h}
-                            className="text-left text-[11px] text-gray-500 font-medium px-4 py-3"
-                          >
-                            {h}
-                          </th>
-                        ),
-                      )}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {auditLog.map((a) => (
-                      <tr
-                        key={a.id}
-                        className="border-b border-white/[0.04] hover:bg-white/[0.02]"
-                      >
-                        <td className="px-4 py-3">
-                          {a.severity === "success" ? (
-                            <CheckCircle2
-                              size={13}
-                              className="text-emerald-400"
-                            />
-                          ) : a.severity === "warning" ? (
-                            <AlertTriangle
-                              size={13}
-                              className="text-amber-400"
-                            />
-                          ) : a.severity === "danger" ? (
-                            <XCircle size={13} className="text-red-400" />
-                          ) : (
-                            <Activity size={13} className="text-blue-400" />
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-white">
-                          {a.event}
-                        </td>
-                        <td className="px-4 py-3 text-xs text-gray-400">
-                          {a.detail}
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className="text-[10px] px-2 py-0.5 bg-white/5 rounded text-gray-400">
-                            {a.user}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-[11px] text-gray-500">
-                          {new Date(a.timestamp).toLocaleString()}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            <AuditLogManagerSection
+              audit={consoleStore.audit}
+              loading={consoleStore.loading}
+              lastSync={consoleStore.lastSync}
+              onClear={consoleStore.clearAudit}
+              onReload={consoleStore.reload}
+              logAudit={consoleStore.addAudit}
+              retentionLimit={consoleSettings.auditRetention}
+            />
           )}
 
           {/* ══════ FEATURE FLAGS ══════ */}
           {activeSection === "flags" && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg font-medium text-white">
-                  Feature Flags
-                </h2>
-                <span className="text-xs text-gray-500">
-                  {featureFlags.filter((f) => f.enabled).length} of{" "}
-                  {featureFlags.length} enabled
-                </span>
-              </div>
-              <div className="space-y-2">
-                {featureFlags.map((f) => (
-                  <div
-                    key={f.id}
-                    className="bg-[#161618] border border-white/[0.06] rounded-xl p-4 flex items-center justify-between"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div
-                        className={`w-2 h-2 rounded-full ${f.enabled ? "bg-green-400" : "bg-gray-600"}`}
-                      />
-                      <div>
-                        <p className="text-sm text-white">{f.name}</p>
-                        <p className="text-[11px] text-gray-500">
-                          {f.description}
-                        </p>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => toggleFlag(f.id)}
-                      className={`relative w-11 h-6 rounded-full transition-colors ${f.enabled ? "bg-green-500" : "bg-gray-600"}`}
-                    >
-                      <div
-                        className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${f.enabled ? "translate-x-5" : "translate-x-0.5"}`}
-                      />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <FeatureFlagsManagerSection
+              flags={consoleStore.flags}
+              settings={consoleSettings}
+              onUpsert={consoleStore.upsertFlag}
+              onToggle={consoleStore.toggleFlag}
+              onDelete={consoleStore.deleteFlag}
+              onBulkSet={consoleStore.bulkSetFlags}
+              logAudit={consoleStore.addAudit}
+            />
           )}
 
           {/* ══════ SYSTEM HEALTH ══════ */}
           {activeSection === "system" && (
-            <div className="space-y-4">
-              <h2 className="text-lg font-medium text-white">System Health</h2>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                {[
-                  {
-                    label: "Storage Used",
-                    value: `${(JSON.stringify(localStorage).length / 1024).toFixed(1)} KB`,
-                    icon: HardDrive,
-                    status: "healthy" as const,
-                  },
-                  {
-                    label: "Local Storage Keys",
-                    value: `${localStorage.length}`,
-                    icon: Database,
-                    status: "healthy" as const,
-                  },
-                  {
-                    label: "Network",
-                    value: navigator.onLine ? "Online" : "Offline",
-                    icon: Wifi,
-                    status: navigator.onLine
-                      ? ("healthy" as const)
-                      : ("warning" as const),
-                  },
-                  {
-                    label: "App Version",
-                    value: "v3.0.0",
-                    icon: Layers,
-                    status: "healthy" as const,
-                  },
-                  {
-                    label: "Platform",
-                    value: navigator.platform,
-                    icon: Zap,
-                    status: "healthy" as const,
-                  },
-                  {
-                    label: "Language",
-                    value: navigator.language,
-                    icon: Globe,
-                    status: "healthy" as const,
-                  },
-                ].map((m) => (
-                  <div
-                    key={m.label}
-                    className="bg-[#161618] border border-white/[0.06] rounded-xl p-5"
-                  >
-                    <div className="flex items-center gap-2 mb-2">
-                      <m.icon
-                        size={14}
-                        className={
-                          m.status === "healthy"
-                            ? "text-emerald-400"
-                            : "text-amber-400"
-                        }
-                      />
-                      <span className="text-[11px] text-gray-500">
-                        {m.label}
-                      </span>
-                    </div>
-                    <p className="text-lg font-semibold text-white">
-                      {m.value}
-                    </p>
-                  </div>
-                ))}
-              </div>
-              <div className="bg-[#161618] border border-white/[0.06] rounded-xl p-5">
-                <h3 className="text-sm font-medium text-gray-300 mb-3">
-                  Storage Breakdown
-                </h3>
-                <div className="space-y-2 max-h-48 overflow-y-auto">
-                  {Array.from({ length: localStorage.length }, (_, i) =>
-                    localStorage.key(i),
-                  )
-                    .filter(Boolean)
-                    .sort()
-                    .map((key) => {
-                      const val = localStorage.getItem(key!) || "";
-                      return (
-                        <div
-                          key={key}
-                          className="flex items-center justify-between text-xs"
-                        >
-                          <span className="text-gray-400 font-mono truncate max-w-[60%]">
-                            {key}
-                          </span>
-                          <span className="text-gray-600">
-                            {(val.length / 1024).toFixed(2)} KB
-                          </span>
-                        </div>
-                      );
-                    })}
-                </div>
-              </div>
-            </div>
+            <SystemHealthManagerSection
+              logAudit={(event, detail, severity) =>
+                consoleStore.addAudit(
+                  event,
+                  detail,
+                  severity ?? "info",
+                  "FOUNDER",
+                )
+              }
+            />
           )}
 
           {/* ══════ AI WEBSITE EDITOR ══════ */}
@@ -2511,6 +2678,16 @@ export default function FounderAccess() {
             <DataManagementSection logAudit={logAudit} />
           )}
 
+          {/* ══════ CONSOLE SETTINGS ══════ */}
+          {activeSection === "consolesettings" && (
+            <ConsoleSettingsSection
+              settings={consoleSettings}
+              lastSync={consoleStore.lastSync}
+              onUpdate={consoleStore.updateSettings}
+              logAudit={consoleStore.addAudit}
+            />
+          )}
+
           {/* ══════ MONETIZATION ══════ */}
           {activeSection === "pricing" && (
             <PricingManagerSection logAudit={logAudit} />
@@ -2531,6 +2708,163 @@ export default function FounderAccess() {
           )}
           {activeSection === "paymentmethods" && (
             <PaymentMethodsSection logAudit={logAudit} />
+          )}
+
+          {/* ══════ DEVELOPER TOOLS ══════ */}
+          {activeSection === "commandpalette" && (
+            <CommandPaletteSection
+              commands={navGroups.flatMap((g) =>
+                g.items.map((it) => ({
+                  id: it.id,
+                  label: it.label,
+                  group: g.label,
+                  keywords: it.label.toLowerCase(),
+                  icon: it.icon,
+                })),
+              )}
+              onRun={(id) => setActiveSection(id as SectionId)}
+            />
+          )}
+          {activeSection === "webhooks" && (
+            <WebhooksManagerSection
+              store={advancedStore}
+              logAudit={consoleStore.addAudit}
+            />
+          )}
+          {activeSection === "apikeys" && (
+            <ApiKeysManagerSection
+              store={advancedStore}
+              logAudit={consoleStore.addAudit}
+            />
+          )}
+          {activeSection === "jobs" && (
+            <ScheduledJobsSection
+              store={advancedStore}
+              logAudit={consoleStore.addAudit}
+            />
+          )}
+          {activeSection === "experiments" && (
+            <ExperimentsSection
+              store={advancedStore}
+              logAudit={consoleStore.addAudit}
+            />
+          )}
+          {activeSection === "healthchecks" && (
+            <HealthChecksSection
+              store={advancedStore}
+              logAudit={consoleStore.addAudit}
+            />
+          )}
+          {activeSection === "dbquery" && (
+            <DatabaseQuerySection logAudit={consoleStore.addAudit} />
+          )}
+          {activeSection === "cachemgmt" && (
+            <CacheManagementSection logAudit={consoleStore.addAudit} />
+          )}
+
+          {/* ══════ PLATFORM CONTROL ══════ */}
+          {activeSection === "announcements" && (
+            <AnnouncementsSection
+              store={advancedStore}
+              logAudit={consoleStore.addAudit}
+            />
+          )}
+          {activeSection === "maintwindows" && (
+            <MaintenanceWindowsSection
+              store={advancedStore}
+              logAudit={consoleStore.addAudit}
+            />
+          )}
+          {activeSection === "blocklist" && (
+            <BlocklistSection
+              store={advancedStore}
+              logAudit={consoleStore.addAudit}
+            />
+          )}
+          {activeSection === "cors" && (
+            <CorsConfigSection
+              store={advancedStore}
+              logAudit={consoleStore.addAudit}
+            />
+          )}
+          {activeSection === "envvars" && (
+            <EnvVarsSection
+              store={advancedStore}
+              logAudit={consoleStore.addAudit}
+            />
+          )}
+          {activeSection === "localization" && (
+            <LocalizationSection
+              store={advancedStore}
+              logAudit={consoleStore.addAudit}
+            />
+          )}
+          {activeSection === "errortracker" && (
+            <ErrorTrackerSection
+              store={advancedStore}
+              logAudit={consoleStore.addAudit}
+            />
+          )}
+          {activeSection === "sessions" && (
+            <SessionInspectorSection
+              store={advancedStore}
+              logAudit={consoleStore.addAudit}
+            />
+          )}
+          {activeSection === "taskqueue" && (
+            <TaskQueueSection
+              store={advancedStore}
+              logAudit={consoleStore.addAudit}
+            />
+          )}
+          {activeSection === "logstreams" && (
+            <LogStreamsSection
+              store={advancedStore}
+              logAudit={consoleStore.addAudit}
+            />
+          )}
+          {activeSection === "rolematrix" && (
+            <RoleMatrixSection
+              store={advancedStore}
+              logAudit={consoleStore.addAudit}
+            />
+          )}
+          {activeSection === "releasecoord" && (
+            <ReleaseCoordinatorSection
+              store={advancedStore}
+              logAudit={consoleStore.addAudit}
+            />
+          )}
+          {activeSection === "migrations" && (
+            <MigrationsSection
+              store={advancedStore}
+              logAudit={consoleStore.addAudit}
+            />
+          )}
+          {activeSection === "deliveries" && (
+            <WebhookDeliveriesSection
+              store={advancedStore}
+              logAudit={consoleStore.addAudit}
+            />
+          )}
+          {activeSection === "storage" && (
+            <StorageExplorerSection
+              store={advancedStore}
+              logAudit={consoleStore.addAudit}
+            />
+          )}
+          {activeSection === "ratelimits" && (
+            <ApiRateLimitsSection
+              store={advancedStore}
+              logAudit={consoleStore.addAudit}
+            />
+          )}
+
+          {activeSection === "devcontrol" && (
+            <DeveloperControlCenterSection
+              store={advancedStore}
+              logAudit={consoleStore.addAudit}
+            />
           )}
         </div>
       </main>

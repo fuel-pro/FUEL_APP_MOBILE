@@ -71,8 +71,7 @@ export default function StationLoyaltyManager({
   // Active station fuel types — used so manual loyalty points are recorded
   // against an actual station fuel (first active) instead of a hardcoded PMS.
   const fuelTypeApi = useStationFuelTypes(stationId);
-  const manualFuelType =
-    fuelTypeApi.activeFuelTypes[0]?.name ?? "PMS";
+  const manualFuelType = fuelTypeApi.activeFuelTypes[0]?.name ?? "PMS";
 
   const [activeTab, setActiveTab] = useState<
     "customers" | "rewards" | "settings" | "stats"

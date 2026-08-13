@@ -1068,20 +1068,9 @@ function fuelReducer(state: FuelState, action: FuelAction): FuelState {
     case "SET_DATA_BACKUPS":
       return { ...state, dataBackups: action.payload };
     case "LOAD_FROM_STORAGE": {
-      // Deep-merge companyData so a logo-less/stale payload cannot clobber a
-      // logo-bearing in-memory state (fixes logo disappearing after refresh
-      // when localStorage wins the race over cloud with stale data).
-      // Additionally, an incoming EMPTY string must NOT overwrite a
-      // non-empty in-memory value — this is the root cause of companyData.name
-      // (and other text fields) being wiped after reload: a stale blob with
-      // name:"" was shallow-merging over a populated name. mergeCompanyData
-      // keeps the non-empty (existing OR incoming) value for each field.
       const incoming = action.payload;
       // Protect the in-progress invoice draft (invoiceItems) from being
       // clobbered by a stale all-empty-items blob on reload/real-time echo.
-      // The incoming items win ONLY when they carry more real content
-      // (non-empty desc OR non-zero price) than the current draft; otherwise
-      // keep the current draft so the user's edits survive a reload.
       const incomingItems = incoming.invoiceItems;
       const currentItems = state.invoiceItems;
       const invoiceItems =
@@ -1089,6 +1078,42 @@ function fuelReducer(state: FuelState, action: FuelAction): FuelState {
         itemsHaveContent(incomingItems) >= itemsHaveContent(currentItems)
           ? incomingItems
           : currentItems;
+      // Protect salesHistory, debtHistory, invoices, clients from being
+      // clobbered by a stale/empty real-time echo. An incoming collection
+      // wins ONLY when it has MORE entries than the current in-memory one;
+      // otherwise keep the current data so a just-saved record survives a
+      // delayed echo from an earlier (pre-save) cloud write.
+      const mergeCollections = (
+        current: Record<string, any> | any[] | undefined,
+        inc: Record<string, any> | any[] | undefined,
+      ) => {
+        const curLen = Array.isArray(current)
+          ? current.length
+          : current
+            ? Object.keys(current).length
+            : 0;
+        const incLen = Array.isArray(inc)
+          ? inc.length
+          : inc
+            ? Object.keys(inc).length
+            : 0;
+        if (incLen >= curLen) return inc ?? current;
+        return current ?? inc;
+      };
+      const salesHistory = mergeCollections(
+        state.salesHistory,
+        incoming.salesHistory,
+      );
+      const debtHistory = mergeCollections(
+        state.debtHistory,
+        incoming.debtHistory,
+      );
+      const invoices = mergeCollections(state.invoices, incoming.invoices);
+      const clients = mergeCollections(state.clients, incoming.clients);
+      const stationData =
+        incoming.stationData && Object.keys(incoming.stationData).length > 0
+          ? incoming.stationData
+          : state.stationData;
       return {
         ...state,
         ...incoming,
@@ -1108,6 +1133,11 @@ function fuelReducer(state: FuelState, action: FuelAction): FuelState {
           ...(incoming.fuelTankValuesByType || {}),
         },
         invoiceItems,
+        salesHistory,
+        debtHistory,
+        invoices,
+        clients,
+        stationData,
       };
     }
     // Station management
@@ -1616,7 +1646,13 @@ export function FuelProvider({ children }: { children: ReactNode }) {
       >(cloudKey, stationIdRef.current)) as Record<string, unknown> | null;
 
       if (compactData && Object.keys(compactData).length > 0) {
-        // Validate that the loaded data has meaningful content
+        // Validate that the loaded data has meaningful content. The check
+        // MUST include ALL business-data collections (salesHistory,
+        // debtHistory, expenses, invoices, clients, etc.) — not just a
+        // subset. Previously salesHistory was missing from this list, so a
+        // user whose only data was saved sales records would see an empty
+        // Fuel Sales tab on a new device (the blob existed in the cloud but
+        // was never loaded → false "no data" → stale default state).
         const cd = compactData as any;
         const hasData =
           cd.companyData?.name ||
@@ -1625,7 +1661,18 @@ export function FuelProvider({ children }: { children: ReactNode }) {
           (cd.invoiceItems && cd.invoiceItems.length > 0) ||
           (cd.pmsPumps && cd.pmsPumps.length > 0) ||
           (cd.agoPumps && cd.agoPumps.length > 0) ||
-          (cd.stations && cd.stations.length > 0);
+          (cd.stations && cd.stations.length > 0) ||
+          (cd.salesHistory && Object.keys(cd.salesHistory).length > 0) ||
+          (cd.debtHistory && Object.keys(cd.debtHistory).length > 0) ||
+          (cd.invoices && Object.keys(cd.invoices).length > 0) ||
+          (cd.clients && Object.keys(cd.clients).length > 0) ||
+          (cd.expenses && cd.expenses.length > 0) ||
+          (cd.employees && cd.employees.length > 0) ||
+          (cd.payrollRecords && cd.payrollRecords.length > 0) ||
+          (cd.offloadingRecords && cd.offloadingRecords.length > 0) ||
+          (cd.mpesaTransactions && cd.mpesaTransactions.length > 0) ||
+          (cd.stationData && Object.keys(cd.stationData).length > 0) ||
+          cd.tillPayment;
 
         if (hasData || cd.theme || cd.tabConfigurations) {
           dispatch({ type: "LOAD_FROM_STORAGE", payload: cd });
@@ -2009,7 +2056,18 @@ export function FuelProvider({ children }: { children: ReactNode }) {
             (cd.invoiceItems && cd.invoiceItems.length > 0) ||
             (cd.pmsPumps && cd.pmsPumps.length > 0) ||
             (cd.agoPumps && cd.agoPumps.length > 0) ||
-            (cd.stations && cd.stations.length > 0);
+            (cd.stations && cd.stations.length > 0) ||
+            (cd.salesHistory && Object.keys(cd.salesHistory).length > 0) ||
+            (cd.debtHistory && Object.keys(cd.debtHistory).length > 0) ||
+            (cd.invoices && Object.keys(cd.invoices).length > 0) ||
+            (cd.clients && Object.keys(cd.clients).length > 0) ||
+            (cd.expenses && cd.expenses.length > 0) ||
+            (cd.employees && cd.employees.length > 0) ||
+            (cd.payrollRecords && cd.payrollRecords.length > 0) ||
+            (cd.offloadingRecords && cd.offloadingRecords.length > 0) ||
+            (cd.mpesaTransactions && cd.mpesaTransactions.length > 0) ||
+            (cd.stationData && Object.keys(cd.stationData).length > 0) ||
+            cd.tillPayment;
           if (hasData || cd.theme || cd.tabConfigurations) {
             dispatch({ type: "LOAD_FROM_STORAGE", payload: cd });
           }

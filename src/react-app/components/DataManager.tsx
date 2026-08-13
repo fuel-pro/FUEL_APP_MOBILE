@@ -670,7 +670,11 @@ export default function DataManager() {
                     value: summary.salesRecords,
                     color: "purple",
                   },
-                  { label: `${getFuelLabel("PMS")} Pumps`, value: summary.pmsPumps, color: "red" },
+                  {
+                    label: `${getFuelLabel("PMS")} Pumps`,
+                    value: summary.pmsPumps,
+                    color: "red",
+                  },
                   {
                     label: `${getFuelLabel("AGO")} Pumps`,
                     value: summary.agoPumps,

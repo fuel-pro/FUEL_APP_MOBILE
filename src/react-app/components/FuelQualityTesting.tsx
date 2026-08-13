@@ -86,9 +86,7 @@ export default function FuelQualityTesting() {
     ];
   })();
   const defaultFuelType =
-    fuelTypeOptions[0]?.code ||
-    fuelTypeApi.activeFuelTypes[0]?.code ||
-    "PMS";
+    fuelTypeOptions[0]?.code || fuelTypeApi.activeFuelTypes[0]?.code || "PMS";
   const [tests, setTests] = useState<QualityTest[]>(() => {
     try {
       return JSON.parse(localStorage.getItem("fuelpro_quality_tests") || "[]");

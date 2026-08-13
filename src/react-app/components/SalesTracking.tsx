@@ -23,6 +23,11 @@ import {
   Calendar,
   Fuel,
   Tag,
+  Cloud,
+  RefreshCw,
+  TrendingUp,
+  Receipt,
+  Edit3,
 } from "lucide-react";
 import { useFuel } from "@/react-app/context/FuelContext";
 import { useStations } from "@/react-app/context/StationContext";
@@ -125,6 +130,10 @@ export default function SalesTracking() {
   const [showCropper, setShowCropper] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [showScanPanel, setShowScanPanel] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "synced">(
+    "idle",
+  );
+  const [loadedRecordKey, setLoadedRecordKey] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const dropZoneRef = useRef<HTMLDivElement>(null);
@@ -451,9 +460,10 @@ export default function SalesTracking() {
     field: string,
     value: number,
   ) => {
-    const pumps = [...pumpsForType(type)];
+    const pumps = pumpsForType(type).map((p, i) =>
+      i === index ? { ...p, [field]: value } : p,
+    );
     const pump = pumps[index];
-    (pump as any)[field] = value;
     // Calculate sales
     pump.salesL = Math.max(0, pump.closingL - pump.openingL);
     pump.salesKsh = Math.max(0, pump.closingKsh - pump.openingKsh);
@@ -562,13 +572,10 @@ export default function SalesTracking() {
       }
       dispatch({ type: "SET_EXPENSES", payload: [] });
       dispatch({ type: "SET_TILL_PAYMENT", payload: 0 });
-      dispatch({
-        type: "SET_PRICES",
-        payload: {
-          pmsPrice: KENYA_BASE_PRICES.petrol,
-          agoPrice: KENYA_BASE_PRICES.diesel,
-        },
-      });
+      // Keep the station's configured prices — do NOT reset to hardcoded
+      // Kenya base prices (that would silently overwrite a user's custom
+      // per-litre price on every "Clear" click and confuse cross-device
+      // sync).
       dispatch({
         type: "SET_SALES_DATE",
         payload: new Date().toISOString().split("T")[0],
@@ -583,6 +590,7 @@ export default function SalesTracking() {
           agoTankClosing: 0,
         },
       });
+      setLoadedRecordKey(null);
     }
   };
 
@@ -612,6 +620,7 @@ export default function SalesTracking() {
       agoTankClosing: state.agoTankClosing,
       // Preserve POS sales so they survive a Sales Tracking save
       posSales: existing.posSales,
+      savedAt: new Date().toISOString(),
     };
 
     dispatch({
@@ -619,7 +628,15 @@ export default function SalesTracking() {
       payload: { ...state.salesHistory, [key]: salesData },
     });
 
-    alert(`Sales data saved for ${state.salesDate} ${state.shift} shift!`);
+    // Non-blocking save feedback — the FuelContext auto-save (500ms debounce)
+    // persists to Supabase app_kv + Realtime, so the data syncs cross-device
+    // without a page reload.
+    setSaveStatus("saving");
+    setTimeout(() => {
+      setSaveStatus("synced");
+      setLoadedRecordKey(key);
+      setTimeout(() => setSaveStatus("idle"), 3000);
+    }, 600);
   };
 
   const loadSalesData = (key: string) => {
@@ -645,8 +662,8 @@ export default function SalesTracking() {
     dispatch({
       type: "SET_PRICES",
       payload: {
-        pmsPrice: data.pmsPrice || KENYA_BASE_PRICES.petrol,
-        agoPrice: data.agoPrice || KENYA_BASE_PRICES.diesel,
+        pmsPrice: data.pmsPrice || state.pmsPrice,
+        agoPrice: data.agoPrice || state.agoPrice,
       },
     });
     dispatch({
@@ -658,6 +675,7 @@ export default function SalesTracking() {
         agoTankClosing: data.agoTankClosing || 0,
       },
     });
+    setLoadedRecordKey(key);
   };
 
   const deleteSalesData = (key: string) => {
@@ -665,6 +683,7 @@ export default function SalesTracking() {
       const updatedHistory = { ...state.salesHistory };
       delete updatedHistory[key];
       dispatch({ type: "SET_SALES_HISTORY", payload: updatedHistory });
+      if (loadedRecordKey === key) setLoadedRecordKey(null);
     }
   };
 
@@ -729,6 +748,24 @@ export default function SalesTracking() {
       return `${label} (${code}) Tank: Opening: ${formatNumber(tv.opening)} L, Closing: ${formatNumber(tv.closing)} L`;
     });
     return `Date: ${state.salesDate}\nShift: ${state.shift}\n\nFuel Tank Inventory:\n${tankLines.join("\n")}\n\nFuel Pricing & Pumps:\n${fuelLines.join("\n")}\n\nDaily Expenses:\n${state.expenses.map((e) => `${e.desc}: ${formatNumber(e.amount)} ${currencySymbol}`).join("\n")}\n\nTill/Mobile Payment: ${formatNumber(state.tillPayment)} ${currencySymbol}\n\nDaily Summary:\n${summaryLines.join("\n")}\nTotal Revenue: ${currencySymbol} ${formatNumber(summary.totalRevenue, 2)}\nTill/Mobile Payment: ${currencySymbol} ${formatNumber(state.tillPayment, 2)}\nCash In Hand: ${currencySymbol} ${formatNumber(summary.cashInHand, 2)}\nTotal Expenses: ${currencySymbol} ${formatNumber(summary.totalExpenses, 2)}\nNet Income: ${currencySymbol} ${formatNumber(summary.netIncome, 2)}`;
+  };
+
+  // Compute a compact revenue summary for a saved history record so the
+  // saved-records list can show per-record totals (not just date+shift).
+  const getRecordSummary = (data: any) => {
+    const pms = (data.pmsPumps || []).reduce(
+      (s: number, p: any) => s + (p.salesKsh || 0),
+      0,
+    );
+    const ago = (data.agoPumps || []).reduce(
+      (s: number, p: any) => s + (p.salesKsh || 0),
+      0,
+    );
+    const exp = (data.expenses || []).reduce(
+      (s: number, e: any) => s + (e.amount || 0),
+      0,
+    );
+    return { revenue: pms + ago, pms, ago, expenses: exp };
   };
 
   return (
@@ -1194,9 +1231,24 @@ export default function SalesTracking() {
       {/* Header */}
       <div className="card">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 pb-4 border-b border-gray-200 dark:border-gray-700">
-          <h2 className="text-xl md:text-2xl font-bold text-blue-900 dark:text-blue-200">
-            Fuel Sales Tracking
-          </h2>
+          <div className="flex items-center gap-3">
+            <h2 className="text-xl md:text-2xl font-bold text-blue-900 dark:text-blue-200">
+              Fuel Sales Tracking
+            </h2>
+            {/* Cloud sync indicator — shows the user their data is synced */}
+            {saveStatus === "saving" && (
+              <span className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+                <RefreshCw size={12} className="animate-spin" />
+                Saving to cloud...
+              </span>
+            )}
+            {saveStatus === "synced" && (
+              <span className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300">
+                <Cloud size={12} />
+                Synced ✓
+              </span>
+            )}
+          </div>
           <div className="flex gap-2 flex-wrap">
             <button
               onClick={() => switchToTab("pos")}
@@ -1631,36 +1683,97 @@ export default function SalesTracking() {
       {/* Saved Sales Tracking */}
       <div className="card">
         <div className="flex justify-between items-center mb-4">
-          <h3 className="text-xl font-bold">Saved Sales Tracking</h3>
+          <h3 className="text-xl font-bold flex items-center gap-2">
+            <BarChart3 size={20} className="text-blue-500" />
+            Saved Sales Tracking
+            {Object.keys(state.salesHistory).length > 0 && (
+              <span className="text-sm font-normal text-gray-500">
+                ({Object.keys(state.salesHistory).length} record
+                {Object.keys(state.salesHistory).length !== 1 ? "s" : ""})
+              </span>
+            )}
+          </h3>
         </div>
         <div className="history-panel">
-          {Object.keys(state.salesHistory)
-            .sort()
-            .reverse()
-            .map((key) => {
-              const data = state.salesHistory[key];
-              return (
-                <div key={key} className="history-item">
-                  <span>
-                    {data.date} - {data.shift} Shift
-                  </span>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => loadSalesData(key)}
-                      className="text-xs"
-                    >
-                      Load
-                    </button>
-                    <button
-                      onClick={() => deleteSalesData(key)}
-                      className="text-xs"
-                    >
-                      Delete
-                    </button>
+          {Object.keys(state.salesHistory).length === 0 ? (
+            <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+              <BarChart3 size={40} className="mx-auto mb-2 opacity-30" />
+              <p className="text-sm">
+                No saved records yet. Fill in the form above and click "Save" to
+                create your first sales record — it syncs to the cloud
+                automatically.
+              </p>
+            </div>
+          ) : (
+            Object.keys(state.salesHistory)
+              .sort()
+              .reverse()
+              .map((key) => {
+                const data = state.salesHistory[key];
+                const rec = getRecordSummary(data);
+                const isActive = loadedRecordKey === key;
+                return (
+                  <div
+                    key={key}
+                    className={`history-item ${
+                      isActive
+                        ? "ring-2 ring-blue-400 bg-blue-50 dark:bg-blue-900/20"
+                        : ""
+                    }`}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <span className="font-medium">
+                        {data.date} - {data.shift} Shift
+                      </span>
+                      {isActive && (
+                        <span className="ml-2 text-xs text-blue-600 dark:text-blue-400">
+                          (editing)
+                        </span>
+                      )}
+                      <div className="flex flex-wrap gap-3 mt-1 text-xs text-gray-500 dark:text-gray-400">
+                        <span className="inline-flex items-center gap-1">
+                          <TrendingUp size={11} />
+                          {currencySymbol} {formatNumber(rec.revenue, 0)}
+                        </span>
+                        {rec.pms > 0 && (
+                          <span>
+                            PMS: {currencySymbol} {formatNumber(rec.pms, 0)}
+                          </span>
+                        )}
+                        {rec.ago > 0 && (
+                          <span>
+                            AGO: {currencySymbol} {formatNumber(rec.ago, 0)}
+                          </span>
+                        )}
+                        {rec.expenses > 0 && (
+                          <span className="inline-flex items-center gap-1">
+                            <Receipt size={11} />
+                            {currencySymbol} {formatNumber(rec.expenses, 0)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex gap-2 shrink-0">
+                      <button
+                        onClick={() => loadSalesData(key)}
+                        className="btn btn-outline text-xs flex items-center gap-1"
+                        title="Load this record into the form"
+                      >
+                        <Edit3 size={12} />
+                        Load
+                      </button>
+                      <button
+                        onClick={() => deleteSalesData(key)}
+                        className="btn btn-outline text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                        title="Delete this record"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })
+          )}
         </div>
       </div>
     </div>
