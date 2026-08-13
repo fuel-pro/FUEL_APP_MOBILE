@@ -3993,3 +3993,17 @@ Rewrote ALL sales/delivery/reports export functions to iterate the station confi
 ### Deploy state
 - GitHub: PR #131 OPEN. Cloudflare: LIVE. Vercel: blocked by quota. Supabase: no schema changes.
 - tsc 0 errors, build 111 precache, prettier pass.
+
+## Dynamic fuel types — final hardcoded PMS/AGO removal (2026-08-13, commits b41c002 + f1a94d6)
+
+### Currency symbol fix (commit b41c002)
+state.companyData.currency was stored as a raw symbol (e.g. "KSh") from a stale Kenya default and leaked into non-Kenya stations. Fixed across 6 components by replacing all display usages with resolveCurrencySymbol: SalesTracking, FuelOffloading (17 usages), LiveTransaction (display only), Communication, Invoice, AIChatbot.
+
+### Hardcoded PMS/AGO type limits removed (commit f1a94d6)
+- useDataIntegration.ts (CRITICAL): SaleEvent/DeliveryEvent fuelType widened from "PMS"|"AGO" to string; tank map is now Record<string, number>; daily summary tracks per-fuel-type keys dynamically.
+- loyaltyProgram.ts: FuelType widened from union to string.
+- adminAPI.ts: default business.fuelTypes is now country-aware.
+- user-preferences.ts: default fuelTypes now derived from CANONICAL_FUEL_TYPES.
+
+### Deploy state 2026-08-13
+- GitHub: PR #131 OPEN. Cloudflare: LIVE (ac4c61fd). Vercel: blocked by quota. Supabase: no schema changes. tsc 0 errors, build 111 precache.
