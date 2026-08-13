@@ -27,7 +27,7 @@ import {
   resolveCurrencySymbol,
 } from "@/react-app/lib/currency";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
-import { normalizeFuelType } from "@/react-app/config/pricing";
+import { normalizeFuelType, getFuelLabel } from "@/react-app/config/pricing";
 
 /** Generate a unique row id (stable across devices/sessions). */
 function rowId(): string {
@@ -35,7 +35,7 @@ function rowId(): string {
 }
 
 export default function DeliveryTracker() {
-  const { state, dispatch } = useFuel();
+  const { state, dispatch, syncPriceToFuelTypes } = useFuel();
   const { user } = useAuth();
   const { currentStation } = useStations();
   const stationId = currentStation?.id;
@@ -119,16 +119,22 @@ export default function DeliveryTracker() {
   const [filterFuel, setFilterFuel] = useState("");
 
   // ─── Station fuel types (replaces hardcoded Petrol/Diesel) ───
+  // Uses fuelTypeApi.activeFuelTypes (from fuel_types_config cloud key) as
+  // the primary source — same source the Dashboard + POS use — so the
+  // dropdown is always in sync with the station's configured fuels.
   const stationFuelOptions = useMemo<string[]>(() => {
-    const fromConfig = (state.fuelTypes || [])
+    const fromApi = (fuelTypeApi.activeFuelTypes || [])
+      .map((ft) => getFuelLabel(ft.name) || ft.localName || ft.name || "")
+      .filter((label): label is string => Boolean(label));
+    const fromState = (state.fuelTypes || [])
       .filter((ft) => ft.active !== false)
       .map((ft) => ft.localName || ft.name || "")
       .filter((label): label is string => Boolean(label));
-    const unique = [...new Set(fromConfig)];
+    const unique = [...new Set([...fromApi, ...fromState])];
     if (unique.length > 0) return unique;
     // Fallback to the two legacy fuels if no fuel types configured yet
     return ["Super Petrol", "Diesel"];
-  }, [state.fuelTypes]);
+  }, [fuelTypeApi.activeFuelTypes, state.fuelTypes]);
 
   const defaultFuel = stationFuelOptions[0] || "Super Petrol";
 
@@ -554,7 +560,24 @@ export default function DeliveryTracker() {
       )
       .join("\n");
 
-    return `FUEL DELIVERED TO: ${state.deliveredTo || "Client"}\nTOTAL ORDER: ${state.totalOrder || "N/A"} Litres\nYEAR: ${state.deliveryYear}\nPetrol Price: ${currencySymbol} ${state.petrolPrice} /L\nDiesel Price: ${currencySymbol} ${state.dieselPrice} /L\n\n${headers.join(" | ")}\n${rows}\n\nTotal Supplied: ${formatNumber(state.deliveryData.totals.totalSupplied)} L\nTotal Payments: ${currencySymbol} ${formatNumber(state.deliveryData.totals.totalPayments)}\nBalance Due: ${currencySymbol} ${formatNumber(state.deliveryData.totals.balanceDue, 2)}`;
+    const priceLines = stationFuelOptions
+      .map((label) => {
+        const ft = fuelTypeApi.findFuelType(label);
+        const price =
+          ft?.price ??
+          (label === "Super Petrol" || label === "Petrol"
+            ? state.petrolPrice
+            : label === "Diesel"
+              ? state.dieselPrice
+              : null);
+        return price != null
+          ? `${label} Price: ${currencySymbol} ${price} /L`
+          : null;
+      })
+      .filter(Boolean)
+      .join("\n");
+
+    return `FUEL DELIVERED TO: ${state.deliveredTo || "Client"}\nTOTAL ORDER: ${state.totalOrder || "N/A"} Litres\nYEAR: ${state.deliveryYear}\n${priceLines}\n\n${headers.join(" | ")}\n${rows}\n\nTotal Supplied: ${formatNumber(state.deliveryData.totals.totalSupplied)} L\nTotal Payments: ${currencySymbol} ${formatNumber(state.deliveryData.totals.totalPayments)}\nBalance Due: ${currencySymbol} ${formatNumber(state.deliveryData.totals.balanceDue, 2)}`;
   };
 
   // Recalculate totals once on mount so cumulative debt is correct after a
@@ -672,6 +695,33 @@ export default function DeliveryTracker() {
               step="0.1"
             />
           </div>
+          {/* Dynamic price inputs for extra fuel types (Kerosene, LPG,
+              V-Power, etc.) — not limited to just Petrol/Diesel. */}
+          {stationFuelOptions
+            .filter(
+              (label) =>
+                !["Super Petrol", "Petrol", "Diesel"].includes(label),
+            )
+            .map((label) => {
+              const ft = fuelTypeApi.findFuelType(label);
+              const priceVal = ft?.price ?? "";
+              return (
+                <div className="form-group" key={label}>
+                  <label>
+                    {label} Price ({currencySymbol}/L)
+                  </label>
+                  <input
+                    type="number"
+                    value={priceVal}
+                    onChange={(e) => {
+                      const v = parseFloat(e.target.value);
+                      syncPriceToFuelTypes(label, v);
+                    }}
+                    step="0.1"
+                  />
+                </div>
+              );
+            })}
         </div>
 
         {/* Table */}
