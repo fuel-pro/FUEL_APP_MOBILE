@@ -34,7 +34,10 @@ import {
   exportSalesTXT,
 } from "@/react-app/utils/exportUtils";
 import { formatNumber } from "@/react-app/utils/formatUtils";
-import { getCurrencySymbol } from "@/react-app/lib/currency";
+import {
+  getCurrencySymbol,
+  resolveCurrencySymbol,
+} from "@/react-app/lib/currency";
 import ImageCropper from "@/react-app/components/ImageCropper";
 
 interface ExtractedPump {
@@ -70,7 +73,10 @@ type ScanStep = "idle" | "uploading" | "analyzing" | "review" | "error";
 export default function SalesTracking() {
   const { state, dispatch, syncPriceToFuelTypes } = useFuel();
   const { currentStation } = useStations();
-  const currencySymbol = getCurrencySymbol(state.companyData?.currency);
+  const currencySymbol = resolveCurrencySymbol(
+    state.companyData?.currency,
+    currentStation?.currency,
+  );
   // Dynamic fuel-type support: read the station's configured fuel types so
   // the pump tables, pricing inputs, and per-fuel summaries are NOT hardcoded
   // to PMS/AGO. A station with Kerosene/LPG/V-Power etc. gets its own pump

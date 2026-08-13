@@ -19,11 +19,14 @@ import {
   parseNumberFromFormatted,
   formatNumber,
 } from "@/react-app/utils/formatUtils";
-import { getCurrencySymbol } from "@/react-app/lib/currency";
+import { resolveCurrencySymbol } from "@/react-app/lib/currency";
 
 export default function DebtReminder() {
   const { state, dispatch } = useFuel();
-  const currencySymbol = getCurrencySymbol(state.companyData?.currency);
+  const currencySymbol = resolveCurrencySymbol(
+    state.companyData?.currency,
+    undefined,
+  );
   const [debtCustomerName, setDebtCustomerName] = useState("");
   const [debtAmount, setDebtAmount] = useState("");
   const [buyGoodsNo, setBuyGoodsNo] = useState("");

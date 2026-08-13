@@ -362,6 +362,28 @@ export function getCurrencySymbol(currency?: string): string {
   return SYMBOLS[c] || c;
 }
 
+/**
+ * Resolve the currency SYMBOL for display from multiple sources. Accepts the
+ * companyData currency (which may be a stale symbol like "KSh" instead of a
+ * code like "USD") and the station record's currency code. A valid currency
+ * code is a 3-letter uppercase string (USD, KES, EUR); anything else is
+ * treated as a symbol and we fall through to the station currency.
+ *
+ * Usage: `const currencySymbol = resolveCurrencySymbol(state.companyData?.currency, currentStation?.currency);`
+ */
+export function resolveCurrencySymbol(
+  companyDataCurrency?: string,
+  stationCurrency?: string,
+): string {
+  const isValidCode = (s?: string): s is string => !!s && /^[A-Z]{3}$/.test(s);
+  const code = isValidCode(companyDataCurrency)
+    ? companyDataCurrency
+    : isValidCode(stationCurrency)
+      ? stationCurrency
+      : undefined;
+  return getCurrencySymbol(code);
+}
+
 /** Format amount with detected currency */
 export function formatMoney(amount: number, currency?: string): string {
   const c = currency || getDetectedCurrency();

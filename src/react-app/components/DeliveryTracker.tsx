@@ -22,7 +22,10 @@ import {
   exportDeliveryTXT,
 } from "@/react-app/utils/exportUtils";
 import { formatNumber } from "@/react-app/utils/formatUtils";
-import { getCurrencySymbol } from "@/react-app/lib/currency";
+import {
+  getCurrencySymbol,
+  resolveCurrencySymbol,
+} from "@/react-app/lib/currency";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 import { normalizeFuelType } from "@/react-app/config/pricing";
 
@@ -36,7 +39,10 @@ export default function DeliveryTracker() {
   const { user } = useAuth();
   const { currentStation } = useStations();
   const stationId = currentStation?.id;
-  const currencySymbol = getCurrencySymbol(state.companyData?.currency);
+  const currencySymbol = resolveCurrencySymbol(
+    state.companyData?.currency,
+    currentStation?.currency,
+  );
   const fuelTypeApi = useStationFuelTypes(stationId);
 
   // ─── Signatures (cross-device cloud-persisted) ───

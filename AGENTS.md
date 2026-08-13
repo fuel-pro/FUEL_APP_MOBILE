@@ -3871,7 +3871,18 @@ $164.90, Shell V-Power $214.35, LPG $120.00):
 - **Currency mismatch**: `companyData.currency` is "KSh" (stale) while the
   station is USD, so POS shows "KSh" while Dashboard shows "$". Root
   cause: `companyData.currency` not synced to `station.currency` on
-  wizard/setup.
+  wizard/setup. Mitigation (2026-08-13): components now call
+  `resolveCurrencySymbol(state.companyData?.currency, currentStation?.currency)`
+  from `src/react-app/lib/currency` instead of
+  `getCurrencySymbol(state.companyData?.currency)`. The helper validates
+  `companyData.currency` is a 3-letter uppercase code (USD/KES/EUR); a
+  stale symbol ("KSh"/"$") falls through to `stationCurrency`. Migrated:
+  ReportsCenter (5 sites), FuelTypesManager, SalesTracking, Invoice,
+  DeliveryTracker, CombinedStationsView (uses `undefined` — no
+  `currentStation`). `getCurrencySymbol` is now only imported (not called)
+  in these 6 files; kept per instruction and harmless with
+  `noUnusedLocals:false`. `DebtReminder.tsx` still uses the old call (out
+  of scope). `npx tsc --noEmit` clean.
 - **PRESET_FUELS** have hardcoded KSh price values; misleading for
   non-Kenya stations (labels adapt, price values do not).
 

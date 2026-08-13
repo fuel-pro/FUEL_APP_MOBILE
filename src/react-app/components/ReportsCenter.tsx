@@ -18,6 +18,7 @@ import { useStations } from "@/react-app/context/StationContext";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 import {
   getCurrencySymbol,
+  resolveCurrencySymbol,
   getDetectedCountryCode,
   isKenyaStation,
 } from "@/react-app/lib/currency";
@@ -45,7 +46,6 @@ type ReportPeriod = "daily" | "weekly" | "monthly" | "yearly";
 
 export default function ReportsCenter() {
   const { state } = useFuel();
-  const currencySymbol = getCurrencySymbol(state.companyData?.currency);
 
   // Country-aware VAT rate + label (replaces hardcoded "16%")
   const VAT_RATE = getVATRate(getDetectedCountryCode());
@@ -77,6 +77,10 @@ export default function ReportsCenter() {
   const { user } = useAuth();
   const { currentStation } = useStations();
   const stationId = currentStation?.id;
+  const currencySymbol = resolveCurrencySymbol(
+    state.companyData?.currency,
+    currentStation?.currency,
+  );
   const [cloudExpenses, setCloudExpenses] = useState<any[]>([]);
 
   useEffect(() => {
@@ -716,7 +720,10 @@ export default function ReportsCenter() {
     const doc = new jsPDF();
     const reportTitle = getReportTitle();
     const pageWidth = doc.internal.pageSize.getWidth();
-    const currency = getCurrencySymbol(state.companyData?.currency);
+    const currency = resolveCurrencySymbol(
+      state.companyData?.currency,
+      currentStation?.currency,
+    );
 
     // Pre-load the logo as a base64 data URL (handles Supabase Storage URLs).
     const logoDataUrl = await loadLogoAsDataURL(state.companyData?.logo);
@@ -1335,7 +1342,10 @@ export default function ReportsCenter() {
 
   const exportToTXT = () => {
     const reportTitle = getReportTitle();
-    const currency = getCurrencySymbol(state.companyData?.currency);
+    const currency = resolveCurrencySymbol(
+      state.companyData?.currency,
+      currentStation?.currency,
+    );
     let txt = `${"=".repeat(60)}\n`;
     txt += `${state.companyData.name}\n`;
     txt += `${"=".repeat(60)}\n\n`;
@@ -1410,7 +1420,10 @@ export default function ReportsCenter() {
     txt: exportToTXT,
     whatsapp: () => {
       const reportTitle = getReportTitle();
-      const currency = getCurrencySymbol(state.companyData?.currency);
+      const currency = resolveCurrencySymbol(
+        state.companyData?.currency,
+        currentStation?.currency,
+      );
       let msg = `*${state.companyData.name}*\n`;
       if (isKenya) {
         msg += `KRA PIN: ${state.companyData.kraPin || "N/A"}\n`;
@@ -1437,7 +1450,10 @@ export default function ReportsCenter() {
     },
     email: () => {
       const reportTitle = getReportTitle();
-      const currency = getCurrencySymbol(state.companyData?.currency);
+      const currency = resolveCurrencySymbol(
+        state.companyData?.currency,
+        currentStation?.currency,
+      );
       const subject = `${reportTitle} - ${state.companyData.name}`;
       let body = `${state.companyData.name}\n`;
       if (isKenya) {

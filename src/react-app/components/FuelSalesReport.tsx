@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { FileText, Printer, TrendingUp, Download, Loader2 } from "lucide-react";
 import { useFuel } from "@/react-app/context/FuelContext";
 import { useStationFuelTypes } from "@/react-app/hooks/useStationFuelTypes";
-import { getCurrencySymbol } from "@/react-app/lib/currency";
+import { resolveCurrencySymbol } from "@/react-app/lib/currency";
 import {
   getFuelLabel,
   type CanonicalFuelType,
@@ -339,7 +339,7 @@ export default function FuelSalesReport() {
         stationName: state.companyData.name || "",
         monthYear: `${months[selectedMonth - 1]} ${selectedYear}`,
         period: `${months[selectedMonth - 1]} ${selectedYear}`,
-        currency: getCurrencySymbol(state.companyData.currency),
+        currency: resolveCurrencySymbol(state.companyData.currency, undefined),
         fuelTypes: trackedFuelTypes,
         entries: reportData.map((entry) => ({
           date: entry.date,
@@ -481,7 +481,7 @@ export default function FuelSalesReport() {
     }
   };
 
-  const currency = getCurrencySymbol(state.companyData.currency);
+  const currency = resolveCurrencySymbol(state.companyData.currency, undefined);
 
   return (
     <div className="p-4 md:p-6 space-y-6 text-white min-h-screen">

@@ -23,7 +23,10 @@ import {
 import { useFuel, type Pump } from "@/react-app/context/FuelContext";
 import { usePermissions } from "@/react-app/context/PermissionContext";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
-import { getCurrencySymbol } from "@/react-app/lib/currency";
+import {
+  getCurrencySymbol,
+  resolveCurrencySymbol,
+} from "@/react-app/lib/currency";
 import { useAuth } from "@/react-app/context/AuthContext";
 import { useStations } from "@/react-app/context/StationContext";
 import SubTabBar from "@/react-app/components/SubTabBar";
@@ -302,7 +305,10 @@ export default function FuelTypesManager() {
   const { currentStation } = useStations();
   const { state, dispatch } = useFuel();
   const { hasPermission } = usePermissions();
-  const currencySymbol = getCurrencySymbol(state.companyData?.currency);
+  const currencySymbol = resolveCurrencySymbol(
+    state.companyData?.currency,
+    currentStation?.currency,
+  );
   const stationId = currentStation?.id;
   const [fuelTypes, setFuelTypes] = useState<CustomFuelType[]>(() => {
     const cloudCached = cloudStorageService.getCached<unknown[]>(
