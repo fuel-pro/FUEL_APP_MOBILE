@@ -309,7 +309,7 @@ function saveFuelTypes(types: CustomFuelType[]) {
 export default function FuelTypesManager() {
   const { user } = useAuth();
   const { currentStation } = useStations();
-  const { state } = useFuel();
+  const { state, dispatch } = useFuel();
   const currencySymbol = getCurrencySymbol(state.companyData?.currency);
   const stationId = currentStation?.id;
   const [fuelTypes, setFuelTypes] = useState<CustomFuelType[]>(() => {
@@ -489,9 +489,45 @@ export default function FuelTypesManager() {
   // read the same value. Mirrors the canonical fuel-type price interlink.
   const handleSetPumpCount = (id: string, next: number) => {
     const safe = Math.max(0, Math.min(99, Math.round(next || 0)));
-    persist(
-      fuelTypes.map((f) => (f.id === id ? { ...f, pumpCount: safe } : f)),
+    const updated = fuelTypes.map((f) =>
+      f.id === id ? { ...f, pumpCount: safe } : f,
     );
+    persist(updated);
+    // Sync the legacy pump arrays (state.pmsPumps / agoPumps) for the
+    // canonical petrol/diesel fuel types so the Dashboard "Pump Status",
+    // Sales Tracking, and Pump Mapping tabs reflect the inline change
+    // immediately (they read the legacy arrays, not fuel_types_config).
+    const changed = updated.find((f) => f.id === id);
+    if (changed) {
+      const canonical = normalizeFuelType(changed.name);
+      const makePump = (pid: string, pname: string) => ({
+        id: pid,
+        name: pname,
+        openingKsh: 0,
+        closingKsh: 0,
+        openingL: 0,
+        closingL: 0,
+        salesL: 0,
+        salesKsh: 0,
+      });
+      if (canonical === "petrol") {
+        const existing = state.pmsPumps || [];
+        const newPumps = Array.from(
+          { length: safe },
+          (_, i) =>
+            existing[i] || makePump(`pms-${i + 1}`, `PMS Pump ${i + 1}`),
+        );
+        dispatch({ type: "SET_PMS_PUMPS", payload: newPumps });
+      } else if (canonical === "diesel") {
+        const existing = state.agoPumps || [];
+        const newPumps = Array.from(
+          { length: safe },
+          (_, i) =>
+            existing[i] || makePump(`ago-${i + 1}`, `AGO Pump ${i + 1}`),
+        );
+        dispatch({ type: "SET_AGO_PUMPS", payload: newPumps });
+      }
+    }
   };
 
   // Inline price/cost/tax editors (task: make everything adjustable inline so
