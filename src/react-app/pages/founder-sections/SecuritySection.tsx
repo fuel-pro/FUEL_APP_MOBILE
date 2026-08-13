@@ -917,9 +917,7 @@ export default function SecuritySection({ logAudit }: Props) {
           password of an existing founder.
         </p>
 
-        {credError && (
-          <p className="text-xs text-red-400 mb-2">{credError}</p>
-        )}
+        {credError && <p className="text-xs text-red-400 mb-2">{credError}</p>}
         {credSuccess && (
           <p className="text-xs text-green-400 mb-2">{credSuccess}</p>
         )}

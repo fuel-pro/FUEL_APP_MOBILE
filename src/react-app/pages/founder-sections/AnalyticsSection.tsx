@@ -138,12 +138,10 @@ export default function AnalyticsSection({
 
       // Also fetch audit log summary from cloud store
       try {
-        const { cloudStorageService } = await import(
-          "@/react-app/lib/cloud-storage-service"
-        );
-        const auditLog = await cloudStorageService.get<any[]>(
-          "founder_audit_log",
-        );
+        const { cloudStorageService } =
+          await import("@/react-app/lib/cloud-storage-service");
+        const auditLog =
+          await cloudStorageService.get<any[]>("founder_audit_log");
         if (Array.isArray(auditLog) && auditLog.length > 0) {
           const bySeverity: Record<string, number> = {};
           auditLog.forEach((e) => {
@@ -171,11 +169,7 @@ export default function AnalyticsSection({
 
   useEffect(() => {
     fetchAnalytics();
-    logAudit(
-      "Analytics Viewed",
-      "Analytics dashboard accessed",
-      "info",
-    );
+    logAudit("Analytics Viewed", "Analytics dashboard accessed", "info");
   }, []);
 
   const handleRefresh = () => {
@@ -192,16 +186,11 @@ export default function AnalyticsSection({
    * totalSales, avgSale). Fall back to the parent-provided backend totals
    * (which come from the same endpoint but are always present) when the
    * analytics field isn't returned yet (old Vercel deploy). */
-  const totalRevenue = Number(
-    analytics?.totalRevenue || backendRevenue || 0,
-  );
+  const totalRevenue = Number(analytics?.totalRevenue || backendRevenue || 0);
   const totalSales = Number(analytics?.totalSales || 0);
   const avgSale = Number(analytics?.avgSale || 0);
   const effectiveStationCount = Number(
-    analytics?.stationCount ||
-      backendStationCount ||
-      stationCount ||
-      0,
+    analytics?.stationCount || backendStationCount || stationCount || 0,
   );
 
   /* ─── Fallback: scan localStorage if backend has no data yet ─── */
@@ -534,7 +523,9 @@ export default function AnalyticsSection({
         </h3>
         <div className="grid grid-cols-3 gap-4">
           <div className="text-center p-3 bg-white/[0.02] rounded-lg">
-            <p className="text-2xl font-bold text-white">{effectiveStationCount}</p>
+            <p className="text-2xl font-bold text-white">
+              {effectiveStationCount}
+            </p>
             <p className="text-[10px] text-gray-500">Stations</p>
           </div>
           <div className="text-center p-3 bg-white/[0.02] rounded-lg">

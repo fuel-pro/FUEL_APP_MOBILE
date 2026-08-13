@@ -9,7 +9,7 @@
  * CACHE_VERSION is bumped automatically by a build-time stamp. On activate,
  * all caches from previous versions are purged so stale entries never leak.
  */
-const CACHE_VERSION = "fuelpro-v3-20260813b";
+const CACHE_VERSION = "fuelpro-v3-20260813c-noloop";
 const ASSET_CACHE = CACHE_VERSION + "-assets";
 const NAV_CACHE = CACHE_VERSION + "-nav";
 
@@ -34,25 +34,12 @@ self.addEventListener("activate", (event) => {
       // Take control of all open clients immediately so the new network-first
       // strategy governs the very next fetch (no waiting for a re-navigation).
       await self.clients.claim();
-      // Force every currently-open client to reload so it picks up the new
-      // index.html (network-first) and the latest hashed chunks. This is what
-      // unsticks users who were stranded on an old workbox SW: the instant
-      // this SW activates (via the auto-update path), every tab reloads.
-      const clientList = await self.clients.matchAll({
-        type: "window",
-        includeUncontrolled: true,
-      });
-      await Promise.all(
-        clientList.map((client) =>
-          client
-            .navigate(client.url)
-            .catch(() =>
-              client
-                .postMessage({ type: "FUELPRO_RELOAD", version: CACHE_VERSION })
-                .catch(() => {}),
-            ),
-        ),
-      );
+      // NOTE: We do NOT force-navigate or post FUELPRO_RELOAD here anymore.
+      // The page's controllerchange listener handles the reload (via
+      // safeReload, which is loop-guarded). The previous dual mechanism
+      // (client.navigate + FUELPRO_RELOAD + controllerchange) caused
+      // double-reloads and infinite refresh loops. Now there is exactly
+      // ONE reload path: controllerchange → safeReload.
     })(),
   );
 });

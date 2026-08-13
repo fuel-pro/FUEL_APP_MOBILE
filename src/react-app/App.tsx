@@ -89,7 +89,16 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
       /* ignore */
     }
     this.setState({ hasError: false, error: null });
-    window.location.reload();
+    // Use the loop-guarded reload so an error that keeps happening doesn't
+    // cause an infinite reload loop.
+    if (
+      typeof window !== "undefined" &&
+      typeof window.__fuelproSafeReload === "function"
+    ) {
+      window.__fuelproSafeReload("error-boundary-retry");
+    } else {
+      window.location.reload();
+    }
   };
 
   render() {

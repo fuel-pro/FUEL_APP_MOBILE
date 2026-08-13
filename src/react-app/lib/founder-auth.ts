@@ -525,7 +525,10 @@ export async function grantFounderAccess(input: {
 }): Promise<{ success: boolean; uid?: string; error?: string }> {
   try {
     if (input.password.length < 8) {
-      return { success: false, error: "Password must be at least 8 characters" };
+      return {
+        success: false,
+        error: "Password must be at least 8 characters",
+      };
     }
     const token = getAuthToken();
     const res = await fetch("/api/founder-admin?action=grant", {

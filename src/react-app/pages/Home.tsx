@@ -205,22 +205,42 @@ function HomeContent() {
   }, [user, currentStation, getActiveBinding, setRole]);
 
   // Check for stations in localStorage after wizard completes
-  // This fixes the race condition where createStation hasn't propagated yet
+  // This fixes the race condition where createStation hasn't propagated yet.
+  // IMPORTANT: checks the USER-SCOPED key (fuelpro_stations_v3_<userId>),
+  // not the legacy bare key — using the bare key caused a reload loop when
+  // StationContext hadn't hydrated from the scoped key yet but the bare key
+  // had leftover data. Also uses safeReload (loop-guarded) instead of a
+  // raw window.location.reload().
   useEffect(() => {
     if (!showSetupWizard && stations.length === 0) {
       const interval = setInterval(() => {
         try {
-          const raw = localStorage.getItem("fuelpro_stations_v3");
+          // Resolve the user-scoped stations key (mirrors StationContext).
+          let scopedKey = "fuelpro_stations_v3";
+          const identityRaw = localStorage.getItem("fuelpro_auth_identity");
+          if (identityRaw) {
+            const id = JSON.parse(identityRaw)?.id;
+            if (typeof id === "string" && id)
+              scopedKey = `fuelpro_stations_v3_${id}`;
+          }
+          const raw =
+            localStorage.getItem(scopedKey) ||
+            localStorage.getItem("fuelpro_stations_v3");
           if (raw) {
             const parsed = JSON.parse(raw);
-            // fuelpro_stations_v3 is stored as { stations: [...], version }
-            // (an object), NOT a bare array. Check the nested stations list.
             const stationList = Array.isArray(parsed)
               ? parsed
               : parsed?.stations;
             if (stationList && stationList.length > 0) {
               clearInterval(interval);
-              window.location.reload();
+              if (
+                typeof window !== "undefined" &&
+                typeof window.__fuelproSafeReload === "function"
+              ) {
+                window.__fuelproSafeReload("home-station-found");
+              } else {
+                window.location.reload();
+              }
             }
           }
         } catch {}

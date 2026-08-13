@@ -12,6 +12,10 @@
 /
   Cache-Control: no-cache, no-store, must-revalidate
 
+/version.json
+  Cache-Control: no-cache, no-store, must-revalidate
+  Content-Type: application/json
+
 /manifest.json
   Cache-Control: no-cache, must-revalidate
 

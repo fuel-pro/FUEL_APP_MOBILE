@@ -1,5 +1,12 @@
 /// <reference types="vite/client" />
 
+// Global reload guard injected by index.html — all reload paths go through
+// this to prevent infinite refresh loops.
+interface Window {
+  __fuelproSafeReload?: (reason: string) => boolean;
+  __BUILD_VERSION__?: string;
+}
+
 interface ImportMetaEnv {
   readonly VITE_CLOUDFLARE_ACCOUNT_ID: string;
   readonly VITE_R2_ACCESS_KEY_ID: string;

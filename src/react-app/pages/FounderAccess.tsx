@@ -2188,7 +2188,9 @@ export default function FounderAccess() {
                         </td>
                         <td className="px-4 py-3 text-[11px] text-gray-500">
                           {(() => {
-                            const d = u.lastActive ? new Date(u.lastActive) : null;
+                            const d = u.lastActive
+                              ? new Date(u.lastActive)
+                              : null;
                             return d && !isNaN(d.getTime())
                               ? d.toLocaleDateString()
                               : u.lastActive === "Never"

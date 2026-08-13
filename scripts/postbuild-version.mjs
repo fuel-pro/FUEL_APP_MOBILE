@@ -1,5 +1,13 @@
 // Post-build: copies the build version into dist/version.json so the client
 // can fetch it at runtime to detect stale SW caches.
+//
+// ALSO: overwrites the workbox-generated dist/sw.js with our CUSTOM
+// public/sw.js. The VitePWA plugin (generateSW mode) overwrites dist/sw.js
+// with a workbox SW that calls skipWaiting()+clientsClaim() on every install
+// — this was the ROOT CAUSE of the endless random refresh loop. Our custom
+// sw.js is network-first for navigations and has a loop-guarded activate
+// handler (no force-navigate, no FUELPRO_RELOAD). It does NOT precache
+// assets, so there's no byte-diff → updatefound → reload cycle.
 import fs from "fs";
 import path from "path";
 
@@ -24,3 +32,23 @@ fs.writeFileSync(
   JSON.stringify({ version, built: new Date().toISOString() }, null, 2),
 );
 console.log(`[version-postbuild] dist/version.json written: ${version}`);
+
+// Overwrite the workbox-generated SW with our custom network-first SW.
+const customSwPath = path.join(root, "public", "sw.js");
+const distSwPath = path.join(dist, "sw.js");
+if (fs.existsSync(customSwPath)) {
+  const customSw = fs.readFileSync(customSwPath, "utf-8");
+  fs.writeFileSync(distSwPath, customSw);
+  console.log("[version-postbuild] dist/sw.js overwritten with custom public/sw.js (network-first, loop-guarded)");
+  // Remove ALL workbox runtime files (hashed name changes per build) — our
+  // custom SW doesn't import them, and leaving them in dist wastes bandwidth.
+  const files = fs.readdirSync(dist);
+  for (const f of files) {
+    if (f.startsWith("workbox-") && f.endsWith(".js")) {
+      fs.unlinkSync(path.join(dist, f));
+      console.log(`[version-postbuild] Removed unused workbox runtime: ${f}`);
+    }
+  }
+} else {
+  console.warn("[version-postbuild] public/sw.js not found — workbox SW will be used (NOT recommended)");
+}

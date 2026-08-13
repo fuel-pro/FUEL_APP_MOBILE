@@ -99,10 +99,66 @@
     <div id="root"></div>
     <script type="module" src="/src/react-app/main.tsx"></script>
     <script>
+      // ═══════════════════════════════════════════════════════════════
+      // FUELPRO RELOAD GUARD — prevents ALL infinite refresh/reload loops.
+      // ═══════════════════════════════════════════════════════════════
+      // Every reload path (SW controllerchange, version-check, script-error
+      // self-heal, FUELPRO_RELOAD message) MUST go through safeReload().
+      // safeReload checks a sessionStorage counter — if we've already
+      // reloaded more than MAX_RELOADS times within the RELOAD_WINDOW,
+      // the reload is SUPPRESSED and the user stays on the current page
+      // instead of looping forever. The counter is cleared after a
+      // successful load settles (see the "load" + setTimeout below).
+      (function () {
+        var MAX_RELOADS = 2;        // max reloads allowed per window
+        var RELOAD_WINDOW = 15000;  // 15-second rolling window
+        var KEY = "fuelpro_reload_count";
+        var TS_KEY = "fuelpro_reload_first_ts";
+
+        window.__fuelproSafeReload = function (reason) {
+          try {
+            var now = Date.now();
+            var firstTs = parseInt(sessionStorage.getItem(TS_KEY) || "0", 10);
+            // Reset the window if it has expired.
+            if (firstTs && now - firstTs > RELOAD_WINDOW) {
+              sessionStorage.setItem(KEY, "0");
+              sessionStorage.setItem(TS_KEY, String(now));
+              firstTs = now;
+            }
+            var count = parseInt(sessionStorage.getItem(KEY) || "0", 10);
+            if (count >= MAX_RELOADS) {
+              console.warn("[reload-guard] Suppressing reload (" + reason + ") — limit reached (" + count + "/" + MAX_RELOADS + " in " + RELOAD_WINDOW / 1000 + "s). User stays on page.");
+              return false;
+            }
+            if (!firstTs) sessionStorage.setItem(TS_KEY, String(now));
+            sessionStorage.setItem(KEY, String(count + 1));
+            console.log("[reload-guard] Reloading (" + reason + ") — attempt " + (count + 1) + "/" + MAX_RELOADS);
+            window.location.reload();
+            return true;
+          } catch (e) {
+            // If sessionStorage is unavailable (private mode), just reload.
+            window.location.reload();
+            return true;
+          }
+        };
+
+        // Clear the guard after the page has been stable for 5 seconds —
+        // this means the load SUCCEEDED (no immediate reload) so the user
+        // is not in a loop. The next legitimate reload (minutes/hours
+        // later) starts fresh.
+        window.addEventListener("load", function () {
+          setTimeout(function () {
+            try {
+              sessionStorage.setItem(KEY, "0");
+              sessionStorage.setItem(TS_KEY, "0");
+            } catch (e) {}
+          }, 5000);
+        });
+      })();
+
       // BUILD VERSION STAMP — checked on every load to defeat stale SW caches.
-      // The build process replaces __BUILD_VERSION__ with a timestamp. If the
-      // version served by the SW doesn't match what the server has, we
-      // unregister the SW and force a hard reload.
+      // Only reloads if the SERVER version is NEWER (not just different) and
+      // only if the reload guard allows it.
       window.__BUILD_VERSION__ = "__BUILD_VERSION__";
       (function () {
         if (!window.__BUILD_VERSION__ || window.__BUILD_VERSION__ === "__BUILD_VERSION__") return;
@@ -111,13 +167,21 @@
             .then(function (r) { return r.ok ? r.json() : null; })
             .then(function (data) {
               if (data && data.version && data.version !== window.__BUILD_VERSION__) {
-                console.warn("[version-check] Server version " + data.version + " != client " + window.__BUILD_VERSION__ + " — hard reload");
-                if ("serviceWorker" in navigator) {
-                  navigator.serviceWorker.getRegistrations().then(function (regs) {
-                    return Promise.all(regs.map(function (r) { return r.unregister(); }));
-                  }).then(function () { window.location.reload(); });
+                // Only reload if the server version is NEWER. If the server
+                // has an OLDER version (CDN cache lag during deploy), do NOT
+                // reload — that would cause a loop (old version.json served
+                // alongside new index.html).
+                if (data.version > window.__BUILD_VERSION__) {
+                  console.warn("[version-check] Server version " + data.version + " > client " + window.__BUILD_VERSION__ + " — updating");
+                  if ("serviceWorker" in navigator) {
+                    navigator.serviceWorker.getRegistrations().then(function (regs) {
+                      return Promise.all(regs.map(function (r) { return r.unregister(); }));
+                    }).then(function () { window.__fuelproSafeReload("version-check-newer"); });
+                  } else {
+                    window.__fuelproSafeReload("version-check-newer");
+                  }
                 } else {
-                  window.location.reload();
+                  console.log("[version-check] Server version " + data.version + " <= client " + window.__BUILD_VERSION__ + " (CDN lag) — no reload");
                 }
               }
             })
@@ -126,15 +190,16 @@
       })();
     </script>
     <script>
-      // Service Worker registration with AGGRESSIVE automatic update handling.
+      // Service Worker registration with automatic update handling.
       //
       // The custom public/sw.js is NETWORK-FIRST for navigations, so a fresh
       // index.html is fetched on every page load — deploys are visible
       // immediately. This script also:
       //   - registers on DOMContentLoaded (not waiting for full load) for speed
-      //   - polls for SW updates every 2 min while the tab is open
-      //   - auto-reloads on controllerchange
+      //   - polls for SW updates every 5 min while the tab is open
+      //   - auto-reloads on controllerchange (via safeReload — loop-guarded)
       //   - self-heals: if a script chunk 404s, unregisters the SW + reloads
+      //     (via safeReload — max 1 retry per session, then shows error)
       if ("serviceWorker" in navigator) {
         var refreshing = false;
         navigator.serviceWorker.addEventListener(
@@ -142,7 +207,7 @@
           function () {
             if (refreshing) return;
             refreshing = true;
-            window.location.reload();
+            window.__fuelproSafeReload("sw-controllerchange");
           },
         );
 
@@ -171,10 +236,10 @@
                 handleUpdateFound(reg);
               });
               checkForUpdate(reg);
-              // Poll for updates every 2 minutes while the tab is open.
+              // Poll for updates every 5 minutes while the tab is open.
               setInterval(function () {
                 checkForUpdate(reg);
-              }, 120000);
+              }, 300000);
             })
             .catch(function () {});
         }
@@ -196,15 +261,18 @@
         });
 
         // Honor a forced-reload message from the service worker (the new SW
-        // posts FUELPRO_RELOAD on activate to unstick tabs on an old build).
+        // posts FUELPRO_RELOAD on activate). Loop-guarded via safeReload.
         navigator.serviceWorker.addEventListener("message", function (event) {
           if (event.data && event.data.type === "FUELPRO_RELOAD") {
-            window.location.reload();
+            window.__fuelproSafeReload("sw-fuelpro-reload");
           }
         });
 
         // Stale-SW self-heal: if a script chunk fails to load, unregister the
-        // SW and reload so the browser fetches fresh assets.
+        // SW and reload so the browser fetches fresh assets. Loop-guarded:
+        // safeReload limits this to MAX_RELOADS per session; if the chunk
+        // still 404s after that, the user stays on the page (the React
+        // ErrorBoundary will show a retry button instead of looping).
         window.addEventListener(
           "error",
           function (event) {
@@ -229,10 +297,10 @@
                   );
                 })
                 .then(function () {
-                  window.location.reload();
+                  window.__fuelproSafeReload("sw-script-404");
                 })
                 .catch(function () {
-                  window.location.reload();
+                  window.__fuelproSafeReload("sw-script-404-fallback");
                 });
             }
           },

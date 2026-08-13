@@ -1518,7 +1518,8 @@ function normalizeConnector(raw: any): IntegrationConnector {
         ? raw.icon
         : Plug;
   return {
-    id: raw.id || `conn_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    id:
+      raw.id || `conn_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
     name: raw.name || "Unnamed Connector",
     category: raw.category || raw.cat || "Other",
     description: raw.description || raw.desc || "",
@@ -1543,7 +1544,8 @@ function normalizeConnectors(raw: any): IntegrationConnector[] {
 // JSON.stringify) and re-map it back to a component on load via ICON_MAP.
 const COMPONENT_TO_ICON_NAME = new Map<any, string>();
 for (const [name, comp] of Object.entries(ICON_MAP)) {
-  if (comp && typeof comp === "function") COMPONENT_TO_ICON_NAME.set(comp, name);
+  if (comp && typeof comp === "function")
+    COMPONENT_TO_ICON_NAME.set(comp, name);
 }
 // Plug is the fallback icon; ensure it's in the reverse map too.
 if (!COMPONENT_TO_ICON_NAME.has(Plug)) COMPONENT_TO_ICON_NAME.set(Plug, "Plug");
