@@ -98,10 +98,10 @@
     "wrangler": "^4.120.1"
   },
   "scripts": {
-    "build": "vite build",
+    "build": "node scripts/stamp-version.mjs && vite build && node scripts/postbuild-version.mjs",
     "build:api": "echo 'No API server needed - using Firebase directly'",
-    "build:vercel": "vite build",
-    "build:static": "vite build",
+    "build:vercel": "node scripts/stamp-version.mjs && vite build && node scripts/postbuild-version.mjs",
+    "build:static": "node scripts/stamp-version.mjs && vite build && node scripts/postbuild-version.mjs",
     "dev": "vite",
     "start": "NODE_ENV=production node dist/boot.js",
     "start:api": "NODE_ENV=production node dist-api/boot.js",
