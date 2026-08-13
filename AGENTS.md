@@ -4698,3 +4698,36 @@ adapting to the station's configured fuel types (NOT hardcoded to PMS/AGO):
 
 All three tabs show the SAME fuel types and prices, dynamically generated from
 the station's `fuel_types_config` (cloud-backed, cross-device).
+
+
+## Founder Console nav section-switch — NavItem component type instability (FIXED 2026-08-13, commit 20dc90a)
+
+**Symptom**: The Founder Access Global Console (`/#/founder`) was stuck on
+the Overview section. Clicking any sidebar nav item (All Users, All Stations,
+Secrets, Audit Log, etc.) re-rendered the page but `activeSection` never
+changed — the header stayed "Super Admin | Overview" and the content never
+switched. This had been "fixed" before (commit ae5f31f, infinite render loop)
+but the same regression returned.
+
+**Root cause — TWO compounding bugs**:
+
+1. **NavItem defined INSIDE the component body** (the real blocker). The
+   `NavItem` component was declared as `const NavItem = ({...}) => (...)`
+   inside the `FounderAccess` function body. Every re-render created a NEW
+   function reference → React treated it as a NEW component TYPE → it
+   UNMOUNTED all old NavItem instances and MOUNTED new ones on every
+   re-render → click handlers were lost during the unmount/remount cycle.
+
+2. **activeSection via useState torn by concurrent-mode render
+   cancellation**. The massive render tree (30+ section components + cloud
+   store hooks + tRPC queries) caused React to cancel the re-render before
+   it committed, so `activeSection` fell back to "overview".
+
+**Fix**: NavItem moved to MODULE scope (stable component type) +
+activeSection tracked via URL hash query param (`#/founder?s=users`) with
+hashchange listener for re-render. Verified live on Cloudflare preview
+df255e79 + main alias fuel-app-mobile.pages.dev.
+
+**Deploy state 2026-08-13**: GitHub main commit 20dc90a pushed. Cloudflare
+LIVE. Vercel BLOCKED by api-deployments-free-per-day (auto-deploys when quota
+resets). Supabase: no schema changes.
