@@ -60,17 +60,43 @@ export default function FuelOffloading() {
   // Build the fuel-type option list ONCE per render (avoids recomputing inside
   // the JSX map which re-renders the <select> on every keystroke and resets
   // its value).
+  // Includes: the station's configured active fuel types + any fuel types
+  // that appear in existing offloading records (so users can filter by
+  // legacy/historical fuel types too).
   const fuelOptions = useMemo(() => {
-    return fuelTypeApi.activeFuelTypes.length > 0
-      ? fuelTypeApi.activeFuelTypes.map((ft) => ({
-          value: getFuelCode(ft.name) || ft.name,
-          label: getFuelLabel(ft.name),
-        }))
-      : [
-          { value: "PMS", label: "Super Petrol" },
-          { value: "AGO", label: "Diesel" },
-        ];
-  }, [fuelTypeApi.activeFuelTypes]);
+    const opts: { value: string; label: string }[] = [];
+    const seen = new Set<string>();
+
+    // 1. Station's configured active fuel types
+    for (const ft of fuelTypeApi.activeFuelTypes) {
+      const code = getFuelCode(ft.name) || ft.name;
+      if (!seen.has(code)) {
+        seen.add(code);
+        opts.push({ value: code, label: getFuelLabel(ft.name) });
+      }
+    }
+
+    // 2. Fuel types from existing records (covers legacy data + fuels no
+    //    longer in the station config but still in historical records)
+    for (const rec of records) {
+      const raw = rec.fuelType || "";
+      if (!raw) continue;
+      const code = getFuelCode(raw) || raw;
+      if (!seen.has(code)) {
+        seen.add(code);
+        opts.push({ value: code, label: getFuelLabel(raw) });
+      }
+    }
+
+    // 3. Fallback for stations with no configured fuel types AND no records
+    if (opts.length === 0) {
+      opts.push(
+        { value: "PMS", label: "Super Petrol" },
+        { value: "AGO", label: "Diesel" },
+      );
+    }
+    return opts;
+  }, [fuelTypeApi.activeFuelTypes, records]);
 
   // Default to the FIRST active fuel type instead of the hardcoded "PMS"
   // (which made no sense for a diesel-only or kerosene station).
