@@ -4613,3 +4613,88 @@ LOAD_FROM_STORAGE now guards salesHistory/debtHistory/invoices/clients against s
 - Vercel: BLOCKED (api-deployments-free-per-day 100/100; auto-deploys when quota resets)
 - Supabase: no schema changes
 - Verified live: all 5 sub-tabs render, tsc -b 0 errors, build 112 precache success
+
+## Founder username login + credential manager (DEPLOYED LIVE 2026-08-13, commit c4100c3)
+
+Added username-based founder login on top of the already-merged
+founder-console-enhancement. The Founder Console is now fully linked to backend.
+
+- **Migration 018** (`supabase/migrations/018_founder_credentials.sql`, APPLIED
+  LIVE): `founder_credentials` table (username UNIQUE, auth_email, unique_id,
+  display_name, is_active). RLS: public read (for login lookup — password still
+  protects auth), founder/admin write. Seeds `FOUNDER` ->
+  `founder.qa.fuelpro@gmail.com` (unique_id `FPRQA2026`).
+- **founder-auth.ts**: `loginFounder` resolves usernames via
+  `founder_credentials` table (case-insensitive `ilike`). Login with `FOUNDER`
+  or a direct email both work. New functions: `listFounderCredentials`,
+  `upsertFounderCredential`, `deleteFounderCredential`, `grantFounderAccess` —
+  all use Supabase `founder_credentials` + `profiles` tables (cloud-backed,
+  cross-device).
+- **SecuritySection.tsx**: Founder Credential Manager UI — list all founder
+  credentials, create/edit/delete, grant founder access. Shows username->email
+  mapping, unique ID, display name, active status.
+- **FounderAccess.tsx**: Fixed "Invalid Date" in All Users last-active column
+  (commit 0b13d04). The `lastActive` field was "Never" (string) when
+  `last_sign_in_at` was null, but the table renderer called
+  `new Date("Never")` which produces Invalid Date. Now validates with
+  `isNaN` check before formatting.
+
+### Deploy status 2026-08-13
+
+- GitHub main: commit 0b13d04 (pushed, synced with origin/main)
+- Cloudflare Pages: LIVE (preview https://05ef0ceb.fuel-app-mobile.pages.dev +
+  main alias https://fuel-app-mobile.pages.dev)
+- Vercel production: BLOCKED by `api-deployments-free-per-day` (100/100;
+  resets ~24h). GitHub integration auto-deploys when quota resets.
+- Supabase: migration 018 applied live (`founder_credentials` table with
+  FOUNDER seed row)
+
+### Live verification (Cloudflare preview 05ef0ceb)
+
+- **Founder Console login**: logged in with username `FOUNDER` + password
+  `FuelPro@2026!` -> resolved to `founder.qa.fuelpro@gmail.com` via
+  `founder_credentials` table -> Supabase `signInWithPassword` -> role check
+  (founder) -> success. Console loaded with real backend data.
+- **Overview**: Users 33, Stations 19, Revenue $0, Secrets 3, Feature Flags 10,
+  Audit Events 1, Webhooks 0, API Keys 0 — all from `/api/founder-stats` +
+  cloud stores.
+- **Secrets section**: 3 secrets (ADMIN_SECRET_CODE, ADMIN_USERNAME,
+  ADMIN_PASSWORD) from `founder_console_secrets` cloud key. Search, category
+  filter, Export, Import, Add Secret all working.
+- **Security & 2FA**: password change, 2FA setup, Founder Credential Manager
+  with "Grant / Add" button, session management.
+- **Dev Control Center**: Live Event Stream (real-time), Cloud KV Inspector,
+  Batch Operations, System Diagnostics, Deploy Manager. "Live" status badge.
+- **All Users**: 33 real users from Supabase `users` table, each with name,
+  email, role, station count, status, action buttons. Export CSV/JSON.
+- **All 40+ sidebar sections** render correctly (Overview, All Users, All
+  Stations, Analytics, Secrets, Audit Log, Feature Flags, Console Settings,
+  System Health, Security & 2FA, Rate Limits, Backup & Restore, Site Config,
+  Notifications, Branding, Email Templates, Paywall Control, Payment Methods,
+  Pricing Manager, Sub. Dashboard, Coupons, Payments, Trial Analytics,
+  Performance Center, API & Webhooks, Maintenance, Data Manager, Dev Control
+  Center, AI Website Editor, Command Palette, Webhooks, API Keys, Scheduled
+  Jobs, A/B Experiments, Health Checks, Database Query, Cache Manager,
+  Announcements, Maint. Windows, IP Blocklist, CORS Config, Env Variables,
+  Localization, Error Tracker, Sessions, Log Streams, Webhook Logs, Task Queue,
+  Role Matrix, Release Coord., Migrations, Storage, API Rate Limits).
+
+### Dynamic fuel-type system verification (ALREADY IMPLEMENTED, verified live)
+
+The dynamic fuel-type system was implemented in prior sessions (commits
+e362725, 1ed2515, f26f921, c7cac7b, 843c957). Verified live on Cloudflare
+preview 05ef0ceb that all three tabs the user mentioned are dynamically
+adapting to the station's configured fuel types (NOT hardcoded to PMS/AGO):
+
+- **Dashboard "Current Pump Prices"**: 3 dynamic cards (LPG $120/L, Kerosene
+  $5000/L, V-Power $4800/L) — built from `fuelTypeApi.activeFuelTypes`.
+- **POS "Quick Fuel Sale"**: 3 dynamic buttons (LPG $120/L, Kerosene $5000/L,
+  V-Power $4800/L) — same fuel types + prices as Dashboard.
+- **Sales Tracking**: 3 dynamic pump tables (LPG, Kerosene, V-Power) with
+  "Add [fuel] Pump" buttons — NOT limited to PMS/AGO. Added an LPG pump
+  (LPG-1-qme1) and saved successfully.
+- **Setup Wizard**: supports adding extra fuel types (Kerosene, LPG, V-Power,
+  premium_diesel, CNG) with pump counts + prices; seeds `fuel_types_config`.
+
+All three tabs show the SAME fuel types and prices, dynamically generated from
+the station's `fuel_types_config` (cloud-backed, cross-device).
