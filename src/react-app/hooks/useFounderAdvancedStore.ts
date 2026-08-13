@@ -743,13 +743,20 @@ function useCloudList<T>(
     if (cloud && isValue(cloud)) {
       setDataState(cloud);
     } else {
+      // Use the default locally but DON'T write to cloud here — writing
+      // triggers a realtime echo that re-runs setDataState with a new array
+      // reference, and with 23 stores doing this on mount the cascade of
+      // echoes caused a re-render storm that broke section navigation.
+      // The default is persisted lazily on the first real setData() call.
       setDataState(defaultValue);
-      cloudStorageService.set(key, defaultValue, stationId).catch(() => {});
     }
     setLoading(false);
   }, [key, stationId]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const loadedRef = useRef(false);
   useEffect(() => {
+    if (loadedRef.current) return; // load once per mount, not per re-render
+    loadedRef.current = true;
     load();
     const unsub = cloudStorageService.subscribe<T[]>(
       key,

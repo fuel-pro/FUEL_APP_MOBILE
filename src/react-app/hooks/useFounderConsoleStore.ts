@@ -292,6 +292,7 @@ export function useFounderConsoleStore(
       )) as ConsoleSecret[] | null;
       if (legacy && Array.isArray(legacy) && legacy.length > 0) {
         setSecrets(legacy);
+        skipEcho.current[KEYS.secrets] = true; // suppress realtime echo from this write
         cloudStorageService
           .set(KEYS.secrets, legacy, stationId)
           .catch(() => {});
@@ -329,6 +330,7 @@ export function useFounderConsoleStore(
           ? legacy
           : DEFAULT_FLAGS;
       setFlags(base);
+      skipEcho.current[KEYS.flags] = true; // suppress realtime echo from this write
       cloudStorageService.set(KEYS.flags, base, stationId).catch(() => {});
     }
 
@@ -351,6 +353,7 @@ export function useFounderConsoleStore(
               },
             ];
       setAudit(base);
+      skipEcho.current[KEYS.audit] = true; // suppress realtime echo from this write
       cloudStorageService.set(KEYS.audit, base, stationId).catch(() => {});
     }
 
