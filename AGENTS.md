@@ -4731,3 +4731,13 @@ df255e79 + main alias fuel-app-mobile.pages.dev.
 **Deploy state 2026-08-13**: GitHub main commit 20dc90a pushed. Cloudflare
 LIVE. Vercel BLOCKED by api-deployments-free-per-day (auto-deploys when quota
 resets). Supabase: no schema changes.
+
+## Integration Hub cloud-load race + echo guard fix (DEPLOYED LIVE 2026-08-13, commit a453c09)
+
+CRITICAL: webhooks/API keys silently wiped on fresh device. Cloud-load effect overwrote newly-added state before save could persist. Same class as PayrollSystem/Communication/FuelContext cloudLoadCompleteRef bug.
+
+Fix: cloudLoadCompleteRef guard (reset on user/station change, set true in finally). Per-type skip flags (skipRemoteConnRef/skipRemoteWhRef/skipRemoteKeyRef) replacing shared skipRemoteRef. try/catch/finally on cloud load.
+
+Verified live on Cloudflare preview 77c6ed05 (fresh deploy): all Integration Hub data (Stripe connected, QA Test Webhook, QA Test API Key fp_1357dd49c...1131, 7 log entries) synced from previous deployment. CSV/JSON export + Payment Setup (country-aware) working.
+
+Deploy: GitHub a453c09 pushed. Cloudflare LIVE. Vercel BLOCKED (quota, auto-deploys on reset). Supabase: no schema changes.
