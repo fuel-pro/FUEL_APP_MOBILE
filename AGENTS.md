@@ -3950,3 +3950,35 @@ V-Power):
 - **Supabase**: no schema changes (fuel-type config persists in the
   `fuel_types_config` cloud key + compact blob `fuelTankValuesByType`).
 - `npx tsc --noEmit` (0 errors), `npm run build` (111 precache), prettier pass.
+
+
+## Dynamic fuel types in ALL export/print/download functions (DEPLOYED LIVE 2026-08-13, commit 35b9e97)
+
+Rewrote ALL sales/delivery/reports export functions to iterate the station configured fuel types (Kerosene, V-Power, LPG, etc.) instead of the hardcoded Petrol (PMS) + Diesel (AGO). A station with N fuel types now gets N pump tables in PDF/Excel/TXT, N tank sections, N price lines, N summary lines, and N columns in the Fuel Sales Report.
+
+### exportUtils.ts
+- Added deriveFuelTypes(), getPumpsForType(), getPriceForType(), getTankForType() helpers.
+- exportSalesPDF/Excel/TXT: dynamic per fuel type.
+- exportDeliveryPDF/Excel/TXT: dynamic fuel prices, year fallback new Date().getFullYear().
+
+### FuelSalesReport.tsx (full rewrite)
+- SalesEntry uses fuelSales: Record<type, {sales, litres}>.
+- useStationFuelTypes hook + trackedFuelTypes memo + computeFuelSales() helper.
+- Quick Stats, table, totals all dynamic per fuel type.
+
+### ReportsCenter.tsx
+- VAT return + Daily Sales Register iterate fuelPumpsByType for ALL fuel types.
+
+### silent-print-service.ts + printer-service.ts
+- Dynamic fuel-type columns in sales report HTML.
+- Removed hardcoded +254 700 000 000 phone fallbacks and en-KE locale.
+
+### Verification (live, Cloudflare preview 2c52ffaf)
+- Station with LPG, Kerosene, V-Power (no Petrol/Diesel).
+- Dashboard: 3 price cards, 3 tank bars, 3 pump counts.
+- Sales Tracking: 3 dynamic pump tables, daily summary shows all 3 types.
+- Deployed chunk has fuelPumpsByType, fuelTankValuesByType, fuelSales, fuelTypes.
+
+### Deploy state
+- GitHub: PR #131 OPEN. Cloudflare: LIVE. Vercel: blocked by quota. Supabase: no schema changes.
+- tsc 0 errors, build 111 precache, prettier pass.
