@@ -3982,3 +3982,25 @@ founder chunk `founder-DaYzPG3o.js` matches local and contains the
   in `app_kv`, scoped by owner). Verified live.
 - `npx tsc --noEmit` (0 errors), `npm run build` (success), `prettier
   --check` (all pass).
+
+
+## Session 2026-08-13 (cont.) — Inline pump stepper now syncs Dashboard Pump Status
+
+The inline number-of-pumps control in FuelTypesManager previously only
+wrote `fuel_types_config.pumpCount`, leaving the Dashboard "Pump Status"
+(which reads the legacy `state.pmsPumps`/`agoPumps` arrays) stale. Now
+`handleSetPumpCount` ALSO dispatches `SET_PMS_PUMPS` / `SET_AGO_PUMPS`
+for the canonical petrol/diesel fuel types, so the inline change
+propagates to Dashboard, Sales Tracking, and Pump Mapping instantly.
+
+**Verified LIVE** on Cloudflare preview `12cb387a`: logged in fresh,
+opened Fuel Type Manager (via Dashboard "Edit Prices"), clicked the
+Super Petrol "+" stepper twice -> pump count 1->3; the Fuel Type Manager
+summary showed "6 Total Pumps" (3+1+1+1); navigated to Dashboard ->
+"Pump Status" now shows **3 Super Petrol Pumps** (matches the inline
+change). Cross-device cloud sync confirmed (fuel_types_config row has
+pumpCount: 3). The Pump Settings -> Fuel Types merge is now FULLY wired
+end-to-end.
+
+Commit `4ee9f61`. Cloudflare LIVE (preview `12cb387a` + main alias).
+Vercel: GitHub integration auto-deploys when quota resets.
