@@ -22,7 +22,7 @@ CREATE POLICY "stations_member_select" ON stations FOR SELECT
       SELECT 1 FROM station_members
       WHERE station_members.station_id = stations.id
         AND station_members.user_id = auth.uid()
-        AND station_members.status = 'accepted'
+        AND station_members.status IN ('accepted', 'active')
     )
   );
 
@@ -40,7 +40,7 @@ CREATE POLICY "products_member_select" ON products FOR SELECT
     EXISTS (
       SELECT 1 FROM station_members sm
       JOIN stations s ON s.id = sm.station_id
-      WHERE sm.user_id = auth.uid() AND sm.status = 'accepted'
+      WHERE sm.user_id = auth.uid() AND sm.status IN ('accepted', 'active')
         AND products.station_id = sm.station_id
     )
   );
@@ -52,7 +52,7 @@ CREATE POLICY "sales_enhanced_member_select" ON sales_enhanced FOR SELECT
   USING (
     EXISTS (
       SELECT 1 FROM station_members sm
-      WHERE sm.user_id = auth.uid() AND sm.status = 'accepted'
+      WHERE sm.user_id = auth.uid() AND sm.status IN ('accepted', 'active')
         AND sales_enhanced.station_id = sm.station_id
     )
   );
@@ -64,7 +64,7 @@ CREATE POLICY "inventory_member_select" ON inventory FOR SELECT
   USING (
     EXISTS (
       SELECT 1 FROM station_members sm
-      WHERE sm.user_id = auth.uid() AND sm.status = 'accepted'
+      WHERE sm.user_id = auth.uid() AND sm.status IN ('accepted', 'active')
         AND inventory.station_id = sm.station_id
     )
   );
@@ -76,7 +76,7 @@ CREATE POLICY "pumps_member_select" ON pumps FOR SELECT
   USING (
     EXISTS (
       SELECT 1 FROM station_members sm
-      WHERE sm.user_id = auth.uid() AND sm.status = 'accepted'
+      WHERE sm.user_id = auth.uid() AND sm.status IN ('accepted', 'active')
         AND pumps.station_id = sm.station_id
     )
   );
@@ -89,7 +89,7 @@ CREATE POLICY "sales_enhanced_member_insert" ON sales_enhanced FOR INSERT
   WITH CHECK (
     EXISTS (
       SELECT 1 FROM station_members sm
-      WHERE sm.user_id = auth.uid() AND sm.status = 'accepted'
+      WHERE sm.user_id = auth.uid() AND sm.status IN ('accepted', 'active')
         AND sales_enhanced.station_id = sm.station_id
     )
   );
@@ -101,7 +101,7 @@ CREATE POLICY "inventory_transactions_member_insert" ON inventory_transactions F
   WITH CHECK (
     EXISTS (
       SELECT 1 FROM station_members sm
-      WHERE sm.user_id = auth.uid() AND sm.status = 'accepted'
+      WHERE sm.user_id = auth.uid() AND sm.status IN ('accepted', 'active')
         AND inventory_transactions.station_id = sm.station_id
     )
   );

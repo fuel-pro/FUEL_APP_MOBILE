@@ -793,12 +793,12 @@ async function syncStationsWithSupabase(
     .eq("owner_id", userId)
     .order("created_at", { ascending: true });
 
-  // Fetch stations where the user is an accepted member (invited by the owner)
+  // Fetch stations where the user is an accepted/active member (invited by the owner)
   const { data: memberData, error: memberError } = await supabase
     .from("stations")
     .select("*, station_members!inner(user_id, status)")
     .eq("station_members.user_id", userId)
-    .eq("station_members.status", "accepted")
+    .in("station_members.status", ["accepted", "active"])
     .neq("owner_id", userId)
     .order("created_at", { ascending: true });
 
@@ -838,7 +838,7 @@ async function syncStationsWithSupabase(
           .from("station_members")
           .select("station_id")
           .eq("user_id", userId)
-          .eq("status", "accepted");
+          .in("status", ["accepted", "active"]);
         if (memberRows && memberRows.length > 0) {
           const memberStationIds = memberRows.map((m: any) => m.station_id);
           const { data: memberStations } = await supabase

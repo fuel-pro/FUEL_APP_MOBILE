@@ -814,7 +814,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .from("station_members")
         .select("station_id, role, status, name")
         .or(`user_id.eq.${user.id},invited_email.eq.${user.email}`)
-        .eq("status", "accepted");
+        .in("status", ["accepted", "active"]);
       if (error) {
         console.warn(
           "[AuthContext] syncBindingsFromCloud error:",
