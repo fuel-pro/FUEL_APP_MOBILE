@@ -545,7 +545,25 @@ export default function Dashboard() {
         (s: number, p: any) => s + (p.salesKsh || 0),
         0,
       );
-      revenue += pmsTotal + agoTotal;
+      // Also count POS sales (from PointOfSale tab) — previously these were
+      // silently excluded, so a completed POS sale never showed in Total Revenue.
+      const pos = entry.posSales || {};
+      const posPms = pos.pmsAmount || 0;
+      const posAgo = pos.agoAmount || 0;
+      const posByType = Object.values(pos.byTypeAmount || {}).reduce(
+        (s: number, v: any) => s + (Number(v) || 0),
+        0,
+      );
+      // byTypeAmount may include PMS/AGO too, so avoid double-counting:
+      // prefer byTypeAmount when present (it's the canonical record), else
+      // fall back to pmsAmount + agoAmount.
+      const posTotal =
+        Object.keys(pos.byTypeAmount || {}).length > 0
+          ? posByType
+          : posPms + posAgo;
+      revenue += pmsTotal + agoTotal + posTotal;
+
+      // Fuel sold: pump litres + POS litres
       fuel += (entry.pmsPumps || []).reduce(
         (s: number, p: any) => s + (p.salesL || 0),
         0,
@@ -554,6 +572,16 @@ export default function Dashboard() {
         (s: number, p: any) => s + (p.salesL || 0),
         0,
       );
+      const posLitresByType = Object.values(pos.byTypeLitres || {}).reduce(
+        (s: number, v: any) => s + (Number(v) || 0),
+        0,
+      );
+      const posLitres =
+        Object.keys(pos.byTypeLitres || {}).length > 0
+          ? posLitresByType
+          : (pos.pmsLitres || 0) + (pos.agoLitres || 0);
+      fuel += posLitres;
+
       expenses += (entry.expenses || []).reduce(
         (s: number, e: any) => s + (e.amount || 0),
         0,
@@ -579,7 +607,17 @@ export default function Dashboard() {
             (s: number, p: any) => s + (p.salesKsh || 0),
             0,
           );
-          return pms + ago;
+          // Include POS sales for today too
+          const pos = e.posSales || {};
+          const posByType = Object.values(pos.byTypeAmount || {}).reduce(
+            (s: number, v: any) => s + (Number(v) || 0),
+            0,
+          );
+          const posTotal =
+            Object.keys(pos.byTypeAmount || {}).length > 0
+              ? posByType
+              : (pos.pmsAmount || 0) + (pos.agoAmount || 0);
+          return pms + ago + posTotal;
         })()
       : 0;
 
