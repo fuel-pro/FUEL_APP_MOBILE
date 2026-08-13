@@ -142,6 +142,8 @@ export function useLocalDashboardData(
     let expenses = 0;
 
     history.forEach((entry: any) => {
+      // DYNAMIC: sum revenue + litres across ALL fuel types (was hardcoded
+      // PMS/AGO only, silently dropping Kerosene/LPG/V-Power sales).
       const pmsTotal = (entry.pmsPumps || []).reduce(
         (s: number, p: any) => s + (p.salesKsh || 0),
         0,
@@ -159,6 +161,19 @@ export function useLocalDashboardData(
         (s: number, p: any) => s + (p.salesL || 0),
         0,
       );
+      // Dynamic fuel types (Kerosene, V-Power, LPG, …)
+      if (entry.fuelPumpsByType && typeof entry.fuelPumpsByType === "object") {
+        for (const pumps of Object.values(entry.fuelPumpsByType)) {
+          revenue += (pumps as any[]).reduce(
+            (s: number, p: any) => s + (p.salesKsh || 0),
+            0,
+          );
+          fuel += (pumps as any[]).reduce(
+            (s: number, p: any) => s + (p.salesL || 0),
+            0,
+          );
+        }
+      }
       expenses += (entry.expenses || []).reduce(
         (s: number, e: any) => s + (e.amount || 0),
         0,

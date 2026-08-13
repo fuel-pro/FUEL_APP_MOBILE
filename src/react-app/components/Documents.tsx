@@ -488,18 +488,57 @@ export default function Documents() {
     } else if (type === "sales") {
       const sales = data.salesHistory || [];
       content = sales
-        .map(
-          (s: any) => `
+        .map((s: any) => {
+          // DYNAMIC: render ALL fuel types, not just PMS/AGO. Legacy
+          // entries have pmsPumps/agoPumps; newer entries have
+          // fuelPumpsByType with any canonical fuel type.
+          const fuelLines: string[] = [];
+          const addFuelLine = (label: string, revenue: number) => {
+            if (revenue > 0)
+              fuelLines.push(
+                `<p><strong>${label}:</strong> ${formatCurrency(revenue)}</p>`,
+              );
+          };
+          // Legacy PMS/AGO
+          const pmsRev = (s.pmsPumps || []).reduce(
+            (sum: number, p: any) => sum + (p.salesKsh || 0),
+            0,
+          );
+          const agoRev = (s.agoPumps || []).reduce(
+            (sum: number, p: any) => sum + (p.salesKsh || 0),
+            0,
+          );
+          addFuelLine(getFuelLabel("PMS"), pmsRev);
+          addFuelLine(getFuelLabel("AGO"), agoRev);
+          // Dynamic fuel types
+          if (s.fuelPumpsByType && typeof s.fuelPumpsByType === "object") {
+            for (const [ft, pumps] of Object.entries(s.fuelPumpsByType)) {
+              if (ft === "petrol" || ft === "diesel") continue;
+              const rev = (pumps as any[]).reduce(
+                (sum: number, p: any) => sum + (p.salesKsh || 0),
+                0,
+              );
+              addFuelLine(
+                getFuelLabel(ft) || ft.charAt(0).toUpperCase() + ft.slice(1),
+                rev,
+              );
+            }
+          }
+          // Fallback: if no per-type lines, show the grand total
+          const fuelHtml =
+            fuelLines.length > 0
+              ? fuelLines.join("")
+              : `<p><strong>Total:</strong> ${formatCurrency(s.grandTotalKsh || 0)}</p>`;
+          return `
         <div class="card">
           <h3>${formatDate(s.date)} - ${s.shift || "Day"}</h3>
-          <p><strong>${getFuelLabel("PMS")}:</strong> ${formatCurrency(s.totalPMSSalesKsh || 0)}</p>
-          <p><strong>${getFuelLabel("AGO")}:</strong> ${formatCurrency(s.totalAGOSalesKsh || 0)}</p>
-          <p><strong>Total:</strong> ${formatCurrency(s.grandTotalKsh || 0)}</p>
+          ${fuelHtml}
+          <p><strong>Grand Total:</strong> ${formatCurrency(s.grandTotalKsh || 0)}</p>
           <p><strong>Cash:</strong> ${formatCurrency(s.cashPayments || 0)}</p>
           <p><strong>M-Pesa:</strong> ${formatCurrency(s.mpesaPayments || 0)}</p>
         </div>
-      `,
-        )
+      `;
+        })
         .join("");
     } else if (type === "mpesa" && Array.isArray(data)) {
       content = data
@@ -625,7 +664,11 @@ export default function Documents() {
         title: "Sales Tracking",
         data: {
           salesHistory: state.salesHistory,
-          pumps: { pms: state.pmsPumps, ago: state.agoPumps },
+          pumps: {
+            pms: state.pmsPumps,
+            ago: state.agoPumps,
+            fuelPumpsByType: state.fuelPumpsByType,
+          },
           expenses: state.expenses,
         },
         type: "sales",

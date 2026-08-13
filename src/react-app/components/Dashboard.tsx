@@ -727,8 +727,33 @@ export default function Dashboard() {
   // Chart data - Sales over last 7 days
   const salesChartData = useMemo(() => {
     const days: string[] = [];
-    const pmsData: number[] = [];
-    const agoData: number[] = [];
+    // Collect ALL fuel types that appear in the sales history (dynamic,
+    // not hardcoded to PMS/AGO). A station with Kerosene/LPG/V-Power gets
+    // a line for each.
+    const allFuelTypes = new Set<string>();
+    Object.values(state.salesHistory).forEach((entry: any) => {
+      if (entry.fuelPumpsByType) {
+        Object.keys(entry.fuelPumpsByType).forEach((t) => {
+          if (t) allFuelTypes.add(t);
+        });
+      }
+      // Legacy entries store pmsPumps/agoPumps separately
+      if (entry.pmsPumps?.length) allFuelTypes.add("petrol");
+      if (entry.agoPumps?.length) allFuelTypes.add("diesel");
+    });
+    // If no history yet, fall back to the station's configured fuel types
+    if (allFuelTypes.size === 0 && state.fuelTypes?.length > 0) {
+      state.fuelTypes.forEach((ft: any) => {
+        if (ft.isActive && ft.canonicalType) allFuelTypes.add(ft.canonicalType);
+      });
+    }
+    if (allFuelTypes.size === 0) {
+      allFuelTypes.add("petrol");
+      allFuelTypes.add("diesel");
+    }
+
+    const seriesData: Record<string, number[]> = {};
+    allFuelTypes.forEach((t) => (seriesData[t] = []));
 
     for (let i = 6; i >= 0; i--) {
       const d = new Date();
@@ -736,82 +761,153 @@ export default function Dashboard() {
       const dateStr = d.toISOString().split("T")[0];
       days.push(d.toLocaleDateString("en-US", { weekday: "short" }));
 
-      let pms = 0,
-        ago = 0;
+      const dayTotals: Record<string, number> = {};
+      allFuelTypes.forEach((t) => (dayTotals[t] = 0));
+
       Object.entries(state.salesHistory).forEach(
         ([key, entry]: [string, any]) => {
           if (key.startsWith(dateStr)) {
-            pms += (entry.pmsPumps || []).reduce(
+            // New format: fuelPumpsByType
+            if (entry.fuelPumpsByType) {
+              Object.entries(entry.fuelPumpsByType).forEach(
+                ([type, pumps]: [string, any]) => {
+                  if (!dayTotals[type]) dayTotals[type] = 0;
+                  dayTotals[type] += (pumps || []).reduce(
+                    (s: number, p: any) => s + (p.salesKsh || 0),
+                    0,
+                  );
+                },
+              );
+            }
+            // Legacy: pmsPumps/agoPumps
+            const pmsRev = (entry.pmsPumps || []).reduce(
               (s: number, p: any) => s + (p.salesKsh || 0),
               0,
             );
-            ago += (entry.agoPumps || []).reduce(
+            const agoRev = (entry.agoPumps || []).reduce(
               (s: number, p: any) => s + (p.salesKsh || 0),
               0,
             );
+            if (pmsRev > 0)
+              dayTotals["petrol"] = (dayTotals["petrol"] || 0) + pmsRev;
+            if (agoRev > 0)
+              dayTotals["diesel"] = (dayTotals["diesel"] || 0) + agoRev;
           }
         },
       );
-      pmsData.push(pms);
-      agoData.push(ago);
+      allFuelTypes.forEach((t) => seriesData[t].push(dayTotals[t] || 0));
     }
+
+    const colors = [
+      "rgb(34, 197, 94)",
+      "rgb(234, 179, 8)",
+      "rgb(99, 102, 241)",
+      "rgb(236, 72, 153)",
+      "rgb(20, 184, 166)",
+      "rgb(249, 115, 22)",
+      "rgb(139, 92, 246)",
+    ];
 
     return {
       labels: days,
-      datasets: [
-        {
-          label: CANONICAL_FUEL_TYPES.petrol.label,
-          data: pmsData,
-          borderColor: "rgb(34, 197, 94)",
-          backgroundColor: "rgba(34, 197, 94, 0.1)",
+      datasets: Array.from(allFuelTypes).map((type, idx) => {
+        const label =
+          (CANONICAL_FUEL_TYPES as any)[type]?.label ||
+          type.charAt(0).toUpperCase() + type.slice(1);
+        const color = colors[idx % colors.length];
+        return {
+          label,
+          data: seriesData[type],
+          borderColor: color,
+          backgroundColor: color.replace("rgb", "rgba").replace(")", ", 0.1)"),
           fill: true,
           tension: 0.4,
           pointRadius: 4,
           pointHoverRadius: 6,
-        },
-        {
-          label: CANONICAL_FUEL_TYPES.diesel.label,
-          data: agoData,
-          borderColor: "rgb(234, 179, 8)",
-          backgroundColor: "rgba(234, 179, 8, 0.1)",
-          fill: true,
-          tension: 0.4,
-          pointRadius: 4,
-          pointHoverRadius: 6,
-        },
-      ],
+        };
+      }),
     };
-  }, [state.salesHistory]);
+  }, [state.salesHistory, state.fuelTypes]);
 
   // Fuel type distribution
   const fuelDistData = useMemo(() => {
     const history = Object.values(state.salesHistory);
-    let pms = 0,
-      ago = 0;
+    const totals: Record<string, number> = {};
+
     history.forEach((entry: any) => {
-      pms += (entry.pmsPumps || []).reduce(
+      // New format: fuelPumpsByType
+      if (entry.fuelPumpsByType) {
+        Object.entries(entry.fuelPumpsByType).forEach(
+          ([type, pumps]: [string, any]) => {
+            if (!totals[type]) totals[type] = 0;
+            totals[type] += (pumps || []).reduce(
+              (s: number, p: any) => s + (p.salesL || 0),
+              0,
+            );
+          },
+        );
+      }
+      // Legacy: pmsPumps/agoPumps
+      const pmsL = (entry.pmsPumps || []).reduce(
         (s: number, p: any) => s + (p.salesL || 0),
         0,
       );
-      ago += (entry.agoPumps || []).reduce(
+      const agoL = (entry.agoPumps || []).reduce(
         (s: number, p: any) => s + (p.salesL || 0),
         0,
       );
+      if (pmsL > 0) totals["petrol"] = (totals["petrol"] || 0) + pmsL;
+      if (agoL > 0) totals["diesel"] = (totals["diesel"] || 0) + agoL;
     });
-    if (pms === 0 && ago === 0) {
-      pms = 1;
-      ago = 1;
-    } // default for empty state
+
+    const types = Object.keys(totals).filter((t) => totals[t] > 0);
+    // If no data, show a default empty state
+    if (types.length === 0) {
+      return {
+        labels: ["No sales data"],
+        datasets: [
+          {
+            data: [1],
+            backgroundColor: ["rgba(100, 116, 139, 0.4)"],
+            borderColor: ["rgb(100, 116, 139)"],
+            borderWidth: 2,
+          },
+        ],
+      };
+    }
+
+    const colors = [
+      "rgba(34, 197, 94, 0.8)",
+      "rgba(234, 179, 8, 0.8)",
+      "rgba(99, 102, 241, 0.8)",
+      "rgba(236, 72, 153, 0.8)",
+      "rgba(20, 184, 166, 0.8)",
+      "rgba(249, 115, 22, 0.8)",
+      "rgba(139, 92, 246, 0.8)",
+    ];
+    const borderColors = [
+      "rgb(34, 197, 94)",
+      "rgb(234, 179, 8)",
+      "rgb(99, 102, 241)",
+      "rgb(236, 72, 153)",
+      "rgb(20, 184, 166)",
+      "rgb(249, 115, 22)",
+      "rgb(139, 92, 246)",
+    ];
+
     return {
-      labels: [
-        CANONICAL_FUEL_TYPES.petrol.label,
-        CANONICAL_FUEL_TYPES.diesel.label,
-      ],
+      labels: types.map(
+        (t) =>
+          (CANONICAL_FUEL_TYPES as any)[t]?.label ||
+          t.charAt(0).toUpperCase() + t.slice(1),
+      ),
       datasets: [
         {
-          data: [pms, ago],
-          backgroundColor: ["rgba(34, 197, 94, 0.8)", "rgba(234, 179, 8, 0.8)"],
-          borderColor: ["rgb(34, 197, 94)", "rgb(234, 179, 8)"],
+          data: types.map((t) => totals[t]),
+          backgroundColor: types.map((_, i) => colors[i % colors.length]),
+          borderColor: types.map(
+            (_, i) => borderColors[i % borderColors.length],
+          ),
           borderWidth: 2,
         },
       ],

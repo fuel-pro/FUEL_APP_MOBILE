@@ -753,6 +753,9 @@ export default function SalesTracking() {
   // Compute a compact revenue summary for a saved history record so the
   // saved-records list can show per-record totals (not just date+shift).
   const getRecordSummary = (data: any) => {
+    // DYNAMIC: sum revenue across ALL fuel types — legacy pmsPumps/agoPumps
+    // PLUS fuelPumpsByType (Kerosene, V-Power, LPG, …). Was hardcoded to
+    // PMS/AGO only, silently dropping revenue from other fuel types.
     const pms = (data.pmsPumps || []).reduce(
       (s: number, p: any) => s + (p.salesKsh || 0),
       0,
@@ -761,11 +764,26 @@ export default function SalesTracking() {
       (s: number, p: any) => s + (p.salesKsh || 0),
       0,
     );
+    let otherFuelRevenue = 0;
+    if (data.fuelPumpsByType && typeof data.fuelPumpsByType === "object") {
+      for (const [type, pumps] of Object.entries(data.fuelPumpsByType)) {
+        if (type === "petrol" || type === "diesel") continue; // already counted
+        otherFuelRevenue += (pumps as any[]).reduce(
+          (s: number, p: any) => s + (p.salesKsh || 0),
+          0,
+        );
+      }
+    }
     const exp = (data.expenses || []).reduce(
       (s: number, e: any) => s + (e.amount || 0),
       0,
     );
-    return { revenue: pms + ago, pms, ago, expenses: exp };
+    return {
+      revenue: pms + ago + otherFuelRevenue,
+      pms,
+      ago,
+      expenses: exp,
+    };
   };
 
   return (

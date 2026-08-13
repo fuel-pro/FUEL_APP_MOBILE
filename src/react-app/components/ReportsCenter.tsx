@@ -67,6 +67,71 @@ export default function ReportsCenter() {
     return total;
   };
 
+  // Total fuel revenue for a sale across ALL fuel types — legacy pmsPumps/
+  // agoPumps PLUS dynamic fuelPumpsByType (Kerosene, V-Power, LPG, …).
+  // Without this, reports silently drop revenue from any non-PMS/AGO fuel.
+  const fuelRevenueFor = (sale: any): number => {
+    let total = 0;
+    // Legacy PMS/AGO
+    total += (sale.pmsPumps || []).reduce(
+      (s: number, p: any) => s + (p.salesKsh || 0),
+      0,
+    );
+    total += (sale.agoPumps || []).reduce(
+      (s: number, p: any) => s + (p.salesKsh || 0),
+      0,
+    );
+    // Dynamic: all fuel types in fuelPumpsByType (including petrol/diesel
+    // if they were stored there instead of in pmsPumps/agoPumps)
+    if (sale.fuelPumpsByType && typeof sale.fuelPumpsByType === "object") {
+      for (const pumps of Object.values(sale.fuelPumpsByType)) {
+        total += (pumps as any[]).reduce(
+          (s: number, p: any) => s + (p.salesKsh || 0),
+          0,
+        );
+      }
+    }
+    // Dynamic POS sales by fuel type
+    if (sale.posSales?.byTypeAmount) {
+      for (const amt of Object.values(sale.posSales.byTypeAmount)) {
+        total += (amt as number) || 0;
+      }
+    }
+    return total;
+  };
+
+  // Total fuel litres for a sale across ALL fuel types.
+  const fuelLitresFor = (sale: any): number => {
+    let total = 0;
+    total += (sale.pmsPumps || []).reduce(
+      (s: number, p: any) => s + (p.salesL || 0),
+      0,
+    );
+    total += (sale.agoPumps || []).reduce(
+      (s: number, p: any) => s + (p.salesL || 0),
+      0,
+    );
+    if (sale.fuelPumpsByType && typeof sale.fuelPumpsByType === "object") {
+      for (const pumps of Object.values(sale.fuelPumpsByType)) {
+        total += (pumps as any[]).reduce(
+          (s: number, p: any) => s + (p.salesL || 0),
+          0,
+        );
+      }
+    }
+    // POS litres
+    const ps = sale.posSales;
+    if (ps) {
+      total += (ps.pmsLitres || 0) + (ps.agoLitres || 0);
+      if (ps.byTypeLitres) {
+        for (const l of Object.values(ps.byTypeLitres)) {
+          total += (l as number) || 0;
+        }
+      }
+    }
+    return total;
+  };
+
   // Country-aware locale for date formatting (replaces hardcoded "en-KE")
   const countryCode = getDetectedCountryCode();
   const reportLocale = countryCode
@@ -584,17 +649,9 @@ export default function ReportsCenter() {
     const profitLossData = Object.entries(groupedSales).map(
       ([period, sales]: [string, any[]]) => {
         const totalRevenue = sales.reduce((sum, sale) => {
-          const pmsRevenue = (sale.pmsPumps || []).reduce(
-            (pmsSum: number, pump: any) => pmsSum + (pump.salesKsh || 0),
-            0,
-          );
-          const agoRevenue = (sale.agoPumps || []).reduce(
-            (agoSum: number, pump: any) => agoSum + (pump.salesKsh || 0),
-            0,
-          );
-          // Include POS sales
-          const posRevenue = posRevenueFor(sale);
-          return sum + pmsRevenue + agoRevenue + posRevenue;
+          // DYNAMIC: includes ALL fuel types via fuelRevenueFor (was
+          // hardcoded PMS/AGO only, silently dropping Kerosene/LPG/etc.)
+          return sum + fuelRevenueFor(sale);
         }, 0);
 
         const totalExpenses =
@@ -655,17 +712,9 @@ export default function ReportsCenter() {
     const offloadingRecords = filterByDateRange(state.offloadingRecords);
 
     const totalSalesRevenue = filteredSales.reduce((sum, sale) => {
-      const pmsRevenue = (sale.pmsPumps || []).reduce(
-        (pmsSum: number, pump: any) => pmsSum + (pump.salesKsh || 0),
-        0,
-      );
-      const agoRevenue = (sale.agoPumps || []).reduce(
-        (agoSum: number, pump: any) => agoSum + (pump.salesKsh || 0),
-        0,
-      );
-      // Include POS sales
-      const posRevenue = posRevenueFor(sale);
-      return sum + pmsRevenue + agoRevenue + posRevenue;
+      // DYNAMIC: includes ALL fuel types via fuelRevenueFor (was hardcoded
+      // PMS/AGO only, silently dropping Kerosene/LPG/V-Power revenue)
+      return sum + fuelRevenueFor(sale);
     }, 0);
 
     // Separate POS revenue tracking
@@ -704,18 +753,9 @@ export default function ReportsCenter() {
     );
 
     const totalFuelSold = filteredSales.reduce((sum, sale) => {
-      const pmsLitres = (sale.pmsPumps || []).reduce(
-        (pmsSum: number, pump: any) => pmsSum + (pump.salesL || 0),
-        0,
-      );
-      const agoLitres = (sale.agoPumps || []).reduce(
-        (agoSum: number, pump: any) => agoSum + (pump.salesL || 0),
-        0,
-      );
-      // Include POS fuel sales
-      const posLitres =
-        (sale.posSales?.pmsLitres || 0) + (sale.posSales?.agoLitres || 0);
-      return sum + pmsLitres + agoLitres + posLitres;
+      // DYNAMIC: includes ALL fuel types via fuelLitresFor (was hardcoded
+      // PMS/AGO only, silently dropping Kerosene/LPG/V-Power litres)
+      return sum + fuelLitresFor(sale);
     }, 0);
 
     const totalFuelPurchased = offloadingRecords.reduce(
