@@ -3843,3 +3843,83 @@ model — widening to all canonical fuels would require changing SalesEntry
 in FuelSalesReport are safe (generateReport coerces all inputs via
 `Number(...)||0`).
 
+
+## CRITICAL — Service Worker cache-first deadlock FIXED (2026-08-13, commit dc78d11, PR #132)
+
+**Symptom**: "I CAN'T SEE ALL THE UPDATES IN ACTION IN EITHER vercel.app
+and pages.dev". Users were permanently stuck on old builds after deploys.
+
+**Root cause — chicken-and-egg deadlock**:
+The workbox-generated `sw.js` (from `vite-plugin-pwa`) served `index.html`
+from a **precache** (cache-first, via `NavigationRoute(createHandlerBoundToURL("index.html"))`).
+After a deploy:
+1. The OLD active SW served the OLD precached `index.html` (referencing
+   OLD chunk hashes) → users saw old code.
+2. The self-heal (script-404 → unregister+reload) never fired because the
+   OLD SW precached the OLD chunks too (200 from cache, no 404).
+3. `reg.update()` polled `/sw.js`, but the CDN (Cloudflare Pages
+   especially — no `_headers` file existed) HTTP-cached `sw.js` with a
+   long max-age → `reg.update()` fetched the SAME old bytes → no install
+   event → no SW update → deadlock.
+
+**Fix (4 layers, all in commit dc78d11)**:
+
+1. **Replaced the workbox SW with a custom `public/sw.js`** that is
+   **NETWORK-FIRST for navigations** (index.html). A fresh `index.html` is
+   fetched on every page load → a deployed update is visible on the very
+   next navigation, falling back to cache ONLY when offline. Hashed
+   `/assets/*` chunks use stale-while-revalidate (instant from cache,
+   revalidated in background). API calls are network-only. On activate,
+   all caches from previous versions are purged (`CACHE_VERSION =
+   "fuelpro-v3-20260813"`).
+
+2. **Removed `vite-plugin-pwa` from `vite.config.ts`** (it generated the
+   cache-first workbox SW that caused the bug). The PWA manifest is now
+   the static `public/manifest.json` (already existed). No more workbox
+   precache of `index.html`. No `dist/workbox-*.js` generated.
+
+3. **CDN cache headers so `sw.js` + `index.html` are NEVER HTTP-cached**:
+   - `vercel.json`: `no-store` for `/sw.js`, `/index.html`, `/`,
+     `/manifest.json`; immutable for `/assets/*`.
+   - `public/_headers` (Cloudflare Pages): same `no-store` rules. **This
+     `_headers` file was MISSING entirely** — Cloudflare was serving stale
+     `sw.js`/`index.html` with its default long max-age, which is why
+     updates never appeared on `pages.dev`. This was the single biggest
+     cause of the user's complaint.
+
+4. **`index.html` SW registration hardened**: registers on
+   `DOMContentLoaded` (not waiting for full `load`); `updateViaCache:
+   "none"` so the browser always re-evaluates the SW bytes; polls every 2
+   min (was 10); self-heal on script 404 retained.
+
+**Propagation path for existing users stuck on the OLD workbox SW**:
+Once the deployed `sw.js` is served with `no-store` (Cloudflare NOW;
+Vercel once quota resets), the OLD SW's `reg.update()` (polled every
+10 min by the old registration) fetches the NEW `sw.js` bytes → new SW
+installs (`self.skipWaiting()` on install + workbox's `skipWaiting:true`)
+→ `controllerchange` → reload → NEW network-first SW is now controller →
+fetches NEW `index.html` → permanent fix. Users see the update within
+~10 min of the deploy without any manual action.
+
+**Verified live 2026-08-13 (Cloudflare preview ba57ef81)**:
+- `https://fuel-app-mobile.pages.dev/sw.js` → custom network-first SW
+  (marker `fuelpro-v3-20260813` present, no `precacheAndRoute`), header
+  `cache-control: no-cache, no-store, must-revalidate`.
+- `https://fuel-app-mobile.pages.dev/` → `cache-control: no-store`,
+  `index.html` contains `updateViaCache`.
+- Logged in as founder QA (`founder.qa.fuelpro@gmail.com`): Dashboard
+  renders country-aware (US station, USD, "$1,500", 0% VAT), all 31 tabs
+  + 12 Quick Actions present.
+
+**Deploy state 2026-08-13**:
+- GitHub main: `dc78d11` (PR #132 squash-merged).
+- Cloudflare Pages: LIVE (preview https://ba57ef81.fuel-app-mobile.pages.dev
+  + main alias https://fuel-app-mobile.pages.dev).
+- Vercel production: BLOCKED by `api-deployments-free-per-day` (100/day
+  exhausted for ALL deploy paths: prebuilt, git-source API, CLI). Vercel
+  production currently serves the OLD commit `0f42e45` (old workbox SW).
+  The GitHub integration (prodBranch=main) will auto-deploy `dc78d11`
+  when the quota resets (~24h). Once deployed, existing Vercel users
+  auto-update within ~10 min via the propagation path above. No
+  Supabase changes (frontend-only).
+
