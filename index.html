@@ -168,6 +168,14 @@
           }
         });
 
+        // Honor a forced-reload message from the service worker (the new SW
+        // posts FUELPRO_RELOAD on activate to unstick tabs on an old build).
+        navigator.serviceWorker.addEventListener("message", function (event) {
+          if (event.data && event.data.type === "FUELPRO_RELOAD") {
+            window.location.reload();
+          }
+        });
+
         // Stale-SW self-heal: if a script chunk fails to load, unregister the
         // SW and reload so the browser fetches fresh assets.
         window.addEventListener(

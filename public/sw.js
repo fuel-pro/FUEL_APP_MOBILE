@@ -9,7 +9,7 @@
  * CACHE_VERSION is bumped automatically by a build-time stamp. On activate,
  * all caches from previous versions are purged so stale entries never leak.
  */
-const CACHE_VERSION = "fuelpro-v3-20260813";
+const CACHE_VERSION = "fuelpro-v3-20260813b";
 const ASSET_CACHE = CACHE_VERSION + "-assets";
 const NAV_CACHE = CACHE_VERSION + "-nav";
 
@@ -19,18 +19,42 @@ self.addEventListener("install", () => {
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((names) =>
-      Promise.all(
+    (async () => {
+      // Purge every cache that does not belong to this version so stale
+      // entries (including the old workbox precache) can never leak back.
+      const names = await caches.keys();
+      await Promise.all(
         names.map((name) => {
           if (name !== ASSET_CACHE && name !== NAV_CACHE) {
             return caches.delete(name);
           }
           return undefined;
         }),
-      ),
-    ),
+      );
+      // Take control of all open clients immediately so the new network-first
+      // strategy governs the very next fetch (no waiting for a re-navigation).
+      await self.clients.claim();
+      // Force every currently-open client to reload so it picks up the new
+      // index.html (network-first) and the latest hashed chunks. This is what
+      // unsticks users who were stranded on an old workbox SW: the instant
+      // this SW activates (via the auto-update path), every tab reloads.
+      const clientList = await self.clients.matchAll({
+        type: "window",
+        includeUncontrolled: true,
+      });
+      await Promise.all(
+        clientList.map((client) =>
+          client
+            .navigate(client.url)
+            .catch(() =>
+              client
+                .postMessage({ type: "FUELPRO_RELOAD", version: CACHE_VERSION })
+                .catch(() => {}),
+            ),
+        ),
+      );
+    })(),
   );
-  self.clients.claim();
 });
 
 self.addEventListener("fetch", (event) => {
@@ -81,11 +105,16 @@ self.addEventListener("fetch", (event) => {
         .then((response) => {
           if (response.status === 200) {
             const clone = response.clone();
-            caches.open(NAV_CACHE).then((cache) => cache.put(req, clone)).catch(() => {});
+            caches
+              .open(NAV_CACHE)
+              .then((cache) => cache.put(req, clone))
+              .catch(() => {});
           }
           return response;
         })
-        .catch(() => caches.match(req).then((r) => r || caches.match("/index.html"))),
+        .catch(() =>
+          caches.match(req).then((r) => r || caches.match("/index.html")),
+        ),
     );
     return;
   }
@@ -97,7 +126,10 @@ self.addEventListener("fetch", (event) => {
           .then((response) => {
             if (response.status === 200) {
               const clone = response.clone();
-              caches.open(ASSET_CACHE).then((cache) => cache.put(req, clone)).catch(() => {});
+              caches
+                .open(ASSET_CACHE)
+                .then((cache) => cache.put(req, clone))
+                .catch(() => {});
             }
             return response;
           })
@@ -113,7 +145,10 @@ self.addEventListener("fetch", (event) => {
       .then((response) => {
         if (response.status === 200) {
           const clone = response.clone();
-          caches.open(ASSET_CACHE).then((cache) => cache.put(req, clone)).catch(() => {});
+          caches
+            .open(ASSET_CACHE)
+            .then((cache) => cache.put(req, clone))
+            .catch(() => {});
         }
         return response;
       })
