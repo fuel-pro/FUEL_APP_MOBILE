@@ -118,6 +118,9 @@ interface StationRecord {
   createdAt: string;
   lastActive: string;
   revenue: number;
+  currency?: string;
+  country?: string;
+  code?: string;
 }
 
 interface Secret {
@@ -329,6 +332,7 @@ export default function FounderAccess() {
     usersLoading,
     allBackendStations,
     allStationsLoading,
+    statsTotalRevenue,
   } = useFounderBackend();
 
   /* ─── Auth State ─── */
@@ -445,6 +449,16 @@ export default function FounderAccess() {
 
     // If we have backend data, use it
     if (allBackendUsers && allBackendUsers.length > 0) {
+      // Build a station count map: userId -> number of stations owned
+      const stationCountByUser = new Map<string, number>();
+      if (allBackendStations) {
+        for (const s of allBackendStations) {
+          const oid = String(s.ownerId || s.owner_id || "");
+          if (oid) {
+            stationCountByUser.set(oid, (stationCountByUser.get(oid) || 0) + 1);
+          }
+        }
+      }
       const backendUsersMapped: AppUser[] = allBackendUsers.map((u: any) => ({
         authId: String(u.id),
         authMethod: u.email?.includes("@") ? "email" : "unknown",
@@ -454,7 +468,7 @@ export default function FounderAccess() {
         lastActive: u.lastSignInAt
           ? new Date(u.lastSignInAt).toLocaleString()
           : "Never",
-        stations: 0,
+        stations: stationCountByUser.get(String(u.id)) || 0,
         createdAt: u.createdAt
           ? new Date(u.createdAt).toLocaleString()
           : "Unknown",
@@ -468,16 +482,19 @@ export default function FounderAccess() {
           id: String(s.id),
           name: s.name || "Unnamed Station",
           location: s.location || "Unknown",
-          ownerId: String(s.ownerId || 0),
+          ownerId: String(s.ownerId || s.owner_id || 0),
           ownerName: s.ownerName || "Owner",
-          members: s.members || 0,
+          members: s.members || 1,
           createdAt: s.createdAt
             ? new Date(s.createdAt).toLocaleString()
             : "Unknown",
           lastActive: s.updatedAt
             ? new Date(s.updatedAt).toLocaleString()
             : "Unknown",
-          revenue: 0,
+          revenue: Number(s.revenue) || 0,
+          currency: s.currency || "USD",
+          country: s.country || "",
+          code: s.code || "",
         }),
       );
       setStations(backendStationsMapped);
@@ -888,7 +905,7 @@ export default function FounderAccess() {
       s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       s.location.toLowerCase().includes(searchQuery.toLowerCase()),
   );
-  const totalRevenue = stations.reduce((sum, s) => sum + s.revenue, 0);
+  const totalRevenue = stations.reduce((sum, s) => sum + (s.revenue || 0), 0);
   // The Founder Console should show the REAL cross-owner counts from
   // /api/founder-stats (allBackendStations), NOT the owner-scoped
   // trpc.station.list count (backendStationCount) which only reflects the
@@ -900,9 +917,37 @@ export default function FounderAccess() {
       : backendStationCount > 0
         ? backendStationCount
         : stations.length;
-  const effectiveRevenue = salesAnalytics?.totalRevenue
-    ? Number(salesAnalytics.totalRevenue)
-    : totalRevenue;
+  // Prefer the cross-owner total revenue from /api/founder-stats, then
+  // salesAnalytics, then the sum of station revenues from the API.
+  const effectiveRevenue =
+    statsTotalRevenue > 0
+      ? statsTotalRevenue
+      : salesAnalytics?.totalRevenue
+        ? Number(salesAnalytics.totalRevenue)
+        : totalRevenue;
+  // Determine the display currency for the global revenue figure. Use the
+  // most common station currency if available, otherwise the detected
+  // currency. This avoids showing "KSh" for a US-founder global console.
+  const globalCurrency = (() => {
+    if (stations.length > 0) {
+      // Count currencies across stations; pick the most frequent
+      const curCounts = new Map<string, number>();
+      for (const s of stations) {
+        const c = s.currency || "USD";
+        curCounts.set(c, (curCounts.get(c) || 0) + 1);
+      }
+      let best = "USD";
+      let bestCount = 0;
+      for (const [c, n] of curCounts) {
+        if (n > bestCount) {
+          best = c;
+          bestCount = n;
+        }
+      }
+      return best;
+    }
+    return getDetectedCurrency();
+  })();
 
   /* ─── Login Screen ─── */
   if (!isAuthenticated) {
@@ -1419,8 +1464,8 @@ export default function FounderAccess() {
               Super Admin
             </span>
             <span className="text-gray-700 hidden sm:inline">|</span>
-            <span className="text-xs text-gray-400 truncate min-w-0">
-              {activeSection.charAt(0).toUpperCase() + activeSection.slice(1)}
+            <span className="text-xs text-gray-400 truncate min-w-0 capitalize">
+              {activeSection.replace(/([A-Z])/g, " $1").trim()}
             </span>
           </div>
           <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
@@ -1436,6 +1481,18 @@ export default function FounderAccess() {
                 className="pl-8 pr-3 py-1.5 bg-white/[0.03] border border-white/[0.08] rounded-lg text-xs text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/30 w-28 sm:w-48"
               />
             </div>
+            {/* Refresh button — reloads founder stats */}
+            <button
+              onClick={() => {
+                // Force a reload to refresh stats
+                window.location.reload();
+              }}
+              className="flex items-center justify-center w-8 h-8 rounded-lg text-gray-400 hover:text-white hover:bg-white/[0.06] transition-colors flex-shrink-0"
+              aria-label="Refresh data"
+              title="Refresh data"
+            >
+              <RefreshCw size={13} className={statsTotalRevenue > 0 ? "" : "animate-spin"} />
+            </button>
             {/* Cloud Sync Status — collapse to icon-only on very small screens */}
             <div
               className={`flex items-center gap-2 px-2 sm:px-2.5 py-1.5 rounded-lg ${cloudStatus.isOnline ? "bg-emerald-500/10 border border-emerald-500/20" : "bg-amber-500/10 border border-amber-500/20"}`}
@@ -1482,7 +1539,7 @@ export default function FounderAccess() {
                   },
                   {
                     label: "Revenue",
-                    value: `${getCurrencySymbol(getDetectedCurrency())} ${effectiveRevenue.toLocaleString()}`,
+                    value: `${getCurrencySymbol(globalCurrency)} ${effectiveRevenue.toLocaleString()}`,
                     icon: DollarSign,
                     color: "text-amber-400",
                   },
@@ -1772,7 +1829,7 @@ export default function FounderAccess() {
                         { label: "Members", value: s.members },
                         {
                           label: "Revenue",
-                          value: `${getCurrencySymbol(getDetectedCurrency())} ${(s.revenue / 1000).toFixed(0)}K`,
+                          value: `${getCurrencySymbol(s.currency || globalCurrency)} ${s.revenue >= 1000 ? (s.revenue / 1000).toFixed(1) + "K" : s.revenue.toFixed(0)}`,
                         },
                         {
                           label: "Status",
@@ -1793,8 +1850,23 @@ export default function FounderAccess() {
                         </div>
                       ))}
                     </div>
-                    <p className="text-[10px] text-gray-600 mt-2">
-                      Owner: {s.ownerName}
+                    <p className="text-[10px] text-gray-600 mt-2 flex items-center gap-2 flex-wrap">
+                      <span>Owner: {s.ownerName}</span>
+                      {s.currency && (
+                        <span className="px-1.5 py-0.5 bg-white/[0.06] rounded text-gray-400">
+                          {s.currency}
+                        </span>
+                      )}
+                      {s.country && (
+                        <span className="px-1.5 py-0.5 bg-white/[0.06] rounded text-gray-400">
+                          {s.country}
+                        </span>
+                      )}
+                      {s.code && (
+                        <span className="px-1.5 py-0.5 bg-white/[0.06] rounded text-gray-400">
+                          {s.code}
+                        </span>
+                      )}
                     </p>
                   </div>
                 ))}

@@ -17,6 +17,7 @@ import { useFuel } from "@/react-app/context/FuelContext";
 import { useStations } from "@/react-app/context/StationContext";
 import { usePermissions } from "@/react-app/context/PermissionContext";
 import { formatNumber } from "@/react-app/utils/formatUtils";
+import { getFuelLabel } from "@/react-app/config/pricing";
 import DataRecovery from "@/react-app/components/DataRecovery";
 import CloudSyncPanel from "@/react-app/components/CloudSyncPanel";
 import SyncDashboard from "@/react-app/components/SyncDashboard";
@@ -373,11 +374,11 @@ export default function DataManager() {
                     <span>${summary.salesRecords}</span>
                 </div>
                 <div class="data-item">
-                    <strong>PMS Pumps</strong>
+                    <strong>${getFuelLabel("PMS")} Pumps</strong>
                     <span>${summary.pmsPumps}</span>
                 </div>
                 <div class="data-item">
-                    <strong>AGO Pumps</strong>
+                    <strong>${getFuelLabel("AGO")} Pumps</strong>
                     <span>${summary.agoPumps}</span>
                 </div>
                 ${summary.extraPumps > 0 ? `<div class="data-item"><strong>Other Fuel Pumps</strong><span>${summary.extraPumps}</span></div>` : ""}
@@ -669,9 +670,9 @@ export default function DataManager() {
                     value: summary.salesRecords,
                     color: "purple",
                   },
-                  { label: "PMS Pumps", value: summary.pmsPumps, color: "red" },
+                  { label: `${getFuelLabel("PMS")} Pumps`, value: summary.pmsPumps, color: "red" },
                   {
-                    label: "AGO Pumps",
+                    label: `${getFuelLabel("AGO")} Pumps`,
                     value: summary.agoPumps,
                     color: "indigo",
                   },

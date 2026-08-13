@@ -37,3 +37,4 @@ service-account.json
 
 .vercel
 .env*
+.build-version

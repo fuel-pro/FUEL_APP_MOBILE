@@ -1,18 +1,161 @@
 import path from "path";
 import { fileURLToPath } from "url";
+import fs from "fs";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { VitePWA } from "vite-plugin-pwa";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 
-// NOTE: vite-plugin-pwa was removed. Its workbox-generated sw.js served
-// index.html from a precache (cache-first), so users were stuck on old
-// builds after deploys. We now ship a custom public/sw.js that is
-// NETWORK-FIRST for navigations — a deployed update is visible on the
-// very next page load. The PWA manifest is the static public/manifest.json.
+// Plugin to replace __BUILD_VERSION__ in index.html during build.
+function buildVersionPlugin() {
+  return {
+    name: "build-version-stamp",
+    transformIndexHtml(html) {
+      try {
+        const versionPath = path.resolve(__dirname, ".build-version");
+        if (!fs.existsSync(versionPath)) return html;
+        const version = fs.readFileSync(versionPath, "utf-8").trim();
+        return html.replace(
+          /(__BUILD_VERSION__\s*=\s*)"__BUILD_VERSION__"/g,
+          '$1"' + version + '"',
+        );
+      } catch (e) {
+        return html;
+      }
+    },
+  };
+}
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    buildVersionPlugin(),
+    react(),
+    VitePWA({
+      registerType: "autoUpdate",
+      // SW registration + update handling is in index.html (inline script).
+      // Disabling the plugin's auto-inject avoids a duplicate minimal
+      // registration that doesn't handle updates.
+      injectRegister: false,
+      includeAssets: ["favicon.ico", "logo-main.jpg", "logo-small.jpg", "*.svg"],
+      manifest: {
+        name: "FuelPro - Fuel Management System",
+        short_name: "FuelPro",
+        description: "Complete fuel station management, sales tracking, EPRA compliance, and real-time analytics",
+        theme_color: "#f59e0b",
+        background_color: "#0a0a0f",
+        display: "standalone",
+        orientation: "any",
+        scope: "/",
+        start_url: "/",
+        icons: [
+          {
+            src: "/logo-main.jpg",
+            sizes: "192x192",
+            type: "image/jpeg",
+            purpose: "any maskable",
+          },
+          {
+            src: "/logo-small.jpg",
+            sizes: "512x512",
+            type: "image/jpeg",
+            purpose: "any maskable",
+          },
+        ],
+        categories: ["business", "productivity", "finance"],
+        shortcuts: [
+          {
+            name: "Dashboard",
+            short_name: "Dashboard",
+            description: "View station dashboard",
+            url: "/#/?tab=dashboard",
+          },
+          {
+            name: "Point of Sale",
+            short_name: "POS",
+            description: "Quick fuel sales",
+            url: "/#/?tab=pos",
+          },
+        ],
+      },
+      workbox: {
+        globPatterns: ["**/*.{js,css,ico,png,svg,jpg,jpeg,woff,woff2}"],
+        // Do NOT precache index.html — always fetch from network so new
+        // deploys are visible immediately (the fresh index.html references
+        // new chunk filenames which the SW then fetches from network).
+        globIgnores: ["**/index.html"],
+        cleanupOutdatedCaches: true,
+        skipWaiting: true,
+        clientsClaim: true,
+        // Never serve a cached fallback for navigations. This ensures the
+        // browser always hits the network for the HTML shell.
+        navigateFallback: null,
+        runtimeCaching: [
+          {
+            // Always fetch HTML/navigations from network first (5s timeout
+            // then falls back to cache for offline support).
+            urlPattern: ({ url }) => url.pathname === "/" || url.pathname.endsWith(".html") || url.pathname.startsWith("/#"),
+            handler: "NetworkFirst",
+            options: {
+              cacheName: "html-cache",
+              networkTimeoutSeconds: 5,
+              expiration: {
+                maxEntries: 10,
+                maxAgeSeconds: 0, // Always revalidate
+              },
+              cacheableResponse: {
+                statuses: [0, 200],
+              },
+            },
+          },
+          {
+            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
+            handler: "CacheFirst",
+            options: {
+              cacheName: "google-fonts-cache",
+              expiration: {
+                maxEntries: 10,
+                maxAgeSeconds: 60 * 60 * 24 * 365, // 1 year
+              },
+              cacheableResponse: {
+                statuses: [0, 200],
+              },
+            },
+          },
+          {
+            urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
+            handler: "CacheFirst",
+            options: {
+              cacheName: "gstatic-fonts-cache",
+              expiration: {
+                maxEntries: 10,
+                maxAgeSeconds: 60 * 60 * 24 * 365, // 1 year
+              },
+              cacheableResponse: {
+                statuses: [0, 200],
+              },
+            },
+          },
+          {
+            urlPattern: /^https:\/\/ojjscjwatikixlpshmub\.supabase\.co\/.*/i,
+            handler: "NetworkFirst",
+            options: {
+              cacheName: "supabase-cache",
+              expiration: {
+                maxEntries: 50,
+                maxAgeSeconds: 60 * 60, // 1 hour
+              },
+              networkTimeoutSeconds: 10,
+            },
+          },
+        ],
+      },
+      devOptions: {
+        enabled: true,
+        type: "module",
+      },
+    }),
+  ],
   server: {
     allowedHosts: true,
     host: "0.0.0.0",

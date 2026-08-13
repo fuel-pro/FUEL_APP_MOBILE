@@ -85,6 +85,10 @@ export default function FuelQualityTesting() {
       { code: "IK", label: "Kerosene" },
     ];
   })();
+  const defaultFuelType =
+    fuelTypeOptions[0]?.code ||
+    fuelTypeApi.activeFuelTypes[0]?.code ||
+    "PMS";
   const [tests, setTests] = useState<QualityTest[]>(() => {
     try {
       return JSON.parse(localStorage.getItem("fuelpro_quality_tests") || "[]");
@@ -94,7 +98,7 @@ export default function FuelQualityTesting() {
   });
   const [showAdd, setShowAdd] = useState(false);
   const [newTest, setNewTest] = useState<Partial<QualityTest>>({
-    fuelType: "PMS",
+    fuelType: defaultFuelType,
     appearance: "clear",
   });
 
@@ -150,7 +154,7 @@ export default function FuelQualityTesting() {
     };
     save([test, ...tests]);
     setShowAdd(false);
-    setNewTest({ fuelType: "PMS", appearance: "clear" });
+    setNewTest({ fuelType: defaultFuelType, appearance: "clear" });
   };
 
   return (

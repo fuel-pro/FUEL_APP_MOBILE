@@ -88,6 +88,12 @@ export interface ExtraFuel {
   id: string;
   /** Canonical fuel-type key (kerosene | vpower | premium_diesel | lpg | cng). */
   type: CanonicalFuelType;
+  /** Display label for the fuel (e.g. "Kerosene"). */
+  label?: string;
+  /** Number of pumps configured for this fuel type. */
+  pumpCount?: number;
+  /** Optional short code override (defaults to type.toUpperCase()). */
+  code?: string;
   count: number;
   price: number;
 }
@@ -517,7 +523,9 @@ export default function SetupWizard({
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         fuelTypes:
-          allFuelTypeCodes.length > 0 ? allFuelTypeCodes : ["PMS", "AGO"],
+          allFuelTypeCodes.length > 0
+            ? allFuelTypeCodes
+            : ["PMS", "AGO", "IK", "LPG", "VPW"],
         pumpCount:
           (data.pmsCount || 0) +
           (data.agoCount || 0) +

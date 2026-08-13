@@ -52,6 +52,21 @@ export default function ReportsCenter() {
   const vatPercentLabel = `${(VAT_RATE * 100).toFixed(0)}%`;
   const isKenya = isKenyaStation();
 
+  // Total POS revenue for a sale across ALL fuel types (legacy PMS/AGO plus
+  // any byTypeAmount entries for custom fuels), so reports aren't limited to
+  // just petrol/diesel.
+  const posRevenueFor = (sale: any): number => {
+    const ps = sale?.posSales;
+    if (!ps) return 0;
+    let total = (ps.pmsAmount || 0) + (ps.agoAmount || 0);
+    if (ps.byTypeAmount && typeof ps.byTypeAmount === "object") {
+      for (const amt of Object.values(ps.byTypeAmount)) {
+        total += (amt as number) || 0;
+      }
+    }
+    return total;
+  };
+
   // Country-aware locale for date formatting (replaces hardcoded "en-KE")
   const countryCode = getDetectedCountryCode();
   const reportLocale = countryCode
@@ -209,13 +224,10 @@ export default function ReportsCenter() {
           );
         }
       }
-      const posRevenue =
-        (sale.posSales?.pmsAmount || 0) + (sale.posSales?.agoAmount || 0);
+      const posRevenue = posRevenueFor(sale);
       // Dynamic POS sales by fuel type
-      if (sale.posSales?.fuelAmountsByType) {
-        for (const [ft, amt] of Object.entries(
-          sale.posSales.fuelAmountsByType,
-        )) {
+      if (sale.posSales?.byTypeAmount) {
+        for (const [ft, amt] of Object.entries(sale.posSales.byTypeAmount)) {
           if (ft === "petrol" || ft === "diesel") continue;
           fuelRevenue += (amt as number) || 0;
         }
@@ -324,8 +336,35 @@ export default function ReportsCenter() {
             }
           }
 
-          // POS Sales
-          if (sale.posSales) {
+          // Dynamic POS sales by fuel type (byTypeAmount / byTypeLitres).
+          // Falls back to legacy pmsAmount/agoAmount for older records.
+          if (sale.posSales?.byTypeAmount && sale.posSales?.byTypeLitres) {
+            const posByType = sale.posSales.byTypeAmount as Record<
+              string,
+              number
+            >;
+            const litresByType = sale.posSales.byTypeLitres as Record<
+              string,
+              number
+            >;
+            for (const [ft, amt] of Object.entries(posByType)) {
+              if (!amt || amt <= 0) continue;
+              const vat = calculateVAT(amt);
+              const litres = litresByType[ft] || 0;
+              items.push({
+                receiptNo: `${state.companyData.etrInvoicePrefix || "ETR"}${String(receiptNo++).padStart(6, "0")}`,
+                time: "12:00",
+                description: `${getFuelLabel(ft)} - POS Transaction`,
+                quantity: litres,
+                unit: "L",
+                unitPrice: litres > 0 ? amt / litres : 0,
+                grossAmount: amt,
+                vatAmount: vat.vatAmount,
+                netAmount: vat.netAmount,
+                vatRate: `${(VAT_RATE * 100).toFixed(0)}%`,
+              });
+            }
+          } else if (sale.posSales) {
             if (sale.posSales.pmsAmount > 0) {
               const vat = calculateVAT(sale.posSales.pmsAmount);
               items.push({
@@ -554,8 +593,7 @@ export default function ReportsCenter() {
             0,
           );
           // Include POS sales
-          const posRevenue =
-            (sale.posSales?.pmsAmount || 0) + (sale.posSales?.agoAmount || 0);
+          const posRevenue = posRevenueFor(sale);
           return sum + pmsRevenue + agoRevenue + posRevenue;
         }, 0);
 
@@ -626,17 +664,15 @@ export default function ReportsCenter() {
         0,
       );
       // Include POS sales
-      const posRevenue =
-        (sale.posSales?.pmsAmount || 0) + (sale.posSales?.agoAmount || 0);
+      const posRevenue = posRevenueFor(sale);
       return sum + pmsRevenue + agoRevenue + posRevenue;
     }, 0);
 
     // Separate POS revenue tracking
-    const totalPOSRevenue = filteredSales.reduce((sum, sale) => {
-      return (
-        sum + (sale.posSales?.pmsAmount || 0) + (sale.posSales?.agoAmount || 0)
-      );
-    }, 0);
+    const totalPOSRevenue = filteredSales.reduce(
+      (sum, sale) => sum + posRevenueFor(sale),
+      0,
+    );
 
     const totalExpenses =
       filteredSales.reduce((sum, sale) => {

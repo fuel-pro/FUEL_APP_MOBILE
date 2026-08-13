@@ -26,6 +26,7 @@ import { useAuth } from "@/react-app/context/AuthContext";
 import { useFuel } from "../context/FuelContext";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 import { getCurrencySymbol } from "../lib/currency";
+import { getFuelLabel } from "@/react-app/config/pricing";
 import { getSupabaseClient } from "@/supabase/client";
 
 interface DocumentFolder {
@@ -491,8 +492,8 @@ export default function Documents() {
           (s: any) => `
         <div class="card">
           <h3>${formatDate(s.date)} - ${s.shift || "Day"}</h3>
-          <p><strong>PMS:</strong> ${formatCurrency(s.totalPMSSalesKsh || 0)}</p>
-          <p><strong>AGO:</strong> ${formatCurrency(s.totalAGOSalesKsh || 0)}</p>
+          <p><strong>${getFuelLabel("PMS")}:</strong> ${formatCurrency(s.totalPMSSalesKsh || 0)}</p>
+          <p><strong>${getFuelLabel("AGO")}:</strong> ${formatCurrency(s.totalAGOSalesKsh || 0)}</p>
           <p><strong>Total:</strong> ${formatCurrency(s.grandTotalKsh || 0)}</p>
           <p><strong>Cash:</strong> ${formatCurrency(s.cashPayments || 0)}</p>
           <p><strong>M-Pesa:</strong> ${formatCurrency(s.mpesaPayments || 0)}</p>

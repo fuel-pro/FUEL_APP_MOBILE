@@ -99,6 +99,33 @@
     <div id="root"></div>
     <script type="module" src="/src/react-app/main.tsx"></script>
     <script>
+      // BUILD VERSION STAMP — checked on every load to defeat stale SW caches.
+      // The build process replaces __BUILD_VERSION__ with a timestamp. If the
+      // version served by the SW doesn't match what the server has, we
+      // unregister the SW and force a hard reload.
+      window.__BUILD_VERSION__ = "__BUILD_VERSION__";
+      (function () {
+        if (!window.__BUILD_VERSION__ || window.__BUILD_VERSION__ === "__BUILD_VERSION__") return;
+        try {
+          fetch("/version.json?t=" + Date.now(), { cache: "no-store" })
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (data) {
+              if (data && data.version && data.version !== window.__BUILD_VERSION__) {
+                console.warn("[version-check] Server version " + data.version + " != client " + window.__BUILD_VERSION__ + " — hard reload");
+                if ("serviceWorker" in navigator) {
+                  navigator.serviceWorker.getRegistrations().then(function (regs) {
+                    return Promise.all(regs.map(function (r) { return r.unregister(); }));
+                  }).then(function () { window.location.reload(); });
+                } else {
+                  window.location.reload();
+                }
+              }
+            })
+            .catch(function () {});
+        } catch (e) {}
+      })();
+    </script>
+    <script>
       // Service Worker registration with AGGRESSIVE automatic update handling.
       //
       // The custom public/sw.js is NETWORK-FIRST for navigations, so a fresh

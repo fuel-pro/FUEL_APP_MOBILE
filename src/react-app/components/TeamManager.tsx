@@ -350,6 +350,9 @@ export default function TeamManager() {
         { id: "pms-2", label: "PMS Pump 2" },
         { id: "ago-1", label: "AGO Pump 1" },
         { id: "ago-2", label: "AGO Pump 2" },
+        { id: "ik-1", label: "IK Pump 1" },
+        { id: "lpg-1", label: "LPG Pump 1" },
+        { id: "vpw-1", label: "VPW Pump 1" },
       ];
     }
     return out;

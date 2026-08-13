@@ -96,6 +96,7 @@ interface TeamMember {
   // The inviter's identity (provenance for the hierarchy tree).
   invitedByUserId?: string;
   invitedByUniqueId?: string;
+  invitedByName?: string;
   stationId?: string;
 }
 

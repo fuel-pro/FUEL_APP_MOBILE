@@ -590,7 +590,7 @@ export default function Dashboard() {
             ? pumps.reduce((ps: number, p: any) => ps + (p.salesL || 0), 0)
             : 0),
         0,
-      );
+      ) as number;
       const posLitresByType = Object.values(pos.byTypeLitres || {}).reduce(
         (s: number, v: any) => s + (Number(v) || 0),
         0,

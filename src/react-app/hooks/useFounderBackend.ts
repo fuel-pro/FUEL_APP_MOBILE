@@ -292,6 +292,7 @@ export function useFounderBackend() {
    * The endpoint lives ONLY on Vercel (Cloudflare serves the SPA). */
   const [statsUsers, setStatsUsers] = useState<any[] | null>(null);
   const [statsStations, setStatsStations] = useState<any[] | null>(null);
+  const [statsTotalRevenue, setStatsTotalRevenue] = useState<number>(0);
   const [statsLoading, setStatsLoading] = useState(false);
 
   useEffect(() => {
@@ -333,6 +334,7 @@ export function useFounderBackend() {
         if (json?.success) {
           setStatsUsers(json.users || []);
           setStatsStations(json.stations || []);
+          setStatsTotalRevenue(Number(json.totalRevenue) || 0);
         }
       } catch {
         /* network / not a founder — silently ignore; tRPC null stays the fallback */
@@ -412,6 +414,9 @@ export function useFounderBackend() {
     // All Stations (for founder dashboard) — same precedence.
     allBackendStations: statsStations || allBackendStations,
     allStationsLoading: allStationsLoading || statsLoading,
+
+    // Total cross-owner revenue from /api/founder-stats
+    statsTotalRevenue,
 
     // Sales Analytics
     salesAnalytics,
