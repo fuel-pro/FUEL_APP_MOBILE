@@ -1492,6 +1492,73 @@ const ICON_MAP: Record<string, any> = {
   MapPin,
 };
 
+/**
+ * Normalize a raw connector (from COUNTRY_CONNECTORS, generateConnectorsForCountry,
+ * or cloud-saved JSON) into the IntegrationConnector shape the render expects.
+ *
+ * This is the single place that:
+ *  - maps the `icon` STRING ("Shield", "Landmark"…) to the actual lucide
+ *    component via ICON_MAP (a raw string would crash React with error #130
+ *    "Element type is invalid: got string" when rendered as <Icon />).
+ *  - renames the legacy `cat`→`category` / `desc`→`description` fields used by
+ *    COUNTRY_CONNECTORS + generateConnectorsForCountry so the render's
+ *    `conn.category` / `conn.description` accesses work.
+ *  - guarantees `config`, `features`, `status` are always present so the
+ *    render's `.map()` calls never crash on undefined.
+ *
+ * Cloud-saved connectors may have `icon` as a string (functions are dropped by
+ * JSON.stringify, but strings survive), or as undefined, or even as an already-
+ * mapped component (if saved by a newer build). This handles ALL cases.
+ */
+function normalizeConnector(raw: any): IntegrationConnector {
+  const iconResolved =
+    typeof raw.icon === "string"
+      ? ICON_MAP[raw.icon] || Plug
+      : typeof raw.icon === "function"
+        ? raw.icon
+        : Plug;
+  return {
+    id: raw.id || `conn_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    name: raw.name || "Unnamed Connector",
+    category: raw.category || raw.cat || "Other",
+    description: raw.description || raw.desc || "",
+    icon: iconResolved,
+    status: raw.status || "disconnected",
+    config:
+      raw.config && typeof raw.config === "object" && !Array.isArray(raw.config)
+        ? raw.config
+        : {},
+    lastSync: raw.lastSync,
+    features: Array.isArray(raw.features) ? raw.features : [],
+  };
+}
+
+function normalizeConnectors(raw: any): IntegrationConnector[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map(normalizeConnector);
+}
+
+// Reverse map: lucide component → icon NAME string, so we can serialize the
+// icon to cloud/localStorage as a plain string (functions are dropped by
+// JSON.stringify) and re-map it back to a component on load via ICON_MAP.
+const COMPONENT_TO_ICON_NAME = new Map<any, string>();
+for (const [name, comp] of Object.entries(ICON_MAP)) {
+  if (comp && typeof comp === "function") COMPONENT_TO_ICON_NAME.set(comp, name);
+}
+// Plug is the fallback icon; ensure it's in the reverse map too.
+if (!COMPONENT_TO_ICON_NAME.has(Plug)) COMPONENT_TO_ICON_NAME.set(Plug, "Plug");
+
+function serializeConnectorsForStorage(
+  conns: IntegrationConnector[],
+): IntegrationConnector[] {
+  return conns.map((c) => ({
+    ...c,
+    // Store the icon NAME (string) instead of the component function so it
+    // survives JSON.stringify and can be re-mapped via ICON_MAP on load.
+    icon: COMPONENT_TO_ICON_NAME.get(c.icon) || "Plug",
+  }));
+}
+
 interface CountryConnectorSet {
   country: string;
   code: string;
@@ -1718,12 +1785,12 @@ export default function IntegrationHub() {
         baseConnectors = dynamic.connectors;
       }
     }
-    return baseConnectors.map((c: any) => ({
-      ...c,
-      icon: ICON_MAP[c.icon] || Plug,
-      status: "disconnected" as const,
-      lastSync: undefined,
-    }));
+    // normalizeConnector maps the icon STRING → lucide component (a raw string
+    // would crash React error #130 when rendered as <Icon />) and renames
+    // cat→category / desc→description.
+    return baseConnectors.map((c: any) =>
+      normalizeConnector({ ...c, status: "disconnected", lastSync: undefined }),
+    );
   }, []);
 
   // INSTANT first render: seed from the synchronous in-memory cache (or localStorage
@@ -1734,7 +1801,7 @@ export default function IntegrationHub() {
       cKey,
       stationId,
     );
-    if (cached && Array.isArray(cached)) return cached;
+    if (cached && Array.isArray(cached)) return normalizeConnectors(cached);
     try {
       const sel = (() => {
         const cc = detectCountryCode();
@@ -1743,7 +1810,7 @@ export default function IntegrationHub() {
       const saved = localStorage.getItem(`${STORAGE_KEY}_${sel}`);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
+        if (Array.isArray(parsed)) return normalizeConnectors(parsed);
       }
       return buildBaseConnectors(sel);
     } catch {
@@ -1810,8 +1877,22 @@ export default function IntegrationHub() {
   });
 
   // Echo guard for real-time: when WE write to cloud, the realtime event echoes
-  // back; skip re-applying our own write to avoid a loop.
-  const skipRemoteRef = useRef(false);
+  // back; skip re-applying our own write to avoid a loop. Each subscription
+  // type gets its OWN flag so a connectors echo doesn't consume the webhooks
+  // skip (which would cause the webhooks echo to overwrite a just-added hook).
+  const skipRemoteConnRef = useRef(false);
+  const skipRemoteWhRef = useRef(false);
+  const skipRemoteKeyRef = useRef(false);
+
+  // Cloud-load-complete guard: prevents save effects from firing with default
+  // state BEFORE the initial cloud load returns — which would overwrite real
+  // cloud data with empty defaults (the same race fixed in PayrollSystem /
+  // Communication). Reset on every user/station change; set true after the
+  // initial load completes (success, no-data, or failure).
+  const cloudLoadCompleteRef = useRef(false);
+  useEffect(() => {
+    cloudLoadCompleteRef.current = false;
+  }, [user, stationId]);
 
   // Load from CLOUD (source of truth) on mount / user / station change.
   // Cloud is authoritative — localStorage is only a read-through cache.
@@ -1819,23 +1900,30 @@ export default function IntegrationHub() {
     if (!user) return;
     let cancelled = false;
     (async () => {
-      const [cloudConn, cloudWh, cloudKeys, cloudLogs] = await Promise.all([
-        cloudStorageService.get<IntegrationConnector[]>(cKey, stationId),
-        cloudStorageService.get<WebhookEndpoint[]>(wKey, stationId),
-        cloudStorageService.get<APIKey[]>(kKey, stationId),
-        cloudStorageService.get<string[]>(lKey, stationId),
-      ]);
-      if (cancelled) return;
-      // Connectors: if cloud has saved connectors use them; otherwise seed the
-      // country default set (disconnected) so the user sees the catalog.
-      if (cloudConn && Array.isArray(cloudConn) && cloudConn.length > 0) {
-        setConnectors(cloudConn);
-      } else {
-        setConnectors(buildBaseConnectors(countrySelector));
+      try {
+        const [cloudConn, cloudWh, cloudKeys, cloudLogs] = await Promise.all([
+          cloudStorageService.get<IntegrationConnector[]>(cKey, stationId),
+          cloudStorageService.get<WebhookEndpoint[]>(wKey, stationId),
+          cloudStorageService.get<APIKey[]>(kKey, stationId),
+          cloudStorageService.get<string[]>(lKey, stationId),
+        ]);
+        if (cancelled) return;
+        // Connectors: if cloud has saved connectors use them (normalized so icon
+        // strings → components + legacy field names are mapped); otherwise seed
+        // the country default set (disconnected) so the user sees the catalog.
+        if (cloudConn && Array.isArray(cloudConn) && cloudConn.length > 0) {
+          setConnectors(normalizeConnectors(cloudConn));
+        } else {
+          setConnectors(buildBaseConnectors(countrySelector));
+        }
+        if (cloudWh && Array.isArray(cloudWh)) setWebhooks(cloudWh);
+        if (cloudKeys && Array.isArray(cloudKeys)) setApiKeys(cloudKeys);
+        if (cloudLogs && Array.isArray(cloudLogs)) setLogs(cloudLogs);
+      } catch {
+        // Cloud load failed — unblock saves so local edits still persist.
+      } finally {
+        if (!cancelled) cloudLoadCompleteRef.current = true;
       }
-      if (cloudWh && Array.isArray(cloudWh)) setWebhooks(cloudWh);
-      if (cloudKeys && Array.isArray(cloudKeys)) setApiKeys(cloudKeys);
-      if (cloudLogs && Array.isArray(cloudLogs)) setLogs(cloudLogs);
     })();
     return () => {
       cancelled = true;
@@ -1858,19 +1946,19 @@ export default function IntegrationHub() {
       cKey,
       stationId,
       (val) => {
-        if (skipRemoteRef.current) {
-          skipRemoteRef.current = false;
+        if (skipRemoteConnRef.current) {
+          skipRemoteConnRef.current = false;
           return;
         }
-        if (val && Array.isArray(val)) setConnectors(val);
+        if (val && Array.isArray(val)) setConnectors(normalizeConnectors(val));
       },
     );
     const unsubW = cloudStorageService.subscribe<WebhookEndpoint[]>(
       wKey,
       stationId,
       (val) => {
-        if (skipRemoteRef.current) {
-          skipRemoteRef.current = false;
+        if (skipRemoteWhRef.current) {
+          skipRemoteWhRef.current = false;
           return;
         }
         if (val && Array.isArray(val)) setWebhooks(val);
@@ -1880,8 +1968,8 @@ export default function IntegrationHub() {
       kKey,
       stationId,
       (val) => {
-        if (skipRemoteRef.current) {
-          skipRemoteRef.current = false;
+        if (skipRemoteKeyRef.current) {
+          skipRemoteKeyRef.current = false;
           return;
         }
         if (val && Array.isArray(val)) setApiKeys(val);
@@ -1896,22 +1984,25 @@ export default function IntegrationHub() {
 
   // Save — cloud is source of truth; localStorage is a read-through cache only.
   // Wrapped in try/catch so a quota error never blocks the save to cloud.
+  // Guarded by cloudLoadCompleteRef so we never overwrite real cloud data with
+  // default/empty state before the initial cloud load returns.
   useEffect(() => {
-    if (!user) return;
-    skipRemoteRef.current = true;
-    cloudStorageService.set(cKey, connectors, stationId).catch(() => {});
+    if (!user || !cloudLoadCompleteRef.current) return;
+    skipRemoteConnRef.current = true;
+    const serializable = serializeConnectorsForStorage(connectors);
+    cloudStorageService.set(cKey, serializable, stationId).catch(() => {});
     try {
       localStorage.setItem(
         `${STORAGE_KEY}_${countrySelector}`,
-        JSON.stringify(connectors),
+        JSON.stringify(serializable),
       );
     } catch {
       /* localStorage quota — non-fatal, cloud is source of truth */
     }
   }, [connectors, countrySelector, user, stationId, cKey]);
   useEffect(() => {
-    if (!user) return;
-    skipRemoteRef.current = true;
+    if (!user || !cloudLoadCompleteRef.current) return;
+    skipRemoteWhRef.current = true;
     cloudStorageService.set(wKey, webhooks, stationId).catch(() => {});
     try {
       localStorage.setItem(
@@ -1923,8 +2014,8 @@ export default function IntegrationHub() {
     }
   }, [webhooks, countrySelector, user, stationId, wKey]);
   useEffect(() => {
-    if (!user) return;
-    skipRemoteRef.current = true;
+    if (!user || !cloudLoadCompleteRef.current) return;
+    skipRemoteKeyRef.current = true;
     cloudStorageService.set(kKey, apiKeys, stationId).catch(() => {});
     try {
       localStorage.setItem(
@@ -1937,7 +2028,7 @@ export default function IntegrationHub() {
   }, [apiKeys, countrySelector, user, stationId, kKey]);
   // Persist logs to cloud (capped) so the audit trail is cross-device.
   useEffect(() => {
-    if (!user) return;
+    if (!user || !cloudLoadCompleteRef.current) return;
     cloudStorageService.set(lKey, logs, stationId).catch(() => {});
   }, [logs, user, stationId, lKey]);
 
@@ -2144,18 +2235,12 @@ export default function IntegrationHub() {
                     country.name,
                   );
                   setConnectors(
-                    dynamic.connectors.map((c) => ({
-                      ...c,
-                      status: "disconnected",
-                      fields: Object.entries(c.config).map(([key, value]) => ({
-                        key,
-                        label: key
-                          .replace(/([A-Z])/g, " $1")
-                          .replace(/^./, (s) => s.toUpperCase()),
-                        type: typeof value === "boolean" ? "toggle" : "text",
-                        value,
+                    normalizeConnectors(
+                      dynamic.connectors.map((c) => ({
+                        ...c,
+                        status: "disconnected",
                       })),
-                    })),
+                    ),
                   );
                   setWebhooks(
                     dynamic.webhooks.map((w) => ({
@@ -2175,18 +2260,12 @@ export default function IntegrationHub() {
                   selected as keyof typeof COUNTRY_CONNECTORS
                 ] as CountryConnectorSet;
                 setConnectors(
-                  cc.connectors.map((c) => ({
-                    ...c,
-                    status: "disconnected",
-                    fields: Object.entries(c.config).map(([key, value]) => ({
-                      key,
-                      label: key
-                        .replace(/([A-Z])/g, " $1")
-                        .replace(/^./, (s) => s.toUpperCase()),
-                      type: typeof value === "boolean" ? "toggle" : "text",
-                      value,
+                  normalizeConnectors(
+                    cc.connectors.map((c) => ({
+                      ...c,
+                      status: "disconnected",
                     })),
-                  })),
+                  ),
                 );
                 setWebhooks(
                   cc.webhooks.map((w) => ({
