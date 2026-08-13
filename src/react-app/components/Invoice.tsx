@@ -284,7 +284,9 @@ export default function Invoice() {
         tax: 0,
         discount: 0,
         totalDue: totalDue,
-        currency: state.companyData.currency || getDetectedCurrency(),
+        currency: /^[A-Z]{3}$/.test(state.companyData?.currency || "")
+          ? state.companyData?.currency
+          : currentStation?.currency || getDetectedCurrency(),
         attendantName: "System",
         footerMessage: "Thank you for your business",
       };

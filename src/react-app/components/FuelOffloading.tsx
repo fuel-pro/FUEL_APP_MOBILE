@@ -19,6 +19,7 @@ import { getFuelLabel, getFuelCode } from "@/react-app/config/pricing";
 import { switchToTab } from "@/react-app/lib/mpesa-integration-service";
 import { cloudStorageService } from "@/react-app/lib/cloud-storage-service";
 import { useStations } from "@/react-app/context/StationContext";
+import { resolveCurrencySymbol } from "@/react-app/lib/currency";
 import type { OffloadingRecord } from "@/react-app/context/FuelContext";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -36,6 +37,10 @@ const formatNumber = (num: number): string => {
 export default function FuelOffloading() {
   const { state, dispatch } = useFuel();
   const { currentStation } = useStations();
+  const currencySymbol = resolveCurrencySymbol(
+    state.companyData?.currency,
+    currentStation?.currency,
+  );
   // Unified station fuel types so the offloading fuel-type dropdown reflects
   // the station's actual configured fuels (from Fuel Type Manager).
   const fuelTypeApi = useStationFuelTypes();
@@ -299,8 +304,8 @@ export default function FuelOffloading() {
       record.driverName,
       record.fuelType,
       formatNumber(record.quantity),
-      `${state.companyData.currency} ${formatNumber(record.rate)}`,
-      `${state.companyData.currency} ${formatNumber(record.totalAmount)}`,
+      `${currencySymbol} ${formatNumber(record.rate)}`,
+      `${currencySymbol} ${formatNumber(record.totalAmount)}`,
       record.supplier,
     ]);
 
@@ -322,14 +327,14 @@ export default function FuelOffloading() {
       finalY,
     );
     doc.text(
-      `Total Amount: ${state.companyData.currency} ${formatNumber(totals.totalAmount)}`,
+      `Total Amount: ${currencySymbol} ${formatNumber(totals.totalAmount)}`,
       14,
       finalY + 8,
     );
     let lineOffset = 16;
     Object.entries(totals.byFuel).forEach(([ft, v]) => {
       doc.text(
-        `${getFuelLabel(ft)} (${ft}): ${formatNumber(v.quantity)} L (${state.companyData.currency} ${formatNumber(v.amount)})`,
+        `${getFuelLabel(ft)} (${ft}): ${formatNumber(v.quantity)} L (${currencySymbol} ${formatNumber(v.amount)})`,
         14,
         finalY + lineOffset,
       );
@@ -374,11 +379,9 @@ export default function FuelOffloading() {
       [],
       ["TOTALS"],
       [`Total Quantity: ${formatNumber(totals.totalQuantity)} L`],
-      [
-        `Total Amount: ${state.companyData.currency} ${formatNumber(totals.totalAmount)}`,
-      ],
+      [`Total Amount: ${currencySymbol} ${formatNumber(totals.totalAmount)}`],
       ...Object.entries(totals.byFuel).map(([ft, v]) => [
-        `${getFuelLabel(ft)} (${ft}): ${formatNumber(v.quantity)} L (${state.companyData.currency} ${formatNumber(v.amount)})`,
+        `${getFuelLabel(ft)} (${ft}): ${formatNumber(v.quantity)} L (${currencySymbol} ${formatNumber(v.amount)})`,
       ]),
     ];
 
@@ -394,7 +397,7 @@ export default function FuelOffloading() {
       txt += `Date: ${record.date} ${record.time}\n`;
       txt += `Truck: ${record.truckReg} | Driver: ${record.driverName}\n`;
       txt += `Fuel: ${record.fuelType} | Quantity: ${formatNumber(record.quantity)} L\n`;
-      txt += `Rate: ${state.companyData.currency} ${formatNumber(record.rate)} | Total: ${state.companyData.currency} ${formatNumber(record.totalAmount)}\n`;
+      txt += `Rate: ${currencySymbol} ${formatNumber(record.rate)} | Total: ${currencySymbol} ${formatNumber(record.totalAmount)}\n`;
       txt += `Supplier: ${record.supplier} | Invoice: ${record.invoiceNo}\n`;
       if (record.remarks) txt += `Remarks: ${record.remarks}\n`;
       txt += "\n";
@@ -402,9 +405,9 @@ export default function FuelOffloading() {
 
     txt += `\nTOTALS:\n`;
     txt += `Total Quantity: ${formatNumber(totals.totalQuantity)} L\n`;
-    txt += `Total Amount: ${state.companyData.currency} ${formatNumber(totals.totalAmount)}\n`;
+    txt += `Total Amount: ${currencySymbol} ${formatNumber(totals.totalAmount)}\n`;
     Object.entries(totals.byFuel).forEach(([ft, v]) => {
-      txt += `${getFuelLabel(ft)} (${ft}): ${formatNumber(v.quantity)} L (${state.companyData.currency} ${formatNumber(v.amount)})\n`;
+      txt += `${getFuelLabel(ft)} (${ft}): ${formatNumber(v.quantity)} L (${currencySymbol} ${formatNumber(v.amount)})\n`;
     });
 
     const blob = new Blob([txt], { type: "text/plain" });
@@ -424,13 +427,13 @@ export default function FuelOffloading() {
     excel: exportToExcel,
     txt: exportToTXT,
     whatsapp: () => {
-      const msg = `*${state.companyData.name}*\n\n*Fuel Offloading Summary*\n\nTotal Quantity: ${formatNumber(totals.totalQuantity)} L\nTotal Amount: ${state.companyData.currency} ${formatNumber(totals.totalAmount)}${fuelBreakdownSummary()}\n\nRecords: ${state.offloadingRecords.length}`;
+      const msg = `*${state.companyData.name}*\n\n*Fuel Offloading Summary*\n\nTotal Quantity: ${formatNumber(totals.totalQuantity)} L\nTotal Amount: ${currencySymbol} ${formatNumber(totals.totalAmount)}${fuelBreakdownSummary()}\n\nRecords: ${state.offloadingRecords.length}`;
       const url = `https://wa.me/?text=${encodeURIComponent(msg)}`;
       window.open(url, "_blank");
     },
     email: () => {
       const subject = "Fuel Offloading Report";
-      const body = `${state.companyData.name}\n\nFuel Offloading Summary\n\nTotal Quantity: ${formatNumber(totals.totalQuantity)} L\nTotal Amount: ${state.companyData.currency} ${formatNumber(totals.totalAmount)}${fuelBreakdownSummary()}\n\nRecords: ${state.offloadingRecords.length}`;
+      const body = `${state.companyData.name}\n\nFuel Offloading Summary\n\nTotal Quantity: ${formatNumber(totals.totalQuantity)} L\nTotal Amount: ${currencySymbol} ${formatNumber(totals.totalAmount)}${fuelBreakdownSummary()}\n\nRecords: ${state.offloadingRecords.length}`;
       window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
     },
   };
@@ -480,7 +483,7 @@ export default function FuelOffloading() {
               </span>
             </div>
             <div className="text-2xl font-bold text-green-600">
-              {state.companyData.currency} {formatNumber(totals.totalAmount)}
+              {currencySymbol} {formatNumber(totals.totalAmount)}
             </div>
           </div>
 
@@ -499,7 +502,7 @@ export default function FuelOffloading() {
                 {formatNumber(v.quantity)} L
               </div>
               <div className="text-sm text-amber-600">
-                {state.companyData.currency} {formatNumber(v.amount)}
+                {currencySymbol} {formatNumber(v.amount)}
               </div>
             </div>
           ))}
@@ -654,11 +657,10 @@ export default function FuelOffloading() {
                       {formatNumber(record.quantity)}
                     </td>
                     <td className="font-mono">
-                      {state.companyData.currency} {formatNumber(record.rate)}
+                      {currencySymbol} {formatNumber(record.rate)}
                     </td>
                     <td className="font-mono font-medium">
-                      {state.companyData.currency}{" "}
-                      {formatNumber(record.totalAmount)}
+                      {currencySymbol} {formatNumber(record.totalAmount)}
                     </td>
                     <td>{record.supplier}</td>
                     <td>
@@ -787,7 +789,7 @@ export default function FuelOffloading() {
               </div>
 
               <div className="form-group">
-                <label>Rate per Litre ({state.companyData.currency}) *</label>
+                <label>Rate per Litre ({currencySymbol}) *</label>
                 <div className="flex gap-2">
                   <input
                     type="number"
@@ -818,7 +820,7 @@ export default function FuelOffloading() {
               </div>
 
               <div className="form-group">
-                <label>Total Amount ({state.companyData.currency})</label>
+                <label>Total Amount ({currencySymbol})</label>
                 <input
                   type="number"
                   value={formData.totalAmount ?? ""}

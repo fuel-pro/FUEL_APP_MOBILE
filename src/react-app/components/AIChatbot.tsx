@@ -90,7 +90,7 @@ export default function AIChatbot() {
     const context: any = {
       timestamp: new Date().toISOString(),
       businessName: state.companyData.name || "Fuel Station",
-      currency: state.companyData.currency || getCurrencySymbol(),
+      currency: state.companyData.currency || getCurrencySymbol() || "USD",
       theme: state.theme,
       currentDate: state.salesDate,
       currentShift: state.shift,

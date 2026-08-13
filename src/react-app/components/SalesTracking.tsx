@@ -1336,8 +1336,7 @@ export default function SalesTracking() {
               return (
                 <div className="form-group" key={ft}>
                   <label>
-                    {label} ({code}) Price (
-                    {state.companyData.currency || currencySymbol}/L)
+                    {label} ({code}) Price ({currencySymbol}/L)
                   </label>
                   <input
                     type="number"
@@ -1377,12 +1376,12 @@ export default function SalesTracking() {
                   <thead>
                     <tr>
                       <th>Pump ID</th>
-                      <th>Opening Meter ({state.companyData.currency})</th>
-                      <th>Closing Meter ({state.companyData.currency})</th>
+                      <th>Opening Meter ({currencySymbol})</th>
+                      <th>Closing Meter ({currencySymbol})</th>
                       <th>Opening Meter (L)</th>
                       <th>Closing Meter (L)</th>
                       <th>Sales (L)</th>
-                      <th>Sales ({state.companyData.currency})</th>
+                      <th>Sales ({currencySymbol})</th>
                       <th>Action</th>
                     </tr>
                   </thead>
@@ -1488,7 +1487,7 @@ export default function SalesTracking() {
               <thead>
                 <tr>
                   <th>Description</th>
-                  <th>Amount ({state.companyData.currency})</th>
+                  <th>Amount ({currencySymbol})</th>
                   <th>Action</th>
                 </tr>
               </thead>
@@ -1536,9 +1535,7 @@ export default function SalesTracking() {
         <div className="mb-6">
           <h3 className="text-lg font-semibold mb-3">Till/Mobile Payment</h3>
           <div className="form-group max-w-md">
-            <label>
-              Total Till/Mobile Payment ({state.companyData.currency})
-            </label>
+            <label>Total Till/Mobile Payment ({currencySymbol})</label>
             <input
               type="number"
               value={state.tillPayment}
@@ -1563,8 +1560,7 @@ export default function SalesTracking() {
               <div className="summary-item" key={ft}>
                 <div className="summary-label">Total {label} Sales</div>
                 <div className="summary-value">
-                  {state.companyData.currency || currencySymbol}{" "}
-                  {formatNumber(sales, 2)}
+                  {currencySymbol} {formatNumber(sales, 2)}
                 </div>
               </div>
             );
@@ -1572,36 +1568,31 @@ export default function SalesTracking() {
           <div className="summary-item">
             <div className="summary-label">Total Revenue</div>
             <div className="summary-value">
-              {state.companyData.currency || currencySymbol}{" "}
-              {formatNumber(summary.totalRevenue, 2)}
+              {currencySymbol} {formatNumber(summary.totalRevenue, 2)}
             </div>
           </div>
           <div className="summary-item">
             <div className="summary-label">Till/Mobile Payment</div>
             <div className="summary-value">
-              {state.companyData.currency || currencySymbol}{" "}
-              {formatNumber(state.tillPayment, 2)}
+              {currencySymbol} {formatNumber(state.tillPayment, 2)}
             </div>
           </div>
           <div className="summary-item">
             <div className="summary-label">Cash In Hand</div>
             <div className="summary-value">
-              {state.companyData.currency || currencySymbol}{" "}
-              {formatNumber(summary.cashInHand, 2)}
+              {currencySymbol} {formatNumber(summary.cashInHand, 2)}
             </div>
           </div>
           <div className="summary-item">
             <div className="summary-label">Total Expenses</div>
             <div className="summary-value">
-              {state.companyData.currency || currencySymbol}{" "}
-              {formatNumber(summary.totalExpenses, 2)}
+              {currencySymbol} {formatNumber(summary.totalExpenses, 2)}
             </div>
           </div>
           <div className="summary-item">
             <div className="summary-label">Net Income</div>
             <div className="summary-value">
-              {state.companyData.currency || currencySymbol}{" "}
-              {formatNumber(summary.netIncome, 2)}
+              {currencySymbol} {formatNumber(summary.netIncome, 2)}
             </div>
           </div>
         </div>
