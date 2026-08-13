@@ -3923,3 +3923,62 @@ fetches NEW `index.html` → permanent fix. Users see the update within
   auto-update within ~10 min via the propagation path above. No
   Supabase changes (frontend-only).
 
+
+
+## Session 2026-08-13 — Pump Settings merged into Fuel Types + founder nav verified
+
+### Pump Settings → Fuel Types inline action (DEPLOYED LIVE, commit 53ad4fd)
+
+`FuelTypesManager.tsx` now merges the "Number of Pumps" control INTO the
+Fuel Types list as an inline action beside each fuel type (per the recurring
+task in 8 AUG 26.txt). Previously pump count was only editable in the separate
+"Pump Settings" sub-tab.
+
+- **Inline stepper** (`handleSetPumpCount`): a compact +/- control with a
+  Gauge icon sits in each fuel-type row's action area (next to the
+  Active/Inactive toggle). `Math.max(0, Math.min(99, ...))` clamps. Writes
+  straight to the canonical `fuel_types_config` via `persist()`.
+- **Inline price/cost/VAT editors** (`handleSetField`): the expanded fuel
+  row now has editable Selling Price / Cost Price / VAT Rate inputs (was
+  read-only InfoBoxes). A change calls `persist()` -> `emitFuelPriceChange`
+  on the fuel interlink bus -> propagates to Dashboard, Price Board, POS,
+  Sales Tracking, Invoice, Reports instantly.
+- The separate "Pump Settings" sub-tab is retained (still works, reads the
+  same config), but the inline action is now the primary, faster path.
+
+**Verified LIVE** on `fuel-app-mobile.pages.dev` (chunk
+`FuelTypesManager-D1lGTXX0.js`, marker "Decrease pump count"): clicked the
+Super Petrol "+" stepper -> pump count 1->2 instantly; Supabase `app_kv`
+row `fuel_types_config__c847d526...__106a671f...` shows `pumpCount: 2` for
+Super Petrol (updated 17:34:33 UTC). Cross-device cloud sync confirmed.
+
+**Also cleaned stale orphaned chunks**: prior builds left old
+`index-De6F8O5Y.js` + `FuelTypesManager-CKUZOMlq.js` in `dist/` (referenced
+by no live index). Removed them; redeployed clean so the SW precache can't
+serve the old chunks.
+
+### Founder Console nav verified working (NOT a regression)
+
+Earlier `browser_get_content` returned STALE DOM after clicking "All Users"
+(showed "Super Admin | Overview"), which looked like the nav-section
+regression. Follow-up with `browser_get_state` + screenshot confirmed the
+nav ACTUALLY works: after clicking "All Users", the full 33-user
+cross-owner table renders (real emails: ridgenawose400@gmail.com,
+coolyona76, leonnovic, founder.qa.fuelpro@gmail.com, etc.). The live
+founder chunk `founder-DaYzPG3o.js` matches local and contains the
+`logAuditRef` fix (commit ae5f31f). The stale-content reading was a
+`get_content` timing artifact, not a real bug. No code change needed.
+
+### Deploy state 2026-08-13
+
+- GitHub main: `53ad4fd` (pushed, synced with origin/main).
+- Cloudflare Pages: LIVE (main alias `fuel-app-mobile.pages.dev`,
+  previews `308fe140`, `a0f00824`; chunk `FuelTypesManager-D1lGTXX0.js`
+  with inline pump stepper verified live; stale orphans removed).
+- Vercel production: still quota-blocked on `leons-projects` team
+  (`api-deployments-free-per-day` 100/100); GitHub integration
+  (prodBranch=main) will auto-deploy `53ad4fd` when the quota resets.
+- Supabase: no schema changes (uses existing `fuel_types_config` cloud key
+  in `app_kv`, scoped by owner). Verified live.
+- `npx tsc --noEmit` (0 errors), `npm run build` (success), `prettier
+  --check` (all pass).
