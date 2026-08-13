@@ -205,8 +205,59 @@ export async function GET(request: Request): Promise<Response> {
   // Compute total revenue across all stations.
   const totalRevenue = stations.reduce((sum, s) => sum + (s.revenue || 0), 0);
 
+  // 6) Sales analytics: byFuelType, totalSales, avgSale.
+  //    Fetch sale_items (fuel_type, quantity, total_price) across all stations
+  //    (service_role bypasses RLS). Fall back to sales_enhanced if sale_items
+  //    is empty or doesn't exist.
+  const byFuelTypeMap = new Map<string, { liters: number; revenue: number }>();
+
+  const { data: saleItemsRows, error: saleItemsErr } = await supabaseAdmin
+    .from("sale_items")
+    .select("fuel_type, quantity, total_price");
+
+  if (!saleItemsErr && saleItemsRows) {
+    for (const si of saleItemsRows) {
+      const ft = String(si.fuel_type || "Other");
+      const qty = Number(si.quantity) || 0;
+      const amt = Number(si.total_price) || 0;
+      const existing = byFuelTypeMap.get(ft) || { liters: 0, revenue: 0 };
+      existing.liters += qty;
+      existing.revenue += amt;
+      byFuelTypeMap.set(ft, existing);
+    }
+  }
+
+  // Also aggregate from sales_enhanced for totalSales count.
+  const { count: salesCount, error: salesCountErr } = await supabaseAdmin
+    .from("sales_enhanced")
+    .select("*", { count: "exact", head: true });
+
+  const totalSales = salesCountErr ? 0 : (salesCount || 0);
+  const avgSale = totalSales > 0 ? totalRevenue / totalSales : 0;
+
+  const byFuelType = Array.from(byFuelTypeMap.entries()).map(
+    ([fuelType, data]) => ({
+      fuelType,
+      liters: data.liters,
+      revenue: data.revenue,
+    }),
+  );
+
   return json(
-    { success: true, users, stations, totalRevenue },
+    {
+      success: true,
+      users,
+      stations,
+      totalRevenue,
+      // Analytics data for the Analytics section
+      analytics: {
+        totalRevenue,
+        totalSales,
+        avgSale,
+        byFuelType,
+        stationCount: stations.length,
+      },
+    },
     200,
     // 60s CDN cache — founder stats don't need to be real-time to the second.
     { "Cache-Control": "no-store" },
