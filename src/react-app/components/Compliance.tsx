@@ -26,12 +26,27 @@ import {
 } from "@/react-app/config/compliance";
 import SearchableCountryDropdown from "@/react-app/components/SearchableCountryDropdown";
 import { useFuel } from "@/react-app/context/FuelContext";
+import { useStations } from "@/react-app/context/StationContext";
+import { getDetectedCountryCode } from "@/react-app/lib/currency";
+import { switchToTab } from "@/react-app/lib/mpesa-integration-service";
 
 export default function Compliance() {
   const { state } = useFuel();
+  const { currentStation } = useStations();
   const companyLogo = state?.companyData?.logo;
   const companyName = state?.companyData?.name;
   const [selectedCountryCode, setSelectedCountryCode] = useState(() => {
+    // Prefer the station's explicit country, then the unified detector, then a
+    // localStorage hint, then timezone — never hard-default to Kenya.
+    const stationCountry =
+      (currentStation as any)?.country ||
+      (state?.companyData as any)?.country ||
+      (state?.companyData as any)?.companyCountry;
+    if (stationCountry && stationCountry.length === 2) {
+      return stationCountry.toUpperCase();
+    }
+    const detected = getDetectedCountryCode();
+    if (detected) return detected.toUpperCase();
     try {
       const saved = localStorage.getItem("fuelpro_location_country");
       if (saved) {
@@ -129,6 +144,14 @@ export default function Compliance() {
             title="Export JSON"
           >
             <Download size={18} />
+          </button>
+          <button
+            onClick={() => switchToTab("reports")}
+            className="px-3 py-2 rounded-lg bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-900/30 dark:hover:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 text-sm font-medium transition-all"
+            title="Open Reports Center"
+          >
+            <FileText size={16} className="inline mr-1" />
+            Reports
           </button>
         </div>
       </div>

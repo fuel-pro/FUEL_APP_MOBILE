@@ -3794,3 +3794,52 @@ station `52c24393`):
 - Owner/founder: `founder.qa.fuelpro@gmail.com` / `FuelPro@2026!`
   (uid `87e6502b`, unique_id `FPRQA2026`, role `founder`, US station
   "Founder Admin Station", USD).
+
+## Multi-tab QA pass — remaining unaudited tabs (2026-08-13, PR #132)
+
+Full QA pass across the 9 remaining unaudited tabs, fixing the standard
+anti-patterns (hardcoded Kenya values, localStorage source-of-truth,
+unchecked supabase errors, unguarded toFixed/NaN, missing cross-tab
+interlinks). `tsc -b` 0 errors, `npm run build` 111 precache, prettier
+all pass. Cloudflare Pages LIVE (preview https://939ac7f3.fuel-app-mobile.pages.dev
++ main alias). Vercel BLOCKED by api-deployments-free-per-day (GitHub
+integration auto-deploys PR #132 when quota resets). No Supabase changes
+(frontend-only).
+
+- **TerminalSessions.tsx**: hardcoded `en-KE` Intl.NumberFormat →
+  country-aware `formatMoney` from currency.ts; `safeMoney()` NaN guard;
+  checked supabase `{ error }` in `loadSessions`.
+- **PumpMappingV1.tsx**: `getDetectedCurrency()` (was localStorage-only
+  `fuelpro_*` read); `fmt()` helper replacing unguarded `.toFixed()`;
+  div-by-zero guard in Quick Stats; `currentStation?.id` for stationId.
+- **SalesTracking.tsx**: removed `KENYA_BASE_PRICES` reset fallback (now
+  uses current station prices); canonical fuel labels (was hardcoded
+  Petrol/Diesel); cross-tab nav buttons.
+- **DataManager.tsx** (CRITICAL): `clearData` now wipes cross-device cloud
+  data via `cloudStorageService.getAll()`+`delete()` (was localStorage-only
+  — cleared data re-hydrated from cloud on reload → "clear all" was
+  ineffective). Second confirmation explains cloud deletion. Fixed broken
+  `import('@/react-app/lib/toast')` in generated standalone-export HTML
+  (the `@/` alias is build-time only → runtime throw in raw HTML) → `alert`.
+- **FuelSalesReport.tsx**: canonical fuel labels (Super Petrol/Diesel)
+  replacing hardcoded Petrol/Diesel across stat cards, table headers,
+  monthly totals.
+- **CustomersManagement.tsx**: country-aware `formatMoney` (was en-KE) +
+  `Number.isFinite` guard; checked supabase `{ error }` in loadSales;
+  guarded `new Date(sale.created_at)`; cross-tab interlinks in customer
+  detail modal (Create Credit Account / New Invoice / Collect via M-PESA).
+- **News.tsx**: guarded `publishedAt` date formatting (was "Invalid Date"
+  on null).
+- **DeliveryTracker.tsx**: canonical fuel labels in TXT export + price
+  input labels; guarded null prices in export string.
+- **Compliance.tsx**: country detection prefers station country → unified
+  `getDetectedCountryCode()` → localStorage hint → timezone (was
+  Kenya-first localStorage-only); added Reports Center cross-tab link.
+
+The two-fuel-only model in FuelSalesReport (SalesEntry has petrol/diesel
+only) is a deliberate data-model match to SalesTracking's PMS/AGO pump
+model — widening to all canonical fuels would require changing SalesEntry
++ the whole report computation (out of scope, deferred). The toFixed calls
+in FuelSalesReport are safe (generateReport coerces all inputs via
+`Number(...)||0`).
+

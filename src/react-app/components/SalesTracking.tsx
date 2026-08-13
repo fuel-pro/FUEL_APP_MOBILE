@@ -1,5 +1,4 @@
 import { useState, useRef, useCallback } from "react";
-import { KENYA_BASE_PRICES } from "@/react-app/config/pricing";
 import {
   Plus,
   Save,
@@ -27,6 +26,8 @@ import {
 } from "@/react-app/utils/exportUtils";
 import { formatNumber } from "@/react-app/utils/formatUtils";
 import { getCurrencySymbol } from "@/react-app/lib/currency";
+import { CANONICAL_FUEL_TYPES } from "@/react-app/config/pricing";
+import { switchToTab } from "@/react-app/lib/mpesa-integration-service";
 import ImageCropper from "@/react-app/components/ImageCropper";
 
 interface ExtractedPump {
@@ -129,28 +130,28 @@ export default function SalesTracking() {
       pumps: [
         {
           name: "PMS-1",
-          fuelType: "Petrol",
+          fuelType: CANONICAL_FUEL_TYPES.petrol.label,
           openingReading: 0,
           closingReading: 0,
           salesAmount: 0,
         },
         {
           name: "PMS-2",
-          fuelType: "Petrol",
+          fuelType: CANONICAL_FUEL_TYPES.petrol.label,
           openingReading: 0,
           closingReading: 0,
           salesAmount: 0,
         },
         {
           name: "AGO-1",
-          fuelType: "Diesel",
+          fuelType: CANONICAL_FUEL_TYPES.diesel.label,
           openingReading: 0,
           closingReading: 0,
           salesAmount: 0,
         },
         {
           name: "AGO-2",
-          fuelType: "Diesel",
+          fuelType: CANONICAL_FUEL_TYPES.diesel.label,
           openingReading: 0,
           closingReading: 0,
           salesAmount: 0,
@@ -479,8 +480,8 @@ export default function SalesTracking() {
       dispatch({
         type: "SET_PRICES",
         payload: {
-          pmsPrice: KENYA_BASE_PRICES.petrol,
-          agoPrice: KENYA_BASE_PRICES.diesel,
+          pmsPrice: state.pmsPrice || 0,
+          agoPrice: state.agoPrice || 0,
         },
       });
       dispatch({
@@ -539,8 +540,8 @@ export default function SalesTracking() {
     dispatch({
       type: "SET_PRICES",
       payload: {
-        pmsPrice: data.pmsPrice || KENYA_BASE_PRICES.petrol,
-        agoPrice: data.agoPrice || KENYA_BASE_PRICES.diesel,
+        pmsPrice: data.pmsPrice || state.pmsPrice || 0,
+        agoPrice: data.agoPrice || state.agoPrice || 0,
       },
     });
     dispatch({
@@ -938,8 +939,11 @@ export default function SalesTracking() {
                             }
                             className="px-2 py-1 rounded border text-xs"
                           >
-                            <option value="Petrol">Petrol</option>
-                            <option value="Diesel">Diesel</option>
+                            {Object.values(CANONICAL_FUEL_TYPES).map((ft) => (
+                              <option key={ft.canonical} value={ft.label}>
+                                {ft.label}
+                              </option>
+                            ))}
                           </select>
                           <input
                             type="number"
@@ -1053,6 +1057,22 @@ export default function SalesTracking() {
             Fuel Sales Tracking (PMS & AGO)
           </h2>
           <div className="flex gap-2 flex-wrap">
+            <button
+              onClick={() => switchToTab("pos")}
+              className="btn btn-outline"
+              title="Record a sale in Point of Sale"
+            >
+              <Tag size={16} />
+              <span className="hidden sm:inline">Sell in POS</span>
+            </button>
+            <button
+              onClick={() => switchToTab("fuelsalesreport")}
+              className="btn btn-outline"
+              title="View consolidated fuel sales report"
+            >
+              <BarChart3 size={16} />
+              <span className="hidden sm:inline">Reports</span>
+            </button>
             <button onClick={saveSalesData} className="btn btn-primary">
               <Save size={16} />
               <span className="hidden sm:inline">Save</span>

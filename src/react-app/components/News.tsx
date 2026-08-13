@@ -696,7 +696,9 @@ export default function News() {
                       </span>
                       <span className="flex items-center gap-1">
                         <Clock size={10} />{" "}
-                        {new Date(item.publishedAt).toLocaleDateString()}
+                        {item.publishedAt
+                          ? new Date(item.publishedAt).toLocaleDateString()
+                          : "—"}
                       </span>
                     </div>
                     <ExternalLink
@@ -751,7 +753,9 @@ export default function News() {
               <div className="flex items-center justify-between text-xs text-gray-400">
                 <span>Source: {selectedItem.source}</span>
                 <span>
-                  {new Date(selectedItem.publishedAt).toLocaleDateString()}
+                  {selectedItem.publishedAt
+                    ? new Date(selectedItem.publishedAt).toLocaleDateString()
+                    : "—"}
                 </span>
               </div>
               <div className="mt-4 flex flex-col gap-2">

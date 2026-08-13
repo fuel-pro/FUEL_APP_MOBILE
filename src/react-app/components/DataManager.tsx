@@ -20,6 +20,7 @@ import { formatNumber } from "@/react-app/utils/formatUtils";
 import DataRecovery from "@/react-app/components/DataRecovery";
 import CloudSyncPanel from "@/react-app/components/CloudSyncPanel";
 import SyncDashboard from "@/react-app/components/SyncDashboard";
+import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 
 export default function DataManager() {
   const {
@@ -166,9 +167,12 @@ export default function DataManager() {
   const FUELPRO_PREFIX = "fuelpro_";
   const clearData = () => {
     const confirmed = confirm(
-      "Are you sure you want to clear all FuelPro data? This action cannot be undone!",
+      "Are you sure you want to clear ALL FuelPro data? This will remove local data AND your cross-device cloud data for this account. This action cannot be undone!",
     );
     if (confirmed) {
+      const confirmedCloud = confirm(
+        "This will permanently delete your data from the cloud so it does NOT reappear on other devices. Continue?",
+      );
       // Only remove FuelPro keys — never clear all localStorage (destructive to other apps)
       const keysToRemove: string[] = [];
       for (let i = 0; i < localStorage.length; i++) {
@@ -185,6 +189,18 @@ export default function DataManager() {
         }
       }
       keysToRemove.forEach((k) => localStorage.removeItem(k));
+
+      // Also wipe cross-device cloud data so it doesn't re-hydrate on reload/other devices
+      if (confirmedCloud) {
+        cloudStorageService
+          .getAll()
+          .then((all) => {
+            Object.keys(all || {}).forEach((k) => {
+              cloudStorageService.delete(k).catch(() => {});
+            });
+          })
+          .catch(() => {});
+      }
       import("@/react-app/lib/app-reloader").then(({ broadcastReload }) =>
         broadcastReload(),
       );
@@ -471,7 +487,7 @@ export default function DataManager() {
         
         function exportAsCSV() {
             if (!appData.deliveryData || !appData.deliveryData.rows.length) {
-                import('@/react-app/lib/toast').then(({toastWarning}) => toastWarning('No delivery data to export'));
+                alert('No delivery data to export');
                 return;
             }
             
