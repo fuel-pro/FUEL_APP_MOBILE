@@ -41,9 +41,17 @@ import {
   onTabPayload,
   navigateToTab,
 } from "@/react-app/lib/mpesa-integration-service";
-import { normalizeFuelType, getFuelLabel } from "@/react-app/config/pricing";
+import {
+  normalizeFuelType,
+  getFuelLabel,
+  getVATRate,
+} from "@/react-app/config/pricing";
 import type { CanonicalFuelType } from "@/react-app/config/pricing";
 import { useStationFuelTypes } from "@/react-app/hooks/useStationFuelTypes";
+import { getDetectedCountryCode } from "@/react-app/lib/currency";
+
+// Country-aware default tax rate for preset fuels (was hardcoded 16% Kenya VAT).
+const PRESET_TAX_RATE = Math.round(getVATRate(getDetectedCountryCode()) * 100);
 
 // ============================================================
 // CUSTOM FUEL TYPE MANAGER
@@ -112,9 +120,9 @@ const PRESET_FUELS: CustomFuelType[] = [
     code: CANONICAL_FUEL_TYPES.kerosene.code,
     name: "Illuminating Kerosene",
     localName: CANONICAL_FUEL_TYPES.kerosene.label,
-    price: 164.9,
-    costPrice: 155.0,
-    taxRate: 16,
+    price: 0, // user enters station-specific price
+    costPrice: 0,
+    taxRate: PRESET_TAX_RATE,
     levyRate: 0,
     color: "amber",
     icon: "flame",
@@ -127,9 +135,9 @@ const PRESET_FUELS: CustomFuelType[] = [
     code: CANONICAL_FUEL_TYPES.vpower.code,
     name: "Shell V-Power",
     localName: CANONICAL_FUEL_TYPES.vpower.label,
-    price: 214.35,
-    costPrice: 200.0,
-    taxRate: 16,
+    price: 0, // user enters station-specific price
+    costPrice: 0,
+    taxRate: PRESET_TAX_RATE,
     levyRate: 0,
     color: "purple",
     icon: "zap",
@@ -142,9 +150,9 @@ const PRESET_FUELS: CustomFuelType[] = [
     code: CANONICAL_FUEL_TYPES.premium_diesel.code,
     name: "Premium Diesel",
     localName: CANONICAL_FUEL_TYPES.premium_diesel.label,
-    price: 213.72,
-    costPrice: 199.5,
-    taxRate: 16,
+    price: 0, // user enters station-specific price
+    costPrice: 0,
+    taxRate: PRESET_TAX_RATE,
     levyRate: 0,
     color: "indigo",
     icon: "droplet",
@@ -157,9 +165,9 @@ const PRESET_FUELS: CustomFuelType[] = [
     code: CANONICAL_FUEL_TYPES.lpg.code,
     name: "Liquefied Petroleum Gas",
     localName: CANONICAL_FUEL_TYPES.lpg.label,
-    price: 120.0,
-    costPrice: 100.0,
-    taxRate: 8,
+    price: 0, // user enters station-specific price
+    costPrice: 0,
+    taxRate: PRESET_TAX_RATE,
     levyRate: 0,
     color: "green",
     icon: "wind",
@@ -172,9 +180,9 @@ const PRESET_FUELS: CustomFuelType[] = [
     code: "CNG",
     name: "Compressed Natural Gas",
     localName: "CNG",
-    price: 80.0,
-    costPrice: 65.0,
-    taxRate: 16,
+    price: 0, // user enters station-specific price
+    costPrice: 0,
+    taxRate: PRESET_TAX_RATE,
     levyRate: 0,
     color: "cyan",
     icon: "wind",
@@ -187,9 +195,9 @@ const PRESET_FUELS: CustomFuelType[] = [
     code: "B20",
     name: "Biodiesel B20",
     localName: "Bio Diesel",
-    price: 195.0,
-    costPrice: 180.0,
-    taxRate: 16,
+    price: 0, // user enters station-specific price
+    costPrice: 0,
+    taxRate: PRESET_TAX_RATE,
     levyRate: 0,
     color: "emerald",
     icon: "leaf",
@@ -202,9 +210,9 @@ const PRESET_FUELS: CustomFuelType[] = [
     code: "E10",
     name: "Ethanol Blend E10",
     localName: "Ethanol Petrol",
-    price: 200.0,
-    costPrice: 185.0,
-    taxRate: 16,
+    price: 0, // user enters station-specific price
+    costPrice: 0,
+    taxRate: PRESET_TAX_RATE,
     levyRate: 0,
     color: "yellow",
     icon: "beaker",
@@ -217,9 +225,9 @@ const PRESET_FUELS: CustomFuelType[] = [
     code: "AVGAS",
     name: "Aviation Gasoline",
     localName: "Avgas",
-    price: 350.0,
-    costPrice: 320.0,
-    taxRate: 16,
+    price: 0, // user enters station-specific price
+    costPrice: 0,
+    taxRate: PRESET_TAX_RATE,
     levyRate: 0,
     color: "sky",
     icon: "plane",
@@ -232,9 +240,9 @@ const PRESET_FUELS: CustomFuelType[] = [
     code: "JET",
     name: "Jet A-1 Fuel",
     localName: "Jet Fuel",
-    price: 280.0,
-    costPrice: 260.0,
-    taxRate: 16,
+    price: 0, // user enters station-specific price
+    costPrice: 0,
+    taxRate: PRESET_TAX_RATE,
     levyRate: 0,
     color: "slate",
     icon: "plane",
@@ -247,9 +255,9 @@ const PRESET_FUELS: CustomFuelType[] = [
     code: "IFO",
     name: "Industrial Fuel Oil",
     localName: "Fuel Oil",
-    price: 150.0,
-    costPrice: 130.0,
-    taxRate: 16,
+    price: 0, // user enters station-specific price
+    costPrice: 0,
+    taxRate: PRESET_TAX_RATE,
     levyRate: 0,
     color: "orange",
     icon: "factory",

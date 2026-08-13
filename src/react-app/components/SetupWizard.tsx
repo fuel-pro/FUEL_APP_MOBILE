@@ -319,6 +319,7 @@ export default function SetupWizard({
     }));
 
     // Update company data
+    const regionalConfig = getRegionalConfig(data.countryCode || "US");
     dispatch({
       type: "SET_COMPANY_DATA",
       payload: {
@@ -330,6 +331,11 @@ export default function SetupWizard({
         vatRegNo: data.vatRegNo,
         physicalAddress: data.physicalAddress || data.location,
         etrSerialNo: data.etrSerialNo,
+        // Store the currency CODE (e.g. "USD"), not the symbol ("$"), so
+        // downstream components resolve the correct symbol at display time.
+        currency: regionalConfig.currency || "USD",
+        companyCurrency: regionalConfig.currency || "USD",
+        country: data.countryCode || "US",
       },
     });
 
@@ -386,8 +392,9 @@ export default function SetupWizard({
     // Seed the fuel_types_config catalog so the new station's configured fuel
     // types (PMS/AGO + extras) are immediately available to POS, Dashboard,
     // Price Board, etc. — without the user having to open Fuel Type Manager.
+    let seededFuelTypes: Array<Record<string, unknown>> = [];
     try {
-      const seededFuelTypes = [
+      seededFuelTypes = [
         {
           id: `ft-petrol-${Date.now()}`,
           code: "PMS",
@@ -439,14 +446,9 @@ export default function SetupWizard({
           description: getFuelLabel(ef.type),
         })),
       ];
-      // Persist to cloud via cloudStorageService so it's cross-device.
-      cloudStorageService
-        .set(
-          "fuel_types_config",
-          seededFuelTypes,
-          state.currentStationId ?? undefined,
-        )
-        .catch(() => {});
+      // Persist to cloud AFTER station creation (below) using newStationId,
+      // because state.currentStationId is stale here (the station hasn't
+      // been created yet). We store the array for the deferred save.
     } catch (e) {
       console.error("[SetupWizard] Failed to seed fuel_types_config:", e);
     }
@@ -457,7 +459,7 @@ export default function SetupWizard({
     // Derive country-aware settings (currency, timezone, tax rate) from the
     // user's selected country so the station is genuinely world-wide — never
     // hardcoded to Kenya/Nairobi/16%.
-    const regionalConfig = getRegionalConfig(data.countryCode || "US");
+    // (regionalConfig is already declared above for the SET_COMPANY_DATA dispatch)
     const countryTaxRate = Math.round(
       (regionalConfig.vatRate || getVATRate(data.countryCode || "US")) * 100,
     );
@@ -509,6 +511,22 @@ export default function SetupWizard({
       }
     } catch (err) {
       console.error("Station creation failed:", err);
+    }
+
+    // Now that we have newStationId, persist the seeded fuel_types_config to
+    // cloud with the correct station-scoped row id. This was previously saved
+    // with state.currentStationId (stale/undefined) so it never reached the
+    // cloud — causing POS/Dashboard to show wrong/default fuel prices on
+    // fresh devices.
+    if (seededFuelTypes.length > 0 && newStationId) {
+      cloudStorageService
+        .set("fuel_types_config", seededFuelTypes, newStationId)
+        .catch((e) =>
+          console.error(
+            "[SetupWizard] fuel_types_config cloud save failed:",
+            e,
+          ),
+        );
     }
 
     // Also write directly to localStorage as fallback

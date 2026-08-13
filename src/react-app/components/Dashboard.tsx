@@ -166,23 +166,30 @@ export default function Dashboard() {
   // (state.pmsPrice = 214.03) until the hook catches up.
   const effectiveFuelPrice = fuelPrice ?? getSyncedFuelPrice(stationCountry);
   const regionalPrice = getPriceForCity(effectiveFuelPrice, stationCity);
-  // Prefer location-based price from GPS, then fall back to regional, then national, then default.
-  // Every branch resolves to a finite number so .toFixed(2) and string
-  // interpolation can never throw "Cannot read properties of null/undefined".
+  // Prefer the STATION'S OWN configured price (state.pmsPrice/agoPrice) over
+  // the global/EPRA synced price. The user's configured pump price is the
+  // authoritative price they actually charge — the global price is only a
+  // reference. Previously the global price took priority, causing a US station
+  // with $1.10/L configured to show $3.45/L (global average) on the Dashboard.
   const displayPmsPrice =
+    state.pmsPrice ??
     locationPrice?.petrolPrice ??
     (regionalPrice.isRegional ? regionalPrice.petrol : null) ??
     effectiveFuelPrice?.petrolPrice ??
-    state.pmsPrice ??
+    fuelTypeApi.getPriceFor(CANONICAL_FUEL_TYPES.petrol.label) ??
     0;
   const displayAgoPrice =
+    state.agoPrice ??
     locationPrice?.dieselPrice ??
     (regionalPrice.isRegional ? regionalPrice.diesel : null) ??
     effectiveFuelPrice?.dieselPrice ??
-    state.agoPrice ??
+    fuelTypeApi.getPriceFor(CANONICAL_FUEL_TYPES.diesel.label) ??
     0;
   const displayKerosenePrice =
-    locationPrice?.kerosenePrice ?? effectiveFuelPrice?.kerosenePrice ?? 0;
+    fuelTypeApi.getPriceFor(CANONICAL_FUEL_TYPES.kerosene.label) ??
+    locationPrice?.kerosenePrice ??
+    effectiveFuelPrice?.kerosenePrice ??
+    0;
   // Show the detected city for location-based pricing
   const priceCityName =
     locationPrice?.cityName || regionalPrice.cityName || stationCity;

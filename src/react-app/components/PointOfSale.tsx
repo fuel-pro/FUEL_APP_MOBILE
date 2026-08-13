@@ -109,20 +109,22 @@ export default function PointOfSale() {
   // also check currentStation.country directly as a fast path.
   const stationCountry = (
     (currentStation as { country?: string })?.country ||
+    state.companyData?.country ||
     state.companyData?.county ||
     ""
   ).toUpperCase();
   const hasKraPin = Boolean(
     currentStation?.kraPin || state.companyData?.kraPin,
   );
+  // Kenya tax regime (KRA eTIMS / 16% VAT) applies ONLY when we can
+  // positively confirm the station is in Kenya. The old `hasKraPin &&
+  // stationCountry !== "US"` gate was wrong: on a fresh device before
+  // cloud hydration, stationCountry is "" (empty), so `!== "US"` was
+  // true and a leftover KRA PIN forced Kenya mode on a US station.
+  // Now we require an explicit "KE" country OR the timezone/station-data
+  // detector to resolve Kenya. A KRA PIN alone NEVER activates Kenya mode.
   const kenyaStation =
-    isKenyaStation() ||
-    stationCountry === "KE" ||
-    (hasKraPin &&
-      stationCountry !== "US" &&
-      stationCountry !== "GB" &&
-      stationCountry !== "DE" &&
-      stationCountry !== "EU");
+    stationCountry === "KE" || (stationCountry === "" && isKenyaStation());
   const fuelTypeApi = useStationFuelTypes(stationId);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [paymentMethod, setPaymentMethod] = useState<

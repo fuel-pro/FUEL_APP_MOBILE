@@ -1430,12 +1430,12 @@ export function FuelProvider({ children }: { children: ReactNode }) {
       if (s.pmsTankClosing !== 0) compactData.pmsTankClosing = s.pmsTankClosing;
       if (s.agoTankOpening !== 0) compactData.agoTankOpening = s.agoTankOpening;
       if (s.agoTankClosing !== 0) compactData.agoTankClosing = s.agoTankClosing;
-      if (s.pmsPrice !== DEFAULT_PMS_PRICE) compactData.pmsPrice = s.pmsPrice;
-      if (s.agoPrice !== DEFAULTAGO_PRICE) compactData.agoPrice = s.agoPrice;
-      if (s.petrolPrice !== DEFAULT_PMS_PRICE)
-        compactData.petrolPrice = s.petrolPrice;
-      if (s.dieselPrice !== DEFAULTAGO_PRICE)
-        compactData.dieselPrice = s.dieselPrice;
+      compactData.pmsPrice = s.pmsPrice; // always save (station-specific)
+      compactData.agoPrice = s.agoPrice; // always save (station-specific)
+      // always save
+      compactData.petrolPrice = s.petrolPrice; // always save (station-specific)
+      // always save
+      compactData.dieselPrice = s.dieselPrice; // always save (station-specific)
       if (s.deliveredTo) compactData.deliveredTo = s.deliveredTo;
       if (s.totalOrder) compactData.totalOrder = s.totalOrder;
       if (s.deliveryYear !== initialState.deliveryYear)
@@ -1560,12 +1560,12 @@ export function FuelProvider({ children }: { children: ReactNode }) {
       if (s.pmsTankClosing !== 0) compactData.pmsTankClosing = s.pmsTankClosing;
       if (s.agoTankOpening !== 0) compactData.agoTankOpening = s.agoTankOpening;
       if (s.agoTankClosing !== 0) compactData.agoTankClosing = s.agoTankClosing;
-      if (s.pmsPrice !== DEFAULT_PMS_PRICE) compactData.pmsPrice = s.pmsPrice;
-      if (s.agoPrice !== DEFAULTAGO_PRICE) compactData.agoPrice = s.agoPrice;
-      if (s.petrolPrice !== DEFAULT_PMS_PRICE)
-        compactData.petrolPrice = s.petrolPrice;
-      if (s.dieselPrice !== DEFAULTAGO_PRICE)
-        compactData.dieselPrice = s.dieselPrice;
+      compactData.pmsPrice = s.pmsPrice; // always save (station-specific)
+      compactData.agoPrice = s.agoPrice; // always save (station-specific)
+      // always save
+      compactData.petrolPrice = s.petrolPrice; // always save (station-specific)
+      // always save
+      compactData.dieselPrice = s.dieselPrice; // always save (station-specific)
       if (s.deliveredTo) compactData.deliveredTo = s.deliveredTo;
       if (s.totalOrder) compactData.totalOrder = s.totalOrder;
       if (s.deliveryYear !== initialState.deliveryYear)
