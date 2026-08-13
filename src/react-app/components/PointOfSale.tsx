@@ -90,7 +90,13 @@ export default function PointOfSale() {
   const { user } = useAuth();
   const { currentStation } = useStations();
   const stationId = currentStation?.id;
-  const currencySymbol = getCurrencySymbol(state.companyData?.currency);
+  // Resolve currency symbol from companyData first, then the station record,
+  // then the detected currency. This ensures a US station shows "$" even if
+  // companyData.currency was stored as a symbol (e.g. "KSh") from a stale
+  // session.
+  const currencySymbol = getCurrencySymbol(
+    state.companyData?.currency || currentStation?.currency || undefined,
+  );
   // A station is treated as Kenyan (KRA eTIMS / 16% VAT) when the
   // timezone+station-data detector resolves Kenya OR the station explicitly
   // carries a KRA PIN AND is in Kenya. The country gate on the KRA-PIN check

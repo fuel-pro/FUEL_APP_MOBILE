@@ -302,6 +302,36 @@ export function getCurrencySymbol(currency?: string): string {
   // First try unified symbols from pricing config
   if (UNIFIED_SYMBOLS[c]) return UNIFIED_SYMBOLS[c];
 
+  // If the input is already a symbol (e.g. "KSh", "$", "USh"), return it
+  // as-is — it was likely stored incorrectly as a symbol instead of a code.
+  // This prevents double-prefixing (e.g. "KSh" -> "KSh" is correct, not "KES").
+  const KNOWN_SYMBOLS = new Set([
+    "KSh",
+    "USh",
+    "TSh",
+    "$",
+    "R",
+    "GH\u20B5",
+    "RF",
+    "FBu",
+    "\u20A6",
+    "SS\u00A3",
+    "\u00A3",
+    "\u20AC",
+    "\u00A5",
+    "\u20B9",
+    "A$",
+    "C$",
+    "CHF",
+    "R$",
+    "Mex$",
+    "AR$",
+    "K",
+    "P",
+    "MT",
+  ]);
+  if (KNOWN_SYMBOLS.has(c)) return c;
+
   // Fallback to standard symbols
   const SYMBOLS: Record<string, string> = {
     KES: "KSh", // Unified format
