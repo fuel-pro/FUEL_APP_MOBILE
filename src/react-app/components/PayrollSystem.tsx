@@ -1109,7 +1109,7 @@ export default function PayrollSystem() {
     const monthName = new Date(2023, (settings.payrollMonth || 1) - 1)
       .toLocaleString("default", { month: "long" })
       .toUpperCase();
-    const year = settings.payrollYear || 2025;
+    const year = settings.payrollYear || new Date().getFullYear();
     const orgName = (settings.organizationName || "ORGANIZATION").toUpperCase();
 
     // Sheet 1: Payroll Payment Summary
@@ -1305,7 +1305,7 @@ export default function PayrollSystem() {
     const monthName = new Date(2023, (settings.payrollMonth || 1) - 1)
       .toLocaleString("default", { month: "long" })
       .toUpperCase();
-    const year = settings.payrollYear || 2025;
+    const year = settings.payrollYear || new Date().getFullYear();
     const orgName = (settings.organizationName || "ORGANIZATION").toUpperCase();
 
     const cpcData = [

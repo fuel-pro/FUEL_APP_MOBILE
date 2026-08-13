@@ -314,8 +314,10 @@ export default function TeamManager() {
 
   // Derive the real pump options from the station's configured pumps so pump
   // assignments reference actual pumps (not the old hardcoded PMS-/AGO-/IK-
-  // list which rarely matched a station's real pumps). Falls back to sensible
-  // defaults only when no pumps are configured yet (pre-setup wizard).
+  // list which rarely matched a station's real pumps). Includes ALL fuel
+  // types (petrol, diesel, kerosene, LPG, V-Power, etc.) so a station with
+  // 5 fuel types shows all its pumps. Falls back to sensible defaults only
+  // when no pumps are configured yet (pre-setup wizard).
   const pumpOptions: { id: string; label: string }[] = (() => {
     const out: { id: string; label: string }[] = [];
     const addPumps = (
@@ -333,6 +335,14 @@ export default function TeamManager() {
     };
     addPumps(state.pmsPumps as { id: string; name?: string }[], "pms");
     addPumps(state.agoPumps as { id: string; name?: string }[], "ago");
+    // Also include pumps for non-petrol/diesel fuel types (kerosene, LPG,
+    // V-Power, etc.) stored in state.fuelPumpsByType.
+    if (state.fuelPumpsByType) {
+      for (const [canonical, pumps] of Object.entries(state.fuelPumpsByType)) {
+        if (canonical === "petrol" || canonical === "diesel") continue;
+        addPumps(pumps as { id: string; name?: string }[], canonical);
+      }
+    }
     // Fallback when the station has no pumps configured yet.
     if (out.length === 0) {
       return [

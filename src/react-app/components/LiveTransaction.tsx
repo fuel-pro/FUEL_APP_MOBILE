@@ -32,6 +32,7 @@ import { useStations } from "@/react-app/context/StationContext";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 import {
   getCurrencySymbol,
+  resolveCurrencySymbol,
   getDetectedCurrency,
   getDetectedCountryCode,
 } from "@/react-app/lib/currency";
@@ -167,6 +168,10 @@ export default function LiveTransaction() {
   const { user } = useAuth();
   const { currentStation } = useStations();
   const stationId = currentStation?.id;
+  const currencySymbol = resolveCurrencySymbol(
+    state.companyData?.currency,
+    currentStation?.currency,
+  );
 
   // State management
   const [paymentSources, setPaymentSources] = useState<PaymentSource[]>([]);
@@ -551,7 +556,9 @@ export default function LiveTransaction() {
     // it vanished as if it never happened. The account_reference is now
     // included so the Invoice→STK→Credit round trip works.
     const checkoutRef = `STK${Date.now()}`;
-    const currency = state.companyData.currency || getDetectedCurrency();
+    const currency = /^[A-Z]{3}$/.test(state.companyData?.currency || "")
+      ? state.companyData?.currency
+      : currentStation?.currency || getDetectedCurrency();
     const formattedPhone = formatPhoneNumber(stkPushData.phone_number);
     await addTransaction(
       {
@@ -700,7 +707,7 @@ export default function LiveTransaction() {
   };
 
   const formatCurrency = (amount: number) =>
-    `${state.companyData.currency || getCurrencySymbol(getDetectedCurrency())} ${amount.toLocaleString()}`;
+    `${currencySymbol} ${amount.toLocaleString()}`;
 
   // Poll the SHARED cloud store for the transaction's final status. When a
   // webhook, the M-PESA Analyzer statement import, or another device updates
@@ -835,7 +842,7 @@ export default function LiveTransaction() {
             <SummaryCard
               icon={<TrendingUp size={14} className="text-green-400" />}
               label="Total Revenue"
-              value={`${state.companyData.currency || getCurrencySymbol(getDetectedCurrency())} ${formatNumber(summary.total, 0)}`}
+              value={`${currencySymbol} ${formatNumber(summary.total, 0)}`}
             />
             <SummaryCard
               icon={<FileText size={14} className="text-blue-400" />}
@@ -853,7 +860,7 @@ export default function LiveTransaction() {
               value={summary.topSender.name || "N/A"}
               subValue={
                 summary.topSender.name
-                  ? `${state.companyData.currency || getCurrencySymbol(getDetectedCurrency())} ${formatNumber(summary.topSender.amount, 0)}`
+                  ? `${currencySymbol} ${formatNumber(summary.topSender.amount, 0)}`
                   : undefined
               }
             />
@@ -1303,11 +1310,7 @@ export default function LiveTransaction() {
 
                 <div>
                   <label className="block text-sm text-gray-300 mb-1">
-                    Amount (
-                    {getCurrencySymbol(
-                      state.companyData.currency || getDetectedCurrency(),
-                    )}
-                    ) *
+                    Amount ({currencySymbol}) *
                   </label>
                   <input
                     type="number"

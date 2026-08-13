@@ -4,6 +4,11 @@ import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
 import { formatNumber } from "./formatUtils";
 import { getCurrencySymbol } from "@/react-app/lib/currency";
+import {
+  getFuelLabel,
+  getFuelCode,
+  type CanonicalFuelType,
+} from "@/react-app/config/pricing";
 
 /**
  * Load a logo image (data URL or external URL) as a base64 data URL so it can
@@ -82,6 +87,100 @@ export async function addLogoToPDF(
   }
 }
 
+/**
+ * Derive the list of configured fuel types (canonical keys) from the app
+ * state. Used by the sales/delivery export functions so they iterate the
+ * station's ACTUAL fuel types (Kerosene, V-Power, LPG, …) instead of the
+ * legacy hardcoded PMS/AGO.
+ *
+ * Resolution order:
+ *  1. state.fuelTypes (the FuelTypesManager config array) — canonical keys.
+ *  2. state.fuelPumpsByType / state.fuelPricesByType / state.fuelTankValuesByType
+ *     keys (defense-in-depth: any fuel type that has pumps/prices/tank data).
+ *  3. Fallback: ["petrol", "diesel"] ONLY if nothing is configured (first run).
+ */
+function deriveFuelTypes(state: any): CanonicalFuelType[] {
+  const set = new Set<CanonicalFuelType>();
+  if (Array.isArray(state.fuelTypes)) {
+    for (const ft of state.fuelTypes) {
+      const key =
+        typeof ft === "string" ? ft : ft?.canonical || ft?.type || ft?.name;
+      if (key) set.add(key as CanonicalFuelType);
+    }
+  }
+  for (const store of [
+    state.fuelPumpsByType,
+    state.fuelPricesByType,
+    state.fuelTankValuesByType,
+  ]) {
+    if (store && typeof store === "object") {
+      for (const key of Object.keys(store)) {
+        if (key) set.add(key as CanonicalFuelType);
+      }
+    }
+  }
+  // Also include petrol/diesel if they have legacy pump arrays (pmsPumps/agoPumps)
+  if (Array.isArray(state.pmsPumps) && state.pmsPumps.length > 0)
+    set.add("petrol");
+  if (Array.isArray(state.agoPumps) && state.agoPumps.length > 0)
+    set.add("diesel");
+  if (set.size === 0) {
+    set.add("petrol");
+    set.add("diesel");
+  }
+  return Array.from(set);
+}
+
+/**
+ * Get the pump array for a given fuel type from state. Petrol/diesel use the
+ * legacy pmsPumps/agoPumps fields; all other types use fuelPumpsByType[type].
+ */
+function getPumpsForType(state: any, type: CanonicalFuelType): any[] {
+  if (type === "petrol")
+    return state.pmsPumps || state.fuelPumpsByType?.petrol || [];
+  if (type === "diesel")
+    return state.agoPumps || state.fuelPumpsByType?.diesel || [];
+  return state.fuelPumpsByType?.[type] || [];
+}
+
+/**
+ * Get the price for a given fuel type from state. Petrol/diesel use the legacy
+ * pmsPrice/agoPrice fields; all other types use fuelPricesByType[type].
+ */
+function getPriceForType(state: any, type: CanonicalFuelType): number {
+  if (type === "petrol")
+    return (
+      state.pmsPrice ?? state.petrolPrice ?? state.fuelPricesByType?.petrol ?? 0
+    );
+  if (type === "diesel")
+    return (
+      state.agoPrice ?? state.dieselPrice ?? state.fuelPricesByType?.diesel ?? 0
+    );
+  return state.fuelPricesByType?.[type] ?? 0;
+}
+
+/**
+ * Get the tank opening/closing values for a given fuel type. Petrol/diesel use
+ * the legacy pmsTankOpening/Closing fields; all other types use
+ * fuelTankValuesByType[type].
+ */
+function getTankForType(
+  state: any,
+  type: CanonicalFuelType,
+): { opening: number; closing: number } {
+  if (type === "petrol")
+    return {
+      opening: state.pmsTankOpening ?? 0,
+      closing: state.pmsTankClosing ?? 0,
+    };
+  if (type === "diesel")
+    return {
+      opening: state.agoTankOpening ?? 0,
+      closing: state.agoTankClosing ?? 0,
+    };
+  return state.fuelTankValuesByType?.[type] ?? { opening: 0, closing: 0 };
+}
+
 export async function exportDeliveryPDF(state: any) {
   const doc = new jsPDF();
 
@@ -116,20 +215,21 @@ export async function exportDeliveryPDF(state: any) {
   y += 8;
   doc.text(`TOTAL ORDER: ${state.totalOrder || "N/A"} Litres`, 14, y);
   y += 8;
-  doc.text(`YEAR: ${state.deliveryYear || "2025"}`, 14, y);
+  doc.text(`YEAR: ${state.deliveryYear || new Date().getFullYear()}`, 14, y);
   y += 8;
-  doc.text(
-    `Petrol Price: ${currencySymbol} ${state.petrolPrice || "180"} /L`,
-    14,
-    y,
-  );
-  y += 8;
-  doc.text(
-    `Diesel Price: ${currencySymbol} ${state.dieselPrice || "170"} /L`,
-    14,
-    y,
-  );
-  y += 8;
+
+  // DYNAMIC: list each configured fuel's price (was hardcoded Petrol/Diesel).
+  const fuelTypes = deriveFuelTypes(state);
+  for (const ft of fuelTypes) {
+    const label = getFuelLabel(ft);
+    const price = getPriceForType(state, ft);
+    doc.text(
+      `${label} Price: ${currencySymbol} ${formatNumber(price)} /L`,
+      14,
+      y,
+    );
+    y += 8;
+  }
 
   // Create table data
   const headers = state.deliveryData.columns.map((col: any) => col.label);
@@ -188,15 +288,25 @@ export function exportDeliveryExcel(state: any) {
   // WORLDWIDE: derive the currency symbol from the company/station currency.
   const currencySymbol = getCurrencySymbol(state.companyData?.currency);
 
+  // DYNAMIC: list each configured fuel's price (was hardcoded Petrol/Diesel).
+  const fuelTypes = deriveFuelTypes(state);
+  const priceRows: string[] = [];
+  for (const ft of fuelTypes) {
+    const label = getFuelLabel(ft);
+    const price = getPriceForType(state, ft);
+    priceRows.push(
+      `${label} Price: ${currencySymbol} ${formatNumber(price)} /L`,
+    );
+  }
+
   const ws_data = [
     [state.companyData.name || "Company Name"],
     ["Fuel Delivery Report"],
     [],
     [`FUEL DELIVERED TO: ${state.deliveredTo || "Client"}`],
     [`TOTAL ORDER: ${state.totalOrder || "N/A"} Litres`],
-    [`YEAR: ${state.deliveryYear || "2025"}`],
-    [`Petrol Price: ${currencySymbol} ${state.petrolPrice || "180"} /L`],
-    [`Diesel Price: ${currencySymbol} ${state.dieselPrice || "170"} /L`],
+    [`YEAR: ${state.deliveryYear || new Date().getFullYear()}`],
+    ...priceRows.map((p) => [p]),
     [],
     state.deliveryData.columns.map((col: any) => col.label),
     ...state.deliveryData.rows.map((r: any) =>
@@ -235,9 +345,16 @@ export function exportDeliveryTXT(state: any) {
   let txt = `=== ${state.companyData.name || "Company Name"} ===\nFuel Delivery Report\n\n`;
   txt += `FUEL DELIVERED TO: ${state.deliveredTo || "Client"}\n`;
   txt += `TOTAL ORDER: ${state.totalOrder || "N/A"} Litres\n`;
-  txt += `YEAR: ${state.deliveryYear || "2025"}\n`;
-  txt += `Petrol Price: ${currencySymbol} ${state.petrolPrice || "180"} /L\n`;
-  txt += `Diesel Price: ${currencySymbol} ${state.dieselPrice || "170"} /L\n\n`;
+  txt += `YEAR: ${state.deliveryYear || new Date().getFullYear()}\n`;
+
+  // DYNAMIC: list each configured fuel's price (was hardcoded Petrol/Diesel).
+  const fuelTypes = deriveFuelTypes(state);
+  for (const ft of fuelTypes) {
+    const label = getFuelLabel(ft);
+    const price = getPriceForType(state, ft);
+    txt += `${label} Price: ${currencySymbol} ${formatNumber(price)} /L\n`;
+  }
+  txt += "\n";
 
   txt += state.deliveryData.rows
     .map((r: any) =>
@@ -407,13 +524,20 @@ export async function exportSalesPDF(state: any) {
   doc.text(`Shift: ${state.shift}`, 100, y);
   y += 15;
 
-  // Create PMS pumps table
-  if (state.pmsPumps && state.pmsPumps.length > 0) {
+  // DYNAMIC fuel-type pump tables — iterates the station's configured fuel
+  // types (Kerosene, V-Power, LPG, …) instead of the legacy hardcoded
+  // Petrol (PMS) + Diesel (AGO). A station with N fuel types gets N tables.
+  const fuelTypes = deriveFuelTypes(state);
+  for (const ft of fuelTypes) {
+    const pumps = getPumpsForType(state, ft);
+    if (!pumps || pumps.length === 0) continue;
+    const label = getFuelLabel(ft);
+    const code = getFuelCode(ft);
     doc.setFont("helvetica", "bold");
-    doc.text("Petrol (PMS) Pumps:", 15, y);
+    doc.text(`${label} (${code}) Pumps:`, 15, y);
     y += 10;
 
-    const pmsHeaders = [
+    const headers = [
       "Pump ID",
       `Opening (${currencySymbol})`,
       `Closing (${currencySymbol})`,
@@ -422,7 +546,7 @@ export async function exportSalesPDF(state: any) {
       "Sales (L)",
       `Sales (${currencySymbol})`,
     ];
-    const pmsData = state.pmsPumps.map((p: any) => [
+    const data = pumps.map((p: any) => [
       p.id,
       formatNumber(p.openingKsh),
       formatNumber(p.closingKsh),
@@ -434,8 +558,8 @@ export async function exportSalesPDF(state: any) {
 
     autoTable(doc, {
       startY: y,
-      head: [pmsHeaders],
-      body: pmsData,
+      head: [headers],
+      body: data,
       theme: "striped",
       headStyles: { fillColor: [26, 58, 95] },
     });
@@ -443,60 +567,24 @@ export async function exportSalesPDF(state: any) {
     y = (doc as any).lastAutoTable.finalY + 15;
   }
 
-  // Create AGO pumps table
-  if (state.agoPumps && state.agoPumps.length > 0) {
-    doc.setFont("helvetica", "bold");
-    doc.text("Diesel (AGO) Pumps:", 15, y);
-    y += 10;
-
-    const agoHeaders = [
-      "Pump ID",
-      `Opening (${currencySymbol})`,
-      `Closing (${currencySymbol})`,
-      "Opening (L)",
-      "Closing (L)",
-      "Sales (L)",
-      `Sales (${currencySymbol})`,
-    ];
-    const agoData = state.agoPumps.map((p: any) => [
-      p.id,
-      formatNumber(p.openingKsh),
-      formatNumber(p.closingKsh),
-      formatNumber(p.openingL),
-      formatNumber(p.closingL),
-      formatNumber(p.salesL),
-      formatNumber(p.salesKsh),
-    ]);
-
-    autoTable(doc, {
-      startY: y,
-      head: [agoHeaders],
-      body: agoData,
-      theme: "striped",
-      headStyles: { fillColor: [26, 58, 95] },
-    });
-
-    y = (doc as any).lastAutoTable.finalY + 15;
-  }
-
-  // Add summary
+  // Add summary — dynamic per fuel type
   if (state.summary) {
     doc.setFont("helvetica", "bold");
     doc.text("Daily Summary:", 15, y);
     y += 10;
     doc.setFont("helvetica", "normal");
-    doc.text(
-      `Total Petrol Sales: ${currencySymbol} ${formatNumber(state.summary.totalPmsSalesKsh, 2)}`,
-      15,
-      y,
-    );
-    y += 8;
-    doc.text(
-      `Total Diesel Sales: ${currencySymbol} ${formatNumber(state.summary.totalAgoSalesKsh, 2)}`,
-      15,
-      y,
-    );
-    y += 8;
+    const salesByType =
+      (state.summary.salesByType as Record<string, number>) || {};
+    for (const ft of fuelTypes) {
+      const label = getFuelLabel(ft);
+      const sales = salesByType[ft] ?? 0;
+      doc.text(
+        `Total ${label} Sales: ${currencySymbol} ${formatNumber(sales, 2)}`,
+        15,
+        y,
+      );
+      y += 8;
+    }
     doc.text(
       `Total Revenue: ${currencySymbol} ${formatNumber(state.summary.totalRevenue, 2)}`,
       15,
@@ -524,9 +612,13 @@ export function exportSalesExcel(state: any) {
   // WORLDWIDE: derive the currency symbol from the company/station currency.
   const currencySymbol = getCurrencySymbol(state.companyData?.currency);
 
-  // PMS Pumps sheet
-  if (state.pmsPumps && state.pmsPumps.length > 0) {
-    const pmsData = [
+  // DYNAMIC: one sheet per configured fuel type (was hardcoded Petrol/Diesel).
+  const fuelTypes = deriveFuelTypes(state);
+  for (const ft of fuelTypes) {
+    const pumps = getPumpsForType(state, ft);
+    if (!pumps || pumps.length === 0) continue;
+    const label = getFuelLabel(ft);
+    const sheetData = [
       [
         "Pump ID",
         `Opening (${currencySymbol})`,
@@ -536,7 +628,7 @@ export function exportSalesExcel(state: any) {
         "Sales (L)",
         `Sales (${currencySymbol})`,
       ],
-      ...state.pmsPumps.map((p: any) => [
+      ...pumps.map((p: any) => [
         p.id,
         p.openingKsh,
         p.closingKsh,
@@ -546,34 +638,27 @@ export function exportSalesExcel(state: any) {
         p.salesKsh,
       ]),
     ];
-    const pmsWS = XLSX.utils.aoa_to_sheet(pmsData);
-    XLSX.utils.book_append_sheet(wb, pmsWS, "Petrol Pumps");
+    const ws = XLSX.utils.aoa_to_sheet(sheetData);
+    // Excel sheet names: max 31 chars, no special chars.
+    const sheetName = `${label} Pumps`.slice(0, 31);
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
   }
 
-  // AGO Pumps sheet
-  if (state.agoPumps && state.agoPumps.length > 0) {
-    const agoData = [
-      [
-        "Pump ID",
-        `Opening (${currencySymbol})`,
-        `Closing (${currencySymbol})`,
-        "Opening (L)",
-        "Closing (L)",
-        "Sales (L)",
-        `Sales (${currencySymbol})`,
-      ],
-      ...state.agoPumps.map((p: any) => [
-        p.id,
-        p.openingKsh,
-        p.closingKsh,
-        p.openingL,
-        p.closingL,
-        p.salesL,
-        p.salesKsh,
-      ]),
-    ];
-    const agoWS = XLSX.utils.aoa_to_sheet(agoData);
-    XLSX.utils.book_append_sheet(wb, agoWS, "Diesel Pumps");
+  // Add summary sheet — dynamic per fuel type
+  if (state.summary) {
+    const salesByType =
+      (state.summary.salesByType as Record<string, number>) || {};
+    const summaryRows: (string | number)[][] = [["Daily Summary"]];
+    for (const ft of fuelTypes) {
+      const label = getFuelLabel(ft);
+      const sales = salesByType[ft] ?? 0;
+      summaryRows.push([`Total ${label} Sales`, sales]);
+    }
+    summaryRows.push(["Total Revenue", state.summary.totalRevenue ?? 0]);
+    summaryRows.push(["Cash In Hand", state.summary.cashInHand ?? 0]);
+    summaryRows.push(["Net Income", state.summary.netIncome ?? 0]);
+    const summaryWS = XLSX.utils.aoa_to_sheet(summaryRows);
+    XLSX.utils.book_append_sheet(wb, summaryWS, "Summary");
   }
 
   // Add footer info sheet
@@ -595,29 +680,34 @@ export function exportSalesTXT(state: any) {
   let txt = `=== ${state.companyData.name || "Company Name"} ===\nFuel Sales Report\n\n`;
   txt += `Date: ${state.salesDate}\nShift: ${state.shift}\n\n`;
 
-  // Add tank inventory
+  // DYNAMIC: tank inventory + pricing + pumps per configured fuel type.
+  const fuelTypes = deriveFuelTypes(state);
+
   txt += `Fuel Tank Inventory:\n`;
-  txt += `Petrol (PMS) Tank: Opening: ${formatNumber(state.pmsTankOpening)} L, Closing: ${formatNumber(state.pmsTankClosing)} L\n`;
-  txt += `Diesel (AGO) Tank: Opening: ${formatNumber(state.agoTankOpening)} L, Closing: ${formatNumber(state.agoTankClosing)} L\n\n`;
+  for (const ft of fuelTypes) {
+    const label = getFuelLabel(ft);
+    const code = getFuelCode(ft);
+    const tv = getTankForType(state, ft);
+    txt += `${label} (${code}) Tank: Opening: ${formatNumber(tv.opening)} L, Closing: ${formatNumber(tv.closing)} L\n`;
+  }
+  txt += "\n";
 
   txt += `Fuel Pricing:\n`;
-  txt += `Petrol (PMS): ${currencySymbol} ${state.pmsPrice}/L\n`;
-  txt += `Diesel (AGO): ${currencySymbol} ${state.agoPrice}/L\n\n`;
-
-  if (state.pmsPumps && state.pmsPumps.length > 0) {
-    txt += `Petrol (PMS) Pumps:\n`;
-    txt += state.pmsPumps
-      .map(
-        (p: any) =>
-          `${p.id}: Sales: ${formatNumber(p.salesL)} L, ${currencySymbol} ${formatNumber(p.salesKsh)}`,
-      )
-      .join("\n");
-    txt += "\n\n";
+  for (const ft of fuelTypes) {
+    const label = getFuelLabel(ft);
+    const code = getFuelCode(ft);
+    const price = getPriceForType(state, ft);
+    txt += `${label} (${code}): ${currencySymbol} ${formatNumber(price)}/L\n`;
   }
+  txt += "\n";
 
-  if (state.agoPumps && state.agoPumps.length > 0) {
-    txt += `Diesel (AGO) Pumps:\n`;
-    txt += state.agoPumps
+  for (const ft of fuelTypes) {
+    const pumps = getPumpsForType(state, ft);
+    if (!pumps || pumps.length === 0) continue;
+    const label = getFuelLabel(ft);
+    const code = getFuelCode(ft);
+    txt += `${label} (${code}) Pumps:\n`;
+    txt += pumps
       .map(
         (p: any) =>
           `${p.id}: Sales: ${formatNumber(p.salesL)} L, ${currencySymbol} ${formatNumber(p.salesKsh)}`,
@@ -638,8 +728,13 @@ export function exportSalesTXT(state: any) {
 
   if (state.summary) {
     txt += `Daily Summary:\n`;
-    txt += `Total Petrol Sales: ${currencySymbol} ${formatNumber(state.summary.totalPmsSalesKsh, 2)}\n`;
-    txt += `Total Diesel Sales: ${currencySymbol} ${formatNumber(state.summary.totalAgoSalesKsh, 2)}\n`;
+    const salesByType =
+      (state.summary.salesByType as Record<string, number>) || {};
+    for (const ft of fuelTypes) {
+      const label = getFuelLabel(ft);
+      const sales = salesByType[ft] ?? 0;
+      txt += `Total ${label} Sales: ${currencySymbol} ${formatNumber(sales, 2)}\n`;
+    }
     txt += `Total Revenue: ${currencySymbol} ${formatNumber(state.summary.totalRevenue, 2)}\n`;
     txt += `Till/Mobile Payment: ${currencySymbol} ${formatNumber(state.tillPayment, 2)}\n`;
     txt += `Cash In Hand: ${currencySymbol} ${formatNumber(state.summary.cashInHand, 2)}\n`;

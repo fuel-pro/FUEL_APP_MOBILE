@@ -22,6 +22,7 @@ import { useFuel } from "@/react-app/context/FuelContext";
 import { useAuth } from "@/react-app/context/AuthContext";
 import { useStations } from "@/react-app/context/StationContext";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
+import { resolveCurrencySymbol } from "@/react-app/lib/currency";
 
 interface Contact {
   id: string;
@@ -136,6 +137,10 @@ export default function Communication() {
   const { currentStation } = useStations();
   const stationId = currentStation?.id;
   const { state } = useFuel();
+  const currencySymbol = resolveCurrencySymbol(
+    state.companyData?.currency,
+    currentStation?.currency,
+  );
 
   // State management — initialize from the synchronous cache so the FIRST
   // render shows data instantly (no blank flash while the async cloud get
@@ -883,7 +888,7 @@ export default function Communication() {
               <div
                 className={`text-sm font-medium mb-3 ${contact.balance > 0 ? "text-red-600" : "text-green-600"}`}
               >
-                Balance: {state.companyData.currency}{" "}
+                Balance: {currencySymbol}{" "}
                 {Math.abs(contact.balance || 0).toLocaleString()}
                 {contact.balance > 0 ? " (Owed)" : " (Credit)"}
               </div>

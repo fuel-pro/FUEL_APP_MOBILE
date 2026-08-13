@@ -3,6 +3,7 @@ import { useLocation } from "@/react-app/context/LocationContext";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 import { useAuth } from "@/react-app/context/AuthContext";
 import { useStations } from "@/react-app/context/StationContext";
+import { useStationFuelTypes } from "@/react-app/hooks/useStationFuelTypes";
 import { getFuelLabel } from "@/react-app/config/pricing";
 import {
   Users,
@@ -30,7 +31,7 @@ interface Customer {
   totalSpent: number;
   visits: number;
   lastVisit: string;
-  preferredFuel: "PMS" | "AGO" | "Both";
+  preferredFuel: string;
   tier: "Bronze" | "Silver" | "Gold" | "Platinum";
   notes: string;
   joinDate: string;
@@ -127,7 +128,7 @@ function normalizeLoyaltyCustomer(
     visits: typeof c?.visits === "number" ? c.visits : 0,
     lastVisit: c?.lastVisit ?? new Date().toISOString(),
     preferredFuel:
-      c?.preferredFuel === "PMS" || c?.preferredFuel === "AGO"
+      typeof c?.preferredFuel === "string" && c.preferredFuel
         ? c.preferredFuel
         : "Both",
     tier:
@@ -152,6 +153,7 @@ export default function CustomerLoyalty() {
   const { user } = useAuth();
   const { currentStation } = useStations();
   const stationId = currentStation?.id;
+  const fuelTypeApi = useStationFuelTypes(stationId);
   const [customers, setCustomers] = useState<Customer[]>(() => {
     // Cloud cache first (freshest cross-device data), then localStorage
     const cloudCached = cloudStorageService.getCached<unknown[]>(
@@ -175,7 +177,7 @@ export default function CustomerLoyalty() {
     phone: string;
     email: string;
     vehicleReg: string;
-    preferredFuel: "PMS" | "AGO" | "Both";
+    preferredFuel: string;
     notes: string;
   }>({
     name: "",
@@ -543,14 +545,23 @@ export default function CustomerLoyalty() {
               onChange={(e) =>
                 setNewCustomer({
                   ...newCustomer,
-                  preferredFuel: e.target.value as "PMS" | "AGO" | "Both",
+                  preferredFuel: e.target.value,
                 })
               }
               className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
             >
-              <option value="PMS">{getFuelLabel("PMS")}</option>
-              <option value="AGO">{getFuelLabel("AGO")}</option>
-              <option value="Both">Both</option>
+              {(fuelTypeApi.activeFuelTypes.length > 0
+                ? fuelTypeApi.activeFuelTypes
+                : [
+                    { name: "PMS", label: "Super Petrol" },
+                    { name: "AGO", label: "Diesel" },
+                  ]
+              ).map((ft) => (
+                <option key={ft.name} value={ft.name}>
+                  {fuelTypeApi.labelOf(ft.name) || getFuelLabel(ft.name)}
+                </option>
+              ))}
+              <option value="Both">All Fuels</option>
             </select>
             <input
               placeholder="Notes"
@@ -835,8 +846,9 @@ export default function CustomerLoyalty() {
                       <p className="text-[11px] text-gray-500">
                         {c.vehicleReg || ""}{" "}
                         {c.preferredFuel === "Both"
-                          ? "Both"
-                          : getFuelLabel(c.preferredFuel)}
+                          ? "All Fuels"
+                          : fuelTypeApi.labelOf(c.preferredFuel) ||
+                            getFuelLabel(c.preferredFuel)}
                       </p>
                     </td>
                     <td className="px-4 py-3 text-gray-600 dark:text-gray-400">
@@ -1012,14 +1024,23 @@ function EditCustomerForm({
           onChange={(e) =>
             setForm({
               ...form,
-              preferredFuel: e.target.value as "PMS" | "AGO" | "Both",
+              preferredFuel: e.target.value,
             })
           }
           className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
         >
-          <option value="PMS">{getFuelLabel("PMS")}</option>
-          <option value="AGO">{getFuelLabel("AGO")}</option>
-          <option value="Both">Both</option>
+          {(fuelTypeApi.activeFuelTypes.length > 0
+            ? fuelTypeApi.activeFuelTypes
+            : [
+                { name: "PMS", label: "Super Petrol" },
+                { name: "AGO", label: "Diesel" },
+              ]
+          ).map((ft) => (
+            <option key={ft.name} value={ft.name}>
+              {fuelTypeApi.labelOf(ft.name) || getFuelLabel(ft.name)}
+            </option>
+          ))}
+          <option value="Both">All Fuels</option>
         </select>
         <input
           type="number"

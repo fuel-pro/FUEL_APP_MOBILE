@@ -302,6 +302,36 @@ export function getCurrencySymbol(currency?: string): string {
   // First try unified symbols from pricing config
   if (UNIFIED_SYMBOLS[c]) return UNIFIED_SYMBOLS[c];
 
+  // If the input is already a symbol (e.g. "KSh", "$", "USh"), return it
+  // as-is — it was likely stored incorrectly as a symbol instead of a code.
+  // This prevents double-prefixing (e.g. "KSh" -> "KSh" is correct, not "KES").
+  const KNOWN_SYMBOLS = new Set([
+    "KSh",
+    "USh",
+    "TSh",
+    "$",
+    "R",
+    "GH\u20B5",
+    "RF",
+    "FBu",
+    "\u20A6",
+    "SS\u00A3",
+    "\u00A3",
+    "\u20AC",
+    "\u00A5",
+    "\u20B9",
+    "A$",
+    "C$",
+    "CHF",
+    "R$",
+    "Mex$",
+    "AR$",
+    "K",
+    "P",
+    "MT",
+  ]);
+  if (KNOWN_SYMBOLS.has(c)) return c;
+
   // Fallback to standard symbols
   const SYMBOLS: Record<string, string> = {
     KES: "KSh", // Unified format
@@ -330,6 +360,28 @@ export function getCurrencySymbol(currency?: string): string {
     MZN: "MT",
   };
   return SYMBOLS[c] || c;
+}
+
+/**
+ * Resolve the currency SYMBOL for display from multiple sources. Accepts the
+ * companyData currency (which may be a stale symbol like "KSh" instead of a
+ * code like "USD") and the station record's currency code. A valid currency
+ * code is a 3-letter uppercase string (USD, KES, EUR); anything else is
+ * treated as a symbol and we fall through to the station currency.
+ *
+ * Usage: `const currencySymbol = resolveCurrencySymbol(state.companyData?.currency, currentStation?.currency);`
+ */
+export function resolveCurrencySymbol(
+  companyDataCurrency?: string,
+  stationCurrency?: string,
+): string {
+  const isValidCode = (s?: string): s is string => !!s && /^[A-Z]{3}$/.test(s);
+  const code = isValidCode(companyDataCurrency)
+    ? companyDataCurrency
+    : isValidCode(stationCurrency)
+      ? stationCurrency
+      : undefined;
+  return getCurrencySymbol(code);
 }
 
 /** Format amount with detected currency */

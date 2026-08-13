@@ -17,7 +17,10 @@ import {
 import { useAuth } from "@/react-app/context/AuthContext";
 import { usePermissions } from "@/react-app/context/PermissionContext";
 import { getSupabaseClient } from "@/supabase/client";
-import type { UserRole } from "@/react-app/context/PermissionContext";
+import type {
+  UserRole,
+  InvitePayload,
+} from "@/react-app/context/PermissionContext";
 
 interface InviteData {
   id: string;
@@ -25,8 +28,14 @@ interface InviteData {
   stationName: string;
   stationId: string;
   createdBy: string;
+  createdByName?: string;
+  createdByUniqueId?: string;
   expiresAt?: string;
   maxUses: number;
+  canCreateSubUsers?: boolean;
+  canGrantPermissions?: boolean;
+  permissionsSnapshot?: Record<string, unknown>;
+  tabGrants?: string[];
 }
 
 const ROLE_INFO: Record<
@@ -77,7 +86,7 @@ export default function InviteAccept() {
   const { inviteId: encodedData } = useParams<{ inviteId: string }>();
   const navigate = useNavigate();
   const { user, loginWithEmail, registerWithEmail, bindRole } = useAuth();
-  const { acceptInvite } = usePermissions();
+  const { acceptInviteFromPayload } = usePermissions();
 
   const [username, setUsername] = useState("");
   const [invite, setInvite] = useState<InviteData | null>(null);
@@ -116,25 +125,25 @@ export default function InviteAccept() {
       return;
     }
 
-    // Check if already used (stored in localStorage by invite ID)
+    // Check if already used by a DIFFERENT user on this browser.
+    // Same-user re-acceptance is allowed (idempotent — updates role/username).
+    // Cross-device "already used" is enforced by the station_members DB table
+    // (checked in handleAccept), NOT by localStorage.
     const usedInvites = JSON.parse(
       localStorage.getItem("fuelpro_used_invites") || "{}",
     );
-    if (usedInvites[decoded.id]) {
-      setError(
-        `This invite has already been used by ${usedInvites[decoded.id]}.`,
-      );
+    const usedBy = usedInvites[decoded.id];
+    if (usedBy && usedBy !== user?.email && usedBy !== user?.id) {
+      setError(`This invite was already used by ${usedBy} on this device.`);
       return;
     }
 
-    // Check max uses
-    const useCount = parseInt(
-      localStorage.getItem(`fuelpro_invite_uses_${decoded.id}`) || "0",
-    );
-    if (useCount >= (decoded.maxUses || 1)) {
-      setError("This invite has reached its maximum uses.");
-      return;
-    }
+    // NOTE: max-uses is NOT checked here. The localStorage use-count is
+    // browser-local and unreliable for cross-device max-uses enforcement.
+    // The authoritative check is the station_members DB table count, which
+    // is done in handleAccept (async, server-side). This allows the invitee
+    // to proceed to the username step and get a clear error if the DB
+    // rejects the upsert.
 
     setInvite(decoded);
 
@@ -195,18 +204,59 @@ export default function InviteAccept() {
       return;
     }
 
-    // 1) Accept via PermissionContext — this persists the team member to the
-    //    cloud (app_kv team_members key, scoped by owner) so the Owner sees
-    //    the new member on every device. No more localStorage-only team write.
-    const ok = acceptInvite(invite.id, username.trim());
+    // 1) Accept via PermissionContext using the DECODED URL payload directly.
+    //    The old code called acceptInvite(invite.id, ...) which looked up the
+    //    invite in the INVITEE's local invites array — but invites are created
+    //    by the station OWNER and stored under the owner's cloud key, so the
+    //    invitee's array is always empty → always returned false → the
+    //    "invite is invalid" error. Now we pass the full decoded payload.
+    const payload: InvitePayload = {
+      id: invite.id,
+      role: invite.role,
+      stationName: invite.stationName,
+      stationId: invite.stationId,
+      createdBy: invite.createdBy,
+      createdByName: invite.createdByName,
+      createdByUniqueId: invite.createdByUniqueId,
+      expiresAt: invite.expiresAt,
+      maxUses: invite.maxUses,
+      canCreateSubUsers: invite.canCreateSubUsers,
+      canGrantPermissions: invite.canGrantPermissions,
+      permissionsSnapshot: invite.permissionsSnapshot as any,
+      tabGrants: invite.tabGrants,
+    };
+    const ok = acceptInviteFromPayload(payload, username.trim());
     if (!ok) {
       setError(
-        "This invite is invalid, expired, or already fully used. Please ask the station owner for a new invite.",
+        "This invite is invalid or expired. Please ask the station owner for a new invite.",
       );
       return;
     }
 
-    // 2) Upsert into the DB station_members table (server-side, cross-device,
+    // 2) Store current station context FIRST (read-through cache only) so the
+    //    PermissionContext role-sync effect can find the stationId when
+    //    bindRole triggers the binding update.
+    localStorage.setItem(
+      "fuelpro_current_station",
+      JSON.stringify({
+        stationId: invite.stationId || "default",
+        role: invite.role,
+      }),
+    );
+    try {
+      localStorage.setItem(
+        "fuelpro_current_station_v3",
+        JSON.stringify({
+          stationId: invite.stationId || "default",
+          stationName: invite.stationName || "Fuel Station",
+          role: invite.role,
+        }),
+      );
+    } catch {
+      /* ignore */
+    }
+
+    // 3) Upsert into the DB station_members table (server-side, cross-device,
     //    RLS-validated). This is the authoritative membership record used by
     //    AuthContext.syncBindingsFromCloud on every subsequent device login.
     try {
@@ -242,8 +292,9 @@ export default function InviteAccept() {
       console.warn("[InviteAccept] DB membership write failed:", e);
     }
 
-    // 3) Bind role to auth identity (client-side binding, cross-device via
-    //    station_members sync above).
+    // 4) Bind role to auth identity (client-side binding, cross-device via
+    //    station_members sync above). This triggers the PermissionContext
+    //    role-sync effect which sets role = invite.role.
     bindRole(
       invite.stationId || "default",
       invite.stationName || "Fuel Station",
@@ -252,14 +303,17 @@ export default function InviteAccept() {
       invite.expiresAt,
     );
 
-    // 4) Store current station context (read-through cache only).
-    localStorage.setItem(
-      "fuelpro_current_station",
-      JSON.stringify({
-        stationId: invite.stationId || "default",
-        role: invite.role,
-      }),
-    );
+    // 5) Record invite usage in localStorage (browser-local cache for the
+    //    "already used by a different user" check on this device).
+    try {
+      const used = JSON.parse(
+        localStorage.getItem("fuelpro_used_invites") || "{}",
+      );
+      used[invite.id] = user?.email || user?.id || username.trim();
+      localStorage.setItem("fuelpro_used_invites", JSON.stringify(used));
+    } catch {
+      /* ignore quota errors */
+    }
 
     setSuccess(
       `Welcome ${username}! You are now ${invite.role} at ${invite.stationName || "the station"}.`,

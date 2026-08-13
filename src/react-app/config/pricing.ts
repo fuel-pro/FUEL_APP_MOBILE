@@ -765,8 +765,8 @@ export const FUEL_TYPES = {
   PMS_ALT: "petrol",
   DIESEL: "diesel",
   KEROSENE: "kerosene",
-  VPOWER: "vPower",
-  PREMIUM_DIESEL: "premiumDiesel",
+  VPOWER: "vpower",
+  PREMIUM_DIESEL: "premium_diesel",
   LPG: "lpg",
   CNG: "cng",
 } as const;
@@ -896,7 +896,20 @@ const FUEL_ALIAS_MAP: Record<string, CanonicalFuelType> = {
 export function normalizeFuelType(raw: string): CanonicalFuelType | null {
   if (!raw) return null;
   const key = String(raw).trim().toUpperCase();
-  return FUEL_ALIAS_MAP[key] ?? null;
+  if (FUEL_ALIAS_MAP[key]) return FUEL_ALIAS_MAP[key];
+  // Substring fallback: a raw name like "Shell V-Power" or "Total V-Power
+  // 95" should still resolve to "vpower" even though only "V-POWER" is a
+  // registered alias. Try each alias key (length >= 4, to avoid short
+  // codes like "IK"/"GAS"/"PMS" false-matching inside words) as a
+  // substring of the raw name — longest match first so "V-POWER PREMIUM"
+  // wins over "V-POWER".
+  const keys = Object.keys(FUEL_ALIAS_MAP)
+    .filter((k) => k.length >= 4)
+    .sort((a, b) => b.length - a.length);
+  for (const k of keys) {
+    if (key.includes(k)) return FUEL_ALIAS_MAP[k];
+  }
+  return null;
 }
 
 /**

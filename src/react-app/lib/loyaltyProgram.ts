@@ -15,7 +15,7 @@
 // TYPES & INTERFACES
 // ═══════════════════════════════════════════════════════════════════
 
-export type FuelType = "PMS" | "AGO" | "Kerosene" | "Both";
+export type FuelType = string; // any canonical fuel code (PMS, AGO, IK, LPG, VPW, etc.) or "Both"
 export type CustomerTier = "Bronze" | "Silver" | "Gold" | "Platinum";
 export type RewardCategory = "discount" | "free_item" | "service" | "voucher";
 export type TransactionType = "earn" | "redeem" | "adjustment" | "expire";

@@ -16,6 +16,8 @@ import {
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 import { useAuth } from "@/react-app/context/AuthContext";
 import { useStations } from "@/react-app/context/StationContext";
+import { useStationFuelTypes } from "@/react-app/hooks/useStationFuelTypes";
+import { getFuelLabel } from "@/react-app/config/pricing";
 import {
   navigateToTab,
   type FuelPricePrefill,
@@ -24,7 +26,7 @@ import {
 interface QualityTest {
   id: string;
   date: string;
-  fuelType: "PMS" | "AGO" | "Kerosene";
+  fuelType: string;
   batchNumber: string;
   supplier: string;
   density: number; // kg/m3
@@ -40,16 +42,49 @@ interface QualityTest {
   certificateUrl?: string;
 }
 
-const QUALITY_STANDARDS = {
+// Default quality standards for the canonical fuel types. Custom fuels
+// (e.g. "Shell V-Power", "CNG") fall back to the petrol standard so the
+// pass/fail gate still works; the standards reference panel renders one
+// card per configured fuel type.
+const QUALITY_STANDARDS: Record<
+  string,
+  {
+    densityMin: number;
+    densityMax: number;
+    sulfurMax: number;
+    flashMin: number;
+  }
+> = {
   PMS: { densityMin: 720, densityMax: 775, sulfurMax: 50, flashMin: 38 },
   AGO: { densityMin: 820, densityMax: 860, sulfurMax: 50, flashMin: 52 },
+  IK: { densityMin: 760, densityMax: 812, sulfurMax: 50, flashMin: 40 },
 };
+
+function standardsFor(code: string) {
+  return QUALITY_STANDARDS[code] || QUALITY_STANDARDS.PMS;
+}
 
 export default function FuelQualityTesting() {
   const location = useLocation();
   const { user } = useAuth();
   const { currentStation } = useStations();
   const stationId = currentStation?.id;
+  // Derive the fuel-type options from the station's configured Fuel Types
+  // (fuel_types_config) so quality tests are not limited to PMS/AGO/Kerosene.
+  const fuelTypeApi = useStationFuelTypes(stationId);
+  const fuelTypeOptions = (() => {
+    const configured = fuelTypeApi.activeFuelTypes.map((ft) => ({
+      code: ft.code || ft.name,
+      label: ft.name,
+    }));
+    if (configured.length > 0) return configured;
+    // Fallback to the canonical set when no fuel types are configured.
+    return [
+      { code: "PMS", label: "Super Petrol" },
+      { code: "AGO", label: "Diesel" },
+      { code: "IK", label: "Kerosene" },
+    ];
+  })();
   const [tests, setTests] = useState<QualityTest[]>(() => {
     try {
       return JSON.parse(localStorage.getItem("fuelpro_quality_tests") || "[]");
@@ -86,7 +121,7 @@ export default function FuelQualityTesting() {
 
   const addTest = () => {
     if (!newTest.date || !newTest.batchNumber || !newTest.density) return;
-    const std = QUALITY_STANDARDS[newTest.fuelType || "PMS"];
+    const std = standardsFor(newTest.fuelType || "PMS");
     const isPassed =
       newTest.density >= std.densityMin &&
       newTest.density <= std.densityMax &&
@@ -158,43 +193,32 @@ export default function FuelQualityTesting() {
         </div>
       </div>
 
-      {/* Quality Standards Reference */}
+      {/* Quality Standards Reference — one card per configured fuel type */}
       <div className="bg-blue-50 dark:bg-blue-900/10 rounded-xl p-4 border border-blue-200 dark:border-blue-800">
         <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-200 mb-2 flex items-center gap-2">
           <FileText size={14} /> Quality Standards (
           {location.currentCountry.shortName})
         </h3>
-        <div className="grid grid-cols-2 gap-4 text-xs">
-          <div>
-            <p className="font-medium text-blue-800 dark:text-blue-300">
-              PMS (Petrol)
-            </p>
-            <p className="text-blue-700 dark:text-blue-400">
-              Density: {QUALITY_STANDARDS.PMS.densityMin}-
-              {QUALITY_STANDARDS.PMS.densityMax} kg/m
-            </p>
-            <p className="text-blue-700 dark:text-blue-400">
-              Sulfur: max {QUALITY_STANDARDS.PMS.sulfurMax} ppm
-            </p>
-            <p className="text-blue-700 dark:text-blue-400">
-              Flash point: min {QUALITY_STANDARDS.PMS.flashMin} C
-            </p>
-          </div>
-          <div>
-            <p className="font-medium text-blue-800 dark:text-blue-300">
-              AGO (Diesel)
-            </p>
-            <p className="text-blue-700 dark:text-blue-400">
-              Density: {QUALITY_STANDARDS.AGO.densityMin}-
-              {QUALITY_STANDARDS.AGO.densityMax} kg/m
-            </p>
-            <p className="text-blue-700 dark:text-blue-400">
-              Sulfur: max {QUALITY_STANDARDS.AGO.sulfurMax} ppm
-            </p>
-            <p className="text-blue-700 dark:text-blue-400">
-              Flash point: min {QUALITY_STANDARDS.AGO.flashMin} C
-            </p>
-          </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
+          {fuelTypeOptions.map((ft) => {
+            const std = standardsFor(ft.code);
+            return (
+              <div key={ft.code}>
+                <p className="font-medium text-blue-800 dark:text-blue-300">
+                  {ft.label} ({ft.code})
+                </p>
+                <p className="text-blue-700 dark:text-blue-400">
+                  Density: {std.densityMin}-{std.densityMax} kg/m
+                </p>
+                <p className="text-blue-700 dark:text-blue-400">
+                  Sulfur: max {std.sulfurMax} ppm
+                </p>
+                <p className="text-blue-700 dark:text-blue-400">
+                  Flash point: min {std.flashMin} C
+                </p>
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -220,13 +244,15 @@ export default function FuelQualityTesting() {
             <select
               value={newTest.fuelType}
               onChange={(e) =>
-                setNewTest({ ...newTest, fuelType: e.target.value as any })
+                setNewTest({ ...newTest, fuelType: e.target.value })
               }
               className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
             >
-              <option value="PMS">PMS (Petrol)</option>
-              <option value="AGO">AGO (Diesel)</option>
-              <option value="Kerosene">Kerosene</option>
+              {fuelTypeOptions.map((ft) => (
+                <option key={ft.code} value={ft.code}>
+                  {ft.label} ({ft.code})
+                </option>
+              ))}
             </select>
             <button
               onClick={() =>
@@ -388,9 +414,15 @@ export default function FuelQualityTesting() {
                   </td>
                   <td className="px-3 py-2">
                     <span
-                      className={`text-[10px] px-1.5 py-0.5 rounded ${t.fuelType === "PMS" ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}
+                      className={`text-[10px] px-1.5 py-0.5 rounded ${
+                        t.fuelType === "PMS"
+                          ? "bg-green-100 text-green-700"
+                          : t.fuelType === "AGO"
+                            ? "bg-amber-100 text-amber-700"
+                            : "bg-blue-100 text-blue-700"
+                      }`}
                     >
-                      {t.fuelType}
+                      {getFuelLabel(t.fuelType) || t.fuelType}
                     </span>
                   </td>
                   <td className="px-3 py-2 text-right dark:text-white">

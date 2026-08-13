@@ -18,6 +18,7 @@ import { useStations } from "@/react-app/context/StationContext";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 import {
   getCurrencySymbol,
+  resolveCurrencySymbol,
   getDetectedCountryCode,
   isKenyaStation,
 } from "@/react-app/lib/currency";
@@ -45,7 +46,6 @@ type ReportPeriod = "daily" | "weekly" | "monthly" | "yearly";
 
 export default function ReportsCenter() {
   const { state } = useFuel();
-  const currencySymbol = getCurrencySymbol(state.companyData?.currency);
 
   // Country-aware VAT rate + label (replaces hardcoded "16%")
   const VAT_RATE = getVATRate(getDetectedCountryCode());
@@ -77,6 +77,10 @@ export default function ReportsCenter() {
   const { user } = useAuth();
   const { currentStation } = useStations();
   const stationId = currentStation?.id;
+  const currencySymbol = resolveCurrencySymbol(
+    state.companyData?.currency,
+    currentStation?.currency,
+  );
   const [cloudExpenses, setCloudExpenses] = useState<any[]>([]);
 
   useEffect(() => {
@@ -180,8 +184,12 @@ export default function ReportsCenter() {
     const salesHistory = Object.values(state.salesHistory);
     const filteredSales = filterByDateRange(salesHistory);
 
-    // Output VAT (Sales)
+    // Output VAT (Sales) — DYNAMIC: iterate all configured fuel types via
+    // fuelPumpsByType (was hardcoded PMS/AGO only). Falls back to legacy
+    // pmsPumps/agoPumps for backward compatibility.
     const totalSalesRevenue = filteredSales.reduce((sum, sale) => {
+      let fuelRevenue = 0;
+      // Legacy PMS/AGO pumps
       const pmsRevenue = (sale.pmsPumps || []).reduce(
         (pmsSum: number, pump: any) => pmsSum + (pump.salesKsh || 0),
         0,
@@ -190,9 +198,29 @@ export default function ReportsCenter() {
         (agoSum: number, pump: any) => agoSum + (pump.salesKsh || 0),
         0,
       );
+      fuelRevenue += pmsRevenue + agoRevenue;
+      // Dynamic: all other fuel types (Kerosene, V-Power, LPG, …)
+      if (sale.fuelPumpsByType && typeof sale.fuelPumpsByType === "object") {
+        for (const [ft, pumps] of Object.entries(sale.fuelPumpsByType)) {
+          if (ft === "petrol" || ft === "diesel") continue; // already counted
+          fuelRevenue += (pumps as any[]).reduce(
+            (s: number, p: any) => s + (p.salesKsh || 0),
+            0,
+          );
+        }
+      }
       const posRevenue =
         (sale.posSales?.pmsAmount || 0) + (sale.posSales?.agoAmount || 0);
-      return sum + pmsRevenue + agoRevenue + posRevenue;
+      // Dynamic POS sales by fuel type
+      if (sale.posSales?.fuelAmountsByType) {
+        for (const [ft, amt] of Object.entries(
+          sale.posSales.fuelAmountsByType,
+        )) {
+          if (ft === "petrol" || ft === "diesel") continue;
+          fuelRevenue += (amt as number) || 0;
+        }
+      }
+      return sum + fuelRevenue + posRevenue;
     }, 0);
 
     const outputVAT = calculateVAT(totalSalesRevenue);
@@ -267,6 +295,34 @@ export default function ReportsCenter() {
               });
             }
           });
+
+          // DYNAMIC: all other configured fuel types (Kerosene, V-Power, LPG, …)
+          if (
+            sale.fuelPumpsByType &&
+            typeof sale.fuelPumpsByType === "object"
+          ) {
+            for (const [ft, pumps] of Object.entries(sale.fuelPumpsByType)) {
+              if (ft === "petrol" || ft === "diesel") continue;
+              (pumps as any[]).forEach((pump: any) => {
+                if (pump.salesKsh > 0) {
+                  const vat = calculateVAT(pump.salesKsh);
+                  items.push({
+                    receiptNo: `${state.companyData.etrInvoicePrefix || "ETR"}${String(receiptNo++).padStart(6, "0")}`,
+                    time: sale.date?.split("T")[1]?.substring(0, 5) || "00:00",
+                    description: `${getFuelLabel(ft)} - Pump ${pump.id}`,
+                    quantity: pump.salesL || 0,
+                    unit: "L",
+                    unitPrice:
+                      pump.salesL > 0 ? pump.salesKsh / pump.salesL : 0,
+                    grossAmount: pump.salesKsh,
+                    vatAmount: vat.vatAmount,
+                    netAmount: vat.netAmount,
+                    vatRate: `${(VAT_RATE * 100).toFixed(0)}%`,
+                  });
+                }
+              });
+            }
+          }
 
           // POS Sales
           if (sale.posSales) {
@@ -664,7 +720,10 @@ export default function ReportsCenter() {
     const doc = new jsPDF();
     const reportTitle = getReportTitle();
     const pageWidth = doc.internal.pageSize.getWidth();
-    const currency = getCurrencySymbol(state.companyData?.currency);
+    const currency = resolveCurrencySymbol(
+      state.companyData?.currency,
+      currentStation?.currency,
+    );
 
     // Pre-load the logo as a base64 data URL (handles Supabase Storage URLs).
     const logoDataUrl = await loadLogoAsDataURL(state.companyData?.logo);
@@ -1283,7 +1342,10 @@ export default function ReportsCenter() {
 
   const exportToTXT = () => {
     const reportTitle = getReportTitle();
-    const currency = getCurrencySymbol(state.companyData?.currency);
+    const currency = resolveCurrencySymbol(
+      state.companyData?.currency,
+      currentStation?.currency,
+    );
     let txt = `${"=".repeat(60)}\n`;
     txt += `${state.companyData.name}\n`;
     txt += `${"=".repeat(60)}\n\n`;
@@ -1358,7 +1420,10 @@ export default function ReportsCenter() {
     txt: exportToTXT,
     whatsapp: () => {
       const reportTitle = getReportTitle();
-      const currency = getCurrencySymbol(state.companyData?.currency);
+      const currency = resolveCurrencySymbol(
+        state.companyData?.currency,
+        currentStation?.currency,
+      );
       let msg = `*${state.companyData.name}*\n`;
       if (isKenya) {
         msg += `KRA PIN: ${state.companyData.kraPin || "N/A"}\n`;
@@ -1385,7 +1450,10 @@ export default function ReportsCenter() {
     },
     email: () => {
       const reportTitle = getReportTitle();
-      const currency = getCurrencySymbol(state.companyData?.currency);
+      const currency = resolveCurrencySymbol(
+        state.companyData?.currency,
+        currentStation?.currency,
+      );
       const subject = `${reportTitle} - ${state.companyData.name}`;
       let body = `${state.companyData.name}\n`;
       if (isKenya) {

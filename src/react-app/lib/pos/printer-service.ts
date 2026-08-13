@@ -160,7 +160,9 @@ class PrinterService {
   }
 
   private formatCurrency(amount: number): string {
-    return `${getCurrencySymbol()} ${amount.toLocaleString("en-KE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    // Use the browser default locale (undefined) so the receipt formats
+    // amounts per the station/user locale instead of the hardcoded "en-KE".
+    return `${getCurrencySymbol()} ${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   }
 
   private formatLine(left: string, right: string, width: number = 42): string {
@@ -188,10 +190,10 @@ class PrinterService {
     commands.push(this.cmdBold(false));
     commands.push(this.textToBytes(receipt.stationLocation));
     commands.push(this.newline());
-    commands.push(
-      this.textToBytes(`Tel: ${receipt.stationPhone || "+254 700 000 000"}`),
-    );
-    commands.push(this.newline());
+    if (receipt.stationPhone) {
+      commands.push(this.textToBytes(`Tel: ${receipt.stationPhone}`));
+      commands.push(this.newline());
+    }
     if (receipt.stationEmail) {
       commands.push(this.textToBytes(`Email: ${receipt.stationEmail}`));
       commands.push(this.newline());

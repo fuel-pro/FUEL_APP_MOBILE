@@ -809,12 +809,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!user) return;
     try {
       const sc = getSupabaseClient();
-      // Fetch accepted memberships for this user (by user_id or invited_email)
+      // Fetch accepted memberships for this user (by user_id or invited_email),
+      // joining stations to get the real station name (not the member's name).
       const { data: members, error } = await sc
         .from("station_members")
-        .select("station_id, role, status, name")
+        .select("station_id, role, status, name, stations:station_id(name)")
         .or(`user_id.eq.${user.id},invited_email.eq.${user.email}`)
-        .eq("status", "accepted");
+        .in("status", ["accepted", "active"]);
       if (error) {
         console.warn(
           "[AuthContext] syncBindingsFromCloud error:",
@@ -824,9 +825,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       if (members && members.length > 0) {
         setBindings((prev) => {
-          const cloudBindings: StationRoleBinding[] = members.map((m) => ({
+          const cloudBindings: StationRoleBinding[] = members.map((m: any) => ({
             stationId: m.station_id,
-            stationName: m.name || "Shared Station",
+            stationName: m.stations?.name || m.name || "Shared Station",
             role: (m.role as StationRoleBinding["role"]) || "staff",
             invitedBy: "cloud",
             joinedAt: new Date().toISOString(),

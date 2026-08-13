@@ -780,12 +780,41 @@ async function syncStationsWithSupabase(
   // own stations, but we ALSO filter by owner_id client-side as
   // defense-in-depth so a misconfigured/loosened RLS policy can never leak
   // other users' stations into this account.
-  const { data, error } = await supabase
+  //
+  // MEMBER STATIONS: an invited Manager/Staff/Auditor doesn't OWN the station
+  // but has a row in station_members (status='accepted'). The
+  // `stations_member_select` RLS policy (migration 016) allows them to SELECT
+  // stations they're a member of. So we do TWO queries: one for owned
+  // stations (owner_id = userId) and one for member stations (via
+  // station_members). The member query uses `.or()` to combine them.
+  const { data: ownedData, error: ownedError } = await supabase
     .from("stations")
     .select("*")
     .eq("owner_id", userId)
     .order("created_at", { ascending: true });
-  let rows = data;
+
+  // Fetch stations where the user is an accepted/active member (invited by the owner)
+  const { data: memberData, error: memberError } = await supabase
+    .from("stations")
+    .select("*, station_members!inner(user_id, status)")
+    .eq("station_members.user_id", userId)
+    .in("station_members.status", ["accepted", "active"])
+    .neq("owner_id", userId)
+    .order("created_at", { ascending: true });
+
+  let rows = [...(ownedData || []), ...(memberData || [])];
+  const error = ownedError;
+
+  if (memberError) {
+    console.warn(
+      "[StationContext] Member stations fetch failed:",
+      memberError.message,
+    );
+  } else if (memberData && memberData.length > 0) {
+    console.log(
+      `[StationContext] Found ${memberData.length} shared station(s) as member`,
+    );
+  }
 
   // If the Supabase client returned empty (likely because it doesn't have
   // the auth session, so RLS blocked the query), retry with a direct
@@ -799,6 +828,37 @@ async function syncStationsWithSupabase(
         `[StationContext] Supabase client returned 0 stations, direct fetch found ${directRows.length}`,
       );
       rows = directRows;
+    }
+    // Also try fetching member stations via direct fetch (using station_members
+    // join). This is the fallback for invited users whose station doesn't
+    // appear in the owned-stations query.
+    if (!rows || rows.length === 0) {
+      try {
+        const { data: memberRows } = await supabase
+          .from("station_members")
+          .select("station_id")
+          .eq("user_id", userId)
+          .in("status", ["accepted", "active"]);
+        if (memberRows && memberRows.length > 0) {
+          const memberStationIds = memberRows.map((m: any) => m.station_id);
+          const { data: memberStations } = await supabase
+            .from("stations")
+            .select("*")
+            .in("id", memberStationIds)
+            .order("created_at", { ascending: true });
+          if (memberStations && memberStations.length > 0) {
+            console.log(
+              `[StationContext] Found ${memberStations.length} shared station(s) via station_members`,
+            );
+            rows = memberStations;
+          }
+        }
+      } catch (memberFetchErr) {
+        console.warn(
+          "[StationContext] Member station direct fetch failed:",
+          memberFetchErr,
+        );
+      }
     }
   }
 

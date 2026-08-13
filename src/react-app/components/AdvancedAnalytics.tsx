@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useFuel } from "@/react-app/context/FuelContext";
+import { useStationFuelTypes } from "@/react-app/hooks/useStationFuelTypes";
 import { useLocation } from "@/react-app/context/LocationContext";
 import { useStations } from "@/react-app/context/StationContext";
 import { supabase } from "@/supabase/client";
@@ -46,6 +47,7 @@ export default function AdvancedAnalytics() {
   const { state } = useFuel();
   const location = useLocation();
   const { currentStation } = useStations();
+  const fuelTypeApi = useStationFuelTypes(currentStation?.id);
   // Use the station's currency (reactive to station/company changes) rather
   // than the device-detected location currency, which was wrong for
   // multi-country setups (a Kenyan station viewed from a US browser showed $).
@@ -289,7 +291,17 @@ export default function AdvancedAnalytics() {
       setDataSource("local");
     } else {
       // Last resort: derive from tank readings (real data, clearly labeled)
-      const avgPrice = state.pmsPrice || state.agoPrice || 0;
+      // Use ALL fuel type prices (not just pms/ago) for stations with only
+      // Kerosene/LPG/V-Power.
+      const allPrices = (fuelTypeApi.activeFuelTypes || [])
+        .map((ft) => ft.price)
+        .filter((p): p is number => typeof p === "number" && p > 0);
+      if (state.pmsPrice > 0) allPrices.push(state.pmsPrice);
+      if (state.agoPrice > 0) allPrices.push(state.agoPrice);
+      const avgPrice =
+        allPrices.length > 0
+          ? allPrices.reduce((s, p) => s + p, 0) / allPrices.length
+          : 0;
       const dailyRevenue =
         avgPrice > 0 ? (totalLitres * avgPrice) / Math.max(1, days) : 0;
       if (dailyRevenue > 0) {
@@ -366,11 +378,17 @@ export default function AdvancedAnalytics() {
   // Calculate totals from real data. Guard against NaN in all calculations.
   const totals = useMemo(() => {
     const totalRevenue = salesData.reduce((s, d) => s + (d.total || 0), 0);
-    // Use the actual station prices (not a hardcoded 200 fallback). If both
-    // are 0, we can't estimate volume — show 0 rather than dividing by zero.
+    // Use ALL station fuel type prices (not just pms/ago) so the estimated
+    // volume is accurate for stations with Kerosene/LPG/V-Power only.
+    const allPrices = (fuelTypeApi.activeFuelTypes || [])
+      .map((ft) => ft.price)
+      .filter((p): p is number => typeof p === "number" && p > 0);
+    // Also include legacy pms/ago prices as a fallback.
+    if (fuelPrices.pms > 0) allPrices.push(fuelPrices.pms);
+    if (fuelPrices.ago > 0) allPrices.push(fuelPrices.ago);
     const avgPrice =
-      (fuelPrices.pms || 0) + (fuelPrices.ago || 0) > 0
-        ? ((fuelPrices.pms || 0) + (fuelPrices.ago || 0)) / 2
+      allPrices.length > 0
+        ? allPrices.reduce((s, p) => s + p, 0) / allPrices.length
         : 0;
     const estimatedVolume = avgPrice > 0 ? totalRevenue / avgPrice : 0;
 
@@ -383,7 +401,7 @@ export default function AdvancedAnalytics() {
           : 0,
       totalTransactions: salesData.reduce((s, d) => s + (d.count || 0), 0),
     };
-  }, [salesData, fuelPrices]);
+  }, [salesData, fuelPrices, fuelTypeApi.activeFuelTypes]);
 
   // Calculate growth. Guard against division by zero (prevTotal=0 → growth=0,
   // not Infinity/NaN). Removed the fabricated `last7Total * 4` extrapolation.

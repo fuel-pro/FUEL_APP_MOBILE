@@ -24,6 +24,7 @@ import { formatNumber } from "@/react-app/utils/formatUtils";
 import { silentPrintService } from "@/react-app/lib/silent-print-service";
 import {
   getCurrencySymbol,
+  resolveCurrencySymbol,
   getDetectedCurrency,
 } from "@/react-app/lib/currency";
 import SubTabBar from "@/react-app/components/SubTabBar";
@@ -140,7 +141,10 @@ export default function Invoice() {
 
   // WORLDWIDE: derive the display currency symbol from the station's/company
   // currency instead of the previously hardcoded "Ksh".
-  const currencySymbol = getCurrencySymbol(state.companyData?.currency);
+  const currencySymbol = resolveCurrencySymbol(
+    state.companyData?.currency,
+    currentStation?.currency,
+  );
 
   const getInvoiceNumber = () => {
     const num = String(state.invoiceCounter).padStart(3, "0");
@@ -280,7 +284,9 @@ export default function Invoice() {
         tax: 0,
         discount: 0,
         totalDue: totalDue,
-        currency: state.companyData.currency || getDetectedCurrency(),
+        currency: /^[A-Z]{3}$/.test(state.companyData?.currency || "")
+          ? state.companyData?.currency
+          : currentStation?.currency || getDetectedCurrency(),
         attendantName: "System",
         footerMessage: "Thank you for your business",
       };

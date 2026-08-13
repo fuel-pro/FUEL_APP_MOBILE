@@ -2,6 +2,7 @@ import { useFuel } from "@/react-app/context/FuelContext";
 import { useLocation } from "@/react-app/context/LocationContext";
 import { useStations } from "@/react-app/context/StationContext";
 import { useAutoSync } from "@/react-app/hooks/useAutoSync";
+import { useStationFuelTypes } from "@/react-app/hooks/useStationFuelTypes";
 import {
   getSyncedFuelPrice,
   getPriceForCity,
@@ -107,6 +108,16 @@ export default function Dashboard() {
   const { state } = useFuel();
   const location = useLocation();
   const { currentStation } = useStations();
+  // Dynamic fuel-type support for the "Current Pump Prices" cards: read the
+  // station's configured fuel types so the cards reflect EVERY fuel the
+  // station sells (Kerosene, LPG, V-Power, etc.), not just Petrol/Diesel.
+  // NOTE: prefer the real StationContext station id (currentStation?.id) —
+  // that is the id FuelTypesManager writes fuel_types_config under. The
+  // FuelContext `state.currentStationId` is a legacy "default_station" value
+  // that resolves to a DIFFERENT (empty) cloud row, so the cards would never
+  // show the configured fuel types.
+  const stationId = currentStation?.id ?? state.currentStationId ?? undefined;
+  const fuelTypeApi = useStationFuelTypes(stationId);
   // The station's country is the authoritative source for pricing/tax/currency
   // — NOT the GPS-detected country (which may be a VPN/tourist location and
   // would otherwise show foreign prices on a station's dashboard). Fall back to
@@ -176,6 +187,235 @@ export default function Dashboard() {
   const priceCityName =
     locationPrice?.cityName || regionalPrice.cityName || stationCity;
   const isLocationBased = !!locationPrice;
+
+  /**
+   * Dynamic "Current Pump Prices" card list. Built from the station's
+   * configured fuel types (canonical-normalized) so a station selling
+   * Kerosene/LPG/V-Power etc. shows a card for EACH fuel — not just the
+   * hardcoded Petrol/Diesel/Kerosene. Falls back to the 3 legacy cards
+   * (petrol/diesel/kerosene) when the station hasn't configured fuel types
+   * yet, so there's no regression for existing stations.
+   */
+  const priceCards: Array<{
+    key: string;
+    label: string;
+    price: number;
+    color: string;
+  }> = useMemo(() => {
+    const active = fuelTypeApi.activeFuelTypes;
+    if (active.length > 0) {
+      // Map the configured fuel types to display prices. The user's
+      // explicitly-configured price (ft.price, set in Fuel Type Manager) is
+      // the source of truth — prefer it over the national-average fallback so
+      // a station that sells Kerosene at $164.90 doesn't show the national
+      // average of $3.20. Only when the configured price is 0/missing do we
+      // fall back to the location/regional/national resolved price
+      // (petrol/diesel/kerosene) or the FuelContext dynamic price store.
+      return active.map((ft) => {
+        const canonical = fuelTypeApi.canonicalOf(ft.name);
+        const label = fuelTypeApi.labelOf(ft.name);
+        const configured =
+          typeof ft.price === "number" && ft.price > 0 ? ft.price : null;
+        let price = 0;
+        if (configured != null) {
+          price = configured;
+        } else if (canonical === "petrol") price = displayPmsPrice;
+        else if (canonical === "diesel") price = displayAgoPrice;
+        else if (canonical === "kerosene") price = displayKerosenePrice;
+        else {
+          price =
+            fuelTypeApi.getPriceFor(ft.name) ??
+            state.fuelPricesByType?.[canonical ?? ft.name] ??
+            ft.price ??
+            0;
+        }
+        const color =
+          canonical === "petrol"
+            ? "text-green-700 dark:text-green-400"
+            : canonical === "diesel"
+              ? "text-amber-700 dark:text-amber-400"
+              : canonical === "kerosene"
+                ? "text-rose-700 dark:text-rose-400"
+                : "text-indigo-700 dark:text-indigo-400";
+        return { key: ft.id || canonical || ft.name, label, price, color };
+      });
+    }
+    // Fallback: legacy 3 cards.
+    return [
+      {
+        key: "petrol",
+        label: CANONICAL_FUEL_TYPES.petrol.label,
+        price: displayPmsPrice,
+        color: "text-green-700 dark:text-green-400",
+      },
+      {
+        key: "diesel",
+        label: CANONICAL_FUEL_TYPES.diesel.label,
+        price: displayAgoPrice,
+        color: "text-amber-700 dark:text-amber-400",
+      },
+      {
+        key: "kerosene",
+        label: CANONICAL_FUEL_TYPES.kerosene.label,
+        price: displayKerosenePrice,
+        color: "text-rose-700 dark:text-rose-400",
+      },
+    ];
+  }, [
+    fuelTypeApi,
+    displayPmsPrice,
+    displayAgoPrice,
+    displayKerosenePrice,
+    state.fuelPricesByType,
+  ]);
+
+  /**
+   * Dynamic "Pump Status" card list. One card per configured fuel type,
+   * showing the count of pumps for that fuel (from the FuelContext
+   * per-canonical-type store `fuelPumpsByType`, falling back to the legacy
+   * `pmsPumps`/`agoPumps` for petrol/diesel). When no fuel types are
+   * configured, falls back to the legacy petrol/diesel pair.
+   */
+  const pumpStatusCards: Array<{
+    key: string;
+    label: string;
+    count: number;
+    bg: string;
+    text: string;
+  }> = useMemo(() => {
+    const active = fuelTypeApi.activeFuelTypes;
+    if (active.length > 0) {
+      const palette: Record<string, { bg: string; text: string }> = {
+        petrol: {
+          bg: "bg-green-50 dark:bg-green-900/20",
+          text: "text-green-700 dark:text-green-300",
+        },
+        diesel: {
+          bg: "bg-amber-50 dark:bg-amber-900/20",
+          text: "text-amber-700 dark:text-amber-300",
+        },
+        kerosene: {
+          bg: "bg-rose-50 dark:bg-rose-900/20",
+          text: "text-rose-700 dark:text-rose-300",
+        },
+      };
+      const fallback = {
+        bg: "bg-indigo-50 dark:bg-indigo-900/20",
+        text: "text-indigo-700 dark:text-indigo-300",
+      };
+      return active.map((ft) => {
+        const canonical = fuelTypeApi.canonicalOf(ft.name);
+        const pumps =
+          (canonical && state.fuelPumpsByType?.[canonical]) ||
+          (canonical === "petrol"
+            ? state.pmsPumps
+            : canonical === "diesel"
+              ? state.agoPumps
+              : []) ||
+          [];
+        const colors = (canonical && palette[canonical]) || fallback;
+        return {
+          key: ft.id || canonical || ft.name,
+          label: fuelTypeApi.labelOf(ft.name),
+          count: Array.isArray(pumps) ? pumps.length : 0,
+          ...colors,
+        };
+      });
+    }
+    return [
+      {
+        key: "petrol",
+        label: CANONICAL_FUEL_TYPES.petrol.label,
+        count: state.pmsPumps.length,
+        bg: "bg-green-50 dark:bg-green-900/20",
+        text: "text-green-700 dark:text-green-300",
+      },
+      {
+        key: "diesel",
+        label: CANONICAL_FUEL_TYPES.diesel.label,
+        count: state.agoPumps.length,
+        bg: "bg-amber-50 dark:bg-amber-900/20",
+        text: "text-amber-700 dark:text-amber-300",
+      },
+    ];
+  }, [fuelTypeApi, state.fuelPumpsByType, state.pmsPumps, state.agoPumps]);
+
+  // Tank Level cards — dynamic per fuel type (was hardcoded to only
+  // Super Petrol Tank + Diesel Tank). A station with Kerosene/V-Power/LPG
+  // etc. gets a tank card for each configured fuel type.
+  const tankLevelCards: Array<{
+    key: string;
+    label: string;
+    opening: number;
+    closing: number;
+    barClass: string;
+  }> = useMemo(() => {
+    const active = fuelTypeApi.activeFuelTypes;
+    const barPalette: Record<string, string> = {
+      petrol: "from-green-400 to-green-600",
+      diesel: "from-amber-400 to-amber-600",
+      kerosene: "from-rose-400 to-rose-600",
+    };
+    const fallbackBar = "from-indigo-400 to-indigo-600";
+    const build = (
+      key: string,
+      label: string,
+      opening: number,
+      closing: number,
+      canonical?: string | null,
+    ) => ({
+      key,
+      label,
+      opening,
+      closing,
+      barClass: (canonical && barPalette[canonical]) || fallbackBar,
+    });
+    if (active.length > 0) {
+      return active.map((ft) => {
+        const canonical = fuelTypeApi.canonicalOf(ft.name);
+        const tv =
+          canonical === "petrol"
+            ? { opening: state.pmsTankOpening, closing: state.pmsTankClosing }
+            : canonical === "diesel"
+              ? { opening: state.agoTankOpening, closing: state.agoTankClosing }
+              : (state.fuelTankValuesByType?.[canonical || ft.name] ?? {
+                  opening: 0,
+                  closing: 0,
+                });
+        return build(
+          ft.id || canonical || ft.name,
+          fuelTypeApi.labelOf(ft.name),
+          tv.opening,
+          tv.closing,
+          canonical,
+        );
+      });
+    }
+    return [
+      build(
+        "petrol",
+        CANONICAL_FUEL_TYPES.petrol.label,
+        state.pmsTankOpening,
+        state.pmsTankClosing,
+        "petrol",
+      ),
+      build(
+        "diesel",
+        CANONICAL_FUEL_TYPES.diesel.label,
+        state.agoTankOpening,
+        state.agoTankClosing,
+        "diesel",
+      ),
+    ];
+  }, [
+    fuelTypeApi,
+    state.fuelTankValuesByType,
+    state.pmsTankOpening,
+    state.pmsTankClosing,
+    state.agoTankOpening,
+    state.agoTankClosing,
+  ]);
+
   // Currency symbol must match the STATION's currency (e.g. "€" for a German
   // station), never the GPS/browser-detected currency. Fall back to the
   // location-derived symbol only if the station has no currency set.
@@ -305,7 +545,35 @@ export default function Dashboard() {
         (s: number, p: any) => s + (p.salesKsh || 0),
         0,
       );
-      revenue += pmsTotal + agoTotal;
+      // Sum dynamic fuel types from Sales Tracking (fuelPumpsByType is a
+      // Record<fuelType, Pump[]> — covers LPG, Kerosene, V-Power, etc.)
+      const byTypeTotal = Object.values(entry.fuelPumpsByType || {}).reduce(
+        (s: number, pumps: any) =>
+          s +
+          (Array.isArray(pumps)
+            ? pumps.reduce((ps: number, p: any) => ps + (p.salesKsh || 0), 0)
+            : 0),
+        0,
+      );
+      // Also count POS sales (from PointOfSale tab) — previously these were
+      // silently excluded, so a completed POS sale never showed in Total Revenue.
+      const pos = entry.posSales || {};
+      const posPms = pos.pmsAmount || 0;
+      const posAgo = pos.agoAmount || 0;
+      const posByType = Object.values(pos.byTypeAmount || {}).reduce(
+        (s: number, v: any) => s + (Number(v) || 0),
+        0,
+      );
+      // byTypeAmount may include PMS/AGO too, so avoid double-counting:
+      // prefer byTypeAmount when present (it's the canonical record), else
+      // fall back to pmsAmount + agoAmount.
+      const posTotal =
+        Object.keys(pos.byTypeAmount || {}).length > 0
+          ? posByType
+          : posPms + posAgo;
+      revenue += pmsTotal + agoTotal + byTypeTotal + posTotal;
+
+      // Fuel sold: pump litres + POS litres
       fuel += (entry.pmsPumps || []).reduce(
         (s: number, p: any) => s + (p.salesL || 0),
         0,
@@ -314,6 +582,25 @@ export default function Dashboard() {
         (s: number, p: any) => s + (p.salesL || 0),
         0,
       );
+      // Dynamic fuel type litres from Sales Tracking
+      fuel += Object.values(entry.fuelPumpsByType || {}).reduce(
+        (s: number, pumps: any) =>
+          s +
+          (Array.isArray(pumps)
+            ? pumps.reduce((ps: number, p: any) => ps + (p.salesL || 0), 0)
+            : 0),
+        0,
+      );
+      const posLitresByType = Object.values(pos.byTypeLitres || {}).reduce(
+        (s: number, v: any) => s + (Number(v) || 0),
+        0,
+      );
+      const posLitres =
+        Object.keys(pos.byTypeLitres || {}).length > 0
+          ? posLitresByType
+          : (pos.pmsLitres || 0) + (pos.agoLitres || 0);
+      fuel += posLitres;
+
       expenses += (entry.expenses || []).reduce(
         (s: number, e: any) => s + (e.amount || 0),
         0,
@@ -339,7 +626,29 @@ export default function Dashboard() {
             (s: number, p: any) => s + (p.salesKsh || 0),
             0,
           );
-          return pms + ago;
+          // Dynamic fuel type pump sales from Sales Tracking
+          const byType = Object.values(e.fuelPumpsByType || {}).reduce(
+            (s: number, pumps: any) =>
+              s +
+              (Array.isArray(pumps)
+                ? pumps.reduce(
+                    (ps: number, p: any) => ps + (p.salesKsh || 0),
+                    0,
+                  )
+                : 0),
+            0,
+          );
+          // Include POS sales for today too
+          const pos = e.posSales || {};
+          const posByType = Object.values(pos.byTypeAmount || {}).reduce(
+            (s: number, v: any) => s + (Number(v) || 0),
+            0,
+          );
+          const posTotal =
+            Object.keys(pos.byTypeAmount || {}).length > 0
+              ? posByType
+              : (pos.pmsAmount || 0) + (pos.agoAmount || 0);
+          return pms + ago + byType + posTotal;
         })()
       : 0;
 
@@ -839,8 +1148,9 @@ export default function Dashboard() {
           <div className="flex items-center gap-1 mt-2">
             <Fuel size={14} className="text-blue-500" />
             <span className="text-xs text-gray-500 dark:text-gray-400">
-              PMS: {currencySymbol} {displayPmsPrice}/L | AGO: {currencySymbol}{" "}
-              {displayAgoPrice}/L
+              {priceCards
+                .map((c) => `${c.label}: ${currencySymbol} ${c.price ?? 0}/L`)
+                .join(" | ")}
             </span>
           </div>
         </div>
@@ -921,60 +1231,29 @@ export default function Dashboard() {
             </span>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            <div className="bg-white dark:bg-gray-800 rounded-lg p-3 text-center">
-              <p className="text-[10px] text-gray-500 uppercase tracking-wide">
-                {CANONICAL_FUEL_TYPES.petrol.label}
-              </p>
-              <p className="text-xl font-bold text-green-700 dark:text-green-400">
-                {currencySymbol} {displayPmsPrice.toFixed(2)}
-              </p>
-              <p className="text-[9px] text-gray-400">per litre</p>
-              {isLocationBased ? (
-                <p className="text-[9px] text-green-600 dark:text-green-400 mt-0.5">
-                  {priceCityName}
+            {priceCards.map((card) => (
+              <div
+                key={card.key}
+                className="bg-white dark:bg-gray-800 rounded-lg p-3 text-center"
+              >
+                <p className="text-[10px] text-gray-500 uppercase tracking-wide">
+                  {card.label}
                 </p>
-              ) : regionalPrice.isRegional ? (
-                <p className="text-[9px] text-green-600 dark:text-green-400 mt-0.5">
-                  {regionalPrice.cityName}
+                <p className={`text-xl font-bold ${card.color}`}>
+                  {currencySymbol} {(card.price ?? 0).toFixed(2)}
                 </p>
-              ) : null}
-            </div>
-            <div className="bg-white dark:bg-gray-800 rounded-lg p-3 text-center">
-              <p className="text-[10px] text-gray-500 uppercase tracking-wide">
-                {CANONICAL_FUEL_TYPES.diesel.label}
-              </p>
-              <p className="text-xl font-bold text-amber-700 dark:text-amber-400">
-                {currencySymbol} {displayAgoPrice.toFixed(2)}
-              </p>
-              <p className="text-[9px] text-gray-400">per litre</p>
-              {isLocationBased ? (
-                <p className="text-[9px] text-amber-600 dark:text-amber-400 mt-0.5">
-                  {priceCityName}
-                </p>
-              ) : regionalPrice.isRegional ? (
-                <p className="text-[9px] text-amber-600 dark:text-amber-400 mt-0.5">
-                  {regionalPrice.cityName}
-                </p>
-              ) : null}
-            </div>
-            <div className="bg-white dark:bg-gray-800 rounded-lg p-3 text-center col-span-2 sm:col-span-1">
-              <p className="text-[10px] text-gray-500 uppercase tracking-wide">
-                {CANONICAL_FUEL_TYPES.kerosene.label}
-              </p>
-              <p className="text-xl font-bold text-rose-700 dark:text-rose-400">
-                {currencySymbol} {displayKerosenePrice.toFixed(2)}
-              </p>
-              <p className="text-[9px] text-gray-400">per litre</p>
-              {isLocationBased ? (
-                <p className="text-[9px] text-rose-600 dark:text-rose-400 mt-0.5">
-                  {priceCityName}
-                </p>
-              ) : regionalPrice.isRegional ? (
-                <p className="text-[9px] text-rose-600 dark:text-rose-400 mt-0.5">
-                  {regionalPrice.cityName}
-                </p>
-              ) : null}
-            </div>
+                <p className="text-[9px] text-gray-400">per litre</p>
+                {isLocationBased ? (
+                  <p className={`text-[9px] mt-0.5 ${card.color}`}>
+                    {priceCityName}
+                  </p>
+                ) : regionalPrice.isRegional ? (
+                  <p className={`text-[9px] mt-0.5 ${card.color}`}>
+                    {regionalPrice.cityName}
+                  </p>
+                ) : null}
+              </div>
+            ))}
           </div>
           {/* Fuel price interlinks — jump to the editor/finder/price-board so
               a price change here is reflected everywhere, and vice-versa. */}
@@ -1193,37 +1472,20 @@ export default function Dashboard() {
           <div className="h-48">
             <Doughnut data={fuelDistData} options={doughnutOptions} />
           </div>
-          <div className="mt-4 grid grid-cols-2 gap-2 text-center">
-            <div
-              className={`rounded-lg p-2 ${effectiveFuelPrice ? "bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800" : "bg-gray-50 dark:bg-gray-700/30"}`}
-            >
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                {CANONICAL_FUEL_TYPES.petrol.label} Price
-              </p>
-              <p className="font-semibold text-green-700 dark:text-green-300">
-                {currencySymbol} {displayPmsPrice}/L
-              </p>
-              {effectiveFuelPrice && (
-                <p className="text-[9px] text-green-600 dark:text-green-400 mt-0.5 flex items-center justify-center gap-0.5">
-                  <Globe size={8} /> Auto-synced
+          <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-2 text-center">
+            {priceCards.map((card) => (
+              <div
+                key={card.key}
+                className="rounded-lg p-2 bg-gray-50 dark:bg-gray-700/30 border border-gray-200 dark:border-gray-700"
+              >
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  {card.label} Price
                 </p>
-              )}
-            </div>
-            <div
-              className={`rounded-lg p-2 ${effectiveFuelPrice ? "bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800" : "bg-gray-50 dark:bg-gray-700/30"}`}
-            >
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                {CANONICAL_FUEL_TYPES.diesel.label} Price
-              </p>
-              <p className="font-semibold text-amber-700 dark:text-amber-300">
-                {currencySymbol} {displayAgoPrice}/L
-              </p>
-              {effectiveFuelPrice && (
-                <p className="text-[9px] text-amber-600 dark:text-amber-400 mt-0.5 flex items-center justify-center gap-0.5">
-                  <Globe size={8} /> Auto-synced
+                <p className={`font-semibold ${card.color}`}>
+                  {currencySymbol} {card.price ?? 0}/L
                 </p>
-              )}
-            </div>
+              </div>
+            ))}
           </div>
         </div>
       </div>
@@ -1263,62 +1525,43 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Tank Levels */}
+      {/* Tank Levels — dynamic per fuel type (was hardcoded to only
+          Super Petrol Tank + Diesel Tank). */}
       <div className="bg-white dark:bg-gray-800 rounded-xl p-3 shadow-sm border border-gray-200 dark:border-gray-700">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
           <Fuel size={18} className="text-blue-500" />
           Tank Levels
         </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {/* PMS Tank */}
-          <div>
-            <div className="flex justify-between items-center mb-2">
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                {CANONICAL_FUEL_TYPES.petrol.label} Tank
-              </span>
-              <span className="text-xs text-gray-500 dark:text-gray-400">
-                {formatNumber(state.pmsTankClosing - state.pmsTankOpening, 0)} L
-                dispensed
-              </span>
-            </div>
-            <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-green-400 to-green-600 rounded-full transition-all duration-500"
-                style={{
-                  width: `${tankFillPercent(state.pmsTankOpening, state.pmsTankClosing)}%`,
-                }}
-              />
-            </div>
-            <div className="flex justify-between mt-1 text-xs text-gray-500 dark:text-gray-400">
-              <span>Opening: {formatNumber(state.pmsTankOpening)} L</span>
-              <span>Closing: {formatNumber(state.pmsTankClosing)} L</span>
-            </div>
-          </div>
-
-          {/* AGO Tank */}
-          <div>
-            <div className="flex justify-between items-center mb-2">
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                {CANONICAL_FUEL_TYPES.diesel.label} Tank
-              </span>
-              <span className="text-xs text-gray-500 dark:text-gray-400">
-                {formatNumber(state.agoTankClosing - state.agoTankOpening, 0)} L
-                dispensed
-              </span>
-            </div>
-            <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-amber-400 to-amber-600 rounded-full transition-all duration-500"
-                style={{
-                  width: `${tankFillPercent(state.agoTankOpening, state.agoTankClosing)}%`,
-                }}
-              />
-            </div>
-            <div className="flex justify-between mt-1 text-xs text-gray-500 dark:text-gray-400">
-              <span>Opening: {formatNumber(state.agoTankOpening)} L</span>
-              <span>Closing: {formatNumber(state.agoTankClosing)} L</span>
-            </div>
-          </div>
+        <div
+          className={`grid gap-3 ${tankLevelCards.length > 2 ? "grid-cols-1 md:grid-cols-3" : "grid-cols-1 md:grid-cols-2"}`}
+        >
+          {tankLevelCards.map((card) => {
+            const dispensed = card.closing - card.opening;
+            return (
+              <div key={card.key}>
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {card.label} Tank
+                  </span>
+                  <span className="text-xs text-gray-500 dark:text-gray-400">
+                    {formatNumber(dispensed, 0)} L dispensed
+                  </span>
+                </div>
+                <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full bg-gradient-to-r ${card.barClass} rounded-full transition-all duration-500`}
+                    style={{
+                      width: `${tankFillPercent(card.opening, card.closing)}%`,
+                    }}
+                  />
+                </div>
+                <div className="flex justify-between mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  <span>Opening: {formatNumber(card.opening)} L</span>
+                  <span>Closing: {formatNumber(card.closing)} L</span>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -1329,22 +1572,17 @@ export default function Dashboard() {
           Pump Status
         </h3>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div className="text-center p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
-            <p className="text-2xl font-bold text-green-700 dark:text-green-300">
-              {state.pmsPumps.length}
-            </p>
-            <p className="text-xs text-gray-500 dark:text-gray-400">
-              {CANONICAL_FUEL_TYPES.petrol.label} Pumps
-            </p>
-          </div>
-          <div className="text-center p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
-            <p className="text-2xl font-bold text-amber-700 dark:text-amber-300">
-              {state.agoPumps.length}
-            </p>
-            <p className="text-xs text-gray-500 dark:text-gray-400">
-              {CANONICAL_FUEL_TYPES.diesel.label} Pumps
-            </p>
-          </div>
+          {pumpStatusCards.map((card) => (
+            <div
+              key={card.key}
+              className={`text-center p-3 ${card.bg} rounded-lg`}
+            >
+              <p className={`text-2xl font-bold ${card.text}`}>{card.count}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                {card.label} Pumps
+              </p>
+            </div>
+          ))}
           <div className="text-center p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
             <p className="text-2xl font-bold text-blue-700 dark:text-blue-300">
               {Object.keys(state.invoices).length}

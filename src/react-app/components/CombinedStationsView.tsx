@@ -1,7 +1,10 @@
 import { useStations } from "@/react-app/context/StationContext";
 import { useFuel } from "@/react-app/context/FuelContext";
 import { formatNumber } from "@/react-app/utils/formatUtils";
-import { getCurrencySymbol } from "@/react-app/lib/currency";
+import {
+  getCurrencySymbol,
+  resolveCurrencySymbol,
+} from "@/react-app/lib/currency";
 import {
   Layers,
   TrendingUp,
@@ -20,7 +23,10 @@ import {
 export default function CombinedStationsView() {
   const { stations, combineStations, switchStation } = useStations();
   const { state } = useFuel();
-  const currencySymbol = getCurrencySymbol(state.companyData?.currency);
+  const currencySymbol = resolveCurrencySymbol(
+    state.companyData?.currency,
+    undefined,
+  );
   const combined = combineStations();
 
   if (!combined) {

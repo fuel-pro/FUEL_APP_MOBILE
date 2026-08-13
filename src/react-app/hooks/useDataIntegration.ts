@@ -6,7 +6,7 @@ import { useCallback, useEffect } from "react";
 // ============================================================
 
 interface SaleEvent {
-  fuelType: "PMS" | "AGO";
+  fuelType: string; // any canonical fuel code (PMS, AGO, IK, LPG, VPW, etc.)
   quantity: number; // liters
   amount: number;
   customerName?: string;
@@ -15,7 +15,7 @@ interface SaleEvent {
 }
 
 interface DeliveryEvent {
-  fuelType: "PMS" | "AGO";
+  fuelType: string; // any canonical fuel code
   quantity: number; // liters
   supplier: string;
   timestamp: string;
@@ -27,23 +27,24 @@ interface TankUpdateEvent {
   timestamp: string;
 }
 
+type TankMap = Record<string, number>;
+
 export function useDataIntegration(stationId: string) {
   const STORAGE_PREFIX = `fuelpro_${stationId}`;
 
   // Record a fuel sale - triggers inventory update, customer loyalty, tank levels
   const recordSale = useCallback(
     (sale: SaleEvent) => {
-      // 1. Update tank levels
-      let currentTanks = { pms: 0, ago: 0 };
+      // 1. Update tank levels (dynamic — supports any fuel type code)
+      let currentTanks: TankMap = {};
       try {
         const stored = localStorage.getItem(`${STORAGE_PREFIX}_tanks`);
         if (stored) currentTanks = JSON.parse(stored);
       } catch {
         /* Use defaults */
       }
-      if (sale.fuelType === "PMS")
-        currentTanks.pms = Math.max(0, currentTanks.pms - sale.quantity);
-      else currentTanks.ago = Math.max(0, currentTanks.ago - sale.quantity);
+      const ft = sale.fuelType || "PMS";
+      currentTanks[ft] = Math.max(0, (currentTanks[ft] || 0) - sale.quantity);
       localStorage.setItem(
         `${STORAGE_PREFIX}_tanks`,
         JSON.stringify(currentTanks),
@@ -51,40 +52,31 @@ export function useDataIntegration(stationId: string) {
 
       // 2. Award loyalty points if customer identified
       if (sale.customerName && sale.customerPhone) {
-        const points = Math.floor(sale.amount / 100); // 1 point per Ksh 100 spent
+        const points = Math.floor(sale.amount / 100); // 1 point per 100 spent
         awardLoyaltyPoints(sale.customerPhone, points, sale.amount);
       }
 
-      // 3. Update daily sales summary
+      // 3. Update daily sales summary (dynamic per-fuel-type)
       const today = new Date().toISOString().split("T")[0];
       const dailyKey = `${STORAGE_PREFIX}_daily_${today}`;
-      let daily = {
-        pmsQty: 0,
-        agoQty: 0,
-        pmsRevenue: 0,
-        agoRevenue: 0,
-        transactions: 0,
-      };
+      let daily: Record<string, number> = { transactions: 0 };
       try {
         const stored = localStorage.getItem(dailyKey);
         if (stored) daily = JSON.parse(stored);
       } catch {
         /* Use defaults */
       }
-      if (sale.fuelType === "PMS") {
-        daily.pmsQty += sale.quantity;
-        daily.pmsRevenue += sale.amount;
-      } else {
-        daily.agoQty += sale.quantity;
-        daily.agoRevenue += sale.amount;
-      }
-      daily.transactions++;
+      const qtyKey = `${ft}Qty`;
+      const revKey = `${ft}Revenue`;
+      daily[qtyKey] = (daily[qtyKey] || 0) + sale.quantity;
+      daily[revKey] = (daily[revKey] || 0) + sale.amount;
+      daily.transactions = (daily.transactions || 0) + 1;
       localStorage.setItem(dailyKey, JSON.stringify(daily));
 
       // 4. Log to audit trail
       logAudit(
         "sale",
-        `Sold ${sale.quantity}L of ${sale.fuelType} for Ksh ${sale.amount}`,
+        `Sold ${sale.quantity}L of ${ft} for ${sale.amount}`,
         sale,
       );
 
@@ -97,15 +89,15 @@ export function useDataIntegration(stationId: string) {
   // Record fuel delivery - updates tank levels
   const recordDelivery = useCallback(
     (delivery: DeliveryEvent) => {
-      let currentTanks = { pms: 0, ago: 0 };
+      let currentTanks: TankMap = {};
       try {
         const stored = localStorage.getItem(`${STORAGE_PREFIX}_tanks`);
         if (stored) currentTanks = JSON.parse(stored);
       } catch {
         /* Use defaults */
       }
-      if (delivery.fuelType === "PMS") currentTanks.pms += delivery.quantity;
-      else currentTanks.ago += delivery.quantity;
+      const ft = delivery.fuelType || "PMS";
+      currentTanks[ft] = (currentTanks[ft] || 0) + delivery.quantity;
       localStorage.setItem(
         `${STORAGE_PREFIX}_tanks`,
         JSON.stringify(currentTanks),
@@ -113,7 +105,7 @@ export function useDataIntegration(stationId: string) {
 
       logAudit(
         "inventory",
-        `Received ${delivery.quantity}L of ${delivery.fuelType} from ${delivery.supplier}`,
+        `Received ${delivery.quantity}L of ${ft} from ${delivery.supplier}`,
         delivery,
       );
       window.dispatchEvent(
@@ -164,19 +156,26 @@ export function useDataIntegration(stationId: string) {
   // Update tank levels from dip measurement
   const updateTankLevels = useCallback(
     (update: TankUpdateEvent) => {
+      // Merge into the dynamic tank map (preserve other fuel types)
+      let currentTanks: TankMap = {};
+      try {
+        const stored = localStorage.getItem(`${STORAGE_PREFIX}_tanks`);
+        if (stored) currentTanks = JSON.parse(stored);
+      } catch {
+        /* Use defaults */
+      }
+      currentTanks.PMS = update.pmsTankClosing;
+      currentTanks.AGO = update.agoTankClosing;
+      currentTanks.timestamp = update.timestamp as unknown as number;
       localStorage.setItem(
         `${STORAGE_PREFIX}_tanks`,
-        JSON.stringify({
-          pms: update.pmsTankClosing,
-          ago: update.agoTankClosing,
-          timestamp: update.timestamp,
-        }),
+        JSON.stringify(currentTanks),
       );
-      logAudit(
-        "inventory",
-        `Tank levels updated: PMS=${update.pmsTankClosing}L, AGO=${update.agoTankClosing}L`,
-        update,
-      );
+      const fuelSummary = Object.entries(currentTanks)
+        .filter(([k]) => k !== "timestamp")
+        .map(([k, v]) => `${k}=${v}L`)
+        .join(", ");
+      logAudit("inventory", `Tank levels updated: ${fuelSummary}`, update);
       window.dispatchEvent(
         new CustomEvent("fuelpro-tank-update", { detail: update }),
       );
@@ -229,7 +228,7 @@ export function useDataIntegration(stationId: string) {
 
           logAudit(
             "payment",
-            `Credit sale: Ksh ${amount} to ${accounts[idx].customerName}`,
+            `Credit sale: ${amount} to ${accounts[idx].customerName}`,
             { accountId, amount },
           );
           window.dispatchEvent(
@@ -379,14 +378,7 @@ export function useDataIntegration(stationId: string) {
       } catch {
         /* Return defaults */
       }
-      if (!daily)
-        return {
-          pmsQty: 0,
-          agoQty: 0,
-          pmsRevenue: 0,
-          agoRevenue: 0,
-          transactions: 0,
-        };
+      if (!daily) return { transactions: 0 };
       return daily;
     },
     [STORAGE_PREFIX],
@@ -400,7 +392,7 @@ export function useDataIntegration(stationId: string) {
     } catch {
       /* Use defaults */
     }
-    return { pms: 0, ago: 0 };
+    return {};
   }, [STORAGE_PREFIX]);
 
   return {

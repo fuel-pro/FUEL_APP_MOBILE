@@ -17,6 +17,7 @@ import {
   Loader2,
   RefreshCw,
   Link2,
+  Trash2,
 } from "lucide-react";
 import { useFuel } from "../context/FuelContext";
 import { useStations } from "../context/StationContext";
@@ -31,10 +32,15 @@ import {
   getCountryPrice,
   getVATRate,
   currencySymbolFor,
+  CANONICAL_FUEL_TYPES,
+  getFuelLabel,
+  getFuelCode,
+  type CanonicalFuelType,
 } from "../config/pricing";
 import { getRegionalConfig } from "../config/regions";
 import SearchableCountryDropdown from "./SearchableCountryDropdown";
 import { resolveCountryFromBrowser } from "../lib/geo-utils";
+import cloudStorageService from "../lib/cloud-storage-service";
 
 const DEFAULT_CURRENCY = "$ ";
 
@@ -68,6 +74,22 @@ interface WizardData {
   vatRegNo: string;
   physicalAddress: string;
   etrSerialNo: string;
+  /**
+   * Extra fuel types beyond the default PMS/AGO (Kerosene, LPG, V-Power,
+   * etc.). Each carries a pump count + per-litre price. The wizard is no
+   * longer limited to only PMS & AGO — a station can configure as many
+   * fuel types as it sells at sign-up.
+   */
+  extraFuels: ExtraFuel[];
+}
+
+/** An additional fuel type configured in the wizard (beyond PMS/AGO). */
+export interface ExtraFuel {
+  id: string;
+  /** Canonical fuel-type key (kerosene | vpower | premium_diesel | lpg | cng). */
+  type: CanonicalFuelType;
+  count: number;
+  price: number;
 }
 
 const STEPS = [
@@ -127,6 +149,7 @@ export default function SetupWizard({
       vatRegNo: "",
       physicalAddress: "Auto-detected location",
       etrSerialNo: "",
+      extraFuels: [],
     };
   };
 
@@ -204,6 +227,46 @@ export default function SetupWizard({
     setData((prev) => ({ ...prev, [field]: value }));
   };
 
+  // --- Extra fuel types (beyond PMS/AGO) management ---
+  // Available canonical fuel types that can be added as extra fuels.
+  const EXTRA_FUEL_OPTIONS: CanonicalFuelType[] = [
+    "kerosene",
+    "vpower",
+    "premium_diesel",
+    "lpg",
+    "cng",
+  ];
+  const usedExtraTypes = new Set(data.extraFuels.map((f) => f.type));
+  const availableExtraFuels = EXTRA_FUEL_OPTIONS.filter(
+    (t) => !usedExtraTypes.has(t),
+  );
+
+  const addExtraFuel = (type: CanonicalFuelType) => {
+    const ef: ExtraFuel = {
+      id: `ef-${type}-${Date.now()}`,
+      type,
+      count: 1,
+      price: getCountryPrice(data.countryCode || "US", type as any)?.price || 0,
+    };
+    setData((prev) => ({ ...prev, extraFuels: [...prev.extraFuels, ef] }));
+  };
+
+  const updateExtraFuel = (id: string, patch: Partial<ExtraFuel>) => {
+    setData((prev) => ({
+      ...prev,
+      extraFuels: prev.extraFuels.map((f) =>
+        f.id === id ? { ...f, ...patch } : f,
+      ),
+    }));
+  };
+
+  const removeExtraFuel = (id: string) => {
+    setData((prev) => ({
+      ...prev,
+      extraFuels: prev.extraFuels.filter((f) => f.id !== id),
+    }));
+  };
+
   const canProceed = () => {
     switch (currentStep) {
       case 1:
@@ -211,9 +274,15 @@ export default function SetupWizard({
       case 2:
         return data.pmsTankCapacity > 0 || data.agoTankCapacity > 0;
       case 3:
-        return data.pmsCount > 0 || data.agoCount > 0;
+        return (
+          data.pmsCount > 0 || data.agoCount > 0 || data.extraFuels.length > 0
+        );
       case 4:
-        return data.pmsPrice > 0 || data.agoPrice > 0;
+        return (
+          data.pmsPrice > 0 ||
+          data.agoPrice > 0 ||
+          data.extraFuels.some((f) => f.price > 0)
+        );
       case 5:
         return true; // KRA is optional
       default:
@@ -282,6 +351,100 @@ export default function SetupWizard({
       },
     });
 
+    // Dispatch extra fuel types (Kerosene, LPG, V-Power, etc.) — the wizard
+    // is no longer limited to only PMS & AGO. Each extra fuel gets its own
+    // pump array (fuelPumpsByType) + price (fuelPricesByType).
+    const extraPumpsByType: Record<string, typeof pmsPumps> = {};
+    const extraPricesByType: Record<string, number> = {};
+    for (const ef of data.extraFuels) {
+      const code = getFuelCode(ef.type);
+      const pumps = Array.from({ length: ef.count || 0 }, (_, i) => ({
+        id: `${code}-${i + 1}-${Math.random().toString(36).slice(2, 6)}`,
+        openingKsh: 0,
+        closingKsh: 0,
+        openingL: 0,
+        closingL: 0,
+        salesL: 0,
+        salesKsh: 0,
+      }));
+      extraPumpsByType[ef.type] = pumps;
+      if (ef.price > 0) extraPricesByType[ef.type] = ef.price;
+    }
+    if (Object.keys(extraPumpsByType).length > 0) {
+      dispatch({ type: "SET_FUEL_PUMPS_BY_TYPE", payload: extraPumpsByType });
+    }
+    if (Object.keys(extraPricesByType).length > 0) {
+      dispatch({ type: "SET_FUEL_PRICES_BY_TYPE", payload: extraPricesByType });
+    }
+
+    // Seed the fuel_types_config catalog so the new station's configured fuel
+    // types (PMS/AGO + extras) are immediately available to POS, Dashboard,
+    // Price Board, etc. — without the user having to open Fuel Type Manager.
+    try {
+      const seededFuelTypes = [
+        {
+          id: `ft-petrol-${Date.now()}`,
+          code: "PMS",
+          name: CANONICAL_FUEL_TYPES.petrol.label,
+          localName: CANONICAL_FUEL_TYPES.petrol.label,
+          price: data.pmsPrice,
+          costPrice: 0,
+          taxRate: 0,
+          levyRate: 0,
+          color: "#22c55e",
+          icon: "Fuel",
+          pumpCount: data.pmsCount,
+          active: true,
+          description: "Premium Motor Spirit (Petrol)",
+        },
+        {
+          id: `ft-diesel-${Date.now()}`,
+          code: "AGO",
+          name: CANONICAL_FUEL_TYPES.diesel.label,
+          localName: CANONICAL_FUEL_TYPES.diesel.label,
+          price: data.agoPrice,
+          costPrice: 0,
+          taxRate: 0,
+          levyRate: 0,
+          color: "#f59e0b",
+          icon: "Fuel",
+          pumpCount: data.agoCount,
+          active: true,
+          description: "Automotive Gas Oil (Diesel)",
+        },
+        ...data.extraFuels.map((ef) => ({
+          id: ef.id,
+          code: getFuelCode(ef.type),
+          name: getFuelLabel(ef.type),
+          localName: getFuelLabel(ef.type),
+          price: ef.price,
+          costPrice: 0,
+          taxRate: 0,
+          levyRate: 0,
+          color:
+            ef.type === "kerosene"
+              ? "#f43f5e"
+              : ef.type === "lpg"
+                ? "#6366f1"
+                : "#0ea5e9",
+          icon: "Fuel",
+          pumpCount: ef.count,
+          active: true,
+          description: getFuelLabel(ef.type),
+        })),
+      ];
+      // Persist to cloud via cloudStorageService so it's cross-device.
+      cloudStorageService
+        .set(
+          "fuel_types_config",
+          seededFuelTypes,
+          state.currentStationId ?? undefined,
+        )
+        .catch(() => {});
+    } catch (e) {
+      console.error("[SetupWizard] Failed to seed fuel_types_config:", e);
+    }
+
     // Mark setup as complete
     localStorage.setItem("fuelpro_setup_complete", "true");
 
@@ -296,11 +459,26 @@ export default function SetupWizard({
 
     // Create the station in StationContext so it's registered and loaded
     let newStationId = "";
+    // Build a description that includes ALL configured fuel types (not just
+    // PMS/AGO) so the station record reflects the user's actual setup.
+    const fuelDescParts: string[] = [];
+    if (data.pmsCount > 0) fuelDescParts.push(`PMS: ${data.pmsCount} pumps`);
+    if (data.agoCount > 0) fuelDescParts.push(`AGO: ${data.agoCount} pumps`);
+    for (const ef of data.extraFuels) {
+      fuelDescParts.push(`${ef.label}: ${ef.pumpCount} pumps`);
+    }
+    const stationDescription =
+      fuelDescParts.join(", ") || "No pumps configured";
+    const allFuelTypeCodes = [
+      ...(data.pmsCount > 0 ? ["PMS"] : []),
+      ...(data.agoCount > 0 ? ["AGO"] : []),
+      ...data.extraFuels.map((ef) => ef.code || ef.type.toUpperCase()),
+    ];
     try {
       const newStation = createStation({
         name: data.stationName || "My Fuel Station",
         location: data.location || "Auto-detected",
-        description: `PMS: ${data.pmsCount || 0} pumps, AGO: ${data.agoCount || 0} pumps`,
+        description: stationDescription,
         // Pass through the contact/tax details captured in the wizard so the
         // station record (and downstream cloud sync) carries them instead of
         // defaulting to empty strings.
@@ -334,12 +512,16 @@ export default function SetupWizard({
         id: newStationId || `st_${Date.now()}`,
         name: data.stationName || "My Fuel Station",
         location: data.location || "Auto-detected",
-        description: `PMS: ${data.pmsCount || 0} pumps, AGO: ${data.agoCount || 0} pumps`,
+        description: stationDescription,
         status: "active",
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
-        fuelTypes: ["PMS", "AGO"],
-        pumpCount: (data.pmsCount || 0) + (data.agoCount || 0),
+        fuelTypes:
+          allFuelTypeCodes.length > 0 ? allFuelTypeCodes : ["PMS", "AGO"],
+        pumpCount:
+          (data.pmsCount || 0) +
+          (data.agoCount || 0) +
+          data.extraFuels.reduce((s, f) => s + (f.pumpCount || 0), 0),
         tankCount: 2,
         managerName: "",
         operatingHours: "24/7",
@@ -432,7 +614,16 @@ export default function SetupWizard({
       case 2:
         return <TanksStep data={data} updateField={updateField} />;
       case 3:
-        return <PumpsStep data={data} updateField={updateField} />;
+        return (
+          <PumpsStep
+            data={data}
+            updateField={updateField}
+            availableExtraFuels={availableExtraFuels}
+            onAddExtraFuel={addExtraFuel}
+            onUpdateExtraFuel={updateExtraFuel}
+            onRemoveExtraFuel={removeExtraFuel}
+          />
+        );
       case 4:
         return (
           <PricingStep
@@ -442,6 +633,10 @@ export default function SetupWizard({
             autoDetectedPrices={autoDetectedPrices}
             onRefreshPrices={refreshPrices}
             priceDetectionError={priceDetectionError}
+            availableExtraFuels={availableExtraFuels}
+            onAddExtraFuel={addExtraFuel}
+            onUpdateExtraFuel={updateExtraFuel}
+            onRemoveExtraFuel={removeExtraFuel}
           />
         );
       case 5:
@@ -752,7 +947,19 @@ function TanksStep({ data, updateField }: StepProps) {
   );
 }
 
-function PumpsStep({ data, updateField }: StepProps) {
+function PumpsStep({
+  data,
+  updateField,
+  availableExtraFuels,
+  onAddExtraFuel,
+  onUpdateExtraFuel,
+  onRemoveExtraFuel,
+}: StepProps & {
+  availableExtraFuels?: CanonicalFuelType[];
+  onAddExtraFuel?: (type: CanonicalFuelType) => void;
+  onUpdateExtraFuel?: (id: string, patch: Partial<ExtraFuel>) => void;
+  onRemoveExtraFuel?: (id: string) => void;
+}) {
   const PumpCounter = ({
     label,
     value,
@@ -806,12 +1013,71 @@ function PumpsStep({ data, updateField }: StepProps) {
           onChange={(n) => updateField("agoCount", n)}
           color="bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200"
         />
+        {data.extraFuels.map((ef) => (
+          <div
+            key={ef.id}
+            className="relative p-5 rounded-xl border bg-sky-50 dark:bg-sky-900/20 border-sky-200 dark:border-sky-800 text-sky-800 dark:text-sky-200"
+          >
+            <button
+              onClick={() => onRemoveExtraFuel?.(ef.id)}
+              className="absolute top-2 right-2 text-slate-400 hover:text-rose-500"
+              title="Remove this fuel type"
+            >
+              <Trash2 size={16} />
+            </button>
+            <h3 className="font-medium mb-4">{getFuelLabel(ef.type)} Pumps</h3>
+            <div className="flex items-center justify-center gap-4">
+              <button
+                onClick={() =>
+                  onUpdateExtraFuel?.(ef.id, {
+                    count: Math.max(0, ef.count - 1),
+                  })
+                }
+                className="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500 flex items-center justify-center transition-colors"
+              >
+                <Minus size={18} />
+              </button>
+              <span className="text-4xl font-bold w-16 text-center">
+                {ef.count}
+              </span>
+              <button
+                onClick={() =>
+                  onUpdateExtraFuel?.(ef.id, { count: ef.count + 1 })
+                }
+                className="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500 flex items-center justify-center transition-colors"
+              >
+                <Plus size={18} />
+              </button>
+            </div>
+            <p className="text-center text-sm text-slate-500 dark:text-slate-400 mt-2">
+              {ef.count === 1 ? "1 pump" : `${ef.count} pumps`}
+            </p>
+          </div>
+        ))}
       </div>
+
+      {/* Add extra fuel type */}
+      {availableExtraFuels && availableExtraFuels.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm text-slate-500 dark:text-slate-400">
+            Add another fuel type:
+          </span>
+          {availableExtraFuels.map((t) => (
+            <button
+              key={t}
+              onClick={() => onAddExtraFuel?.(t)}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-300 hover:bg-sky-200 dark:hover:bg-sky-800 text-sm font-medium"
+            >
+              <Plus size={14} /> {getFuelLabel(t)}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
         <p className="text-sm text-blue-700 dark:text-blue-300">
-          You can add more pumps or rename them later from the Sales Tracking
-          section.
+          You can add more pumps, fuel types, or rename them later from the
+          Sales Tracking or Fuel Type Manager sections.
         </p>
       </div>
     </div>
@@ -825,11 +1091,19 @@ function PricingStep({
   autoDetectedPrices,
   onRefreshPrices,
   priceDetectionError,
+  availableExtraFuels,
+  onAddExtraFuel,
+  onUpdateExtraFuel,
+  onRemoveExtraFuel,
 }: StepProps & {
   isDetectingPrices?: boolean;
   autoDetectedPrices?: FuelPrices | null;
   onRefreshPrices?: () => void;
   priceDetectionError?: string | null;
+  availableExtraFuels?: CanonicalFuelType[];
+  onAddExtraFuel?: (type: CanonicalFuelType) => void;
+  onUpdateExtraFuel?: (id: string, patch: Partial<ExtraFuel>) => void;
+  onRemoveExtraFuel?: (id: string) => void;
 }) {
   // Determine currency symbol. The selected country takes priority (it's the
   // authoritative source of the station's currency), then the entered
@@ -961,7 +1235,65 @@ function PricingStep({
             per litre
           </p>
         </div>
+
+        {/* Extra fuel type prices (Kerosene, LPG, V-Power, etc.) */}
+        {data.extraFuels.map((ef) => (
+          <div
+            key={ef.id}
+            className="relative bg-gradient-to-br from-sky-50 to-indigo-50 dark:from-sky-900/20 dark:to-indigo-900/20 rounded-xl p-5 border border-sky-200 dark:border-sky-800"
+          >
+            <button
+              onClick={() => onRemoveExtraFuel?.(ef.id)}
+              className="absolute top-2 right-2 text-slate-400 hover:text-rose-500"
+              title="Remove this fuel type"
+            >
+              <Trash2 size={16} />
+            </button>
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-3 h-3 rounded-full bg-sky-500"></div>
+              <span className="text-sm font-medium text-sky-800 dark:text-sky-300">
+                {getFuelLabel(ef.type)} ({getFuelCode(ef.type)})
+              </span>
+            </div>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-lg font-semibold text-sky-600 dark:text-sky-400">
+                {getCurrencySymbol()}
+              </span>
+              <input
+                type="number"
+                value={ef.price}
+                onChange={(e) =>
+                  onUpdateExtraFuel?.(ef.id, {
+                    price: Number(e.target.value),
+                  })
+                }
+                className="w-full pl-14 pr-4 py-4 text-2xl font-bold bg-white dark:bg-slate-700 border border-sky-300 dark:border-sky-700 rounded-xl focus:ring-2 focus:ring-sky-500 outline-none text-slate-900 dark:text-white text-center"
+              />
+            </div>
+            <p className="text-xs text-center text-sky-600 dark:text-sky-400 mt-2">
+              per litre
+            </p>
+          </div>
+        ))}
       </div>
+
+      {/* Add extra fuel type (pricing) */}
+      {availableExtraFuels && availableExtraFuels.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm text-slate-500 dark:text-slate-400">
+            Add another fuel type:
+          </span>
+          {availableExtraFuels.map((t) => (
+            <button
+              key={t}
+              onClick={() => onAddExtraFuel?.(t)}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-300 hover:bg-sky-200 dark:hover:bg-sky-800 text-sm font-medium"
+            >
+              <Plus size={14} /> {getFuelLabel(t)}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="p-4 bg-slate-100 dark:bg-slate-700/50 rounded-lg">
         <p className="text-xs text-slate-500 dark:text-slate-400 text-center">

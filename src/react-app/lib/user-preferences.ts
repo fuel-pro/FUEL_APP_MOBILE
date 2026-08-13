@@ -18,7 +18,28 @@ import {
   getCurrencySymbol,
   getDetectedCountryCode,
 } from "@/react-app/lib/currency";
-import { getVATRate } from "@/react-app/config/pricing";
+import { getVATRate, CANONICAL_FUEL_TYPES } from "@/react-app/config/pricing";
+
+/** Country-aware default fuel types (not hardcoded PMS/AGO only). */
+function getDefaultFuelTypes() {
+  const cc = getDetectedCountryCode();
+  // Every station gets at least petrol + diesel; Kenya adds kerosene + LPG.
+  const base = [
+    { label: CANONICAL_FUEL_TYPES.petrol.label, code: "PMS", price: 0 },
+    { label: CANONICAL_FUEL_TYPES.diesel.label, code: "AGO", price: 0 },
+  ];
+  if (cc === "KE") {
+    return [
+      ...base,
+      { label: CANONICAL_FUEL_TYPES.kerosene.label, code: "IK", price: 0 },
+      { label: CANONICAL_FUEL_TYPES.lpg.label, code: "LPG", price: 0 },
+    ];
+  }
+  return [
+    ...base,
+    { label: CANONICAL_FUEL_TYPES.kerosene.label, code: "IK", price: 0 },
+  ];
+}
 
 export interface UserPreferences {
   // Currency & formatting
@@ -89,11 +110,7 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   defaultReorderLevel: 10,
   lowStockThresholdPercent: 100,
 
-  fuelTypes: [
-    { label: "Super Petrol", code: "PMS", price: 0 },
-    { label: "Diesel", code: "AGO", price: 0 },
-    { label: "Kerosene", code: "IK", price: 0 },
-  ],
+  fuelTypes: getDefaultFuelTypes(),
 
   defaultPaymentMethods: ["cash", "card", "bank_transfer"],
   receiptFooter: "Thank you for your business!",
