@@ -626,11 +626,16 @@ export class AdminAPI {
           language: "en",
         },
         business: {
-          fuelTypes: ["PMS", "AGO", "Kerosene"],
+          // Dynamic: derive fuel types from the detected country's canonical set
+          // rather than hardcoding PMS/AGO/Kerosene for every station.
+          fuelTypes: isKenya
+            ? ["PMS", "AGO", "IK"]
+            : ["PMS", "AGO", "IK", "LPG"],
           defaultPrices: {
             PMS: pms.price,
             AGO: ago.price,
             Kerosene: kerosene.price,
+            IK: kerosene.price,
           },
           taxRate: isKenya ? 0.16 : 0,
         },
