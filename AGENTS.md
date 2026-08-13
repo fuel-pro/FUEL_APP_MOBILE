@@ -3874,3 +3874,79 @@ $164.90, Shell V-Power $214.35, LPG $120.00):
   wizard/setup.
 - **PRESET_FUELS** have hardcoded KSh price values; misleading for
   non-Kenya stations (labels adapt, price values do not).
+
+
+## Dynamic fuel types across Dashboard/POS/SalesTracking (DEPLOYED LIVE 2026-08-13, commit 85f8694)
+
+**Requirement**: "Current Pump Prices" (Dashboard) must match "Quick Fuel Sale"
+(POS) must match "Fuel Pricing" and "Add pump" (Sales Tracking). The whole site
+must adapt to the user's configured fuel types — NOT be hardcoded to PMS & AGO.
+A station with 5 fuel types should get 5 pump tables (not 2 + 3 unwanted empty
+PMS/AGO). During sign-up/login, do not limit to PMS & AGO.
+
+### SalesTracking — hardcoded PMS/AGO baseline REMOVED
+
+`trackedFuelTypes` previously ALWAYS prepended `["petrol","diesel"]` to the
+station's configured fuel types. A station with LPG/Kerosene/V-Power got 5
+pump tables (3 real + 2 unwanted empty PMS/AGO). Now petrol+diesel are a
+FIRST-RUN FALLBACK ONLY when `fuelTypeApi.activeFuelTypes` is empty (no
+configured fuel types yet). A station with N configured fuels gets exactly N
+pump tables.
+
+### FuelContext — new `fuelTankValuesByType` store
+
+Added `fuelTankValuesByType: Record<string, {opening:number; closing:number}>`
+to the FuelState interface, StationData, SET_TANK_VALUES action payload,
+initial state, and the SET_TANK_VALUES reducer (merges it separately from
+the rest of the payload). The compact save (BOTH `saveToStorage` +
+`saveToCloud`) includes it. `LOAD_FROM_STORAGE` now MERGES (not replaces)
+all three per-fuel-type stores (`fuelPumpsByType`, `fuelPricesByType`,
+`fuelTankValuesByType`) so a stale cloud blob can't wipe pumps/prices/tank
+values the user just set.
+
+### SalesTracking tank inventory — dynamic per fuel type
+
+The "Fuel Tank Inventory" section was hardcoded to two blocks: "Petrol (PMS)
+Tank" + "Diesel (AGO) Tank". Now renders one tank section per `trackedFuelTypes`
+entry. Petrol/diesel map to the legacy `pmsTankOpening`/`agoTankOpening` fields
+(backward compat); all other fuel types use the new `fuelTankValuesByType`
+store. The txt export also builds dynamic tank lines.
+
+### SalesTracking header — "PMS & AGO" label removed
+
+The header said "Fuel Sales Tracking (PMS & AGO)" even for Kerosene/V-Power/LPG
+stations. Now just "Fuel Sales Tracking".
+
+### Dashboard Tank Levels — dynamic per fuel type
+
+The "Tank Levels" section was hardcoded to two cards: "Super Petrol Tank" +
+"Diesel Tank". Now builds a `tankLevelCards` memo (same pattern as the existing
+`pumpStatusCards`) from `fuelTypeApi.activeFuelTypes`. Falls back to petrol/diesel
+only when no fuel types are configured. Grid switches to 3 columns when >2 fuel
+types.
+
+### Verified LIVE (Cloudflare preview 09ab0140)
+
+Logged in as founder QA user (US station, configured fuels: LPG, Kerosene,
+V-Power):
+- **Dashboard**: "Current Pump Prices" shows LPG/Kerosene/V-Power. "Tank Levels"
+  shows 3 dynamic tanks (LPG Tank, Kerosene Tank, V-Power Tank) in a 3-col grid.
+  "Pump Status" shows LPG(0)/Kerosene(1)/V-Power(2) pumps.
+- **Sales Tracking**: header "Fuel Sales Tracking" (no PMS & AGO). "Fuel Tank
+  Inventory" shows LPG (LPG) Tank, Kerosene (IK) Tank, V-Power (VPW) Tank.
+  "Fuel Pricing" shows LPG/Kerosene/V-Power prices. Pump tables: LPG Pumps,
+  Kerosene Pumps (IK-1-x4se), V-Power Pumps (VPW-1, VPW-2) — exactly 3 tables
+  (was 5 with unwanted PMS/AGO). Daily Summary: Total LPG/Kerosene/V-Power
+  Sales. 2 saved shifts persist.
+- **POS Quick Fuel Sale**: already dynamic (prior commit c7cac7b).
+
+### Deploy state 2026-08-13
+
+- **GitHub**: branch `dynamic-fuel-types`, commit `85f8694` pushed.
+- **Cloudflare Pages**: LIVE (preview https://09ab0140.fuel-app-mobile.pages.dev
+  + main alias https://fuel-app-mobile.pages.dev).
+- **Vercel production**: BLOCKED by `api-deployments-free-per-day` (100/day
+  exhausted). GitHub integration auto-deploys when quota resets (~24h).
+- **Supabase**: no schema changes (fuel-type config persists in the
+  `fuel_types_config` cloud key + compact blob `fuelTankValuesByType`).
+- `npx tsc --noEmit` (0 errors), `npm run build` (111 precache), prettier pass.
