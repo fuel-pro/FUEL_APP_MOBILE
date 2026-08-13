@@ -545,6 +545,16 @@ export default function Dashboard() {
         (s: number, p: any) => s + (p.salesKsh || 0),
         0,
       );
+      // Sum dynamic fuel types from Sales Tracking (fuelPumpsByType is a
+      // Record<fuelType, Pump[]> — covers LPG, Kerosene, V-Power, etc.)
+      const byTypeTotal = Object.values(entry.fuelPumpsByType || {}).reduce(
+        (s: number, pumps: any) =>
+          s +
+          (Array.isArray(pumps)
+            ? pumps.reduce((ps: number, p: any) => ps + (p.salesKsh || 0), 0)
+            : 0),
+        0,
+      );
       // Also count POS sales (from PointOfSale tab) — previously these were
       // silently excluded, so a completed POS sale never showed in Total Revenue.
       const pos = entry.posSales || {};
@@ -561,7 +571,7 @@ export default function Dashboard() {
         Object.keys(pos.byTypeAmount || {}).length > 0
           ? posByType
           : posPms + posAgo;
-      revenue += pmsTotal + agoTotal + posTotal;
+      revenue += pmsTotal + agoTotal + byTypeTotal + posTotal;
 
       // Fuel sold: pump litres + POS litres
       fuel += (entry.pmsPumps || []).reduce(
@@ -570,6 +580,15 @@ export default function Dashboard() {
       );
       fuel += (entry.agoPumps || []).reduce(
         (s: number, p: any) => s + (p.salesL || 0),
+        0,
+      );
+      // Dynamic fuel type litres from Sales Tracking
+      fuel += Object.values(entry.fuelPumpsByType || {}).reduce(
+        (s: number, pumps: any) =>
+          s +
+          (Array.isArray(pumps)
+            ? pumps.reduce((ps: number, p: any) => ps + (p.salesL || 0), 0)
+            : 0),
         0,
       );
       const posLitresByType = Object.values(pos.byTypeLitres || {}).reduce(
@@ -607,6 +626,18 @@ export default function Dashboard() {
             (s: number, p: any) => s + (p.salesKsh || 0),
             0,
           );
+          // Dynamic fuel type pump sales from Sales Tracking
+          const byType = Object.values(e.fuelPumpsByType || {}).reduce(
+            (s: number, pumps: any) =>
+              s +
+              (Array.isArray(pumps)
+                ? pumps.reduce(
+                    (ps: number, p: any) => ps + (p.salesKsh || 0),
+                    0,
+                  )
+                : 0),
+            0,
+          );
           // Include POS sales for today too
           const pos = e.posSales || {};
           const posByType = Object.values(pos.byTypeAmount || {}).reduce(
@@ -617,7 +648,7 @@ export default function Dashboard() {
             Object.keys(pos.byTypeAmount || {}).length > 0
               ? posByType
               : (pos.pmsAmount || 0) + (pos.agoAmount || 0);
-          return pms + ago + posTotal;
+          return pms + ago + byType + posTotal;
         })()
       : 0;
 
