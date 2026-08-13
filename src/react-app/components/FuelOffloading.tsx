@@ -78,7 +78,7 @@ export default function FuelOffloading() {
 
     // 2. Fuel types from existing records (covers legacy data + fuels no
     //    longer in the station config but still in historical records)
-    for (const rec of records) {
+    for (const rec of state.offloadingRecords) {
       const raw = rec.fuelType || "";
       if (!raw) continue;
       const code = getFuelCode(raw) || raw;
@@ -96,7 +96,7 @@ export default function FuelOffloading() {
       );
     }
     return opts;
-  }, [fuelTypeApi.activeFuelTypes, records]);
+  }, [fuelTypeApi.activeFuelTypes, state.offloadingRecords]);
 
   // Default to the FIRST active fuel type instead of the hardcoded "PMS"
   // (which made no sense for a diesel-only or kerosene station).
