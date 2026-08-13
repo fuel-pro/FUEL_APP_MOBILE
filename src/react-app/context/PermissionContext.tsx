@@ -975,7 +975,7 @@ export function PermissionProvider({
 }: {
   children: React.ReactNode;
 }) {
-  const { user, getActiveBinding } = useAuth();
+  const { user, getActiveBinding, bindings: allBindings } = useAuth();
 
   // --- cloud-backed state (user-scoped): team members, invites, role grants ---
   // getCached first (instant from memory/localStorage cache), then async cloud
@@ -1203,36 +1203,53 @@ export function PermissionProvider({
   useEffect(() => {
     if (!user) return;
     let currentStationId: string | null = null;
-    try {
-      const s = localStorage.getItem("fuelpro_current_station_v3");
-      if (s) currentStationId = JSON.parse(s).stationId;
-    } catch {
-      /* ignore */
-    }
-    if (!currentStationId) {
+    // StationContext stores the raw ID string; InviteAccept stores a JSON
+    // object {stationId}. Handle both formats.
+    const rawV3 = localStorage.getItem("fuelpro_current_station_v3");
+    if (rawV3) {
       try {
-        const s = localStorage.getItem("fuelpro_current_station");
-        if (s) currentStationId = JSON.parse(s).stationId;
+        const parsed = JSON.parse(rawV3);
+        currentStationId =
+          typeof parsed === "string" ? parsed : parsed?.stationId;
       } catch {
-        /* ignore */
+        // Not valid JSON — it's a raw ID string
+        currentStationId = rawV3;
       }
     }
-    if (!currentStationId) return;
-
-    const binding = getActiveBinding(currentStationId);
-    if (binding && binding.active && binding.role !== role) {
-      // The user has an active binding for this station with a different role.
-      // Apply it (this is the legitimate owner→invited-role transition that
-      // setRole blocks — we bypass setRole because the binding is authoritative).
-      setRoleState(binding.role);
-      localStorage.setItem("fuelpro_v2_role", binding.role);
-      localStorage.setItem("fuelpro_user_invited", "true");
-    } else if (!binding && role !== "owner") {
-      // No active binding for this station and role is non-owner → the user
-      // may have been revoked. Reset to owner (they'll see their own stations).
-      // Only do this if they have no bindings at all (pure station switch).
+    if (!currentStationId) {
+      const legacy = localStorage.getItem("fuelpro_current_station");
+      if (legacy) {
+        try {
+          const parsed = JSON.parse(legacy);
+          currentStationId =
+            typeof parsed === "string" ? parsed : parsed?.stationId;
+        } catch {
+          currentStationId = legacy;
+        }
+      }
     }
-  }, [user, getActiveBinding, role]);
+
+    // Try the binding for the current station first; if no current station
+    // is set yet (fresh login, sync in progress), fall back to ANY active
+    // binding — an invited user with exactly one binding should get that
+    // role even before the StationContext finishes syncing.
+    const binding = currentStationId
+      ? getActiveBinding(currentStationId)
+      : null;
+    const fallbackBinding =
+      !binding && role === "owner" ? allBindings.find((b) => b.active) : null;
+    const effectiveBinding = binding || fallbackBinding;
+
+    if (
+      effectiveBinding &&
+      effectiveBinding.active &&
+      effectiveBinding.role !== role
+    ) {
+      setRoleState(effectiveBinding.role);
+      localStorage.setItem("fuelpro_v2_role", effectiveBinding.role);
+      localStorage.setItem("fuelpro_user_invited", "true");
+    }
+  }, [user, getActiveBinding, role, allBindings]);
 
   // setRole: OWNER cannot switch roles. Only non-owner invited users can have different roles.
   const setRole = useCallback(
@@ -1255,18 +1272,26 @@ export function PermissionProvider({
 
       // Rule 3: Invited users are bound to their invited role
       let currentStationId: string | null = null;
-      try {
-        const s = localStorage.getItem("fuelpro_current_station_v3");
-        if (s) currentStationId = JSON.parse(s).stationId;
-      } catch {
-        /* ignore */
+      const rawV3 = localStorage.getItem("fuelpro_current_station_v3");
+      if (rawV3) {
+        try {
+          const parsed = JSON.parse(rawV3);
+          currentStationId =
+            typeof parsed === "string" ? parsed : parsed?.stationId;
+        } catch {
+          currentStationId = rawV3;
+        }
       }
       if (!currentStationId) {
-        try {
-          const s = localStorage.getItem("fuelpro_current_station");
-          if (s) currentStationId = JSON.parse(s).stationId;
-        } catch {
-          /* ignore */
+        const legacy = localStorage.getItem("fuelpro_current_station");
+        if (legacy) {
+          try {
+            const parsed = JSON.parse(legacy);
+            currentStationId =
+              typeof parsed === "string" ? parsed : parsed?.stationId;
+          } catch {
+            currentStationId = legacy;
+          }
         }
       }
 
@@ -1595,11 +1620,14 @@ export function PermissionProvider({
         createdByName: user?.name || user?.email,
         createdByUniqueId: (user as { uniqueId?: string })?.uniqueId,
         stationId: ((): string | undefined => {
-          try {
-            const s = localStorage.getItem("fuelpro_current_station_v3");
-            if (s) return JSON.parse(s).stationId;
-          } catch {
-            /* ignore */
+          const rawV3 = localStorage.getItem("fuelpro_current_station_v3");
+          if (rawV3) {
+            try {
+              const parsed = JSON.parse(rawV3);
+              return typeof parsed === "string" ? parsed : parsed?.stationId;
+            } catch {
+              return rawV3;
+            }
           }
           return undefined;
         })(),
