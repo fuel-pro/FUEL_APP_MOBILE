@@ -55,7 +55,6 @@ import {
   CreditCard,
   Cloud,
   CloudOff,
-  RefreshCw,
 } from "lucide-react";
 import { loginFounder } from "@/react-app/lib/founder-auth";
 import { requestPasswordReset } from "@/react-app/lib/founder-auth";

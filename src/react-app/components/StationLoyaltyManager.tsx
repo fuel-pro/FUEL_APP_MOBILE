@@ -36,6 +36,7 @@ import {
 } from "../lib/loyaltyProgram";
 import { formatNumber } from "@/react-app/utils/formatUtils";
 import { getCurrencySymbol } from "../lib/currency";
+import { useStationFuelTypes } from "@/react-app/hooks/useStationFuelTypes";
 
 interface StationLoyaltyManagerProps {
   stationId: string;
@@ -66,6 +67,12 @@ export default function StationLoyaltyManager({
     updateConfig,
     exportData,
   } = useLoyalty(stationId);
+
+  // Active station fuel types — used so manual loyalty points are recorded
+  // against an actual station fuel (first active) instead of a hardcoded PMS.
+  const fuelTypeApi = useStationFuelTypes(stationId);
+  const manualFuelType =
+    fuelTypeApi.activeFuelTypes[0]?.name ?? "PMS";
 
   const [activeTab, setActiveTab] = useState<
     "customers" | "rewards" | "settings" | "stats"
@@ -99,7 +106,7 @@ export default function StationLoyaltyManager({
       `manual_${Date.now()}`,
       pointsAmount * 10, // Simulate sale amount
       pointsAmount, // Liters
-      "PMS",
+      manualFuelType,
       "admin",
     );
 
@@ -658,6 +665,8 @@ function AddCustomerForm({
   onAdd: (data: any) => void;
   onCancel: () => void;
 }) {
+  // Offer all active fuel types from the station config plus "Both".
+  const fuelTypeApi = useStationFuelTypes();
   const [form, setForm] = useState({
     name: "",
     phone: "",
@@ -703,8 +712,11 @@ function AddCustomerForm({
           }
           className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
         >
-          <option value="PMS">PMS</option>
-          <option value="AGO">AGO</option>
+          {fuelTypeApi.activeFuelTypes.map((ft) => (
+            <option key={ft.id} value={ft.name}>
+              {ft.name}
+            </option>
+          ))}
           <option value="Both">Both</option>
         </select>
       </div>
