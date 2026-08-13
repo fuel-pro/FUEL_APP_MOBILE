@@ -132,7 +132,7 @@ export async function GET(request: Request): Promise<Response> {
   // 4) Fetch ALL stations (service_role bypasses the per-owner RLS).
   const { data: stationsRows, error: stationsErr } = await supabaseAdmin
     .from("stations")
-    .select("id, name, owner_id, created_by, location, created_at, updated_at")
+    .select("id, name, owner_id, created_by, location, created_at, updated_at, code, currency, country")
     .order("created_at", { ascending: false });
 
   if (stationsErr) {
@@ -152,19 +152,61 @@ export async function GET(request: Request): Promise<Response> {
     ownerNameById.set(String(u.id), u.name);
   }
 
-  const stations = (stationsRows || []).map((s: any) => ({
-    id: s.id,
-    name: s.name || "Unnamed Station",
-    ownerId: s.owner_id || s.created_by || "",
-    ownerName: ownerNameById.get(String(s.owner_id || s.created_by)) || "Owner",
-    location: s.location || "Unknown",
-    members: 1,
-    createdAt: s.created_at,
-    updatedAt: s.updated_at,
-  }));
+  // 5) Fetch revenue per station from sales_enhanced (sum of total_amount).
+  //    service_role bypasses RLS so we get cross-owner totals.
+  //    Note: sales_enhanced has no currency column; we use the station's currency.
+  const { data: revenueRows, error: revenueErr } = await supabaseAdmin
+    .from("sales_enhanced")
+    .select("station_id, total_amount");
+
+  // Build a map: station_id -> totalRevenue
+  const revenueByStation = new Map<string, number>();
+  if (!revenueErr && revenueRows) {
+    for (const r of revenueRows) {
+      const sid = String(r.station_id);
+      const existing = revenueByStation.get(sid) || 0;
+      revenueByStation.set(sid, existing + (Number(r.total_amount) || 0));
+    }
+  } else if (revenueErr) {
+    console.warn("[founder-stats] sales_enhanced query error:", revenueErr.message);
+  }
+
+  // Also fetch from legacy sales table (total column) as fallback
+  const { data: legacySalesRows, error: legacySalesErr } = await supabaseAdmin
+    .from("sales")
+    .select("station_id, total");
+
+  if (!legacySalesErr && legacySalesRows) {
+    for (const r of legacySalesRows) {
+      const sid = String(r.station_id);
+      const existing = revenueByStation.get(sid) || 0;
+      revenueByStation.set(sid, existing + (Number(r.total) || 0));
+    }
+  }
+
+  const stations = (stationsRows || []).map((s: any) => {
+    const sid = String(s.id);
+    return {
+      id: s.id,
+      name: s.name || "Unnamed Station",
+      ownerId: s.owner_id || s.created_by || "",
+      ownerName: ownerNameById.get(String(s.owner_id || s.created_by)) || "Owner",
+      location: s.location || "Unknown",
+      members: 1,
+      createdAt: s.created_at,
+      updatedAt: s.updated_at,
+      code: s.code || "",
+      currency: s.currency || "USD",
+      country: s.country || "",
+      revenue: revenueByStation.get(sid) || 0,
+    };
+  });
+
+  // Compute total revenue across all stations.
+  const totalRevenue = stations.reduce((sum, s) => sum + (s.revenue || 0), 0);
 
   return json(
-    { success: true, users, stations },
+    { success: true, users, stations, totalRevenue },
     200,
     // 60s CDN cache — founder stats don't need to be real-time to the second.
     { "Cache-Control": "no-store" },
