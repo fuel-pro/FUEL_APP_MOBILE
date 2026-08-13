@@ -4007,3 +4007,77 @@ state.companyData.currency was stored as a raw symbol (e.g. "KSh") from a stale 
 
 ### Deploy state 2026-08-13
 - GitHub: PR #131 OPEN. Cloudflare: LIVE (ac4c61fd). Vercel: blocked by quota. Supabase: no schema changes. tsc 0 errors, build 111 precache.
+
+## Dynamic fuel types — Analytics + Customer Loyalty (DEPLOYED LIVE 2026-08-13, commit a2cac45)
+
+### AdvancedAnalytics.tsx
+The estimated-volume calculation used only pms/ago prices from the pumps
+table — a station with only Kerosene/LPG/V-Power showed 0 estimated volume.
+Now averages ALL station fuel type prices from `fuelTypeApi.activeFuelTypes`
+(with pms/ago legacy fallback). The `totals` useMemo deps updated to include
+`fuelTypeApi`.
+
+### CustomerLoyalty.tsx
+The `preferredFuel` field was typed `"PMS" | "AGO" | "Both"` with hardcoded
+dropdown options — a station with Kerosene/LPG/V-Power could not select
+those as a customer's preferred fuel. Now the dropdown renders dynamically
+from `fuelTypeApi.activeFuelTypes` (with PMS/AGO first-run fallback). The
+type was widened to `string` so any fuel code works. Display now uses
+`fuelTypeApi.labelOf()` for canonical labels. The "Both" option is now
+labelled "All Fuels".
+
+### Verification (live, 2026-08-13, Cloudflare preview 0671651c + main alias)
+Logged in as founder QA user (US station, USD, fuel types: LPG/Kerosene/
+V-Power). Verified across all tabs:
+
+- **Dashboard "Current Pump Prices"**: LPG $120, Kerosene $5000, V-Power
+  $4800 — all 3 configured fuel types shown (not hardcoded Petrol/Diesel).
+  Tank Levels: LPG Tank, Kerosene Tank, V-Power Tank. Pump Status: LPG
+  Pumps (0), Kerosene Pumps (1), V-Power Pumps (2).
+- **POS "Quick Fuel Sale"**: LPG ($120.00/L), Kerosene ($5000.00/L),
+  V-Power ($4800.00/L) — dynamic buttons matching Dashboard prices. Test
+  sale: 10L LPG @ $120/L = $1,200 cash sale completed (INV20260813000005Q0YR).
+- **Sales Tracking pump tables**: "Add LPG Pump", "Add Kerosene Pump",
+  "Add V-Power Pump" — 3 dynamic pump tables (not hardcoded PMS/AGO).
+  Existing pumps: IK-1-x4se (Kerosene), VPW-1, VPW-2 (V-Power).
+  Fuel Tank Inventory: LPG/Kerosene/V-Power tanks. Fuel Pricing: LPG/
+  Kerosene/V-Power price inputs. Totals: Total LPG/Kerosene/V-Power Sales.
+- **Delivery Tracker**: fuel filter dropdown shows "All, LPG, Kerosene,
+  V-Power". Price inputs: LPG/Kerosene/V-Power Price ($/L).
+- **Customer Loyalty**: preferredFuel dropdown shows "LPG, Kerosene,
+  V-Power, All Fuels" (was hardcoded "PMS, AGO, Both").
+- **Analytics**: loads without crash, shows Total Revenue $95,003, 5
+  transactions, "Live (Supabase)" data source.
+
+### Deploy state 2026-08-13 (commit a2cac45)
+- GitHub main: PR #131 branch `dynamic-fuel-types`, commit a2cac45 pushed.
+- Cloudflare Pages: LIVE (main alias fuel-app-mobile.pages.dev, bundle
+  index-Dv4tG-r7.js + CustomerLoyalty-DHYcc_nl.js with "All Fuels"
+  confirmed). Preview https://e1a82aa2.fuel-app-mobile.pages.dev.
+- Vercel production: first prebuilt deploy succeeded (aliased to
+  fuel-app-mobile.vercel.app) but used a stale .vercel/output; a fresh
+  `vercel build --prod` regenerated the correct output but the subsequent
+  `vercel deploy --prebuilt` hit `api-deployments-free-per-day` (100/day
+  exhausted). GitHub integration auto-deploys when quota resets (~24h).
+  The Cloudflare mirror has the fixed code NOW.
+- Supabase: no schema changes (frontend-only fixes).
+- tsc 0 errors, build 111 precache, prettier all pass.
+
+## Dynamic fuel types â€” Analytics + Customer Loyalty (DEPLOYED LIVE 2026-08-13, commit a2cac45)
+
+### AdvancedAnalytics.tsx
+Estimated-volume calc used only pms/ago prices â€” a station with only Kerosene/LPG/V-Power showed 0. Now averages ALL station fuel type prices from fuelTypeApi.activeFuelTypes (with pms/ago legacy fallback).
+
+### CustomerLoyalty.tsx
+preferredFuel was typed "PMS"|"AGO"|"Both" with hardcoded dropdown. Now renders dynamically from fuelTypeApi.activeFuelTypes (with PMS/AGO first-run fallback). Type widened to string. Display uses fuelTypeApi.labelOf(). "Both" relabelled "All Fuels".
+
+### Verification (live 2026-08-13, Cloudflare 0671651c + main alias)
+- Dashboard: LPG $120, Kerosene $5000, V-Power $4800 â€” 3 fuel types (not Petrol/Diesel).
+- POS Quick Fuel Sale: LPG/Kerosene/V-Power buttons. Test sale 10L LPG @ $120 = $1,200 (INV20260813000005Q0YR).
+- Sales Tracking: "Add LPG/Kerosene/V-Power Pump" â€” 3 dynamic pump tables.
+- Delivery Tracker: fuel filter "All/LPG/Kerosene/V-Power". Price inputs per fuel.
+- Customer Loyalty: preferredFuel dropdown "LPG/Kerosene/V-Power/All Fuels".
+- Analytics: loads without crash, $95,003 revenue, 5 transactions.
+
+### Deploy state 2026-08-13 (commit a2cac45)
+- GitHub: PR #131 branch dynamic-fuel-types. Cloudflare: LIVE (index-Dv4tG-r7.js + CustomerLoyalty-DHYcc_nl.js with "All Fuels" confirmed). Vercel: prebuilt deploy aliased but stale; redeploy blocked by api-deployments-free-per-day (100/day). GitHub integration auto-deploys when quota resets. Supabase: no schema changes. tsc 0 errors, build 111 precache.
