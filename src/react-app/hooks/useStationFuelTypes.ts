@@ -71,10 +71,17 @@ export function useStationFuelTypes(
 
   const load = useCallback(async () => {
     try {
-      const data = await cloudStorageService.get<CustomFuelType[]>(
+      let data = await cloudStorageService.get<CustomFuelType[]>(
         CLOUD_KEY,
         stationId,
       );
+      // Fallback: if the per-station row is empty (e.g. the station predates
+      // fuel_types_config, or stationId resolved to a legacy sentinel like
+      // "default_station"), try the owner-scoped (no-station) row so a
+      // station's configured fuel types still load.
+      if (!data && stationId) {
+        data = await cloudStorageService.get<CustomFuelType[]>(CLOUD_KEY);
+      }
       if (data && Array.isArray(data)) setFuelTypes(data);
     } catch {
       /* ignore — components keep their own state as a secondary source */

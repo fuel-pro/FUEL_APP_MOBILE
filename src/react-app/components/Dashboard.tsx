@@ -111,7 +111,12 @@ export default function Dashboard() {
   // Dynamic fuel-type support for the "Current Pump Prices" cards: read the
   // station's configured fuel types so the cards reflect EVERY fuel the
   // station sells (Kerosene, LPG, V-Power, etc.), not just Petrol/Diesel.
-  const stationId = state.currentStationId ?? currentStation?.id ?? undefined;
+  // NOTE: prefer the real StationContext station id (currentStation?.id) —
+  // that is the id FuelTypesManager writes fuel_types_config under. The
+  // FuelContext `state.currentStationId` is a legacy "default_station" value
+  // that resolves to a DIFFERENT (empty) cloud row, so the cards would never
+  // show the configured fuel types.
+  const stationId = currentStation?.id ?? state.currentStationId ?? undefined;
   const fuelTypeApi = useStationFuelTypes(stationId);
   // The station's country is the authoritative source for pricing/tax/currency
   // — NOT the GPS-detected country (which may be a VPN/tourist location and

@@ -25,6 +25,7 @@ import {
   Tag,
 } from "lucide-react";
 import { useFuel } from "@/react-app/context/FuelContext";
+import { useStations } from "@/react-app/context/StationContext";
 import { useStationFuelTypes } from "@/react-app/hooks/useStationFuelTypes";
 import ExportDropdown from "@/react-app/components/ExportDropdown";
 import {
@@ -68,12 +69,17 @@ type ScanStep = "idle" | "uploading" | "analyzing" | "review" | "error";
 
 export default function SalesTracking() {
   const { state, dispatch, syncPriceToFuelTypes } = useFuel();
+  const { currentStation } = useStations();
   const currencySymbol = getCurrencySymbol(state.companyData?.currency);
   // Dynamic fuel-type support: read the station's configured fuel types so
   // the pump tables, pricing inputs, and per-fuel summaries are NOT hardcoded
   // to PMS/AGO. A station with Kerosene/LPG/V-Power etc. gets its own pump
   // table per fuel type.
-  const stationId = state.currentStationId ?? undefined;
+  // NOTE: prefer the real StationContext station id (currentStation?.id) —
+  // that is the id FuelTypesManager writes fuel_types_config under. The
+  // FuelContext `state.currentStationId` is a legacy "default_station" value
+  // that resolves to a DIFFERENT (empty) cloud row.
+  const stationId = currentStation?.id ?? state.currentStationId ?? undefined;
   const fuelTypeApi = useStationFuelTypes(stationId);
 
   /**
