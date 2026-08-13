@@ -588,6 +588,12 @@ export default function SalesTracking() {
   const saveSalesData = () => {
     const key = `${state.salesDate}_${state.shift}`;
 
+    // Preserve posSales from the existing entry — POS sales (PointOfSale tab)
+    // are stored in the same salesHistory[key].posSales sub-object. Without
+    // this spread, saving Sales Tracking data would silently DESTROY all POS
+    // sales for this day/shift (data-loss bug).
+    const existing = state.salesHistory[key] || {};
+
     const salesData = {
       date: state.salesDate,
       shift: state.shift,
@@ -603,6 +609,8 @@ export default function SalesTracking() {
       pmsTankClosing: state.pmsTankClosing,
       agoTankOpening: state.agoTankOpening,
       agoTankClosing: state.agoTankClosing,
+      // Preserve POS sales so they survive a Sales Tracking save
+      posSales: existing.posSales,
     };
 
     dispatch({
