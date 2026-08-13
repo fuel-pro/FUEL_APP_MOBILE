@@ -553,8 +553,8 @@ export default function CustomerLoyalty() {
               {(fuelTypeApi.activeFuelTypes.length > 0
                 ? fuelTypeApi.activeFuelTypes
                 : [
-                    { name: "PMS", label: "Super Petrol" },
-                    { name: "AGO", label: "Diesel" },
+                    { name: "PMS", label: getFuelLabel("PMS") },
+                    { name: "AGO", label: getFuelLabel("AGO") },
                   ]
               ).map((ft) => (
                 <option key={ft.name} value={ft.name}>
@@ -1033,8 +1033,8 @@ function EditCustomerForm({
           {(fuelTypeApi.activeFuelTypes.length > 0
             ? fuelTypeApi.activeFuelTypes
             : [
-                { name: "PMS", label: "Super Petrol" },
-                { name: "AGO", label: "Diesel" },
+                { name: "PMS", label: getFuelLabel("PMS") },
+                { name: "AGO", label: getFuelLabel("AGO") },
               ]
           ).map((ft) => (
             <option key={ft.name} value={ft.name}>

@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { formatNumber } from "@/react-app/utils/formatUtils";
 import { switchToTab } from "@/react-app/lib/mpesa-integration-service";
+import { getDetectedCurrency } from "@/react-app/lib/currency";
 
 interface PredictionPoint {
   date: string;
@@ -55,7 +56,7 @@ export default function AdvancedAnalytics() {
     currentStation?.currencySymbol ||
     location.currencySymbol ||
     state.companyData?.currency ||
-    "KES";
+    getDetectedCurrency();
   const [timeRange, setTimeRange] = useState<"7d" | "30d" | "90d" | "1y">(
     "30d",
   );

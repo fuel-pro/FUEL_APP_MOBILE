@@ -84,7 +84,14 @@ export default function CacheControl() {
   };
 
   const reloadPage = () => {
-    window.location.reload();
+    if (
+      typeof window !== "undefined" &&
+      typeof window.__fuelproSafeReload === "function"
+    ) {
+      window.__fuelproSafeReload("cache-cleared");
+    } else {
+      window.location.reload();
+    }
   };
 
   const stats = getCacheStats();

@@ -91,8 +91,8 @@ export default function FuelOffloading() {
     // 3. Fallback for stations with no configured fuel types AND no records
     if (opts.length === 0) {
       opts.push(
-        { value: "PMS", label: "Super Petrol" },
-        { value: "AGO", label: "Diesel" },
+        { value: "PMS", label: getFuelLabel("PMS") },
+        { value: "AGO", label: getFuelLabel("AGO") },
       );
     }
     return opts;

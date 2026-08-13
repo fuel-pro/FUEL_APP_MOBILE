@@ -80,9 +80,9 @@ export default function FuelQualityTesting() {
     if (configured.length > 0) return configured;
     // Fallback to the canonical set when no fuel types are configured.
     return [
-      { code: "PMS", label: "Super Petrol" },
-      { code: "AGO", label: "Diesel" },
-      { code: "IK", label: "Kerosene" },
+      { code: "PMS", label: getFuelLabel("PMS") },
+      { code: "AGO", label: getFuelLabel("AGO") },
+      { code: "IK", label: getFuelLabel("IK") },
     ];
   })();
   const defaultFuelType =

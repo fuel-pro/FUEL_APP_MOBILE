@@ -309,7 +309,9 @@ export default function Paywall({ onClose }: PaywallProps) {
                     >
                       {tier.priceKES === 0
                         ? "Free"
-                        : `Ksh ${tier.priceKES.toLocaleString()}`}
+                        : isKenya
+                          ? `Ksh ${tier.priceKES.toLocaleString()}`
+                          : `$${tier.priceUSD.toLocaleString()}`}
                       {tier.priceKES > 0 && (
                         <span
                           style={{
@@ -546,7 +548,9 @@ export default function Paywall({ onClose }: PaywallProps) {
                   color: selectedTierData.color,
                 }}
               >
-                Ksh {selectedTierData.priceKES.toLocaleString()}
+                {isKenya
+                  ? `Ksh ${selectedTierData.priceKES.toLocaleString()}`
+                  : `$${selectedTierData.priceUSD.toLocaleString()}`}
                 <span style={{ fontSize: 12, color: "#6b7280" }}>/month</span>
               </div>
               <div style={{ fontSize: 11, color: "#6b7280", marginTop: 4 }}>

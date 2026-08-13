@@ -3003,7 +3003,7 @@ function AddWebhookForm({
           value={name}
           onChange={(e) => setName(e.target.value)}
           className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-xs dark:text-white"
-          placeholder="e.g. KRA Invoice Sync"
+          placeholder="e.g. Invoice Sync"
         />
       </div>
       <div>

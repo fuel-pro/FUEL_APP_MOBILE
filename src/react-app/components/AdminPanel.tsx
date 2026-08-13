@@ -3,6 +3,7 @@ import { useStations } from "@/react-app/context/StationContext";
 import { useAuth } from "@/react-app/context/AuthContext";
 import { useNavigate } from "react-router";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
+import { isKenyaStation } from "@/react-app/lib/currency";
 import {
   Shield,
   Settings,
@@ -1491,7 +1492,21 @@ export default function AdminPanel() {
                   </button>
                 </div>
                 {[
-                  { key: "kra_etims", label: "KRA eTIMS API", icon: Receipt },
+                  ...(isKenyaStation()
+                    ? [
+                        {
+                          key: "kra_etims",
+                          label: "KRA eTIMS API",
+                          icon: Receipt,
+                        },
+                      ]
+                    : [
+                        {
+                          key: "tax_api",
+                          label: "Tax Authority API",
+                          icon: Receipt,
+                        },
+                      ]),
                   {
                     key: "mpesa_api",
                     label: "M-Pesa Daraja API",
