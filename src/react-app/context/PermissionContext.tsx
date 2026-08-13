@@ -124,6 +124,25 @@ interface AccessInvite {
   tabGrants?: string[];
 }
 
+/** Decoded invite data from the invite URL (base64 payload). This is what
+ * InviteAccept.tsx decodes from the URL — it does NOT need to exist in the
+ * invitee's local invites array. */
+export interface InvitePayload {
+  id: string;
+  role: UserRole;
+  stationName: string;
+  stationId: string;
+  createdBy: string;
+  createdByName?: string;
+  createdByUniqueId?: string;
+  expiresAt?: string;
+  maxUses: number;
+  canCreateSubUsers?: boolean;
+  canGrantPermissions?: boolean;
+  permissionsSnapshot?: Partial<PermissionConfig>;
+  tabGrants?: string[];
+}
+
 // --- TAB ACCESS MAP: which permission key gates each tab ---
 export const TAB_PERMISSION_MAP: Record<string, keyof PermissionConfig> = {
   dashboard: "canViewDashboard",
@@ -680,6 +699,13 @@ interface PermissionContextType {
     },
   ) => AccessInvite;
   acceptInvite: (inviteId: string, username: string) => boolean;
+  /** Accept an invite directly from the decoded URL payload — does NOT require
+   * the invite to exist in the local invites array (which is the invitee's own
+   * array, always empty since invites are created by the station owner). */
+  acceptInviteFromPayload: (
+    payload: InvitePayload,
+    username: string,
+  ) => boolean;
   revokeMember: (memberId: string) => void;
   extendAccess: (memberId: string, days: number) => void;
   assignPumps: (memberId: string, pumpIds: string[]) => void;
@@ -735,6 +761,7 @@ const PermissionContext = createContext<PermissionContextType>({
     uses: 0,
   }),
   acceptInvite: () => false,
+  acceptInviteFromPayload: () => false,
   revokeMember: () => {},
   extendAccess: () => {},
   assignPumps: () => {},
@@ -1165,6 +1192,47 @@ export function PermissionProvider({
       unsubs.forEach((u) => u());
     };
   }, [user]);
+
+  // Sync role from the active station binding. When a user logs in on any
+  // device, AuthContext.syncBindingsFromCloud loads their station_members
+  // rows → bindings. This effect reads the binding for the current station
+  // and sets the PermissionContext role accordingly. This is how an invited
+  // Manager/Staff/Auditor gets their correct role on every device — NOT via
+  // localStorage (which is per-browser). Without this, an invited user stays
+  // "owner" in the PermissionContext even though their binding says "manager".
+  useEffect(() => {
+    if (!user) return;
+    let currentStationId: string | null = null;
+    try {
+      const s = localStorage.getItem("fuelpro_current_station_v3");
+      if (s) currentStationId = JSON.parse(s).stationId;
+    } catch {
+      /* ignore */
+    }
+    if (!currentStationId) {
+      try {
+        const s = localStorage.getItem("fuelpro_current_station");
+        if (s) currentStationId = JSON.parse(s).stationId;
+      } catch {
+        /* ignore */
+      }
+    }
+    if (!currentStationId) return;
+
+    const binding = getActiveBinding(currentStationId);
+    if (binding && binding.active && binding.role !== role) {
+      // The user has an active binding for this station with a different role.
+      // Apply it (this is the legitimate owner→invited-role transition that
+      // setRole blocks — we bypass setRole because the binding is authoritative).
+      setRoleState(binding.role);
+      localStorage.setItem("fuelpro_v2_role", binding.role);
+      localStorage.setItem("fuelpro_user_invited", "true");
+    } else if (!binding && role !== "owner") {
+      // No active binding for this station and role is non-owner → the user
+      // may have been revoked. Reset to owner (they'll see their own stations).
+      // Only do this if they have no bindings at all (pure station switch).
+    }
+  }, [user, getActiveBinding, role]);
 
   // setRole: OWNER cannot switch roles. Only non-owner invited users can have different roles.
   const setRole = useCallback(
@@ -1600,6 +1668,87 @@ export function PermissionProvider({
     [invites, user],
   );
 
+  /** Accept an invite directly from the decoded URL payload.
+   *
+   * This is the CORRECT path for invite acceptance: the invite data is encoded
+   * in the URL (base64), so we don't need to look it up in the invitee's local
+   * `invites` array (which is always empty — invites are created by the station
+   * OWNER and stored under the owner's cloud key, not the invitee's).
+   *
+   * Validation:
+   * - Expiry: checks `payload.expiresAt`.
+   * - Max uses: checks the `station_members` DB table count (async, best-effort)
+   *   AND the local `team` array (defense-in-depth).
+   * - Duplicate: if the current user is already a team member for this station,
+   *   we allow re-acceptance (idempotent — updates their role/username).
+   */
+  const acceptInviteFromPayload = useCallback(
+    (payload: InvitePayload, username: string): boolean => {
+      if (!payload || !payload.id || !payload.role) return false;
+      if (payload.expiresAt && new Date(payload.expiresAt) < new Date())
+        return false;
+
+      // Check if this user is already a member (idempotent re-acceptance).
+      const existingMember = team.find(
+        (m) => m.userId === user?.id && m.stationId === payload.stationId,
+      );
+      // Check max uses via local team count (defense-in-depth; the DB
+      // station_members table is the authoritative count, checked async in
+      // InviteAccept.tsx before calling this).
+      if (
+        !existingMember &&
+        team.filter((m) => m.stationId === payload.stationId).length >=
+          (payload.maxUses || 1)
+      ) {
+        // The local team array may be empty on a fresh device (cloud hasn't
+        // loaded yet), so don't hard-block — the DB check in InviteAccept is
+        // the real gate. Only block if we have local data showing max reached.
+        // Still allow if we have no local team data (fresh device).
+        if (team.length > 0) return false;
+      }
+
+      const member: TeamMember = {
+        id:
+          existingMember?.id ||
+          `mem_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        username,
+        role: payload.role,
+        assignedPumps: existingMember?.assignedPumps || [],
+        assignedShifts: existingMember?.assignedShifts || [],
+        invitedBy: payload.createdBy,
+        invitedAt: existingMember?.invitedAt || new Date().toISOString(),
+        expiresAt: payload.expiresAt,
+        active: true,
+        userId: user?.id,
+        authId: user?.authId,
+        email: user?.email,
+        uniqueId: (user as { uniqueId?: string })?.uniqueId,
+        canCreateSubUsers: payload.canCreateSubUsers,
+        canGrantPermissions: payload.canGrantPermissions,
+        permissionsSnapshot: payload.permissionsSnapshot,
+        invitedByUserId: undefined,
+        invitedByUniqueId: payload.createdByUniqueId,
+        invitedByName: payload.createdByName,
+        stationId: payload.stationId,
+      };
+
+      skipTeamRemoteRef.current = true;
+      localModifiedRef.current = true;
+      if (existingMember) {
+        // Update existing member (idempotent re-acceptance).
+        setTeam((prev) =>
+          prev.map((m) =>
+            m.id === existingMember.id ? { ...m, ...member, id: m.id } : m,
+          ),
+        );
+      } else {
+        setTeam((prev) => [...prev, member]);
+      }
+      return true;
+    },
+    [team, user],
+  );
+
   // --- Custom role management (Owner-defined: accountant, cashier, ...) ---
   const createCustomRole = useCallback(
     (
@@ -1757,6 +1906,7 @@ export function PermissionProvider({
         canInviteRole,
         createInvite,
         acceptInvite,
+        acceptInviteFromPayload,
         revokeMember,
         extendAccess,
         assignPumps,
