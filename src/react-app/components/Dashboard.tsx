@@ -204,15 +204,21 @@ export default function Dashboard() {
   }> = useMemo(() => {
     const active = fuelTypeApi.activeFuelTypes;
     if (active.length > 0) {
-      // Map the configured fuel types to display prices. Prefer the
-      // location/regional/national resolved price for petrol/diesel/kerosene;
-      // for other fuels use the configured price (fuelTypeApi.getPriceFor) or
-      // the FuelContext dynamic price store.
+      // Map the configured fuel types to display prices. The user's
+      // explicitly-configured price (ft.price, set in Fuel Type Manager) is
+      // the source of truth — prefer it over the national-average fallback so
+      // a station that sells Kerosene at $164.90 doesn't show the national
+      // average of $3.20. Only when the configured price is 0/missing do we
+      // fall back to the location/regional/national resolved price
+      // (petrol/diesel/kerosene) or the FuelContext dynamic price store.
       return active.map((ft) => {
         const canonical = fuelTypeApi.canonicalOf(ft.name);
         const label = fuelTypeApi.labelOf(ft.name);
+        const configured = typeof ft.price === "number" && ft.price > 0 ? ft.price : null;
         let price = 0;
-        if (canonical === "petrol") price = displayPmsPrice;
+        if (configured != null) {
+          price = configured;
+        } else if (canonical === "petrol") price = displayPmsPrice;
         else if (canonical === "diesel") price = displayAgoPrice;
         else if (canonical === "kerosene") price = displayKerosenePrice;
         else {
@@ -261,6 +267,78 @@ export default function Dashboard() {
     displayKerosenePrice,
     state.fuelPricesByType,
   ]);
+
+  /**
+   * Dynamic "Pump Status" card list. One card per configured fuel type,
+   * showing the count of pumps for that fuel (from the FuelContext
+   * per-canonical-type store `fuelPumpsByType`, falling back to the legacy
+   * `pmsPumps`/`agoPumps` for petrol/diesel). When no fuel types are
+   * configured, falls back to the legacy petrol/diesel pair.
+   */
+  const pumpStatusCards: Array<{
+    key: string;
+    label: string;
+    count: number;
+    bg: string;
+    text: string;
+  }> = useMemo(() => {
+    const active = fuelTypeApi.activeFuelTypes;
+    if (active.length > 0) {
+      const palette: Record<string, { bg: string; text: string }> = {
+        petrol: {
+          bg: "bg-green-50 dark:bg-green-900/20",
+          text: "text-green-700 dark:text-green-300",
+        },
+        diesel: {
+          bg: "bg-amber-50 dark:bg-amber-900/20",
+          text: "text-amber-700 dark:text-amber-300",
+        },
+        kerosene: {
+          bg: "bg-rose-50 dark:bg-rose-900/20",
+          text: "text-rose-700 dark:text-rose-300",
+        },
+      };
+      const fallback = {
+        bg: "bg-indigo-50 dark:bg-indigo-900/20",
+        text: "text-indigo-700 dark:text-indigo-300",
+      };
+      return active.map((ft) => {
+        const canonical = fuelTypeApi.canonicalOf(ft.name);
+        const pumps =
+          (canonical && state.fuelPumpsByType?.[canonical]) ||
+          (canonical === "petrol"
+            ? state.pmsPumps
+            : canonical === "diesel"
+              ? state.agoPumps
+              : []) ||
+          [];
+        const colors = (canonical && palette[canonical]) || fallback;
+        return {
+          key: ft.id || canonical || ft.name,
+          label: fuelTypeApi.labelOf(ft.name),
+          count: Array.isArray(pumps) ? pumps.length : 0,
+          ...colors,
+        };
+      });
+    }
+    return [
+      {
+        key: "petrol",
+        label: CANONICAL_FUEL_TYPES.petrol.label,
+        count: state.pmsPumps.length,
+        bg: "bg-green-50 dark:bg-green-900/20",
+        text: "text-green-700 dark:text-green-300",
+      },
+      {
+        key: "diesel",
+        label: CANONICAL_FUEL_TYPES.diesel.label,
+        count: state.agoPumps.length,
+        bg: "bg-amber-50 dark:bg-amber-900/20",
+        text: "text-amber-700 dark:text-amber-300",
+      },
+    ];
+  }, [fuelTypeApi, state.fuelPumpsByType, state.pmsPumps, state.agoPumps]);
+
   // Currency symbol must match the STATION's currency (e.g. "€" for a German
   // station), never the GPS/browser-detected currency. Fall back to the
   // location-derived symbol only if the station has no currency set.
@@ -1248,37 +1326,20 @@ export default function Dashboard() {
           <div className="h-48">
             <Doughnut data={fuelDistData} options={doughnutOptions} />
           </div>
-          <div className="mt-4 grid grid-cols-2 gap-2 text-center">
-            <div
-              className={`rounded-lg p-2 ${effectiveFuelPrice ? "bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800" : "bg-gray-50 dark:bg-gray-700/30"}`}
-            >
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                {CANONICAL_FUEL_TYPES.petrol.label} Price
-              </p>
-              <p className="font-semibold text-green-700 dark:text-green-300">
-                {currencySymbol} {displayPmsPrice}/L
-              </p>
-              {effectiveFuelPrice && (
-                <p className="text-[9px] text-green-600 dark:text-green-400 mt-0.5 flex items-center justify-center gap-0.5">
-                  <Globe size={8} /> Auto-synced
+          <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-2 text-center">
+            {priceCards.map((card) => (
+              <div
+                key={card.key}
+                className="rounded-lg p-2 bg-gray-50 dark:bg-gray-700/30 border border-gray-200 dark:border-gray-700"
+              >
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  {card.label} Price
                 </p>
-              )}
-            </div>
-            <div
-              className={`rounded-lg p-2 ${effectiveFuelPrice ? "bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800" : "bg-gray-50 dark:bg-gray-700/30"}`}
-            >
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                {CANONICAL_FUEL_TYPES.diesel.label} Price
-              </p>
-              <p className="font-semibold text-amber-700 dark:text-amber-300">
-                {currencySymbol} {displayAgoPrice}/L
-              </p>
-              {effectiveFuelPrice && (
-                <p className="text-[9px] text-amber-600 dark:text-amber-400 mt-0.5 flex items-center justify-center gap-0.5">
-                  <Globe size={8} /> Auto-synced
+                <p className={`font-semibold ${card.color}`}>
+                  {currencySymbol} {card.price ?? 0}/L
                 </p>
-              )}
-            </div>
+              </div>
+            ))}
           </div>
         </div>
       </div>
@@ -1384,22 +1445,17 @@ export default function Dashboard() {
           Pump Status
         </h3>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div className="text-center p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
-            <p className="text-2xl font-bold text-green-700 dark:text-green-300">
-              {state.pmsPumps.length}
-            </p>
-            <p className="text-xs text-gray-500 dark:text-gray-400">
-              {CANONICAL_FUEL_TYPES.petrol.label} Pumps
-            </p>
-          </div>
-          <div className="text-center p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
-            <p className="text-2xl font-bold text-amber-700 dark:text-amber-300">
-              {state.agoPumps.length}
-            </p>
-            <p className="text-xs text-gray-500 dark:text-gray-400">
-              {CANONICAL_FUEL_TYPES.diesel.label} Pumps
-            </p>
-          </div>
+          {pumpStatusCards.map((card) => (
+            <div
+              key={card.key}
+              className={`text-center p-3 ${card.bg} rounded-lg`}
+            >
+              <p className={`text-2xl font-bold ${card.text}`}>{card.count}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                {card.label} Pumps
+              </p>
+            </div>
+          ))}
           <div className="text-center p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
             <p className="text-2xl font-bold text-blue-700 dark:text-blue-300">
               {Object.keys(state.invoices).length}
