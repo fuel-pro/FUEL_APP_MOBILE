@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import {
   BarChart3,
   TrendingUp,
+  Users,
   Fuel,
   DollarSign,
   Activity,
@@ -22,14 +23,6 @@ import {
 
 const CUR = () => getCurrencySymbol(getDetectedCurrency());
 
-interface Props {
-  logAudit: (
-    e: string,
-    d: string,
-    s: "success" | "warning" | "danger" | "info",
-  ) => void;
-}
-
 interface AnalyticsData {
   totalRevenue: number;
   totalSales: number;
@@ -38,7 +31,27 @@ interface AnalyticsData {
   stationCount: number;
 }
 
-export default function AnalyticsSection({ logAudit }: Props) {
+interface AnalyticsProps {
+  logAudit: (
+    e: string,
+    d: string,
+    s: "success" | "warning" | "danger" | "info",
+  ) => void;
+  // Passed from the parent FounderAccess which already fetches via
+  // useFounderBackend. This avoids a duplicate fetch and ensures the
+  // Analytics section has data even when the /api/founder-stats endpoint
+  // hasn't been updated to return the `analytics` field yet.
+  backendRevenue?: number;
+  backendStationCount?: number;
+  backendUserCount?: number;
+}
+
+export default function AnalyticsSection({
+  logAudit,
+  backendRevenue,
+  backendStationCount,
+  backendUserCount,
+}: AnalyticsProps) {
   const [fuelBreakdown, setFuelBreakdown] = useState<
     Record<string, { qty: number; amount: number }>
   >({});
@@ -91,23 +104,31 @@ export default function AnalyticsSection({ logAudit }: Props) {
         return;
       }
       const json = await res.json();
-      if (json?.success && json.analytics) {
-        setAnalytics(json.analytics);
-        setStationCount(json.analytics.stationCount || json.stations?.length || 0);
-
-        // Build fuel breakdown from byFuelType
-        const fBreak: Record<string, { qty: number; amount: number }> = {};
-        if (json.analytics.byFuelType?.length > 0) {
-          json.analytics.byFuelType.forEach(
-            (ft: { fuelType: string; liters: number; revenue: number }) => {
-              const name = String(ft.fuelType || "Other");
-              fBreak[name] = {
-                qty: Number(ft.liters || 0),
-                amount: Number(ft.revenue || 0),
-              };
-            },
+      if (json?.success) {
+        // The endpoint always returns users/stations/totalRevenue.
+        // The `analytics` field is present in the enhanced endpoint
+        // (byFuelType, totalSales, avgSale). If absent (old deploy),
+        // we fall back to the parent-provided backend totals.
+        if (json.analytics) {
+          setAnalytics(json.analytics);
+          setStationCount(
+            json.analytics.stationCount || json.stations?.length || 0,
           );
-          setFuelBreakdown(fBreak);
+
+          // Build fuel breakdown from byFuelType
+          const fBreak: Record<string, { qty: number; amount: number }> = {};
+          if (json.analytics.byFuelType?.length > 0) {
+            json.analytics.byFuelType.forEach(
+              (ft: { fuelType: string; liters: number; revenue: number }) => {
+                const name = String(ft.fuelType || "Other");
+                fBreak[name] = {
+                  qty: Number(ft.liters || 0),
+                  amount: Number(ft.revenue || 0),
+                };
+              },
+            );
+            setFuelBreakdown(fBreak);
+          }
         }
         setDataSource("backend");
         setBackendError(null);
@@ -166,10 +187,22 @@ export default function AnalyticsSection({ logAudit }: Props) {
     );
   };
 
-  /* ─── Computed KPIs ─── */
-  const totalRevenue = Number(analytics?.totalRevenue || 0);
+  /* ─── Computed KPIs ───
+   * Prefer the analytics field from /api/founder-stats (detailed: byFuelType,
+   * totalSales, avgSale). Fall back to the parent-provided backend totals
+   * (which come from the same endpoint but are always present) when the
+   * analytics field isn't returned yet (old Vercel deploy). */
+  const totalRevenue = Number(
+    analytics?.totalRevenue || backendRevenue || 0,
+  );
   const totalSales = Number(analytics?.totalSales || 0);
   const avgSale = Number(analytics?.avgSale || 0);
+  const effectiveStationCount = Number(
+    analytics?.stationCount ||
+      backendStationCount ||
+      stationCount ||
+      0,
+  );
 
   /* ─── Fallback: scan localStorage if backend has no data yet ─── */
   useEffect(() => {
@@ -288,7 +321,7 @@ export default function AnalyticsSection({ logAudit }: Props) {
       )}
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
         {[
           {
             label: "Total Revenue",
@@ -322,11 +355,19 @@ export default function AnalyticsSection({ logAudit }: Props) {
           },
           {
             label: "Stations",
-            value: stationCount.toString(),
+            value: effectiveStationCount.toString(),
             icon: Building2,
             change: "+15%",
             up: true,
             color: "text-purple-400",
+          },
+          {
+            label: "Users",
+            value: (backendUserCount || 0).toString(),
+            icon: Users,
+            change: "+5%",
+            up: true,
+            color: "text-indigo-400",
           },
         ].map((k) => (
           <div
@@ -493,7 +534,7 @@ export default function AnalyticsSection({ logAudit }: Props) {
         </h3>
         <div className="grid grid-cols-3 gap-4">
           <div className="text-center p-3 bg-white/[0.02] rounded-lg">
-            <p className="text-2xl font-bold text-white">{stationCount}</p>
+            <p className="text-2xl font-bold text-white">{effectiveStationCount}</p>
             <p className="text-[10px] text-gray-500">Stations</p>
           </div>
           <div className="text-center p-3 bg-white/[0.02] rounded-lg">

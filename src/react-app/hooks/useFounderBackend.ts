@@ -293,6 +293,7 @@ export function useFounderBackend() {
   const [statsUsers, setStatsUsers] = useState<any[] | null>(null);
   const [statsStations, setStatsStations] = useState<any[] | null>(null);
   const [statsTotalRevenue, setStatsTotalRevenue] = useState<number>(0);
+  const [statsAnalytics, setStatsAnalytics] = useState<any>(null);
   const [statsLoading, setStatsLoading] = useState(false);
 
   useEffect(() => {
@@ -335,6 +336,9 @@ export function useFounderBackend() {
           setStatsUsers(json.users || []);
           setStatsStations(json.stations || []);
           setStatsTotalRevenue(Number(json.totalRevenue) || 0);
+          // Store analytics (byFuelType, totalSales, avgSale) if the endpoint
+          // returns it (enhanced endpoint). Falls back to null otherwise.
+          setStatsAnalytics(json.analytics || null);
         }
       } catch {
         /* network / not a founder — silently ignore; tRPC null stays the fallback */
@@ -418,8 +422,9 @@ export function useFounderBackend() {
     // Total cross-owner revenue from /api/founder-stats
     statsTotalRevenue,
 
-    // Sales Analytics
-    salesAnalytics,
+    // Sales Analytics — prefer /api/founder-stats analytics (real, cross-owner)
+    // over the no-op tRPC query which is always null in Supabase-only mode.
+    salesAnalytics: statsAnalytics || salesAnalytics,
 
     // Refresh helpers - only works in non-static mode
     refresh: useCallback(() => {

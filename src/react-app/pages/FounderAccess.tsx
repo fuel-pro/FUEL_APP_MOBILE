@@ -2747,7 +2747,12 @@ export default function FounderAccess() {
           )}
           {activeSection === "api" && <ApiSection logAudit={logAudit} />}
           {activeSection === "analytics" && (
-            <AnalyticsSection logAudit={logAudit} />
+            <AnalyticsSection
+              logAudit={logAudit}
+              backendRevenue={statsTotalRevenue}
+              backendStationCount={allBackendStations?.length}
+              backendUserCount={allBackendUsers?.length}
+            />
           )}
           {activeSection === "maintenance" && (
             <MaintenanceSection logAudit={logAudit} />
