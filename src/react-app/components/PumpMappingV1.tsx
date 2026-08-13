@@ -27,7 +27,10 @@ import {
   type FuelPricePrefill,
 } from "@/react-app/lib/mpesa-integration-service";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
-import { getCurrencySymbol } from "@/react-app/lib/currency";
+import {
+  getCurrencySymbol,
+  getDetectedCurrency,
+} from "@/react-app/lib/currency";
 import {
   Upload,
   MessageSquare,
@@ -143,6 +146,10 @@ const CURRENCY_MAP: Record<
   INR: { symbol: "₹", code: "INR", name: "Indian Rupee" },
   "₹": { symbol: "₹", code: "INR", name: "Indian Rupee" },
 };
+
+/** Safe number formatter — guards NaN/null/undefined before toFixed */
+const fmt = (v: number | null | undefined, digits = 2): string =>
+  Number.isFinite(v as number) ? (v as number).toFixed(digits) : "0.00";
 
 // Fuel type mapping
 const FUEL_TYPE_MAP: Record<string, string[]> = {
@@ -619,7 +626,10 @@ const PumpMappingV1: React.FC = () => {
       formData.append("rules", customRules);
       formData.append(
         "stationId",
-        localStorage.getItem("fuelpro_current_station") || "default",
+        currentStation?.id ||
+          localStorage.getItem("fuelpro_current_station_v3") ||
+          localStorage.getItem("fuelpro_current_station") ||
+          "default",
       );
 
       // Call extraction API
@@ -851,10 +861,10 @@ const PumpMappingV1: React.FC = () => {
     pumps.forEach((pump) => {
       txt += `Pump ID: ${pump.pump_id}\n`;
       txt += `Fuel Type: ${pump.fuel_name} (${pump.fuel_type})\n`;
-      txt += `Opening: ${pump.opening_reading.toFixed(2)} L\n`;
-      txt += `Closing: ${pump.closing_reading.toFixed(2)} L\n`;
-      txt += `Sales: ${pump.total_sales_litres.toFixed(2)} L\n`;
-      txt += `Value: ${metadata.currency_symbol} ${pump.total_sales_value.toFixed(2)}\n`;
+      txt += `Opening: ${fmt(pump.opening_reading)} L\n`;
+      txt += `Closing: ${fmt(pump.closing_reading)} L\n`;
+      txt += `Sales: ${fmt(pump.total_sales_litres)} L\n`;
+      txt += `Value: ${metadata.currency_symbol} ${fmt(pump.total_sales_value)}\n`;
       if (pump.anomalies && pump.anomalies.length > 0) {
         txt += `⚠️ Anomalies: ${pump.anomalies.join(", ")}\n`;
       }
@@ -865,8 +875,8 @@ const PumpMappingV1: React.FC = () => {
     txt += "SUMMARY\n";
     txt += "-".repeat(60) + "\n";
     txt += `Total Pumps: ${metadata.pumps_count}\n`;
-    txt += `Total Litres: ${metadata.total_litres.toFixed(2)} L\n`;
-    txt += `Total Value: ${metadata.currency_symbol} ${metadata.total_value.toFixed(2)}\n`;
+    txt += `Total Litres: ${fmt(metadata.total_litres)} L\n`;
+    txt += `Total Value: ${metadata.currency_symbol} ${fmt(metadata.total_value)}\n`;
     txt += "\n" + "=".repeat(60) + "\n";
     txt += `Generated: ${new Date().toISOString()}\n`;
 
@@ -905,7 +915,7 @@ const PumpMappingV1: React.FC = () => {
 
       // Fallback: Copy to clipboard
       if (selectedShareMethod === "copy") {
-        const summary = `Pump Mapping Report\n${extractedData.metadata.station_name}\nDate: ${extractedData.metadata.date}\nTotal Sales: ${extractedData.metadata.currency} ${extractedData.metadata.total_value.toFixed(2)}`;
+        const summary = `Pump Mapping Report\n${extractedData.metadata.station_name}\nDate: ${extractedData.metadata.date}\nTotal Sales: ${extractedData.metadata.currency} ${fmt(extractedData.metadata.total_value)}`;
         await navigator.clipboard.writeText(summary);
         showToast("success", "Copied to clipboard");
       } else {
@@ -922,8 +932,8 @@ const PumpMappingV1: React.FC = () => {
 
     const { pumps, metadata } = extractedData;
     const totalPumps = pumps.length;
-    const totalLitres = metadata.total_litres.toFixed(2);
-    const totalValue = metadata.total_value.toFixed(2);
+    const totalLitres = fmt(metadata.total_litres);
+    const totalValue = fmt(metadata.total_value);
     const currency = metadata.currency;
 
     const text = `Shift report for ${metadata.station_name}. ${new Date().toLocaleDateString()}. ${metadata.shift} shift. ${totalPumps} pumps recorded. Total sales: ${totalLitres} litres. Total value: ${currency} ${totalValue}.`;
@@ -1229,7 +1239,7 @@ const PumpMappingV1: React.FC = () => {
                       Total Litres
                     </p>
                     <p className="text-xl font-bold text-purple-600 dark:text-purple-400">
-                      {totals.litres.toFixed(2)}
+                      {fmt(totals.litres)}
                     </p>
                   </div>
                   <div className="bg-amber-50 dark:bg-amber-900/30 rounded-lg p-3">
@@ -1238,7 +1248,7 @@ const PumpMappingV1: React.FC = () => {
                     </p>
                     <p className="text-lg font-bold text-amber-600 dark:text-amber-400">
                       {extractedData.metadata.currency_symbol}{" "}
-                      {totals.value.toFixed(2)}
+                      {fmt(totals.value)}
                     </p>
                   </div>
                 </div>
@@ -1297,7 +1307,7 @@ const PumpMappingV1: React.FC = () => {
                             {pump.confidence < 0.9 && (
                               <span
                                 className="ml-1 text-amber-500"
-                                title={`${(pump.confidence * 100).toFixed(0)}% confidence`}
+                                title={`${fmt(pump.confidence * 100, 0)}% confidence`}
                               >
                                 ⚠️
                               </span>
@@ -1319,17 +1329,17 @@ const PumpMappingV1: React.FC = () => {
                             </button>
                           </td>
                           <td className="px-3 py-2 text-right text-slate-600 dark:text-slate-400">
-                            {pump.opening_reading.toFixed(2)}
+                            {fmt(pump.opening_reading)}
                           </td>
                           <td className="px-3 py-2 text-right text-slate-600 dark:text-slate-400">
-                            {pump.closing_reading.toFixed(2)}
+                            {fmt(pump.closing_reading)}
                           </td>
                           <td className="px-3 py-2 text-right font-medium text-blue-600 dark:text-blue-400">
-                            {pump.total_sales_litres.toFixed(2)}
+                            {fmt(pump.total_sales_litres)}
                           </td>
                           <td className="px-3 py-2 text-right font-medium text-green-600 dark:text-green-400">
                             {extractedData.metadata.currency_symbol}{" "}
-                            {pump.total_sales_value.toFixed(2)}
+                            {fmt(pump.total_sales_value)}
                           </td>
                         </tr>
                       ))}
@@ -1503,7 +1513,7 @@ const PumpMappingV1: React.FC = () => {
                       {LANGUAGES.find(
                         (l) =>
                           l.code ===
-                          extractedData.metadata.language_detected
+                          (extractedData.metadata.language_detected || "")
                             .toLowerCase()
                             .slice(0, 2),
                       )?.flag || "🌐"}{" "}
@@ -1515,9 +1525,11 @@ const PumpMappingV1: React.FC = () => {
                       Extraction Time
                     </span>
                     <span className="text-xs font-medium">
-                      {new Date(
-                        extractedData.metadata.extraction_time,
-                      ).toLocaleTimeString()}
+                      {extractedData.metadata.extraction_time
+                        ? new Date(
+                            extractedData.metadata.extraction_time,
+                          ).toLocaleTimeString()
+                        : "—"}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
@@ -1525,15 +1537,20 @@ const PumpMappingV1: React.FC = () => {
                       Avg. Confidence
                     </span>
                     <span className="text-xs font-medium">
-                      {(
-                        (extractedData.pumps.reduce(
-                          (sum, p) => sum + p.confidence,
-                          0,
-                        ) /
-                          extractedData.pumps.length) *
-                        100
-                      ).toFixed(0)}
-                      %
+                      {(() => {
+                        const pmps = extractedData.pumps || [];
+                        if (pmps.length === 0) return "—";
+                        const avg =
+                          (pmps.reduce(
+                            (sum, p) => sum + (p.confidence || 0),
+                            0,
+                          ) /
+                            pmps.length) *
+                          100;
+                        return Number.isFinite(avg)
+                          ? `${avg.toFixed(0)}%`
+                          : "—";
+                      })()}
                     </span>
                   </div>
                 </div>
@@ -1679,13 +1696,28 @@ const PumpMappingV1: React.FC = () => {
                     </label>
                     <select
                       className="w-full text-sm border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200"
+                      value={(() => {
+                        const cur = getDetectedCurrency();
+                        return (
+                          Object.keys(CURRENCY_MAP).find(
+                            (c) => CURRENCY_MAP[c]?.code === cur,
+                          ) || "KES"
+                        );
+                      })()}
                       onChange={(e) => {
                         const currency = CURRENCY_MAP[e.target.value];
                         if (currency) {
-                          localStorage.setItem(
-                            "fuelpro_currency",
-                            currency.code,
-                          );
+                          try {
+                            localStorage.setItem(
+                              "fuelpro_currency",
+                              currency.code,
+                            );
+                          } catch {
+                            /* ignore quota */
+                          }
+                          cloudStorageService
+                            .set("pump_mapping_currency", currency.code)
+                            .catch(() => {});
                         }
                       }}
                     >

@@ -14,18 +14,14 @@ import {
 } from "lucide-react";
 import { useStations } from "@/react-app/context/StationContext";
 import { supabase } from "@/supabase/client";
-import { getCurrencySymbol, getDetectedCurrency } from "../lib/currency";
+import { formatMoney as fmtMoney } from "../lib/currency";
 import {
   openTerminalSession,
   closeTerminalSession,
 } from "@/react-app/lib/pos-service";
 
-const formatMoney = (amount: number) =>
-  new Intl.NumberFormat("en-KE", {
-    style: "currency",
-    currency: getDetectedCurrency(),
-    minimumFractionDigits: 0,
-  }).format(amount);
+const safeMoney = (amount: number | null | undefined) =>
+  fmtMoney(Number.isFinite(amount as number) ? (amount as number) : 0);
 
 export default function TerminalSessions() {
   const { currentStation } = useStations();
@@ -42,16 +38,23 @@ export default function TerminalSessions() {
     if (!currentStation?.id) return;
     setLoading(true);
     try {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("terminal_sessions")
         .select("*")
         .eq("station_id", currentStation.id)
         .order("created_at", { ascending: false })
         .limit(20);
-      setSessions(data || []);
-      setOpenSession(data?.find((s) => s.status === "open") || null);
+      if (error) {
+        console.error("Failed to load terminal sessions:", error.message);
+        setSessions([]);
+        setOpenSession(null);
+      } else {
+        setSessions(data || []);
+        setOpenSession(data?.find((s) => s.status === "open") || null);
+      }
     } catch (error) {
       console.error("Failed:", error);
+      setSessions([]);
     } finally {
       setLoading(false);
     }
@@ -144,25 +147,25 @@ export default function TerminalSessions() {
             <div>
               <p className="text-gray-400 text-xs mb-1">Opening Cash</p>
               <p className="text-white font-medium">
-                {formatMoney(openSession.opening_cash)}
+                {safeMoney(openSession.opening_cash)}
               </p>
             </div>
             <div>
               <p className="text-gray-400 text-xs mb-1">Cash Sales</p>
               <p className="text-emerald-400 font-medium">
-                {formatMoney(openSession.cash_sales)}
+                {safeMoney(openSession.cash_sales)}
               </p>
             </div>
             <div>
               <p className="text-gray-400 text-xs mb-1">M-PESA</p>
               <p className="text-blue-400 font-medium">
-                {formatMoney(openSession.mpesa_sales)}
+                {safeMoney(openSession.mpesa_sales)}
               </p>
             </div>
             <div>
               <p className="text-gray-400 text-xs mb-1">Card</p>
               <p className="text-purple-400 font-medium">
-                {formatMoney(openSession.card_sales)}
+                {safeMoney(openSession.card_sales)}
               </p>
             </div>
           </div>
@@ -170,7 +173,7 @@ export default function TerminalSessions() {
             <div>
               <p className="text-gray-400 text-sm">Expected Cash</p>
               <p className="text-white text-2xl font-bold">
-                {formatMoney(openSessionsTotal)}
+                {safeMoney(openSessionsTotal)}
               </p>
             </div>
             <button
@@ -242,12 +245,12 @@ export default function TerminalSessions() {
                         : "-"}
                     </td>
                     <td className="px-4 py-4 text-right text-amber-400 font-medium">
-                      {formatMoney(session.total_sales)}
+                      {safeMoney(session.total_sales)}
                     </td>
                     <td
                       className={`px-4 py-4 text-right font-medium ${session.variance > 0 ? "text-emerald-400" : session.variance < 0 ? "text-red-400" : "text-gray-300"}`}
                     >
-                      {session.variance ? formatMoney(session.variance) : "-"}
+                      {session.variance ? safeMoney(session.variance) : "-"}
                     </td>
                     <td className="px-4 py-4">
                       <span
@@ -331,19 +334,19 @@ export default function TerminalSessions() {
                 <div className="flex justify-between">
                   <span className="text-gray-400">Opening Cash</span>
                   <span className="text-white">
-                    {formatMoney(closingSession.opening_cash)}
+                    {safeMoney(closingSession.opening_cash)}
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-400">Cash Sales</span>
                   <span className="text-white">
-                    {formatMoney(closingSession.cash_sales)}
+                    {safeMoney(closingSession.cash_sales)}
                   </span>
                 </div>
                 <div className="flex justify-between font-semibold">
                   <span className="text-gray-300">Expected</span>
                   <span className="text-white">
-                    {formatMoney(openSessionsTotal)}
+                    {safeMoney(openSessionsTotal)}
                   </span>
                 </div>
               </div>
@@ -367,7 +370,7 @@ export default function TerminalSessions() {
                 >
                   <AlertTriangle size={18} />
                   <span>
-                    Variance: {formatMoney(countedCash - openSessionsTotal)}
+                    Variance: {safeMoney(countedCash - openSessionsTotal)}
                   </span>
                 </div>
               )}

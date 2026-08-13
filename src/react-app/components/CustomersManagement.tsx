@@ -21,15 +21,12 @@ import { supabase } from "@/supabase/client";
 import { fetchCustomers } from "@/react-app/lib/pos-service";
 import {
   getCurrencySymbol,
-  getDetectedCurrency,
+  formatMoney as fmtMoney,
 } from "@/react-app/lib/currency";
+import { switchToTab } from "@/react-app/lib/mpesa-integration-service";
 
-const formatMoney = (amount: number) =>
-  new Intl.NumberFormat("en-KE", {
-    style: "currency",
-    currency: getDetectedCurrency(),
-    minimumFractionDigits: 0,
-  }).format(amount);
+const formatMoney = (amount: number | null | undefined) =>
+  fmtMoney(Number.isFinite(amount as number) ? (amount as number) : 0);
 
 export default function CustomersManagement() {
   const { currentStation } = useStations();
@@ -350,12 +347,13 @@ function CustomerDetailModal({
 
   useEffect(() => {
     const loadSales = async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("sales_enhanced")
         .select("*, sale_items(*)")
         .eq("customer_id", customer.id)
         .order("created_at", { ascending: false })
         .limit(10);
+      if (error) console.error("Failed to load customer sales:", error.message);
       setSales(data || []);
       setLoading(false);
     };
@@ -401,6 +399,26 @@ function CustomerDetailModal({
               </p>
             </div>
           </div>
+          <div className="flex flex-wrap gap-2 mb-6">
+            <button
+              onClick={() => switchToTab("credit")}
+              className="px-3 py-2 bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 text-sm rounded-lg border border-indigo-500/30"
+            >
+              Create Credit Account
+            </button>
+            <button
+              onClick={() => switchToTab("invoice")}
+              className="px-3 py-2 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 text-sm rounded-lg border border-emerald-500/30"
+            >
+              New Invoice
+            </button>
+            <button
+              onClick={() => switchToTab("livetransaction")}
+              className="px-3 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 text-sm rounded-lg border border-blue-500/30"
+            >
+              Collect via M-PESA
+            </button>
+          </div>
           <h5 className="text-gray-400 text-sm mb-3">Recent Purchases</h5>
           {loading ? (
             <div className="text-center py-4">
@@ -418,7 +436,9 @@ function CustomerDetailModal({
                   <div>
                     <p className="text-white text-sm">{sale.invoice_number}</p>
                     <p className="text-gray-500 text-xs">
-                      {new Date(sale.created_at).toLocaleDateString()}
+                      {sale.created_at
+                        ? new Date(sale.created_at).toLocaleDateString()
+                        : "—"}
                     </p>
                   </div>
                   <span className="text-amber-400 font-medium">

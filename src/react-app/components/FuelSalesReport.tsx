@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { FileText, Printer, TrendingUp, Download, Loader2 } from "lucide-react";
 import { useFuel } from "@/react-app/context/FuelContext";
 import { getCurrencySymbol } from "@/react-app/lib/currency";
+import { CANONICAL_FUEL_TYPES } from "@/react-app/config/pricing";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import { silentPrintService } from "@/react-app/lib/silent-print-service";
@@ -15,6 +16,9 @@ interface SalesEntry {
   dieselLitres: number;
   totalSales: number;
 }
+
+const PETROL_LABEL = CANONICAL_FUEL_TYPES.petrol.label;
+const DIESEL_LABEL = CANONICAL_FUEL_TYPES.diesel.label;
 
 export default function FuelSalesReport() {
   const { state } = useFuel();
@@ -565,7 +569,7 @@ export default function FuelSalesReport() {
         <div className="bg-green-900/30 border border-green-600 p-4 rounded-lg">
           <div className="flex items-center gap-2 mb-2">
             <TrendingUp className="text-green-400" size={20} />
-            <span className="text-sm text-green-300">Petrol Sales</span>
+            <span className="text-sm text-green-300">{PETROL_LABEL} Sales</span>
           </div>
           <div className="text-xl font-bold text-white">
             {currency} {totals.petrol.toFixed(2)}
@@ -579,7 +583,7 @@ export default function FuelSalesReport() {
         <div className="bg-blue-900/30 border border-blue-600 p-4 rounded-lg">
           <div className="flex items-center gap-2 mb-2">
             <TrendingUp className="text-blue-400" size={20} />
-            <span className="text-sm text-blue-300">Diesel Sales</span>
+            <span className="text-sm text-blue-300">{DIESEL_LABEL} Sales</span>
           </div>
           <div className="text-xl font-bold text-white">
             {currency} {totals.diesel.toFixed(2)}
@@ -659,16 +663,16 @@ export default function FuelSalesReport() {
                       DD/MM/YYYY(SHIFT)
                     </th>
                     <th className="border border-gray-400 p-3 text-right">
-                      Petrol (L)
+                      {PETROL_LABEL} (L)
                     </th>
                     <th className="border border-gray-400 p-3 text-right">
-                      Petrol Sales ({currency})
+                      {PETROL_LABEL} Sales ({currency})
                     </th>
                     <th className="border border-gray-400 p-3 text-right">
-                      Diesel (L)
+                      {DIESEL_LABEL} (L)
                     </th>
                     <th className="border border-gray-400 p-3 text-right">
-                      Diesel Sales ({currency})
+                      {DIESEL_LABEL} Sales ({currency})
                     </th>
                     <th className="border border-gray-400 p-3 text-right">
                       Total Sales/Revenue ({currency})
@@ -711,7 +715,7 @@ export default function FuelSalesReport() {
             <div className="totals mt-6 space-y-2">
               <div className="text-white">
                 <span className="font-semibold">
-                  Monthly Total Petrol Sales:
+                  Monthly Total {PETROL_LABEL} Sales:
                 </span>{" "}
                 {currency} {totals.petrol.toFixed(2)}
                 {totals.petrolLitres > 0 && (
@@ -722,7 +726,7 @@ export default function FuelSalesReport() {
               </div>
               <div className="text-white">
                 <span className="font-semibold">
-                  Monthly Total Diesel Sales:
+                  Monthly Total {DIESEL_LABEL} Sales:
                 </span>{" "}
                 {currency} {totals.diesel.toFixed(2)}
                 {totals.dieselLitres > 0 && (

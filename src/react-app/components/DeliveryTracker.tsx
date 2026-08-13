@@ -24,7 +24,10 @@ import {
 import { formatNumber } from "@/react-app/utils/formatUtils";
 import { getCurrencySymbol } from "@/react-app/lib/currency";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
-import { normalizeFuelType } from "@/react-app/config/pricing";
+import {
+  normalizeFuelType,
+  CANONICAL_FUEL_TYPES,
+} from "@/react-app/config/pricing";
 
 /** Generate a unique row id (stable across devices/sessions). */
 function rowId(): string {
@@ -548,7 +551,7 @@ export default function DeliveryTracker() {
       )
       .join("\n");
 
-    return `FUEL DELIVERED TO: ${state.deliveredTo || "Client"}\nTOTAL ORDER: ${state.totalOrder || "N/A"} Litres\nYEAR: ${state.deliveryYear}\nPetrol Price: ${currencySymbol} ${state.petrolPrice} /L\nDiesel Price: ${currencySymbol} ${state.dieselPrice} /L\n\n${headers.join(" | ")}\n${rows}\n\nTotal Supplied: ${formatNumber(state.deliveryData.totals.totalSupplied)} L\nTotal Payments: ${currencySymbol} ${formatNumber(state.deliveryData.totals.totalPayments)}\nBalance Due: ${currencySymbol} ${formatNumber(state.deliveryData.totals.balanceDue, 2)}`;
+    return `FUEL DELIVERED TO: ${state.deliveredTo || "Client"}\nTOTAL ORDER: ${state.totalOrder || "N/A"} Litres\nYEAR: ${state.deliveryYear}\n${CANONICAL_FUEL_TYPES.petrol.label} Price: ${currencySymbol} ${state.petrolPrice || 0} /L\n${CANONICAL_FUEL_TYPES.diesel.label} Price: ${currencySymbol} ${state.dieselPrice || 0} /L\n\n${headers.join(" | ")}\n${rows}\n\nTotal Supplied: ${formatNumber(state.deliveryData.totals.totalSupplied)} L\nTotal Payments: ${currencySymbol} ${formatNumber(state.deliveryData.totals.totalPayments)}\nBalance Due: ${currencySymbol} ${formatNumber(state.deliveryData.totals.balanceDue, 2)}`;
   };
 
   // Recalculate totals once on mount so cumulative debt is correct after a
@@ -637,7 +640,9 @@ export default function DeliveryTracker() {
             />
           </div>
           <div className="form-group">
-            <label>Petrol Price ({currencySymbol}/L)</label>
+            <label>
+              {CANONICAL_FUEL_TYPES.petrol.label} Price ({currencySymbol}/L)
+            </label>
             <input
               type="number"
               value={state.petrolPrice ?? ""}
@@ -652,7 +657,9 @@ export default function DeliveryTracker() {
             />
           </div>
           <div className="form-group">
-            <label>Diesel Price ({currencySymbol}/L)</label>
+            <label>
+              {CANONICAL_FUEL_TYPES.diesel.label} Price ({currencySymbol}/L)
+            </label>
             <input
               type="number"
               value={state.dieselPrice ?? ""}
