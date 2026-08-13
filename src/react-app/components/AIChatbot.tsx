@@ -444,9 +444,23 @@ export default function AIChatbot() {
         lowerMsg.includes("income"))
     ) {
       if (!todaySales || todaySales.totalRevenue === 0) {
-        return `**Today's Sales Summary**\n\nNo sales have been recorded for today (${context.currentDate}).\n\nTo record sales:\n1. Go to **Sales Tracking** tab\n2. Enter pump opening and closing readings\n3. Add any expenses\n4. Save the data\n\nCurrent fuel prices:\n• Petrol (PMS): ${currency} ${fuelPrices?.petrol || "N/A"}/L\n• Diesel (AGO): ${currency} ${fuelPrices?.diesel || "N/A"}/L`;
+        const fuelLines = (fuelPrices?.allFuelTypes || [])
+          .map((ft) => `• ${ft.name}: ${currency} ${ft.price || "N/A"}/L`)
+          .join("\n");
+        return `**Today's Sales Summary**\n\nNo sales have been recorded for today (${context.currentDate}).\n\nTo record sales:\n1. Go to **Sales Tracking** tab\n2. Enter pump opening and closing readings\n3. Add any expenses\n4. Save the data\n\nCurrent fuel prices:\n${fuelLines || `• Petrol: ${currency} ${fuelPrices?.petrol || "N/A"}/L\n• Diesel: ${currency} ${fuelPrices?.diesel || "N/A"}/L`}`;
       }
-      return `**Today's Sales Summary**\n\n**Date:** ${todaySales.date} (${todaySales.shift} Shift)\n\n**Petrol (PMS):**\n• Litres: ${todaySales.petrol?.litres?.toLocaleString() || 0} L\n• Amount: ${currency} ${todaySales.petrol?.amount?.toLocaleString() || 0}\n• Pumps: ${todaySales.petrol?.pumpCount || 0}\n\n🛢️ **Diesel (AGO):**\n• Litres: ${todaySales.diesel?.litres?.toLocaleString() || 0} L\n• Amount: ${currency} ${todaySales.diesel?.amount?.toLocaleString() || 0}\n• Pumps: ${todaySales.diesel?.pumpCount || 0}\n\n💰 **Totals:**\n• Total Revenue: ${currency} ${todaySales.totalRevenue?.toLocaleString()}\n• Till/M-Pesa: ${currency} ${todaySales.tillPayment?.toLocaleString()}\n• Total Expenses: ${currency} ${todaySales.totalExpenses?.toLocaleString()}\n• Cash in Hand: ${currency} ${todaySales.cashInHand?.toLocaleString()}\n• Net Income: ${currency} ${todaySales.netIncome?.toLocaleString()}`;
+      const extraFuelLines = (fuelPrices?.allFuelTypes || [])
+        .filter(
+          (ft) =>
+            ft.name &&
+            !ft.name.toLowerCase().includes("petrol") &&
+            !ft.name.toLowerCase().includes("diesel") &&
+            !ft.name.toLowerCase().includes("pms") &&
+            !ft.name.toLowerCase().includes("ago"),
+        )
+        .map((ft) => `\n• ${ft.name}: ${currency} ${ft.price || 0}/L`)
+        .join("");
+      return `**Today's Sales Summary**\n\n**Date:** ${todaySales.date} (${todaySales.shift} Shift)\n\n**Petrol (PMS):**\n• Litres: ${todaySales.petrol?.litres?.toLocaleString() || 0} L\n• Amount: ${currency} ${todaySales.petrol?.amount?.toLocaleString() || 0}\n• Pumps: ${todaySales.petrol?.pumpCount || 0}\n\n🛢️ **Diesel (AGO):**\n• Litres: ${todaySales.diesel?.litres?.toLocaleString() || 0} L\n• Amount: ${currency} ${todaySales.diesel?.amount?.toLocaleString() || 0}\n• Pumps: ${todaySales.diesel?.pumpCount || 0}\n${extraFuelLines ? `**Other Fuels:**${extraFuelLines}` : ""}\n\n💰 **Totals:**\n• Total Revenue: ${currency} ${todaySales.totalRevenue?.toLocaleString()}\n• Till/M-Pesa: ${currency} ${todaySales.tillPayment?.toLocaleString()}\n• Total Expenses: ${currency} ${todaySales.totalExpenses?.toLocaleString()}\n• Cash in Hand: ${currency} ${todaySales.cashInHand?.toLocaleString()}\n• Net Income: ${currency} ${todaySales.netIncome?.toLocaleString()}`;
     }
 
     // Debt queries
@@ -468,7 +482,10 @@ export default function AIChatbot() {
 
     // Fuel price queries
     if (lowerMsg.includes("price") || lowerMsg.includes("fuel")) {
-      return `**Current Fuel Prices & Tank Levels**\n\n**Prices:**\n• Petrol (PMS): ${currency} ${fuelPrices?.pms || "N/A"}/L\n• Diesel (AGO): ${currency} ${fuelPrices?.ago || "N/A"}/L\n\n**Tank Levels:**\n• PMS Tank: Opening ${tankLevels?.pms?.opening || 0}L → Closing ${tankLevels?.pms?.closing || 0}L\n• AGO Tank: Opening ${tankLevels?.ago?.opening || 0}L → Closing ${tankLevels?.ago?.closing || 0}L\n\n**Consumption:**\n• PMS: ${(tankLevels?.pms?.opening || 0) - (tankLevels?.pms?.closing || 0)} Litres dispensed\n• AGO: ${(tankLevels?.ago?.opening || 0) - (tankLevels?.ago?.closing || 0)} Litres dispensed`;
+      const allFuelLines = (fuelPrices?.allFuelTypes || [])
+        .map((ft) => `• ${ft.name}: ${currency} ${ft.price || "N/A"}/L`)
+        .join("\n");
+      return `**Current Fuel Prices & Tank Levels**\n\n**Prices:**\n${allFuelLines || `• Petrol (PMS): ${currency} ${fuelPrices?.pms || "N/A"}/L\n• Diesel (AGO): ${currency} ${fuelPrices?.ago || "N/A"}/L`}\n\n**Tank Levels:**\n• PMS Tank: Opening ${tankLevels?.pms?.opening || 0}L → Closing ${tankLevels?.pms?.closing || 0}L\n• AGO Tank: Opening ${tankLevels?.ago?.opening || 0}L → Closing ${tankLevels?.ago?.closing || 0}L\n\n**Consumption:**\n• PMS: ${(tankLevels?.pms?.opening || 0) - (tankLevels?.pms?.closing || 0)} Litres dispensed\n• AGO: ${(tankLevels?.ago?.opening || 0) - (tankLevels?.ago?.closing || 0)} Litres dispensed`;
     }
 
     // Payroll queries
@@ -516,7 +533,10 @@ export default function AIChatbot() {
       lowerMsg.includes("status") ||
       lowerMsg.includes("business")
     ) {
-      return `**Business Overview - ${context.businessName}**\n\n**Sales:**\n• Today's Revenue: ${currency} ${todaySales?.totalRevenue?.toLocaleString() || 0}\n• PMS Sales: ${currency} ${todaySales?.petrol?.amount?.toLocaleString() || 0}\n• AGO Sales: ${currency} ${todaySales?.diesel?.amount?.toLocaleString() || 0}\n\n💰 **Financials:**\n• Outstanding Debt: ${currency} ${deliveryTracker?.totalDebt?.toLocaleString() || 0}\n• Total Expenses Today: ${currency} ${todaySales?.totalExpenses?.toLocaleString() || 0}\n• Saved Invoices: ${invoices?.savedInvoices || 0}\n\n**Fuel:**\n• PMS Price: ${currency} ${fuelPrices?.pms}/L\n• AGO Price: ${currency} ${fuelPrices?.ago}/L\n• PMS Pumps: ${todaySales?.petrol?.pumpCount || 0}\n• AGO Pumps: ${todaySales?.diesel?.pumpCount || 0}\n\n👥 **Staff:** ${payroll?.totalEmployees || 0} employees\n🚛 **Offloading:** ${offloading?.totalRecords || 0} records\n📅 **Sales History:** ${salesHistory?.totalDaysRecorded || 0} days recorded`;
+      const allFuelLines = (fuelPrices?.allFuelTypes || [])
+        .map((ft) => `• ${ft.name}: ${currency} ${ft.price || "N/A"}/L`)
+        .join("\n");
+      return `**Business Overview - ${context.businessName}**\n\n**Sales:**\n• Today's Revenue: ${currency} ${todaySales?.totalRevenue?.toLocaleString() || 0}\n• PMS Sales: ${currency} ${todaySales?.petrol?.amount?.toLocaleString() || 0}\n• AGO Sales: ${currency} ${todaySales?.diesel?.amount?.toLocaleString() || 0}\n\n💰 **Financials:**\n• Outstanding Debt: ${currency} ${deliveryTracker?.totalDebt?.toLocaleString() || 0}\n• Total Expenses Today: ${currency} ${todaySales?.totalExpenses?.toLocaleString() || 0}\n• Saved Invoices: ${invoices?.savedInvoices || 0}\n\n**Fuel:**\n${allFuelLines || `• PMS Price: ${currency} ${fuelPrices?.pms}/L\n• AGO Price: ${currency} ${fuelPrices?.ago}/L`}\n• PMS Pumps: ${todaySales?.petrol?.pumpCount || 0}\n• AGO Pumps: ${todaySales?.diesel?.pumpCount || 0}\n\n👥 **Staff:** ${payroll?.totalEmployees || 0} employees\n🚛 **Offloading:** ${offloading?.totalRecords || 0} records\n📅 **Sales History:** ${salesHistory?.totalDaysRecorded || 0} days recorded`;
     }
 
     // Help

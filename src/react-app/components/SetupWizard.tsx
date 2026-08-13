@@ -459,11 +459,26 @@ export default function SetupWizard({
 
     // Create the station in StationContext so it's registered and loaded
     let newStationId = "";
+    // Build a description that includes ALL configured fuel types (not just
+    // PMS/AGO) so the station record reflects the user's actual setup.
+    const fuelDescParts: string[] = [];
+    if (data.pmsCount > 0) fuelDescParts.push(`PMS: ${data.pmsCount} pumps`);
+    if (data.agoCount > 0) fuelDescParts.push(`AGO: ${data.agoCount} pumps`);
+    for (const ef of data.extraFuels) {
+      fuelDescParts.push(`${ef.label}: ${ef.pumpCount} pumps`);
+    }
+    const stationDescription =
+      fuelDescParts.join(", ") || "No pumps configured";
+    const allFuelTypeCodes = [
+      ...(data.pmsCount > 0 ? ["PMS"] : []),
+      ...(data.agoCount > 0 ? ["AGO"] : []),
+      ...data.extraFuels.map((ef) => ef.code || ef.type.toUpperCase()),
+    ];
     try {
       const newStation = createStation({
         name: data.stationName || "My Fuel Station",
         location: data.location || "Auto-detected",
-        description: `PMS: ${data.pmsCount || 0} pumps, AGO: ${data.agoCount || 0} pumps`,
+        description: stationDescription,
         // Pass through the contact/tax details captured in the wizard so the
         // station record (and downstream cloud sync) carries them instead of
         // defaulting to empty strings.
@@ -497,12 +512,16 @@ export default function SetupWizard({
         id: newStationId || `st_${Date.now()}`,
         name: data.stationName || "My Fuel Station",
         location: data.location || "Auto-detected",
-        description: `PMS: ${data.pmsCount || 0} pumps, AGO: ${data.agoCount || 0} pumps`,
+        description: stationDescription,
         status: "active",
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
-        fuelTypes: ["PMS", "AGO"],
-        pumpCount: (data.pmsCount || 0) + (data.agoCount || 0),
+        fuelTypes:
+          allFuelTypeCodes.length > 0 ? allFuelTypeCodes : ["PMS", "AGO"],
+        pumpCount:
+          (data.pmsCount || 0) +
+          (data.agoCount || 0) +
+          data.extraFuels.reduce((s, f) => s + (f.pumpCount || 0), 0),
         tankCount: 2,
         managerName: "",
         operatingHours: "24/7",

@@ -41,6 +41,13 @@ export default function DataManager() {
   };
 
   const getDataSummary = () => {
+    // Count pumps across ALL fuel types (not just PMS/AGO) so the summary
+    // reflects the station's real configuration.
+    const extraPumpCount = state.fuelPumpsByType
+      ? Object.entries(state.fuelPumpsByType)
+          .filter(([k]) => k !== "petrol" && k !== "diesel")
+          .reduce((sum, [, pumps]) => sum + (pumps?.length || 0), 0)
+      : 0;
     return {
       deliveries: state.deliveryData.rows.length,
       clients: Object.keys(state.clients).length,
@@ -49,6 +56,9 @@ export default function DataManager() {
       debtRecords: Object.keys(state.debtHistory).length,
       pmsPumps: state.pmsPumps.length,
       agoPumps: state.agoPumps.length,
+      extraPumps: extraPumpCount,
+      totalPumps:
+        state.pmsPumps.length + state.agoPumps.length + extraPumpCount,
       expenses: state.expenses.length,
       employees: state.employees.length,
       offloadingRecords: state.offloadingRecords.length,
@@ -354,6 +364,11 @@ export default function DataManager() {
                     <strong>AGO Pumps</strong>
                     <span>${summary.agoPumps}</span>
                 </div>
+                ${summary.extraPumps > 0 ? `<div class="data-item"><strong>Other Fuel Pumps</strong><span>${summary.extraPumps}</span></div>` : ""}
+                <div class="data-item">
+                    <strong>Total Pumps</strong>
+                    <span>${summary.totalPumps}</span>
+                </div>
                 <div class="data-item">
                     <strong>Employees</strong>
                     <span>${summary.employees}</span>
@@ -644,6 +659,15 @@ export default function DataManager() {
                     value: summary.agoPumps,
                     color: "indigo",
                   },
+                  ...(summary.extraPumps > 0
+                    ? [
+                        {
+                          label: "Other Pumps",
+                          value: summary.extraPumps,
+                          color: "blue",
+                        },
+                      ]
+                    : []),
                   {
                     label: "Employees",
                     value: summary.employees,
