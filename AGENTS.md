@@ -3794,3 +3794,83 @@ station `52c24393`):
 - Owner/founder: `founder.qa.fuelpro@gmail.com` / `FuelPro@2026!`
   (uid `87e6502b`, unique_id `FPRQA2026`, role `founder`, US station
   "Founder Admin Station", USD).
+
+## Dynamic fuel types across Dashboard / POS / SalesTracking (DEPLOYED LIVE 2026-08-13, branch dynamic-fuel-types)
+
+**Requirement**: "Current Pump Prices" (Dashboard), "Quick Fuel Sale"
+(POS), and "Fuel Pricing"/"add pump" (SalesTracking) must all show the SAME
+fuel types and prices the user configured in Fuel Type Manager — not the
+hardcoded PMS+AGO. A station with 5 fuel types must show 5 price cards, 5
+quick-sale buttons, and 5 pump tables (2 baseline + 3 added).
+
+### Root cause
+
+Dashboard & SalesTracking resolved the `fuel_types_config` cloud row under
+`state.currentStationId` (FuelContext legacy sentinel "default_station")
+FIRST, then `currentStation?.id`. But FuelTypesManager (source of truth)
+writes under `currentStation?.id` (the real StationContext id e.g.
+`52c24393`). The mismatch caused Dashboard/SalesTracking to read an
+empty/different cloud row → fell back to the legacy 3 hardcoded cards /
+2 hardcoded pump tables instead of the configured fuel types.
+
+### Fixes
+
+1. **Dashboard.tsx (~L114)**: `stationId` now prefers `currentStation?.id`
+   over `state.currentStationId`.
+2. **SalesTracking.tsx (~L71)**: added `import { useStations }` and resolves
+   `stationId = currentStation?.id` (was using `state.currentStationId`).
+   The `trackedFuelTypes` memo (already dynamic) now renders a pump table
+   + "Add [fuel] Pump" button per configured type.
+3. **useStationFuelTypes.ts**: `load()` falls back to the user-scoped and
+   legacy bare `fuel_types_config` key when the per-station row is empty.
+4. **Dashboard priceCards**: prefer the user's explicitly-configured price
+   (`ft.price` from Fuel Type Manager) over the national-average fallback
+   for ALL fuel types (incl. petrol/diesel/kerosene).
+5. **Dashboard Fuel Distribution**: replaced the hardcoded 2-col petrol/diesel
+   grid with a dynamic grid (one card per configured fuel type).
+6. **Dashboard Pump Status**: replaced the hardcoded petrol/diesel pump-count
+   cards with a dynamic `pumpStatusCards` list (reads `fuelPumpsByType`).
+7. **pricing.ts normalizeFuelType**: added a SUBSTRING fallback (alias keys
+   length >= 4, longest first) so "Shell V-Power" resolves to `vpower`.
+   Fixed `FUEL_TYPES.VPOWER` typo `vPower` → `vpower` and `PREMIUM_DIESEL`
+   `premiumDiesel` → `premium_diesel`. Effect: SalesTracking now renders a
+   V-Power pump table (was missing because "Shell V-Power" canonicalized to null).
+
+### Verified end-to-end (live, Cloudflare preview 771edf12)
+
+Founder user, US station 52c24393, 3 configured fuel types (Kerosene
+$164.90, Shell V-Power $214.35, LPG $120.00):
+- Dashboard "Current Pump Prices": 3 cards with configured prices (not
+  national averages). ✅
+- Dashboard "Fuel Distribution": 3 dynamic cards. ✅
+- Dashboard "Pump Status": per-fuel-type pump counts. ✅
+- POS "Quick Fuel Sale": 3 dynamic buttons. ✅
+- SalesTracking: 5 pump tables (Kerosene, V-Power, LPG, Super Petrol,
+  Diesel baseline) each with "Add [fuel] Pump" button. ✅
+- Data entry: added Kerosene pump IK-1-x4se (opening 1000, closing 1100).
+  Verified in Supabase app_kv compact blob `fuelPumpsByType.kerosene`.
+  Cross-device persistence confirmed. ✅
+
+### Deploy state 2026-08-13
+
+- GitHub: branch `dynamic-fuel-types`, commits f557e64 + 10b452c pushed
+  (NOT merged to main yet — a PR can be opened).
+- Cloudflare Pages: LIVE (preview https://771edf12.fuel-app-mobile.pages.dev
+  + main alias https://fuel-app-mobile.pages.dev, 111 precache).
+- Vercel production: LIVE (prebuilt deploy, aliased to
+  fuel-app-mobile.vercel.app).
+- Supabase: no schema changes (frontend-only; uses existing
+  `fuel_types_config__<ownerId>__<stationId>` app_kv cloud key + the
+  compact blob's `fuelPumpsByType` field).
+
+### Known out-of-scope (NOT addressed this session)
+
+- **Tank Levels** section still shows legacy PMS/AGO tanks only — a
+  per-fuel-type tank store (`fuelTanksByType`) does not exist in
+  FuelContext yet.
+- **Currency mismatch**: `companyData.currency` is "KSh" (stale) while the
+  station is USD, so POS shows "KSh" while Dashboard shows "$". Root
+  cause: `companyData.currency` not synced to `station.currency` on
+  wizard/setup.
+- **PRESET_FUELS** have hardcoded KSh price values; misleading for
+  non-Kenya stations (labels adapt, price values do not).
