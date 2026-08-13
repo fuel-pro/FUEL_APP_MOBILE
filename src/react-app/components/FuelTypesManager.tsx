@@ -482,6 +482,31 @@ export default function FuelTypesManager() {
     );
   };
 
+  // Inline "Number of Pumps" action on each fuel type (task: merge Pump
+  // Settings into Fuel Types). Stepper +/− beside each fuel type writes the
+  // pumpCount straight to the canonical fuel_types_config, so the Pump
+  // Settings sub-tab, Price Board, POS, Sales Tracking, and Dashboard all
+  // read the same value. Mirrors the canonical fuel-type price interlink.
+  const handleSetPumpCount = (id: string, next: number) => {
+    const safe = Math.max(0, Math.min(99, Math.round(next || 0)));
+    persist(
+      fuelTypes.map((f) => (f.id === id ? { ...f, pumpCount: safe } : f)),
+    );
+  };
+
+  // Inline price/cost/tax editors (task: make everything adjustable inline so
+  // a change on a fuel type propagates to Price Board, POS, Sales Tracking,
+  // and Dashboard via the canonical fuel_types_config interlink). Writing
+  // price here calls persist(), which emits on the fuel interlink bus.
+  const handleSetField = (
+    id: string,
+    field: "price" | "costPrice" | "taxRate",
+    value: number,
+  ) => {
+    const safe = Math.max(0, Math.round(value || 0));
+    persist(fuelTypes.map((f) => (f.id === id ? { ...f, [field]: safe } : f)));
+  };
+
   const handleAddPreset = (preset: CustomFuelType) => {
     const exists = fuelTypes.some((f) => f.code === preset.code);
     if (exists) {
@@ -802,6 +827,38 @@ export default function FuelTypesManager() {
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
+                      {/* Inline Pump Settings action (merged from the Pump
+                          Settings sub-tab): a compact stepper to set the
+                          number of pumps for this fuel type directly. */}
+                      <div
+                        className="flex items-center gap-1 bg-gray-50 dark:bg-gray-900 rounded-lg px-1 py-0.5 border border-gray-200 dark:border-gray-600"
+                        title="Number of pumps for this fuel type"
+                      >
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleSetPumpCount(ft.id, (ft.pumpCount || 0) - 1);
+                          }}
+                          className="p-1 text-gray-500 hover:text-amber-600 rounded"
+                          aria-label="Decrease pump count"
+                        >
+                          <Minus size={12} />
+                        </button>
+                        <span className="flex items-center gap-1 text-xs font-semibold text-gray-700 dark:text-gray-200 min-w-[3rem] justify-center">
+                          <Gauge size={12} className="text-amber-500" />
+                          {ft.pumpCount || 0}
+                        </span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleSetPumpCount(ft.id, (ft.pumpCount || 0) + 1);
+                          }}
+                          className="p-1 text-gray-500 hover:text-amber-600 rounded"
+                          aria-label="Increase pump count"
+                        >
+                          <Plus size={12} />
+                        </button>
+                      </div>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -853,8 +910,72 @@ export default function FuelTypesManager() {
                           value={`${ft.levyRate || 0}%`}
                         />
                       </div>
+
+                      {/* Inline quick-edit row: adjust price / cost / VAT
+                          directly from the Fuel Types list. A change
+                          propagates everywhere via the fuel interlink bus. */}
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-3 border-t border-gray-100 dark:border-gray-700">
+                        <label className="block">
+                          <span className="block text-[10px] text-gray-500 mb-1">
+                            Selling Price ({currencySymbol})
+                          </span>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={ft.price || 0}
+                            onChange={(e) =>
+                              handleSetField(
+                                ft.id,
+                                "price",
+                                parseFloat(e.target.value) || 0,
+                              )
+                            }
+                            className="w-full px-2 py-1.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+                          />
+                        </label>
+                        <label className="block">
+                          <span className="block text-[10px] text-gray-500 mb-1">
+                            Cost Price ({currencySymbol})
+                          </span>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={ft.costPrice || 0}
+                            onChange={(e) =>
+                              handleSetField(
+                                ft.id,
+                                "costPrice",
+                                parseFloat(e.target.value) || 0,
+                              )
+                            }
+                            className="w-full px-2 py-1.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+                          />
+                        </label>
+                        <label className="block sm:col-span-1">
+                          <span className="block text-[10px] text-gray-500 mb-1">
+                            VAT Rate (%)
+                          </span>
+                          <input
+                            type="number"
+                            step="0.5"
+                            min="0"
+                            max="100"
+                            value={ft.taxRate || 0}
+                            onChange={(e) =>
+                              handleSetField(
+                                ft.id,
+                                "taxRate",
+                                parseFloat(e.target.value) || 0,
+                              )
+                            }
+                            className="w-full px-2 py-1.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+                          />
+                        </label>
+                      </div>
                       {ft.description && (
-                        <p className="text-xs text-gray-500 dark:text-gray-400 italic">
+                        <p className="text-xs text-gray-500 dark:text-gray-400 italic mt-3">
                           {ft.description}
                         </p>
                       )}
