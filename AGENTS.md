@@ -29,6 +29,17 @@ ref: `ojjscjwatikixlpshmub`). Auth via Supabase email/password + Google OAuth
   returns 404 with the current access token (insufficient scope), so enabling
   must be done in the Supabase Dashboard or with a token carrying Auth: Write scope.
 
+  STATUS 2026-08-14 (after user enabled provider + supplied Google OAuth
+  client ID 186024815542-...apps.googleusercontent.com): the Supabase Google
+  provider IS now enabled - the flow reaches Google accounts. NEW blocker is
+  Google `redirect_uri_mismatch`: the OAuth client in Google Cloud Console is
+  missing the authorized redirect URI. The exact URI Google receives is
+  `https://ojsscjwatikixlpshmub.supabase.co/auth/v1/callback` and it MUST be
+  added under Google Cloud Console -> APIs & Services -> Credentials ->
+  the OAuth 2.0 Client ID (186024815542-fp0p5lrc6ensfg2i6o1vvf2jbnktan7f)
+  -> Authorized redirect URIs. This is a Google Cloud Console step that
+  requires the account owner's Google login (no API access available).
+
 ## QA verification 2026-08-14 (fuel-app-mobile.pages.dev, deploy c1916953)
 
 Google sign-in button renders on login + signup; clicking it correctly
