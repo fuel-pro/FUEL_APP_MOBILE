@@ -30,7 +30,6 @@ import { useTutorial } from "@/react-app/context/TutorialContext";
 import { useTenant } from "@/react-app/context/TenantContext";
 import {
   buildTutorialSteps,
-  type TutorialAudience,
   type TutorialAdaptiveContext,
 } from "@/react-app/lib/tutorial/tutorial-steps";
 
@@ -99,7 +98,6 @@ export default function OnboardingTutorial(_: Props) {
   const {
     active,
     audience,
-    startTutorial,
     stopTutorial,
     completeTutorial,
     snoozeTutorial,
