@@ -80,7 +80,7 @@ export default function AuthLogin() {
     loginWithEmail,
     registerWithEmail,
     loginWithUsername,
-    loginWithGoogle,
+    loginWithGoogleToken,
     updateProfile,
     user,
     isPending,
@@ -276,13 +276,17 @@ export default function AuthLogin() {
   const handleGoogleLogin = async () => {
     setLocalError("");
     setGoogleLoading(true);
-    const result = await loginWithGoogle();
+    // Primary: Google Identity Services client-side token flow (uses
+    // Authorized JavaScript origins). Falls back to the OAuth redirect flow
+    // (which uses Authorized redirect URIs) if GIS cannot display.
+    const result = await loginWithGoogleToken();
     if (!result.success) {
       setGoogleLoading(false);
       setLocalError(result.error || "Google sign-in failed. Please try again.");
     }
-    // On success the browser redirects to Google; googleLoading stays true so
-    // the button shows a spinner until the navigation occurs.
+    // On success via redirect fallback the browser navigates to Google; the
+    // spinner stays until that happens. On success via token flow the
+    // onAuthStateChange listener handles the transition.
   };
 
   return (

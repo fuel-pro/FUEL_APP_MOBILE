@@ -65,6 +65,14 @@ interface AuthContextType {
     email: string,
   ) => Promise<boolean>;
   loginWithGoogle: () => Promise<{ success: boolean; error?: string }>;
+  /**
+   * Google Identity Services (GIS) client-side token flow. Renders Google's
+   * own "Sign in with Google" flow, receives an ID token (JWT) in the browser,
+   * and exchanges it with Supabase via signInWithIdToken. Uses "Authorized
+   * JavaScript origins" (not redirect URIs), so it works without the OAuth
+   * redirect-URI registration that the server-side flow requires.
+   */
+  loginWithGoogleToken: () => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
   clearError: () => void;
   refreshAuth: () => Promise<boolean>;
@@ -576,6 +584,85 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { success: false, error: err.message };
     }
   }, []);
+
+  // ---- GOOGLE AUTH (GIS client-side token flow) ----
+  // Uses Google Identity Services to obtain an ID token in-browser, then
+  // exchanges it with Supabase via signInWithIdToken. This flow relies on
+  // "Authorized JavaScript origins" (not redirect URIs), so it works even
+  // when the OAuth client's redirect-URI list is not yet configured.
+  const GOOGLE_CLIENT_ID =
+    "186024815542-fp0p5lrc6ensfg2i6o1vvf2jbnktan7f.apps.googleusercontent.com";
+
+  const loginWithGoogleToken = useCallback(async (): Promise<{
+    success: boolean;
+    error?: string;
+  }> => {
+    setIsPending(true);
+    setError(null);
+
+    const finishWithError = (msg: string) => {
+      setError(msg);
+      setIsPending(false);
+      return { success: false, error: msg };
+    };
+
+    try {
+      const google = (window as any).google;
+      if (!google?.accounts?.id) {
+        return finishWithError(
+          "Google Identity Services failed to load. Check your connection and try again.",
+        );
+      }
+
+      // Request an ID token (JWT credential) from Google.
+      const credential: string | null = await new Promise((resolve) => {
+        try {
+          google.accounts.id.initialize({
+            client_id: GOOGLE_CLIENT_ID,
+            callback: (response: any) => {
+              resolve(response?.credential || null);
+            },
+          });
+          // One Tap prompt; if it cannot show (e.g. no active session or
+          // blocked), fall back to the redirect-based OAuth flow below.
+          google.accounts.id.prompt((notification: any) => {
+            if (notification?.isNotDisplayed() || notification?.isSkippedMoment()) {
+              resolve(null);
+            }
+          });
+        } catch {
+          resolve(null);
+        }
+      });
+
+      if (!credential) {
+        // Fall back to the server-side OAuth redirect flow.
+        console.info(
+          "[AuthContext] GIS One Tap unavailable; falling back to OAuth redirect",
+        );
+        return loginWithGoogle();
+      }
+
+      const { data, error: supabaseError } =
+        await supabase.auth.signInWithIdToken({
+          provider: "google",
+          token: credential,
+        });
+
+      if (supabaseError || !data?.user) {
+        const msg = supabaseError?.message
+          ? `Google sign-in failed: ${supabaseError.message}`
+          : "Google sign-in failed. Please try again.";
+        return finishWithError(msg);
+      }
+
+      // onAuthStateChange (SIGNED_IN) will enrich + persist the user.
+      return { success: true };
+    } catch (err: any) {
+      console.error("[AuthContext] GIS Google login error:", err.message);
+      return finishWithError(err.message || "Google login failed.");
+    }
+  }, [loginWithGoogle]);
 
   // ---- USERNAME AUTH (Local Fallback) ----
   const loginWithUsername = useCallback(
@@ -1159,6 +1246,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loginWithUsername,
         registerWithUsername,
         loginWithGoogle,
+        loginWithGoogleToken,
         logout,
         clearError,
         refreshAuth,
