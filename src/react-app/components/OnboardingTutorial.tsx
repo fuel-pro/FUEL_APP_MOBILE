@@ -183,6 +183,47 @@ export default function OnboardingTutorial(_: Props) {
     stopTutorial();
   }, [stopTutorial]);
 
+  // Keyboard navigation: ←/→ move between steps, Esc closes/snoozes, Enter
+  // advances (or finishes on the last step). Only active once the tour starts.
+  const goNext = useCallback(() => {
+    setIndex((i) => {
+      if (i >= steps.length - 1) {
+        completeTutorial();
+        setStarted(false);
+        stopTutorial();
+        return i;
+      }
+      return i + 1;
+    });
+  }, [steps.length, completeTutorial, stopTutorial]);
+
+  const goPrev = useCallback(() => {
+    setIndex((i) => Math.max(0, i - 1));
+  }, []);
+
+  useEffect(() => {
+    if (!active || !started) return;
+    const onKey = (e: KeyboardEvent) => {
+      switch (e.key) {
+        case "ArrowRight":
+        case "Enter":
+          e.preventDefault();
+          goNext();
+          break;
+        case "ArrowLeft":
+          e.preventDefault();
+          goPrev();
+          break;
+        case "Escape":
+          e.preventDefault();
+          close();
+          break;
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [active, started, goNext, goPrev, close]);
+
   if (!active) return null;
 
   const step = steps[index];
@@ -390,7 +431,7 @@ export default function OnboardingTutorial(_: Props) {
             <div className="flex items-center justify-between mt-5 pt-4 border-t border-gray-100 dark:border-gray-800">
               <div className="flex items-center gap-1">
                 <button
-                  onClick={() => setIndex((i) => Math.max(0, i - 1))}
+                  onClick={goPrev}
                   disabled={index === 0}
                   className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-30 disabled:cursor-not-allowed text-gray-600 dark:text-gray-300"
                   aria-label="Previous"
@@ -398,14 +439,7 @@ export default function OnboardingTutorial(_: Props) {
                   <ChevronLeft size={18} />
                 </button>
                 <button
-                  onClick={() => {
-                    if (isLast) {
-                      completeTutorial();
-                      close();
-                    } else {
-                      setIndex((i) => Math.min(steps.length - 1, i + 1));
-                    }
-                  }}
+                  onClick={goNext}
                   className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-sm font-medium transition-colors"
                 >
                   {isLast ? (
@@ -439,6 +473,10 @@ export default function OnboardingTutorial(_: Props) {
                 </button>
               </div>
             </div>
+
+            <p className="hidden md:block text-[10px] text-gray-400 dark:text-gray-500 mt-2 text-center">
+              Tip: use ← → arrow keys to navigate, Esc to close
+            </p>
 
             {/* Continue to Advanced CTA on the basic-done step */}
             {step.id === "basic-done" && (

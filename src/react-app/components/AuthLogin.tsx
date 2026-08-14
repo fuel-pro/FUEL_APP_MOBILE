@@ -117,6 +117,18 @@ export default function AuthLogin() {
   const [success, setSuccess] = useState("");
   const [googleLoading, setGoogleLoading] = useState(false);
 
+  // Clear the Google spinner once auth completes (token-flow success path —
+  // the failure path clears it in handleGoogleLogin). Also add a safety
+  // timeout so a stuck GIS prompt never leaves the button spinning forever.
+  useEffect(() => {
+    if (user && googleLoading) setGoogleLoading(false);
+  }, [user, googleLoading]);
+  useEffect(() => {
+    if (!googleLoading) return;
+    const t = setTimeout(() => setGoogleLoading(false), 30_000);
+    return () => clearTimeout(t);
+  }, [googleLoading]);
+
   // Stable callback for email change with persistence
   const handleEmailChange = useCallback(
     (value: string) => {

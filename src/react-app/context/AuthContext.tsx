@@ -324,9 +324,61 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     });
 
+    // ── Cross-tab auth sync (receiver side) ──
+    // Other tabs post AUTH_UPDATE / LOGOUT on the BroadcastChannel. We also
+    // listen to the `storage` event as a fallback (fires in other tabs when
+    // localStorage is mutated). This keeps every open tab's auth state in sync:
+    // sign-in / sign-out / token refresh in one tab reflects everywhere.
+    const applyRemoteAuth = (
+      newUser: AuthIdentity | null,
+      newToken: string | null,
+    ) => {
+      setUser(newUser);
+      setToken(newToken);
+      if (newUser) {
+        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(newUser));
+      } else {
+        localStorage.removeItem(AUTH_STORAGE_KEY);
+      }
+      if (newToken) {
+        localStorage.setItem(TOKEN_STORAGE_KEY, newToken);
+      } else {
+        localStorage.removeItem(TOKEN_STORAGE_KEY);
+      }
+    };
+
+    if (syncChannel) {
+      syncChannel.onmessage = (ev: MessageEvent) => {
+        const data = ev.data;
+        if (!data || typeof data !== "object") return;
+        if (data.type === "AUTH_UPDATE" && data.user) {
+          applyRemoteAuth(data.user as AuthIdentity, data.token as string);
+        } else if (data.type === "LOGOUT") {
+          applyRemoteAuth(null, null);
+        }
+      };
+    }
+
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === AUTH_STORAGE_KEY) {
+        if (e.newValue) {
+          try {
+            applyRemoteAuth(JSON.parse(e.newValue) as AuthIdentity, null);
+          } catch {
+            // ignore malformed
+          }
+        } else {
+          applyRemoteAuth(null, null);
+        }
+      }
+    };
+    window.addEventListener("storage", onStorage);
+
     return () => {
       cancelled = true;
       subscription.unsubscribe();
+      if (syncChannel) syncChannel.onmessage = null;
+      window.removeEventListener("storage", onStorage);
     };
   }, []);
 
@@ -588,7 +640,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // exchanges it with Supabase via signInWithIdToken. This flow relies on
   // "Authorized JavaScript origins" (not redirect URIs), so it works even
   // when the OAuth client's redirect-URI list is not yet configured.
+  // Client ID is configurable via VITE_GOOGLE_CLIENT_ID; falls back to the
+  // project's hard-coded Google OAuth client for zero-config deploys.
   const GOOGLE_CLIENT_ID =
+    import.meta.env.VITE_GOOGLE_CLIENT_ID ||
     "186024815542-fp0p5lrc6ensfg2i6o1vvf2jbnktan7f.apps.googleusercontent.com";
 
   const loginWithGoogleToken = useCallback(async (): Promise<{
