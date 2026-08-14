@@ -685,7 +685,7 @@ async function syncStationsWithSupabase(
   if (userId) {
     try {
       const sbTokenRaw = localStorage.getItem(
-        "sb-ojsscjwatikixlpshmub-auth-token",
+        "sb-ojjscjwatikixlpshmub-auth-token",
       );
       if (sbTokenRaw) {
         const sbToken = JSON.parse(sbTokenRaw);

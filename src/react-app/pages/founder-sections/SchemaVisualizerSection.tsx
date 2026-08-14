@@ -21,7 +21,7 @@ import { getSupabaseClient } from "@/supabase/client";
  *
  * Fully linked to the live Supabase schema. The schema (tables, columns,
  * types, PK/FK) is an authoritative embedded map derived from the actual
- * live database (project ojsscjwatikixlpshmub) — PostgREST's OpenAPI root
+ * live database (project ojjscjwatikixlpshmub) — PostgREST's OpenAPI root
  * is now restricted to the service_role key, which can never live in the
  * client bundle (it bypasses RLS). Keeping the schema as a vetted constant
  * is both secure and stable; it is updated alongside the SQL migrations in
@@ -46,7 +46,7 @@ interface TableDef {
   columns: ColumnDef[];
 }
 
-// ─── Authoritative live schema (project ojsscjwatikixlpshmub) ─────────
+// ─── Authoritative live schema (project ojjscjwatikixlpshmub) ─────────
 // Keep in sync with supabase/migrations/. FK targets encode the enforced/
 // intended relationships (PostgREST does not expose pg_constraint).
 const SCHEMA: TableDef[] = [
@@ -395,7 +395,7 @@ export default function SchemaVisualizerSection({ logAudit }: Props) {
 
       {/* Connection status */}
       <div className="flex items-center gap-2 p-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-lg text-emerald-300 text-xs">
-        <CheckCircle2 size={14} /> Linked to Supabase (ojsscjwatikixlpshmub) ·
+        <CheckCircle2 size={14} /> Linked to Supabase (ojjscjwatikixlpshmub) ·
         {SCHEMA.length} tables · {FK_LINKS.length} foreign-key relationships
         {accessibleCount < SCHEMA.length && (
           <span className="text-amber-300/80 ml-1 flex items-center gap-1">

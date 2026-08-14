@@ -39,7 +39,7 @@ async function initFirebase(): Promise<boolean> {
 
 const SUPABASE_URL =
   import.meta.env.VITE_SUPABASE_URL ||
-  "https://ojsscjwatikixlpshmub.supabase.co";
+  "https://ojjscjwatikixlpshmub.supabase.co";
 const SUPABASE_KEY =
   import.meta.env.VITE_SUPABASE_ANON_KEY ||
   import.meta.env.VITE_SUPABASE_KEY ||
