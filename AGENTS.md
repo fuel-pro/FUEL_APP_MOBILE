@@ -3,8 +3,27 @@
 ## Project Overview
 
 React + Vite + TypeScript SPA for fuel station management. Deployed at
-`fuel-app-mobile.vercel.app`. Backend is Supabase (project ref:
-`ojjscjwatikixlpshmub`). Auth via Supabase email/password.
+`fuel-app-mobile.vercel.app` AND Cloudflare Pages
+`fuel-app-mobile.pages.dev` (primary test site). Backend is Supabase (project
+ref: `ojjscjwatikixlpshmub`). Auth via Supabase email/password + Google OAuth
+(Sign in with Google, added 2026-08-14).
+
+## Google OAuth (Sign in with Google)
+
+- `AuthContext.loginWithGoogle` calls `supabase.auth.signInWithOAuth({provider:"google"})`.
+- The OAuth callback is auto-handled by the Supabase client
+  (`detectSessionInUrl: true`) + `onAuthStateChange`; identity is tagged
+  `authMethod: "google"` when `app_metadata.provider === "google"`.
+- UI button lives in `src/react-app/components/AuthLogin.tsx` (shown on both
+  login and signup).
+- Supabase redirect URLs already include `fuel-app-mobile.vercel.app` and
+  `fuel-app-mobile.pages.dev` + `*.fuel-app-mobile.pages.dev`.
+- **BLOCKER (manual, free):** the Google provider must be enabled in
+  Supabase Dashboard -> Authentication -> Providers -> Google with a free
+  Google OAuth Client ID + secret from Google Cloud Console. Redirect URI
+  to add in Google Cloud: `https://ojjscjwatikixlpshmub.supabase.co/auth/v1/callback`.
+  Until enabled, Supabase returns `400 Unsupported provider: provider is not
+  enabled` (the app's friendly error message covers this).
 
 ## Key Architecture
 
