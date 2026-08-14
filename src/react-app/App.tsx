@@ -7,6 +7,7 @@ import { LocalizationProvider } from "@/react-app/context/LocalizationContext";
 import { PermissionProvider } from "@/react-app/context/PermissionContext";
 import { FuelProvider } from "@/react-app/context/FuelContext";
 import { PlatformDataProvider } from "@/react-app/context/PlatformDataContext";
+import { TutorialProvider } from "@/react-app/context/TutorialContext";
 import HomePage from "@/react-app/pages/Home";
 import AuthLogin from "@/react-app/components/AuthLogin";
 import PasswordReset from "@/react-app/pages/PasswordReset";
@@ -239,7 +240,9 @@ function MainAppLoader() {
     <TenantProvider detectedCountry={detectedCountry}>
       <StationProvider>
         <FuelProvider>
-          <HomePage />
+          <TutorialProvider>
+            <HomePage />
+          </TutorialProvider>
         </FuelProvider>
       </StationProvider>
     </TenantProvider>

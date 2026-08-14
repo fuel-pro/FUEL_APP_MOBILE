@@ -13,6 +13,8 @@ import { usePermissions } from "@/react-app/context/PermissionContext";
 import { useTenant } from "@/react-app/context/TenantContext";
 import { LocationProvider } from "@/react-app/context/LocationContext";
 import { useFuel } from "@/react-app/context/FuelContext";
+import { useTutorial } from "@/react-app/context/TutorialContext";
+import OnboardingTutorial from "@/react-app/components/OnboardingTutorial";
 import Header from "@/react-app/components/Header";
 import TabNavigation from "@/react-app/components/TabNavigation";
 import MobileBottomNav from "@/react-app/components/MobileBottomNav";
@@ -183,6 +185,7 @@ function HomeContent() {
   const { featureFlags, isFeatureEnabled } = useTenant();
   const { broadcast, subscribe } = useCrossTabSync();
   const { state: fuelState } = useFuel();
+  const tutorial = useTutorial();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("dashboard");
@@ -194,6 +197,17 @@ function HomeContent() {
     title: string;
     message: string;
   } | null>(null);
+
+  // One-time onboarding tutorial: auto-launch the first time a logged-in user
+  // reaches the main dashboard (after station setup). It is a one-time
+  // experience — once completed/skipped it won't show again unless replayed
+  // from the Header Help menu. "Remind me later" snoozes it for 3 days.
+  useEffect(() => {
+    if (tutorial.shouldAutoStart && !tutorial.active) {
+      const t = setTimeout(() => tutorial.startTutorial("basic"), 800);
+      return () => clearTimeout(t);
+    }
+  }, [tutorial.shouldAutoStart, tutorial.active]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-login to role
   useEffect(() => {
@@ -641,6 +655,10 @@ function HomeContent() {
 
       {/* Cloud Sync Indicator */}
       <CloudSyncIndicator />
+
+      {/* One-time onboarding tutorial overlay (auto-launches on first login,
+          replayable from the Header Help menu). */}
+      <OnboardingTutorial />
 
       {/* Automation notification toast */}
       {automationNotice && (

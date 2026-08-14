@@ -3,6 +3,7 @@ import { useStations } from "@/react-app/context/StationContext";
 import { useAuth } from "@/react-app/context/AuthContext";
 import { useTheme } from "@/react-app/context/ThemeContext";
 import { useLocation } from "@/react-app/context/LocationContext";
+import { useTutorial } from "@/react-app/context/TutorialContext";
 import LocationSelector from "@/react-app/components/LocationSelector";
 import TabConfigModal from "@/react-app/components/TabConfigModal";
 import SyncStatusIndicator from "@/react-app/components/SyncStatusIndicator";
@@ -36,6 +37,7 @@ import {
   LayoutDashboard,
   Crown,
   Loader2,
+  HelpCircle,
 } from "lucide-react";
 
 interface HeaderProps {
@@ -52,6 +54,7 @@ export default function Header({
   const { currentStation, stations, switchStation } = useStations();
   const { resolvedTheme, toggleTheme } = useTheme();
   const location = useLocation();
+  const tutorial = useTutorial();
   const navigate = useNavigate();
   const [showEditInfo, setShowEditInfo] = useState(false);
   const [showQRCode, setShowQRCode] = useState(false);
@@ -324,6 +327,14 @@ export default function Header({
               <QrCode size={12} />
               <span className="hidden lg:inline">QR</span>
             </button>
+            <button
+              onClick={() => tutorial.startTutorial("basic")}
+              title="Replay the onboarding tutorial"
+              className="px-2.5 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-xs text-gray-300 transition-colors flex items-center gap-1.5"
+            >
+              <HelpCircle size={12} />
+              <span className="hidden lg:inline">Tutorial</span>
+            </button>
             <SyncStatusIndicator
               countryCode={location.currentCountry.id}
               compact
@@ -464,6 +475,16 @@ export default function Header({
               >
                 <QrCode size={16} className="text-gray-300" />
                 <span className="text-[10px] text-gray-400">QR Code</span>
+              </button>
+              <button
+                onClick={() => {
+                  tutorial.startTutorial("basic");
+                  setShowMobileMenu(false);
+                }}
+                className="flex flex-col items-center gap-1.5 p-3 bg-white/5 rounded-xl hover:bg-white/10 transition-colors"
+              >
+                <HelpCircle size={16} className="text-amber-400" />
+                <span className="text-[10px] text-gray-400">Tutorial</span>
               </button>
               <button
                 onClick={() => {
