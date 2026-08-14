@@ -106,7 +106,7 @@ export default function FuelPriceLocator() {
     detectPreciseLocation,
     currentCountry,
   } = useLocation();
-  const { stations } = useStations();
+  const { stations, currentStation } = useStations();
   const { syncPriceToFuelTypes } = useFuel();
   const {
     prices: unifiedPrices,
@@ -309,8 +309,8 @@ export default function FuelPriceLocator() {
               premium: toNum(data.prices.premium),
               kerosene:
                 toNum(data.prices.kerosene) ?? data.kerosenePrice ?? null,
-              currency: data.currency || getCurrencySymbol(),
-              currencySymbol: data.currencySymbol || getCurrencySymbol(),
+              currency: data.currency || getCurrencySymbol(stationCurrency),
+              currencySymbol: data.currencySymbol || getCurrencySymbol(stationCurrency),
               unit: data.unit || "litre",
               source: data.source || "Live API",
               location:
@@ -336,9 +336,18 @@ export default function FuelPriceLocator() {
     // Fallback: use the unified pricing system (location-aware static prices)
     // This integrates with the existing LocationContext + pricing.ts config.
     // Only reached when the Vercel API is unreachable (e.g. offline).
-    const countryCode = currentCountry?.id || "KE";
-    const currency = currentCountry?.currency?.code || getCurrencySymbol();
-    const symbol = currentCountry?.currency?.symbol || getCurrencySymbol();
+    const countryCode =
+      currentCountry?.id ||
+      (currentStation as any)?.country ||
+      "US";
+    const stationCurrency =
+      (currentStation as any)?.companyCurrency ||
+      (currentStation as any)?.currency;
+    const currency = currentCountry?.currency?.code || stationCurrency || "USD";
+    const symbol =
+      currentCountry?.currency?.symbol ||
+      getCurrencySymbol(stationCurrency) ||
+      "$";
 
     let petrol = unifiedPrices.petrol;
     let diesel = unifiedPrices.diesel;
@@ -413,7 +422,7 @@ export default function FuelPriceLocator() {
     icon: React.ReactNode,
     colorClass: string,
   ) => {
-    const symbol = nearbyResult?.currencySymbol || getCurrencySymbol();
+    const symbol = nearbyResult?.currencySymbol || getCurrencySymbol(stationCurrency);
     return (
       <div className="p-4 bg-slate-800/50 rounded-xl border border-slate-700/50 hover:border-slate-600 transition-colors">
         <div className="flex items-center gap-2 mb-1">
@@ -590,7 +599,7 @@ export default function FuelPriceLocator() {
                 const breakdown = costBreakdown(nearbyResult.gasoline);
                 if (!breakdown) return null;
                 const symbol =
-                  nearbyResult?.currencySymbol || getCurrencySymbol();
+                  nearbyResult?.currencySymbol || getCurrencySymbol(stationCurrency);
                 const fmt = (n: number) =>
                   `${symbol} ${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
                 return (
@@ -676,7 +685,7 @@ export default function FuelPriceLocator() {
                             </span>
                             <span className="font-medium text-emerald-400">
                               {unifiedPrices.currencySymbol ||
-                                getCurrencySymbol()}{" "}
+                                getCurrencySymbol(stationCurrency)}{" "}
                               {stationPetrol.toLocaleString()}
                             </span>
                           </div>
@@ -688,7 +697,7 @@ export default function FuelPriceLocator() {
                             </span>
                             <span className="font-medium text-amber-400">
                               {unifiedPrices.currencySymbol ||
-                                getCurrencySymbol()}{" "}
+                                getCurrencySymbol(stationCurrency)}{" "}
                               {stationDiesel.toLocaleString()}
                             </span>
                           </div>

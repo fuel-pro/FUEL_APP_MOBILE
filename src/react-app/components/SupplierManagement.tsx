@@ -152,6 +152,16 @@ export default function SupplierManagement() {
   const { currentStation } = useStations();
   const stationId = currentStation?.id || "default";
   const { user } = useAuth();
+  // Resolve currency from React-context station (not synchronous localStorage)
+  // so it's correct on fresh devices / multi-currency stations.
+  const currencySymbol = useMemo(
+    () =>
+      getCurrencySymbol(
+        (currentStation as any)?.companyCurrency ||
+          (currentStation as any)?.currency,
+      ),
+    [currentStation],
+  );
   // Unified station fuel types — so supplier fuel-type checkboxes & the
   // purchase-order fuel dropdown reflect the station's actual configured fuels
   // (from Fuel Type Manager) instead of a hardcoded list.
@@ -604,11 +614,11 @@ export default function SupplierManagement() {
                   <div className="mt-3 p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
                     <div className="flex justify-between text-xs">
                       <span className="text-gray-500">
-                        Credit: {getCurrencySymbol()}{" "}
+                        Credit: {currencySymbol}{" "}
                         {(supplier.creditLimit || 0).toLocaleString()}
                       </span>
                       <span className="text-gray-500">
-                        Balance: {getCurrencySymbol()}{" "}
+                        Balance: {currencySymbol}{" "}
                         {(supplier.currentBalance || 0).toLocaleString()}
                       </span>
                     </div>
@@ -696,7 +706,7 @@ export default function SupplierManagement() {
                       )}
                       <div>
                         <span className="text-gray-500">Available Credit:</span>{" "}
-                        {getCurrencySymbol()}{" "}
+                        {currencySymbol}{" "}
                         {(
                           supplier.creditLimit - supplier.currentBalance
                         ).toLocaleString()}
@@ -794,7 +804,7 @@ export default function SupplierManagement() {
                         {order.liters.toLocaleString()}
                       </td>
                       <td className="px-4 py-3 text-right font-medium text-gray-900 dark:text-white">
-                        {getCurrencySymbol()} {order.total.toLocaleString()}
+                        {currencySymbol} {order.total.toLocaleString()}
                       </td>
                       <td className="px-4 py-3 text-center">
                         <span
@@ -1071,7 +1081,7 @@ export default function SupplierManagement() {
                       .filter((s) => s.status === "active")
                       .map((s) => (
                         <option key={s.id} value={s.id}>
-                          {s.name} (Credit: {getCurrencySymbol()}{" "}
+                          {s.name} (Credit: {currencySymbol}{" "}
                           {(s.creditLimit - s.currentBalance).toLocaleString()})
                         </option>
                       ))}
@@ -1116,7 +1126,7 @@ export default function SupplierManagement() {
                   </div>
                   <div>
                     <label className="text-xs text-gray-500 mb-1 block">
-                      Price/Liter ({getCurrencySymbol()})
+                      Price/Liter ({currencySymbol})
                     </label>
                     <input
                       type="number"
@@ -1136,7 +1146,7 @@ export default function SupplierManagement() {
                   <div className="p-3 bg-amber-500/10 rounded-lg text-center">
                     <span className="text-sm text-gray-500">Total: </span>
                     <span className="text-lg font-bold text-amber-600 dark:text-amber-400">
-                      {getCurrencySymbol()} {orderForm.total.toLocaleString()}
+                      {currencySymbol} {orderForm.total.toLocaleString()}
                     </span>
                   </div>
                 )}

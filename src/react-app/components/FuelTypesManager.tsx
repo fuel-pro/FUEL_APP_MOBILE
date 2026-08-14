@@ -345,7 +345,7 @@ export default function FuelTypesManager() {
   const [formLocalName, setFormLocalName] = useState("");
   const [formPrice, setFormPrice] = useState(0);
   const [formCostPrice, setFormCostPrice] = useState(0);
-  const [formTaxRate, setFormTaxRate] = useState(16);
+  const [formTaxRate, setFormTaxRate] = useState(PRESET_TAX_RATE);
   const [formColor, setFormColor] = useState("red");
   const [formIcon, setFormIcon] = useState("flame");
   const [formPumps, setFormPumps] = useState(1);
@@ -445,7 +445,7 @@ export default function FuelTypesManager() {
     setFormLocalName("");
     setFormPrice(0);
     setFormCostPrice(0);
-    setFormTaxRate(16);
+    setFormTaxRate(PRESET_TAX_RATE);
     setFormColor("red");
     setFormIcon("flame");
     setFormPumps(1);
