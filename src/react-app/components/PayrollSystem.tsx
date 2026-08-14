@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import {
   Plus,
   Save,
@@ -229,7 +229,7 @@ const defaultSettings: PayrollSettings = {
   payrollMonth: new Date().getMonth() + 1,
   payrollYear: new Date().getFullYear(),
   paymentMethod: "bank",
-  currency: getCurrencySymbol(),
+  currency: "$", // overridden by station currency on mount"
   enableSha: true,
   enableNssf: true,
   enableTax: true,
@@ -249,6 +249,16 @@ export default function PayrollSystem() {
   const { user } = useAuth();
   const { currentStation } = useStations();
   const stationId = currentStation?.id;
+  // Resolve currency from React-context station (not synchronous localStorage)
+  // so it's correct on fresh devices / multi-currency stations.
+  const stationCurrencySymbol = useMemo(
+    () =>
+      getCurrencySymbol(
+        (currentStation as any)?.companyCurrency ||
+          (currentStation as any)?.currency,
+      ),
+    [currentStation],
+  );
   const { state: fuelState } = useFuel();
   const isKenya = isKenyaStation();
 
@@ -2691,14 +2701,14 @@ export default function PayrollSystem() {
             className="text-xs md:text-base px-2 md:px-3 py-1 md:py-2"
           />
           <p className="text-xs text-gray-500 mt-1">
-            Minimum contribution: {getCurrencySymbol()} 300 (enforced
+            Minimum contribution: {stationCurrencySymbol} 300 (enforced
             automatically)
           </p>
         </div>
 
         <div className="form-group">
           <label className="text-xs md:text-sm">
-            NSSF Amount ({getCurrencySymbol()})
+            NSSF Amount ({stationCurrencySymbol})
           </label>
           <input
             type="number"
@@ -2826,7 +2836,7 @@ export default function PayrollSystem() {
               payrollMonth: new Date().getMonth() + 1,
               payrollYear: new Date().getFullYear(),
               paymentMethod: "bank",
-              currency: getCurrencySymbol(),
+              currency: "$", // overridden by station currency on mount"
               enableSha: true,
               enableNssf: true,
               enableTax: true,
@@ -3282,7 +3292,7 @@ export default function PayrollSystem() {
               </div>
 
               <div className="form-group">
-                <label>Advance ({getCurrencySymbol()})</label>
+                <label>Advance ({stationCurrencySymbol})</label>
                 <input
                   type="number"
                   value={employeeForm.advance}
@@ -3388,7 +3398,7 @@ export default function PayrollSystem() {
                 step="0.01"
               />
               <p className="text-sm text-gray-500 mt-2">
-                Note: Minimum SHA contribution is {getCurrencySymbol()} 300
+                Note: Minimum SHA contribution is {stationCurrencySymbol} 300
                 (automatically enforced)
               </p>
             </div>
@@ -3423,7 +3433,7 @@ export default function PayrollSystem() {
               Enter the fixed NSSF amount to apply to all employees:
             </p>
             <div className="form-group">
-              <label>NSSF Amount ({getCurrencySymbol()})</label>
+              <label>NSSF Amount ({stationCurrencySymbol})</label>
               <input
                 type="number"
                 value={nssfAmount}

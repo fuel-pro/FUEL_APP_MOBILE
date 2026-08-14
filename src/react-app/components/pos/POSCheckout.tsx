@@ -168,7 +168,7 @@ export default function POSCheckout({
       // Process card payment
       const result = await paymentService.processPayment({
         amount: sale.total,
-        currency: getCurrencySymbol(),
+        currency: currencySymbol,
         type: "sale",
         reference: `CARD-${Date.now()}`,
       });
