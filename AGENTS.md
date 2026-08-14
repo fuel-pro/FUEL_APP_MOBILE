@@ -4837,3 +4837,10 @@ Then SAVE. Near-instant.
 ### Lost commits / reverted audit
 - Cloudflare deploy 4841b85d (06:00 UTC, fix: KRA gate) was a direct-upload that OVERWROTE the Google-button deploy c1916953 (05:07 UTC). Live bundle had NO Google button. Fixed: rebuilt main (has Google button 29b853e) + redeployed to Cloudflare prod.
 - GitHub main HEAD e799228 contains GIS + Google button. No unmerged feature work lost.
+
+## Session 2026-08-14: Currency symbol fix across all tabs
+
+- Bare getCurrencySymbol() calls in ExpenseTracker, MaintenanceTracker, PayrollSystem, POSCheckout now use station currency from React context via useMemo.
+- Compliance.tsx hardcoded "KE" fallback changed to "US".
+- DeliveryTracker subscribe echo guard added.
+- Commits: aa93254, 6ea3a99, 28a40b1. Cloudflare LIVE. Vercel BLOCKED (quota).
