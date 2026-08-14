@@ -115,6 +115,14 @@ export default function FuelPriceLocator() {
     cityName,
   } = useFuelPrices();
 
+  // Component-scope currency code (e.g. "KES") used by the render JSX and the
+  // helper closures below. fetchNearbyPrices re-resolves the same value so it
+  // stays correct even if currentStation changes mid-fetch.
+  const stationCurrency =
+    (currentStation as any)?.companyCurrency ||
+    (currentStation as any)?.currency ||
+    "";
+
   const [loading, setLoading] = useState(false);
   const [appliedLabel, setAppliedLabel] = useState<string | null>(null);
   const [nearbyResult, setNearbyResult] = useState<StationPriceInfo | null>(
@@ -310,7 +318,8 @@ export default function FuelPriceLocator() {
               kerosene:
                 toNum(data.prices.kerosene) ?? data.kerosenePrice ?? null,
               currency: data.currency || getCurrencySymbol(stationCurrency),
-              currencySymbol: data.currencySymbol || getCurrencySymbol(stationCurrency),
+              currencySymbol:
+                data.currencySymbol || getCurrencySymbol(stationCurrency),
               unit: data.unit || "litre",
               source: data.source || "Live API",
               location:
@@ -337,12 +346,7 @@ export default function FuelPriceLocator() {
     // This integrates with the existing LocationContext + pricing.ts config.
     // Only reached when the Vercel API is unreachable (e.g. offline).
     const countryCode =
-      currentCountry?.id ||
-      (currentStation as any)?.country ||
-      "US";
-    const stationCurrency =
-      (currentStation as any)?.companyCurrency ||
-      (currentStation as any)?.currency;
+      currentCountry?.id || (currentStation as any)?.country || "US";
     const currency = currentCountry?.currency?.code || stationCurrency || "USD";
     const symbol =
       currentCountry?.currency?.symbol ||
@@ -422,7 +426,8 @@ export default function FuelPriceLocator() {
     icon: React.ReactNode,
     colorClass: string,
   ) => {
-    const symbol = nearbyResult?.currencySymbol || getCurrencySymbol(stationCurrency);
+    const symbol =
+      nearbyResult?.currencySymbol || getCurrencySymbol(stationCurrency);
     return (
       <div className="p-4 bg-slate-800/50 rounded-xl border border-slate-700/50 hover:border-slate-600 transition-colors">
         <div className="flex items-center gap-2 mb-1">
@@ -599,7 +604,8 @@ export default function FuelPriceLocator() {
                 const breakdown = costBreakdown(nearbyResult.gasoline);
                 if (!breakdown) return null;
                 const symbol =
-                  nearbyResult?.currencySymbol || getCurrencySymbol(stationCurrency);
+                  nearbyResult?.currencySymbol ||
+                  getCurrencySymbol(stationCurrency);
                 const fmt = (n: number) =>
                   `${symbol} ${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
                 return (
