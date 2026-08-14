@@ -952,7 +952,25 @@ export function isSameFuelType(a: string, b: string): boolean {
  * alias map so any known spelling (PMS, Super Petrol, Gasoline, AGO, DPK,
  * etc.) resolves to the correct price.
  */
-export function getBasePrice(fuelType: string): number {
+/**
+ * Resolve a baseline per-litre price for a fuel type.
+ *
+ * When `countryCode` is provided (and is NOT Kenya), the country-appropriate
+ * price from `getCountryPrice` is used — NOT Kenya's KSh baseline. This
+ * prevents a US/EU/Asian station from showing KSh 214.03 as a USD price
+ * when the station has no configured price for that fuel.
+ *
+ * When `countryCode` is omitted or is "KE", the original Kenya baseline is
+ * returned (backward-compatible behaviour).
+ */
+export function getBasePrice(fuelType: string, countryCode?: string): number {
+  if (countryCode && countryCode !== "KE") {
+    const cp = getCountryPrice(countryCode, fuelType);
+    if (cp && typeof cp.price === "number" && cp.price > 0) return cp.price;
+    // If the country-specific lookup returned 0 (unknown fuel for that
+    // country), fall through to the Kenya baseline rather than returning 0 —
+    // a non-zero reference price is more useful than 0 for display purposes.
+  }
   const canonical = normalizeFuelType(fuelType);
   switch (canonical) {
     case "petrol":

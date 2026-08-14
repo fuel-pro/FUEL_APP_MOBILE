@@ -178,13 +178,24 @@ export default function Dashboard() {
     effectiveFuelPrice?.petrolPrice ??
     fuelTypeApi.getPriceFor(CANONICAL_FUEL_TYPES.petrol.label) ??
     0;
-  const displayAgoPrice =
-    state.agoPrice ??
-    locationPrice?.dieselPrice ??
-    (regionalPrice.isRegional ? regionalPrice.diesel : null) ??
-    effectiveFuelPrice?.dieselPrice ??
-    fuelTypeApi.getPriceFor(CANONICAL_FUEL_TYPES.diesel.label) ??
-    0;
+  // Sanity guard for the legacy scalar agoPrice: if the station is NOT in
+  // Kenya but the stored agoPrice looks like a Kenya KSh price (>= 100),
+  // it's a stale Kenya default. Fall through to the country-appropriate
+  // fallback instead so a US station doesn't show "$229.95/L" for diesel.
+  const agoPriceSanityOk =
+    stationCountry === "KE" || !state.agoPrice || state.agoPrice < 100;
+  const displayAgoPrice = agoPriceSanityOk
+    ? (state.agoPrice ??
+      locationPrice?.dieselPrice ??
+      (regionalPrice.isRegional ? regionalPrice.diesel : null) ??
+      effectiveFuelPrice?.dieselPrice ??
+      fuelTypeApi.getPriceFor(CANONICAL_FUEL_TYPES.diesel.label) ??
+      0)
+    : (locationPrice?.dieselPrice ??
+      (regionalPrice.isRegional ? regionalPrice.diesel : null) ??
+      effectiveFuelPrice?.dieselPrice ??
+      fuelTypeApi.getPriceFor(CANONICAL_FUEL_TYPES.diesel.label) ??
+      0);
   const displayKerosenePrice =
     fuelTypeApi.getPriceFor(CANONICAL_FUEL_TYPES.kerosene.label) ??
     locationPrice?.kerosenePrice ??
@@ -221,8 +232,19 @@ export default function Dashboard() {
       return active.map((ft) => {
         const canonical = fuelTypeApi.canonicalOf(ft.name);
         const label = fuelTypeApi.labelOf(ft.name);
-        const configured =
+        let configured =
           typeof ft.price === "number" && ft.price > 0 ? ft.price : null;
+        // Sanity guard: if the station is NOT in Kenya and the configured
+        // price looks like a Kenya KSh price (>= 100 per litre — absurd in
+        // USD/EUR/etc.), the stored value is a stale Kenya default. Discard
+        // it so the country-appropriate fallback is used instead.
+        if (
+          configured != null &&
+          stationCountry !== "KE" &&
+          configured >= 100
+        ) {
+          configured = null;
+        }
         let price = 0;
         if (configured != null) {
           price = configured;
@@ -274,6 +296,7 @@ export default function Dashboard() {
     displayAgoPrice,
     displayKerosenePrice,
     state.fuelPricesByType,
+    stationCountry,
   ]);
 
   /**

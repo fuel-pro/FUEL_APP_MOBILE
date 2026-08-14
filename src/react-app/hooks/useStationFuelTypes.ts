@@ -22,6 +22,7 @@ import {
   getFuelLabel,
   type CanonicalFuelType,
 } from "@/react-app/config/pricing";
+import { getDetectedCountryCode } from "@/react-app/lib/currency";
 import {
   onFuelPriceChange,
   onFuelTypeChange,
@@ -143,10 +144,21 @@ export function useStationFuelTypes(
       if (!raw || !raw.trim()) return null;
       const entry = findFuelType(raw);
       if (entry && typeof entry.price === "number" && entry.price > 0) {
+        // Sanity guard: if the station is NOT in Kenya and the stored price
+        // looks like a Kenya KSh price (>= 100 per litre — absurd in USD/EUR/
+        // etc.), the stored value is a stale Kenya default. Use the
+        // country-appropriate fallback instead so a US station doesn't show
+        // "$214.03/L" for petrol.
+        const cc = getDetectedCountryCode();
+        if (cc && cc !== "KE" && entry.price >= 100) {
+          const base = getBasePrice(raw, cc);
+          if (base > 0 && base < 100) return base;
+        }
         return entry.price;
       }
       if (fallbackToStatic) {
-        const base = getBasePrice(raw);
+        const cc = getDetectedCountryCode();
+        const base = getBasePrice(raw, cc);
         return typeof base === "number" && base > 0 ? base : null;
       }
       return null;
