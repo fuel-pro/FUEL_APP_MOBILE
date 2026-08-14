@@ -359,7 +359,7 @@ export default function PayrollSystem() {
   };
 
   const formatCurrency = (amount: number) => {
-    return `${settings.currency} ${formatNumber(amount)}`;
+    return `${stationCurrencySymbol || settings.currency} ${formatNumber(amount)}`;
   };
 
   // Single source of truth for net-pay calculation. Guards against NaN /
