@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 import { getCurrencySymbol } from "../lib/currency";
 import { useAuth } from "@/react-app/context/AuthContext";
@@ -120,6 +120,18 @@ export default function ExpenseTracker() {
   const { user } = useAuth();
   const { currentStation } = useStations();
   const stationId = currentStation?.id;
+  // Resolve the currency symbol from the React-context station (not the
+  // synchronous localStorage read) so it's correct on fresh devices before
+  // the station data is written to localStorage, and for multi-currency
+  // stations. Mirrors the SalesInvoices useCurrencySymbol pattern.
+  const currencySymbol = useMemo(
+    () =>
+      getCurrencySymbol(
+        (currentStation as any)?.companyCurrency ||
+          (currentStation as any)?.currency,
+      ),
+    [currentStation],
+  );
   const [expenses, setExpenses] = useState<Expense[]>(() => {
     const cloudCached = cloudStorageService.getCached<unknown[]>(
       "expenses_data",
@@ -432,7 +444,7 @@ export default function ExpenseTracker() {
             <span className="text-xs text-gray-500">Total Expenses</span>
           </div>
           <p className="text-xl font-bold text-gray-900 dark:text-white">
-            {getCurrencySymbol()} {(totalExpenses || 0).toLocaleString()}
+            {currencySymbol} {(totalExpenses || 0).toLocaleString()}
           </p>
         </div>
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
@@ -441,7 +453,7 @@ export default function ExpenseTracker() {
             <span className="text-xs text-gray-500">Approved</span>
           </div>
           <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400">
-            {getCurrencySymbol()} {(approvedTotal || 0).toLocaleString()}
+            {currencySymbol} {(approvedTotal || 0).toLocaleString()}
           </p>
         </div>
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
@@ -450,7 +462,7 @@ export default function ExpenseTracker() {
             <span className="text-xs text-gray-500">Pending</span>
           </div>
           <p className="text-xl font-bold text-amber-600 dark:text-amber-400">
-            {getCurrencySymbol()} {(pendingTotal || 0).toLocaleString()}
+            {currencySymbol} {(pendingTotal || 0).toLocaleString()}
           </p>
         </div>
       </div>
@@ -580,7 +592,7 @@ export default function ExpenseTracker() {
                           {exp.description || ""}
                         </td>
                         <td className="px-4 py-3 text-right font-medium text-gray-900 dark:text-white">
-                          {getCurrencySymbol()}{" "}
+                          {currencySymbol}{" "}
                           {(exp.amount || 0).toLocaleString()}
                         </td>
                         <td className="px-4 py-3 text-center">
@@ -653,7 +665,7 @@ export default function ExpenseTracker() {
                         <CatIcon size={12} /> {cat.label}
                       </span>
                       <span className="text-gray-900 dark:text-white font-medium">
-                        {getCurrencySymbol()}{" "}
+                        {currencySymbol}{" "}
                         {(cat.total || 0).toLocaleString()} (
                         {(pct || 0).toFixed(1)}%)
                       </span>
@@ -688,19 +700,19 @@ export default function ExpenseTracker() {
               <div className="p-3 bg-emerald-50 dark:bg-emerald-500/10 rounded-lg">
                 <p className="text-xs text-gray-500">Approved</p>
                 <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
-                  {getCurrencySymbol()} {(approvedTotal || 0).toLocaleString()}
+                  {currencySymbol} {(approvedTotal || 0).toLocaleString()}
                 </p>
               </div>
               <div className="p-3 bg-amber-50 dark:bg-amber-500/10 rounded-lg">
                 <p className="text-xs text-gray-500">Pending Approval</p>
                 <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">
-                  {getCurrencySymbol()} {(pendingTotal || 0).toLocaleString()}
+                  {currencySymbol} {(pendingTotal || 0).toLocaleString()}
                 </p>
               </div>
               <div className="p-3 bg-red-50 dark:bg-red-500/10 rounded-lg">
                 <p className="text-xs text-gray-500">Average per Expense</p>
                 <p className="text-2xl font-bold text-red-600 dark:text-red-400">
-                  {getCurrencySymbol()}{" "}
+                  {currencySymbol}{" "}
                   {filtered.length > 0
                     ? Math.round(
                         (totalExpenses || 0) / filtered.length,
@@ -746,7 +758,7 @@ export default function ExpenseTracker() {
                   </div>
                   <div>
                     <label className="text-xs text-gray-500 mb-1 block">
-                      Amount ({getCurrencySymbol()}) *
+                      Amount ({currencySymbol}) *
                     </label>
                     <input
                       type="number"
