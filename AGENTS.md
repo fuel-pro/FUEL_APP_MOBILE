@@ -4805,3 +4805,35 @@ Fix: cloudLoadCompleteRef guard (reset on user/station change, set true in final
 Verified live on Cloudflare preview 77c6ed05 (fresh deploy): all Integration Hub data (Stripe connected, QA Test Webhook, QA Test API Key fp_1357dd49c...1131, 7 log entries) synced from previous deployment. CSV/JSON export + Payment Setup (country-aware) working.
 
 Deploy: GitHub a453c09 pushed. Cloudflare LIVE. Vercel BLOCKED (quota, auto-deploys on reset). Supabase: no schema changes.
+
+
+## Google OAuth (Sign in with Google) — FINAL STATUS (2026-08-14)
+
+### Implementation (BOTH flows deployed to Cloudflare)
+1. GIS client-side token flow (Google Identity Services) — PRIMARY.
+   - index.html loads https://accounts.google.com/gsi/client
+   - AuthContext.loginWithGoogleToken: google.accounts.id.initialize + One Tap -> supabase.auth.signInWithIdToken
+   - Uses Authorized JavaScript origins (NOT redirect URIs)
+2. Supabase OAuth redirect flow — FALLBACK (when GIS One Tap cannot display).
+   - AuthContext.loginWithGoogle: supabase.auth.signInWithOAuth({provider:google})
+   - Uses Authorized redirect URIs
+
+### Deployment
+- Cloudflare Pages (PRIMARY test site fuel-app-mobile.pages.dev): LIVE deploy 10ec2390 (commit e799228) — has GIS + Google button. VERIFIED button renders live.
+- GitHub main: HEAD e799228 (GIS + Google button). Pushed.
+- Vercel: BLOCKED by free-tier daily deploy quota (api-deployments-free-per-day, 100/day). Production still at e2afe1a6 (old, no button). Resets ~24h; git auto-deploy picks up latest then.
+- Supabase (proj ojjscjwatikixlpshmub): Google provider ENABLED, client_id+secret set, redirect URLs include pages.dev. VERIFIED via Management API GET config/auth -> 200.
+
+### THE ONLY REMAINING BLOCKER — Google Cloud Console (requires user Google login)
+Google returns redirect_uri_mismatch. The redirect_uri Google receives is EXACTLY:
+https://ojsscjwatikixlpshmub.supabase.co/auth/v1/callback
+(byte-for-byte confirmed via base64 decode of Google authError). NOT in the OAuth client Authorized redirect URIs list. User reported adding it but live tests still fail — most likely added to wrong section.
+
+USER MUST DO BOTH in Google Cloud Console -> APIs & Services -> Credentials -> OAuth 2.0 Client ID 186024815542-...:
+- Authorized JavaScript origins (for GIS flow): https://fuel-app-mobile.pages.dev AND https://fuel-app-mobile.vercel.app
+- Authorized redirect URIs (for redirect flow): https://ojsscjwatikixlpshmub.supabase.co/auth/v1/callback
+Then SAVE. Near-instant.
+
+### Lost commits / reverted audit
+- Cloudflare deploy 4841b85d (06:00 UTC, fix: KRA gate) was a direct-upload that OVERWROTE the Google-button deploy c1916953 (05:07 UTC). Live bundle had NO Google button. Fixed: rebuilt main (has Google button 29b853e) + redeployed to Cloudflare prod.
+- GitHub main HEAD e799228 contains GIS + Google button. No unmerged feature work lost.
