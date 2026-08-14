@@ -100,7 +100,8 @@ const BASIC_TAB_STEPS: TutorialStep[] = [
     emoji: "📦",
     body: "Track fuel and shop stock levels, set reorder points, and record new stock. The system warns you before you run out.",
     targetSelector: '[data-tab="inventory"], [data-tab-id="inventory"]',
-    applies: (c) => c.featureFlags.inventory && c.availableTabs.includes("inventory"),
+    applies: (c) =>
+      c.featureFlags.inventory && c.availableTabs.includes("inventory"),
   },
   {
     id: "tab-offloading",
@@ -145,7 +146,8 @@ const BASIC_TAB_STEPS: TutorialStep[] = [
     emoji: "👥",
     body: "Manage employees, shifts, and run payroll. Calculates pay in your station's currency and records payouts.",
     targetSelector: '[data-tab="payroll"], [data-tab-id="payroll"]',
-    applies: (c) => c.featureFlags.payroll && c.availableTabs.includes("payroll"),
+    applies: (c) =>
+      c.featureFlags.payroll && c.availableTabs.includes("payroll"),
   },
   {
     id: "tab-customers",
@@ -154,7 +156,8 @@ const BASIC_TAB_STEPS: TutorialStep[] = [
     emoji: "🏆",
     body: "Run a customer loyalty program: points, tiers, and rewards. Great for retaining regulars.",
     targetSelector: '[data-tab="customers"], [data-tab-id="customers"]',
-    applies: (c) => c.featureFlags.loyalty && c.availableTabs.includes("customers"),
+    applies: (c) =>
+      c.featureFlags.loyalty && c.availableTabs.includes("customers"),
   },
   {
     id: "tab-reports",
@@ -211,7 +214,8 @@ const ADVANCED_TAB_STEPS: TutorialStep[] = [
     title: "Live Transaction — real-time monitoring",
     emoji: "⚡",
     body: "Watch payments and sales arrive in real time. Useful during busy hours to catch issues instantly across all pumps.",
-    targetSelector: '[data-tab="livetransaction"], [data-tab-id="livetransaction"]',
+    targetSelector:
+      '[data-tab="livetransaction"], [data-tab-id="livetransaction"]',
     applies: (c) => c.availableTabs.includes("livetransaction"),
   },
   {
@@ -221,7 +225,8 @@ const ADVANCED_TAB_STEPS: TutorialStep[] = [
     emoji: "🧠",
     body: "Trends, forecasting and business intelligence over your sales and fuel data. Spot slow days, best-selling products, and predict demand.",
     targetSelector: '[data-tab="analytics"], [data-tab-id="analytics"]',
-    applies: (c) => c.featureFlags.analytics && c.availableTabs.includes("analytics"),
+    applies: (c) =>
+      c.featureFlags.analytics && c.availableTabs.includes("analytics"),
   },
   {
     id: "adv-audit",
@@ -238,7 +243,8 @@ const ADVANCED_TAB_STEPS: TutorialStep[] = [
     title: "Fuel Sales Report — monthly reporting",
     emoji: "🗓️",
     body: "Generate monthly fuel sales reports for tax authorities and management. Pre-formatted for KRA/eTIMS where applicable.",
-    targetSelector: '[data-tab="fuelsalesreport"], [data-tab-id="fuelsalesreport"]',
+    targetSelector:
+      '[data-tab="fuelsalesreport"], [data-tab-id="fuelsalesreport"]',
     applies: (c) => c.availableTabs.includes("fuelsalesreport"),
   },
   {
@@ -248,7 +254,8 @@ const ADVANCED_TAB_STEPS: TutorialStep[] = [
     emoji: "🛢️",
     body: "Define fuel types, tanks, pumps and prices. Skilled operators use this to keep the fuel ledger accurate.",
     targetSelector: '[data-tab="fueltypes"], [data-tab-id="fueltypes"]',
-    applies: (c) => c.featureFlags.fueltypes && c.availableTabs.includes("fueltypes"),
+    applies: (c) =>
+      c.featureFlags.fueltypes && c.availableTabs.includes("fueltypes"),
   },
   {
     id: "adv-pumpmapping",
@@ -266,7 +273,8 @@ const ADVANCED_TAB_STEPS: TutorialStep[] = [
     emoji: "🏭",
     body: "Manage fuel suppliers, raise purchase orders, and record purchases. Tracks cost price per supplier for margin analysis.",
     targetSelector: '[data-tab="suppliers"], [data-tab-id="suppliers"]',
-    applies: (c) => c.featureFlags.suppliers && c.availableTabs.includes("suppliers"),
+    applies: (c) =>
+      c.featureFlags.suppliers && c.availableTabs.includes("suppliers"),
   },
   {
     id: "adv-maintenance",
@@ -275,7 +283,8 @@ const ADVANCED_TAB_STEPS: TutorialStep[] = [
     emoji: "🔧",
     body: "Schedule and track equipment maintenance and servicing (pumps, generators, tanks). Avoid costly downtime.",
     targetSelector: '[data-tab="maintenance"], [data-tab-id="maintenance"]',
-    applies: (c) => c.featureFlags.maintenance && c.availableTabs.includes("maintenance"),
+    applies: (c) =>
+      c.featureFlags.maintenance && c.availableTabs.includes("maintenance"),
   },
   {
     id: "adv-expenses",
@@ -284,7 +293,8 @@ const ADVANCED_TAB_STEPS: TutorialStep[] = [
     emoji: "💸",
     body: "Record operational expenses and run approvals. Accountants reconcile expenses against sales here.",
     targetSelector: '[data-tab="expenses"], [data-tab-id="expenses"]',
-    applies: (c) => c.featureFlags.expenses && c.availableTabs.includes("expenses"),
+    applies: (c) =>
+      c.featureFlags.expenses && c.availableTabs.includes("expenses"),
   },
   {
     id: "adv-delivery",
@@ -302,7 +312,8 @@ const ADVANCED_TAB_STEPS: TutorialStep[] = [
     emoji: "📁",
     body: "Upload, organize and convert documents (invoices, contracts, permits). Per-station isolation and auto-sort.",
     targetSelector: '[data-tab="documents"], [data-tab-id="documents"]',
-    applies: (c) => c.featureFlags.documents && c.availableTabs.includes("documents"),
+    applies: (c) =>
+      c.featureFlags.documents && c.availableTabs.includes("documents"),
   },
   {
     id: "adv-integration",
@@ -311,7 +322,8 @@ const ADVANCED_TAB_STEPS: TutorialStep[] = [
     emoji: "🔌",
     body: "Connect accounting, POS hardware, payment providers and more. Skilled operators configure webhooks and API keys here.",
     targetSelector: '[data-tab="integration"], [data-tab-id="integration"]',
-    applies: (c) => c.featureFlags.integrations && c.availableTabs.includes("integration"),
+    applies: (c) =>
+      c.featureFlags.integrations && c.availableTabs.includes("integration"),
   },
   {
     id: "adv-regional",
@@ -320,7 +332,8 @@ const ADVANCED_TAB_STEPS: TutorialStep[] = [
     emoji: "⚖️",
     body: "Country-specific compliance: KRA/eTIMS (Kenya), EFD (Tanzania/Uganda), ETR, VAT reporting. Adapts to your detected country.",
     targetSelector: '[data-tab="regional"], [data-tab-id="regional"]',
-    applies: (c) => c.featureFlags.compliance && c.availableTabs.includes("regional"),
+    applies: (c) =>
+      c.featureFlags.compliance && c.availableTabs.includes("regional"),
   },
   {
     id: "adv-communication",
@@ -349,7 +362,8 @@ const ADVANCED_FOUNDER_STEPS: TutorialStep[] = [
     title: "Founder / Admin Console — the technical control center",
     emoji: "👑",
     body: "The Admin button (top-right, crown icon) opens the Founder Console: 50+ technical sections for security, billing, developer tools, webhooks, feature flags, schema, backups and more. This is where skilled operators and IT admins configure the whole platform.",
-    targetSelector: 'a[href*="/founder"], button[aria-label*="Admin"], [data-tutorial="founder"]',
+    targetSelector:
+      'a[href*="/founder"], button[aria-label*="Admin"], [data-tutorial="founder"]',
     applies: (c) => c.featureFlags.founderAccess,
   },
   {

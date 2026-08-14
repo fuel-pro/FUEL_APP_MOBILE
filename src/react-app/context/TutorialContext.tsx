@@ -135,7 +135,10 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
   const snoozeTutorial = useCallback(() => {
     const until = Date.now() + SNOOZE_MS;
     try {
-      localStorage.setItem(key("fuelpro_tutorial_snooze_until"), until.toString());
+      localStorage.setItem(
+        key("fuelpro_tutorial_snooze_until"),
+        until.toString(),
+      );
     } catch {
       /* ignore */
     }

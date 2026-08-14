@@ -221,13 +221,17 @@ export default function OnboardingTutorial(_: Props) {
               }}
               className="w-full flex items-start gap-3 p-4 rounded-xl border-2 border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-900/10 hover:border-amber-400 dark:hover:border-amber-700 transition-colors text-left"
             >
-              <GraduationCap className="text-amber-600 dark:text-amber-400 mt-0.5" size={22} />
+              <GraduationCap
+                className="text-amber-600 dark:text-amber-400 mt-0.5"
+                size={22}
+              />
               <div>
                 <div className="font-semibold text-gray-900 dark:text-white">
                   Basic Tour
                 </div>
                 <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                  Day-to-day features: sales, fuel, invoices, payroll & reports. ~2 min.
+                  Day-to-day features: sales, fuel, invoices, payroll & reports.
+                  ~2 min.
                 </div>
               </div>
             </button>
@@ -239,13 +243,17 @@ export default function OnboardingTutorial(_: Props) {
               }}
               className="w-full flex items-start gap-3 p-4 rounded-xl border-2 border-indigo-200 dark:border-indigo-900/50 bg-indigo-50 dark:bg-indigo-900/10 hover:border-indigo-400 dark:hover:border-indigo-700 transition-colors text-left"
             >
-              <Wrench className="text-indigo-600 dark:text-indigo-400 mt-0.5" size={22} />
+              <Wrench
+                className="text-indigo-600 dark:text-indigo-400 mt-0.5"
+                size={22}
+              />
               <div>
                 <div className="font-semibold text-gray-900 dark:text-white">
                   Advanced Tour
                 </div>
                 <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                  Day-to-day recap + technical features for skilled operators: analytics, integrations, compliance & founder console. ~5 min.
+                  Day-to-day recap + technical features for skilled operators:
+                  analytics, integrations, compliance & founder console. ~5 min.
                 </div>
               </div>
             </button>
