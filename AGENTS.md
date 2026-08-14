@@ -22,8 +22,42 @@ ref: `ojjscjwatikixlpshmub`). Auth via Supabase email/password + Google OAuth
   Supabase Dashboard -> Authentication -> Providers -> Google with a free
   Google OAuth Client ID + secret from Google Cloud Console. Redirect URI
   to add in Google Cloud: `https://ojjscjwatikixlpshmub.supabase.co/auth/v1/callback`.
-  Until enabled, Supabase returns `400 Unsupported provider: provider is not
-  enabled` (the app's friendly error message covers this).
+  Until enabled, Supabase returns
+  `400 {"code":400,"error_code":"validation_failed","msg":"Unsupported provider: missing OAuth client ID"}`
+  (the app's friendly error message covers this).
+  NOTE: the Supabase Management API `PATCH /v1/projects/{ref}/config/auth`
+  returns 404 with the current access token (insufficient scope), so enabling
+  must be done in the Supabase Dashboard or with a token carrying Auth: Write scope.
+
+## QA verification 2026-08-14 (fuel-app-mobile.pages.dev, deploy c1916953)
+
+Google sign-in button renders on login + signup; clicking it correctly
+redirects to
+`https://ojsscjwatikixlpshmub.supabase.co/auth/v1/authorize?provider=google&redirect_to=https%3A%2F%2Ffuel-app-mobile.pages.dev%2F&scopes=openid%20email%20profile`
+(returns the "missing OAuth client ID" 400 above until the provider is enabled).
+Full app smoke-tested with test data end-to-end: signup+onboarding (station,
+pumps, pricing, tax), Dashboard, POS (completed 20L Super Petrol sale @ $1.85
+= $37 cash, tax-compliant receipt INV...019QI, cloud-synced), Sales Tracking
+(pump readings 1000->1050 auto-calc 50L saved), Invoice (#INV-2026-001
+Test Client Ltd saved), Stock Management (Engine Oil 5L, Lubricants, 100
+pcs, $15/$25 saved to Supabase `products`), Credit (John Credit Customer
+account created). All persistence confirmed via live Supabase reads.
+
+## Lost commits on unmerged branches (audit 2026-08-14)
+
+`origin/founder-username-login` (7 commits, NOT merged to main) contains
+substantial live-tested work: username-based Founder Access login (FOUNDER
+username works on the main login page via `founder_credentials` Supabase
+table), consolidated founder admin API endpoint (`api/founder-admin.ts`),
+Security & 2FA section (`SecuritySection.tsx`, 305 lines), migration
+`014_founder_credentials.sql`, a FounderAccess render-loop fix (Audit Log was
+filling to 1000 entries from `[logAudit]` deps -> mount-only `[]`), and
+cross-component wiring fixes (POS/SalesTracking/LiveTransaction). Branch
+diverges from `c1e907a` and touches AuthContext.tsx + several files also
+changed on main, so a merge would conflict and needs a manual rebase. NOT
+auto-merged (awaiting user authorization). Other large branches (develop,
+fix/typescript-errors, fix/comprehensive-*, tembo/*) are old divergent
+snapshots (200+ commits) and are not lost work.
 
 ## Key Architecture
 
