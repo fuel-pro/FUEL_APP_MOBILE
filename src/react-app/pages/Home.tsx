@@ -307,7 +307,6 @@ function HomeContent() {
   const { canAccessTab } = usePermissions();
   useEffect(() => {
     const tabFeatureMap: Record<string, keyof typeof featureFlags> = {
-      mpesa: "mpesa",
       communication: "email",
       audit: "audit",
       regional: "compliance",
@@ -327,10 +326,10 @@ function HomeContent() {
   // Filter tab configurations based on feature flags
   const filteredTabConfig = useMemo(() => {
     const config = { ...adminSettings.tabConfig };
-    // Hide M-PESA tab if not in Kenya/TZ
-    if (!featureFlags.mpesa) {
-      config.mpesa = { ...config.mpesa, enabled: false };
-    }
+    // M-PESA Analyzer is available to ALL users — the statement analysis
+    // (paste SMS text, pattern match, AI extract) is country-agnostic.
+    // The Kenya-specific Daraja STK Push API gracefully degrades inside
+    // the component based on the configured integration.
     // Compliance tab controlled by compliance feature flag
     if (!featureFlags.compliance) {
       config.regional = { ...config.regional, enabled: false };
@@ -398,7 +397,7 @@ function HomeContent() {
       case "reports":
         return <ReportsCenter />;
       case "mpesa":
-        return featureFlags.mpesa ? <MPESAAnalyzer /> : null;
+        return <MPESAAnalyzer />;
       case "payroll":
         return <PayrollSystem />;
       case "data":
