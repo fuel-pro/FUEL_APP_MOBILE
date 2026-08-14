@@ -1,6 +1,6 @@
 -- ============================================================
 -- Migration 006 (APPLIED variant): Complete schema
--- Applied to live project ojjscjwatikixlpshmub on 2026-08-09.
+-- Applied to live project ojsscjwatikixlpshmub on 2026-08-09.
 --
 -- This is 006_complete_schema.sql with two index statements removed
 -- that referenced columns absent on the pre-existing live `inventory`

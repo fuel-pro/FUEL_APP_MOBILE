@@ -217,7 +217,7 @@ export const R2Storage = {
 // ─── Supabase Storage ───
 const SUPABASE_URL =
   import.meta.env.VITE_SUPABASE_URL ||
-  "https://ojjscjwatikixlpshmub.supabase.co";
+  "https://ojsscjwatikixlpshmub.supabase.co";
 const SUPABASE_KEY =
   import.meta.env.VITE_SUPABASE_ANON_KEY ||
   "sb_publishable_-uUkeBG1KzESv3O4v90rcw_jY9NxTc4";

@@ -5,7 +5,7 @@ This guide walks you through setting up Supabase for the FuelPro application.
 ## Prerequisites
 
 - Supabase account at https://supabase.com
-- Access to the FuelPro Supabase project: `ojjscjwatikixlpshmub`
+- Access to the FuelPro Supabase project: `ojsscjwatikixlpshmub`
 
 ---
 
@@ -31,7 +31,7 @@ npm install -g supabase
 supabase login
 
 # Link to your project
-supabase link --project-ref ojjscjwatikixlpshmub
+supabase link --project-ref ojsscjwatikixlpshmub
 
 # Push the schema
 supabase db push
@@ -143,7 +143,7 @@ supabase db push
 3. Name: FuelPro Web
 4. Authorized redirect URIs:
    ```
-   https://ojjscjwatikixlpshmub.supabase.co/auth/v1/callback
+   https://ojsscjwatikixlpshmub.supabase.co/auth/v1/callback
    ```
 
 ### 3.3 Add to Supabase
@@ -205,7 +205,7 @@ Add these to your Vercel project settings:
 
 | Variable                 | Value                                      |
 | ------------------------ | ------------------------------------------ |
-| `VITE_SUPABASE_URL`      | `https://ojjscjwatikixlpshmub.supabase.co` |
+| `VITE_SUPABASE_URL`      | `https://ojsscjwatikixlpshmub.supabase.co` |
 | `VITE_SUPABASE_ANON_KEY` | Your Supabase anon key                     |
 
 To get your anon key:
@@ -240,7 +240,7 @@ To get your anon key:
 
 ### "Invalid API key" error
 
-- Make sure you're using the correct project reference: `ojjscjwatikixlpshmub`
+- Make sure you're using the correct project reference: `ojsscjwatikixlpshmub`
 - Regenerate API keys in **Project Settings** → **API**
 
 ### Email not sending

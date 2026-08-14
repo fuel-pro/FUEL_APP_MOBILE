@@ -14,7 +14,7 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
 // Supabase configuration from environment variables
 const supabaseUrl =
   import.meta.env.VITE_SUPABASE_URL ||
-  "https://ojjscjwatikixlpshmub.supabase.co";
+  "https://ojsscjwatikixlpshmub.supabase.co";
 const supabaseAnonKey =
   import.meta.env.VITE_SUPABASE_ANON_KEY ||
   "sb_publishable_-uUkeBG1KzESv3O4v90rcw_jY9NxTc4";
