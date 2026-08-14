@@ -156,8 +156,7 @@ async function supabaseUserToIdentityEnriched(
   const base: AuthIdentity = {
     id: user.id,
     authId: `supabase_${user.id}`,
-    authMethod:
-      user.app_metadata?.provider === "google" ? "google" : "email",
+    authMethod: user.app_metadata?.provider === "google" ? "google" : "email",
     email: user.email || "",
     name: user.user_metadata?.full_name || user.email?.split("@")[0] || "User",
     picture: user.user_metadata?.avatar_url || undefined,
@@ -195,8 +194,7 @@ function supabaseUserToIdentity(
   return {
     id: user.id,
     authId: `supabase_${user.id}`,
-    authMethod:
-      user.app_metadata?.provider === "google" ? "google" : "email",
+    authMethod: user.app_metadata?.provider === "google" ? "google" : "email",
     email: user.email || "",
     name: user.user_metadata?.full_name || user.email?.split("@")[0] || "User",
     picture: user.user_metadata?.avatar_url || undefined,
@@ -626,7 +624,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           // One Tap prompt; if it cannot show (e.g. no active session or
           // blocked), fall back to the redirect-based OAuth flow below.
           google.accounts.id.prompt((notification: any) => {
-            if (notification?.isNotDisplayed() || notification?.isSkippedMoment()) {
+            if (
+              notification?.isNotDisplayed() ||
+              notification?.isSkippedMoment()
+            ) {
               resolve(null);
             }
           });

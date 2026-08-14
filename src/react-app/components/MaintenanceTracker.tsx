@@ -610,8 +610,7 @@ export default function MaintenanceTracker() {
                       </div>
                       <div>
                         <span className="text-gray-500">Cost:</span>{" "}
-                        {currencySymbol}{" "}
-                        {(record.cost || 0).toLocaleString()}
+                        {currencySymbol} {(record.cost || 0).toLocaleString()}
                       </div>
                       {record.completedDate && (
                         <div>
