@@ -144,6 +144,26 @@ export default function ExpenseTracker() {
   // state before the initial cloud load completes (cross-device overwrite race).
   const cloudLoadCompleteRef = useRef(false);
 
+  // Guards against the real-time subscribe callback overwriting uncommitted
+  // local changes. When the user adds/edits/deletes an expense, we set this
+  // ref so the echo from our own cloud write doesn't wipe local state.
+  const localModifiedRef = useRef(false);
+  const localModifiedTimer = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+
+  const flagLocalModified = () => {
+    localModifiedRef.current = true;
+    if (localModifiedTimer.current) clearTimeout(localModifiedTimer.current);
+    localModifiedTimer.current = setTimeout(() => {
+      localModifiedRef.current = false;
+    }, 3000);
+  };
+
+  // Refs for post-load flush so the cloud write reads the latest state.
+  const expensesRef = useRef(expenses);
+  expensesRef.current = expenses;
+
   const [formData, setFormData] = useState<Partial<Expense>>({
     date: new Date().toISOString().slice(0, 10),
     category: "fuel_purchase",
@@ -181,7 +201,9 @@ export default function ExpenseTracker() {
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(expenses));
     if (!cloudLoadCompleteRef.current) return; // skip until cloud load done
-    cloudStorageService.set(CLOUD_KEY, expenses, stationId).catch(() => {});
+    cloudStorageService.set(CLOUD_KEY, expenses, stationId).catch((err) => {
+      console.error("ExpenseTracker cloud save failed:", err);
+    });
   }, [expenses, stationId]);
 
   // Load from cloud on mount AND when the station changes (cross-device +
@@ -202,10 +224,12 @@ export default function ExpenseTracker() {
       }
     })();
     // Real-time cross-device sync: another device updates expenses_data.
+    // Guard against echo overwrites: skip if we just made a local change.
     const unsub = cloudStorageService.subscribe<unknown>(
       CLOUD_KEY,
       stationId,
       (val) => {
+        if (localModifiedRef.current) return;
         setExpenses(normalizeExpenses(val));
       },
     );
@@ -214,6 +238,22 @@ export default function ExpenseTracker() {
       unsub();
     };
   }, [user, stationId]);
+
+  // Post-load flush: if the user made changes before/during the cloud load,
+  // re-push the latest local state to cloud so it's not lost.
+  useEffect(() => {
+    if (cloudLoadCompleteRef.current && localModifiedRef.current) {
+      cloudStorageService
+        .set(CLOUD_KEY, expensesRef.current, stationId)
+        .catch(() => {});
+    }
+  }, [cloudLoadCompleteRef.current]);
+
+  useEffect(() => {
+    return () => {
+      if (localModifiedTimer.current) clearTimeout(localModifiedTimer.current);
+    };
+  }, []);
 
   const showNotification = (
     message: string,
@@ -269,19 +309,24 @@ export default function ExpenseTracker() {
       showNotification("Description and amount are required", "warning");
       return;
     }
+    const realStationId = currentStation?.id || "default";
     if (editingId) {
+      flagLocalModified();
       setExpenses((prev) =>
         prev.map((e) =>
-          e.id === editingId ? ({ ...e, ...formData } as Expense) : e,
+          e.id === editingId
+            ? ({ ...e, ...formData, stationId: realStationId } as Expense)
+            : e,
         ),
       );
       showNotification("Expense updated");
     } else {
+      flagLocalModified();
       setExpenses((prev) => [
         {
           ...(formData as Expense),
-          id: `exp_${Date.now()}`,
-          stationId: "default",
+          id: `exp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          stationId: realStationId,
           createdAt: new Date().toISOString(),
         },
         ...prev,
@@ -292,7 +337,7 @@ export default function ExpenseTracker() {
       // the values locally — no need to await the storage write.
       emit({
         type: "expense:created",
-        stationId: currentStation?.id || "",
+        stationId: realStationId,
         amount: Number(formData.amount) || 0,
         category: formData.category || "",
       });
@@ -304,12 +349,14 @@ export default function ExpenseTracker() {
 
   const handleDelete = (id: string) => {
     if (confirm("Delete this expense?")) {
+      flagLocalModified();
       setExpenses((prev) => prev.filter((e) => e.id !== id));
       showNotification("Expense deleted");
     }
   };
 
   const updateStatus = (id: string, newStatus: Expense["status"]) => {
+    flagLocalModified();
     setExpenses((prev) =>
       prev.map((e) => (e.id === id ? { ...e, status: newStatus } : e)),
     );
