@@ -632,7 +632,7 @@ export default function Header({
                   <option value="JPY" className="bg-gray-800">
                     JPY — Japanese Yen
                   </option>
-                  <option value="KSh" className="bg-gray-800">
+                  <option value="KES" className="bg-gray-800">
                     KES — Kenyan Shilling
                   </option>
                   <option value="NGN" className="bg-gray-800">

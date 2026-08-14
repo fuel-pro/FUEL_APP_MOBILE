@@ -68,7 +68,7 @@ export function getDetectedCurrency(): string {
         if (current.currency) {
           const code =
             normalizeCurrencyCode(current.currency) || current.currency;
-          if (code !== "USD") return code;
+          return code;
         }
         const cc = current.country || current.countryCode;
         if (cc) {
@@ -107,7 +107,7 @@ export function getDetectedCurrency(): string {
           const cd = JSON.parse(raw);
           if (cd?.currency) {
             const code = normalizeCurrencyCode(cd.currency) || cd.currency;
-            if (code !== "USD") return code;
+            return code;
           }
         }
       }
