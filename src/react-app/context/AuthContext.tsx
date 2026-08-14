@@ -231,6 +231,19 @@ function friendlyAuthEmailError(message: string): string {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Lightweight password hashing for the offline username fallback. This is NOT
+// a server-side secret — it's a local-only convenience account — but we still
+// avoid storing passwords in cleartext in localStorage. Uses Web Crypto
+// SHA-256 with a fixed salt prefix so values stay comparable across sessions.
+const USERNAME_PW_SALT = "fuelpro_local_user_v1";
+async function hashUsernamePassword(pw: string): Promise<string> {
+  const enc = new TextEncoder().encode(USERNAME_PW_SALT + pw);
+  const buf = await crypto.subtle.digest("SHA-256", enc);
+  return Array.from(new Uint8Array(buf))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthIdentity | null>(loadUser);
   const [bindings, setBindings] = useState<StationRoleBinding[]>(loadBindings);
@@ -729,23 +742,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const users: Record<string, any> = JSON.parse(
         localStorage.getItem("fuelpro_username_users") || "{}",
       );
-      const found = Object.values(users).find(
-        (u: any) => u.username === username && u.password === password,
-      );
-      if (found) {
-        const u = found as any;
-        console.info("[AuthContext] Username login successful for:", u.name);
-        const newUser: AuthIdentity = {
-          id: `username_${username}`,
-          authId: `username_${username}`,
-          authMethod: "username",
-          email: u.email || "",
-          name: u.name || username,
-          role: u.role || "user",
-        };
-        setUser(newUser);
-        setIsPending(false);
-        return true;
+      const entry = users[username];
+      if (entry) {
+        // Compare against the stored hash; tolerate legacy cleartext entries
+        // by hashing the candidate the same way. Migrate cleartext on the fly.
+        const candidate = await hashUsernamePassword(password);
+        const storedHash = entry.passwordHash;
+        const isCleartextMatch = !storedHash && entry.password === password;
+        const match = storedHash === candidate || isCleartextMatch;
+        if (match) {
+          // Migrate legacy cleartext to a hash.
+          if (isCleartextMatch) {
+            entry.passwordHash = candidate;
+            delete entry.password;
+            localStorage.setItem(
+              "fuelpro_username_users",
+              JSON.stringify(users),
+            );
+          }
+          const u = entry;
+          console.info("[AuthContext] Username login successful for:", u.name);
+          const newUser: AuthIdentity = {
+            id: `username_${username}`,
+            authId: `username_${username}`,
+            authMethod: "username",
+            email: u.email || "",
+            name: u.name || username,
+            role: u.role || "user",
+          };
+          setUser(newUser);
+          setIsPending(false);
+          return true;
+        }
       }
       setError("Invalid username or password");
       setIsPending(false);
@@ -773,9 +801,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return false;
       }
 
+      const passwordHash = await hashUsernamePassword(password);
       users[username] = {
         username,
-        password,
+        passwordHash,
         name,
         email,
         role: "user",
@@ -1079,6 +1108,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const verifyResetCode = useCallback(
     (email: string, code: string): boolean => {
+      // Supabase password reset is link-based (no OTP code). Kept for API
+      // compatibility with the context type; the real reset is done via the
+      // email recovery link -> updateUser({password}) on the reset page.
+      void email;
+      void code;
       setError(
         "Supabase handles password reset via email link. Code verification not needed.",
       );
@@ -1089,24 +1123,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const resetPassword = useCallback(
     async (email: string, newPassword: string): Promise<boolean> => {
+      void email; // recovery flow identifies the user via the active session
       setIsPending(true);
       setError(null);
 
-      if (!newPassword || newPassword.length < 6) {
-        setError("Password must be at least 6 characters");
+      if (!newPassword || newPassword.length < 8) {
+        setError("Password must be at least 8 characters");
         setIsPending(false);
         return false;
       }
 
       try {
-        // For Supabase, password update requires the user to be logged in
-        // or use the reset password flow with the token from email
-        setError(
-          "Please use the password reset link from your email to change your password.",
-        );
+        // After the user clicks the recovery link, Supabase establishes a
+        // session; updateUser({password}) completes the reset.
+        const { error: supabaseError } = await supabase.auth.updateUser({
+          password: newPassword,
+        });
+        if (supabaseError) {
+          console.error(
+            "[AuthContext] Password reset error:",
+            supabaseError.message,
+          );
+          setError(supabaseError.message);
+          setIsPending(false);
+          return false;
+        }
         setIsPending(false);
-        return false;
+        return true;
       } catch (err: any) {
+        console.error("[AuthContext] Password reset error:", err.message);
         setError(err.message || "Failed to reset password");
         setIsPending(false);
         return false;
