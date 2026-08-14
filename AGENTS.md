@@ -5,7 +5,7 @@
 React + Vite + TypeScript SPA for fuel station management. Deployed at
 `fuel-app-mobile.vercel.app` AND Cloudflare Pages
 `fuel-app-mobile.pages.dev` (primary test site). Backend is Supabase (project
-ref: `ojjscjwatikixlpshmub`). Auth via Supabase email/password + Google OAuth
+ref: `ojsscjwatikixlpshmub`). Auth via Supabase email/password + Google OAuth
 (Sign in with Google, added 2026-08-14).
 
 ## Google OAuth (Sign in with Google)
@@ -21,7 +21,7 @@ ref: `ojjscjwatikixlpshmub`). Auth via Supabase email/password + Google OAuth
 - **BLOCKER (manual, free):** the Google provider must be enabled in
   Supabase Dashboard -> Authentication -> Providers -> Google with a free
   Google OAuth Client ID + secret from Google Cloud Console. Redirect URI
-  to add in Google Cloud: `https://ojjscjwatikixlpshmub.supabase.co/auth/v1/callback`.
+  to add in Google Cloud: `https://ojsscjwatikixlpshmub.supabase.co/auth/v1/callback`.
   Until enabled, Supabase returns
   `400 {"code":400,"error_code":"validation_failed","msg":"Unsupported provider: missing OAuth client ID"}`
   (the app's friendly error message covers this).
@@ -314,7 +314,7 @@ field with a default value (currency, invoice label, etc.). Fix applied:
 ## Credentials
 
 - Supabase service_role key and access token are in `/workspace/API KEYS.txt`
-  (project `ojjscjwatikixlpshmub`). NEVER commit these.
+  (project `ojsscjwatikixlpshmub`). NEVER commit these.
 - Vercel token in `$VERCEL`. GitHub token in `$GITHUB_TOKEN`.
 
 ## CRITICAL ÔÇö Cross-user station + data leak via overly-permissive RLS (FIXED 2026-08-09, commit fb9eb29)
@@ -4822,7 +4822,7 @@ Deploy: GitHub a453c09 pushed. Cloudflare LIVE. Vercel BLOCKED (quota, auto-depl
 - Cloudflare Pages (PRIMARY test site fuel-app-mobile.pages.dev): LIVE deploy 10ec2390 (commit e799228) — has GIS + Google button. VERIFIED button renders live.
 - GitHub main: HEAD e799228 (GIS + Google button). Pushed.
 - Vercel: BLOCKED by free-tier daily deploy quota (api-deployments-free-per-day, 100/day). Production still at e2afe1a6 (old, no button). Resets ~24h; git auto-deploy picks up latest then.
-- Supabase (proj ojjscjwatikixlpshmub): Google provider ENABLED, client_id+secret set, redirect URLs include pages.dev. VERIFIED via Management API GET config/auth -> 200.
+- Supabase (proj ojsscjwatikixlpshmub): Google provider ENABLED, client_id+secret set, redirect URLs include pages.dev. VERIFIED via Management API GET config/auth -> 200.
 
 ### THE ONLY REMAINING BLOCKER — Google Cloud Console (requires user Google login)
 Google returns redirect_uri_mismatch. The redirect_uri Google receives is EXACTLY:
