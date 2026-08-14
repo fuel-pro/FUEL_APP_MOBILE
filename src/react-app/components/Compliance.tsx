@@ -51,7 +51,7 @@ export default function Compliance() {
       const saved = localStorage.getItem("fuelpro_location_country");
       if (saved) {
         const parsed = JSON.parse(saved);
-        return (parsed.currentCountry || parsed.country || "KE").toUpperCase();
+        return (parsed.currentCountry || parsed.country || "US").toUpperCase();
       }
     } catch {}
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -61,7 +61,7 @@ export default function Compliance() {
     if (tz.includes("Dar")) return "TZ";
     if (tz.includes("Kampala")) return "UG";
     if (tz.includes("Accra")) return "GH";
-    return "KE";
+    return "US";
   });
 
   const [expandedSection, setExpandedSection] = useState<string | null>(

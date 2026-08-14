@@ -49,6 +49,11 @@ export default function DeliveryTracker() {
   const SIG_KEY = "delivery_signatures";
   const [managerSignature, setManagerSignature] = useState("");
   const [directorSignature, setDirectorSignature] = useState("");
+  // Refs to guard against real-time echo overwriting in-progress edits
+  const managerSignatureRef = useRef("");
+  const directorSignatureRef = useRef("");
+  managerSignatureRef.current = managerSignature;
+  directorSignatureRef.current = directorSignature;
 
   // Load signatures from cloud on mount; seed from in-memory cache for
   // instant first render. Save back to cloud whenever they change.
@@ -69,9 +74,20 @@ export default function DeliveryTracker() {
       manager?: string;
       director?: string;
     }>(SIG_KEY, stationId, (val) => {
-      if (val) {
-        if (val.manager !== undefined) setManagerSignature(val.manager);
-        if (val.director !== undefined) setDirectorSignature(val.director);
+      // Guard against echo: skip if the value matches what we just saved
+      // (the real-time event echoes back our own write).
+      if (!val) return;
+      if (
+        val.manager !== undefined &&
+        val.manager !== managerSignatureRef.current
+      ) {
+        setManagerSignature(val.manager);
+      }
+      if (
+        val.director !== undefined &&
+        val.director !== directorSignatureRef.current
+      ) {
+        setDirectorSignature(val.director);
       }
     });
     return () => {

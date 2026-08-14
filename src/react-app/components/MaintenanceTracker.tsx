@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 import { useAuth } from "@/react-app/context/AuthContext";
 import { useStations } from "@/react-app/context/StationContext";
@@ -134,6 +134,16 @@ export default function MaintenanceTracker() {
   const { user } = useAuth();
   const { currentStation } = useStations();
   const stationId = currentStation?.id;
+  // Resolve currency from the React-context station (not the synchronous
+  // localStorage read) so it's correct on fresh devices / multi-currency.
+  const currencySymbol = useMemo(
+    () =>
+      getCurrencySymbol(
+        (currentStation as any)?.companyCurrency ||
+          (currentStation as any)?.currency,
+      ),
+    [currentStation],
+  );
   const [records, setRecords] = useState<MaintenanceRecord[]>(() => {
     const cloudCached = cloudStorageService.getCached<unknown[]>(
       "maintenance_records",
@@ -520,7 +530,7 @@ export default function MaintenanceTracker() {
                     ).toLocaleDateString()}
                   </div>
                   <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
-                    {getCurrencySymbol()} {(record.cost || 0).toLocaleString()}
+                    {currencySymbol} {(record.cost || 0).toLocaleString()}
                   </div>
                 </div>
 
@@ -600,7 +610,7 @@ export default function MaintenanceTracker() {
                       </div>
                       <div>
                         <span className="text-gray-500">Cost:</span>{" "}
-                        {getCurrencySymbol()}{" "}
+                        {currencySymbol}{" "}
                         {(record.cost || 0).toLocaleString()}
                       </div>
                       {record.completedDate && (
@@ -754,7 +764,7 @@ export default function MaintenanceTracker() {
                   </div>
                   <div>
                     <label className="text-xs text-gray-500 mb-1 block">
-                      Cost ({getCurrencySymbol()})
+                      Cost ({currencySymbol})
                     </label>
                     <input
                       type="number"
