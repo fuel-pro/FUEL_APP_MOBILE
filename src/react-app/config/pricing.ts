@@ -993,7 +993,7 @@ export function getBasePrice(fuelType: string): number {
         case "cng":
           return KENYA_SPECIALTY_PRICES.cng;
         default:
-          return KENYA_BASE_PRICES.petrol;
+          return 0;
       }
     }
   }

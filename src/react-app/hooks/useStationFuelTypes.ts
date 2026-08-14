@@ -140,6 +140,7 @@ export function useStationFuelTypes(
 
   const getPriceFor = useCallback(
     (raw: string): number | null => {
+      if (!raw || !raw.trim()) return null;
       const entry = findFuelType(raw);
       if (entry && typeof entry.price === "number" && entry.price > 0) {
         return entry.price;
