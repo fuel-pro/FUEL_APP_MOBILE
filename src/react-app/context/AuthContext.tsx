@@ -64,6 +64,7 @@ interface AuthContextType {
     name: string,
     email: string,
   ) => Promise<boolean>;
+  loginWithGoogle: () => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
   clearError: () => void;
   refreshAuth: () => Promise<boolean>;
@@ -147,7 +148,8 @@ async function supabaseUserToIdentityEnriched(
   const base: AuthIdentity = {
     id: user.id,
     authId: `supabase_${user.id}`,
-    authMethod: "email",
+    authMethod:
+      user.app_metadata?.provider === "google" ? "google" : "email",
     email: user.email || "",
     name: user.user_metadata?.full_name || user.email?.split("@")[0] || "User",
     picture: user.user_metadata?.avatar_url || undefined,
@@ -185,7 +187,8 @@ function supabaseUserToIdentity(
   return {
     id: user.id,
     authId: `supabase_${user.id}`,
-    authMethod: "email",
+    authMethod:
+      user.app_metadata?.provider === "google" ? "google" : "email",
     email: user.email || "",
     name: user.user_metadata?.full_name || user.email?.split("@")[0] || "User",
     picture: user.user_metadata?.avatar_url || undefined,
@@ -522,7 +525,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [broadcastAuthUpdate],
   );
 
-  // ---- GOOGLE AUTH (Supabase OAuth) ----
+  // ---- GOOGLE AUTH (Supabase OAuth / Google Identity Services) ----
+  // Fully free: uses Supabase's hosted Google OAuth provider (Google Identity
+  // Services / OAuth 2.0). No billing required on Google or Supabase. The
+  // redirect callback is handled automatically by the Supabase client
+  // (detectSessionInUrl: true) and the onAuthStateChange listener above, so we
+  // do not set the user here — the SIGNED_IN event enriches and persists it.
   const loginWithGoogle = useCallback(async (): Promise<{
     success: boolean;
     error?: string;
@@ -530,33 +538,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsPending(true);
     setError(null);
 
-    console.info("[AuthContext] Starting Google login with Supabase");
+    console.info("[AuthContext] Starting Google login (Supabase OAuth)");
 
     try {
-      const { data, error: supabaseError } =
-        await supabase.auth.signInWithOAuth({
-          provider: "google",
-          options: {
-            redirectTo: window.location.origin,
-          },
-        });
+      const { error: supabaseError } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          // Redirect back to the app root; Supabase will append the auth tokens
+          // as a URL hash which the client auto-detects on load.
+          redirectTo: window.location.origin + "/",
+          scopes: "openid email profile",
+        },
+      });
 
       if (supabaseError) {
         console.error(
-          "[AuthContext] Supabase Google login error:",
+          "[AuthContext] Google login error:",
           supabaseError.message,
         );
-        setError(supabaseError.message);
+        const msg =
+          supabaseError.message?.includes("provider") ||
+          supabaseError.message?.includes("not enabled")
+            ? "Google sign-in is not enabled yet. Please ask an admin to enable the Google provider in Supabase (it's free)."
+            : supabaseError.message;
+        setError(msg);
         setIsPending(false);
-        return { success: false, error: supabaseError.message };
+        return { success: false, error: msg };
       }
 
-      // OAuth will redirect, so we don't set user here
-      // The auth state change will be handled by onAuthStateChange
-      setIsPending(false);
+      // Browser is navigating away to Google's consent screen; the
+      // onAuthStateChange listener will resume the session on return.
       return { success: true };
     } catch (err: any) {
-      console.error("[AuthContext] Supabase Google login error:", err.message);
+      console.error("[AuthContext] Google login error:", err.message);
       setError(err.message || "Google login failed. Please try again.");
       setIsPending(false);
       return { success: false, error: err.message };
@@ -1144,6 +1158,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         registerWithEmail,
         loginWithUsername,
         registerWithUsername,
+        loginWithGoogle,
         logout,
         clearError,
         refreshAuth,

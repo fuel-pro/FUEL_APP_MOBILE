@@ -22,6 +22,31 @@ type LoginMode = "email" | "username" | "register";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// Official Google "G" logo (multi-color) as inline SVG so we don't need an
+// external asset and it renders crisply on the auth screens.
+function GoogleLogo({ className = "w-5 h-5" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 48 48" aria-hidden="true">
+      <path
+        fill="#EA4335"
+        d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"
+      />
+      <path
+        fill="#4285F4"
+        d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"
+      />
+      <path
+        fill="#34A853"
+        d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"
+      />
+    </svg>
+  );
+}
+
 // Persistent storage keys for form data
 const PERSISTED_EMAIL_KEY = "fuelpro_login_email";
 const PERSISTED_PASSWORD_KEY = "fuelpro_login_password";
@@ -55,6 +80,7 @@ export default function AuthLogin() {
     loginWithEmail,
     registerWithEmail,
     loginWithUsername,
+    loginWithGoogle,
     updateProfile,
     user,
     isPending,
@@ -89,6 +115,7 @@ export default function AuthLogin() {
   const [showCompanyFields, setShowCompanyFields] = useState(false);
   const [localError, setLocalError] = useState("");
   const [success, setSuccess] = useState("");
+  const [googleLoading, setGoogleLoading] = useState(false);
 
   // Stable callback for email change with persistence
   const handleEmailChange = useCallback(
@@ -246,6 +273,18 @@ export default function AuthLogin() {
 
   // Production mode - no demo credentials
 
+  const handleGoogleLogin = async () => {
+    setLocalError("");
+    setGoogleLoading(true);
+    const result = await loginWithGoogle();
+    if (!result.success) {
+      setGoogleLoading(false);
+      setLocalError(result.error || "Google sign-in failed. Please try again.");
+    }
+    // On success the browser redirects to Google; googleLoading stays true so
+    // the button shows a spinner until the navigation occurs.
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 flex overflow-hidden">
       {/* Animated background blobs */}
@@ -354,6 +393,35 @@ export default function AuthLogin() {
               <span>{success}</span>
             </div>
           )}
+
+          {/* Sign in with Google (Google Identity Services / OAuth 2.0) */}
+          <button
+            type="button"
+            onClick={handleGoogleLogin}
+            disabled={isPending || googleLoading}
+            className="w-full py-3 mb-4 bg-white hover:bg-gray-50 disabled:opacity-60 disabled:cursor-not-allowed text-gray-700 font-semibold rounded-xl transition-all shadow-lg flex items-center justify-center gap-3"
+          >
+            {googleLoading ? (
+              <>
+                <span className="w-5 h-5 border-2 border-gray-300 border-t-gray-700 rounded-full animate-spin" />
+                Connecting to Google...
+              </>
+            ) : (
+              <>
+                <GoogleLogo className="w-5 h-5" />
+                {mode === "register" ? "Sign up with Google" : "Sign in with Google"}
+              </>
+            )}
+          </button>
+
+          {/* Divider */}
+          <div className="flex items-center gap-3 mb-5">
+            <div className="flex-1 h-px bg-white/10" />
+            <span className="text-[11px] text-gray-500 uppercase tracking-wide">
+              or
+            </span>
+            <div className="flex-1 h-px bg-white/10" />
+          </div>
 
           {/* Mode Tabs */}
           {mode !== "register" && (
