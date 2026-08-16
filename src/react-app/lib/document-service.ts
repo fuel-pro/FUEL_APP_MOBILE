@@ -8,6 +8,13 @@
  */
 
 import { getSupabaseClient } from "@/supabase/client";
+import {
+  compressBlob,
+  compressedFilePath,
+  isCompressibleMimeType,
+  isCompressedPath,
+  decompressBlob,
+} from "@/react-app/lib/compression";
 
 export interface UserDocument {
   id: string;
@@ -78,15 +85,36 @@ export async function uploadDocument(
 
   // Build a unique storage path: documents/<uid>/<timestamp>-<filename>
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-  const filePath = `documents/${user.id}/${Date.now()}-${safeName}`;
+  const baseFilePath = `documents/${user.id}/${Date.now()}-${safeName}`;
+
+  // Compress text-based files (JSON, CSV, XML, TXT, SVG, etc.) with gzip to
+  // save Storage space. Already-compressed formats (images, PDF, video, audio,
+  // archives) are stored as-is — gzipping them wastes CPU. The stored path
+  // gets a `.gz` suffix so the download path can transparently decompress.
+  const shouldCompress = isCompressibleMimeType(file.type || "", file.name);
+  let uploadBlob: Blob = file;
+  let filePath = baseFilePath;
+  let storedSize = file.size;
+  let storedContentType = file.type || undefined;
+  if (shouldCompress) {
+    try {
+      uploadBlob = await compressBlob(file);
+      filePath = compressedFilePath(baseFilePath);
+      storedSize = uploadBlob.size;
+      storedContentType = "application/gzip";
+    } catch {
+      // Compression failed — fall back to the original file (never block upload).
+      uploadBlob = file;
+    }
+  }
 
   // Upload to Storage
   const { error: uploadErr } = await supabase.storage
     .from(BUCKET)
-    .upload(filePath, file, {
+    .upload(filePath, uploadBlob, {
       cacheControl: "3600",
       upsert: false,
-      contentType: file.type || undefined,
+      contentType: storedContentType,
     });
 
   if (uploadErr) {
@@ -102,7 +130,7 @@ export async function uploadDocument(
       file_name: file.name,
       file_path: filePath,
       file_type: getFileExtension(file.name),
-      file_size: file.size,
+      file_size: storedSize,
       mime_type: file.type || null,
       category: categorizeFile(file.name, file.type || ""),
       description: description || null,
@@ -173,6 +201,47 @@ export async function getDocumentUrl(
     return null;
   }
   return signed?.signedUrl || null;
+}
+
+/**
+ * Download a document and return an object URL ready for the browser. If the
+ * stored file was gzip-compressed on upload (path ends with `.gz`), the bytes
+ * are transparently decompressed first so the user receives the original file.
+ * Falls back to the raw public URL when the file is not compressed (so the
+ * browser can stream it directly without holding it in memory).
+ */
+export async function downloadDocument(
+  doc: UserDocument,
+): Promise<{ url: string; blob?: Blob } | null> {
+  // Non-compressed files: a direct public URL is best (browser streams it).
+  if (!isCompressedPath(doc.file_path)) {
+    const url = await getDocumentUrl(doc);
+    return url ? { url } : null;
+  }
+
+  // Compressed files: fetch the bytes and decompress in-browser.
+  const supabase = getSupabaseClient();
+  const bucket = doc.storage_bucket || BUCKET;
+  const { data, error } = await supabase.storage
+    .from(bucket)
+    .download(doc.file_path);
+  if (error || !data) {
+    // Fallback: try a signed URL fetch (e.g. if bucket isn't public).
+    const signed = await getDocumentUrl(doc);
+    if (!signed) return null;
+    try {
+      const res = await fetch(signed);
+      if (!res.ok) return null;
+      const blob = await res.blob();
+      const decompressed = await decompressBlob(blob);
+      return { url: URL.createObjectURL(decompressed), blob: decompressed };
+    } catch {
+      return null;
+    }
+  }
+  const blob = data as Blob;
+  const decompressed = await decompressBlob(blob);
+  return { url: URL.createObjectURL(decompressed), blob: decompressed };
 }
 
 export async function deleteDocument(

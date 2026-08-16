@@ -12,6 +12,11 @@
  */
 
 import { getSupabaseClient } from "@/supabase/client";
+import {
+  compressJson,
+  decompressJson,
+  isCompressedPayload,
+} from "@/react-app/lib/compression";
 
 const COLLECTION = "fuel_data";
 const CACHE_PREFIX = "fuelpro_cloud_";
@@ -77,6 +82,21 @@ function coerceJson<T = Json>(raw: unknown): T | null {
     }
   }
   return raw as T;
+}
+
+/**
+ * Read-side adapter: run coerceJson for legacy/double-encoded strings, then
+ * transparently decompress any gzip-compressed payload written by set().
+ * Returns null only when there is genuinely no value. Existing uncompressed
+ * rows pass through unchanged.
+ */
+function decodeRow<T = Json>(raw: unknown): T | null {
+  const coerced = coerceJson<T>(raw);
+  if (coerced == null) return null;
+  if (isCompressedPayload(coerced)) {
+    return decompressJson<T>(coerced);
+  }
+  return coerced;
 }
 
 /**
@@ -242,7 +262,7 @@ class CloudStorageService {
           .maybeSingle();
         if (error) throw error;
         if (data?.data != null) {
-          const value = coerceJson<T>(data.data);
+          const value = decodeRow<T>(data.data);
           if (value != null) {
             this.memoryCache.set(ck, { value, ts: Date.now() });
             writeCache(ck, value);
@@ -266,7 +286,7 @@ class CloudStorageService {
         .maybeSingle();
       if (usError) throw usError;
       if (usData?.data != null) {
-        const value = coerceJson<T>(usData.data);
+        const value = decodeRow<T>(usData.data);
         if (value != null) {
           this.memoryCache.set(ck, { value, ts: Date.now() });
           writeCache(ck, value);
@@ -288,7 +308,7 @@ class CloudStorageService {
           .eq("owner_id", ownerId)
           .maybeSingle();
         if (legacy?.data != null) {
-          const value = coerceJson<T>(legacy.data);
+          const value = decodeRow<T>(legacy.data);
           if (value != null) {
             this.memoryCache.set(ck, { value, ts: Date.now() });
             writeCache(ck, value);
@@ -327,13 +347,18 @@ class CloudStorageService {
 
     try {
       const client = getSupabaseClient();
+      // Compress the payload before writing to the DB to save storage space.
+      // compressJson returns the original value unchanged when it's too small
+      // to benefit, so tiny rows incur no overhead. The compressed form stays
+      // in the DB until the next read decompresses it (decodeRow in get()).
+      const stored = compressJson(value);
       const { error } = await client.from("app_kv").upsert(
         {
           id: rowId(key, ownerId, stationId),
           collection: COLLECTION,
           owner_id: ownerId,
           station_id: stationId ?? null,
-          data: value as unknown as Json,
+          data: stored as unknown as Json,
           updated_at: new Date().toISOString(),
         },
         { onConflict: "id" },
@@ -405,7 +430,7 @@ class CloudStorageService {
         const logicalKey = row.id.endsWith(suffix)
           ? row.id.slice(0, -suffix.length)
           : row.id;
-        out[logicalKey] = coerceJson<T>(row.data) as T;
+        out[logicalKey] = decodeRow<T>(row.data) as T;
       }
       return out;
     } catch {
@@ -468,7 +493,7 @@ class CloudStorageService {
               payload.eventType === "DELETE"
                 ? null
                 : ((payload.new as { data?: unknown })?.data ?? null);
-            const newData = rawNew == null ? null : coerceJson<T>(rawNew);
+            const newData = rawNew == null ? null : decodeRow<T>(rawNew);
             if (newData != null) {
               writeCache(ck, newData);
               this.memoryCache.set(ck, { value: newData, ts: Date.now() });
@@ -540,7 +565,7 @@ class CloudStorageService {
               }
             }
             const rawValue = (payload.new as { data?: unknown })?.data ?? null;
-            const value = rawValue == null ? null : coerceJson<T>(rawValue);
+            const value = rawValue == null ? null : decodeRow<T>(rawValue);
             if (value != null && id) {
               callback(id, value);
             }

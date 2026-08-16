@@ -22,6 +22,12 @@
 // CONFIGURATION
 // ═══════════════════════════════════════════════════════════════════
 
+import {
+  compressBlob,
+  compressedFilePath,
+  isCompressibleMimeType,
+} from "@/react-app/lib/compression";
+
 export interface CloudConfig {
   provider: "supabase" | "firebase" | "seafile" | "custom";
   apiEndpoint?: string;
@@ -234,9 +240,26 @@ export const SupabaseStorage = {
       const filename = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
       const fullPath = `uploads/${new Date().toISOString().split("T")[0]}/${filename}`;
 
+      // Gzip text-based files to save Storage; binary formats stored as-is.
+      const fileName = file instanceof File ? file.name : filename;
+      const mime = file instanceof File ? file.type : file.type;
+      const shouldCompress = isCompressibleMimeType(mime || "", fileName);
+      let uploadBlob: Blob = file;
+      let storedPath = fullPath;
+      let storedContentType: string | undefined = file.type;
+      if (shouldCompress) {
+        try {
+          uploadBlob = await compressBlob(file);
+          storedPath = compressedFilePath(fullPath);
+          storedContentType = "application/gzip";
+        } catch {
+          uploadBlob = file;
+        }
+      }
+
       const { data, error } = await supabase.storage
         .from("fuelpro-files")
-        .upload(fullPath, file, {
+        .upload(storedPath, uploadBlob, {
           cacheControl: "3600",
           upsert: false,
         });
@@ -245,14 +268,15 @@ export const SupabaseStorage = {
 
       const { data: urlData } = supabase.storage
         .from("fuelpro-files")
-        .getPublicUrl(fullPath);
+        .getPublicUrl(storedPath);
 
-      await storeFileMetadata(fullPath, {
+      await storeFileMetadata(storedPath, {
         name: file instanceof File ? file.name : "unknown",
-        size: file.size,
+        size: uploadBlob.size,
         type: file.type,
         uploadedAt: Date.now(),
         url: urlData.publicUrl,
+        compressed: shouldCompress,
       });
 
       return urlData.publicUrl;
