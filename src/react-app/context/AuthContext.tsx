@@ -681,7 +681,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       // Request an ID token (JWT credential) from Google.
+      // Strategy: try One Tap prompt first (instant for users with an active
+      // Google session). When One Tap cannot display (no session, blocked by
+      // browser, or headless), render a hidden GIS button and click it to open
+      // the account-chooser popup — this works WITHOUT a pre-existing Google
+      // session and only requires "Authorized JavaScript origins" (not redirect
+      // URIs), making it the most zero-config-friendly path. Only if the popup
+      // also fails do we fall back to the server-side OAuth redirect flow.
+      let credentialResolve: ((v: string | null) => void) | null = null;
       const credential: string | null = await new Promise((resolve) => {
+        credentialResolve = resolve;
         try {
           google.accounts.id.initialize({
             client_id: GOOGLE_CLIENT_ID,
@@ -689,25 +698,51 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               resolve(response?.credential || null);
             },
           });
-          // One Tap prompt; if it cannot show (e.g. no active session or
-          // blocked), fall back to the redirect-based OAuth flow below.
+          // One Tap prompt; if it cannot show, render a popup button.
           google.accounts.id.prompt((notification: any) => {
             if (
               notification?.isNotDisplayed() ||
               notification?.isSkippedMoment()
             ) {
-              resolve(null);
+              // One Tap unavailable — trigger the popup account chooser via a
+              // hidden, programmatically-clicked GIS button. renderButton opens
+              // the standard Google account picker even without a session.
+              try {
+                const holder = document.createElement("div");
+                holder.style.position = "fixed";
+                holder.style.left = "-9999px";
+                holder.style.top = "0";
+                document.body.appendChild(holder);
+                google.accounts.id.renderButton(holder, {
+                  type: "standard",
+                  size: "large",
+                });
+                const btn = holder.querySelector(
+                  "a, button, div[role=button]",
+                ) as HTMLElement | null;
+                if (btn) btn.click();
+                // Clean up the holder shortly after; the popup is independent.
+                setTimeout(() => holder.remove(), 4000);
+                // If no credential arrives within 60s (user closed popup /
+                // origin not authorized), fall back to the redirect flow.
+                setTimeout(() => resolve(null), 60_000);
+              } catch {
+                resolve(null);
+              }
             }
           });
         } catch {
           resolve(null);
         }
       });
+      credentialResolve = null;
 
       if (!credential) {
-        // Fall back to the server-side OAuth redirect flow.
+        // Final fallback: server-side OAuth redirect flow (requires the
+        // Supabase callback URL to be registered as an Authorized redirect URI
+        // in the Google Cloud Console OAuth client).
         console.info(
-          "[AuthContext] GIS One Tap unavailable; falling back to OAuth redirect",
+          "[AuthContext] GIS popup unavailable; falling back to OAuth redirect",
         );
         return loginWithGoogle();
       }

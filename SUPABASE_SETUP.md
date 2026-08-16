@@ -141,10 +141,20 @@ supabase db push
 1. Go to **Credentials** → **Create Credentials** → **OAuth client ID**
 2. Application type: **Web application**
 3. Name: FuelPro Web
-4. Authorized redirect URIs:
+4. **Authorized JavaScript origins** (required for the GIS token/popup flow — the primary, zero-config-friendly path):
    ```
-   https://ojsscjwatikixlpshmub.supabase.co/auth/v1/callback
+   https://fuel-app-mobile.pages.dev
+   https://fuel-app-mobile.vercel.app
    ```
+5. **Authorized redirect URIs** (required for the OAuth redirect fallback flow):
+   ```
+   https://ojjscjwatikixlpshmub.supabase.co/auth/v1/callback
+   ```
+
+> The app uses a hard-coded Google OAuth client ID
+> (`186024815542-fp0p5lrc6ensfg2i6o1vvf2jbnktan7f.apps.googleusercontent.com`)
+> by default, configurable via `VITE_GOOGLE_CLIENT_ID`. To use your own client,
+> create one above and set `VITE_GOOGLE_CLIENT_ID` in your environment.
 
 ### 3.3 Add to Supabase
 

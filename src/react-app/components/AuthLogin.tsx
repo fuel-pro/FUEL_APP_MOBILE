@@ -294,7 +294,16 @@ export default function AuthLogin() {
     const result = await loginWithGoogleToken();
     if (!result.success) {
       setGoogleLoading(false);
-      setLocalError(result.error || "Google sign-in failed. Please try again.");
+      const err = result.error || "Google sign-in failed. Please try again.";
+      // Surface a clear, actionable message when the Google OAuth client
+      // hasn't been configured yet (the most common cause of failure).
+      const actionable =
+        /redirect_uri_mismatch|redirect.*uri|doesn't comply|OAuth 2\.0 policy|origin|not enabled|provider not/i.test(
+          err,
+        )
+          ? "Google sign-in isn't fully configured yet. The app owner needs to add this site to the Google OAuth client's Authorized JavaScript origins and Authorized redirect URIs in the Google Cloud Console (a free, one-time setup). Email and Username sign-in still work."
+          : err;
+      setLocalError(actionable);
     }
     // On success via redirect fallback the browser navigates to Google; the
     // spinner stays until that happens. On success via token flow the
