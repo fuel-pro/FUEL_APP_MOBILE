@@ -1143,10 +1143,38 @@ function fuelReducer(state: FuelState, action: FuelAction): FuelState {
         incoming.stationData && Object.keys(incoming.stationData).length > 0
           ? incoming.stationData
           : state.stationData;
+      // PRICE STABILITY GUARD: fuel_types_config is the single source of truth
+      // for fuel prices. The compact blob also stores legacy scalar prices
+      // (pmsPrice/agoPrice/petrolPrice/dieselPrice) for backward compat, but
+      // these can be STALE (an older device's value) or ZERO (a freshly-created
+      // station that hasn't synced fuel_types_config yet). If we blindly apply
+      // them via the `...incoming` spread, prices flicker/revert on every
+      // refresh or cross-device load. Instead: keep the CURRENT price unless the
+      // incoming value is a POSITIVE number that DIFFERS from current (i.e. a
+      // genuine price update from another device). Never let a 0/undefined
+      // incoming value overwrite a positive current price.
+      const pickPrice = (
+        currentVal: number | undefined,
+        incomingVal: number | undefined,
+      ): number => {
+        const cur = typeof currentVal === "number" && currentVal > 0 ? currentVal : 0;
+        const inc =
+          typeof incomingVal === "number" && incomingVal > 0 ? incomingVal : 0;
+        // If incoming is 0/stale, keep current (preserves fuel_types_config price).
+        if (inc === 0) return cur;
+        // Both positive: the fuel_types_config effect will reconcile; prefer the
+        // incoming value only if it differs (a real remote edit).
+        return inc;
+      };
       return {
         ...state,
         ...incoming,
         companyData: mergeCompanyData(state.companyData, incoming.companyData),
+        // Stable prices — never revert to 0/stale values from the compact blob.
+        pmsPrice: pickPrice(state.pmsPrice, incoming.pmsPrice),
+        agoPrice: pickPrice(state.agoPrice, incoming.agoPrice),
+        petrolPrice: pickPrice(state.petrolPrice, incoming.petrolPrice),
+        dieselPrice: pickPrice(state.dieselPrice, incoming.dieselPrice),
         // Merge (not replace) the dynamic per-fuel-type stores so a stale
         // cloud blob can't wipe pumps/prices/tank-values the user just set.
         fuelPumpsByType: {
@@ -1378,6 +1406,11 @@ export function FuelProvider({ children }: { children: ReactNode }) {
   // Real-time echo guard: set before saveToCloud writes so the real-time
   // subscription knows to skip the echo of our own write.
   const skipRemoteUpdateRef = useRef(false);
+  // Tracks the timestamp of our most recent successful cloud save. Used for
+  // conflict resolution when two devices are open simultaneously: a real-time
+  // update from the other device is only applied if it is NEWER than our last
+  // save, preventing a stale remote write from clobbering our unsaved edits.
+  const lastLocalSaveTsRef = useRef(0);
 
   // ============================================================
   // FUEL TYPE / PRICE INTERLINK (FuelContext <-> fuel_types_config)
@@ -1632,6 +1665,12 @@ export function FuelProvider({ children }: { children: ReactNode }) {
       if (s.dataBackups?.length > 0)
         compactData.dataBackups = s.dataBackups.slice(-3); // Keep only last 3 backups in cloud
 
+      // Timestamp for conflict resolution: when two devices are open
+      // simultaneously, a real-time update from the other device should only
+      // overwrite local state if it is NEWER than our last save. This prevents
+      // a stale remote echo from clobbering unsaved local edits.
+      compactData.lastSavedAt = Date.now();
+
       // Persist to Supabase app_kv (cross-device). Keyed per-user + per-station
       // so each station has its own isolated FuelContext blob (companyData,
       // salesHistory, debtHistory, etc.). RLS-protected by owner_id. localStorage
@@ -1640,6 +1679,9 @@ export function FuelProvider({ children }: { children: ReactNode }) {
       // Set the echo-skip flag so the real-time subscription doesn't
       // re-dispatch our own write as if it came from another device.
       skipRemoteUpdateRef.current = true;
+      // Record our save timestamp so the real-time handler can reject stale
+      // remote updates that predate our latest local write.
+      lastLocalSaveTsRef.current = compactData.lastSavedAt;
       await cloudStorageService.set(
         cloudKey,
         compactData,
@@ -2078,6 +2120,27 @@ export function FuelProvider({ children }: { children: ReactNode }) {
         }
         if (value && Object.keys(value).length > 0) {
           const cd = value as any;
+          // CONFLICT RESOLUTION (two devices open simultaneously): only apply
+          // the remote update if it is NEWER than our last local save. If we
+          // have unsaved-or-just-saved local edits that are newer, keep them —
+          // applying a stale remote write would revert our changes and cause
+          // the "data keeps conflicting" flicker. The first load (lastLocalSaveTs
+          // === 0) always accepts the remote value.
+          const remoteTs = typeof cd.lastSavedAt === "number" ? cd.lastSavedAt : 0;
+          if (
+            lastLocalSaveTsRef.current > 0 &&
+            remoteTs > 0 &&
+            remoteTs < lastLocalSaveTsRef.current
+          ) {
+            console.log(
+              "[FuelContext] Skipping stale remote update (remote ts",
+              remoteTs,
+              "< local ts",
+              lastLocalSaveTsRef.current,
+              ")",
+            );
+            return;
+          }
           const hasData =
             cd.companyData?.name ||
             cd.companyData?.logo ||

@@ -480,8 +480,62 @@ function HomeContent() {
   //    setup is part of the "account sign up" flow, not a separate choice.
   //  - Invited team member (has active bindings): show FirstLoginChoice so they
   //    can access the shared station they were invited to.
+  //  - Returning user who ALREADY completed setup (fuelpro_setup_complete flag
+  //    is set) but stations haven't loaded yet (cloud sync in progress, or
+  //    offline): show a "syncing your station" loading state instead of forcing
+  //    the setup wizard again. This fixes the "offline keeps asking me to set
+  //    up again" bug — the user already set up on another device; we just need
+  //    to wait for (or retry) the cloud load instead of re-running the wizard.
   const hasActiveBindings = bindings.some((b) => b.active);
+  const setupAlreadyCompleted =
+    localStorage.getItem("fuelpro_setup_complete") === "true";
+
   if (stations.length === 0 || !currentStation) {
+    // Returning user: setup was completed before but stations are empty (cloud
+    // sync pending or offline). Do NOT re-run the wizard — show a loading
+    // state that retries the cloud sync. Only brand-new users (no setup flag)
+    // or users who explicitly clicked "create station" see the wizard.
+    if (
+      setupAlreadyCompleted &&
+      !showSetupWizard &&
+      !hasActiveBindings
+    ) {
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-slate-900 via-indigo-900 to-slate-900 flex items-center justify-center">
+          <div className="text-center max-w-md px-4">
+            <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-amber-400 to-amber-600 rounded-2xl flex items-center justify-center animate-pulse">
+              <span className="text-2xl font-bold text-white">F</span>
+            </div>
+            <h2 className="text-xl font-bold text-white font-serif">
+              FuelPro
+            </h2>
+            <p className="text-gray-300 text-sm mt-2">
+              Loading your station data…
+            </p>
+            <p className="text-gray-500 text-xs mt-1">
+              If you're offline, your data will sync automatically when you're
+              back online.
+            </p>
+            <div className="mt-4 w-48 h-1 bg-white/10 rounded-full mx-auto overflow-hidden">
+              <div
+                className="h-full bg-amber-500 rounded-full animate-pulse"
+                style={{ width: "60%" }}
+              />
+            </div>
+            <button
+              onClick={() => {
+                // Allow the user to manually retry if they've been stuck.
+                localStorage.removeItem("fuelpro_setup_complete");
+                setShowSetupWizard(true);
+              }}
+              className="mt-6 px-4 py-2 text-xs text-gray-400 hover:text-gray-200 underline"
+            >
+              Station not found? Set up a new one
+            </button>
+          </div>
+        </div>
+      );
+    }
     if (showSetupWizard || !hasActiveBindings) {
       return (
         <SetupWizard

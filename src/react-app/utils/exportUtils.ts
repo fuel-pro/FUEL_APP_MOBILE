@@ -602,7 +602,95 @@ export async function exportSalesPDF(state: any) {
       15,
       y,
     );
+    y += 12;
   }
+
+  // Fuel Tank Inventory — one entry per configured fuel type (previously
+  // missing from the PDF). Shows the opening/closing tank levels for each fuel.
+  if (y > 250) {
+    doc.addPage();
+    y = 20;
+  }
+  doc.setFont("helvetica", "bold");
+  doc.text("Fuel Tank Inventory:", 15, y);
+  y += 8;
+  doc.setFont("helvetica", "normal");
+  for (const ft of fuelTypes) {
+    const label = getFuelLabel(ft);
+    const code = getFuelCode(ft);
+    const tv = getTankForType(state, ft);
+    doc.text(
+      `${label} (${code}): Opening ${formatNumber(tv.opening)} L, Closing ${formatNumber(tv.closing)} L`,
+      20,
+      y,
+    );
+    y += 7;
+  }
+  y += 8;
+
+  // Fuel Pricing per type (previously missing from the PDF).
+  doc.setFont("helvetica", "bold");
+  doc.text("Fuel Pricing:", 15, y);
+  y += 8;
+  doc.setFont("helvetica", "normal");
+  for (const ft of fuelTypes) {
+    const label = getFuelLabel(ft);
+    const code = getFuelCode(ft);
+    const price = getPriceForType(state, ft);
+    doc.text(
+      `${label} (${code}): ${currencySymbol} ${formatNumber(price)}/L`,
+      20,
+      y,
+    );
+    y += 7;
+  }
+  y += 8;
+
+  // Daily Expenses — each expense item (previously missing from the PDF).
+  if (state.expenses && state.expenses.length > 0) {
+    if (y > 250) {
+      doc.addPage();
+      y = 20;
+    }
+    doc.setFont("helvetica", "bold");
+    doc.text("Daily Expenses:", 15, y);
+    y += 8;
+    doc.setFont("helvetica", "normal");
+    const expHeaders = ["Description", `Amount (${currencySymbol})`];
+    const expData = state.expenses.map((e: any) => [
+      e.desc || e.description || "—",
+      formatNumber(e.amount || 0),
+    ]);
+    autoTable(doc, {
+      startY: y,
+      head: [expHeaders],
+      body: expData,
+      theme: "striped",
+      headStyles: { fillColor: [180, 53, 53] },
+    });
+    y = (doc as any).lastAutoTable.finalY + 10;
+    const totalExp =
+      state.summary?.totalExpenses ??
+      state.expenses.reduce(
+        (sum: number, e: any) => sum + (e.amount || 0),
+        0,
+      );
+    doc.setFont("helvetica", "bold");
+    doc.text(
+      `Total Expenses: ${currencySymbol} ${formatNumber(totalExp, 2)}`,
+      15,
+      y,
+    );
+    y += 12;
+  }
+
+  // Till/Mobile Payment (previously missing from the PDF).
+  doc.setFont("helvetica", "bold");
+  doc.text(
+    `Till/Mobile Payment: ${currencySymbol} ${formatNumber(state.tillPayment || 0, 2)}`,
+    15,
+    y,
+  );
 
   doc.save("Fuel_Sales_Report.pdf");
 }
@@ -656,9 +744,63 @@ export function exportSalesExcel(state: any) {
     }
     summaryRows.push(["Total Revenue", state.summary.totalRevenue ?? 0]);
     summaryRows.push(["Cash In Hand", state.summary.cashInHand ?? 0]);
+    summaryRows.push(["Total Expenses", state.summary.totalExpenses ?? 0]);
     summaryRows.push(["Net Income", state.summary.netIncome ?? 0]);
+    summaryRows.push([]);
+    summaryRows.push(["Till/Mobile Payment", state.tillPayment ?? 0]);
     const summaryWS = XLSX.utils.aoa_to_sheet(summaryRows);
     XLSX.utils.book_append_sheet(wb, summaryWS, "Summary");
+  }
+
+  // Fuel Tank Inventory sheet — one row per configured fuel type (previously
+  // missing from the Excel export).
+  const tankRows: (string | number)[][] = [
+    ["Fuel Tank Inventory"],
+    ["Fuel Type", "Code", "Opening (L)", "Closing (L)"],
+  ];
+  for (const ft of fuelTypes) {
+    const label = getFuelLabel(ft);
+    const code = getFuelCode(ft);
+    const tv = getTankForType(state, ft);
+    tankRows.push([label, code, tv.opening, tv.closing]);
+  }
+  const tankWS = XLSX.utils.aoa_to_sheet(tankRows);
+  XLSX.utils.book_append_sheet(wb, tankWS, "Tank Inventory");
+
+  // Fuel Pricing sheet (previously missing from Excel).
+  const priceRows: (string | number)[][] = [
+    ["Fuel Pricing"],
+    ["Fuel Type", "Code", `Price (${currencySymbol}/L)`],
+  ];
+  for (const ft of fuelTypes) {
+    const label = getFuelLabel(ft);
+    const code = getFuelCode(ft);
+    const price = getPriceForType(state, ft);
+    priceRows.push([label, code, price]);
+  }
+  const priceWS = XLSX.utils.aoa_to_sheet(priceRows);
+  XLSX.utils.book_append_sheet(wb, priceWS, "Fuel Pricing");
+
+  // Daily Expenses sheet — each expense item (previously missing from Excel).
+  if (state.expenses && state.expenses.length > 0) {
+    const expRows: (string | number)[][] = [
+      ["Daily Expenses"],
+      ["Description", `Amount (${currencySymbol})`],
+      ...state.expenses.map((e: any) => [
+        e.desc || e.description || "—",
+        e.amount || 0,
+      ]),
+      [],
+      [
+        "Total Expenses",
+        state.expenses.reduce(
+          (sum: number, e: any) => sum + (e.amount || 0),
+          0,
+        ),
+      ],
+    ];
+    const expWS = XLSX.utils.aoa_to_sheet(expRows);
+    XLSX.utils.book_append_sheet(wb, expWS, "Expenses");
   }
 
   // Add footer info sheet

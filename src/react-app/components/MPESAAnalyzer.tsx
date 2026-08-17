@@ -34,6 +34,7 @@ import {
 import {
   addBatchTransactions,
   getTransactions,
+  clearTransactions,
   subscribeToTransactions,
   switchToTab,
   navigateToTab,
@@ -877,6 +878,32 @@ export default function MPESAAnalyzer() {
       alert(
         `Could not save ${records.length} transactions to the shared store (they will NOT sync to other devices).\n\nError: ${msg}\n\nYou can re-run the extraction to retry.`,
       );
+    }
+  };
+
+  /**
+   * Clear ALL extracted inflow data from both the local working state AND the
+   * shared cloud store. Lets the user remove old/no-longer-needed records to
+   * save space and keep the analyzer focused on current data.
+   */
+  const handleClearAllData = async () => {
+    if (
+      !confirm(
+        "Clear ALL M-PESA analyzer data? This removes every extracted inflow from this session AND the shared cloud store (also clears the Live Transaction feed). This cannot be undone.",
+      )
+    )
+      return;
+    setInflowData([]);
+    setRangeFiltered(null);
+    setStats(null);
+    setSavedToShared(null);
+    setPastedText("");
+    setPdfFiles([]);
+    setProgress([]);
+    try {
+      await clearTransactions(stationId);
+    } catch (err) {
+      console.error("Failed to clear shared store:", err);
     }
   };
 
@@ -1730,6 +1757,15 @@ export default function MPESAAnalyzer() {
               >
                 <Download size={14} /> CSV
               </button>
+              {inflowData.length > 0 && (
+                <button
+                  onClick={handleClearAllData}
+                  className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium flex items-center gap-2"
+                  title="Remove all extracted inflow data (local + cloud) to save space and keep the analyzer focused on current data"
+                >
+                  <Trash2 size={14} /> Clear All
+                </button>
+              )}
             </div>
           </div>
 

@@ -13,6 +13,7 @@ import {
 import { currencySymbolFor, getVATRate } from "@/react-app/config/pricing";
 import { getRegionalConfig } from "@/react-app/config/regions";
 import { supabase, supabaseUrl, supabaseAnonKey } from "@/supabase/client";
+import { cloudStorageService } from "@/react-app/lib/cloud-storage-service";
 
 // Lazy API base URL getter using dynamic import to avoid circular deps
 let _apiBase: string | null = null;
@@ -1325,6 +1326,33 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
 
     return () => {
       supabase.removeChannel(channel);
+    };
+  }, [syncFromBackend]);
+
+  // OFFLINE → ONLINE RETRY: when the browser regains connectivity (or the tab
+  // becomes visible again), re-sync stations from cloud. This handles the case
+  // where a user opened the app offline (stations didn't load from cloud), then
+  // connectivity is restored — the station list must appear without a manual
+  // reload. Also flushes any offline-queued writes via cloudStorageService.
+  useEffect(() => {
+    const handleOnline = () => {
+      // Small delay to let the Supabase auth session re-establish.
+      setTimeout(() => {
+        syncFromBackend().catch(() => {});
+        cloudStorageService.flushOfflineQueue().catch(() => {});
+      }, 1500);
+    };
+    const handleVisible = () => {
+      if (document.visibilityState === "visible") {
+        syncFromBackend().catch(() => {});
+        cloudStorageService.flushOfflineQueue().catch(() => {});
+      }
+    };
+    window.addEventListener("online", handleOnline);
+    document.addEventListener("visibilitychange", handleVisible);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      document.removeEventListener("visibilitychange", handleVisible);
     };
   }, [syncFromBackend]);
 

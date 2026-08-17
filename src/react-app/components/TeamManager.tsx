@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Users,
   Link2,
@@ -41,6 +41,13 @@ import { useStations } from "@/react-app/context/StationContext";
 import { useFuel } from "@/react-app/context/FuelContext";
 import SubTabBar from "@/react-app/components/SubTabBar";
 import ShiftManagement from "@/react-app/components/ShiftManagement";
+import {
+  getAccessCodes,
+  createAccessCode,
+  deleteAccessCode,
+  toggleAccessCode,
+  type StationAccessCode,
+} from "@/react-app/lib/station-access-code-service";
 
 const BASE_ROLES: BaseUserRole[] = ["manager", "staff", "auditor"];
 
@@ -261,9 +268,9 @@ export default function TeamManager() {
   const [permEditorRole, setPermEditorRole] = useState<string | null>(null);
   // Inner sub-tab: "Team" (this component) vs "Shifts" (the formerly-standalone
   // ShiftManagement module, now hosted here).
-  const [activeView, setActiveView] = useState<"team" | "shifts" | "roles">(
-    "team",
-  );
+  const [activeView, setActiveView] = useState<
+    "team" | "shifts" | "roles" | "access"
+  >("team");
 
   // Tab ID to human-readable label mapping
   const tabIdToLabel: Record<string, string> = {
@@ -488,10 +495,13 @@ export default function TeamManager() {
         tabs={[
           { id: "team", label: "Team Access", icon: Users },
           { id: "roles", label: "Roles & Permissions", icon: KeyRound },
+          { id: "access", label: "Access Codes", icon: KeyRound },
           { id: "shifts", label: "Shifts", icon: Calendar },
         ]}
         active={activeView}
-        onChange={(id) => setActiveView(id as "team" | "shifts" | "roles")}
+        onChange={(id) =>
+          setActiveView(id as "team" | "shifts" | "roles" | "access")
+        }
       />
 
       {activeView === "shifts" ? (
@@ -525,6 +535,12 @@ export default function TeamManager() {
           setNewRoleLabel={setNewRoleLabel}
           newRoleBase={newRoleBase}
           setNewRoleBase={setNewRoleBase}
+        />
+      ) : activeView === "access" ? (
+        <AccessCodesView
+          stationId={currentStation?.id}
+          stationOwnerId={user?.authId}
+          stationName={currentStation?.name}
         />
       ) : (
         <>
@@ -1544,6 +1560,280 @@ function RolesAndPermissionsView(props: RolesAndPermissionsViewProps) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// ============================================================
+// AccessCodesView — lets the station OWNER create username/password
+// access codes so team members can access station data WITHOUT signing
+// up. The owner shares a link (/#/station-access?owner=<uid>&station=<sid>)
+// and the member enters the username + password.
+// ============================================================
+function AccessCodesView({
+  stationId,
+  stationOwnerId,
+}: {
+  stationId?: string;
+  stationOwnerId?: string;
+  stationName?: string;
+}) {
+  const [codes, setCodes] = useState<StationAccessCode[]>([]);
+  const [showForm, setShowForm] = useState(false);
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [memberName, setMemberName] = useState("");
+  const [memberRole, setMemberRole] = useState("staff");
+  const [readOnly, setReadOnly] = useState(true);
+  const [error, setError] = useState("");
+  const [toast, setToast] = useState("");
+
+  const load = useCallback(async () => {
+    try {
+      const data = await getAccessCodes(stationId);
+      setCodes(data);
+    } catch (err) {
+      console.error("Failed to load access codes:", err);
+    }
+  }, [stationId]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const handleCreate = async () => {
+    setError("");
+    if (!username.trim() || !password.trim() || !memberName.trim()) {
+      setError("Username, password, and member name are required.");
+      return;
+    }
+    try {
+      await createAccessCode(
+        {
+          username,
+          password,
+          memberName,
+          memberRole,
+          allowedTabs: [],
+          readOnly,
+        },
+        stationId,
+      );
+      setToast(`Access code created for ${memberName}`);
+      setTimeout(() => setToast(""), 3000);
+      setUsername("");
+      setPassword("");
+      setMemberName("");
+      setMemberRole("staff");
+      setReadOnly(true);
+      setShowForm(false);
+      load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create code.");
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("Delete this access code? The member will no longer be able to log in.")) return;
+    await deleteAccessCode(id, stationId);
+    load();
+    setToast("Access code deleted");
+    setTimeout(() => setToast(""), 3000);
+  };
+
+  const handleToggle = async (id: string) => {
+    await toggleAccessCode(id, stationId);
+    load();
+  };
+
+  const accessLink = stationOwnerId
+    ? `${window.location.origin}/#/station-access?owner=${stationOwnerId}&station=${stationId || ""}`
+    : "";
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800 p-4">
+        <h3 className="font-bold text-blue-900 dark:text-blue-200 mb-2">
+          Quick Access Codes (No Signup Needed)
+        </h3>
+        <p className="text-sm text-blue-700 dark:text-blue-300 mb-3">
+          Create a username + password for a team member. Share the access link
+          below — the member enters the credentials to view station data
+          (read-only by default) without creating an account.
+        </p>
+        {accessLink && (
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              readOnly
+              value={accessLink}
+              onClick={(e) => (e.target as HTMLInputElement).select()}
+              className="flex-1 px-3 py-2 bg-white dark:bg-gray-800 border border-blue-300 dark:border-blue-700 rounded-lg text-xs dark:text-white font-mono"
+            />
+            <button
+              onClick={() => {
+                navigator.clipboard?.writeText(accessLink);
+                setToast("Link copied to clipboard");
+                setTimeout(() => setToast(""), 2000);
+              }}
+              className="px-3 py-2 bg-blue-600 text-white rounded-lg text-xs font-medium"
+            >
+              Copy Link
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div className="flex justify-between items-center">
+        <h3 className="font-semibold dark:text-white">Access Codes</h3>
+        <button
+          onClick={() => setShowForm(!showForm)}
+          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium flex items-center gap-2"
+        >
+          <Plus size={14} /> New Access Code
+        </button>
+      </div>
+
+      {showForm && (
+        <div className="p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-gray-500">Username *</label>
+              <input
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+                placeholder="e.g. cashier1"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500">Password *</label>
+              <input
+                type="text"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+                placeholder="min 4 characters"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500">Member Name *</label>
+              <input
+                type="text"
+                value={memberName}
+                onChange={(e) => setMemberName(e.target.value)}
+                className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+                placeholder="e.g. John Mwangi"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500">Role</label>
+              <select
+                value={memberRole}
+                onChange={(e) => setMemberRole(e.target.value)}
+                className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+              >
+                <option value="manager">Manager</option>
+                <option value="staff">Staff</option>
+                <option value="auditor">Auditor</option>
+                <option value="cashier">Cashier</option>
+                <option value="attendant">Attendant</option>
+              </select>
+            </div>
+          </div>
+          <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={readOnly}
+              onChange={(e) => setReadOnly(e.target.checked)}
+              className="rounded"
+            />
+            Read-only access (recommended — member can view but not edit)
+          </label>
+          {error && <p className="text-sm text-red-500">{error}</p>}
+          <div className="flex gap-2 justify-end">
+            <button
+              onClick={() => setShowForm(false)}
+              className="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded-lg text-sm dark:text-white"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleCreate}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium"
+            >
+              Create
+            </button>
+          </div>
+        </div>
+      )}
+
+      {codes.length === 0 ? (
+        <p className="text-sm text-gray-400 text-center py-6">
+          No access codes yet. Create one to let team members log in without
+          signing up.
+        </p>
+      ) : (
+        <div className="space-y-2">
+          {codes.map((c) => (
+            <div
+              key={c.id}
+              className={`flex items-center justify-between p-3 rounded-lg border ${c.enabled ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800" : "bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700"}`}
+            >
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-sm dark:text-white">
+                    {c.memberName}
+                  </span>
+                  <span className="text-xs text-gray-400">({c.username})</span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600">
+                    {c.memberRole}
+                  </span>
+                  {c.readOnly && (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-500/10 text-gray-500">
+                      Read-Only
+                    </span>
+                  )}
+                  <span
+                    className={`text-[10px] px-2 py-0.5 rounded-full ${c.enabled ? "bg-green-500/10 text-green-600" : "bg-red-500/10 text-red-600"}`}
+                  >
+                    {c.enabled ? "Active" : "Disabled"}
+                  </span>
+                </div>
+                <div className="text-[11px] text-gray-400 mt-1">
+                  Accessed {c.accessCount} time{c.accessCount !== 1 ? "s" : ""}
+                  {c.lastAccessedAt
+                    ? ` · Last: ${new Date(c.lastAccessedAt).toLocaleString()}`
+                    : ""}
+                </div>
+              </div>
+              <div className="flex gap-1">
+                <button
+                  onClick={() => handleToggle(c.id)}
+                  className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg"
+                  title={c.enabled ? "Disable" : "Enable"}
+                >
+                  <KeyRound size={14} className={c.enabled ? "text-green-600" : "text-gray-400"} />
+                </button>
+                <button
+                  onClick={() => handleDelete(c.id)}
+                  className="p-1.5 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-lg"
+                  title="Delete"
+                >
+                  <Trash2 size={14} className="text-red-500" />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {toast && (
+        <div className="fixed bottom-6 right-6 bg-gray-900 text-white px-4 py-3 rounded-xl shadow-2xl text-sm font-medium z-50">
+          {toast}
+        </div>
+      )}
     </div>
   );
 }

@@ -19,6 +19,7 @@ import {
   ReactNode,
 } from "react";
 import InviteAccept from "@/react-app/pages/InviteAccept";
+import StationAccess from "@/react-app/pages/StationAccess";
 import FounderAccess from "@/react-app/pages/FounderAccess";
 import OfflineIndicator from "@/react-app/components/OfflineIndicator";
 import { TRPCProvider } from "@/providers/trpc";
@@ -286,6 +287,12 @@ export default function App() {
                       <Route
                         path="/join/:inviteId"
                         element={<InviteAccept />}
+                      />
+
+                      {/* Station access (team member login w/o signup) - public */}
+                      <Route
+                        path="/station-access"
+                        element={<StationAccess />}
                       />
 
                       {/* Main app - requires auth, shows loader while checking */}

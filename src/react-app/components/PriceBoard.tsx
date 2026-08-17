@@ -476,6 +476,14 @@ export default function PriceBoard() {
           fuelType: formData.fuelType,
           newPrice: formData.price!,
         });
+
+        // AUTOMATICALLY sync the price to Fuel Type Manager (fuel_types_config)
+        // so the two tabs stay fully consistent. Previously this was a manual
+        // "Set as station price" button — the user wants changes in Price Board
+        // to reflect in Fuel Types (and vice versa) automatically.
+        if (formData.price && formData.price > 0) {
+          syncPriceToFuelTypes(formData.fuelType, formData.price);
+        }
       }
       showNotification("Price updated");
     } else {
@@ -495,6 +503,11 @@ export default function PriceBoard() {
         fuelType: formData.fuelType,
         newPrice: formData.price!,
       });
+
+      // Auto-sync to Fuel Type Manager for consistency.
+      if (formData.price && formData.price > 0) {
+        syncPriceToFuelTypes(formData.fuelType, formData.price);
+      }
       showNotification("Price entry added");
     }
     setShowForm(false);
@@ -888,7 +901,10 @@ export default function PriceBoard() {
                       onChange={(e) =>
                         setFormData({
                           ...formData,
-                          price: Number(e.target.value),
+                          price:
+                            e.target.value === ""
+                              ? 0
+                              : Number(e.target.value),
                         })
                       }
                       className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
