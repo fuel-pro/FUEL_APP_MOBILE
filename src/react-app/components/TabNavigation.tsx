@@ -92,6 +92,8 @@ const TabNavigation: React.FC<TabNavigationProps> = ({
     "sales-invoices": <FileText size={16} />,
     purchases: <ShoppingCart size={16} />,
     terminal: <Store size={16} />,
+    automation: <Activity size={16} />,
+    "price-finder": <Globe size={16} />,
   };
 
   // Check scroll position for arrow visibility
