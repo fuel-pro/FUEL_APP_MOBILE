@@ -17,6 +17,7 @@ import {
   Archive,
   Star,
   Download,
+  Settings as SettingsIcon,
 } from "lucide-react";
 import { useFuel } from "@/react-app/context/FuelContext";
 import { useAuth } from "@/react-app/context/AuthContext";
@@ -146,7 +147,7 @@ export default function Communication() {
   // render shows data instantly (no blank flash while the async cloud get
   // resolves).
   const [activeTab, setActiveTab] = useState<
-    "contacts" | "messages" | "templates"
+    "contacts" | "messages" | "templates" | "settings"
   >("contacts");
   const [contacts, setContacts] = useState<Contact[]>(() => {
     const cached = cloudStorageService.getCached<unknown[]>(
@@ -1130,12 +1131,24 @@ export default function Communication() {
           <Archive size={20} className="inline mr-2" />
           Templates ({templates.length})
         </button>
+        <button
+          onClick={() => setActiveTab("settings")}
+          className={`px-6 py-3 font-medium ${
+            activeTab === "settings"
+              ? "border-b-2 border-blue-600 text-blue-600"
+              : "text-gray-600 dark:text-gray-400"
+          }`}
+        >
+          <SettingsIcon size={20} className="inline mr-2" />
+          Settings
+        </button>
       </div>
 
       {/* Tab Content */}
       {activeTab === "contacts" && renderContactsTab()}
       {activeTab === "messages" && renderMessagesTab()}
       {activeTab === "templates" && renderTemplatesTab()}
+      {activeTab === "settings" && <CommSettingsTab stationId={stationId} />}
 
       {/* Contact Modal */}
       {showContactModal && (
@@ -1439,6 +1452,342 @@ export default function Communication() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// CommSettingsTab — per-station communication integration settings.
+// Lets each station configure their own SMS gateway, email, WhatsApp
+// Business API, and default sender info so the Communication tab uses
+// the station's own channels (not a global default).
+// ============================================================
+interface CommIntegrationConfig {
+  stationName: string;
+  senderPhone: string;
+  senderEmail: string;
+  // SMS gateway
+  smsEnabled: boolean;
+  smsProvider: string; // "twilio" | "africa-talking" | "custom"
+  smsApiKey: string;
+  smsSender: string; // sender ID / shortcode
+  // Email
+  emailEnabled: boolean;
+  emailProvider: string; // "smtp" | "sendgrid" | "mailgun"
+  smtpHost: string;
+  smtpPort: string;
+  smtpUser: string;
+  smtpPassword: string;
+  // WhatsApp Business
+  whatsappEnabled: boolean;
+  whatsappPhone: string; // WhatsApp Business number
+  whatsappApiUrl: string;
+  whatsappToken: string;
+}
+
+const DEFAULT_COMM_CONFIG: CommIntegrationConfig = {
+  stationName: "",
+  senderPhone: "",
+  senderEmail: "",
+  smsEnabled: false,
+  smsProvider: "africa-talking",
+  smsApiKey: "",
+  smsSender: "",
+  emailEnabled: false,
+  emailProvider: "smtp",
+  smtpHost: "",
+  smtpPort: "587",
+  smtpUser: "",
+  smtpPassword: "",
+  whatsappEnabled: false,
+  whatsappPhone: "",
+  whatsappApiUrl: "",
+  whatsappToken: "",
+};
+
+function CommSettingsTab({ stationId }: { stationId?: string }) {
+  const [config, setConfig] = useState<CommIntegrationConfig>(
+    () =>
+      cloudStorageService.getCached<CommIntegrationConfig>(
+        "comm_integration_config",
+        stationId,
+      ) || DEFAULT_COMM_CONFIG,
+  );
+  const [saving, setSaving] = useState(false);
+  const [toast, setToast] = useState("");
+
+  useEffect(() => {
+    cloudStorageService
+      .get<CommIntegrationConfig>("comm_integration_config", stationId)
+      .then((data) => {
+        if (data) setConfig({ ...DEFAULT_COMM_CONFIG, ...data });
+      })
+      .catch((err) => console.error("Failed to load comm config:", err));
+  }, [stationId]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await cloudStorageService.set(
+        "comm_integration_config",
+        config,
+        stationId,
+      );
+      setToast("Communication settings saved (synced to cloud)");
+      setTimeout(() => setToast(""), 3000);
+    } catch (err) {
+      console.error("Failed to save comm config:", err);
+      setToast("Failed to save settings");
+      setTimeout(() => setToast(""), 3000);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const update = (field: keyof CommIntegrationConfig, value: string | boolean) =>
+    setConfig((prev) => ({ ...prev, [field]: value }));
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800 p-4">
+        <h3 className="font-bold text-blue-900 dark:text-blue-200 mb-1">
+          Station Communication Settings
+        </h3>
+        <p className="text-sm text-blue-700 dark:text-blue-300">
+          Configure your station's own communication channels. These settings
+          are used by the Contacts, Messages, and Templates tabs to send via
+          your gateway (SMS, email, WhatsApp Business). Saved to the cloud so
+          all devices at this station share the same config.
+        </p>
+      </div>
+
+      {/* Default Sender Info */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
+        <h4 className="font-semibold dark:text-white mb-3">Default Sender Info</h4>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div>
+            <label className="text-xs text-gray-500">Station Name</label>
+            <input
+              type="text"
+              value={config.stationName}
+              onChange={(e) => update("stationName", e.target.value)}
+              className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+              placeholder="e.g. Acme Fuel Station"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-gray-500">Sender Phone</label>
+            <input
+              type="text"
+              value={config.senderPhone}
+              onChange={(e) => update("senderPhone", e.target.value)}
+              className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+              placeholder="e.g. +254700000000"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-gray-500">Sender Email</label>
+            <input
+              type="email"
+              value={config.senderEmail}
+              onChange={(e) => update("senderEmail", e.target.value)}
+              className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+              placeholder="e.g. info@acme.com"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* SMS Gateway */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
+        <div className="flex items-center justify-between mb-3">
+          <h4 className="font-semibold dark:text-white flex items-center gap-2">
+            <Phone size={16} /> SMS Gateway
+          </h4>
+          <label className="flex items-center gap-2 text-sm cursor-pointer">
+            <input
+              type="checkbox"
+              checked={config.smsEnabled}
+              onChange={(e) => update("smsEnabled", e.target.checked)}
+              className="rounded"
+            />
+            Enabled
+          </label>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div>
+            <label className="text-xs text-gray-500">Provider</label>
+            <select
+              value={config.smsProvider}
+              onChange={(e) => update("smsProvider", e.target.value)}
+              className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+            >
+              <option value="africa-talking">Africa's Talking</option>
+              <option value="twilio">Twilio</option>
+              <option value="custom">Custom HTTP API</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-gray-500">API Key</label>
+            <input
+              type="password"
+              value={config.smsApiKey}
+              onChange={(e) => update("smsApiKey", e.target.value)}
+              className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+              placeholder="Your gateway API key"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-gray-500">Sender ID / Shortcode</label>
+            <input
+              type="text"
+              value={config.smsSender}
+              onChange={(e) => update("smsSender", e.target.value)}
+              className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+              placeholder="e.g. ACME"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Email */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
+        <div className="flex items-center justify-between mb-3">
+          <h4 className="font-semibold dark:text-white flex items-center gap-2">
+            <Mail size={16} /> Email
+          </h4>
+          <label className="flex items-center gap-2 text-sm cursor-pointer">
+            <input
+              type="checkbox"
+              checked={config.emailEnabled}
+              onChange={(e) => update("emailEnabled", e.target.checked)}
+              className="rounded"
+            />
+            Enabled
+          </label>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-gray-500">Provider</label>
+            <select
+              value={config.emailProvider}
+              onChange={(e) => update("emailProvider", e.target.value)}
+              className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+            >
+              <option value="smtp">SMTP</option>
+              <option value="sendgrid">SendGrid</option>
+              <option value="mailgun">Mailgun</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-gray-500">SMTP Host</label>
+            <input
+              type="text"
+              value={config.smtpHost}
+              onChange={(e) => update("smtpHost", e.target.value)}
+              className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+              placeholder="smtp.gmail.com"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-gray-500">SMTP Port</label>
+            <input
+              type="text"
+              value={config.smtpPort}
+              onChange={(e) => update("smtpPort", e.target.value)}
+              className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+              placeholder="587"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-gray-500">SMTP User</label>
+            <input
+              type="text"
+              value={config.smtpUser}
+              onChange={(e) => update("smtpUser", e.target.value)}
+              className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+              placeholder="user@gmail.com"
+            />
+          </div>
+          <div className="md:col-span-2">
+            <label className="text-xs text-gray-500">SMTP Password</label>
+            <input
+              type="password"
+              value={config.smtpPassword}
+              onChange={(e) => update("smtpPassword", e.target.value)}
+              className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+              placeholder="App password"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* WhatsApp Business */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
+        <div className="flex items-center justify-between mb-3">
+          <h4 className="font-semibold dark:text-white flex items-center gap-2">
+            <MessageSquare size={16} /> WhatsApp Business
+          </h4>
+          <label className="flex items-center gap-2 text-sm cursor-pointer">
+            <input
+              type="checkbox"
+              checked={config.whatsappEnabled}
+              onChange={(e) => update("whatsappEnabled", e.target.checked)}
+              className="rounded"
+            />
+            Enabled
+          </label>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div>
+            <label className="text-xs text-gray-500">Business Number</label>
+            <input
+              type="text"
+              value={config.whatsappPhone}
+              onChange={(e) => update("whatsappPhone", e.target.value)}
+              className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+              placeholder="e.g. 254700000000"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-gray-500">API URL</label>
+            <input
+              type="text"
+              value={config.whatsappApiUrl}
+              onChange={(e) => update("whatsappApiUrl", e.target.value)}
+              className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+              placeholder="https://graph.facebook.com/v17.0/..."
+            />
+          </div>
+          <div>
+            <label className="text-xs text-gray-500">Access Token</label>
+            <input
+              type="password"
+              value={config.whatsappToken}
+              onChange={(e) => update("whatsappToken", e.target.value)}
+              className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+              placeholder="WhatsApp Cloud API token"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="flex justify-end">
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium flex items-center gap-2 disabled:opacity-50"
+        >
+          <Download size={16} />
+          {saving ? "Saving…" : "Save Settings"}
+        </button>
+      </div>
+
+      {toast && (
+        <div className="fixed bottom-6 right-6 bg-gray-900 text-white px-4 py-3 rounded-xl shadow-2xl text-sm font-medium z-50">
+          {toast}
         </div>
       )}
     </div>

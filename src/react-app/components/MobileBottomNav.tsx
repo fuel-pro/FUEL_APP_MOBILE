@@ -67,11 +67,8 @@ export default function MobileBottomNav({
       communication: "email",
       audit: "audit",
       regional: "compliance",
-      docconverter: "documents",
-      priceboard: "priceboard",
       fueltypes: "fueltypes",
       maintenance: "maintenance",
-      quality: "quality",
     };
     const flag = flagMap[tabId];
     if (flag && !featureFlags[flag]) return false;

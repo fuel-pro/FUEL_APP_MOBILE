@@ -39,6 +39,7 @@ import {
 import {
   getTransactions,
   addTransaction,
+  clearTransactions,
   subscribeToTransactions,
   calculateSummary,
   switchToTab,
@@ -397,6 +398,30 @@ export default function LiveTransaction() {
     } catch (error) {
       console.error("Error loading live transactions:", error);
       setError("Failed to load live transactions. Please try again.");
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  // Clear ALL shared transactions (mpesa_transactions cloud store). Lets the
+  // user remove old/no-longer-needed records to save space and keep the feed
+  // focused on what they're working on now. Requires confirmation.
+  const handleClearAllTransactions = async () => {
+    if (
+      !confirm(
+        "Clear ALL transaction records? This permanently removes every STK Push and statement transaction from this station's cloud store. This cannot be undone.",
+      )
+    )
+      return;
+    try {
+      setIsRefreshing(true);
+      await clearTransactions(stationId);
+      setLiveTransactions([]);
+      setFilteredTransactions([]);
+      setSuccess("All transaction records cleared successfully.");
+    } catch (error) {
+      console.error("Error clearing transactions:", error);
+      setError("Failed to clear transactions. Please try again.");
     } finally {
       setIsRefreshing(false);
     }
@@ -1107,17 +1132,30 @@ export default function LiveTransaction() {
               <Loader2 size={16} className="animate-spin text-blue-400" />
             )}
           </h3>
-          <button
-            onClick={loadLiveTransactions}
-            disabled={isRefreshing}
-            className="text-blue-400 hover:text-blue-300 flex items-center gap-1 text-sm disabled:opacity-50"
-          >
-            <RefreshCw
-              size={16}
-              className={isRefreshing ? "animate-spin" : ""}
-            />
-            Refresh
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={loadLiveTransactions}
+              disabled={isRefreshing}
+              className="text-blue-400 hover:text-blue-300 flex items-center gap-1 text-sm disabled:opacity-50"
+            >
+              <RefreshCw
+                size={16}
+                className={isRefreshing ? "animate-spin" : ""}
+              />
+              Refresh
+            </button>
+            {liveTransactions.length > 0 && (
+              <button
+                onClick={handleClearAllTransactions}
+                disabled={isRefreshing}
+                className="text-red-400 hover:text-red-300 flex items-center gap-1 text-sm disabled:opacity-50"
+                title="Remove all transaction records to save space and keep the feed focused on current data"
+              >
+                <Trash2 size={16} />
+                Clear All
+              </button>
+            )}
+          </div>
         </div>
 
         <div

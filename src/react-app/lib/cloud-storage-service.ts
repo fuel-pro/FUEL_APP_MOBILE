@@ -173,6 +173,93 @@ function clearCache(key: string): void {
   }
 }
 
+// ---------------------------------------------------------------------------
+// OFFLINE WRITE QUEUE
+// ---------------------------------------------------------------------------
+// When `set()`/`delete()` fail because the network is unavailable (or the
+// Supabase session expired), the operation is appended to a durable queue in
+// localStorage. A single global listener (window online event + visibility
+// change + periodic retry) flushes the queue once connectivity is restored so
+// offline edits are never lost — they reach the cloud automatically as soon as
+// the device is back online.
+//
+// The queue stores the LAST write per logical key (coalescing rapid edits so a
+// user typing into a price field offline doesn't queue 50 writes — only the
+// final value matters). Deletions are stored as `{ op: "delete" }`.
+
+const OFFLINE_QUEUE_KEY = "fuelpro_offline_queue_v1";
+
+type QueuedOp =
+  | {
+      op: "set";
+      key: string;
+      value: Json;
+      stationId?: string;
+      ts: number;
+    }
+  | {
+      op: "delete";
+      key: string;
+      stationId?: string;
+      ts: number;
+    };
+
+function readQueue(): QueuedOp[] {
+  try {
+    const raw = localStorage.getItem(OFFLINE_QUEUE_KEY);
+    return raw ? (JSON.parse(raw) as QueuedOp[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeQueue(q: QueuedOp[]): void {
+  try {
+    // Cap the queue size to avoid unbounded growth (keep the most recent 200
+    // ops — coalescing means this is per-key, not per-keystroke).
+    const capped = q.slice(-200);
+    localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(capped));
+  } catch {
+    /* ignore quota */
+  }
+}
+
+/** Coalesce: replace any existing op for the same key+station, then append. */
+function enqueueSet(
+  key: string,
+  value: Json,
+  stationId: string | undefined,
+): void {
+  const q = readQueue().filter(
+    (op) => !(op.key === key && op.stationId === stationId),
+  );
+  q.push({ op: "set", key, value, stationId, ts: Date.now() });
+  writeQueue(q);
+}
+
+function enqueueDelete(
+  key: string,
+  stationId: string | undefined,
+): void {
+  const q = readQueue().filter(
+    (op) => !(op.key === key && op.stationId === stationId),
+  );
+  q.push({ op: "delete", key, stationId, ts: Date.now() });
+  writeQueue(q);
+}
+
+function removeQueuedOp(op: QueuedOp): void {
+  const q = readQueue().filter(
+    (o) => !(o.key === op.key && o.stationId === op.stationId && o.ts === op.ts),
+  );
+  writeQueue(q);
+}
+
+/** Whether there are pending offline writes awaiting sync. */
+function hasPendingOfflineOps(): boolean {
+  return readQueue().length > 0;
+}
+
 class CloudStorageService {
   private memoryCache = new Map<string, { value: unknown; ts: number }>();
   private memTtlMs = 60_000; // 60 seconds — data rarely changes faster than this
@@ -323,7 +410,12 @@ class CloudStorageService {
     this.memoryCache.set(ck, { value, ts: Date.now() });
 
     const ownerId = await currentUserId();
-    if (!ownerId) return; // offline / unauthenticated — cached locally only
+    if (!ownerId) {
+      // Unauthenticated — cache locally only, but DO queue so the write
+      // reaches the cloud once a session is restored.
+      enqueueSet(key, value as unknown as Json, stationId);
+      return;
+    }
 
     try {
       const client = getSupabaseClient();
@@ -339,11 +431,17 @@ class CloudStorageService {
         { onConflict: "id" },
       );
       if (error) throw error;
+      // Success — remove any previously-queued op for this key (it's now live).
+      this.dequeueKey(key, stationId);
     } catch (err) {
-      // Cloud write failed (network/RLS). Data is safely cached locally and
-      // will be overwritten on the next successful set. Surface to console for
-      // debugging without breaking the caller.
-      console.warn(`[CloudStorage] set failed for "${key}":`, err);
+      // Cloud write failed (network down / RLS / session expired). Queue the
+      // write so it is retried automatically when connectivity is restored.
+      // The value is already in the local cache so reads keep working.
+      console.warn(
+        `[CloudStorage] set failed for "${key}", queued for offline retry:`,
+        err,
+      );
+      enqueueSet(key, value as unknown as Json, stationId);
     }
   }
 
@@ -354,7 +452,10 @@ class CloudStorageService {
     this.memoryCache.delete(ck);
 
     const ownerId = await currentUserId();
-    if (!ownerId) return;
+    if (!ownerId) {
+      enqueueDelete(key, stationId);
+      return;
+    }
 
     try {
       const client = getSupabaseClient();
@@ -373,9 +474,87 @@ class CloudStorageService {
           .eq("id", key)
           .eq("owner_id", ownerId);
       }
+      this.dequeueKey(key, stationId);
     } catch (err) {
-      console.warn(`[CloudStorage] delete failed for "${key}":`, err);
+      console.warn(
+        `[CloudStorage] delete failed for "${key}", queued for offline retry:`,
+        err,
+      );
+      enqueueDelete(key, stationId);
     }
+  }
+
+  /** Remove any queued op for a key (called after a successful write). */
+  private dequeueKey(key: string, stationId?: string): void {
+    const q = readQueue().filter(
+      (op) => !(op.key === key && op.stationId === stationId),
+    );
+    writeQueue(q);
+  }
+
+  /**
+   * Flush the offline write queue. Called automatically on `online` events,
+   * visibility change, and a periodic timer. Each queued op is replayed in
+   * order; successfully-applied ops are removed. Returns the number of ops
+   * still pending (0 = fully synced).
+   */
+  async flushOfflineQueue(): Promise<number> {
+    const queue = readQueue();
+    if (queue.length === 0) return 0;
+    // Check connectivity cheaply — if no user session, we can't flush yet.
+    const ownerId = await currentUserId();
+    if (!ownerId) return queue.length;
+
+    const remaining: QueuedOp[] = [];
+    let succeeded = 0;
+    for (const op of queue) {
+      try {
+        const client = getSupabaseClient();
+        if (op.op === "set") {
+          const { error } = await client.from("app_kv").upsert(
+            {
+              id: rowId(op.key, ownerId, op.stationId),
+              collection: COLLECTION,
+              owner_id: ownerId,
+              station_id: op.stationId ?? null,
+              data: op.value,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: "id" },
+          );
+          if (error) throw error;
+        } else {
+          const scopedId = rowId(op.key, ownerId, op.stationId);
+          const { error } = await client
+            .from("app_kv")
+            .delete()
+            .eq("id", scopedId)
+            .eq("owner_id", ownerId);
+          if (error) throw error;
+        }
+        succeeded++;
+      } catch {
+        // Keep this op in the queue for the next flush attempt.
+        remaining.push(op);
+      }
+    }
+    writeQueue(remaining);
+    if (succeeded > 0) {
+      console.log(
+        `[CloudStorage] Flushed ${succeeded} offline write(s); ${remaining.length} still pending.`,
+      );
+    }
+    return remaining.length;
+  }
+
+  /** Number of offline writes awaiting sync (for UI indicators). */
+  pendingOfflineOps(): number {
+    return readQueue().length;
+  }
+
+  /** Whether there are pending offline writes (synchronous, for UI gates). */
+  hasOfflineWritesPending(): boolean {
+    return hasPendingOfflineOps();
   }
 
   /**
@@ -564,3 +743,47 @@ class CloudStorageService {
 
 export const cloudStorageService = new CloudStorageService();
 export default cloudStorageService;
+
+// ---------------------------------------------------------------------------
+// GLOBAL OFFLINE-QUEUE FLUSH LISTENERS
+// ---------------------------------------------------------------------------
+// Wire up the browser's connectivity events so the offline write queue is
+// flushed automatically as soon as the device comes back online — no user
+// action required. This is the core of the "offline edits sync when back
+// online" feature. A periodic safety-net timer also retries every 30s in case
+// the online event doesn't fire (some mobile browsers are unreliable).
+
+if (typeof window !== "undefined") {
+  let flushInFlight = false;
+  const safeFlush = () => {
+    if (flushInFlight) return;
+    flushInFlight = true;
+    cloudStorageService
+      .flushOfflineQueue()
+      .catch(() => {})
+      .finally(() => {
+        flushInFlight = false;
+      });
+  };
+
+  // 1. Browser reports connectivity is back.
+  window.addEventListener("online", () => {
+    // Small delay to let auth/session settle after a reconnect.
+    setTimeout(safeFlush, 1500);
+  });
+
+  // 2. Tab becomes visible again (user returns to the app after being away).
+  if (typeof document !== "undefined") {
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") safeFlush();
+    });
+  }
+
+  // 3. Periodic safety-net retry (some mobile browsers don't fire `online`
+  //    reliably, and a session can be restored without a network change).
+  setInterval(safeFlush, 30_000);
+
+  // 4. Best-effort flush on page load (handles the case where the user made
+  //    offline edits, closed the tab, and reopened later while online).
+  setTimeout(safeFlush, 3000);
+}
