@@ -4845,6 +4845,95 @@ Then SAVE. Near-instant.
 - DeliveryTracker subscribe echo guard added.
 - Commits: aa93254, 6ea3a99, 28a40b1. Cloudflare LIVE. Vercel BLOCKED (quota).
 
+## Session 2026-08-18: Team Manager — Invite Links + Access Codes blended (DEPLOYED LIVE, commit 2e66a4f)
+
+Blended/interlinked Invite Links + Access Codes in the Team Manager tab so
+the two team-access methods share ONE entry point, ONE role list, and ONE
+permission concept. Deployed to GitHub (2e66a4f), Cloudflare Pages (preview
+dbddc8e7 + main alias), Vercel production (aliased to
+fuel-app-mobile.vercel.app, index chunk index-DNKBH4rH.js matches local
+build). No Supabase schema changes (uses existing app_kv + scoped row ids).
+
+### What changed (src/react-app/components/TeamManager.tsx)
+
+1. **Unified "Add Team Member" card** with a mode toggle:
+   - "Add Team Member" (primary) → opens the card defaulting to Invite-Link
+     mode.
+   - "Quick Access Code (no signup)" (secondary) → opens the card in
+     Access-Code mode directly.
+   - Inside the card, a toggle switches between "Invite Link (full account)"
+     and "Access Code (no signup)".
+   - Both modes share the SAME availableRoles (base + custom roles) — no
+     more hardcoded role list in the access-code form.
+
+2. **New AccessCodeForm component** (extracted, reusable from both the
+   unified card AND the AccessCodesView panel):
+   - Username / Password / Member Name / Role (select from availableRoles).
+   - **Allowed Tabs picker** — checkboxes (pill buttons) built from
+     tabIdToLabel, so an access-code member's tab access can be restricted.
+     This interlinks with the Roles & Permissions / Feature Access Control
+     concept. Empty allowedTabs = all tabs (recommended for read-only viewers).
+   - Read-only checkbox (default on). Password min-length 4 validation.
+     Busy state on the Create button.
+
+3. **Blended Team Members list**: now merges invite-accepted members AND
+   access-code members into ONE list (combinedMembers). Each row shows:
+   - The member name (invite: username; code: memberName).
+   - A **Code/Invite access-method badge** (blue for Code, indigo for Invite).
+   - A Read-Only badge (for read-only code members).
+   - Expanded row: code members get code-specific actions (enable/disable,
+     delete, access count, last-accessed); invite members get the existing
+     pump/shift/extend/revoke actions. This prevents the PermissionContext
+     methods (assignPumps, extendAccess, revokeMember) from being called on
+     code members (which would crash/no-op since they're not in the team list).
+
+4. **AccessCodesView refactored** to receive lifted `codes` + `onRefresh`
+   from the parent (so the blended list + stats stay in sync), plus
+   `availableRoles` + `tabIdToLabel` for the inline form. Adds:
+   - WhatsApp + Email share buttons on the access link (parity with invite
+     links — was only Copy before).
+   - "N tabs" badge per code when allowedTabs is non-empty.
+
+5. **Stats grid**: updated to grid-cols-2 sm:grid-cols-3 lg:grid-cols-5,
+   includes an Access Codes count card + uses combinedMembers.
+
+### Verification (live, Cloudflare preview dbddc8e7)
+
+Logged in as founder QA (`founder.qa.fuelpro@gmail.com`, US station, USD).
+Navigated to Team Manager → "Team Access" sub-tab:
+- Unified "Add Team Member" card renders with both buttons + mode toggle.
+- Switched to "Access Code" mode → form shows the SAME role list (Manager /
+  Staff / Auditor) as the invite form + an Allowed Tabs picker (Dashboard,
+  Sales, POS, Inventory, ... Team Manager, Documents).
+- Created a test access code: username `qa_cashier1`, password
+  `TestCode2026!`, member name `QA Test Cashier`, role Manager, tabs
+  [Dashboard, POS], read-only.
+- The blended Team Members list immediately showed the new entry with a
+  "Code" badge + "Read-Only" badge + "Invited by Access Code on 8/18/2026".
+- The Access Codes panel showed "QA Test Cashier (qa_cashier1)" with a
+  "2 tabs" badge + "Active" badge + toggle/delete buttons.
+- **Supabase verification**: queried app_kv via PostgREST (service_role key)
+  → the access code persisted to owner-scoped row
+  `station_access_codes__87e6502b...` (updated 2026-08-18T11:26:20.87Z).
+  The data field was **gzip-compressed + base64** (confirming the
+  compression work from the earlier session is active), containing the JSON
+  array with username `qa_cashier1`, memberName `QA Test Cashier`, role
+  `manager`, tabs `["dashboard","pos"]`, enabled `true`.
+- Cleaned up the test code via the delete button (confirm dialog).
+
+### Deploy state 2026-08-18 (commit 2e66a4f)
+
+- GitHub main: 2e66a4f (pushed, synced with origin/main).
+- Cloudflare Pages: LIVE (preview https://dbddc8e7.fuel-app-mobile.pages.dev
+  + main alias https://fuel-app-mobile.pages.dev). TeamManager chunk
+  TeamManager-N5qZ0ilI.js with all markers confirmed.
+- Vercel production: LIVE (prebuilt deploy, aliased to
+  fuel-app-mobile.vercel.app). Index chunk index-DNKBH4rH.js matches local
+  build (HTTP 200).
+- Supabase: no schema changes (uses existing app_kv + scoped row ids from
+  the cross-user fix).
+- tsc 0 errors, prettier pass, build 112 precache.
+
 ## Session 2026-08-14: Full 30-tab QA sweep + M-PESA region fix + country-aware prices
 
 ### Full tab sweep — ALL 30 tabs verified on Cloudflare Pages
