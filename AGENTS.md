@@ -5083,3 +5083,89 @@ ON. Immediately stops all Realtime subscriptions on the current device
 (drops Realtime message usage to ~0). Cross-device edits appear on next
 reload/navigation instead of instantly. Toggle OFF to restore instant
 live sync. Persists across reloads (`fuelpro_realtime_disabled` key).
+
+## Session 2026-08-18 — Compression + egress reduction + price stability (DEPLOYED LIVE)
+
+The Supabase org went over the Free-plan quota (Egress 7.095/5 GB = 142%,
+Realtime Messages 1.9M/2M = 96%; grace period ends 12 Sep 2026). This session
+targets storage + egress directly, plus the price-fluctuation + cross-device
+persistence gaps surfaced in the user's review.
+
+### 1. Shared Realtime channel multiplexer (biggest egress win)
+`src/react-app/lib/cloud-storage-service.ts`: before, every
+`cloudStorageService.subscribe(key)` opened its OWN Supabase Realtime channel
+(`app_kv:<scopedId>`). With 30+ components each subscribing to a key, that
+was 30 open channels, each generating presence + system messages on top of
+data messages — the ~30x overhead that blew the 2M/month Realtime quota. Now
+ALL per-key subscriptions for the same owner share ONE channel
+(`app_kv:mux:<ownerId>`, filter `owner_id=eq.<ownerId>`). The single
+postgres_changes callback fans each payload out to the registered per-key
+callbacks by matching the row id; `subscribeToStation` uses a wildcard set
+on the same channel (no separate station channel). The channel is lazily
+started on first subscribe and torn down when the last callback unsubscribes
+(idle tab = zero Realtime messages). Net: 30 channels -> 1. The global
+`realtimeEnabled` kill-switch (Data Manager -> Storage & Egress) remains the
+outer guard. Verified live in the `founder-*.js` chunk (`app_kv:mux`,
+`muxSubscribe`, `Wildcard` markers).
+
+### 2. Max gzip compression level (storage + egress)
+`src/react-app/lib/compression.ts`: `compressJson` + `compressBlob` now use
+`pako.gzip(bytes, { level: 9 })` (was default level 6). Level 9 produces the
+smallest possible payload, directly cutting both the bytes stored in
+`app_kv` (storage quota) and the bytes transferred on every read (egress
+quota). Backward compatible — `decompressJson` handles both level-6 and
+level-9 payloads. Document Center uploads already compress text files via
+`compressBlob` (now level 9).
+
+### 3. Price stability (T10 — fuel prices no longer fluctuate on refresh)
+`src/react-app/components/PriceBoard.tsx`: root cause of fluctuating prices
+was the EPRA/regulator auto-update effect overwriting prices the owner set
+explicitly whenever the national source loaded a different value. Added a
+per-entry `source: "user" | "auto" | undefined` field:
+- `normalizePriceEntry` defaults source to `"auto"`.
+- `handleSave` marks edited + new entries `source: "user"`.
+- the interlink receiver (FuelTypesManager -> PriceBoard propagated price)
+  marks entries `source: "user"`.
+- the EPRA auto-update effect now SKIPS any entry whose `source === "user"`
+  (only refreshes `"auto"` entries). Auto entries still refresh normally.
+- the updated/diesel/kerosene auto-update branches now set `source: "auto"`.
+Effect: a price the user sets in Fuel Type Manager or Price Board is now
+STABLE across refreshes and devices — the national auto-sync no longer
+fights it.
+
+### 4. Per-fuel tank readings persist cross-device (T9 completion)
+`src/react-app/components/SalesTracking.tsx`: `saveSalesData` was not saving
+`fuelTankValuesByType`, so Kerosene/LPG/V-Power tank readings vanished on
+reload/cross-device (petrol/diesel used the legacy pmsTankOpening fields).
+Now saved + restored on `loadSalesData`. Exports (TXT/PDF/Excel) already
+included per-fuel tank inventory + pricing + pumps + expenses + summary.
+
+### 5. Cloud setup-flag (T5)
+`SetupWizard.tsx` + `Home.tsx`: setup-complete flag now persisted to cloud
+(`setup_complete` app_kv key) so a returning user on a NEW device offline is
+not sent back to the wizard. Resolved the rebase conflict with the remote
+`user_setup_flag` change by standardizing on the `setup_complete` key (read
+by Home.tsx on mount to hydrate the local flag).
+
+### Migration 020 (in repo, NOT yet applied to live DB)
+`supabase/migrations/020_app_kv_version_conflict.sql` adds the
+`upsert_app_kv_versioned` RPC for optimistic-concurrency multi-device
+conflict resolution (version column + conditional upsert + merge-retry).
+The Supabase Management API SQL endpoint + direct DB connection are both
+unavailable in this environment (DNS doesn't resolve; PAT scope insufficient),
+so the migration is committed but not applied. The app DEGRADES GRACEFULLY
+without it: `set()` falls back to a plain upsert when the RPC is missing
+(PGRST202 handled). Apply migration 020 via the Supabase Dashboard SQL
+Editor when DB access is restored to enable conflict-free multi-device writes.
+
+### Deploy state 2026-08-18
+- GitHub main: commit `6d2bc87` (pushed, rebased on `4d45d0c` Access Codes
+  merge). `setup_complete` key standardized across SetupWizard + Home.
+- Cloudflare Pages: LIVE (preview https://8c5e7d70.fuel-app-mobile.pages.dev
+  + main alias https://fuel-app-mobile.pages.dev). Verified live: `app_kv:mux`,
+  `muxSubscribe`, `Wildcard`, `setup_complete`, `source:"user"` all present.
+- Vercel production: LIVE (prebuilt deploy, aliased to
+  fuel-app-mobile.vercel.app, founder chunk `founder-Bwn7Jbzl.js` with all
+  markers). `npx tsc --noEmit` 0 errors, 16/16 tests pass, build 110 precache.
+- Supabase: no schema changes applied this session (migration 020 pending DB
+  access). All cloud data uses existing `app_kv` table + scoped row ids.
