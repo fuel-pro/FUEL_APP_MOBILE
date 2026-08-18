@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useLocation } from "@/react-app/context/LocationContext";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 import { useAuth } from "@/react-app/context/AuthContext";
@@ -197,6 +197,16 @@ export default function CustomerLoyalty() {
   const [toast, setToast] = useState<string | null>(null);
   const [synced, setSynced] = useState(false);
 
+  // Race-condition guard: prevents the async cloud-load effect from
+  // overwriting local state before the load completes, and prevents the
+  // real-time echo from wiping uncommitted local edits. Without this,
+  // switching to the tab shows cached data for a glimpse then the cloud
+  // load wipes it (the "flash then blank" bug).
+  const cloudLoadCompleteRef = useRef(false);
+  const localModifiedRef = useRef(false);
+  const customersRef = useRef(customers);
+  customersRef.current = customers;
+
   const showToast = useCallback((msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(null), 2500);
@@ -204,22 +214,31 @@ export default function CustomerLoyalty() {
 
   const currencySymbol = location.currencySymbol;
   const save = (c: Customer[]) => {
+    localModifiedRef.current = true;
     setCustomers(c);
     localStorage.setItem("fuelpro_customers", JSON.stringify(c));
-    cloudStorageService.set("loyalty_customers", c, stationId).catch(() => {});
+    if (cloudLoadCompleteRef.current)
+      cloudStorageService.set("loyalty_customers", c, stationId).catch(() => {});
   };
 
   // Load from cloud on mount + real-time cross-device sync
   useEffect(() => {
     if (!user) return;
+    cloudLoadCompleteRef.current = false;
+    localModifiedRef.current = false;
     setSynced(false);
+    let cancelled = false;
     (async () => {
       const cloudData = await cloudStorageService.get<Customer[]>(
         "loyalty_customers",
         stationId,
       );
-      if (cloudData) setCustomers(normalizeLoyaltyCustomers(cloudData));
-      setSynced(true);
+      if (!cancelled && cloudData && !localModifiedRef.current)
+        setCustomers(normalizeLoyaltyCustomers(cloudData));
+      if (!cancelled) {
+        cloudLoadCompleteRef.current = true;
+        setSynced(true);
+      }
     })();
     // Real-time: when another device updates customers, update instantly
     const unsubs = [
@@ -227,13 +246,27 @@ export default function CustomerLoyalty() {
         "loyalty_customers",
         stationId,
         (val) => {
-          if (val) setCustomers(normalizeLoyaltyCustomers(val));
+          if (!val || localModifiedRef.current) return;
+          setCustomers(normalizeLoyaltyCustomers(val));
           setSynced(true);
         },
       ),
     ];
-    return () => unsubs.forEach((u) => u());
+    return () => {
+      cancelled = true;
+      unsubs.forEach((u) => u());
+    };
   }, [user, stationId]);
+
+  // Post-load flush: if the user made changes before/during the cloud load,
+  // re-push the latest local state to cloud so it's not lost.
+  useEffect(() => {
+    if (cloudLoadCompleteRef.current && localModifiedRef.current) {
+      cloudStorageService
+        .set("loyalty_customers", customersRef.current, stationId)
+        .catch(() => {});
+    }
+  }, [cloudLoadCompleteRef.current]);
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();

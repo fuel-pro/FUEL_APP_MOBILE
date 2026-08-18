@@ -243,6 +243,13 @@ export default function SupplierManagement() {
   // Prevents save effects from overwriting cloud data with default state
   // before the initial cloud load completes (cross-device overwrite race).
   const cloudLoadCompleteRef = useRef(false);
+  // Echo guard: prevents the real-time subscribe callback from overwriting
+  // uncommitted local edits (the cloud write echoes back and wipes state).
+  const localModifiedRef = useRef(false);
+  const suppliersRef = useRef(suppliers);
+  suppliersRef.current = suppliers;
+  const ordersRef = useRef(orders);
+  ordersRef.current = orders;
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(suppliers));
@@ -263,6 +270,7 @@ export default function SupplierManagement() {
   useEffect(() => {
     if (!user) return;
     cloudLoadCompleteRef.current = false;
+    localModifiedRef.current = false;
     let cancelled = false;
     (async () => {
       try {
@@ -270,12 +278,14 @@ export default function SupplierManagement() {
           "suppliers_data",
           stationId,
         );
-        if (!cancelled) setSuppliers(normalizeSuppliers(cloudSuppliers));
+        if (!cancelled && !localModifiedRef.current)
+          setSuppliers(normalizeSuppliers(cloudSuppliers));
         const cloudOrders = await cloudStorageService.get<unknown>(
           "purchase_orders",
           stationId,
         );
-        if (!cancelled) setOrders(normalizeOrders(cloudOrders));
+        if (!cancelled && !localModifiedRef.current)
+          setOrders(normalizeOrders(cloudOrders));
       } finally {
         if (!cancelled) cloudLoadCompleteRef.current = true;
       }
@@ -286,6 +296,7 @@ export default function SupplierManagement() {
         "suppliers_data",
         stationId,
         (val) => {
+          if (localModifiedRef.current) return;
           setSuppliers(normalizeSuppliers(val));
         },
       ),
@@ -293,6 +304,7 @@ export default function SupplierManagement() {
         "purchase_orders",
         stationId,
         (val) => {
+          if (localModifiedRef.current) return;
           setOrders(normalizeOrders(val));
         },
       ),
@@ -302,6 +314,19 @@ export default function SupplierManagement() {
       unsubs.forEach((u) => u());
     };
   }, [user, stationId]);
+
+  // Post-load flush: if the user made changes before/during the cloud load,
+  // re-push the latest local state to cloud so it's not lost.
+  useEffect(() => {
+    if (cloudLoadCompleteRef.current && localModifiedRef.current) {
+      cloudStorageService
+        .set("suppliers_data", suppliersRef.current, stationId)
+        .catch(() => {});
+      cloudStorageService
+        .set("purchase_orders", ordersRef.current, stationId)
+        .catch(() => {});
+    }
+  }, [cloudLoadCompleteRef.current]);
 
   const showNotification = (
     message: string,
@@ -328,6 +353,7 @@ export default function SupplierManagement() {
       showNotification("Name and phone are required", "warning");
       return;
     }
+    localModifiedRef.current = true;
     if (editingId) {
       setSuppliers((prev) =>
         prev.map((s) =>
@@ -364,6 +390,7 @@ export default function SupplierManagement() {
 
   const handleDelete = (id: string) => {
     if (confirm("Delete this supplier?")) {
+      localModifiedRef.current = true;
       setSuppliers((prev) => prev.filter((s) => s.id !== id));
       showNotification("Supplier deleted");
     }
@@ -376,6 +403,7 @@ export default function SupplierManagement() {
     }
     const supplier = suppliers.find((s) => s.id === selectedSupplierId);
     if (!supplier) return;
+    localModifiedRef.current = true;
     const newOrder: PurchaseOrder = {
       id: `po_${Date.now()}`,
       supplierId: selectedSupplierId,
@@ -420,6 +448,7 @@ export default function SupplierManagement() {
     orderId: string,
     newStatus: PurchaseOrder["status"],
   ) => {
+    localModifiedRef.current = true;
     setOrders((prev) =>
       prev.map((o) =>
         o.id === orderId

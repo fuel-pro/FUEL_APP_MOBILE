@@ -161,29 +161,36 @@ export default function ReportsCenter() {
     state.companyData?.currency,
     currentStation?.currency,
   );
-  const [cloudExpenses, setCloudExpenses] = useState<any[]>([]);
+  const [cloudExpenses, setCloudExpenses] = useState<any[]>(() => {
+    // Instant first render from the synchronous in-memory cache so there is
+    // no blank flash before the async cloud fetch resolves.
+    const cached = cloudStorageService.getCached<unknown>(
+      "expenses_data",
+      stationId,
+    );
+    if (Array.isArray(cached)) return cached as any[];
+    return [];
+  });
 
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
-      const cached = cloudStorageService.getCached<unknown>(
-        "expenses_data",
-        stationId,
-      );
-      if (!cancelled && Array.isArray(cached))
-        setCloudExpenses(cached as any[]);
       const cloud = await cloudStorageService.get<unknown>(
         "expenses_data",
         stationId,
       );
-      if (!cancelled && Array.isArray(cloud)) setCloudExpenses(cloud as any[]);
+      // Only overwrite if the cloud returned real data — avoids wiping the
+      // cached display with an empty/null result during a transient fetch.
+      if (!cancelled && Array.isArray(cloud) && cloud.length > 0)
+        setCloudExpenses(cloud as any[]);
     };
     load();
     const unsub = cloudStorageService.subscribe<unknown>(
       "expenses_data",
       stationId,
       (val) => {
-        if (Array.isArray(val)) setCloudExpenses(val as any[]);
+        if (Array.isArray(val) && val.length > 0)
+          setCloudExpenses(val as any[]);
       },
     );
     return () => {

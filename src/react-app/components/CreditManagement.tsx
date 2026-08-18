@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useLocation } from "@/react-app/context/LocationContext";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 import { useAuth } from "@/react-app/context/AuthContext";
@@ -178,6 +178,22 @@ export default function CreditManagement() {
     description: "",
   });
 
+  // Race-condition guard: prevents the async cloud-load effect from
+  // overwriting local state (saveAcc/saveTx) before the load completes,
+  // and prevents the real-time echo from wiping uncommitted local edits.
+  // Without this, switching to the tab shows cached data for a glimpse
+  // then the cloud load wipes it (the "flash then blank" bug).
+  const cloudLoadCompleteRef = useRef(false);
+  const localModifiedRef = useRef(false);
+  const accountsRef = useRef(accounts);
+  accountsRef.current = accounts;
+  const transactionsRef = useRef(transactions);
+  transactionsRef.current = transactions;
+
+  const flagLocalModified = () => {
+    localModifiedRef.current = true;
+  };
+
   const showToast = useCallback((msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(null), 3000);
@@ -211,35 +227,42 @@ export default function CreditManagement() {
   }, []);
 
   const saveAcc = (a: CreditAccount[]) => {
+    flagLocalModified();
     setAccounts(a);
     localStorage.setItem("fuelpro_credit_accounts", JSON.stringify(a));
-    cloudStorageService.set("credit_accounts", a, stationId).catch(() => {});
+    if (cloudLoadCompleteRef.current)
+      cloudStorageService.set("credit_accounts", a, stationId).catch(() => {});
   };
   const saveTx = (t: CreditTransaction[]) => {
+    flagLocalModified();
     setTransactions(t);
     localStorage.setItem("fuelpro_credit_tx", JSON.stringify(t));
-    cloudStorageService
-      .set("credit_transactions", t, stationId)
-      .catch(() => {});
+    if (cloudLoadCompleteRef.current)
+      cloudStorageService
+        .set("credit_transactions", t, stationId)
+        .catch(() => {});
   };
 
   // Load from cloud on mount + real-time cross-device sync
   useEffect(() => {
     if (!user) return;
+    cloudLoadCompleteRef.current = false;
+    localModifiedRef.current = false;
     let cancelled = false;
     (async () => {
       const cloudAccounts = await cloudStorageService.get<CreditAccount[]>(
         "credit_accounts",
         stationId,
       );
-      if (!cancelled && cloudAccounts)
+      if (!cancelled && cloudAccounts && !localModifiedRef.current)
         setAccounts(normalizeCreditAccounts(cloudAccounts));
       const cloudTx = await cloudStorageService.get<CreditTransaction[]>(
         "credit_transactions",
         stationId,
       );
-      if (!cancelled && cloudTx)
+      if (!cancelled && cloudTx && !localModifiedRef.current)
         setTransactions(normalizeCreditTransactions(cloudTx));
+      if (!cancelled) cloudLoadCompleteRef.current = true;
     })();
     // Real-time: when another device updates accounts/transactions, update instantly
     const unsubs = [
@@ -247,14 +270,16 @@ export default function CreditManagement() {
         "credit_accounts",
         stationId,
         (val) => {
-          if (val) setAccounts(normalizeCreditAccounts(val));
+          if (!val || localModifiedRef.current) return;
+          setAccounts(normalizeCreditAccounts(val));
         },
       ),
       cloudStorageService.subscribe<CreditTransaction[]>(
         "credit_transactions",
         stationId,
         (val) => {
-          if (val) setTransactions(normalizeCreditTransactions(val));
+          if (!val || localModifiedRef.current) return;
+          setTransactions(normalizeCreditTransactions(val));
         },
       ),
     ];
@@ -263,6 +288,19 @@ export default function CreditManagement() {
       unsubs.forEach((u) => u());
     };
   }, [user, stationId]);
+
+  // Post-load flush: if the user made changes before/during the cloud load,
+  // re-push the latest local state to cloud so it's not lost.
+  useEffect(() => {
+    if (cloudLoadCompleteRef.current && localModifiedRef.current) {
+      cloudStorageService
+        .set("credit_accounts", accountsRef.current, stationId)
+        .catch(() => {});
+      cloudStorageService
+        .set("credit_transactions", transactionsRef.current, stationId)
+        .catch(() => {});
+    }
+  }, [cloudLoadCompleteRef.current]);
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();

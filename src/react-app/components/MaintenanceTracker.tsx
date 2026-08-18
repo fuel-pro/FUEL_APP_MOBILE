@@ -179,6 +179,11 @@ export default function MaintenanceTracker() {
   // Prevents the save effect from overwriting cloud data with default state
   // before the initial cloud load completes (cross-device overwrite race).
   const cloudLoadCompleteRef = useRef(false);
+  // Echo guard: prevents the real-time subscribe callback from overwriting
+  // uncommitted local edits (the cloud write echoes back and wipes state).
+  const localModifiedRef = useRef(false);
+  const recordsRef = useRef(records);
+  recordsRef.current = records;
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
@@ -192,6 +197,7 @@ export default function MaintenanceTracker() {
   useEffect(() => {
     if (!user) return;
     cloudLoadCompleteRef.current = false;
+    localModifiedRef.current = false;
     let cancelled = false;
     (async () => {
       try {
@@ -199,7 +205,7 @@ export default function MaintenanceTracker() {
           "maintenance_records",
           stationId,
         );
-        if (!cancelled && cloudData)
+        if (!cancelled && cloudData && !localModifiedRef.current)
           setRecords(normalizeMaintenanceRecords(cloudData));
       } finally {
         if (!cancelled) cloudLoadCompleteRef.current = true;
@@ -211,7 +217,8 @@ export default function MaintenanceTracker() {
         "maintenance_records",
         stationId,
         (val) => {
-          if (val) setRecords(normalizeMaintenanceRecords(val));
+          if (!val || localModifiedRef.current) return;
+          setRecords(normalizeMaintenanceRecords(val));
         },
       ),
     ];
@@ -220,6 +227,16 @@ export default function MaintenanceTracker() {
       unsubs.forEach((u) => u());
     };
   }, [user, stationId]);
+
+  // Post-load flush: if the user made changes before/during the cloud load,
+  // re-push the latest local state to cloud so it's not lost.
+  useEffect(() => {
+    if (cloudLoadCompleteRef.current && localModifiedRef.current) {
+      cloudStorageService
+        .set("maintenance_records", recordsRef.current, stationId)
+        .catch(() => {});
+    }
+  }, [cloudLoadCompleteRef.current]);
 
   const showNotification = (
     message: string,
@@ -249,6 +266,7 @@ export default function MaintenanceTracker() {
       );
       return;
     }
+    localModifiedRef.current = true;
     if (editingId) {
       setRecords((prev) =>
         prev.map((r) =>
@@ -272,12 +290,14 @@ export default function MaintenanceTracker() {
 
   const handleDelete = (id: string) => {
     if (confirm("Delete this maintenance record?")) {
+      localModifiedRef.current = true;
       setRecords((prev) => prev.filter((r) => r.id !== id));
       showNotification("Record deleted");
     }
   };
 
   const updateStatus = (id: string, newStatus: MaintenanceRecord["status"]) => {
+    localModifiedRef.current = true;
     setRecords((prev) =>
       prev.map((r) =>
         r.id === id

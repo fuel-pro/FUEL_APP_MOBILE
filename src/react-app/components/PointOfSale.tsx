@@ -159,6 +159,15 @@ export default function PointOfSale() {
     return [];
   });
   const [fiscalCounter, setFiscalCounter] = useState(1);
+  // Race-condition guard: prevents the async cloud-load effect from
+  // overwriting local state (processPayment) before the load completes, and
+  // prevents the real-time echo from wiping uncommitted local edits. Without
+  // this, switching to the tab shows cached transactions for a glimpse then
+  // the cloud load wipes them (the "flash then blank" bug).
+  const cloudLoadCompleteRef = useRef(false);
+  const localModifiedRef = useRef(false);
+  const transactionsRef = useRef(transactions);
+  transactionsRef.current = transactions;
   // The selected quick-sale fuel — the canonical display LABEL of the active
   // fuel type (e.g. "Super Petrol", "Diesel", "Kerosene", "LPG"). Defaults to
   // the canonical petrol label so the first render works before cloud data
@@ -223,19 +232,22 @@ export default function PointOfSale() {
   // resolves the true cross-device state and reconciles any divergence.
   useEffect(() => {
     if (!user) return;
+    cloudLoadCompleteRef.current = false;
+    localModifiedRef.current = false;
     let cancelled = false;
     (async () => {
       const cloud = await cloudStorageService.get<POSTransaction[]>(
         "pos_transactions",
         stationId,
       );
-      if (!cancelled && cloud && Array.isArray(cloud)) {
+      if (!cancelled && cloud && Array.isArray(cloud) && !localModifiedRef.current) {
         setTransactions(cloud);
         // Seed the fiscal counter from the persisted sale history so invoice
         // numbers never collide across sessions/devices (a fresh device would
         // otherwise reset to #1 and re-generate today's invoice numbers).
         setFiscalCounter((prev) => Math.max(prev, cloud.length + 1));
       }
+      if (!cancelled) cloudLoadCompleteRef.current = true;
     })();
     // Real-time cross-device sync: a sale completed on another device appears
     // in "Recent Transactions" instantly without a page reload.
@@ -243,10 +255,9 @@ export default function PointOfSale() {
       "pos_transactions",
       stationId,
       (val) => {
-        if (val && Array.isArray(val)) {
-          setTransactions(val);
-          setFiscalCounter((prev) => Math.max(prev, val.length + 1));
-        }
+        if (!val || !Array.isArray(val) || localModifiedRef.current) return;
+        setTransactions(val);
+        setFiscalCounter((prev) => Math.max(prev, val.length + 1));
       },
     );
     return () => {
@@ -254,6 +265,16 @@ export default function PointOfSale() {
       unsub();
     };
   }, [user, stationId]);
+
+  // Post-load flush: if the user made changes before/during the cloud load,
+  // re-push the latest local state to cloud so it's not lost.
+  useEffect(() => {
+    if (cloudLoadCompleteRef.current && localModifiedRef.current) {
+      cloudStorageService
+        .set("pos_transactions", transactionsRef.current, stationId)
+        .catch(() => {});
+    }
+  }, [cloudLoadCompleteRef.current]);
 
   // Award points after successful transaction
   const awardLoyaltyPoints = (transaction: POSTransaction) => {
@@ -614,6 +635,7 @@ export default function PointOfSale() {
     // destroying every prior sale from other devices.
     const merged = [transaction, ...transactions];
     const trimmed = merged.slice(0, 200); // keep the most recent 200
+    localModifiedRef.current = true;
     setTransactions(trimmed);
     try {
       localStorage.setItem(

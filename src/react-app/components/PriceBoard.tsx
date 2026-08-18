@@ -233,6 +233,11 @@ export default function PriceBoard() {
   // Prevents save effects from overwriting cloud data with default state
   // before the initial cloud load completes (cross-device overwrite race).
   const cloudLoadCompleteRef = useRef(false);
+  // Echo guard: prevents the async cloud-load effect from overwriting
+  // uncommitted local edits (price changes the user just made).
+  const localModifiedRef = useRef(false);
+  const pricesRef = useRef(prices);
+  pricesRef.current = prices;
   const [showAutoUpdateNotice, setShowAutoUpdateNotice] = useState(false);
 
   const isKenya = isKenyaStation();
@@ -428,6 +433,7 @@ export default function PriceBoard() {
   useEffect(() => {
     if (!user) return;
     cloudLoadCompleteRef.current = false;
+    localModifiedRef.current = false;
     let cancelled = false;
     (async () => {
       try {
@@ -435,13 +441,13 @@ export default function PriceBoard() {
           CLOUD_KEY,
           stationId,
         );
-        if (!cancelled && cloudPrices)
+        if (!cancelled && cloudPrices && !localModifiedRef.current)
           setPrices(normalizePriceEntries(cloudPrices));
         const cloudHistory = await cloudStorageService.get<PriceHistory[]>(
           CLOUD_HISTORY_KEY,
           stationId,
         );
-        if (!cancelled && cloudHistory)
+        if (!cancelled && cloudHistory && !localModifiedRef.current)
           setHistory(normalizePriceHistoryList(cloudHistory));
       } finally {
         if (!cancelled) cloudLoadCompleteRef.current = true;
@@ -451,6 +457,16 @@ export default function PriceBoard() {
       cancelled = true;
     };
   }, [user, stationId]);
+
+  // Post-load flush: if the user made changes before/during the cloud load,
+  // re-push the latest local state to cloud so it's not lost.
+  useEffect(() => {
+    if (cloudLoadCompleteRef.current && localModifiedRef.current) {
+      cloudStorageService
+        .set(CLOUD_KEY, pricesRef.current, stationId)
+        .catch(() => {});
+    }
+  }, [cloudLoadCompleteRef.current]);
 
   const showNotification = (
     message: string,
@@ -465,6 +481,7 @@ export default function PriceBoard() {
       showNotification("Fuel type, grade, and price are required", "warning");
       return;
     }
+    localModifiedRef.current = true;
     if (editingId) {
       const old = prices.find((p) => p.id === editingId);
       setPrices((prev) =>
@@ -547,12 +564,14 @@ export default function PriceBoard() {
 
   const handleDelete = (id: string) => {
     if (confirm("Delete this price entry?")) {
+      localModifiedRef.current = true;
       setPrices((prev) => prev.filter((p) => p.id !== id));
       showNotification("Price entry deleted");
     }
   };
 
   const toggleActive = (id: string) => {
+    localModifiedRef.current = true;
     setPrices((prev) =>
       prev.map((p) => (p.id === id ? { ...p, isActive: !p.isActive } : p)),
     );

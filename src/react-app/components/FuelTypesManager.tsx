@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { CANONICAL_FUEL_TYPES } from "@/react-app/config/pricing";
 import {
   Fuel,
@@ -352,12 +352,24 @@ export default function FuelTypesManager() {
   const [formPumps, setFormPumps] = useState<number | "">(1);
   const [formDesc, setFormDesc] = useState("");
 
+  // Race-condition guard: prevents the async cloud-load effect from
+  // overwriting local state (persist) before the load completes, and
+  // prevents the real-time echo from wiping uncommitted local edits.
+  // Without this, switching to the tab shows cached fuel types for a
+  // glimpse then the cloud load wipes them (the "flash then blank" bug).
+  const cloudLoadCompleteRef = useRef(false);
+  const localModifiedRef = useRef(false);
+  const fuelTypesRef = useRef(fuelTypes);
+  fuelTypesRef.current = fuelTypes;
+
   const persist = (types: CustomFuelType[]) => {
+    localModifiedRef.current = true;
     setFuelTypes(types);
     saveFuelTypes(types);
-    cloudStorageService
-      .set(FUEL_TYPES_CLOUD_KEY, types, stationId)
-      .catch(() => {});
+    if (cloudLoadCompleteRef.current)
+      cloudStorageService
+        .set(FUEL_TYPES_CLOUD_KEY, types, stationId)
+        .catch(() => {});
     // Broadcast each active fuel's price on the interlink bus so same-page
     // consumers (Dashboard, PriceBoard, POS, Invoice, Reports) update
     // instantly without waiting for the cloud real-time round-trip.
@@ -381,12 +393,17 @@ export default function FuelTypesManager() {
   // Load from cloud on mount + real-time cross-device sync
   useEffect(() => {
     if (!user) return;
+    cloudLoadCompleteRef.current = false;
+    localModifiedRef.current = false;
+    let cancelled = false;
     (async () => {
       const cloudData = await cloudStorageService.get<CustomFuelType[]>(
         FUEL_TYPES_CLOUD_KEY,
         stationId,
       );
-      if (cloudData) setFuelTypes(normalizeCustomFuelTypes(cloudData));
+      if (!cancelled && cloudData && !localModifiedRef.current)
+        setFuelTypes(normalizeCustomFuelTypes(cloudData));
+      if (!cancelled) cloudLoadCompleteRef.current = true;
     })();
     // Real-time: when another device updates fuel types, update instantly
     const unsubs = [
@@ -394,12 +411,26 @@ export default function FuelTypesManager() {
         FUEL_TYPES_CLOUD_KEY,
         stationId,
         (val) => {
-          if (val) setFuelTypes(normalizeCustomFuelTypes(val));
+          if (!val || localModifiedRef.current) return;
+          setFuelTypes(normalizeCustomFuelTypes(val));
         },
       ),
     ];
-    return () => unsubs.forEach((u) => u());
+    return () => {
+      cancelled = true;
+      unsubs.forEach((u) => u());
+    };
   }, [user, stationId]);
+
+  // Post-load flush: if the user made changes before/during the cloud load,
+  // re-push the latest local state to cloud so it's not lost.
+  useEffect(() => {
+    if (cloudLoadCompleteRef.current && localModifiedRef.current) {
+      cloudStorageService
+        .set(FUEL_TYPES_CLOUD_KEY, fuelTypesRef.current, stationId)
+        .catch(() => {});
+    }
+  }, [cloudLoadCompleteRef.current]);
 
   // Interlink receiver: when another tab calls navigateToTab("fueltypes",
   // <FuelPricePrefill>), open the add form pre-filled with the fuel type +
