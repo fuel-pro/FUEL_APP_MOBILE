@@ -401,16 +401,43 @@ export async function loginWithAccessCode(
     throw new Error(error.message || "Login failed.");
   }
   if (!data) {
-    throw new Error("Invalid username or password, or access has been disabled.");
+    throw new Error(
+      "Invalid username or password, or access has been disabled.",
+    );
   }
   const result = data as {
-    accessCodeId: string;
-    memberName: string;
-    memberRole: string;
-    allowedTabs: string[];
-    readOnly: boolean;
-    stationId: string;
+    accessCodeId?: string;
+    memberName?: string;
+    memberRole?: string;
+    allowedTabs?: string[];
+    readOnly?: boolean;
+    stationId?: string;
+    locked?: boolean;
+    retryAfter?: string;
   };
+  // Brute-force lockout: the RPC returns {locked:true, retryAfter:<iso>}
+  // instead of null so the user gets a clear "try again later" message and
+  // the owner can see the locked state in the Team Manager UI.
+  if (result.locked) {
+    const mins = result.retryAfter
+      ? Math.max(
+          1,
+          Math.ceil(
+            (new Date(result.retryAfter).getTime() - Date.now()) / 60000,
+          ),
+        )
+      : 15;
+    throw new Error(
+      `Too many failed attempts. This account is locked for ${mins} minute${
+        mins === 1 ? "" : "s"
+      }. Please try again later or contact the station owner.`,
+    );
+  }
+  if (!result.accessCodeId) {
+    throw new Error(
+      "Invalid username or password, or access has been disabled.",
+    );
+  }
   const session: StationAccessSession = {
     accessCodeId: result.accessCodeId,
     memberName: result.memberName,

@@ -1,4 +1,4 @@
-import React, { useCallback, useRef } from "react";
+import React, { useCallback, useRef, Suspense } from "react";
 import { useState, useEffect } from "react";
 import {
   Crown,
@@ -117,7 +117,7 @@ import {
   StorageExplorerSection,
   ApiRateLimitsSection,
   DeveloperControlCenterSection,
-} from "./founder-sections";
+} from "./founder-sections/lazy";
 import { useFounderBackend } from "@/react-app/hooks/useFounderBackend";
 import { useFounderConsoleStore } from "@/react-app/hooks/useFounderConsoleStore";
 import { useFounderAdvancedStore } from "@/react-app/hooks/useFounderAdvancedStore";
@@ -2736,227 +2736,246 @@ export default function FounderAccess() {
           )}
 
           {/* ══════ NEW SECTIONS ══════ */}
-          {activeSection === "security" && (
-            <SecuritySection logAudit={logAudit} />
-          )}
-          {activeSection === "backup" && <BackupSection logAudit={logAudit} />}
-          {activeSection === "config" && <ConfigSection logAudit={logAudit} />}
-          {activeSection === "notifications" && (
-            <NotificationsSection logAudit={logAudit} />
-          )}
-          {activeSection === "branding" && (
-            <BrandingSection logAudit={logAudit} />
-          )}
-          {activeSection === "api" && <ApiSection logAudit={logAudit} />}
-          {activeSection === "analytics" && (
-            <AnalyticsSection
-              logAudit={logAudit}
-              backendRevenue={statsTotalRevenue}
-              backendStationCount={allBackendStations?.length}
-              backendUserCount={allBackendUsers?.length}
-            />
-          )}
-          {activeSection === "maintenance" && (
-            <MaintenanceSection logAudit={logAudit} />
-          )}
-          {activeSection === "email" && (
-            <EmailTemplatesSection logAudit={logAudit} />
-          )}
-          {activeSection === "ratelimit" && (
-            <RateLimitSection logAudit={logAudit} />
-          )}
-          {activeSection === "datamgmt" && (
-            <DataManagementSection logAudit={logAudit} />
-          )}
+          {/* Lazy-loaded: each founder section is a separate chunk so the
+              founder bundle isn't 1+ MB on first paint. Only the active
+              section's chunk is fetched on demand. */}
+          <Suspense
+            fallback={
+              <div className="flex items-center justify-center py-20">
+                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-amber-400" />
+              </div>
+            }
+          >
+            {activeSection === "security" && (
+              <SecuritySection logAudit={logAudit} />
+            )}
+            {activeSection === "backup" && (
+              <BackupSection logAudit={logAudit} />
+            )}
+            {activeSection === "config" && (
+              <ConfigSection logAudit={logAudit} />
+            )}
+            {activeSection === "notifications" && (
+              <NotificationsSection logAudit={logAudit} />
+            )}
+            {activeSection === "branding" && (
+              <BrandingSection logAudit={logAudit} />
+            )}
+            {activeSection === "api" && <ApiSection logAudit={logAudit} />}
+            {activeSection === "analytics" && (
+              <AnalyticsSection
+                logAudit={logAudit}
+                backendRevenue={statsTotalRevenue}
+                backendStationCount={allBackendStations?.length}
+                backendUserCount={allBackendUsers?.length}
+              />
+            )}
+            {activeSection === "maintenance" && (
+              <MaintenanceSection logAudit={logAudit} />
+            )}
+            {activeSection === "email" && (
+              <EmailTemplatesSection logAudit={logAudit} />
+            )}
+            {activeSection === "ratelimit" && (
+              <RateLimitSection logAudit={logAudit} />
+            )}
+            {activeSection === "datamgmt" && (
+              <DataManagementSection logAudit={logAudit} />
+            )}
 
-          {/* ══════ CONSOLE SETTINGS ══════ */}
-          {activeSection === "consolesettings" && (
-            <ConsoleSettingsSection
-              settings={consoleSettings}
-              lastSync={consoleStore.lastSync}
-              onUpdate={consoleStore.updateSettings}
-              logAudit={consoleStore.addAudit}
-            />
-          )}
+            {/* ══════ CONSOLE SETTINGS ══════ */}
+            {activeSection === "consolesettings" && (
+              <ConsoleSettingsSection
+                settings={consoleSettings}
+                lastSync={consoleStore.lastSync}
+                onUpdate={consoleStore.updateSettings}
+                logAudit={consoleStore.addAudit}
+              />
+            )}
 
-          {/* ══════ MONETIZATION ══════ */}
-          {activeSection === "pricing" && (
-            <PricingManagerSection logAudit={logAudit} />
-          )}
-          {activeSection === "subdash" && (
-            <SubscriptionDashboardSection logAudit={logAudit} />
-          )}
-          {activeSection === "coupons" && <CouponSection logAudit={logAudit} />}
-          {activeSection === "payouts" && <PayoutSection logAudit={logAudit} />}
-          {activeSection === "trialanalytics" && (
-            <TrialAnalyticsSection logAudit={logAudit} />
-          )}
-          {activeSection === "performance" && (
-            <PerformanceSection logAudit={logAudit} />
-          )}
-          {activeSection === "paywall" && (
-            <PaywallControlSection logAudit={logAudit} />
-          )}
-          {activeSection === "paymentmethods" && (
-            <PaymentMethodsSection logAudit={logAudit} />
-          )}
+            {/* ══════ MONETIZATION ══════ */}
+            {activeSection === "pricing" && (
+              <PricingManagerSection logAudit={logAudit} />
+            )}
+            {activeSection === "subdash" && (
+              <SubscriptionDashboardSection logAudit={logAudit} />
+            )}
+            {activeSection === "coupons" && (
+              <CouponSection logAudit={logAudit} />
+            )}
+            {activeSection === "payouts" && (
+              <PayoutSection logAudit={logAudit} />
+            )}
+            {activeSection === "trialanalytics" && (
+              <TrialAnalyticsSection logAudit={logAudit} />
+            )}
+            {activeSection === "performance" && (
+              <PerformanceSection logAudit={logAudit} />
+            )}
+            {activeSection === "paywall" && (
+              <PaywallControlSection logAudit={logAudit} />
+            )}
+            {activeSection === "paymentmethods" && (
+              <PaymentMethodsSection logAudit={logAudit} />
+            )}
 
-          {/* ══════ DEVELOPER TOOLS ══════ */}
-          {activeSection === "commandpalette" && (
-            <CommandPaletteSection
-              commands={navGroups.flatMap((g) =>
-                g.items.map((it) => ({
-                  id: it.id,
-                  label: it.label,
-                  group: g.label,
-                  keywords: it.label.toLowerCase(),
-                  icon: it.icon,
-                })),
-              )}
-              onRun={(id) => handleSetActiveSection(id as SectionId)}
-            />
-          )}
-          {activeSection === "webhooks" && (
-            <WebhooksManagerSection
-              store={advancedStore}
-              logAudit={consoleStore.addAudit}
-            />
-          )}
-          {activeSection === "apikeys" && (
-            <ApiKeysManagerSection
-              store={advancedStore}
-              logAudit={consoleStore.addAudit}
-            />
-          )}
-          {activeSection === "jobs" && (
-            <ScheduledJobsSection
-              store={advancedStore}
-              logAudit={consoleStore.addAudit}
-            />
-          )}
-          {activeSection === "experiments" && (
-            <ExperimentsSection
-              store={advancedStore}
-              logAudit={consoleStore.addAudit}
-            />
-          )}
-          {activeSection === "healthchecks" && (
-            <HealthChecksSection
-              store={advancedStore}
-              logAudit={consoleStore.addAudit}
-            />
-          )}
-          {activeSection === "dbquery" && (
-            <DatabaseQuerySection logAudit={consoleStore.addAudit} />
-          )}
-          {activeSection === "cachemgmt" && (
-            <CacheManagementSection logAudit={consoleStore.addAudit} />
-          )}
+            {/* ══════ DEVELOPER TOOLS ══════ */}
+            {activeSection === "commandpalette" && (
+              <CommandPaletteSection
+                commands={navGroups.flatMap((g) =>
+                  g.items.map((it) => ({
+                    id: it.id,
+                    label: it.label,
+                    group: g.label,
+                    keywords: it.label.toLowerCase(),
+                    icon: it.icon,
+                  })),
+                )}
+                onRun={(id) => handleSetActiveSection(id as SectionId)}
+              />
+            )}
+            {activeSection === "webhooks" && (
+              <WebhooksManagerSection
+                store={advancedStore}
+                logAudit={consoleStore.addAudit}
+              />
+            )}
+            {activeSection === "apikeys" && (
+              <ApiKeysManagerSection
+                store={advancedStore}
+                logAudit={consoleStore.addAudit}
+              />
+            )}
+            {activeSection === "jobs" && (
+              <ScheduledJobsSection
+                store={advancedStore}
+                logAudit={consoleStore.addAudit}
+              />
+            )}
+            {activeSection === "experiments" && (
+              <ExperimentsSection
+                store={advancedStore}
+                logAudit={consoleStore.addAudit}
+              />
+            )}
+            {activeSection === "healthchecks" && (
+              <HealthChecksSection
+                store={advancedStore}
+                logAudit={consoleStore.addAudit}
+              />
+            )}
+            {activeSection === "dbquery" && (
+              <DatabaseQuerySection logAudit={consoleStore.addAudit} />
+            )}
+            {activeSection === "cachemgmt" && (
+              <CacheManagementSection logAudit={consoleStore.addAudit} />
+            )}
 
-          {/* ══════ PLATFORM CONTROL ══════ */}
-          {activeSection === "announcements" && (
-            <AnnouncementsSection
-              store={advancedStore}
-              logAudit={consoleStore.addAudit}
-            />
-          )}
-          {activeSection === "maintwindows" && (
-            <MaintenanceWindowsSection
-              store={advancedStore}
-              logAudit={consoleStore.addAudit}
-            />
-          )}
-          {activeSection === "blocklist" && (
-            <BlocklistSection
-              store={advancedStore}
-              logAudit={consoleStore.addAudit}
-            />
-          )}
-          {activeSection === "cors" && (
-            <CorsConfigSection
-              store={advancedStore}
-              logAudit={consoleStore.addAudit}
-            />
-          )}
-          {activeSection === "envvars" && (
-            <EnvVarsSection
-              store={advancedStore}
-              logAudit={consoleStore.addAudit}
-            />
-          )}
-          {activeSection === "localization" && (
-            <LocalizationSection
-              store={advancedStore}
-              logAudit={consoleStore.addAudit}
-            />
-          )}
-          {activeSection === "errortracker" && (
-            <ErrorTrackerSection
-              store={advancedStore}
-              logAudit={consoleStore.addAudit}
-            />
-          )}
-          {activeSection === "sessions" && (
-            <SessionInspectorSection
-              store={advancedStore}
-              logAudit={consoleStore.addAudit}
-            />
-          )}
-          {activeSection === "taskqueue" && (
-            <TaskQueueSection
-              store={advancedStore}
-              logAudit={consoleStore.addAudit}
-            />
-          )}
-          {activeSection === "logstreams" && (
-            <LogStreamsSection
-              store={advancedStore}
-              logAudit={consoleStore.addAudit}
-            />
-          )}
-          {activeSection === "rolematrix" && (
-            <RoleMatrixSection
-              store={advancedStore}
-              logAudit={consoleStore.addAudit}
-            />
-          )}
-          {activeSection === "releasecoord" && (
-            <ReleaseCoordinatorSection
-              store={advancedStore}
-              logAudit={consoleStore.addAudit}
-            />
-          )}
-          {activeSection === "migrations" && (
-            <MigrationsSection
-              store={advancedStore}
-              logAudit={consoleStore.addAudit}
-            />
-          )}
-          {activeSection === "deliveries" && (
-            <WebhookDeliveriesSection
-              store={advancedStore}
-              logAudit={consoleStore.addAudit}
-            />
-          )}
-          {activeSection === "storage" && (
-            <StorageExplorerSection
-              store={advancedStore}
-              logAudit={consoleStore.addAudit}
-            />
-          )}
-          {activeSection === "ratelimits" && (
-            <ApiRateLimitsSection
-              store={advancedStore}
-              logAudit={consoleStore.addAudit}
-            />
-          )}
+            {/* ══════ PLATFORM CONTROL ══════ */}
+            {activeSection === "announcements" && (
+              <AnnouncementsSection
+                store={advancedStore}
+                logAudit={consoleStore.addAudit}
+              />
+            )}
+            {activeSection === "maintwindows" && (
+              <MaintenanceWindowsSection
+                store={advancedStore}
+                logAudit={consoleStore.addAudit}
+              />
+            )}
+            {activeSection === "blocklist" && (
+              <BlocklistSection
+                store={advancedStore}
+                logAudit={consoleStore.addAudit}
+              />
+            )}
+            {activeSection === "cors" && (
+              <CorsConfigSection
+                store={advancedStore}
+                logAudit={consoleStore.addAudit}
+              />
+            )}
+            {activeSection === "envvars" && (
+              <EnvVarsSection
+                store={advancedStore}
+                logAudit={consoleStore.addAudit}
+              />
+            )}
+            {activeSection === "localization" && (
+              <LocalizationSection
+                store={advancedStore}
+                logAudit={consoleStore.addAudit}
+              />
+            )}
+            {activeSection === "errortracker" && (
+              <ErrorTrackerSection
+                store={advancedStore}
+                logAudit={consoleStore.addAudit}
+              />
+            )}
+            {activeSection === "sessions" && (
+              <SessionInspectorSection
+                store={advancedStore}
+                logAudit={consoleStore.addAudit}
+              />
+            )}
+            {activeSection === "taskqueue" && (
+              <TaskQueueSection
+                store={advancedStore}
+                logAudit={consoleStore.addAudit}
+              />
+            )}
+            {activeSection === "logstreams" && (
+              <LogStreamsSection
+                store={advancedStore}
+                logAudit={consoleStore.addAudit}
+              />
+            )}
+            {activeSection === "rolematrix" && (
+              <RoleMatrixSection
+                store={advancedStore}
+                logAudit={consoleStore.addAudit}
+              />
+            )}
+            {activeSection === "releasecoord" && (
+              <ReleaseCoordinatorSection
+                store={advancedStore}
+                logAudit={consoleStore.addAudit}
+              />
+            )}
+            {activeSection === "migrations" && (
+              <MigrationsSection
+                store={advancedStore}
+                logAudit={consoleStore.addAudit}
+              />
+            )}
+            {activeSection === "deliveries" && (
+              <WebhookDeliveriesSection
+                store={advancedStore}
+                logAudit={consoleStore.addAudit}
+              />
+            )}
+            {activeSection === "storage" && (
+              <StorageExplorerSection
+                store={advancedStore}
+                logAudit={consoleStore.addAudit}
+              />
+            )}
+            {activeSection === "ratelimits" && (
+              <ApiRateLimitsSection
+                store={advancedStore}
+                logAudit={consoleStore.addAudit}
+              />
+            )}
 
-          {activeSection === "devcontrol" && (
-            <DeveloperControlCenterSection
-              store={advancedStore}
-              logAudit={consoleStore.addAudit}
-            />
-          )}
+            {activeSection === "devcontrol" && (
+              <DeveloperControlCenterSection
+                store={advancedStore}
+                logAudit={consoleStore.addAudit}
+              />
+            )}
+          </Suspense>
         </div>
       </main>
     </div>

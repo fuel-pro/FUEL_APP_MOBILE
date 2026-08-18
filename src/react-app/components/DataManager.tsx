@@ -128,6 +128,52 @@ export default function DataManager() {
     }
   };
 
+  // Export EVERYTHING the user has in cloud (app_kv) — every per-component
+  // dataset (shifts, payroll, credit, suppliers, expenses, etc.) plus the
+  // compact FuelContext blob. This is the true full backup: the in-memory
+  // `state` export above only covers FuelContext, but most station data lives
+  // in per-component cloud keys that the in-memory state never holds.
+  const [exportingCloud, setExportingCloud] = useState(false);
+  const exportAllCloudData = async () => {
+    setExportingCloud(true);
+    try {
+      const allData = await cloudStorageService.getAll();
+      const keysCount = Object.keys(allData).length;
+      if (keysCount === 0) {
+        import("@/react-app/lib/toast").then(({ toastInfo }) =>
+          toastInfo("No cloud data found to export."),
+        );
+        return;
+      }
+      const payload = {
+        version: "fuelpro-cloud-backup-1.0",
+        exportedAt: new Date().toISOString(),
+        keyCount: keysCount,
+        data: allData,
+      };
+      const dataStr = JSON.stringify(payload, null, 2);
+      const blob = new Blob([dataStr], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `FuelPro_CloudBackup_${new Date()
+        .toISOString()
+        .replace(/[:.]/g, "-")}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      import("@/react-app/lib/toast").then(({ toastSuccess }) =>
+        toastSuccess(`Exported ${keysCount} cloud data sets!`),
+      );
+    } catch (error) {
+      console.error("Cloud export error:", error);
+      import("@/react-app/lib/toast").then(({ toastError }) =>
+        toastError("Cloud export failed. Please try again."),
+      );
+    } finally {
+      setExportingCloud(false);
+    }
+  };
+
   const importData = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -768,6 +814,17 @@ export default function DataManager() {
                 >
                   <Download size={16} />
                   Export Complete Backup
+                </button>
+
+                <button
+                  onClick={exportAllCloudData}
+                  disabled={exportingCloud}
+                  className="w-full btn bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:from-emerald-700 hover:to-teal-700 flex items-center gap-3 disabled:opacity-60 disabled:cursor-wait"
+                >
+                  <Cloud size={16} />
+                  {exportingCloud
+                    ? "Exporting cloud data..."
+                    : "Export ALL Cloud Data (Full Backup)"}
                 </button>
 
                 <button

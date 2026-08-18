@@ -23,6 +23,7 @@ import InviteAccept from "@/react-app/pages/InviteAccept";
 import StationAccess from "@/react-app/pages/StationAccess";
 import FounderAccess from "@/react-app/pages/FounderAccess";
 import OfflineIndicator from "@/react-app/components/OfflineIndicator";
+import { SkipToContent } from "@/react-app/lib/accessibility";
 import { TRPCProvider } from "@/providers/trpc";
 import { AlertTriangle, RefreshCw } from "lucide-react";
 import { resolveCountryCode } from "@/react-app/lib/geo-utils";
@@ -256,63 +257,66 @@ export default function App() {
   // Supabase - Primary Auth and Database
   return (
     <ErrorBoundary>
-      <AuthProvider>
-        <ThemeProvider>
-          <LocalizationProvider>
-            <PermissionProvider>
-              <PlatformDataProvider>
-                <TRPCProvider>
-                  <Router>
-                    <Routes>
-                      {/* Firebase Authentication - handled by AuthLogin component */}
-                      <Route path="/sign-in" element={<AuthLogin />} />
-                      <Route path="/sign-up" element={<AuthLogin />} />
-                      <Route path="/dashboard" element={<MainAppLoader />} />
+      <SkipToContent />
+      <div id="main-content" className="min-h-screen">
+        <AuthProvider>
+          <ThemeProvider>
+            <LocalizationProvider>
+              <PermissionProvider>
+                <PlatformDataProvider>
+                  <TRPCProvider>
+                    <Router>
+                      <Routes>
+                        {/* Firebase Authentication - handled by AuthLogin component */}
+                        <Route path="/sign-in" element={<AuthLogin />} />
+                        <Route path="/sign-up" element={<AuthLogin />} />
+                        <Route path="/dashboard" element={<MainAppLoader />} />
 
-                      {/* Founder Access - public, no auth required */}
-                      <Route path="/founder" element={<FounderAccess />} />
-                      <Route
-                        path="/founder-v1"
-                        element={<Navigate to="/founder" replace />}
-                      />
-                      <Route
-                        path="/admin"
-                        element={<Navigate to="/founder" replace />}
-                      />
+                        {/* Founder Access - public, no auth required */}
+                        <Route path="/founder" element={<FounderAccess />} />
+                        <Route
+                          path="/founder-v1"
+                          element={<Navigate to="/founder" replace />}
+                        />
+                        <Route
+                          path="/admin"
+                          element={<Navigate to="/founder" replace />}
+                        />
 
-                      {/* Password Reset - public */}
-                      <Route
-                        path="/reset-password"
-                        element={<PasswordReset />}
-                      />
+                        {/* Password Reset - public */}
+                        <Route
+                          path="/reset-password"
+                          element={<PasswordReset />}
+                        />
 
-                      {/* Invite acceptance - public */}
-                      <Route
-                        path="/join/:inviteId"
-                        element={<InviteAccept />}
-                      />
+                        {/* Invite acceptance - public */}
+                        <Route
+                          path="/join/:inviteId"
+                          element={<InviteAccept />}
+                        />
 
-                      {/* Station access (team member login w/o signup) - public */}
-                      <Route
-                        path="/station-access"
-                        element={<StationAccess />}
-                      />
+                        {/* Station access (team member login w/o signup) - public */}
+                        <Route
+                          path="/station-access"
+                          element={<StationAccess />}
+                        />
 
-                      {/* Main app - requires auth, shows loader while checking */}
-                      <Route path="/" element={<MainAppLoader />} />
+                        {/* Main app - requires auth, shows loader while checking */}
+                        <Route path="/" element={<MainAppLoader />} />
 
-                      {/* Catch all */}
-                      <Route path="*" element={<Navigate to="/" replace />} />
-                    </Routes>
-                    {/* Offline indicator for sync status */}
-                    <OfflineIndicator />
-                  </Router>
-                </TRPCProvider>
-              </PlatformDataProvider>
-            </PermissionProvider>
-          </LocalizationProvider>
-        </ThemeProvider>
-      </AuthProvider>
+                        {/* Catch all */}
+                        <Route path="*" element={<Navigate to="/" replace />} />
+                      </Routes>
+                      {/* Offline indicator for sync status */}
+                      <OfflineIndicator />
+                    </Router>
+                  </TRPCProvider>
+                </PlatformDataProvider>
+              </PermissionProvider>
+            </LocalizationProvider>
+          </ThemeProvider>
+        </AuthProvider>
+      </div>
     </ErrorBoundary>
   );
 }
