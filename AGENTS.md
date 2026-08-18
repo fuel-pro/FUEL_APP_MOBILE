@@ -4996,3 +4996,32 @@ Management API database/query endpoint were both unreachable).
   is applied client-side per-user on sign-in).
 - Existing data compression: occurs automatically for each user within ~8s
   of their next sign-in on the updated build.
+
+## Session 2026-08-18 — Lost commit recovery + merge + stale price fix
+
+### Lost commits recovered from unmerged branches
+Found and merged valuable work from TWO unmerged branches:
+1. feat/adaptive-onboarding-tutorial (3 commits NOT on main): OnboardingTutorial, TutorialContext, Compression, Cross-tab auth sync
+2. comprehensive-fixes-aug17 (1 commit NOT on main): scheduled-reminder-service, Communication Settings, Station Access Codes, Auto-start tutorial
+Skipped: founder-username-login (7 commits, needs manual rebase), develop/fix/tembo (200+ commit divergent snapshots).
+
+### Merge conflict resolution (6 files)
+cloud-storage-service.ts, document-service.ts, documentStore.ts, AuthContext.tsx, StationContext.tsx, UserProfileSettings.tsx, restApiSync.ts — combined compression API + cross-tab auth + offline queue + subscribe.
+
+### Dashboard stale Kenya price fix (commit e937b23)
+displayPmsPrice + displayKerosenePrice were missing the sanity guard that displayAgoPrice already had. For non-Kenya stations, if stored price >= 100 (stale Kenya KSh), now falls through to country-appropriate fallback. Verified: Super Petrol $220.08 -> $1.10 on US station.
+
+### Deploy state 2026-08-18
+- GitHub main: 01a5794 (merge) + e937b23 (price fix) pushed
+- Cloudflare Pages: LIVE (preview 59965310, Dashboard-WXg1E877.js with sanity guard verified)
+- Vercel production: BLOCKED by api-deployments-free-per-day (deploys stuck in Queued). GitHub integration auto-deploys when quota resets.
+- Supabase: no schema changes (frontend-only)
+
+### Browser test verification (2026-08-18, Cloudflare main alias)
+Founder QA Test, US station, USD:
+- Dashboard: country-aware, 4 dynamic fuel types, OnboardingTutorial button, revenue reflected POS sale ($11)
+- POS: 10L Super Petrol @ $1.10/L cash sale (INV20260818000010NQVL, $11), US locale receipt, cloud sync
+- Invoice: INV-2026-001 for Acme Logistics Inc $550, Unpaid, export options
+- Credit Accounts: Test Credit Customer, $5k limit, status selector + action buttons
+- Debt Payment Reminders: form saved, Schedule Reminder button, country-aware phone placeholder
+- Founder Console login: FOUNDER username -> 2FA verification screen
