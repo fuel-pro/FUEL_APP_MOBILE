@@ -5416,3 +5416,81 @@ succeed.
 (preview 81927190 + main alias). Vercel BLOCKED by api-deployments-free-per-day
 (100/100; GitHub integration auto-deploys on reset). Supabase migration 021
 applied live (table + RPC + RLS).
+
+
+## Backend compression backfill — app_kv gzip (DEPLOYED LIVE 2026-08-18, commit 2a7fd23)
+
+**User request**: compress every user file/document/data in the backend to save
+Supabase storage + egress (org on Free Plan, Egress 7.095/5GB = 142%,
+Realtime 1.9M/2M = 96%).
+
+### What was already in place (verified)
+- `src/react-app/lib/compression.ts` (committed f6ff198 + 6d2bc87): pako
+  gzip level 9 + base64, stores app_kv.data as `{__compressed:true, c:<b64>, o:<origLen>}`.
+  Backward-compatible: `decompressJson` detects the marker; non-compressed
+  rows read unchanged. `cloudStorageService.set` always compresses (skips if
+  <256 bytes or no gain); `get`/`getAll`/`subscribe` decompress transparently.
+- Realtime channel multiplexer (`cloudStorageService.muxSubscribe`): all
+  per-key subscriptions for one owner share ONE channel
+  (`owner_id=eq.<ownerId>` filter) instead of 30 separate channels — ~30x
+  reduction in non-data Realtime messages. Verified `owner_id=eq` present in
+  deployed reports chunk.
+
+### Backfill (the new work this session)
+The compression code only compressed NEW writes; 374 of 421 existing rows were
+still plain JSONB. Wrote `scripts/backfill_compress_appkv.py` (uses ONLY the
+Supabase Management API `database/query` endpoint — the REST hostname is not
+DNS-resolvable from this env; Python stdlib gzip+base64 produces the exact
+same format as the client pako). Ran live:
+- Before: 421 rows, 48 compressed, 307,472 bytes.
+- After: 421 rows, 262 compressed, 270,058 bytes.
+- 214 rows newly compressed; ~63.8% size reduction on compressed rows
+  (egregious rows: 11.7KB -> 3.8KB = 3.1x; 8.5KB -> 1.9KB = 4.4x).
+- Remaining 159 plain rows are <1KB (below the 256-byte threshold or no gain).
+
+### Verified live (Cloudflare preview f07fd064)
+Logged in as founder QA (founder.qa.fuelpro@gmail.com, US station, USD):
+Dashboard rendered country-aware (0% VAT, "$1.10/L", United States Revenue
+Authority), Synced indicator on. The app DECOMPRESSED the founder compact
+blob (`user_87e6502b..._compact` is compressed) + per-component keys
+(`credit_accounts`, `pos_transactions`, etc.) transparently. No data loss,
+no decode errors.
+
+### Other improvements bundled (commit 2a7fd23)
+- `supabase/migrations/022_access_code_brute_force_protection.sql` (APPLIED
+  LIVE): SECURITY DEFINER `verify_access_code(p_station_id, p_username,
+p_password)` RPC. 5 failed attempts in 15min -> 15min lockout. Per
+  (station_id, lower(username)). Verified live: 5 wrong passwords -> account
+  locked, "Too many failed attempts..." message displayed, `locked_until`
+  set 15 min ahead.
+- `src/react-app/pages/founder-sections/lazy.ts`: React.lazy barrel for 50
+  founder console sections -> smaller founder base chunk (faster console load).
+- `DataManager.tsx`: export-all-cloud-data backup (`cloudStorageService.getAll()`
+  -> JSON download).
+- `main.tsx`: `initErrorMonitoring()` (Sentry + window error/rejection handlers).
+- `App.tsx`: SkipToContent a11y link + `id="main-content"` target.
+- `public/backfill-compress.html` + `scripts/backfill-compress-appkv.mjs`:
+  alternate browser/Node backfill runners (kept for re-running on new data).
+
+### Deploy state 2026-08-18 (commit 2a7fd23)
+- GitHub main: 2a7fd23 pushed (820ca86..2a7fd23)
+- Cloudflare Pages: LIVE (preview https://f07fd064.fuel-app-mobile.pages.dev
+  + main alias https://fuel-app-mobile.pages.dev)
+- Vercel production: BLOCKED by api-deployments-free-per-day (100/100;
+  resets ~24h). GitHub integration (prodBranch=main) auto-deploys 2a7fd23
+  when quota resets.
+- Supabase: migration 022 applied live (verify_access_code RPC). app_kv
+  backfill applied live (262/421 rows compressed). No further schema changes.
+- `npx tsc --noEmit` 0 errors, `npm run build` 164 precache success.
+
+### Quota mitigation summary (Free Plan grace period ends 12 Sep 2026)
+1. Compression (this session): every cloud read transfers gzip-compressed
+   bytes (~3-5x smaller). Biggest egress reducer for app_kv reads (fire on
+   every tab mount + every realtime message).
+2. Realtime multiplexer (commit 6d2bc87, already deployed): 30 channels -> 1
+   per owner. Biggest Realtime message reducer.
+3. Backfill (this session): compressed the 374 pre-existing plain rows so
+   savings apply to ALL data, not just new writes.
+4. Latency optimization (commit 74d9cb7, already deployed): sync userId from
+   localStorage + in-memory cache eliminates an auth.getUser() round-trip on
+   every cloud op (was 200-500ms x 10+ components on every load).
