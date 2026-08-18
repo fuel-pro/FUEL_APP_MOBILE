@@ -74,6 +74,29 @@ export interface CompressedEnvelope {
   z: number;
 }
 
+/**
+ * Legacy/alternate envelope shape used by the `feat/adaptive-onboarding-tutorial`
+ * branch: `{ c: "<base64 gzip>", o: <orig bytes>, __compressed: true }`.
+ * Same gzip+base64 payload, different keys. We transparently decode it so rows
+ * written by either implementation are readable — and the next `set()`
+ * re-persists them in the canonical `{__c:1,...}` shape.
+ */
+interface LegacyEnvelope {
+  c: string;
+  o: number;
+  __compressed: boolean;
+}
+
+function isLegacyEnvelope(raw: unknown): raw is LegacyEnvelope {
+  return (
+    raw != null &&
+    typeof raw === "object" &&
+    !Array.isArray(raw) &&
+    (raw as Record<string, unknown>).__compressed === true &&
+    typeof (raw as Record<string, unknown>).c === "string"
+  );
+}
+
 export function isCompressedEnvelope(raw: unknown): raw is CompressedEnvelope {
   return (
     raw != null &&
@@ -82,6 +105,11 @@ export function isCompressedEnvelope(raw: unknown): raw is CompressedEnvelope {
     (raw as Record<string, unknown>)[ENVELOPE_KEY] === ENVELOPE_VERSION &&
     typeof (raw as Record<string, unknown>).d === "string"
   );
+}
+
+/** True if `raw` is ANY supported compressed envelope (canonical OR legacy). */
+export function isAnyCompressedEnvelope(raw: unknown): boolean {
+  return isCompressedEnvelope(raw) || isLegacyEnvelope(raw);
 }
 
 /**
@@ -127,16 +155,30 @@ export function compress<T>(value: T): T | CompressedEnvelope {
  */
 export function decompress<T = unknown>(raw: unknown): T | null {
   if (raw == null) return null;
-  if (!isCompressedEnvelope(raw)) return raw as T;
-  try {
-    const bytes = base64ToBytes(raw.d);
-    const jsonBytes = ungzip(bytes);
-    const json = new TextDecoder().decode(jsonBytes);
-    return JSON.parse(json) as T;
-  } catch {
-    // Corrupt envelope — treat as no data rather than crashing the UI.
-    return null;
+  // Canonical envelope: { __c: 1, d, n, z }
+  if (isCompressedEnvelope(raw)) {
+    try {
+      const bytes = base64ToBytes(raw.d);
+      const jsonBytes = ungzip(bytes);
+      const json = new TextDecoder().decode(jsonBytes);
+      return JSON.parse(json) as T;
+    } catch {
+      return null;
+    }
   }
+  // Legacy envelope: { c: "<base64 gzip>", o, __compressed: true }
+  if (isLegacyEnvelope(raw)) {
+    try {
+      const bytes = base64ToBytes(raw.c);
+      const jsonBytes = ungzip(bytes);
+      const json = new TextDecoder().decode(jsonBytes);
+      return JSON.parse(json) as T;
+    } catch {
+      return null;
+    }
+  }
+  // Not an envelope — return legacy raw JSONB untouched.
+  return raw as T;
 }
 
 /** Approximate compression ratio for diagnostics (1 = no change, 0.1 = 10x). */

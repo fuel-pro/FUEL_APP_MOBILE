@@ -10,6 +10,7 @@ import {
   compress,
   decompress,
   isCompressedEnvelope,
+  isAnyCompressedEnvelope,
   COMPRESSION_MIN_BYTES,
   compressFile,
   decompressFile,
@@ -104,6 +105,32 @@ describe("compression (JSONB envelope)", () => {
     expect(isCompressedEnvelope(env)).toBe(true);
     expect(wireSize).toBeLessThan(rawSize);
     expect(decompress(env)).toEqual(business);
+  });
+
+  it("decodes the legacy {c, o, __compressed:true} envelope", () => {
+    // The feat/adaptive-onboarding-tutorial branch wrote rows in this shape.
+    // decompress must transparently decode them so existing cloud data is not
+    // returned as an opaque envelope object. Use a large value so compress()
+    // actually produces an envelope (tiny values skip compression).
+    const value = {
+      invoices: Array.from({ length: 40 }, (_, i) => ({
+        id: `INV-${i}`,
+        total: 1234.56 + i,
+        customer: `Customer ${i}`,
+      })),
+    };
+    const canonical = compress(value) as {
+      d: string;
+      n: number;
+      z: number;
+      __c: number;
+    };
+    expect(isCompressedEnvelope(canonical)).toBe(true);
+    // Rebuild the same payload in the legacy shape using the same gzip base64.
+    const legacy = { c: canonical.d, o: canonical.n, __compressed: true };
+    expect(isCompressedEnvelope(legacy)).toBe(false);
+    expect(isAnyCompressedEnvelope(legacy)).toBe(true);
+    expect(decompress(legacy)).toEqual(value);
   });
 });
 
