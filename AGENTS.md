@@ -5169,3 +5169,15 @@ Editor when DB access is restored to enable conflict-free multi-device writes.
   markers). `npx tsc --noEmit` 0 errors, 16/16 tests pass, build 110 precache.
 - Supabase: no schema changes applied this session (migration 020 pending DB
   access). All cloud data uses existing `app_kv` table + scoped row ids.
+
+## Flash-of-data-then-blank bug fix (DEPLOYED LIVE 2026-08-18, commit 92194d8)
+
+Symptom: switching tabs flashed cached data then went blank. Root cause: 8 components used getCached in useState initializer but were missing cloudLoadCompleteRef + localModifiedRef guards. The async cloud load overwrote cached data + realtime subscribe echo wiped uncommitted edits.
+
+Fix (standard 3-ref guard pattern, reference ExpenseTracker.tsx L136-223): cloudLoadCompleteRef (skip save until load done), localModifiedRef (skip cloud-load overwrite + subscribe echo when user has uncommitted edits), post-load flush useEffect (re-push local state if modified during load).
+
+Components fixed: CreditManagement, CustomerLoyalty, FuelTypesManager, PointOfSale, ReportsCenter, SupplierManagement, MaintenanceTracker, PriceBoard. All user-action handlers now set localModifiedRef.current = true before setX().
+
+Verified live (Cloudflare 72b8af4f): created Credit account + Supplier, switched tabs, data persisted with NO flash-then-blank. All 30+ tabs load correctly.
+
+Deploy: GitHub main 92194d8, Cloudflare LIVE, Vercel LIVE. Supabase: no schema changes. No lost commits found on unmerged branches.
