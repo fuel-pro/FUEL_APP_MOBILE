@@ -171,17 +171,25 @@ export default function Dashboard() {
   // authoritative price they actually charge — the global price is only a
   // reference. Previously the global price took priority, causing a US station
   // with $1.10/L configured to show $3.45/L (global average) on the Dashboard.
-  const displayPmsPrice =
-    state.pmsPrice ??
-    locationPrice?.petrolPrice ??
-    (regionalPrice.isRegional ? regionalPrice.petrol : null) ??
-    effectiveFuelPrice?.petrolPrice ??
-    fuelTypeApi.getPriceFor(CANONICAL_FUEL_TYPES.petrol.label) ??
-    0;
-  // Sanity guard for the legacy scalar agoPrice: if the station is NOT in
-  // Kenya but the stored agoPrice looks like a Kenya KSh price (>= 100),
-  // it's a stale Kenya default. Fall through to the country-appropriate
-  // fallback instead so a US station doesn't show "$229.95/L" for diesel.
+  // Sanity guard for the legacy scalar prices: if the station is NOT in
+  // Kenya but a stored price looks like a Kenya KSh price (>= 100 per
+  // litre — absurd in USD/EUR/etc.), it's a stale Kenya default. Fall
+  // through to the country-appropriate fallback instead so a US station
+  // doesn't show "$220.08/L" for petrol or "$229.95/L" for diesel.
+  const pmsPriceSanityOk =
+    stationCountry === "KE" || !state.pmsPrice || state.pmsPrice < 100;
+  const displayPmsPrice = pmsPriceSanityOk
+    ? (state.pmsPrice ??
+      locationPrice?.petrolPrice ??
+      (regionalPrice.isRegional ? regionalPrice.petrol : null) ??
+      effectiveFuelPrice?.petrolPrice ??
+      fuelTypeApi.getPriceFor(CANONICAL_FUEL_TYPES.petrol.label) ??
+      0)
+    : (locationPrice?.petrolPrice ??
+      (regionalPrice.isRegional ? regionalPrice.petrol : null) ??
+      effectiveFuelPrice?.petrolPrice ??
+      fuelTypeApi.getPriceFor(CANONICAL_FUEL_TYPES.petrol.label) ??
+      0);
   const agoPriceSanityOk =
     stationCountry === "KE" || !state.agoPrice || state.agoPrice < 100;
   const displayAgoPrice = agoPriceSanityOk
@@ -196,11 +204,19 @@ export default function Dashboard() {
       effectiveFuelPrice?.dieselPrice ??
       fuelTypeApi.getPriceFor(CANONICAL_FUEL_TYPES.diesel.label) ??
       0);
-  const displayKerosenePrice =
-    fuelTypeApi.getPriceFor(CANONICAL_FUEL_TYPES.kerosene.label) ??
-    locationPrice?.kerosenePrice ??
-    effectiveFuelPrice?.kerosenePrice ??
-    0;
+  const keroseneConfigured = fuelTypeApi.getPriceFor(
+    CANONICAL_FUEL_TYPES.kerosene.label,
+  );
+  const keroseneSanityOk =
+    stationCountry === "KE" || !keroseneConfigured || keroseneConfigured < 100;
+  const displayKerosenePrice = keroseneSanityOk
+    ? (keroseneConfigured ??
+      locationPrice?.kerosenePrice ??
+      effectiveFuelPrice?.kerosenePrice ??
+      0)
+    : (locationPrice?.kerosenePrice ??
+      effectiveFuelPrice?.kerosenePrice ??
+      0);
   // Show the detected city for location-based pricing
   const priceCityName =
     locationPrice?.cityName || regionalPrice.cityName || stationCity;

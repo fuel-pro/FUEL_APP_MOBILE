@@ -13,9 +13,9 @@
 
 import { getSupabaseClient } from "@/supabase/client";
 import {
-  compress,
-  decompress,
-  isCompressedEnvelope,
+  compressJson,
+  decompressJson,
+  isCompressedPayload,
 } from "@/react-app/lib/compression";
 
 const COLLECTION = "fuel_data";
@@ -82,6 +82,21 @@ function coerceJson<T = Json>(raw: unknown): T | null {
     }
   }
   return raw as T;
+}
+
+/**
+ * Read-side adapter: run coerceJson for legacy/double-encoded strings, then
+ * transparently decompress any gzip-compressed payload written by set().
+ * Returns null only when there is genuinely no value. Existing uncompressed
+ * rows pass through unchanged.
+ */
+function decodeRow<T = Json>(raw: unknown): T | null {
+  const coerced = coerceJson<T>(raw);
+  if (coerced == null) return null;
+  if (isCompressedPayload(coerced)) {
+    return decompressJson<T>(coerced);
+  }
+  return coerced;
 }
 
 /**
@@ -178,18 +193,94 @@ function clearCache(key: string): void {
   }
 }
 
+// ---------------------------------------------------------------------------
+// OFFLINE WRITE QUEUE
+// ---------------------------------------------------------------------------
+// When `set()`/`delete()` fail because the network is unavailable (or the
+// Supabase session expired), the operation is appended to a durable queue in
+// localStorage. A single global listener (window online event + visibility
+// change + periodic retry) flushes the queue once connectivity is restored so
+// offline edits are never lost — they reach the cloud automatically as soon as
+// the device is back online.
+//
+// The queue stores the LAST write per logical key (coalescing rapid edits so a
+// user typing into a price field offline doesn't queue 50 writes — only the
+// final value matters). Deletions are stored as `{ op: "delete" }`.
+
+const OFFLINE_QUEUE_KEY = "fuelpro_offline_queue_v1";
+
+type QueuedOp =
+  | {
+      op: "set";
+      key: string;
+      value: Json;
+      stationId?: string;
+      ts: number;
+    }
+  | {
+      op: "delete";
+      key: string;
+      stationId?: string;
+      ts: number;
+    };
+
+function readQueue(): QueuedOp[] {
+  try {
+    const raw = localStorage.getItem(OFFLINE_QUEUE_KEY);
+    return raw ? (JSON.parse(raw) as QueuedOp[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeQueue(q: QueuedOp[]): void {
+  try {
+    // Cap the queue size to avoid unbounded growth (keep the most recent 200
+    // ops — coalescing means this is per-key, not per-keystroke).
+    const capped = q.slice(-200);
+    localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(capped));
+  } catch {
+    /* ignore quota */
+  }
+}
+
+/** Coalesce: replace any existing op for the same key+station, then append. */
+function enqueueSet(
+  key: string,
+  value: Json,
+  stationId: string | undefined,
+): void {
+  const q = readQueue().filter(
+    (op) => !(op.key === key && op.stationId === stationId),
+  );
+  q.push({ op: "set", key, value, stationId, ts: Date.now() });
+  writeQueue(q);
+}
+
+function enqueueDelete(key: string, stationId: string | undefined): void {
+  const q = readQueue().filter(
+    (op) => !(op.key === key && op.stationId === stationId),
+  );
+  q.push({ op: "delete", key, stationId, ts: Date.now() });
+  writeQueue(q);
+}
+
+function removeQueuedOp(op: QueuedOp): void {
+  const q = readQueue().filter(
+    (o) =>
+      !(o.key === op.key && o.stationId === op.stationId && o.ts === op.ts),
+  );
+  writeQueue(q);
+}
+
+/** Whether there are pending offline writes awaiting sync. */
+function hasPendingOfflineOps(): boolean {
+  return readQueue().length > 0;
+}
+
 class CloudStorageService {
   private memoryCache = new Map<string, { value: unknown; ts: number }>();
-  private memTtlMs = 300_000; // 5 minutes — data changes at most every 2s (save debounce), and a longer TTL avoids redundant GETs that burn egress quota.
-
-  /**
-   * In-flight GET deduplication. When two components call `get(key)` for the
-   * same key within the same tick (common on mount — e.g. a parent + child
-   * both loading the same cloud key), only ONE Supabase round-trip is made
-   * and both callers await the same promise. This halves redundant reads
-   * (each read is billable egress on the Free plan).
-   */
-  private inflight = new Map<string, Promise<unknown | null>>();
+  private memTtlMs = 60_000; // 60 seconds — data rarely changes faster than this
 
   /** Whether Supabase auth is available (client configured + user signed in). */
   async isAvailable(): Promise<boolean> {
@@ -242,40 +333,6 @@ class CloudStorageService {
     const ownerId = await currentUserId();
     if (!ownerId) return readCache<T>(ck);
 
-    // Dedup concurrent identical GETs: if another caller already has an
-    // in-flight fetch for this exact key+station, await its result instead of
-    // firing a second Supabase round-trip (each round-trip is billable egress).
-    const existing = this.inflight.get(ck);
-    if (existing) {
-      try {
-        return (await existing) as T | null;
-      } catch {
-        // Fall through to a fresh fetch if the dedup'd promise rejected.
-      }
-    }
-
-    const promise = this.fetchFromCloud<T>(key, stationId, ck, ownerId).finally(
-      () => {
-        this.inflight.delete(ck);
-      },
-    );
-    this.inflight.set(ck, promise as Promise<unknown | null>);
-    return promise;
-  }
-
-  /**
-   * Single-flight network fetch for `get()`. Performs the station-scoped →
-   * user-scoped → legacy bare-key read ladder, decompressing each candidate,
-   * and auto-healing legacy rows by repersisting them compressed under the
-   * scoped id. Exposed as a private method so `get()` can dedup concurrent
-   * calls via the `inflight` map.
-   */
-  private async fetchFromCloud<T = Json>(
-    key: string,
-    stationId: string | undefined,
-    ck: string,
-    ownerId: string,
-  ): Promise<T | null> {
     try {
       const client = getSupabaseClient();
       const scopedId = rowId(key, ownerId, stationId);
@@ -290,18 +347,13 @@ class CloudStorageService {
           .maybeSingle();
         if (error) throw error;
         if (data?.data != null) {
-          const unwrapped = coerceJson<unknown>(data.data);
-          const value = decompress<T>(unwrapped);
+          const value = decodeRow<T>(data.data);
           if (value != null) {
             this.memoryCache.set(ck, { value, ts: Date.now() });
             writeCache(ck, value);
-            // Auto-heal: if the stored row was a double-encoded string OR an
-            // uncompressed (legacy) object, repersist compressed so future
-            // reads skip the parse and the row shrinks on the wire.
-            if (
-              typeof data.data === "string" ||
-              !isCompressedEnvelope(unwrapped)
-            ) {
+            // Auto-heal: if the stored row was a double-encoded string,
+            // repersist as proper JSONB so future reads skip the parse.
+            if (typeof data.data === "string") {
               this.set(key, value, stationId).catch(() => {});
             }
             return value;
@@ -319,16 +371,12 @@ class CloudStorageService {
         .maybeSingle();
       if (usError) throw usError;
       if (usData?.data != null) {
-        const unwrapped = coerceJson<unknown>(usData.data);
-        const value = decompress<T>(unwrapped);
+        const value = decodeRow<T>(usData.data);
         if (value != null) {
           this.memoryCache.set(ck, { value, ts: Date.now() });
           writeCache(ck, value);
-          if (
-            typeof usData.data === "string" ||
-            !isCompressedEnvelope(unwrapped)
-          ) {
-            // Repersist under the scoped id, compressed.
+          if (typeof usData.data === "string") {
+            // Repersist under the scoped id as proper JSONB.
             this.set(key, value, stationId).catch(() => {});
           }
           return value;
@@ -345,8 +393,7 @@ class CloudStorageService {
           .eq("owner_id", ownerId)
           .maybeSingle();
         if (legacy?.data != null) {
-          const unwrapped = coerceJson<unknown>(legacy.data);
-          const value = decompress<T>(unwrapped);
+          const value = decodeRow<T>(legacy.data);
           if (value != null) {
             this.memoryCache.set(ck, { value, ts: Date.now() });
             writeCache(ck, value);
@@ -381,31 +428,43 @@ class CloudStorageService {
     this.memoryCache.set(ck, { value, ts: Date.now() });
 
     const ownerId = await currentUserId();
-    if (!ownerId) return; // offline / unauthenticated — cached locally only
+    if (!ownerId) {
+      // Unauthenticated — cache locally only, but DO queue so the write
+      // reaches the cloud once a session is restored.
+      enqueueSet(key, value as unknown as Json, stationId);
+      return;
+    }
 
     try {
       const client = getSupabaseClient();
-      // Compress the payload before it hits the wire. Small payloads are
-      // returned untouched by `compress`, so there is no overhead for the
-      // many tiny per-component keys.
-      const payload = compress(value) as unknown as Json;
+      // Compress the payload before writing to the DB to save storage space.
+      // compressJson returns the original value unchanged when it's too small
+      // to benefit, so tiny rows incur no overhead. The compressed form stays
+      // in the DB until the next read decompresses it (decodeRow in get()).
+      const stored = compressJson(value);
       const { error } = await client.from("app_kv").upsert(
         {
           id: rowId(key, ownerId, stationId),
           collection: COLLECTION,
           owner_id: ownerId,
           station_id: stationId ?? null,
-          data: payload,
+          data: stored as unknown as Json,
           updated_at: new Date().toISOString(),
         },
         { onConflict: "id" },
       );
       if (error) throw error;
+      // Success — remove any previously-queued op for this key (it's now live).
+      this.dequeueKey(key, stationId);
     } catch (err) {
-      // Cloud write failed (network/RLS). Data is safely cached locally and
-      // will be overwritten on the next successful set. Surface to console for
-      // debugging without breaking the caller.
-      console.warn(`[CloudStorage] set failed for "${key}":`, err);
+      // Cloud write failed (network down / RLS / session expired). Queue the
+      // write so it is retried automatically when connectivity is restored.
+      // The value is already in the local cache so reads keep working.
+      console.warn(
+        `[CloudStorage] set failed for "${key}", queued for offline retry:`,
+        err,
+      );
+      enqueueSet(key, value as unknown as Json, stationId);
     }
   }
 
@@ -416,7 +475,10 @@ class CloudStorageService {
     this.memoryCache.delete(ck);
 
     const ownerId = await currentUserId();
-    if (!ownerId) return;
+    if (!ownerId) {
+      enqueueDelete(key, stationId);
+      return;
+    }
 
     try {
       const client = getSupabaseClient();
@@ -435,9 +497,87 @@ class CloudStorageService {
           .eq("id", key)
           .eq("owner_id", ownerId);
       }
+      this.dequeueKey(key, stationId);
     } catch (err) {
-      console.warn(`[CloudStorage] delete failed for "${key}":`, err);
+      console.warn(
+        `[CloudStorage] delete failed for "${key}", queued for offline retry:`,
+        err,
+      );
+      enqueueDelete(key, stationId);
     }
+  }
+
+  /** Remove any queued op for a key (called after a successful write). */
+  private dequeueKey(key: string, stationId?: string): void {
+    const q = readQueue().filter(
+      (op) => !(op.key === key && op.stationId === stationId),
+    );
+    writeQueue(q);
+  }
+
+  /**
+   * Flush the offline write queue. Called automatically on `online` events,
+   * visibility change, and a periodic timer. Each queued op is replayed in
+   * order; successfully-applied ops are removed. Returns the number of ops
+   * still pending (0 = fully synced).
+   */
+  async flushOfflineQueue(): Promise<number> {
+    const queue = readQueue();
+    if (queue.length === 0) return 0;
+    // Check connectivity cheaply — if no user session, we can't flush yet.
+    const ownerId = await currentUserId();
+    if (!ownerId) return queue.length;
+
+    const remaining: QueuedOp[] = [];
+    let succeeded = 0;
+    for (const op of queue) {
+      try {
+        const client = getSupabaseClient();
+        if (op.op === "set") {
+          const { error } = await client.from("app_kv").upsert(
+            {
+              id: rowId(op.key, ownerId, op.stationId),
+              collection: COLLECTION,
+              owner_id: ownerId,
+              station_id: op.stationId ?? null,
+              data: op.value,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: "id" },
+          );
+          if (error) throw error;
+        } else {
+          const scopedId = rowId(op.key, ownerId, op.stationId);
+          const { error } = await client
+            .from("app_kv")
+            .delete()
+            .eq("id", scopedId)
+            .eq("owner_id", ownerId);
+          if (error) throw error;
+        }
+        succeeded++;
+      } catch {
+        // Keep this op in the queue for the next flush attempt.
+        remaining.push(op);
+      }
+    }
+    writeQueue(remaining);
+    if (succeeded > 0) {
+      console.log(
+        `[CloudStorage] Flushed ${succeeded} offline write(s); ${remaining.length} still pending.`,
+      );
+    }
+    return remaining.length;
+  }
+
+  /** Number of offline writes awaiting sync (for UI indicators). */
+  pendingOfflineOps(): number {
+    return readQueue().length;
+  }
+
+  /** Whether there are pending offline writes (synchronous, for UI gates). */
+  hasOfflineWritesPending(): boolean {
+    return hasPendingOfflineOps();
   }
 
   /**
@@ -467,8 +607,7 @@ class CloudStorageService {
         const logicalKey = row.id.endsWith(suffix)
           ? row.id.slice(0, -suffix.length)
           : row.id;
-        const unwrapped = coerceJson<unknown>(row.data);
-        out[logicalKey] = decompress<T>(unwrapped) as T;
+        out[logicalKey] = decodeRow<T>(row.data) as T;
       }
       return out;
     } catch {
@@ -478,25 +617,13 @@ class CloudStorageService {
 
   /**
    * One-shot migration: compress ALL of the current user's existing `app_kv`
-   * rows in place.
-   *
-   * The per-row self-heal in `get()` only compresses rows that happen to be
-   * read by the running app. Rows that exist but are never accessed (e.g. a
-   * stale compact blob from an old device, or per-component keys for a tab
-   * the user hasn't opened this session) stay uncompressed — wasting DB
-   * storage and egress every time any device lists/transfers them.
-   *
-   * This walks every row owned by the user, and for any row whose `data` is
-   * NOT already a compressed envelope (or is a double-encoded string), it
-   * re-upserts the row with the compressed envelope — preserving the exact
-   * row id, station_id, and collection so RLS + real-time subscriptions are
-   * unaffected. Rows already compressed are skipped (no write, no egress).
-   *
-   * Guarded by a per-user localStorage flag so it runs at most once per
-   * device (idempotent: a re-run after a forced logout is harmless because
-   * already-compressed rows are skipped). Runs fire-and-forget on app boot
-   * via `ensureExistingDataCompressed()`; failures are non-fatal (the
-   * per-row self-heal still catches anything missed).
+   * rows in place, so legacy uncompressed rows don't keep consuming DB storage
+   * + egress. Walks every row owned by the user and re-upserts any row whose
+   * `data` is not already a compressed payload (or is a double-encoded string)
+   * — preserving the exact row id, station_id, and collection so RLS + realtime
+   * are unaffected. Rows already compressed are skipped (no write, no egress).
+   * Idempotent: already-compressed rows are skipped. Failures are non-fatal
+   * (the per-row self-heal in get() still catches anything missed).
    */
   async compressAllExistingData(): Promise<{
     scanned: number;
@@ -511,9 +638,6 @@ class CloudStorageService {
     let skipped = 0;
     try {
       const client = getSupabaseClient();
-      // Page through every row owned by this user. app_kv rows are small
-      // (tens of KB each) so a single page is usually enough, but we cap +
-      // paginate to stay well under the PostgREST row limit.
       let offset = 0;
       const pageSize = 500;
       while (true) {
@@ -524,19 +648,22 @@ class CloudStorageService {
           .order("id", { ascending: true })
           .range(offset, offset + pageSize - 1);
         if (error) throw error;
-        const rows = data ?? [];
+        const rows = (data ?? []) as Array<{
+          id: string;
+          data: unknown;
+          station_id: string | null;
+        }>;
         if (rows.length === 0) break;
         scanned += rows.length;
 
-        // Re-write uncompressed rows. Batch the upserts; each is independent.
         for (const row of rows) {
           const unwrapped = coerceJson<unknown>(row.data);
-          // Already a compressed envelope (and not a double-encoded string)?
-          // Skip — no write, no egress. This is the steady-state fast path.
+          // Already a compressed payload (and not a double-encoded string)?
+          // Skip — no write, no egress. Steady-state fast path.
           if (
             typeof row.data !== "string" &&
             unwrapped != null &&
-            isCompressedEnvelope(unwrapped)
+            isCompressedPayload(unwrapped)
           ) {
             skipped++;
             continue;
@@ -547,15 +674,13 @@ class CloudStorageService {
           }
           // Compress the decoded value and write it back to the SAME row id,
           // preserving station_id + collection so RLS/realtime are unaffected.
-          const payload = compress(unwrapped) as unknown as Json;
-          const stationId =
-            typeof row.station_id === "string" ? row.station_id : null;
+          const payload = compressJson(unwrapped) as unknown as Json;
           const { error: upErr } = await client.from("app_kv").upsert(
             {
               id: row.id,
               collection: COLLECTION,
               owner_id: ownerId,
-              station_id: stationId,
+              station_id: row.station_id ?? null,
               data: payload,
               updated_at: new Date().toISOString(),
             },
@@ -572,7 +697,6 @@ class CloudStorageService {
         offset += pageSize;
       }
     } catch (err) {
-      // Non-fatal: the per-row self-heal in get() still catches missed rows.
       console.warn(
         "[CloudStorage] compressAllExistingData partial failure:",
         err,
@@ -636,9 +760,7 @@ class CloudStorageService {
               payload.eventType === "DELETE"
                 ? null
                 : ((payload.new as { data?: unknown })?.data ?? null);
-            const unwrapped =
-              rawNew == null ? null : coerceJson<unknown>(rawNew);
-            const newData = unwrapped == null ? null : decompress<T>(unwrapped);
+            const newData = rawNew == null ? null : decodeRow<T>(rawNew);
             if (newData != null) {
               writeCache(ck, newData);
               this.memoryCache.set(ck, { value: newData, ts: Date.now() });
@@ -710,9 +832,7 @@ class CloudStorageService {
               }
             }
             const rawValue = (payload.new as { data?: unknown })?.data ?? null;
-            const unwrapped =
-              rawValue == null ? null : coerceJson<unknown>(rawValue);
-            const value = unwrapped == null ? null : decompress<T>(unwrapped);
+            const value = rawValue == null ? null : decodeRow<T>(rawValue);
             if (value != null && id) {
               callback(id, value);
             }
@@ -736,3 +856,47 @@ class CloudStorageService {
 
 export const cloudStorageService = new CloudStorageService();
 export default cloudStorageService;
+
+// ---------------------------------------------------------------------------
+// GLOBAL OFFLINE-QUEUE FLUSH LISTENERS
+// ---------------------------------------------------------------------------
+// Wire up the browser's connectivity events so the offline write queue is
+// flushed automatically as soon as the device comes back online — no user
+// action required. This is the core of the "offline edits sync when back
+// online" feature. A periodic safety-net timer also retries every 30s in case
+// the online event doesn't fire (some mobile browsers are unreliable).
+
+if (typeof window !== "undefined") {
+  let flushInFlight = false;
+  const safeFlush = () => {
+    if (flushInFlight) return;
+    flushInFlight = true;
+    cloudStorageService
+      .flushOfflineQueue()
+      .catch(() => {})
+      .finally(() => {
+        flushInFlight = false;
+      });
+  };
+
+  // 1. Browser reports connectivity is back.
+  window.addEventListener("online", () => {
+    // Small delay to let auth/session settle after a reconnect.
+    setTimeout(safeFlush, 1500);
+  });
+
+  // 2. Tab becomes visible again (user returns to the app after being away).
+  if (typeof document !== "undefined") {
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") safeFlush();
+    });
+  }
+
+  // 3. Periodic safety-net retry (some mobile browsers don't fire `online`
+  //    reliably, and a session can be restored without a network change).
+  setInterval(safeFlush, 30_000);
+
+  // 4. Best-effort flush on page load (handles the case where the user made
+  //    offline edits, closed the tab, and reopened later while online).
+  setTimeout(safeFlush, 3000);
+}

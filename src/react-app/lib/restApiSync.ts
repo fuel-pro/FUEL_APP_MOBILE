@@ -27,7 +27,7 @@
  */
 
 import { supabase } from "@/supabase/client";
-import { compress, decompress } from "@/react-app/lib/compression";
+import { compressJson, decompressJson } from "@/react-app/lib/compression";
 
 // ═══════════════════════════════════════════════════
 // COLLECTIONS
@@ -99,7 +99,7 @@ export async function createRecord(
         collection,
         owner_id: userId ?? null,
         station_id: stationId ?? null,
-        data: compress(data) as any,
+        data: compressJson(data) as any,
       });
       if (error) throw error;
     }
@@ -136,7 +136,7 @@ export async function getRecord(
         .eq("id", id)
         .single();
       if (error) throw error;
-      return { success: true, data: decompress(data?.data) ?? data?.data };
+      return { success: true, data: decompressJson(data?.data) ?? data?.data };
     }
   } catch (err: any) {
     const localData = localStorage.getItem(`fuelpro_${collection}_${id}`);
@@ -160,7 +160,7 @@ export async function updateRecord(
     } else {
       const { error } = await supabase
         .from("app_kv")
-        .update({ data: compress(data) as any })
+        .update({ data: compressJson(data) as any })
         .eq("id", id);
       if (error) throw error;
     }
@@ -225,7 +225,7 @@ export async function listRecords(
         success: true,
         data: (data ?? []).map((row) => ({
           id: row.id,
-          ...decompress(row.data),
+          ...decompressJson(row.data),
         })),
       };
     }

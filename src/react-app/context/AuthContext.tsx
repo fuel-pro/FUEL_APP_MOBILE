@@ -10,7 +10,6 @@ import {
 import { supabase } from "@/supabase/client";
 import { getSupabaseClient } from "@/supabase/client";
 import type { User, Session } from "@supabase/supabase-js";
-import { cloudStorageService } from "@/react-app/lib/cloud-storage-service";
 
 // ============================================================
 // AUTH CONTEXT v10 - Supabase Production Mode
@@ -232,6 +231,19 @@ function friendlyAuthEmailError(message: string): string {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Lightweight password hashing for the offline username fallback. This is NOT
+// a server-side secret — it's a local-only convenience account — but we still
+// avoid storing passwords in cleartext in localStorage. Uses Web Crypto
+// SHA-256 with a fixed salt prefix so values stay comparable across sessions.
+const USERNAME_PW_SALT = "fuelpro_local_user_v1";
+async function hashUsernamePassword(pw: string): Promise<string> {
+  const enc = new TextEncoder().encode(USERNAME_PW_SALT + pw);
+  const buf = await crypto.subtle.digest("SHA-256", enc);
+  return Array.from(new Uint8Array(buf))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthIdentity | null>(loadUser);
   const [bindings, setBindings] = useState<StationRoleBinding[]>(loadBindings);
@@ -325,9 +337,61 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     });
 
+    // ── Cross-tab auth sync (receiver side) ──
+    // Other tabs post AUTH_UPDATE / LOGOUT on the BroadcastChannel. We also
+    // listen to the `storage` event as a fallback (fires in other tabs when
+    // localStorage is mutated). This keeps every open tab's auth state in sync:
+    // sign-in / sign-out / token refresh in one tab reflects everywhere.
+    const applyRemoteAuth = (
+      newUser: AuthIdentity | null,
+      newToken: string | null,
+    ) => {
+      setUser(newUser);
+      setToken(newToken);
+      if (newUser) {
+        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(newUser));
+      } else {
+        localStorage.removeItem(AUTH_STORAGE_KEY);
+      }
+      if (newToken) {
+        localStorage.setItem(TOKEN_STORAGE_KEY, newToken);
+      } else {
+        localStorage.removeItem(TOKEN_STORAGE_KEY);
+      }
+    };
+
+    if (syncChannel) {
+      syncChannel.onmessage = (ev: MessageEvent) => {
+        const data = ev.data;
+        if (!data || typeof data !== "object") return;
+        if (data.type === "AUTH_UPDATE" && data.user) {
+          applyRemoteAuth(data.user as AuthIdentity, data.token as string);
+        } else if (data.type === "LOGOUT") {
+          applyRemoteAuth(null, null);
+        }
+      };
+    }
+
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === AUTH_STORAGE_KEY) {
+        if (e.newValue) {
+          try {
+            applyRemoteAuth(JSON.parse(e.newValue) as AuthIdentity, null);
+          } catch {
+            // ignore malformed
+          }
+        } else {
+          applyRemoteAuth(null, null);
+        }
+      }
+    };
+    window.addEventListener("storage", onStorage);
+
     return () => {
       cancelled = true;
       subscription.unsubscribe();
+      if (syncChannel) syncChannel.onmessage = null;
+      window.removeEventListener("storage", onStorage);
     };
   }, []);
 
@@ -589,7 +653,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // exchanges it with Supabase via signInWithIdToken. This flow relies on
   // "Authorized JavaScript origins" (not redirect URIs), so it works even
   // when the OAuth client's redirect-URI list is not yet configured.
+  // Client ID is configurable via VITE_GOOGLE_CLIENT_ID; falls back to the
+  // project's hard-coded Google OAuth client for zero-config deploys.
   const GOOGLE_CLIENT_ID =
+    import.meta.env.VITE_GOOGLE_CLIENT_ID ||
     "186024815542-fp0p5lrc6ensfg2i6o1vvf2jbnktan7f.apps.googleusercontent.com";
 
   const loginWithGoogleToken = useCallback(async (): Promise<{
@@ -614,7 +681,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       // Request an ID token (JWT credential) from Google.
+      // Strategy: try One Tap prompt first (instant for users with an active
+      // Google session). When One Tap cannot display (no session, blocked by
+      // browser, or headless), render a hidden GIS button and click it to open
+      // the account-chooser popup — this works WITHOUT a pre-existing Google
+      // session and only requires "Authorized JavaScript origins" (not redirect
+      // URIs), making it the most zero-config-friendly path. Only if the popup
+      // also fails do we fall back to the server-side OAuth redirect flow.
+      let credentialResolve: ((v: string | null) => void) | null = null;
       const credential: string | null = await new Promise((resolve) => {
+        credentialResolve = resolve;
         try {
           google.accounts.id.initialize({
             client_id: GOOGLE_CLIENT_ID,
@@ -622,25 +698,51 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               resolve(response?.credential || null);
             },
           });
-          // One Tap prompt; if it cannot show (e.g. no active session or
-          // blocked), fall back to the redirect-based OAuth flow below.
+          // One Tap prompt; if it cannot show, render a popup button.
           google.accounts.id.prompt((notification: any) => {
             if (
               notification?.isNotDisplayed() ||
               notification?.isSkippedMoment()
             ) {
-              resolve(null);
+              // One Tap unavailable — trigger the popup account chooser via a
+              // hidden, programmatically-clicked GIS button. renderButton opens
+              // the standard Google account picker even without a session.
+              try {
+                const holder = document.createElement("div");
+                holder.style.position = "fixed";
+                holder.style.left = "-9999px";
+                holder.style.top = "0";
+                document.body.appendChild(holder);
+                google.accounts.id.renderButton(holder, {
+                  type: "standard",
+                  size: "large",
+                });
+                const btn = holder.querySelector(
+                  "a, button, div[role=button]",
+                ) as HTMLElement | null;
+                if (btn) btn.click();
+                // Clean up the holder shortly after; the popup is independent.
+                setTimeout(() => holder.remove(), 4000);
+                // If no credential arrives within 60s (user closed popup /
+                // origin not authorized), fall back to the redirect flow.
+                setTimeout(() => resolve(null), 60_000);
+              } catch {
+                resolve(null);
+              }
             }
           });
         } catch {
           resolve(null);
         }
       });
+      credentialResolve = null;
 
       if (!credential) {
-        // Fall back to the server-side OAuth redirect flow.
+        // Final fallback: server-side OAuth redirect flow (requires the
+        // Supabase callback URL to be registered as an Authorized redirect URI
+        // in the Google Cloud Console OAuth client).
         console.info(
-          "[AuthContext] GIS One Tap unavailable; falling back to OAuth redirect",
+          "[AuthContext] GIS popup unavailable; falling back to OAuth redirect",
         );
         return loginWithGoogle();
       }
@@ -675,23 +777,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const users: Record<string, any> = JSON.parse(
         localStorage.getItem("fuelpro_username_users") || "{}",
       );
-      const found = Object.values(users).find(
-        (u: any) => u.username === username && u.password === password,
-      );
-      if (found) {
-        const u = found as any;
-        console.info("[AuthContext] Username login successful for:", u.name);
-        const newUser: AuthIdentity = {
-          id: `username_${username}`,
-          authId: `username_${username}`,
-          authMethod: "username",
-          email: u.email || "",
-          name: u.name || username,
-          role: u.role || "user",
-        };
-        setUser(newUser);
-        setIsPending(false);
-        return true;
+      const entry = users[username];
+      if (entry) {
+        // Compare against the stored hash; tolerate legacy cleartext entries
+        // by hashing the candidate the same way. Migrate cleartext on the fly.
+        const candidate = await hashUsernamePassword(password);
+        const storedHash = entry.passwordHash;
+        const isCleartextMatch = !storedHash && entry.password === password;
+        const match = storedHash === candidate || isCleartextMatch;
+        if (match) {
+          // Migrate legacy cleartext to a hash.
+          if (isCleartextMatch) {
+            entry.passwordHash = candidate;
+            delete entry.password;
+            localStorage.setItem(
+              "fuelpro_username_users",
+              JSON.stringify(users),
+            );
+          }
+          const u = entry;
+          console.info("[AuthContext] Username login successful for:", u.name);
+          const newUser: AuthIdentity = {
+            id: `username_${username}`,
+            authId: `username_${username}`,
+            authMethod: "username",
+            email: u.email || "",
+            name: u.name || username,
+            role: u.role || "user",
+          };
+          setUser(newUser);
+          setIsPending(false);
+          return true;
+        }
       }
       setError("Invalid username or password");
       setIsPending(false);
@@ -719,9 +836,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return false;
       }
 
+      const passwordHash = await hashUsernamePassword(password);
       users[username] = {
         username,
-        password,
+        passwordHash,
         name,
         email,
         role: "user",
@@ -786,34 +904,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     refreshAuthRef.current = refreshAuth;
   }, [refreshAuth]);
-
-  // One-shot background migration: compress ALL of the signed-in user's
-  // existing cloud data (app_kv rows) in place, so legacy uncompressed rows
-  // don't keep consuming DB storage + egress on the Free Plan. Runs at most
-  // once per (user, device) — guarded by a localStorage flag — and is fully
-  // idempotent (already-compressed rows are skipped, so a re-run is free).
-  // Fire-and-forget: never blocks the UI; failures fall back to the per-row
-  // self-heal in cloudStorageService.get().
-  useEffect(() => {
-    if (!user?.id) return;
-    const flag = `fuelpro_data_compressed_v1_${user.id}`;
-    if (localStorage.getItem(flag) === "1") return;
-    // Defer so it doesn't compete with the initial app-data hydration.
-    const t = setTimeout(() => {
-      cloudStorageService
-        .compressAllExistingData()
-        .then((res) => {
-          localStorage.setItem(flag, "1");
-          console.info(
-            `[compression] migrated existing data: scanned=${res.scanned} compressed=${res.compressed} skipped=${res.skipped}`,
-          );
-        })
-        .catch(() => {
-          // Leave the flag unset so it retries on the next session.
-        });
-    }, 8000);
-    return () => clearTimeout(t);
-  }, [user?.id]);
 
   // Token refresh interval
   useEffect(() => {
@@ -1053,6 +1143,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const verifyResetCode = useCallback(
     (email: string, code: string): boolean => {
+      // Supabase password reset is link-based (no OTP code). Kept for API
+      // compatibility with the context type; the real reset is done via the
+      // email recovery link -> updateUser({password}) on the reset page.
+      void email;
+      void code;
       setError(
         "Supabase handles password reset via email link. Code verification not needed.",
       );
@@ -1063,24 +1158,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const resetPassword = useCallback(
     async (email: string, newPassword: string): Promise<boolean> => {
+      void email; // recovery flow identifies the user via the active session
       setIsPending(true);
       setError(null);
 
-      if (!newPassword || newPassword.length < 6) {
-        setError("Password must be at least 6 characters");
+      if (!newPassword || newPassword.length < 8) {
+        setError("Password must be at least 8 characters");
         setIsPending(false);
         return false;
       }
 
       try {
-        // For Supabase, password update requires the user to be logged in
-        // or use the reset password flow with the token from email
-        setError(
-          "Please use the password reset link from your email to change your password.",
-        );
+        // After the user clicks the recovery link, Supabase establishes a
+        // session; updateUser({password}) completes the reset.
+        const { error: supabaseError } = await supabase.auth.updateUser({
+          password: newPassword,
+        });
+        if (supabaseError) {
+          console.error(
+            "[AuthContext] Password reset error:",
+            supabaseError.message,
+          );
+          setError(supabaseError.message);
+          setIsPending(false);
+          return false;
+        }
         setIsPending(false);
-        return false;
+        return true;
       } catch (err: any) {
+        console.error("[AuthContext] Password reset error:", err.message);
         setError(err.message || "Failed to reset password");
         setIsPending(false);
         return false;

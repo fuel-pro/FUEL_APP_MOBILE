@@ -37,6 +37,7 @@ import {
 import {
   uploadDocument,
   getDocuments,
+  getDocumentUrl,
   downloadDocument,
   deleteDocument,
   type UserDocument,
@@ -243,12 +244,21 @@ export default function UserProfileSettings() {
   };
 
   const handleDownload = async (doc: UserDocument) => {
+    // Compressed uploads (.gz) need in-browser decompression; non-compressed
+    // files stream directly via the public URL.
     const result = await downloadDocument(doc);
-    if (!result.success) {
-      setDocNotice({
-        type: "error",
-        msg: result.error || "Failed to download",
-      });
+    if (result?.url) {
+      const a = document.createElement("a");
+      a.href = result.url;
+      a.download = doc.file_name;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      a.click();
+      // Revoke object URLs (from decompressed blobs) to free memory. Direct
+      // public URLs don't need revocation.
+      if (result.blob) setTimeout(() => URL.revokeObjectURL(result.url), 10000);
+    } else {
+      setDocNotice({ type: "error", msg: "Failed to generate download URL" });
     }
   };
 

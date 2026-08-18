@@ -330,6 +330,7 @@ export default function FuelTypesManager() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [renamingPumpsFor, setRenamingPumpsFor] = useState<string | null>(null);
   const [showPresets, setShowPresets] = useState(false);
   // Inner sub-tab: hosts the formerly-standalone Price Board and Fuel
   // Quality Testing tabs alongside the fuel-type catalog. Pump Settings is
@@ -343,12 +344,12 @@ export default function FuelTypesManager() {
   const [formCode, setFormCode] = useState("");
   const [formName, setFormName] = useState("");
   const [formLocalName, setFormLocalName] = useState("");
-  const [formPrice, setFormPrice] = useState(0);
-  const [formCostPrice, setFormCostPrice] = useState(0);
-  const [formTaxRate, setFormTaxRate] = useState(PRESET_TAX_RATE);
+  const [formPrice, setFormPrice] = useState<number | "">(0);
+  const [formCostPrice, setFormCostPrice] = useState<number | "">(0);
+  const [formTaxRate, setFormTaxRate] = useState<number | "">(PRESET_TAX_RATE);
   const [formColor, setFormColor] = useState("red");
   const [formIcon, setFormIcon] = useState("flame");
-  const [formPumps, setFormPumps] = useState(1);
+  const [formPumps, setFormPumps] = useState<number | "">(1);
   const [formDesc, setFormDesc] = useState("");
 
   const persist = (types: CustomFuelType[]) => {
@@ -459,13 +460,13 @@ export default function FuelTypesManager() {
       code: formCode.toUpperCase(),
       name: formName,
       localName: formLocalName || formName,
-      price: formPrice,
-      costPrice: formCostPrice,
-      taxRate: formTaxRate,
+      price: typeof formPrice === "number" ? formPrice : 0,
+      costPrice: typeof formCostPrice === "number" ? formCostPrice : 0,
+      taxRate: typeof formTaxRate === "number" ? formTaxRate : 0,
       levyRate: 0,
       color: formColor,
       icon: formIcon,
-      pumpCount: formPumps,
+      pumpCount: typeof formPumps === "number" ? formPumps : 0,
       active: true,
       description: formDesc,
     };
@@ -539,6 +540,53 @@ export default function FuelTypesManager() {
       canonical,
       source: "FuelTypesManager.handlePumpCountChange",
     });
+  };
+
+  // Rename a single pump's ID + display name for a fuel type. Updates the
+  // FuelContext pump store (pmsPumps / agoPumps / fuelPumpsByType) so the
+  // custom name appears in Sales Tracking, POS, Dashboard, Reports, etc.
+  const handleRenamePump = (
+    ft: CustomFuelType,
+    pumpIndex: number,
+    newName: string,
+  ) => {
+    const canonical = normalizeFuelType(ft.name);
+    const trimmed = newName.trim();
+    if (!trimmed) return; // don't allow empty names
+    const code =
+      ft.code ||
+      (canonical ? canonical.toUpperCase().slice(0, 3) : ft.id.slice(0, 3));
+    const updatePump = (pumps: Pump[], idx: number, name: string): Pump[] =>
+      pumps.map((p, i) =>
+        i === idx
+          ? {
+              ...p,
+              name,
+              id: `${code}-${idx + 1}-${name.replace(/\s+/g, "-").toLowerCase().slice(0, 8)}`,
+            }
+          : p,
+      );
+    if (canonical === "petrol" && state.pmsPumps) {
+      dispatch({
+        type: "SET_PMS_PUMPS",
+        payload: updatePump(state.pmsPumps, pumpIndex, trimmed),
+      });
+    } else if (canonical === "diesel" && state.agoPumps) {
+      dispatch({
+        type: "SET_AGO_PUMPS",
+        payload: updatePump(state.agoPumps, pumpIndex, trimmed),
+      });
+    } else if (canonical && state.fuelPumpsByType?.[canonical]) {
+      const updated = updatePump(
+        state.fuelPumpsByType[canonical],
+        pumpIndex,
+        trimmed,
+      );
+      dispatch({
+        type: "SET_FUEL_PUMPS_BY_TYPE",
+        payload: { ...state.fuelPumpsByType, [canonical]: updated },
+      });
+    }
   };
 
   const handleToggleActive = (id: string) => {
@@ -698,9 +746,13 @@ export default function FuelTypesManager() {
                   <input
                     type="number"
                     step="0.01"
-                    value={formPrice}
+                    value={formPrice === "" ? "" : formPrice}
                     onChange={(e) =>
-                      setFormPrice(parseFloat(e.target.value) || 0)
+                      setFormPrice(
+                        e.target.value === ""
+                          ? ""
+                          : parseFloat(e.target.value) || 0,
+                      )
                     }
                     className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
                   />
@@ -712,9 +764,13 @@ export default function FuelTypesManager() {
                   <input
                     type="number"
                     step="0.01"
-                    value={formCostPrice}
+                    value={formCostPrice === "" ? "" : formCostPrice}
                     onChange={(e) =>
-                      setFormCostPrice(parseFloat(e.target.value) || 0)
+                      setFormCostPrice(
+                        e.target.value === ""
+                          ? ""
+                          : parseFloat(e.target.value) || 0,
+                      )
                     }
                     className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
                   />
@@ -725,9 +781,13 @@ export default function FuelTypesManager() {
                   </label>
                   <input
                     type="number"
-                    value={formTaxRate}
+                    value={formTaxRate === "" ? "" : formTaxRate}
                     onChange={(e) =>
-                      setFormTaxRate(parseFloat(e.target.value) || 0)
+                      setFormTaxRate(
+                        e.target.value === ""
+                          ? ""
+                          : parseFloat(e.target.value) || 0,
+                      )
                     }
                     className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
                   />
@@ -738,9 +798,13 @@ export default function FuelTypesManager() {
                   </label>
                   <input
                     type="number"
-                    value={formPumps}
+                    value={formPumps === "" ? "" : formPumps}
                     onChange={(e) =>
-                      setFormPumps(parseInt(e.target.value) || 0)
+                      setFormPumps(
+                        e.target.value === ""
+                          ? ""
+                          : parseInt(e.target.value) || 0,
+                      )
                     }
                     className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
                   />
@@ -973,6 +1037,98 @@ export default function FuelTypesManager() {
                           </span>
                         )}
                       </div>
+
+                      {/* Rename Pump IDs — lets the user assign a custom
+                          name/label to each pump for this fuel type. The
+                          custom name propagates to Sales Tracking, POS,
+                          Dashboard, and Reports. */}
+                      {(ft.pumpCount || 0) > 0 &&
+                        hasPermission("canChangePumpCount") && (
+                          <div className="mt-2">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setRenamingPumpsFor(
+                                  renamingPumpsFor === ft.id ? null : ft.id,
+                                );
+                              }}
+                              className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
+                            >
+                              <Edit3 size={12} />
+                              {renamingPumpsFor === ft.id
+                                ? "Hide pump names"
+                                : "Rename / assign pump IDs"}
+                            </button>
+                            {renamingPumpsFor === ft.id && (
+                              <div className="mt-2 space-y-2 bg-gray-50 dark:bg-gray-900 rounded-lg p-3">
+                                {(() => {
+                                  const canonical = normalizeFuelType(ft.name);
+                                  let pumps: Pump[] = [];
+                                  if (canonical === "petrol")
+                                    pumps = state.pmsPumps || [];
+                                  else if (canonical === "diesel")
+                                    pumps = state.agoPumps || [];
+                                  else if (canonical)
+                                    pumps =
+                                      state.fuelPumpsByType?.[canonical] || [];
+                                  // If the pump store hasn't been seeded yet,
+                                  // synthesize display rows from the count.
+                                  if (pumps.length < (ft.pumpCount || 0)) {
+                                    const code =
+                                      ft.code ||
+                                      (canonical
+                                        ? canonical.toUpperCase().slice(0, 3)
+                                        : "PMP");
+                                    const label = getFuelLabel(ft.name);
+                                    pumps = Array.from(
+                                      { length: ft.pumpCount || 0 },
+                                      (_, i) =>
+                                        pumps[i] || {
+                                          id: `${code}-${i + 1}`,
+                                          name: `${label} Pump ${i + 1}`,
+                                          openingKsh: 0,
+                                          closingKsh: 0,
+                                          openingL: 0,
+                                          closingL: 0,
+                                          salesL: 0,
+                                          salesKsh: 0,
+                                        },
+                                    );
+                                  }
+                                  return pumps
+                                    .slice(0, ft.pumpCount || 0)
+                                    .map((pump, idx) => (
+                                      <div
+                                        key={pump.id || idx}
+                                        className="flex items-center gap-2"
+                                      >
+                                        <span className="text-[10px] text-gray-400 w-12">
+                                          #{idx + 1}
+                                        </span>
+                                        <input
+                                          type="text"
+                                          value={pump.name || ""}
+                                          placeholder={`Pump ${idx + 1}`}
+                                          onChange={(e) => {
+                                            e.stopPropagation();
+                                            handleRenamePump(
+                                              ft,
+                                              idx,
+                                              e.target.value,
+                                            );
+                                          }}
+                                          className="flex-1 px-2 py-1 text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-md dark:text-white"
+                                        />
+                                        <span className="text-[9px] text-gray-400 font-mono">
+                                          ID: {pump.id}
+                                        </span>
+                                      </div>
+                                    ));
+                                })()}
+                              </div>
+                            )}
+                          </div>
+                        )}
 
                       {ft.description && (
                         <p className="text-xs text-gray-500 dark:text-gray-400 italic mt-3">

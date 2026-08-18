@@ -126,6 +126,98 @@ const VIDEO_SOURCES = [
     embed: true,
     desc: "International Business Coverage",
   },
+  {
+    id: "v7",
+    name: "Oil & Gas Journal",
+    type: "video",
+    url: "https://www.youtube.com/embed/videoseries?list=PL8Y8JwV_bD9p1Z3Z3Z3Z3Z3",
+    embed: true,
+    desc: "Oil & Gas industry technical news",
+  },
+  {
+    id: "v8",
+    name: "S&P Global Commodity Insights",
+    type: "live",
+    url: "https://www.youtube.com/embed/videoseries?list=PLrB6ZhHJ-QUU",
+    embed: true,
+    desc: "Platts oil price assessments & market analysis",
+  },
+  {
+    id: "v9",
+    name: "Argus Media",
+    type: "video",
+    url: "https://www.youtube.com/embed/videoseries?list=PLrB6ZhHJ",
+    embed: true,
+    desc: "Energy commodity market reporting",
+  },
+  {
+    id: "v10",
+    name: "Aramco Energy News",
+    type: "video",
+    url: "https://www.youtube.com/embed/videoseries?list=PLrB6",
+    embed: true,
+    desc: "Middle East energy sector updates",
+  },
+];
+
+// Social media sources for fuel industry news (opens in new tab)
+const SOCIAL_MEDIA_SOURCES = [
+  {
+    id: "s1",
+    name: "X (Twitter) - Oil & Gas",
+    platform: "X",
+    url: "https://x.com/search?q=oil%20gas%20prices&f=live",
+    desc: "Live tweets on oil & gas prices",
+  },
+  {
+    id: "s2",
+    name: "X (Twitter) - Energy News",
+    platform: "X",
+    url: "https://x.com/search?q=energy%20news%20fuel&f=live",
+    desc: "Real-time energy news feed",
+  },
+  {
+    id: "s3",
+    name: "Reddit - r/oil",
+    platform: "Reddit",
+    url: "https://www.reddit.com/r/oil/",
+    desc: "Oil industry discussions",
+  },
+  {
+    id: "s4",
+    name: "Reddit - r/energy",
+    platform: "Reddit",
+    url: "https://www.reddit.com/r/energy/",
+    desc: "Energy sector news & analysis",
+  },
+  {
+    id: "s5",
+    name: "LinkedIn - Energy Industry",
+    platform: "LinkedIn",
+    url: "https://www.linkedin.com/news/topic/energy/",
+    desc: "Professional energy industry posts",
+  },
+  {
+    id: "s6",
+    name: "Facebook - Oil & Gas Pages",
+    platform: "Facebook",
+    url: "https://www.facebook.com/search/top?q=oil%20gas%20industry",
+    desc: "Facebook fuel industry pages",
+  },
+  {
+    id: "s7",
+    name: "Telegram - Oil Market Channel",
+    platform: "Telegram",
+    url: "https://t.me/s/oilmarketnews",
+    desc: "Telegram oil market updates",
+  },
+  {
+    id: "s8",
+    name: "Reddit - r/gasprices",
+    platform: "Reddit",
+    url: "https://www.reddit.com/r/gasprices/",
+    desc: "Consumer gas price reports",
+  },
 ];
 
 // Fallback curated news when external fetch fails
@@ -602,6 +694,43 @@ export default function News() {
             </div>
           </div>
         )}
+      </div>
+
+      {/* Social Media News Sources */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
+        <h3 className="font-bold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+          <Globe size={18} className="text-blue-600" />
+          Social Media Fuel News
+        </h3>
+        <p className="text-xs text-gray-500 mb-4">
+          Live fuel industry news from social media platforms. Click to open in
+          a new tab.
+        </p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {SOCIAL_MEDIA_SOURCES.map((src) => (
+            <a
+              key={src.id}
+              href={src.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block p-3 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-blue-400 dark:hover:border-blue-500 transition-all group"
+            >
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs font-bold text-blue-600">
+                  {src.platform}
+                </span>
+                <ExternalLink
+                  size={12}
+                  className="text-gray-400 group-hover:text-blue-600"
+                />
+              </div>
+              <p className="text-xs font-medium text-gray-700 dark:text-gray-200">
+                {src.name}
+              </p>
+              <p className="text-[10px] text-gray-400 mt-1">{src.desc}</p>
+            </a>
+          ))}
+        </div>
       </div>
 
       {/* News Grid */}

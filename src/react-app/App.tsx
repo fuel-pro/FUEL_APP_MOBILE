@@ -7,6 +7,7 @@ import { LocalizationProvider } from "@/react-app/context/LocalizationContext";
 import { PermissionProvider } from "@/react-app/context/PermissionContext";
 import { FuelProvider } from "@/react-app/context/FuelContext";
 import { PlatformDataProvider } from "@/react-app/context/PlatformDataContext";
+import { TutorialProvider } from "@/react-app/context/TutorialContext";
 import HomePage from "@/react-app/pages/Home";
 import AuthLogin from "@/react-app/components/AuthLogin";
 import PasswordReset from "@/react-app/pages/PasswordReset";
@@ -19,6 +20,7 @@ import {
   ReactNode,
 } from "react";
 import InviteAccept from "@/react-app/pages/InviteAccept";
+import StationAccess from "@/react-app/pages/StationAccess";
 import FounderAccess from "@/react-app/pages/FounderAccess";
 import OfflineIndicator from "@/react-app/components/OfflineIndicator";
 import { TRPCProvider } from "@/providers/trpc";
@@ -239,7 +241,9 @@ function MainAppLoader() {
     <TenantProvider detectedCountry={detectedCountry}>
       <StationProvider>
         <FuelProvider>
-          <HomePage />
+          <TutorialProvider>
+            <HomePage />
+          </TutorialProvider>
         </FuelProvider>
       </StationProvider>
     </TenantProvider>
@@ -286,6 +290,12 @@ export default function App() {
                       <Route
                         path="/join/:inviteId"
                         element={<InviteAccept />}
+                      />
+
+                      {/* Station access (team member login w/o signup) - public */}
+                      <Route
+                        path="/station-access"
+                        element={<StationAccess />}
                       />
 
                       {/* Main app - requires auth, shows loader while checking */}

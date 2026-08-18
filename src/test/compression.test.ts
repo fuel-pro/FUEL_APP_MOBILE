@@ -1,200 +1,152 @@
 /**
- * Tests for the compression layer used by cloud-storage-service + document
- * uploads. Verifies round-trip fidelity, the envelope marker, the
- * small-payload skip threshold, backward-compat with legacy raw JSONB, and
- * the file compress/decompress helpers (including the FPGZ magic prefix).
+ * Compression utility tests.
+ *
+ * Verifies the gzip compression/decompression layer used to minimize Supabase
+ * storage: JSON payloads (app_kv) round-trip exactly and are smaller, tiny
+ * payloads skip compression, backward compatibility with uncompressed rows,
+ * file Blob compression, and MIME-type detection.
  */
 
 import { describe, it, expect } from "vitest";
 import {
-  compress,
-  decompress,
-  isCompressedEnvelope,
-  isAnyCompressedEnvelope,
-  COMPRESSION_MIN_BYTES,
-  compressFile,
-  decompressFile,
-  isCompressibleFile,
+  compressJson,
+  decompressJson,
+  isCompressedPayload,
+  isCompressibleMimeType,
+  compressBlob,
+  decompressBlob,
+  compressedFilePath,
+  isCompressedPath,
+  COMPRESSED_MARKER,
 } from "@/react-app/lib/compression";
 
-describe("compression (JSONB envelope)", () => {
-  it("round-trips a large object losslessly", () => {
-    const big = {
-      invoices: Array.from({ length: 50 }, (_, i) => ({
-        id: `INV-${i}`,
-        total: 1234.56 + i,
-        items: Array.from({ length: 10 }, (_, j) => ({
-          name: `Item ${j}`,
-          qty: j,
-          price: 9.99 * j,
-        })),
-      })),
-    };
-    const env = compress(big);
-    expect(isCompressedEnvelope(env)).toBe(true);
-    const restored = decompress(env) as typeof big;
-    expect(restored).toEqual(big);
-  });
-
-  it("round-trips large arrays", () => {
-    const arr = Array.from({ length: 1000 }, (_, i) => ({
+describe("compression — JSON (app_kv)", () => {
+  it("compresses a large JSON payload and round-trips exactly", () => {
+    // A large, highly-repetitive JSON object (realistic business data shape).
+    const items = Array.from({ length: 200 }, (_, i) => ({
       id: i,
-      name: `row ${i}`,
-      value: Math.random() * 1000,
+      name: `Expense item ${i}`,
+      amount: 100 + i,
+      category: "fuel",
+      note: "重复的文本内容用于测试压缩比 repeat repeat repeat",
+      date: "2026-08-14",
     }));
-    const env = compress(arr);
-    expect(isCompressedEnvelope(env)).toBe(true);
-    expect(decompress(env)).toEqual(arr);
+    const value = { items, total: 12345, currency: "USD" };
+
+    const compressed = compressJson(value);
+    expect(isCompressedPayload(compressed)).toBe(true);
+
+    const payload = compressed as { __compressed: true; c: string; o: number };
+    expect(payload[COMPRESSED_MARKER]).toBe(true);
+    expect(typeof payload.c).toBe("string");
+    expect(payload.o).toBeGreaterThan(0);
+
+    // The base64 payload should be materially smaller than the original JSON.
+    const originalBytes = new TextEncoder().encode(
+      JSON.stringify(value),
+    ).length;
+    const compressedBytes = new TextEncoder().encode(payload.c).length;
+    expect(compressedBytes).toBeLessThan(originalBytes);
+
+    // Round-trip: decompress and compare with the original.
+    const restored = decompressJson(compressed);
+    expect(restored).toEqual(value);
   });
 
-  it("does NOT compress payloads below the threshold", () => {
-    const tiny = { a: 1, b: "x" };
-    const result = compress(tiny);
-    expect(isCompressedEnvelope(result)).toBe(false);
-    expect(result).toBe(tiny); // returned by reference, unchanged
-  });
-
-  it("skips incompressible (high-entropy) data even if large", () => {
-    // Truly random bytes, base64-encoded, are near-optimal entropy; gzip
-    // cannot shrink them. compress() must fall back to the raw value rather
-    // than storing a larger envelope.
-    const randomBytes = new Uint8Array(4000);
-    for (let i = 0; i < randomBytes.length; i++)
-      randomBytes[i] = Math.random() * 256;
-    // btoa over binary strings: build via chunks.
-    let bin = "";
-    for (let i = 0; i < randomBytes.length; i++)
-      bin += String.fromCharCode(randomBytes[i]);
-    const random = btoa(bin);
-    const result = compress({ blob: random });
-    // For random data it should skip (envelope would be >= raw).
-    expect(isCompressedEnvelope(result)).toBe(false);
-  });
-
-  it("treats legacy raw JSONB as already-decompressed (backward compat)", () => {
-    const legacy = { foo: "bar", n: 42, arr: [1, 2, 3] };
-    expect(isCompressedEnvelope(legacy)).toBe(false);
-    expect(decompress(legacy)).toEqual(legacy);
-  });
-
-  it("returns null for null input", () => {
-    expect(decompress(null)).toBeNull();
-  });
-
-  it("returns null for a corrupt envelope (graceful failure)", () => {
-    const corrupt = { __c: 1, d: "!!!not-base64-gzip!!!", n: 10, z: 10 };
-    expect(isCompressedEnvelope(corrupt)).toBe(true);
-    expect(decompress(corrupt)).toBeNull();
-  });
-
-  it("compresses to a smaller on-wire size for real business data", () => {
-    const business = {
-      companyData: { name: "Test Station", kraPin: "P051234567X" },
-      salesHistory: Object.fromEntries(
-        Array.from({ length: 30 }, (_, i) => [`day-${i}`, { total: 5000 + i }]),
-      ),
-      pmsPumps: Array.from({ length: 4 }, (_, i) => ({
-        id: `pms-${i}`,
-        opening: 1000,
-        closing: 1100 + i,
-      })),
-    };
-    const env = compress(business)!;
-    const wireSize = JSON.stringify(env).length;
-    const rawSize = JSON.stringify(business).length;
-    expect(isCompressedEnvelope(env)).toBe(true);
-    expect(wireSize).toBeLessThan(rawSize);
-    expect(decompress(env)).toEqual(business);
-  });
-
-  it("decodes the legacy {c, o, __compressed:true} envelope", () => {
-    // The feat/adaptive-onboarding-tutorial branch wrote rows in this shape.
-    // decompress must transparently decode them so existing cloud data is not
-    // returned as an opaque envelope object. Use a large value so compress()
-    // actually produces an envelope (tiny values skip compression).
+  it("decompresses a compressed payload back to the original value", () => {
     const value = {
-      invoices: Array.from({ length: 40 }, (_, i) => ({
-        id: `INV-${i}`,
-        total: 1234.56 + i,
-        customer: `Customer ${i}`,
-      })),
+      rows: Array.from({ length: 50 }, (_, i) => ({ a: i, b: `row${i}` })),
     };
-    const canonical = compress(value) as {
-      d: string;
-      n: number;
-      z: number;
-      __c: number;
-    };
-    expect(isCompressedEnvelope(canonical)).toBe(true);
-    // Rebuild the same payload in the legacy shape using the same gzip base64.
-    const legacy = { c: canonical.d, o: canonical.n, __compressed: true };
-    expect(isCompressedEnvelope(legacy)).toBe(false);
-    expect(isAnyCompressedEnvelope(legacy)).toBe(true);
-    expect(decompress(legacy)).toEqual(value);
+    const compressed = compressJson(value);
+    expect(decompressJson(compressed)).toEqual(value);
+  });
+
+  it("skips compression for tiny payloads (returns original)", () => {
+    const tiny = { a: 1 };
+    const result = compressJson(tiny);
+    // Tiny values are returned unchanged (not wrapped in a compressed payload).
+    expect(isCompressedPayload(result)).toBe(false);
+    expect(result).toEqual(tiny);
+  });
+
+  it("is backward compatible — uncompressed values pass through decompressJson", () => {
+    const plain = { hello: "world", n: 42 };
+    expect(decompressJson(plain)).toEqual(plain);
+    expect(decompressJson(null)).toBeNull();
+    expect(decompressJson("plain string")).toBe("plain string");
+    // Arrays are not compressed payloads either.
+    expect(decompressJson([1, 2, 3])).toEqual([1, 2, 3]);
+  });
+
+  it("decompressJson returns null for a corrupt compressed payload", () => {
+    const corrupt = { [COMPRESSED_MARKER]: true, c: "!!!not-valid-base64!!!" };
+    expect(decompressJson(corrupt)).toBeNull();
   });
 });
 
-describe("file compression (Storage uploads)", () => {
-  it("compresses a large text file and restores it losslessly", async () => {
-    const text = "hello world ".repeat(5000); // ~60 KB, very compressible
-    const file = new File([text], "report.txt", { type: "text/plain" });
-    const { blob, contentType, compressed } = await compressFile(
-      file,
-      "report.txt",
-      "text/plain",
-    );
-    expect(compressed).toBe(true);
-    expect(contentType).toBe("application/octet-stream");
-    expect(blob.size).toBeLessThan(file.size);
+describe("compression — file Blobs", () => {
+  it("compresses and decompresses a text Blob round-trip", async () => {
+    const text = "hello compression ".repeat(500);
+    const file = new Blob([text], { type: "text/plain" });
 
-    // Round-trip through decompressFile.
-    const buf = await blob.arrayBuffer();
-    const { blob: restored, compressed: wasCompressed } = await decompressFile(
-      buf,
-      "text/plain",
-    );
-    expect(wasCompressed).toBe(true);
-    expect(await restored.text()).toBe(text);
+    const compressed = await compressBlob(file);
+    expect(compressed.type).toBe("application/gzip");
+    // gzip should reduce a highly-repetitive text blob.
+    expect(compressed.size).toBeLessThan(file.size);
+
+    const restored = await decompressBlob(compressed);
+    const restoredText = await restored.text();
+    expect(restoredText).toBe(text);
   });
 
-  it("does NOT compress tiny text files", async () => {
-    const file = new File(["hi"], "tiny.txt", { type: "text/plain" });
-    const { compressed } = await compressFile(file, "tiny.txt", "text/plain");
-    expect(compressed).toBe(false);
-  });
-
-  it("does NOT compress already-compressed media (png)", async () => {
-    const bytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a]);
-    const file = new File([bytes], "photo.png", { type: "image/png" });
-    const { compressed } = await compressFile(file, "photo.png", "image/png");
-    expect(compressed).toBe(false);
-  });
-
-  it("passes through non-magic bytes unchanged in decompressFile", async () => {
-    const original = new Uint8Array([1, 2, 3, 4, 5]);
-    const { blob, compressed } = await decompressFile(
-      original.buffer,
-      "application/octet-stream",
-    );
-    expect(compressed).toBe(false);
-    expect(new Uint8Array(await blob.arrayBuffer())).toEqual(original);
-  });
-
-  it("isCompressibleFile correctly classifies types", () => {
-    expect(isCompressibleFile("data.csv", "text/csv")).toBe(true);
-    expect(isCompressibleFile("data.json", "application/json")).toBe(true);
-    expect(isCompressibleFile("readme.md", "text/markdown")).toBe(true);
-    expect(isCompressibleFile("spreadsheet.xls", "")).toBe(true);
-    expect(isCompressibleFile("photo.jpg", "image/jpeg")).toBe(false);
-    expect(isCompressibleFile("doc.pdf", "application/pdf")).toBe(false);
-    expect(isCompressibleFile("archive.zip", "application/zip")).toBe(false);
-    expect(isCompressibleFile("report.docx", "")).toBe(false); // OOXML zip
+  it("decompressBlob returns the original blob when input is not gzip", async () => {
+    const plain = new Blob(["not gzip data"], { type: "text/plain" });
+    const result = await decompressBlob(plain);
+    // pako.ungzip throws on non-gzip input; the helper returns the original.
+    expect(await result.text()).toBe("not gzip data");
   });
 });
 
-describe("threshold constant", () => {
-  it("exports a sane minimum", () => {
-    expect(COMPRESSION_MIN_BYTES).toBeGreaterThan(0);
-    expect(COMPRESSION_MIN_BYTES).toBeLessThan(2000);
+describe("compression — MIME detection", () => {
+  it("marks text-based types as compressible", () => {
+    expect(isCompressibleMimeType("text/plain")).toBe(true);
+    expect(isCompressibleMimeType("text/csv")).toBe(true);
+    expect(isCompressibleMimeType("application/json")).toBe(true);
+    expect(isCompressibleMimeType("application/xml")).toBe(true);
+    expect(isCompressibleMimeType("image/svg+xml")).toBe(true);
+  });
+
+  it("marks binary/already-compressed types as NOT compressible", () => {
+    expect(isCompressibleMimeType("image/png")).toBe(false);
+    expect(isCompressibleMimeType("image/jpeg")).toBe(false);
+    expect(isCompressibleMimeType("image/webp")).toBe(false);
+    expect(isCompressibleMimeType("application/pdf")).toBe(false);
+    expect(isCompressibleMimeType("video/mp4")).toBe(false);
+    expect(isCompressibleMimeType("audio/mpeg")).toBe(false);
+    expect(isCompressibleMimeType("application/zip")).toBe(false);
+  });
+
+  it("falls back to file extension when MIME is empty", () => {
+    expect(isCompressibleMimeType("", "report.json")).toBe(true);
+    expect(isCompressibleMimeType("", "data.csv")).toBe(true);
+    expect(isCompressibleMimeType("", "photo.jpg")).toBe(false);
+    expect(isCompressibleMimeType("", "archive.zip")).toBe(false);
+  });
+});
+
+describe("compression — path helpers", () => {
+  it("appends .gz to a file path", () => {
+    expect(compressedFilePath("documents/abc/report.json")).toBe(
+      "documents/abc/report.json.gz",
+    );
+    // idempotent — doesn't double-suffix
+    expect(compressedFilePath("documents/abc/report.json.gz")).toBe(
+      "documents/abc/report.json.gz",
+    );
+  });
+
+  it("detects compressed paths", () => {
+    expect(isCompressedPath("docs/x.json.gz")).toBe(true);
+    expect(isCompressedPath("docs/x.json")).toBe(false);
   });
 });

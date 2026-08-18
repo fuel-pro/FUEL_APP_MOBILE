@@ -4,7 +4,13 @@
 // cross-device (RLS by owner_id = auth.uid()). This replaces the previous
 // IndexedDB implementation which was browser-local and did NOT sync.
 import { getSupabaseClient } from "@/supabase/client";
-import { compressFile, decompressFile } from "@/react-app/lib/compression";
+import {
+  compressBlob,
+  compressedFilePath,
+  isCompressibleMimeType,
+  isCompressedPath,
+  decompressBlob,
+} from "@/react-app/lib/compression";
 
 const BUCKET = "fuelpro-files";
 
@@ -219,24 +225,34 @@ export async function saveDocument(
   }
   const tags = getTags(file.name, category);
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-  const filePath = `documents/${user.id}/${Date.now()}-${safeName}`;
+  const baseFilePath = `documents/${user.id}/${Date.now()}-${safeName}`;
 
-  // 1. Compress compressible file types (text/csv/json/legacy Office docs)
-  //    before uploading to Storage, to cut storage size AND egress on every
-  //    future download. Non-compressible files (images, PDF, video, OOXML
-  //    zips) are passed through unchanged. A magic prefix ("FPGZ") is stored
-  //    at the head of compressed objects so `getDocument` can inflate them
-  //    transparently without needing a metadata flag.
-  const { blob: uploadBlob, contentType: uploadContentType } =
-    await compressFile(file, file.name, file.type);
+  // Gzip text-based files to save Storage space (see compression.ts). Binary
+  // formats (images/PDF/video) are stored as-is. The .gz suffix lets the
+  // download path transparently decompress.
+  const shouldCompress = isCompressibleMimeType(file.type || "", file.name);
+  let uploadBlob: Blob = file;
+  let filePath = baseFilePath;
+  let storedSize = file.size;
+  let storedContentType = file.type || undefined;
+  if (shouldCompress) {
+    try {
+      uploadBlob = await compressBlob(file);
+      filePath = compressedFilePath(baseFilePath);
+      storedSize = uploadBlob.size;
+      storedContentType = "application/gzip";
+    } catch {
+      uploadBlob = file;
+    }
+  }
 
-  // 1. Upload the (possibly compressed) binary to Storage.
+  // 1. Upload the file binary to Storage.
   const { error: upErr } = await supabase.storage
     .from(BUCKET)
     .upload(filePath, uploadBlob, {
       cacheControl: "3600",
       upsert: false,
-      contentType: uploadContentType || undefined,
+      contentType: storedContentType,
     });
   if (upErr) throw new Error(`Storage upload failed: ${upErr.message}`);
 
@@ -249,7 +265,7 @@ export async function saveDocument(
       file_name: file.name,
       file_path: filePath,
       file_type: file.type || "application/octet-stream",
-      file_size: file.size,
+      file_size: storedSize,
       mime_type: file.type || null,
       category,
       storage_bucket: BUCKET,
@@ -291,14 +307,18 @@ export async function getDocument(
     .getPublicUrl(r.file_path);
   const res = await fetch(pubUrlData.publicUrl);
   if (!res.ok) return { meta, data: new ArrayBuffer(0) };
-  const raw = await res.arrayBuffer();
-  // Inflate if the object was gzip-compressed at upload (magic "FPGZ" prefix).
-  // Returns the original bytes + content type; for non-compressed objects the
-  // blob is returned unchanged. We surface the decompressed ArrayBuffer so the
-  // caller gets the original file bytes regardless of how it was stored.
-  const fallbackType = r.mime_type || r.file_type || "application/octet-stream";
-  const { blob } = await decompressFile(raw, fallbackType);
-  const data = await blob.arrayBuffer();
+  // Transparently decompress gzip-compressed uploads (.gz path suffix).
+  if (isCompressedPath(r.file_path)) {
+    try {
+      const blob = await res.blob();
+      const decompressed = await decompressBlob(blob);
+      const buf = await decompressed.arrayBuffer();
+      return { meta, data: buf };
+    } catch {
+      // decompression failed — return raw bytes as a last resort
+    }
+  }
+  const data = await res.arrayBuffer();
   return { meta, data };
 }
 

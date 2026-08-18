@@ -734,27 +734,11 @@ const initialState: FuelState = {
       visible: true,
     },
     {
-      id: "priceboard",
-      label: "Price Board",
-      originalLabel: "Price Board",
-      description: "Display fuel prices on digital price board",
-      order: 16,
-      visible: true,
-    },
-    {
       id: "team",
       label: "Team Manager",
       originalLabel: "Team Manager",
       description: "Invite & manage team access and shift scheduling",
-      order: 17,
-      visible: true,
-    },
-    {
-      id: "shifts",
-      label: "Shift Management",
-      originalLabel: "Shift Management",
-      description: "Manage employee shifts and schedules",
-      order: 18,
+      order: 16,
       visible: true,
     },
     {
@@ -762,7 +746,7 @@ const initialState: FuelState = {
       label: "Maintenance",
       originalLabel: "Maintenance",
       description: "Equipment maintenance & servicing schedules",
-      order: 19,
+      order: 17,
       visible: true,
     },
     // ─── ANALYTICS & REPORTING TABS (Regularly Used) ───
@@ -771,7 +755,7 @@ const initialState: FuelState = {
       label: "Reports Center",
       originalLabel: "Reports Center",
       description: "Generate business reports and analytics",
-      order: 20,
+      order: 18,
       visible: true,
     },
     {
@@ -779,7 +763,7 @@ const initialState: FuelState = {
       label: "Analytics",
       originalLabel: "Analytics",
       description: "Predictions, trends & business intelligence",
-      order: 21,
+      order: 19,
       visible: true,
     },
     {
@@ -787,7 +771,7 @@ const initialState: FuelState = {
       label: "Audit Trail",
       originalLabel: "Audit Trail",
       description: "Complete activity log for compliance",
-      order: 22,
+      order: 20,
       visible: true,
     },
     {
@@ -795,7 +779,7 @@ const initialState: FuelState = {
       label: "Pump Mapping V1",
       originalLabel: "Pump Mapping V1",
       description: "AI-powered pump ledger parsing & extraction",
-      order: 23,
+      order: 21,
       visible: true,
     },
     // ─── ADMINISTRATIVE TABS (Occasionally Used) ───
@@ -804,7 +788,7 @@ const initialState: FuelState = {
       label: "Communication",
       originalLabel: "Communication",
       description: "Client relationship management",
-      order: 24,
+      order: 22,
       visible: true,
     },
     {
@@ -812,7 +796,7 @@ const initialState: FuelState = {
       label: "Document Center",
       originalLabel: "Document Center",
       description: "Smart document management & format conversion",
-      order: 25,
+      order: 23,
       visible: true,
     },
     {
@@ -820,7 +804,7 @@ const initialState: FuelState = {
       label: "Data Manager",
       originalLabel: "Data Manager",
       description: "Backup, restore & cloud sync",
-      order: 26,
+      order: 24,
       visible: true,
     },
     {
@@ -829,7 +813,7 @@ const initialState: FuelState = {
       originalLabel: "Integration Hub",
       description:
         "Country-specific integrations & payment setup (M-PESA, Kopo Kopo, KRA, banks)",
-      order: 27,
+      order: 25,
       visible: true,
     },
     {
@@ -838,7 +822,7 @@ const initialState: FuelState = {
       originalLabel: "Compliance",
       description:
         "Country-specific regulations & compliance for all 195+ countries",
-      order: 28,
+      order: 26,
       visible: true,
     },
     {
@@ -846,7 +830,7 @@ const initialState: FuelState = {
       label: "News",
       originalLabel: "News",
       description: "Fuel industry news, regulations, and price updates",
-      order: 29,
+      order: 27,
       visible: true,
     },
     // ─── SPECIALIZED TABS (Rarely Used) ───
@@ -855,7 +839,7 @@ const initialState: FuelState = {
       label: "Terminal Sessions",
       originalLabel: "Terminal Sessions",
       description: "POS terminal session open/close & reconciliation",
-      order: 30,
+      order: 28,
       visible: true,
     },
     {
@@ -864,7 +848,7 @@ const initialState: FuelState = {
       originalLabel: "Automation Engine",
       description:
         "The site's brain — auto-reorder, auto-sync, auto-refresh, activity log",
-      order: 31,
+      order: 29,
       visible: true,
     },
     {
@@ -873,23 +857,7 @@ const initialState: FuelState = {
       originalLabel: "Fuel Price Finder",
       description:
         "GPS-based nearby fuel price locator & auto fuel price comparison",
-      order: 32,
-      visible: true,
-    },
-    {
-      id: "quality",
-      label: "Fuel Quality Testing",
-      originalLabel: "Fuel Quality Testing",
-      description: "Test and record fuel quality metrics",
-      order: 33,
-      visible: true,
-    },
-    {
-      id: "docconverter",
-      label: "Document Converter",
-      originalLabel: "Document Converter",
-      description: "Convert documents between different formats",
-      order: 34,
+      order: 30,
       visible: true,
     },
   ],
@@ -948,6 +916,64 @@ function itemsHaveContent(items?: InvoiceItem[] | null): number {
   return items.filter(
     (it) => (it.desc && it.desc.trim() !== "") || it.price > 0,
   ).length;
+}
+
+/**
+ * Tab IDs that have been DEPRECATED as top-level tabs and merged into parent
+ * components as inner sub-tabs. A stale cloud blob may still list these as
+ * standalone tabs, causing duplicates in the nav bar. This set is used to
+ * filter them out whenever tabConfigurations are loaded from storage/cloud.
+ */
+export const DEPRECATED_TOP_LEVEL_TAB_IDS = new Set([
+  "priceboard", // merged into Fuel Type Manager
+  "shifts", // merged into Team Manager
+  "quality", // merged into Fuel Type Manager
+  "docconverter", // merged into Document Center
+  "purchases", // merged into Supplier Management
+  "sales-invoices", // merged into Invoice
+  "debt", // merged into Credit Management
+  "integrations-settings", // merged into Integration Hub
+]);
+
+/**
+ * Sanitize tabConfigurations loaded from storage/cloud:
+ * 1. Remove any tab whose id is in DEPRECATED_TOP_LEVEL_TAB_IDS.
+ * 2. Merge in any NEW tabs from initialState that the blob is missing
+ *    (so newly-added tabs appear for existing users).
+ * 3. Preserve the user's customizations (visibility, order, label) for
+ *    tabs that still exist.
+ */
+function sanitizeTabConfigs(
+  saved: TabConfiguration[] | undefined,
+): TabConfiguration[] {
+  const authoritative = initialState.tabConfigurations;
+  if (!saved || !Array.isArray(saved) || saved.length === 0) {
+    return authoritative;
+  }
+  // Filter out deprecated tabs from the saved list.
+  const filtered = saved.filter(
+    (t) => t && t.id && !DEPRECATED_TOP_LEVEL_TAB_IDS.has(t.id),
+  );
+  // Build a map of authoritative tab ids for quick lookup.
+  const authoritativeIds = new Set(authoritative.map((t) => t.id));
+  // Keep saved customizations for tabs that still exist (not deprecated).
+  const savedMap = new Map(filtered.map((t) => [t.id, t]));
+  // Merge: start with authoritative (ensures new tabs are present), then
+  // overlay saved customizations (visibility/order) for tabs that exist.
+  const merged = authoritative.map((t) => {
+    const savedTab = savedMap.get(t.id);
+    return savedTab
+      ? {
+          ...t,
+          visible: savedTab.visible ?? t.visible,
+          order: savedTab.order ?? t.order,
+        }
+      : t;
+  });
+  // Also include any saved tabs that are NOT in authoritative (custom user tabs),
+  // as long as they're not deprecated.
+  const extraCustom = filtered.filter((t) => !authoritativeIds.has(t.id));
+  return [...merged, ...extraCustom];
 }
 
 function fuelReducer(state: FuelState, action: FuelAction): FuelState {
@@ -1150,10 +1176,48 @@ function fuelReducer(state: FuelState, action: FuelAction): FuelState {
         incoming.stationData && Object.keys(incoming.stationData).length > 0
           ? incoming.stationData
           : state.stationData;
+      // PRICE STABILITY GUARD: fuel_types_config is the single source of truth
+      // for fuel prices. The compact blob also stores legacy scalar prices
+      // (pmsPrice/agoPrice/petrolPrice/dieselPrice) for backward compat, but
+      // these can be STALE (an older device's value) or ZERO (a freshly-created
+      // station that hasn't synced fuel_types_config yet). If we blindly apply
+      // them via the `...incoming` spread, prices flicker/revert on every
+      // refresh or cross-device load. Instead: keep the CURRENT price unless the
+      // incoming value is a POSITIVE number that DIFFERS from current (i.e. a
+      // genuine price update from another device). Never let a 0/undefined
+      // incoming value overwrite a positive current price.
+      const pickPrice = (
+        currentVal: number | undefined,
+        incomingVal: number | undefined,
+      ): number => {
+        const cur =
+          typeof currentVal === "number" && currentVal > 0 ? currentVal : 0;
+        const inc =
+          typeof incomingVal === "number" && incomingVal > 0 ? incomingVal : 0;
+        // If incoming is 0/stale, keep current (preserves fuel_types_config price).
+        if (inc === 0) return cur;
+        // Both positive: the fuel_types_config effect will reconcile; prefer the
+        // incoming value only if it differs (a real remote edit).
+        return inc;
+      };
       return {
         ...state,
         ...incoming,
         companyData: mergeCompanyData(state.companyData, incoming.companyData),
+        // Sanitize tabConfigurations: filter out deprecated top-level tabs that
+        // were merged into parent components as sub-tabs (priceboard, shifts,
+        // quality, docconverter). A stale cloud blob may still contain these,
+        // causing duplicate tabs to appear in the nav bar. Always merge with the
+        // authoritative initial state so new tabs are included and deprecated
+        // ones are removed.
+        tabConfigurations: sanitizeTabConfigs(
+          incoming.tabConfigurations ?? state.tabConfigurations,
+        ),
+        // Stable prices — never revert to 0/stale values from the compact blob.
+        pmsPrice: pickPrice(state.pmsPrice, incoming.pmsPrice),
+        agoPrice: pickPrice(state.agoPrice, incoming.agoPrice),
+        petrolPrice: pickPrice(state.petrolPrice, incoming.petrolPrice),
+        dieselPrice: pickPrice(state.dieselPrice, incoming.dieselPrice),
         // Merge (not replace) the dynamic per-fuel-type stores so a stale
         // cloud blob can't wipe pumps/prices/tank-values the user just set.
         fuelPumpsByType: {
@@ -1385,6 +1449,11 @@ export function FuelProvider({ children }: { children: ReactNode }) {
   // Real-time echo guard: set before saveToCloud writes so the real-time
   // subscription knows to skip the echo of our own write.
   const skipRemoteUpdateRef = useRef(false);
+  // Tracks the timestamp of our most recent successful cloud save. Used for
+  // conflict resolution when two devices are open simultaneously: a real-time
+  // update from the other device is only applied if it is NEWER than our last
+  // save, preventing a stale remote write from clobbering our unsaved edits.
+  const lastLocalSaveTsRef = useRef(0);
 
   // ============================================================
   // FUEL TYPE / PRICE INTERLINK (FuelContext <-> fuel_types_config)
@@ -1639,6 +1708,12 @@ export function FuelProvider({ children }: { children: ReactNode }) {
       if (s.dataBackups?.length > 0)
         compactData.dataBackups = s.dataBackups.slice(-3); // Keep only last 3 backups in cloud
 
+      // Timestamp for conflict resolution: when two devices are open
+      // simultaneously, a real-time update from the other device should only
+      // overwrite local state if it is NEWER than our last save. This prevents
+      // a stale remote echo from clobbering unsaved local edits.
+      compactData.lastSavedAt = Date.now();
+
       // Persist to Supabase app_kv (cross-device). Keyed per-user + per-station
       // so each station has its own isolated FuelContext blob (companyData,
       // salesHistory, debtHistory, etc.). RLS-protected by owner_id. localStorage
@@ -1647,6 +1722,9 @@ export function FuelProvider({ children }: { children: ReactNode }) {
       // Set the echo-skip flag so the real-time subscription doesn't
       // re-dispatch our own write as if it came from another device.
       skipRemoteUpdateRef.current = true;
+      // Record our save timestamp so the real-time handler can reject stale
+      // remote updates that predate our latest local write.
+      lastLocalSaveTsRef.current = compactData.lastSavedAt;
       await cloudStorageService.set(
         cloudKey,
         compactData,
@@ -1938,7 +2016,7 @@ export function FuelProvider({ children }: { children: ReactNode }) {
             ? JSON.parse(savedTabVisibility)
             : initialState.tabVisibility,
           tabConfigurations: savedTabConfigurations
-            ? JSON.parse(savedTabConfigurations)
+            ? sanitizeTabConfigs(JSON.parse(savedTabConfigurations))
             : initialState.tabConfigurations,
           employees: savedEmployees
             ? JSON.parse(savedEmployees)
@@ -2091,6 +2169,28 @@ export function FuelProvider({ children }: { children: ReactNode }) {
         }
         if (value && Object.keys(value).length > 0) {
           const cd = value as any;
+          // CONFLICT RESOLUTION (two devices open simultaneously): only apply
+          // the remote update if it is NEWER than our last local save. If we
+          // have unsaved-or-just-saved local edits that are newer, keep them —
+          // applying a stale remote write would revert our changes and cause
+          // the "data keeps conflicting" flicker. The first load (lastLocalSaveTs
+          // === 0) always accepts the remote value.
+          const remoteTs =
+            typeof cd.lastSavedAt === "number" ? cd.lastSavedAt : 0;
+          if (
+            lastLocalSaveTsRef.current > 0 &&
+            remoteTs > 0 &&
+            remoteTs < lastLocalSaveTsRef.current
+          ) {
+            console.log(
+              "[FuelContext] Skipping stale remote update (remote ts",
+              remoteTs,
+              "< local ts",
+              lastLocalSaveTsRef.current,
+              ")",
+            );
+            return;
+          }
           const hasData =
             cd.companyData?.name ||
             cd.companyData?.logo ||

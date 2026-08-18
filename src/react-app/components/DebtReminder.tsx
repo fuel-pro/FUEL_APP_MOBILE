@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import {
   Save,
   Trash2,
@@ -6,8 +6,12 @@ import {
   Mail,
   CheckCircle2,
   AlertTriangle,
+  Clock,
+  Plus,
+  Bell,
 } from "lucide-react";
 import { useFuel } from "@/react-app/context/FuelContext";
+import { useStations } from "@/react-app/context/StationContext";
 import ExportDropdown from "@/react-app/components/ExportDropdown";
 import {
   exportDebtPDF,
@@ -20,6 +24,17 @@ import {
   formatNumber,
 } from "@/react-app/utils/formatUtils";
 import { resolveCurrencySymbol } from "@/react-app/lib/currency";
+import {
+  getScheduledReminders,
+  addScheduledReminder,
+  deleteScheduledReminder,
+  toggleScheduledReminder,
+  checkAndFireDueReminders,
+  computeNextFireTime,
+  formatReminderMessage,
+  type ScheduledReminder,
+  type ReminderMethod,
+} from "@/react-app/lib/scheduled-reminder-service";
 
 export default function DebtReminder() {
   const { state, dispatch } = useFuel();
@@ -40,10 +55,172 @@ export default function DebtReminder() {
   const [nameError, setNameError] = useState(false);
   const [deleteKey, setDeleteKey] = useState<string | null>(null);
 
+  // ===== Scheduled Auto-Reminder state =====
+  const { currentStation } = useStations();
+  const stationId = currentStation?.id;
+  const [scheduledReminders, setScheduledReminders] = useState<
+    ScheduledReminder[]
+  >([]);
+  const [showScheduleForm, setShowScheduleForm] = useState(false);
+  const [schedCustomerName, setSchedCustomerName] = useState("");
+  const [schedAmount, setSchedAmount] = useState("");
+  const [schedContact, setSchedContact] = useState("");
+  const [schedMethod, setSchedMethod] = useState<ReminderMethod>("whatsapp");
+  const [schedMessage, setSchedMessage] = useState(
+    "Dear {{name}}, this is a reminder that {{currency}} {{amount}} for fuel supplied remains unpaid. Kindly settle the amount. Thank you.",
+  );
+  const [schedMinute, setSchedMinute] = useState<string>(""); // "" = every
+  const [schedHour, setSchedHour] = useState<string>("9"); // default 9 AM
+  const [schedDayOfMonth, setSchedDayOfMonth] = useState<string>(""); // "" = every
+  const [schedMonth, setSchedMonth] = useState<string>(""); // "" = every
+  const [schedRecurring, setSchedRecurring] = useState(true);
+  const fireCheckRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   const showToast = useCallback((msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(null), 3000);
   }, []);
+
+  // Load scheduled reminders on mount + station change.
+  const loadScheduledReminders = useCallback(async () => {
+    try {
+      const data = await getScheduledReminders(stationId);
+      setScheduledReminders(data);
+    } catch (err) {
+      console.error("Failed to load scheduled reminders:", err);
+    }
+  }, [stationId]);
+
+  useEffect(() => {
+    loadScheduledReminders();
+  }, [loadScheduledReminders]);
+
+  // Fire a reminder via the appropriate channel. Only WhatsApp/Email can be
+  // auto-opened from the browser; SMS shows a toast (requires a gateway).
+  const fireReminder = useCallback(
+    (reminder: ScheduledReminder, message: string) => {
+      const cleanContact = reminder.contact.replace(/\D/g, "");
+      if (reminder.method === "whatsapp" && cleanContact) {
+        const url = `https://wa.me/${cleanContact}?text=${encodeURIComponent(message)}`;
+        window.open(url, "_blank");
+      } else if (reminder.method === "email") {
+        const url = `mailto:${reminder.contact}?subject=${encodeURIComponent("Payment Reminder")}&body=${encodeURIComponent(message)}`;
+        window.open(url, "_blank");
+      }
+      // SMS: no browser-native send; gateway integration needed.
+      showToast(
+        `Auto-reminder sent to ${reminder.customerName} via ${reminder.method}`,
+      );
+    },
+    [showToast],
+  );
+
+  // Background interval: check every 30s for due reminders.
+  useEffect(() => {
+    const check = () => {
+      checkAndFireDueReminders(stationId, fireReminder)
+        .then((fired) => {
+          if (fired.length > 0) {
+            loadScheduledReminders();
+          }
+        })
+        .catch((err) => console.error("Scheduled reminder check failed:", err));
+    };
+    // Check immediately on mount.
+    check();
+    fireCheckRef.current = setInterval(check, 30_000);
+    return () => {
+      if (fireCheckRef.current) clearInterval(fireCheckRef.current);
+    };
+  }, [stationId, fireReminder, loadScheduledReminders]);
+
+  const handleAddScheduledReminder = async () => {
+    if (!schedCustomerName.trim()) {
+      showToast("Please enter a customer name");
+      return;
+    }
+    if (!schedContact.trim()) {
+      showToast("Please enter a contact (phone or email)");
+      return;
+    }
+    const parseOrNull = (v: string): number | null => {
+      const t = v.trim();
+      if (t === "") return null;
+      const n = parseInt(t, 10);
+      return Number.isFinite(n) ? n : null;
+    };
+    try {
+      await addScheduledReminder(
+        {
+          customerName: schedCustomerName.trim(),
+          amount: parseNumberFromFormatted(schedAmount) || 0,
+          currency: currencySymbol,
+          contact: schedContact.trim(),
+          method: schedMethod,
+          messageFormat: schedMessage,
+          minute: parseOrNull(schedMinute),
+          hour: parseOrNull(schedHour),
+          dayOfMonth: parseOrNull(schedDayOfMonth),
+          month: parseOrNull(schedMonth),
+          recurring: schedRecurring,
+          enabled: true,
+        },
+        stationId,
+      );
+      showToast(`Scheduled reminder for ${schedCustomerName} created`);
+      // Reset form.
+      setSchedCustomerName("");
+      setSchedAmount("");
+      setSchedContact("");
+      setSchedMessage(
+        "Dear {{name}}, this is a reminder that {{currency}} {{amount}} for fuel supplied remains unpaid. Kindly settle the amount. Thank you.",
+      );
+      setSchedMinute("");
+      setSchedHour("9");
+      setSchedDayOfMonth("");
+      setSchedMonth("");
+      setSchedRecurring(true);
+      setShowScheduleForm(false);
+      loadScheduledReminders();
+    } catch (err) {
+      console.error("Failed to add scheduled reminder:", err);
+      showToast("Failed to create scheduled reminder");
+    }
+  };
+
+  const handleDeleteScheduled = async (id: string) => {
+    try {
+      await deleteScheduledReminder(id, stationId);
+      loadScheduledReminders();
+      showToast("Scheduled reminder deleted");
+    } catch (err) {
+      console.error("Failed to delete scheduled reminder:", err);
+    }
+  };
+
+  const handleToggleScheduled = async (id: string) => {
+    try {
+      await toggleScheduledReminder(id, stationId);
+      loadScheduledReminders();
+    } catch (err) {
+      console.error("Failed to toggle scheduled reminder:", err);
+    }
+  };
+
+  const formatSchedule = (r: ScheduledReminder): string => {
+    const parts: string[] = [];
+    parts.push(
+      r.minute !== null
+        ? `:${String(r.minute).padStart(2, "0")}`
+        : "every minute",
+    );
+    parts.push(
+      r.hour !== null ? `${String(r.hour).padStart(2, "0")}h` : "every hour",
+    );
+    parts.push(r.dayOfMonth !== null ? `day ${r.dayOfMonth}` : "every day");
+    parts.push(r.month !== null ? `month ${r.month}` : "every month");
+    return parts.join(", ");
+  };
 
   const handleAmountChange = (value: string) => {
     const formatted = formatAmountWithCommas(value);
@@ -381,6 +558,235 @@ export default function DebtReminder() {
           </div>
         </div>
       )}
+
+      {/* ===== Scheduled Auto-Reminders ===== */}
+      <div className="card">
+        <div className="flex justify-between items-center mb-4 pb-3 border-b border-gray-200 dark:border-gray-700">
+          <h3 className="text-lg font-bold text-blue-900 dark:text-blue-200 flex items-center gap-2">
+            <Bell size={18} />
+            Scheduled Auto-Reminders
+          </h3>
+          <button
+            onClick={() => setShowScheduleForm(!showScheduleForm)}
+            className="btn btn-primary text-sm"
+          >
+            <Plus size={14} />
+            Schedule Reminder
+          </button>
+        </div>
+
+        {showScheduleForm && (
+          <div className="mb-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800 space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-gray-500">Customer Name *</label>
+                <input
+                  type="text"
+                  value={schedCustomerName}
+                  onChange={(e) => setSchedCustomerName(e.target.value)}
+                  className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+                  placeholder="e.g. John Mwangi"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500">
+                  Amount ({currencySymbol})
+                </label>
+                <input
+                  type="text"
+                  value={schedAmount}
+                  onChange={(e) => setSchedAmount(e.target.value)}
+                  className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+                  placeholder="e.g. 5,000"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500">
+                  Contact (phone/email) *
+                </label>
+                <input
+                  type="text"
+                  value={schedContact}
+                  onChange={(e) => setSchedContact(e.target.value)}
+                  className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+                  placeholder="e.g. 254712345678 or john@email.com"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500">Method</label>
+                <select
+                  value={schedMethod}
+                  onChange={(e) =>
+                    setSchedMethod(e.target.value as ReminderMethod)
+                  }
+                  className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+                >
+                  <option value="whatsapp">WhatsApp</option>
+                  <option value="email">Email</option>
+                  <option value="sms">SMS (requires gateway)</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Schedule fields */}
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              <div>
+                <label className="text-xs text-gray-500">Minute</label>
+                <input
+                  type="text"
+                  value={schedMinute}
+                  onChange={(e) => setSchedMinute(e.target.value)}
+                  className="w-full px-2 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+                  placeholder="every"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500">Hour</label>
+                <input
+                  type="text"
+                  value={schedHour}
+                  onChange={(e) => setSchedHour(e.target.value)}
+                  className="w-full px-2 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+                  placeholder="every"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500">Day of Month</label>
+                <input
+                  type="text"
+                  value={schedDayOfMonth}
+                  onChange={(e) => setSchedDayOfMonth(e.target.value)}
+                  className="w-full px-2 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+                  placeholder="every"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500">Month (1-12)</label>
+                <input
+                  type="text"
+                  value={schedMonth}
+                  onChange={(e) => setSchedMonth(e.target.value)}
+                  className="w-full px-2 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+                  placeholder="every"
+                />
+              </div>
+              <div className="flex items-end">
+                <label className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={schedRecurring}
+                    onChange={(e) => setSchedRecurring(e.target.checked)}
+                    className="rounded"
+                  />
+                  Recurring
+                </label>
+              </div>
+            </div>
+            <p className="text-[10px] text-gray-400">
+              Leave a field empty for "every". Example: Hour=9, Minute=0, Day=1
+              = every 1st of the month at 9:00 AM. Hour=9 only = every day at
+              9:00 AM (every hour if Hour empty too).
+            </p>
+
+            <div>
+              <label className="text-xs text-gray-500">Message Format</label>
+              <textarea
+                value={schedMessage}
+                onChange={(e) => setSchedMessage(e.target.value)}
+                rows={3}
+                className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+                placeholder="Use {{name}}, {{amount}}, {{currency}}"
+              />
+            </div>
+
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setShowScheduleForm(false)}
+                className="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded-lg text-sm dark:text-white"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAddScheduledReminder}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium"
+              >
+                Create Reminder
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* List of scheduled reminders */}
+        {scheduledReminders.length === 0 ? (
+          <p className="text-sm text-gray-400 text-center py-6">
+            No scheduled auto-reminders yet. Click "Schedule Reminder" to
+            automate debt collection notifications.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {scheduledReminders.map((r) => (
+              <div
+                key={r.id}
+                className={`flex items-center justify-between p-3 rounded-lg border ${r.enabled ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800" : "bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700"}`}
+              >
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-sm dark:text-white">
+                      {r.customerName}
+                    </span>
+                    <span className="text-xs text-gray-400">
+                      {currencySymbol} {formatNumber(r.amount)}
+                    </span>
+                    <span
+                      className={`text-[10px] px-2 py-0.5 rounded-full ${r.enabled ? "bg-green-500/10 text-green-600" : "bg-gray-500/10 text-gray-500"}`}
+                    >
+                      {r.enabled ? "Active" : "Paused"}
+                    </span>
+                    {!r.recurring && (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600">
+                        One-time
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3 mt-1 text-[11px] text-gray-400">
+                    <span className="flex items-center gap-1">
+                      <Clock size={11} />
+                      {formatSchedule(r)}
+                    </span>
+                    <span>
+                      {r.method === "whatsapp"
+                        ? "📱 WhatsApp"
+                        : r.method === "email"
+                          ? "✉️ Email"
+                          : "💬 SMS"}
+                    </span>
+                    <span>→ {r.contact}</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => handleToggleScheduled(r.id)}
+                    className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg"
+                    title={r.enabled ? "Pause" : "Enable"}
+                  >
+                    <Bell
+                      size={14}
+                      className={r.enabled ? "text-green-600" : "text-gray-400"}
+                    />
+                  </button>
+                  <button
+                    onClick={() => handleDeleteScheduled(r.id)}
+                    className="p-1.5 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-lg"
+                    title="Delete"
+                  >
+                    <Trash2 size={14} className="text-red-500" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Toast notification */}
       {toast && (

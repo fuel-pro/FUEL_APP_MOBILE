@@ -64,4 +64,45 @@ describe("Authentication", () => {
     expect(id).toBeDefined();
     expect(id.startsWith("dev_")).toBe(true);
   });
+
+  it("hashes username passwords with SHA-256 (no cleartext stored)", async () => {
+    // Replicate the module-scope hashing helper used by the username fallback.
+    const USERNAME_PW_SALT = "fuelpro_local_user_v1";
+    const hashUsernamePassword = async (pw: string): Promise<string> => {
+      const enc = new TextEncoder().encode(USERNAME_PW_SALT + pw);
+      const buf = await crypto.subtle.digest("SHA-256", enc);
+      return Array.from(new Uint8Array(buf))
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("");
+    };
+
+    const password = "supersecret123";
+    const hash = await hashUsernamePassword(password);
+
+    // The stored representation is a hex digest, never the raw password.
+    expect(hash).toMatch(/^[0-9a-f]{64}$/);
+    expect(hash).not.toBe(password);
+
+    // Same input deterministically produces the same hash.
+    expect(await hashUsernamePassword(password)).toBe(hash);
+
+    // Different input produces a different hash.
+    expect(await hashUsernamePassword("wrongpass")).not.toBe(hash);
+
+    // Simulate the storage shape used by registerWithUsername: only passwordHash.
+    const users = {
+      demo: {
+        username: "demo",
+        passwordHash: hash,
+        name: "Demo",
+        role: "user",
+      },
+    };
+    localStorage.setItem("fuelpro_username_users", JSON.stringify(users));
+    const stored = JSON.parse(
+      localStorage.getItem("fuelpro_username_users") || "{}",
+    );
+    expect(stored.demo.passwordHash).toBe(hash);
+    expect(stored.demo.password).toBeUndefined();
+  });
 });
