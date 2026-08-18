@@ -8,6 +8,7 @@
  */
 
 import { getSupabaseClient } from "@/supabase/client";
+import { compressFile, decompressFile } from "@/react-app/lib/compression";
 
 export interface UserDocument {
   id: string;
@@ -80,13 +81,19 @@ export async function uploadDocument(
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
   const filePath = `documents/${user.id}/${Date.now()}-${safeName}`;
 
+  // Compress compressible file types (text/csv/json/legacy Office docs) before
+  // upload to save Storage space + egress on every future download. A magic
+  // "FPGZ" prefix is stored at the head so `downloadDocument` can inflate it.
+  const { blob: uploadBlob, contentType: uploadContentType } =
+    await compressFile(file, file.name, file.type);
+
   // Upload to Storage
   const { error: uploadErr } = await supabase.storage
     .from(BUCKET)
-    .upload(filePath, file, {
+    .upload(filePath, uploadBlob, {
       cacheControl: "3600",
       upsert: false,
-      contentType: file.type || undefined,
+      contentType: uploadContentType || undefined,
     });
 
   if (uploadErr) {
@@ -218,3 +225,49 @@ export async function deleteDocument(
 }
 
 export { categorizeFile, getFileExtension };
+
+/**
+ * Download a document, transparently inflating it if it was gzip-compressed at
+ * upload (detected via the "FPGZ" magic prefix). This is the correct download
+ * path for compressible file types — `getDocumentUrl` returns a raw public
+ * URL that would serve the still-compressed bytes for those files, so direct
+ * `window.open(url)` downloads would be broken. This function fetches the
+ * bytes, decompresses if needed, and triggers a browser download of the
+ * ORIGINAL file. Returns the object URL (revoked after the click) so callers
+ * that want to preview instead of download can reuse it.
+ */
+export async function downloadDocument(
+  doc: UserDocument,
+): Promise<{ success: boolean; error?: string; url?: string }> {
+  const supabase = getSupabaseClient();
+  const { data: pubUrlData } = supabase.storage
+    .from(doc.storage_bucket || BUCKET)
+    .getPublicUrl(doc.file_path);
+  const publicUrl = pubUrlData?.publicUrl;
+  if (!publicUrl) return { success: false, error: "No URL available" };
+
+  try {
+    const res = await fetch(publicUrl);
+    if (!res.ok)
+      return { success: false, error: `Fetch failed (${res.status})` };
+    const raw = await res.arrayBuffer();
+    const fallbackType =
+      doc.mime_type || doc.file_type || "application/octet-stream";
+    const { blob } = await decompressFile(raw, fallbackType);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = doc.file_name;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    // Revoke shortly after the click so the browser finishes the download.
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+    return { success: true, url };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Download failed",
+    };
+  }
+}

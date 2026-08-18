@@ -13,6 +13,11 @@ import {
 import { currencySymbolFor, getVATRate } from "@/react-app/config/pricing";
 import { getRegionalConfig } from "@/react-app/config/regions";
 import { supabase, supabaseUrl, supabaseAnonKey } from "@/supabase/client";
+import {
+  compress,
+  decompress,
+  isCompressedEnvelope,
+} from "@/react-app/lib/compression";
 
 // Lazy API base URL getter using dynamic import to avoid circular deps
 let _apiBase: string | null = null;
@@ -609,7 +614,7 @@ async function pushStationUpsert(station: Station, ownerId: string) {
       id: `station_data_${station.id}`,
       collection: "station_data",
       owner_id: ownerId,
-      data: station.data ?? {},
+      data: compress(station.data ?? {}) as any,
     });
     if (kvError) {
       console.error(
@@ -764,7 +769,7 @@ async function syncStationsWithSupabase(
           id: `station_data_${inserted.id}`,
           collection: "station_data",
           owner_id: userId,
-          data: s.data ?? {},
+          data: compress(s.data ?? {}) as any,
         });
         migrated.push(newStation);
       }
@@ -894,14 +899,14 @@ async function syncStationsWithSupabase(
       .maybeSingle();
 
     if (!kvError && kvRow?.data) {
-      kvRowData = kvRow.data;
+      kvRowData = decompress(kvRow.data);
     } else {
       // Direct fetch fallback (same RLS issue as the stations query above)
       const directKv = await directFetch(
         `app_kv?id=eq.${compactKey}&owner_id=eq.${userId}&select=data`,
       );
       if (directKv && directKv.length > 0) {
-        kvRowData = directKv[0].data;
+        kvRowData = decompress(directKv[0].data);
       }
     }
 
@@ -937,7 +942,7 @@ async function syncStationsWithSupabase(
                   id: `station_data_${inserted.id}`,
                   collection: "station_data",
                   owner_id: userId,
-                  data: s.data,
+                  data: compress(s.data) as any,
                 });
               }
               migrated.push(newStation);
@@ -978,7 +983,7 @@ async function syncStationsWithSupabase(
       .in("id", kvIds);
     for (const row of kvRows || []) {
       const stationId = String(row.id).replace(/^station_data_/, "");
-      dataBlobs[stationId] = row.data;
+      dataBlobs[stationId] = decompress(row.data);
     }
     // Direct fetch fallback for data blobs
     if (Object.keys(dataBlobs).length === 0) {
@@ -989,7 +994,7 @@ async function syncStationsWithSupabase(
       if (directKvRows) {
         for (const row of directKvRows) {
           const stationId = String(row.id).replace(/^station_data_/, "");
-          dataBlobs[stationId] = row.data;
+          dataBlobs[stationId] = decompress(row.data);
         }
       }
     }

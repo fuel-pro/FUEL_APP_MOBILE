@@ -1976,13 +1976,19 @@ export function FuelProvider({ children }: { children: ReactNode }) {
     return () => clearTimeout(timeoutId);
   }, [state]);
 
-  // AGGRESSIVE AUTO-SAVE to cloud - ensures all business data is always saved
+  // AGGRESSIVE AUTO-SAVE to cloud - ensures all business data is always saved.
+  // Debounced to 2s so a burst of edits (typing, rapid line-item changes)
+  // collapses into ONE cloud write + ONE realtime broadcast instead of one
+  // per keystroke. This is a major realtime/egress saving on the Free plan
+  // (each cloud write echoes a postgres_changes event to every subscribed
+  // device). The echo guard (skipRemoteUpdateRef) and the local 100ms save
+  // keep data safe; the 2s window only delays the *cloud* mirror.
   useEffect(() => {
     if (!user) return;
 
     const immediateCloudSave = setTimeout(() => {
       saveToCloud();
-    }, 500); // 500ms — fast cloud sync, batches rapid edits
+    }, 2000); // 2s — batches rapid edits into a single cloud sync
 
     return () => clearTimeout(immediateCloudSave);
   }, [user, state]);

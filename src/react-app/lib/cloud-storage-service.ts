@@ -12,6 +12,11 @@
  */
 
 import { getSupabaseClient } from "@/supabase/client";
+import {
+  compress,
+  decompress,
+  isCompressedEnvelope,
+} from "@/react-app/lib/compression";
 
 const COLLECTION = "fuel_data";
 const CACHE_PREFIX = "fuelpro_cloud_";
@@ -175,7 +180,16 @@ function clearCache(key: string): void {
 
 class CloudStorageService {
   private memoryCache = new Map<string, { value: unknown; ts: number }>();
-  private memTtlMs = 60_000; // 60 seconds — data rarely changes faster than this
+  private memTtlMs = 300_000; // 5 minutes — data changes at most every 2s (save debounce), and a longer TTL avoids redundant GETs that burn egress quota.
+
+  /**
+   * In-flight GET deduplication. When two components call `get(key)` for the
+   * same key within the same tick (common on mount — e.g. a parent + child
+   * both loading the same cloud key), only ONE Supabase round-trip is made
+   * and both callers await the same promise. This halves redundant reads
+   * (each read is billable egress on the Free plan).
+   */
+  private inflight = new Map<string, Promise<unknown | null>>();
 
   /** Whether Supabase auth is available (client configured + user signed in). */
   async isAvailable(): Promise<boolean> {
@@ -228,6 +242,40 @@ class CloudStorageService {
     const ownerId = await currentUserId();
     if (!ownerId) return readCache<T>(ck);
 
+    // Dedup concurrent identical GETs: if another caller already has an
+    // in-flight fetch for this exact key+station, await its result instead of
+    // firing a second Supabase round-trip (each round-trip is billable egress).
+    const existing = this.inflight.get(ck);
+    if (existing) {
+      try {
+        return (await existing) as T | null;
+      } catch {
+        // Fall through to a fresh fetch if the dedup'd promise rejected.
+      }
+    }
+
+    const promise = this.fetchFromCloud<T>(key, stationId, ck, ownerId).finally(
+      () => {
+        this.inflight.delete(ck);
+      },
+    );
+    this.inflight.set(ck, promise as Promise<unknown | null>);
+    return promise;
+  }
+
+  /**
+   * Single-flight network fetch for `get()`. Performs the station-scoped →
+   * user-scoped → legacy bare-key read ladder, decompressing each candidate,
+   * and auto-healing legacy rows by repersisting them compressed under the
+   * scoped id. Exposed as a private method so `get()` can dedup concurrent
+   * calls via the `inflight` map.
+   */
+  private async fetchFromCloud<T = Json>(
+    key: string,
+    stationId: string | undefined,
+    ck: string,
+    ownerId: string,
+  ): Promise<T | null> {
     try {
       const client = getSupabaseClient();
       const scopedId = rowId(key, ownerId, stationId);
@@ -242,13 +290,18 @@ class CloudStorageService {
           .maybeSingle();
         if (error) throw error;
         if (data?.data != null) {
-          const value = coerceJson<T>(data.data);
+          const unwrapped = coerceJson<unknown>(data.data);
+          const value = decompress<T>(unwrapped);
           if (value != null) {
             this.memoryCache.set(ck, { value, ts: Date.now() });
             writeCache(ck, value);
-            // Auto-heal: if the stored row was a double-encoded string,
-            // repersist as proper JSONB so future reads skip the parse.
-            if (typeof data.data === "string") {
+            // Auto-heal: if the stored row was a double-encoded string OR an
+            // uncompressed (legacy) object, repersist compressed so future
+            // reads skip the parse and the row shrinks on the wire.
+            if (
+              typeof data.data === "string" ||
+              !isCompressedEnvelope(unwrapped)
+            ) {
               this.set(key, value, stationId).catch(() => {});
             }
             return value;
@@ -266,12 +319,16 @@ class CloudStorageService {
         .maybeSingle();
       if (usError) throw usError;
       if (usData?.data != null) {
-        const value = coerceJson<T>(usData.data);
+        const unwrapped = coerceJson<unknown>(usData.data);
+        const value = decompress<T>(unwrapped);
         if (value != null) {
           this.memoryCache.set(ck, { value, ts: Date.now() });
           writeCache(ck, value);
-          if (typeof usData.data === "string") {
-            // Repersist under the scoped id as proper JSONB.
+          if (
+            typeof usData.data === "string" ||
+            !isCompressedEnvelope(unwrapped)
+          ) {
+            // Repersist under the scoped id, compressed.
             this.set(key, value, stationId).catch(() => {});
           }
           return value;
@@ -288,7 +345,8 @@ class CloudStorageService {
           .eq("owner_id", ownerId)
           .maybeSingle();
         if (legacy?.data != null) {
-          const value = coerceJson<T>(legacy.data);
+          const unwrapped = coerceJson<unknown>(legacy.data);
+          const value = decompress<T>(unwrapped);
           if (value != null) {
             this.memoryCache.set(ck, { value, ts: Date.now() });
             writeCache(ck, value);
@@ -327,13 +385,17 @@ class CloudStorageService {
 
     try {
       const client = getSupabaseClient();
+      // Compress the payload before it hits the wire. Small payloads are
+      // returned untouched by `compress`, so there is no overhead for the
+      // many tiny per-component keys.
+      const payload = compress(value) as unknown as Json;
       const { error } = await client.from("app_kv").upsert(
         {
           id: rowId(key, ownerId, stationId),
           collection: COLLECTION,
           owner_id: ownerId,
           station_id: stationId ?? null,
-          data: value as unknown as Json,
+          data: payload,
           updated_at: new Date().toISOString(),
         },
         { onConflict: "id" },
@@ -405,12 +467,118 @@ class CloudStorageService {
         const logicalKey = row.id.endsWith(suffix)
           ? row.id.slice(0, -suffix.length)
           : row.id;
-        out[logicalKey] = coerceJson<T>(row.data) as T;
+        const unwrapped = coerceJson<unknown>(row.data);
+        out[logicalKey] = decompress<T>(unwrapped) as T;
       }
       return out;
     } catch {
       return {};
     }
+  }
+
+  /**
+   * One-shot migration: compress ALL of the current user's existing `app_kv`
+   * rows in place.
+   *
+   * The per-row self-heal in `get()` only compresses rows that happen to be
+   * read by the running app. Rows that exist but are never accessed (e.g. a
+   * stale compact blob from an old device, or per-component keys for a tab
+   * the user hasn't opened this session) stay uncompressed — wasting DB
+   * storage and egress every time any device lists/transfers them.
+   *
+   * This walks every row owned by the user, and for any row whose `data` is
+   * NOT already a compressed envelope (or is a double-encoded string), it
+   * re-upserts the row with the compressed envelope — preserving the exact
+   * row id, station_id, and collection so RLS + real-time subscriptions are
+   * unaffected. Rows already compressed are skipped (no write, no egress).
+   *
+   * Guarded by a per-user localStorage flag so it runs at most once per
+   * device (idempotent: a re-run after a forced logout is harmless because
+   * already-compressed rows are skipped). Runs fire-and-forget on app boot
+   * via `ensureExistingDataCompressed()`; failures are non-fatal (the
+   * per-row self-heal still catches anything missed).
+   */
+  async compressAllExistingData(): Promise<{
+    scanned: number;
+    compressed: number;
+    skipped: number;
+  }> {
+    const ownerId = await currentUserId();
+    if (!ownerId) return { scanned: 0, compressed: 0, skipped: 0 };
+
+    let scanned = 0;
+    let compressed = 0;
+    let skipped = 0;
+    try {
+      const client = getSupabaseClient();
+      // Page through every row owned by this user. app_kv rows are small
+      // (tens of KB each) so a single page is usually enough, but we cap +
+      // paginate to stay well under the PostgREST row limit.
+      let offset = 0;
+      const pageSize = 500;
+      while (true) {
+        const { data, error } = await client
+          .from("app_kv")
+          .select("id, data, station_id")
+          .eq("owner_id", ownerId)
+          .order("id", { ascending: true })
+          .range(offset, offset + pageSize - 1);
+        if (error) throw error;
+        const rows = data ?? [];
+        if (rows.length === 0) break;
+        scanned += rows.length;
+
+        // Re-write uncompressed rows. Batch the upserts; each is independent.
+        for (const row of rows) {
+          const unwrapped = coerceJson<unknown>(row.data);
+          // Already a compressed envelope (and not a double-encoded string)?
+          // Skip — no write, no egress. This is the steady-state fast path.
+          if (
+            typeof row.data !== "string" &&
+            unwrapped != null &&
+            isCompressedEnvelope(unwrapped)
+          ) {
+            skipped++;
+            continue;
+          }
+          if (unwrapped == null) {
+            skipped++;
+            continue;
+          }
+          // Compress the decoded value and write it back to the SAME row id,
+          // preserving station_id + collection so RLS/realtime are unaffected.
+          const payload = compress(unwrapped) as unknown as Json;
+          const stationId =
+            typeof row.station_id === "string" ? row.station_id : null;
+          const { error: upErr } = await client.from("app_kv").upsert(
+            {
+              id: row.id,
+              collection: COLLECTION,
+              owner_id: ownerId,
+              station_id: stationId,
+              data: payload,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: "id" },
+          );
+          if (upErr) {
+            skipped++;
+          } else {
+            compressed++;
+          }
+        }
+
+        if (rows.length < pageSize) break;
+        offset += pageSize;
+      }
+    } catch (err) {
+      // Non-fatal: the per-row self-heal in get() still catches missed rows.
+      console.warn(
+        "[CloudStorage] compressAllExistingData partial failure:",
+        err,
+      );
+    }
+    return { scanned, compressed, skipped };
   }
 
   /** Drop the in-memory cache (forces next get to hit cloud). */
@@ -468,7 +636,9 @@ class CloudStorageService {
               payload.eventType === "DELETE"
                 ? null
                 : ((payload.new as { data?: unknown })?.data ?? null);
-            const newData = rawNew == null ? null : coerceJson<T>(rawNew);
+            const unwrapped =
+              rawNew == null ? null : coerceJson<unknown>(rawNew);
+            const newData = unwrapped == null ? null : decompress<T>(unwrapped);
             if (newData != null) {
               writeCache(ck, newData);
               this.memoryCache.set(ck, { value: newData, ts: Date.now() });
@@ -540,7 +710,9 @@ class CloudStorageService {
               }
             }
             const rawValue = (payload.new as { data?: unknown })?.data ?? null;
-            const value = rawValue == null ? null : coerceJson<T>(rawValue);
+            const unwrapped =
+              rawValue == null ? null : coerceJson<unknown>(rawValue);
+            const value = unwrapped == null ? null : decompress<T>(unwrapped);
             if (value != null && id) {
               callback(id, value);
             }

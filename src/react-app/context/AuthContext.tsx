@@ -10,6 +10,7 @@ import {
 import { supabase } from "@/supabase/client";
 import { getSupabaseClient } from "@/supabase/client";
 import type { User, Session } from "@supabase/supabase-js";
+import { cloudStorageService } from "@/react-app/lib/cloud-storage-service";
 
 // ============================================================
 // AUTH CONTEXT v10 - Supabase Production Mode
@@ -156,8 +157,7 @@ async function supabaseUserToIdentityEnriched(
   const base: AuthIdentity = {
     id: user.id,
     authId: `supabase_${user.id}`,
-    authMethod:
-      user.app_metadata?.provider === "google" ? "google" : "email",
+    authMethod: user.app_metadata?.provider === "google" ? "google" : "email",
     email: user.email || "",
     name: user.user_metadata?.full_name || user.email?.split("@")[0] || "User",
     picture: user.user_metadata?.avatar_url || undefined,
@@ -195,8 +195,7 @@ function supabaseUserToIdentity(
   return {
     id: user.id,
     authId: `supabase_${user.id}`,
-    authMethod:
-      user.app_metadata?.provider === "google" ? "google" : "email",
+    authMethod: user.app_metadata?.provider === "google" ? "google" : "email",
     email: user.email || "",
     name: user.user_metadata?.full_name || user.email?.split("@")[0] || "User",
     picture: user.user_metadata?.avatar_url || undefined,
@@ -626,7 +625,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           // One Tap prompt; if it cannot show (e.g. no active session or
           // blocked), fall back to the redirect-based OAuth flow below.
           google.accounts.id.prompt((notification: any) => {
-            if (notification?.isNotDisplayed() || notification?.isSkippedMoment()) {
+            if (
+              notification?.isNotDisplayed() ||
+              notification?.isSkippedMoment()
+            ) {
               resolve(null);
             }
           });
@@ -784,6 +786,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     refreshAuthRef.current = refreshAuth;
   }, [refreshAuth]);
+
+  // One-shot background migration: compress ALL of the signed-in user's
+  // existing cloud data (app_kv rows) in place, so legacy uncompressed rows
+  // don't keep consuming DB storage + egress on the Free Plan. Runs at most
+  // once per (user, device) — guarded by a localStorage flag — and is fully
+  // idempotent (already-compressed rows are skipped, so a re-run is free).
+  // Fire-and-forget: never blocks the UI; failures fall back to the per-row
+  // self-heal in cloudStorageService.get().
+  useEffect(() => {
+    if (!user?.id) return;
+    const flag = `fuelpro_data_compressed_v1_${user.id}`;
+    if (localStorage.getItem(flag) === "1") return;
+    // Defer so it doesn't compete with the initial app-data hydration.
+    const t = setTimeout(() => {
+      cloudStorageService
+        .compressAllExistingData()
+        .then((res) => {
+          localStorage.setItem(flag, "1");
+          console.info(
+            `[compression] migrated existing data: scanned=${res.scanned} compressed=${res.compressed} skipped=${res.skipped}`,
+          );
+        })
+        .catch(() => {
+          // Leave the flag unset so it retries on the next session.
+        });
+    }, 8000);
+    return () => clearTimeout(t);
+  }, [user?.id]);
 
   // Token refresh interval
   useEffect(() => {

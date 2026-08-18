@@ -413,7 +413,9 @@ export default function AuthLogin() {
             ) : (
               <>
                 <GoogleLogo className="w-5 h-5" />
-                {mode === "register" ? "Sign up with Google" : "Sign in with Google"}
+                {mode === "register"
+                  ? "Sign up with Google"
+                  : "Sign in with Google"}
               </>
             )}
           </button>

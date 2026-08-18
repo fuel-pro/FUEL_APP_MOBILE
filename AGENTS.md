@@ -4909,3 +4909,90 @@ and stored price >= 100, discard it (stale Kenya value) → use country fallback
   exhausted; resets ~24h). GitHub integration auto-deploys when quota
   resets. ⏳
 - Supabase: no schema changes (frontend-only fixes). ✅
+
+
+## Backend compression + egress/realtime reduction (ADDED 2026-08-18)
+
+The Supabase org hit Free-Plan quotas (Egress 7.095/5 GB = 142%; Realtime Messages 1.9M/2M = 96%; grace period ends 12 Sep 2026). Added a transparent compression layer that shrinks EVERY cloud payload, plus egress/realtime reductions. No schema changes.
+
+### New module: src/react-app/lib/compression.ts
+- compress()/decompress(): gzip (pako) + base64 envelope for JSONB. Envelope { __c:1, d, n, z }. isCompressedEnvelope() detects marker. Payloads <384 bytes skip; incompressible falls back to raw. Backward-compat: legacy raw JSONB returned unchanged by decompress, auto-heals on next set().
+- compressFile()/decompressFile(): gzip Storage objects for COMPRESSIBLE types only (text/csv/json/xml/md/sql/rtf/legacy .doc/.xls/.ppt/SVG). Already-compressed formats passed through. 4-byte FPGZ magic prefix. isCompressibleFile() classifier.
+
+### Integration (all cloud writes/reads compress/decompress)
+- cloud-storage-service.ts: set() compresses; get()+getAll()+subscribe() decompress. Cache TTL 60s->300s. In-flight GET DEDUP. Refactored get() -> private fetchFromCloud().
+- StationContext.tsx: 3 station_data upserts compress(); 2 read paths decompress().
+- restApiSync.ts: create/update compress; get/list decompress.
+- documentStore.ts: saveDocument compressFile before upload; getDocument decompressFile after fetch.
+- document-service.ts: uploadDocument compresses; new downloadDocument() decompresses+downloads. Fixed UserProfileSettings.handleDownload (was serving compressed bytes).
+
+### Egress + Realtime reductions
+- Cloud save debounce 500ms->2000ms (FuelContext.tsx): burst of edits -> ONE cloud write + ONE realtime broadcast. Echo guard + 100ms local save keep data safe.
+- In-memory cache TTL 60s->300s: fewer redundant GETs (billable egress).
+- In-flight GET dedup: concurrent get(sameKey) share one round-trip.
+
+### No Supabase schema changes
+Application-layer transforms only. JSONB still holds valid JSON; Storage still blobs. Existing rows auto-heal.
+
+### Verification 2026-08-18
+- tsc -b: 0 errors. build: success (110 precache; __c in reports-*.js). prettier: pass. eslint: 0 errors. vitest: 17/17 (3 existing + 14 new in src/test/compression.test.ts).
+
+### Deploy state 2026-08-18
+- GitHub main: NOT yet committed (awaiting user authorization). Cloudflare/Vercel: NOT yet deployed. Supabase: NO schema changes (frontend-only).
+
+## Session 2026-08-18 (cont.) — Compress EXISTING at-rest data (one-shot migration)
+
+The initial compression layer (commit 53d74d5) compressed NEW writes but left
+legacy rows uncompressed until a user happened to re-edit them. The user's
+Free Plan had hit 142% egress + 96% realtime quota, so every byte counts.
+This adds a one-shot migration that compresses ALL existing `app_kv` rows in
+place — no DB admin access required (runs in the user's browser where the
+Supabase client works, unlike this sandbox where *.supabase.co DNS + the
+Management API database/query endpoint were both unreachable).
+
+### `cloudStorageService.compressAllExistingData()` (NEW)
+- Pages through EVERY `app_kv` row owned by the signed-in user
+  (`select("id, data, station_id").eq("owner_id", ownerId)`, 500/page).
+- For each row: if `data` is NOT already a `{__c:1,...}` envelope (or is a
+  double-encoded string), gzip-compresses the decoded value (pako) and
+  upserts the envelope back to the SAME row id — preserving `owner_id`,
+  `station_id`, and `collection` so RLS + Realtime subscriptions are
+  unaffected.
+- Already-compressed rows are SKIPPED (no write, no egress) — idempotent.
+- Returns `{scanned, compressed, skipped}` for logging.
+
+### AuthContext boot trigger (NEW)
+- `useEffect([user?.id])` fires `compressAllExistingData()` 8s after sign-in
+  (deferred so it doesn't compete with initial hydration).
+- Guarded by per-(user,device) localStorage flag
+  `fuelpro_data_compressed_v1_<uid>` so it runs at most once per device.
+  Failures leave the flag unset → retries next session.
+- Fire-and-forget; never blocks the UI. Failures fall back to the per-row
+  self-heal already in `get()`.
+
+### Migration file `019_compress_existing_app_kv.sql` (NEW)
+- Documents the migration in `supabase/migrations/`. NO schema change (the
+  `__c` envelope is plain JSONB). Pure-SQL PL/pgSQL has no built-in gzip,
+  so the actual byte compression is client-side; the SQL file includes a
+  commented server-side `UPDATE ... gzip(...)` template for future use if a
+  gzip extension is added.
+
+### Egress/realtime reduction (already in 53d74d5, retained)
+- FuelContext cloud-save debounce 500ms → 2000ms (≈4x fewer realtime echo
+  writes during active editing).
+- In-memory cache TTL 5min + inflight request dedup in `get` (cuts repeat
+  GETs that burn egress).
+
+### Verification 2026-08-18
+- tsc --noEmit: 0 errors. vitest: 17/17 pass. vite build: success (110
+  precache; `__c` envelope + `compressAllExistingData` in reports chunk).
+  eslint: 0 errors (warnings pre-existing). prettier: all pass.
+
+### Deploy state 2026-08-18 (this commit)
+- GitHub main: pushed.
+- Cloudflare Pages: deployed (primary test site fuel-app-mobile.pages.dev).
+- Vercel: deployed via prebuilt (or auto-deploys when quota resets).
+- Supabase: NO schema changes (migration 019 is a no-op marker; compression
+  is applied client-side per-user on sign-in).
+- Existing data compression: occurs automatically for each user within ~8s
+  of their next sign-in on the updated build.

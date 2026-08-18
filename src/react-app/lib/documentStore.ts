@@ -4,6 +4,7 @@
 // cross-device (RLS by owner_id = auth.uid()). This replaces the previous
 // IndexedDB implementation which was browser-local and did NOT sync.
 import { getSupabaseClient } from "@/supabase/client";
+import { compressFile, decompressFile } from "@/react-app/lib/compression";
 
 const BUCKET = "fuelpro-files";
 
@@ -220,13 +221,22 @@ export async function saveDocument(
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
   const filePath = `documents/${user.id}/${Date.now()}-${safeName}`;
 
-  // 1. Upload the file binary to Storage.
+  // 1. Compress compressible file types (text/csv/json/legacy Office docs)
+  //    before uploading to Storage, to cut storage size AND egress on every
+  //    future download. Non-compressible files (images, PDF, video, OOXML
+  //    zips) are passed through unchanged. A magic prefix ("FPGZ") is stored
+  //    at the head of compressed objects so `getDocument` can inflate them
+  //    transparently without needing a metadata flag.
+  const { blob: uploadBlob, contentType: uploadContentType } =
+    await compressFile(file, file.name, file.type);
+
+  // 1. Upload the (possibly compressed) binary to Storage.
   const { error: upErr } = await supabase.storage
     .from(BUCKET)
-    .upload(filePath, file, {
+    .upload(filePath, uploadBlob, {
       cacheControl: "3600",
       upsert: false,
-      contentType: file.type || undefined,
+      contentType: uploadContentType || undefined,
     });
   if (upErr) throw new Error(`Storage upload failed: ${upErr.message}`);
 
@@ -281,7 +291,14 @@ export async function getDocument(
     .getPublicUrl(r.file_path);
   const res = await fetch(pubUrlData.publicUrl);
   if (!res.ok) return { meta, data: new ArrayBuffer(0) };
-  const data = await res.arrayBuffer();
+  const raw = await res.arrayBuffer();
+  // Inflate if the object was gzip-compressed at upload (magic "FPGZ" prefix).
+  // Returns the original bytes + content type; for non-compressed objects the
+  // blob is returned unchanged. We surface the decompressed ArrayBuffer so the
+  // caller gets the original file bytes regardless of how it was stored.
+  const fallbackType = r.mime_type || r.file_type || "application/octet-stream";
+  const { blob } = await decompressFile(raw, fallbackType);
+  const data = await blob.arrayBuffer();
   return { meta, data };
 }
 

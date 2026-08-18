@@ -37,7 +37,7 @@ import {
 import {
   uploadDocument,
   getDocuments,
-  getDocumentUrl,
+  downloadDocument,
   deleteDocument,
   type UserDocument,
 } from "@/react-app/lib/document-service";
@@ -243,11 +243,12 @@ export default function UserProfileSettings() {
   };
 
   const handleDownload = async (doc: UserDocument) => {
-    const url = await getDocumentUrl(doc);
-    if (url) {
-      window.open(url, "_blank");
-    } else {
-      setDocNotice({ type: "error", msg: "Failed to generate download URL" });
+    const result = await downloadDocument(doc);
+    if (!result.success) {
+      setDocNotice({
+        type: "error",
+        msg: result.error || "Failed to download",
+      });
     }
   };
 
