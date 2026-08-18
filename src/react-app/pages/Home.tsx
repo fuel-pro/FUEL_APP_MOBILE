@@ -310,10 +310,8 @@ function HomeContent() {
       communication: "email",
       audit: "audit",
       regional: "compliance",
-      priceboard: "priceboard",
       fueltypes: "fueltypes",
       maintenance: "maintenance",
-      quality: "quality",
     };
     const requiredFeature = tabFeatureMap[activeTab];
     if (requiredFeature && !featureFlags[requiredFeature]) {

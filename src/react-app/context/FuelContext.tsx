@@ -727,27 +727,11 @@ const initialState: FuelState = {
       visible: true,
     },
     {
-      id: "priceboard",
-      label: "Price Board",
-      originalLabel: "Price Board",
-      description: "Display fuel prices on digital price board",
-      order: 16,
-      visible: true,
-    },
-    {
       id: "team",
       label: "Team Manager",
       originalLabel: "Team Manager",
       description: "Invite & manage team access and shift scheduling",
-      order: 17,
-      visible: true,
-    },
-    {
-      id: "shifts",
-      label: "Shift Management",
-      originalLabel: "Shift Management",
-      description: "Manage employee shifts and schedules",
-      order: 18,
+      order: 16,
       visible: true,
     },
     {
@@ -755,7 +739,7 @@ const initialState: FuelState = {
       label: "Maintenance",
       originalLabel: "Maintenance",
       description: "Equipment maintenance & servicing schedules",
-      order: 19,
+      order: 17,
       visible: true,
     },
     // ─── ANALYTICS & REPORTING TABS (Regularly Used) ───
@@ -764,7 +748,7 @@ const initialState: FuelState = {
       label: "Reports Center",
       originalLabel: "Reports Center",
       description: "Generate business reports and analytics",
-      order: 20,
+      order: 18,
       visible: true,
     },
     {
@@ -772,7 +756,7 @@ const initialState: FuelState = {
       label: "Analytics",
       originalLabel: "Analytics",
       description: "Predictions, trends & business intelligence",
-      order: 21,
+      order: 19,
       visible: true,
     },
     {
@@ -780,7 +764,7 @@ const initialState: FuelState = {
       label: "Audit Trail",
       originalLabel: "Audit Trail",
       description: "Complete activity log for compliance",
-      order: 22,
+      order: 20,
       visible: true,
     },
     {
@@ -788,7 +772,7 @@ const initialState: FuelState = {
       label: "Pump Mapping V1",
       originalLabel: "Pump Mapping V1",
       description: "AI-powered pump ledger parsing & extraction",
-      order: 23,
+      order: 21,
       visible: true,
     },
     // ─── ADMINISTRATIVE TABS (Occasionally Used) ───
@@ -797,7 +781,7 @@ const initialState: FuelState = {
       label: "Communication",
       originalLabel: "Communication",
       description: "Client relationship management",
-      order: 24,
+      order: 22,
       visible: true,
     },
     {
@@ -805,7 +789,7 @@ const initialState: FuelState = {
       label: "Document Center",
       originalLabel: "Document Center",
       description: "Smart document management & format conversion",
-      order: 25,
+      order: 23,
       visible: true,
     },
     {
@@ -813,7 +797,7 @@ const initialState: FuelState = {
       label: "Data Manager",
       originalLabel: "Data Manager",
       description: "Backup, restore & cloud sync",
-      order: 26,
+      order: 24,
       visible: true,
     },
     {
@@ -822,7 +806,7 @@ const initialState: FuelState = {
       originalLabel: "Integration Hub",
       description:
         "Country-specific integrations & payment setup (M-PESA, Kopo Kopo, KRA, banks)",
-      order: 27,
+      order: 25,
       visible: true,
     },
     {
@@ -831,7 +815,7 @@ const initialState: FuelState = {
       originalLabel: "Compliance",
       description:
         "Country-specific regulations & compliance for all 195+ countries",
-      order: 28,
+      order: 26,
       visible: true,
     },
     {
@@ -839,7 +823,7 @@ const initialState: FuelState = {
       label: "News",
       originalLabel: "News",
       description: "Fuel industry news, regulations, and price updates",
-      order: 29,
+      order: 27,
       visible: true,
     },
     // ─── SPECIALIZED TABS (Rarely Used) ───
@@ -848,7 +832,7 @@ const initialState: FuelState = {
       label: "Terminal Sessions",
       originalLabel: "Terminal Sessions",
       description: "POS terminal session open/close & reconciliation",
-      order: 30,
+      order: 28,
       visible: true,
     },
     {
@@ -857,7 +841,7 @@ const initialState: FuelState = {
       originalLabel: "Automation Engine",
       description:
         "The site's brain — auto-reorder, auto-sync, auto-refresh, activity log",
-      order: 31,
+      order: 29,
       visible: true,
     },
     {
@@ -866,23 +850,7 @@ const initialState: FuelState = {
       originalLabel: "Fuel Price Finder",
       description:
         "GPS-based nearby fuel price locator & auto fuel price comparison",
-      order: 32,
-      visible: true,
-    },
-    {
-      id: "quality",
-      label: "Fuel Quality Testing",
-      originalLabel: "Fuel Quality Testing",
-      description: "Test and record fuel quality metrics",
-      order: 33,
-      visible: true,
-    },
-    {
-      id: "docconverter",
-      label: "Document Converter",
-      originalLabel: "Document Converter",
-      description: "Convert documents between different formats",
-      order: 34,
+      order: 30,
       visible: true,
     },
   ],
@@ -941,6 +909,60 @@ function itemsHaveContent(items?: InvoiceItem[] | null): number {
   return items.filter(
     (it) => (it.desc && it.desc.trim() !== "") || it.price > 0,
   ).length;
+}
+
+/**
+ * Tab IDs that have been DEPRECATED as top-level tabs and merged into parent
+ * components as inner sub-tabs. A stale cloud blob may still list these as
+ * standalone tabs, causing duplicates in the nav bar. This set is used to
+ * filter them out whenever tabConfigurations are loaded from storage/cloud.
+ */
+export const DEPRECATED_TOP_LEVEL_TAB_IDS = new Set([
+  "priceboard", // merged into Fuel Type Manager
+  "shifts", // merged into Team Manager
+  "quality", // merged into Fuel Type Manager
+  "docconverter", // merged into Document Center
+  "purchases", // merged into Supplier Management
+  "sales-invoices", // merged into Invoice
+  "debt", // merged into Credit Management
+  "integrations-settings", // merged into Integration Hub
+]);
+
+/**
+ * Sanitize tabConfigurations loaded from storage/cloud:
+ * 1. Remove any tab whose id is in DEPRECATED_TOP_LEVEL_TAB_IDS.
+ * 2. Merge in any NEW tabs from initialState that the blob is missing
+ *    (so newly-added tabs appear for existing users).
+ * 3. Preserve the user's customizations (visibility, order, label) for
+ *    tabs that still exist.
+ */
+function sanitizeTabConfigs(
+  saved: TabConfiguration[] | undefined,
+): TabConfiguration[] {
+  const authoritative = initialState.tabConfigurations;
+  if (!saved || !Array.isArray(saved) || saved.length === 0) {
+    return authoritative;
+  }
+  // Filter out deprecated tabs from the saved list.
+  const filtered = saved.filter(
+    (t) => t && t.id && !DEPRECATED_TOP_LEVEL_TAB_IDS.has(t.id),
+  );
+  // Build a map of authoritative tab ids for quick lookup.
+  const authoritativeIds = new Set(authoritative.map((t) => t.id));
+  // Keep saved customizations for tabs that still exist (not deprecated).
+  const savedMap = new Map(filtered.map((t) => [t.id, t]));
+  // Merge: start with authoritative (ensures new tabs are present), then
+  // overlay saved customizations (visibility/order) for tabs that exist.
+  const merged = authoritative.map((t) => {
+    const savedTab = savedMap.get(t.id);
+    return savedTab
+      ? { ...t, visible: savedTab.visible ?? t.visible, order: savedTab.order ?? t.order }
+      : t;
+  });
+  // Also include any saved tabs that are NOT in authoritative (custom user tabs),
+  // as long as they're not deprecated.
+  const extraCustom = filtered.filter((t) => !authoritativeIds.has(t.id));
+  return [...merged, ...extraCustom];
 }
 
 function fuelReducer(state: FuelState, action: FuelAction): FuelState {
@@ -1170,6 +1192,15 @@ function fuelReducer(state: FuelState, action: FuelAction): FuelState {
         ...state,
         ...incoming,
         companyData: mergeCompanyData(state.companyData, incoming.companyData),
+        // Sanitize tabConfigurations: filter out deprecated top-level tabs that
+        // were merged into parent components as sub-tabs (priceboard, shifts,
+        // quality, docconverter). A stale cloud blob may still contain these,
+        // causing duplicate tabs to appear in the nav bar. Always merge with the
+        // authoritative initial state so new tabs are included and deprecated
+        // ones are removed.
+        tabConfigurations: sanitizeTabConfigs(
+          incoming.tabConfigurations ?? state.tabConfigurations,
+        ),
         // Stable prices — never revert to 0/stale values from the compact blob.
         pmsPrice: pickPrice(state.pmsPrice, incoming.pmsPrice),
         agoPrice: pickPrice(state.agoPrice, incoming.agoPrice),
@@ -1973,7 +2004,7 @@ export function FuelProvider({ children }: { children: ReactNode }) {
             ? JSON.parse(savedTabVisibility)
             : initialState.tabVisibility,
           tabConfigurations: savedTabConfigurations
-            ? JSON.parse(savedTabConfigurations)
+            ? sanitizeTabConfigs(JSON.parse(savedTabConfigurations))
             : initialState.tabConfigurations,
           employees: savedEmployees
             ? JSON.parse(savedEmployees)
