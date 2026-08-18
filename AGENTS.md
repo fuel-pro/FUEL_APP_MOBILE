@@ -5369,3 +5369,50 @@ data — exactly the requirement.
 - Supabase: migration 019 applied live (storage RLS policies for
   station-snapshots).
 - `npx tsc --noEmit` (0 errors), `npm run build` (success), prettier pass.
+## Session 2026-08-18 (cont.) — Access-code login FIX (dedicated table + RPC)
+
+**Symptom**: A member logging in via access code at `/#/station-access` got
+"Invalid username or the access has been disabled." even with the correct
+credentials. The owner's code existed in `app_kv`.
+
+**Root cause** (3 compounding bugs):
+1. Access codes were stored in `app_kv` under the OWNER's `owner_id` with RLS
+   (`owner_id = auth.uid()`). The member has NO Supabase session →
+   `currentUserId()` returned null → `getAccessCodes()` read `[]` → "Invalid
+   username". Even with a session, RLS blocked reading another user's rows.
+2. App_kv data is now gzip-compressed (`{__compressed:true, c:<base64>}`), so
+   server-side validation in SQL was impossible.
+3. The access link includes `supabase_<uuid>` on the owner id, but the stored
+   `owner_id` is the bare UUID.
+
+**Fix**:
+- **Migration 021** (applied live): new `station_access_codes` table (RLS:
+  owner CRUD `auth.uid() = owner_id`) + `verify_access_code` SECURITY DEFINER
+  RPC callable by anon. The RPC hashes the supplied password (pgcrypto
+  `digest`, schema-qualified `extensions.digest` — critical fix, since
+  `digest()` lives in the `extensions` schema not `public`) and compares to
+  the stored hash; returns the access config on success, NULL on failure.
+  Bumps `access_count` + `last_accessed_at` on success. Password hash is
+  NEVER returned.
+- **`station-access-code-service.ts`** rewritten: owner CRUD (get/create/
+  delete/toggle) uses the table directly (authenticated); `loginWithAccessCode`
+  calls the `verify_access_code` RPC (works unauthenticated). Strips a leading
+  `supabase_` prefix on the owner id. One-time migration copies existing
+  app_kv codes into the table on first owner load. Mirrors create/delete/
+  toggle back to app_kv for older builds.
+- The existing "leon" code (owner 3877753b / station 5bd26c8b) was manually
+  migrated from the compressed app_kv blob into the table (the owner-side
+  auto-migration only fires when the owner opens Team Manager).
+
+**Verified live** (Cloudflare preview 81927190): login with username "leon"
++ wrong password now returns "Invalid username or password, or access has
+been disabled." — the NEW RPC-path message (not the old app_kv message),
+confirming the RPC is invoked and returns null on failure. The RPC was also
+tested directly via the Management API with a known-correct password →
+returns the full config + bumps access_count. So a correct login WILL
+succeed.
+
+**Deploy state**: GitHub main pushed (commit 31d4668). Cloudflare Pages LIVE
+(preview 81927190 + main alias). Vercel BLOCKED by api-deployments-free-per-day
+(100/100; GitHub integration auto-deploys on reset). Supabase migration 021
+applied live (table + RPC + RLS).
