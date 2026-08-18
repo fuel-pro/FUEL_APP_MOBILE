@@ -282,6 +282,48 @@ class CloudStorageService {
   private memoryCache = new Map<string, { value: unknown; ts: number }>();
   private memTtlMs = 60_000; // 60 seconds — data rarely changes faster than this
 
+  /**
+   * EGRESS-SAVING KILL SWITCH for Supabase Realtime subscriptions.
+   *
+   * Supabase Free plan counts Realtime messages toward a quota (2,000,000 /
+   * month on the org). With 30+ components each opening a realtime channel on
+   * app_kv, every cross-device write fans out to ~30 subscribed channels —
+   * each message counts. Under sustained multi-device usage this hits the cap
+   * (observed 96%+). When `realtimeEnabled` is `false`, `subscribe()` /
+   * `subscribeToStation()` return a no-op unsubscribe and open NO channels,
+   * so Realtime message count drops to ~0. Cross-device sync then relies on
+   * the periodic read-through cache + manual refresh instead.
+   *
+   * Persisted in localStorage (`fuelpro_realtime_disabled`) so the user's
+   * choice survives reloads. Toggled from the Data Manager "Storage & Egress"
+   * panel. Default: ENABLED (instant cross-device sync is a core feature).
+   */
+  private realtimeEnabled = (() => {
+    try {
+      return localStorage.getItem("fuelpro_realtime_disabled") !== "1";
+    } catch {
+      return true;
+    }
+  })();
+
+  /** Toggle Realtime subscriptions on/off (egress-saver). */
+  setRealtimeEnabled(enabled: boolean): void {
+    this.realtimeEnabled = enabled;
+    try {
+      if (enabled) {
+        localStorage.removeItem("fuelpro_realtime_disabled");
+      } else {
+        localStorage.setItem("fuelpro_realtime_disabled", "1");
+      }
+    } catch {
+      /* ignore quota errors */
+    }
+  }
+
+  isRealtimeEnabled(): boolean {
+    return this.realtimeEnabled;
+  }
+
   /** Whether Supabase auth is available (client configured + user signed in). */
   async isAvailable(): Promise<boolean> {
     return (await currentUserId()) !== null;
@@ -730,6 +772,13 @@ class CloudStorageService {
     stationId: string | undefined,
     callback: (value: T | null) => void,
   ): () => void {
+    // EGRESS-SAVER: when the user has disabled Realtime (Data Manager →
+    // Storage & Egress), open NO channels. Cross-device sync falls back to
+    // the read-through cache + manual refresh. This is the single biggest
+    // reducer of Supabase Realtime message quota (2M/month on Free plan).
+    if (!this.realtimeEnabled) {
+      return () => {};
+    }
     let channel: ReturnType<
       ReturnType<typeof getSupabaseClient>["channel"]
     > | null = null;
@@ -795,6 +844,10 @@ class CloudStorageService {
     stationId: string | undefined,
     callback: (rowId: string, value: T | null) => void,
   ): () => void {
+    // EGRESS-SAVER: respect the global Realtime kill-switch (see subscribe()).
+    if (!this.realtimeEnabled) {
+      return () => {};
+    }
     let channel: ReturnType<
       ReturnType<typeof getSupabaseClient>["channel"]
     > | null = null;

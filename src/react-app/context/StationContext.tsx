@@ -1309,8 +1309,10 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
   // REAL-TIME cross-device station sync: subscribe to postgres_changes on the
   // `stations` table. When another device creates/updates/deletes a station,
   // this fires INSTANTLY and triggers a re-sync so the new station appears
-  // without a page reload.
+  // without a page reload. Respects the global Realtime kill-switch (egress
+  // saver) so a disabled org doesn't burn the 2M/month Realtime quota.
   useEffect(() => {
+    if (!cloudStorageService.isRealtimeEnabled()) return;
     const channel = supabase
       .channel("stations:realtime")
       .on(

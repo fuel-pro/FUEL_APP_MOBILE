@@ -53,6 +53,7 @@ import {
   fulfillReorder,
 } from "@/react-app/lib/automation-engine";
 import { switchToTab } from "@/react-app/lib/mpesa-integration-service";
+import { cloudStorageService } from "@/react-app/lib/cloud-storage-service";
 import { getVATRate } from "@/react-app/config/pricing";
 
 // Format currency — country-aware (uses the detected/station currency symbol).
@@ -1691,9 +1692,11 @@ export default function InventoryManagement() {
 
   // ── Realtime: refresh products when another device inserts/updates/deletes
   // a product in this station. Without this, cross-device product changes
-  // were invisible until a manual tab switch / refresh.
+  // were invisible until a manual tab switch / refresh. Respects the global
+  // Realtime kill-switch (egress saver).
   useEffect(() => {
     if (!currentStation?.id) return;
+    if (!cloudStorageService.isRealtimeEnabled()) return;
     const channel = supabase
       .channel(`inventory-products-${currentStation.id}`)
       .on(

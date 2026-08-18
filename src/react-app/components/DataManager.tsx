@@ -12,6 +12,7 @@ import {
   CheckCircle,
   Fuel,
   Wifi,
+  Gauge,
 } from "lucide-react";
 import { useFuel } from "@/react-app/context/FuelContext";
 import { useStations } from "@/react-app/context/StationContext";
@@ -21,6 +22,7 @@ import { getFuelLabel } from "@/react-app/config/pricing";
 import DataRecovery from "@/react-app/components/DataRecovery";
 import CloudSyncPanel from "@/react-app/components/CloudSyncPanel";
 import SyncDashboard from "@/react-app/components/SyncDashboard";
+import StorageEgressPanel from "@/react-app/components/StorageEgressPanel";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 
 export default function DataManager() {
@@ -612,6 +614,7 @@ export default function DataManager() {
           <div className="flex space-x-1 bg-gray-100 dark:bg-gray-700 rounded-lg p-1 overflow-x-auto">
             {[
               { id: "overview", label: "Overview", icon: HardDrive },
+              { id: "storage", label: "Storage & Egress", icon: Gauge },
               hasPermission("canManageCloud")
                 ? { id: "recovery", label: "Recovery", icon: RefreshCw }
                 : null,
@@ -1043,6 +1046,7 @@ export default function DataManager() {
         )}
 
         {activeTab === "sync" && <SyncDashboard />}
+        {activeTab === "storage" && <StorageEgressPanel />}
       </div>
     </div>
   );
