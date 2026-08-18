@@ -272,9 +272,19 @@ export default function TeamManager() {
   // Inner sub-tab: "Team" (this component, now includes Access Codes) vs
   // "Roles & Permissions" vs "Shifts" (the formerly-standalone ShiftManagement
   // module, now hosted here).
-  const [activeView, setActiveView] = useState<
-    "team" | "shifts" | "roles"
-  >("team");
+  const [activeView, setActiveView] = useState<"team" | "shifts" | "roles">(
+    "team",
+  );
+
+  // ── Access Codes (lifted into the main component so the unified Team
+  //    Access view can show combined stats + a combined member list that
+  //    blends invite-accepted members with access-code members). Previously
+  //    this state lived only inside AccessCodesView.
+  const [accessCodes, setAccessCodes] = useState<StationAccessCode[]>([]);
+  // Unified "Add Team Member" entry: "invite" (full account via link) or
+  // "code" (no-signup access code). Blend the two access methods into one
+  // entry point.
+  const [addMode, setAddMode] = useState<"invite" | "code">("invite");
 
   // Tab ID to human-readable label mapping
   const tabIdToLabel: Record<string, string> = {
@@ -477,6 +487,50 @@ export default function TeamManager() {
     (i) => i.expiresAt && new Date(i.expiresAt) < new Date() && !i.usedBy,
   );
 
+  // Load access codes (lifted) so the unified stats + member list can
+  // reference them alongside invite-accepted members.
+  const loadAccessCodes = useCallback(async () => {
+    try {
+      const data = await getAccessCodes(currentStation?.id);
+      setAccessCodes(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Failed to load access codes:", err);
+    }
+  }, [currentStation?.id]);
+  useEffect(() => {
+    loadAccessCodes();
+  }, [loadAccessCodes]);
+
+  // Combined member list: invite-accepted members (full accounts) +
+  // access-code members (no-signup). Each entry carries an `accessMethod`
+  // badge so the UI can show "Invite" vs "Code" in one blended list.
+  const codeMembers = accessCodes.map((c) => ({
+    id: c.id,
+    username: c.username,
+    memberName: c.memberName,
+    role: c.memberRole,
+    invitedBy: "Access Code",
+    invitedByUniqueId: undefined as string | undefined,
+    invitedAt: c.createdAt,
+    expiresAt: undefined as number | undefined,
+    email: undefined as string | undefined,
+    uniqueId: undefined as string | undefined,
+    assignedPumps: [] as string[],
+    active: c.enabled,
+    accessMethod: "code" as const,
+    readOnly: c.readOnly,
+    accessCount: c.accessCount,
+    lastAccessedAt: c.lastAccessedAt,
+  }));
+  const inviteMembers = team.map((m) => ({
+    ...m,
+    accessMethod: "invite" as const,
+    readOnly: false,
+    accessCount: undefined as number | undefined,
+    lastAccessedAt: undefined as number | null | undefined,
+  }));
+  const combinedMembers = [...inviteMembers, ...codeMembers];
+
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
       {/* Header */}
@@ -596,27 +650,33 @@ export default function TeamManager() {
           </div>
 
           {/* Stats */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
             {[
               {
                 label: "Team Members",
-                value: team.filter((m) => m.active).length,
+                value: combinedMembers.filter((m) => m.active).length,
                 color: "text-purple-600",
               },
               {
                 label: "Managers",
-                value: team.filter((m) => m.role === "manager").length,
+                value: combinedMembers.filter((m) => m.role === "manager")
+                  .length,
                 color: "text-blue-600",
               },
               {
                 label: "Staff",
-                value: team.filter((m) => m.role === "staff").length,
+                value: combinedMembers.filter((m) => m.role === "staff").length,
                 color: "text-green-600",
               },
               {
                 label: "Active Invites",
                 value: activeInvites.length,
                 color: "text-amber-600",
+              },
+              {
+                label: "Access Codes",
+                value: accessCodes.filter((c) => c.enabled).length,
+                color: "text-indigo-600",
               },
             ].map((s) => (
               <div
@@ -633,120 +693,182 @@ export default function TeamManager() {
             ))}
           </div>
 
-          {/* Create Invite */}
+          {/* ── Unified "Add Team Member" — blends Invite Links + Access Codes
+              into ONE entry point. The owner picks the access method:
+              • Invite Link  → full Supabase account (the member signs up).
+              • Access Code  → username/password, no signup needed (read-only
+                by default). Lighter-weight; great for casual/viewer access.
+              Both share the SAME role list (availableRoles) and the SAME
+              permission/delegation concepts, so a team built from either
+              method stays consistent. */}
           {availableRoles.length > 0 && (
             <div>
               {!showCreate ? (
-                <button
-                  onClick={() => setShowCreate(true)}
-                  className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-colors shadow-lg"
-                >
-                  <Plus size={18} /> Create Invite Link
-                </button>
+                <div className="space-y-3">
+                  <button
+                    onClick={() => {
+                      setAddMode("invite");
+                      setShowCreate(true);
+                    }}
+                    className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-colors shadow-lg"
+                  >
+                    <Plus size={18} /> Add Team Member
+                  </button>
+                  {/* Quick secondary action: jump straight to a no-signup
+                      access code (the lighter-weight alternative). */}
+                  <button
+                    onClick={() => {
+                      setAddMode("code");
+                      setShowCreate(true);
+                    }}
+                    className="w-full py-2.5 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/20 dark:hover:bg-blue-900/40 text-blue-700 dark:text-blue-300 rounded-xl text-xs font-medium flex items-center justify-center gap-2 transition-colors border border-blue-200 dark:border-blue-800"
+                  >
+                    <KeyRound size={14} /> Quick Access Code (no signup)
+                  </button>
+                </div>
               ) : (
                 <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-xl border border-indigo-200 dark:border-indigo-800 p-6 space-y-4">
-                  <h3 className="text-sm font-bold text-indigo-900 dark:text-indigo-300">
-                    Create Access Invite
-                  </h3>
-                  <div>
-                    <label className="text-xs text-gray-600 dark:text-gray-400 block mb-2">
-                      Role
-                    </label>
-                    <div className="flex flex-wrap gap-2">
-                      {availableRoles.map((r) => (
-                        <button
-                          key={r.id}
-                          onClick={() => setInviteRole(r.id)}
-                          className={`px-4 py-2 rounded-lg text-xs font-medium transition-all ${inviteRole === r.id ? getRoleLabel(r.id).color + " ring-2 ring-offset-1 ring-indigo-400" : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700"}`}
-                        >
-                          {r.label}
-                        </button>
-                      ))}
-                    </div>
-                    <p className="text-xs text-gray-500 mt-1">
-                      {getRoleLabel(inviteRole).desc}
-                    </p>
+                  {/* Mode switcher — blend the two access methods. */}
+                  <div className="flex gap-2 p-1 bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
+                    <button
+                      onClick={() => setAddMode("invite")}
+                      className={`flex-1 px-3 py-2 rounded-md text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${addMode === "invite" ? "bg-indigo-600 text-white shadow" : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"}`}
+                    >
+                      <Link2 size={14} /> Invite Link
+                      <span className="text-[9px] opacity-80">
+                        (full account)
+                      </span>
+                    </button>
+                    <button
+                      onClick={() => setAddMode("code")}
+                      className={`flex-1 px-3 py-2 rounded-md text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${addMode === "code" ? "bg-blue-600 text-white shadow" : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"}`}
+                    >
+                      <KeyRound size={14} /> Access Code
+                      <span className="text-[9px] opacity-80">(no signup)</span>
+                    </button>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-xs text-gray-600 dark:text-gray-400 block mb-1">
-                        Expires in (days) - optional
-                      </label>
-                      <input
-                        type="number"
-                        value={expireDays}
-                        onChange={(e) => setExpireDays(e.target.value)}
-                        placeholder="Never"
-                        className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs text-gray-600 dark:text-gray-400 block mb-1">
-                        Max uses
-                      </label>
-                      <input
-                        type="number"
-                        value={maxUses}
-                        onChange={(e) => setMaxUses(e.target.value)}
-                        min="1"
-                        className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
-                      />
-                    </div>
-                  </div>
-                  {/* Delegation toggles — only shown if the inviter may grant
-                      them. The context clamps to what the inviter actually has. */}
-                  {(isOwner || hasPermission("canCreateSubUsers")) && (
-                    <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3 space-y-2">
-                      <p className="text-xs font-semibold text-amber-800 dark:text-amber-300 flex items-center gap-1">
-                        <ShieldAlert size={12} /> Delegation (optional)
-                      </p>
-                      <label className="flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={inviteCanCreateSubUsers}
-                          onChange={(e) =>
-                            setInviteCanCreateSubUsers(e.target.checked)
-                          }
-                          disabled={
-                            !isOwner && !hasPermission("canCreateSubUsers")
-                          }
-                        />
-                        Allow this sub-user to create further sub-users
-                      </label>
-                      <label className="flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={inviteCanGrantPermissions}
-                          onChange={(e) =>
-                            setInviteCanGrantPermissions(e.target.checked)
-                          }
-                          disabled={
-                            !isOwner && !hasPermission("canGrantPermissions")
-                          }
-                        />
-                        Allow this sub-user to grant permissions to others
-                      </label>
-                      {!isOwner && (
-                        <p className="text-[10px] text-amber-600 dark:text-amber-400">
-                          You can only delegate powers you yourself hold.
+
+                  {addMode === "code" ? (
+                    <AccessCodeForm
+                      stationId={currentStation?.id}
+                      availableRoles={availableRoles}
+                      getRoleLabel={getRoleLabel}
+                      tabIdToLabel={tabIdToLabel}
+                      stationName={currentStation?.name}
+                      stationOwnerId={user?.authId}
+                      onCreated={() => {
+                        loadAccessCodes();
+                        setShowCreate(false);
+                      }}
+                      onCancel={() => setShowCreate(false)}
+                    />
+                  ) : (
+                    <>
+                      <h3 className="text-sm font-bold text-indigo-900 dark:text-indigo-300">
+                        Create Access Invite
+                      </h3>
+                      <div>
+                        <label className="text-xs text-gray-600 dark:text-gray-400 block mb-2">
+                          Role
+                        </label>
+                        <div className="flex flex-wrap gap-2">
+                          {availableRoles.map((r) => (
+                            <button
+                              key={r.id}
+                              onClick={() => setInviteRole(r.id)}
+                              className={`px-4 py-2 rounded-lg text-xs font-medium transition-all ${inviteRole === r.id ? getRoleLabel(r.id).color + " ring-2 ring-offset-1 ring-indigo-400" : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700"}`}
+                            >
+                              {r.label}
+                            </button>
+                          ))}
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1">
+                          {getRoleLabel(inviteRole).desc}
                         </p>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-xs text-gray-600 dark:text-gray-400 block mb-1">
+                            Expires in (days) - optional
+                          </label>
+                          <input
+                            type="number"
+                            value={expireDays}
+                            onChange={(e) => setExpireDays(e.target.value)}
+                            placeholder="Never"
+                            className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs text-gray-600 dark:text-gray-400 block mb-1">
+                            Max uses
+                          </label>
+                          <input
+                            type="number"
+                            value={maxUses}
+                            onChange={(e) => setMaxUses(e.target.value)}
+                            min="1"
+                            className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+                          />
+                        </div>
+                      </div>
+                      {/* Delegation toggles — only shown if the inviter may grant
+                      them. The context clamps to what the inviter actually has. */}
+                      {(isOwner || hasPermission("canCreateSubUsers")) && (
+                        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3 space-y-2">
+                          <p className="text-xs font-semibold text-amber-800 dark:text-amber-300 flex items-center gap-1">
+                            <ShieldAlert size={12} /> Delegation (optional)
+                          </p>
+                          <label className="flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={inviteCanCreateSubUsers}
+                              onChange={(e) =>
+                                setInviteCanCreateSubUsers(e.target.checked)
+                              }
+                              disabled={
+                                !isOwner && !hasPermission("canCreateSubUsers")
+                              }
+                            />
+                            Allow this sub-user to create further sub-users
+                          </label>
+                          <label className="flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={inviteCanGrantPermissions}
+                              onChange={(e) =>
+                                setInviteCanGrantPermissions(e.target.checked)
+                              }
+                              disabled={
+                                !isOwner &&
+                                !hasPermission("canGrantPermissions")
+                              }
+                            />
+                            Allow this sub-user to grant permissions to others
+                          </label>
+                          {!isOwner && (
+                            <p className="text-[10px] text-amber-600 dark:text-amber-400">
+                              You can only delegate powers you yourself hold.
+                            </p>
+                          )}
+                        </div>
                       )}
-                    </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={handleCreateInvite}
+                          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium rounded-lg flex items-center gap-1.5"
+                        >
+                          <Link2 size={14} /> Generate Link
+                        </button>
+                        <button
+                          onClick={() => setShowCreate(false)}
+                          className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-xs font-medium rounded-lg"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </>
                   )}
-                  <div className="flex gap-2">
-                    <button
-                      onClick={handleCreateInvite}
-                      className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium rounded-lg flex items-center gap-1.5"
-                    >
-                      <Link2 size={14} /> Generate Link
-                    </button>
-                    <button
-                      onClick={() => setShowCreate(false)}
-                      className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-xs font-medium rounded-lg"
-                    >
-                      Cancel
-                    </button>
-                  </div>
                 </div>
               )}
             </div>
@@ -964,22 +1086,27 @@ export default function TeamManager() {
             </div>
           )}
 
-          {/* Team Members */}
+          {/* Team Members — blended list of invite-accepted members (full
+              accounts) AND access-code members (no-signup). Each row shows an
+              "Invite"/"Code" badge so the owner can see at a glance how each
+              member accesses the station. */}
           <div className="space-y-3">
             <h3 className="text-sm font-bold text-gray-900 dark:text-white">
               Team Members
             </h3>
-            {team.length === 0 && (
+            {combinedMembers.length === 0 && (
               <p className="text-center text-sm text-gray-400 py-4">
-                No team members yet. Create an invite link above.
+                No team members yet. Add a member via an invite link or an
+                access code above.
               </p>
             )}
-            {team.map((member) => {
+            {combinedMembers.map((member) => {
               const isExpanded = expandedMember === member.id;
               const RoleIcon = getRoleIcon(member.role);
               const roleInfo = getRoleLabel(member.role);
               const isExpired =
                 member.expiresAt && new Date(member.expiresAt) < new Date();
+              const isCode = member.accessMethod === "code";
               return (
                 <div
                   key={member.id}
@@ -999,13 +1126,24 @@ export default function TeamManager() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <p className="text-sm font-semibold text-gray-900 dark:text-white">
-                          {member.username}
+                          {isCode ? member.memberName : member.username}
                         </p>
                         <span
                           className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${roleInfo.color}`}
                         >
                           {roleInfo.label}
                         </span>
+                        {/* Access-method badge — Invite vs Code. */}
+                        <span
+                          className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${isCode ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300" : "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300"}`}
+                        >
+                          {isCode ? "Code" : "Invite"}
+                        </span>
+                        {isCode && member.readOnly && (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-500/10 text-gray-500">
+                            Read-Only
+                          </span>
+                        )}
                         {isExpired && (
                           <span className="text-[10px] px-2 py-0.5 bg-red-100 text-red-700 rounded-full">
                             Expired
@@ -1052,113 +1190,176 @@ export default function TeamManager() {
 
                   {isExpanded && (
                     <div className="border-t border-gray-100 dark:border-gray-700 p-4 space-y-3">
-                      {canAssign && (
+                      {isCode ? (
+                        /* Access-code member actions: enable/disable, delete,
+                           and a read-out of access usage. These interlink with
+                           the AccessCodesView list below (same cloud store). */
                         <>
-                          <div>
-                            <label className="text-xs text-gray-500 flex items-center gap-1 mb-1">
-                              <Fuel size={10} /> Assigned Pumps
-                            </label>
-                            <div className="flex flex-wrap gap-1">
-                              {pumpOptions.length === 0 && (
-                                <span className="text-[10px] text-gray-400">
-                                  No pumps configured for this station.
-                                </span>
-                              )}
-                              {pumpOptions.map((p) => {
-                                const selected = member.assignedPumps.includes(
-                                  p.id,
-                                );
-                                return (
-                                  <button
-                                    key={p.id}
-                                    onClick={() => {
-                                      const next = selected
-                                        ? member.assignedPumps.filter(
-                                            (x: string) => x !== p.id,
-                                          )
-                                        : [...member.assignedPumps, p.id];
-                                      assignPumps(member.id, next);
-                                    }}
-                                    className={`text-[10px] px-2 py-1 rounded-full border transition-all ${selected ? "bg-green-100 text-green-700 border-green-300" : "bg-gray-50 text-gray-500 border-gray-200"}`}
-                                  >
-                                    {p.label}
-                                  </button>
-                                );
-                              })}
-                            </div>
+                          <div className="text-xs text-gray-500 space-y-1">
+                            <p>
+                              <KeyRound size={10} className="inline mr-1" />
+                              Username:{" "}
+                              <code className="font-mono bg-gray-100 dark:bg-gray-900 px-1 rounded">
+                                {member.username}
+                              </code>
+                            </p>
+                            <p>
+                              Accessed {member.accessCount ?? 0} time
+                              {(member.accessCount ?? 0) !== 1 ? "s" : ""}
+                              {member.lastAccessedAt
+                                ? ` · Last: ${new Date(member.lastAccessedAt).toLocaleString()}`
+                                : ""}
+                            </p>
+                            <p className="text-gray-400">
+                              Access method: Access Code (no signup needed).
+                              Manage in the Access Codes panel below.
+                            </p>
                           </div>
-                          <div>
-                            <label className="text-xs text-gray-500 flex items-center gap-1 mb-1">
-                              <Calendar size={10} /> Assigned Shifts
-                            </label>
-                            <div className="flex flex-wrap gap-1">
-                              {shiftOptions.map((s) => (
+                          <div className="flex gap-2 pt-2 border-t border-gray-100 dark:border-gray-700">
+                            <button
+                              onClick={async () => {
+                                await toggleAccessCode(
+                                  member.id,
+                                  currentStation?.id,
+                                );
+                                loadAccessCodes();
+                              }}
+                              className="px-3 py-1.5 bg-blue-50 text-blue-700 text-[11px] font-medium rounded-lg flex items-center gap-1"
+                            >
+                              <KeyRound size={10} />
+                              {member.active ? "Disable" : "Enable"}
+                            </button>
+                            <button
+                              onClick={async () => {
+                                if (
+                                  confirm(
+                                    `Delete the access code for ${member.memberName}? They will no longer be able to log in.`,
+                                  )
+                                ) {
+                                  await deleteAccessCode(
+                                    member.id,
+                                    currentStation?.id,
+                                  );
+                                  loadAccessCodes();
+                                }
+                              }}
+                              className="px-3 py-1.5 bg-red-50 text-red-700 text-[11px] font-medium rounded-lg flex items-center gap-1"
+                            >
+                              <Trash2 size={10} /> Delete Code
+                            </button>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          {canAssign && (
+                            <>
+                              <div>
+                                <label className="text-xs text-gray-500 flex items-center gap-1 mb-1">
+                                  <Fuel size={10} /> Assigned Pumps
+                                </label>
+                                <div className="flex flex-wrap gap-1">
+                                  {pumpOptions.length === 0 && (
+                                    <span className="text-[10px] text-gray-400">
+                                      No pumps configured for this station.
+                                    </span>
+                                  )}
+                                  {pumpOptions.map((p) => {
+                                    const selected =
+                                      member.assignedPumps.includes(p.id);
+                                    return (
+                                      <button
+                                        key={p.id}
+                                        onClick={() => {
+                                          const next = selected
+                                            ? member.assignedPumps.filter(
+                                                (x: string) => x !== p.id,
+                                              )
+                                            : [...member.assignedPumps, p.id];
+                                          assignPumps(member.id, next);
+                                        }}
+                                        className={`text-[10px] px-2 py-1 rounded-full border transition-all ${selected ? "bg-green-100 text-green-700 border-green-300" : "bg-gray-50 text-gray-500 border-gray-200"}`}
+                                      >
+                                        {p.label}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                              <div>
+                                <label className="text-xs text-gray-500 flex items-center gap-1 mb-1">
+                                  <Calendar size={10} /> Assigned Shifts
+                                </label>
+                                <div className="flex flex-wrap gap-1">
+                                  {shiftOptions.map((s) => (
+                                    <button
+                                      key={s}
+                                      onClick={() => {
+                                        const next =
+                                          member.assignedShifts.includes(s)
+                                            ? member.assignedShifts.filter(
+                                                (x: string) => x !== s,
+                                              )
+                                            : [...member.assignedShifts, s];
+                                        assignShifts(member.id, next);
+                                      }}
+                                      className={`text-[10px] px-2 py-1 rounded-full border transition-all ${member.assignedShifts.includes(s) ? "bg-blue-100 text-blue-700 border-blue-300" : "bg-gray-50 text-gray-500 border-gray-200"}`}
+                                    >
+                                      {s}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            </>
+                          )}
+
+                          <div className="flex gap-2 pt-2 border-t border-gray-100 dark:border-gray-700">
+                            {canSetLimits && (
+                              <div className="flex items-center gap-2 flex-1">
+                                <input
+                                  type="number"
+                                  value={extendDaysByMember[member.id] ?? "30"}
+                                  onChange={(e) =>
+                                    setExtendDaysByMember((prev) => ({
+                                      ...prev,
+                                      [member.id]: e.target.value,
+                                    }))
+                                  }
+                                  className="w-16 px-2 py-1 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded text-xs dark:text-white"
+                                  placeholder="Days"
+                                />
                                 <button
-                                  key={s}
-                                  onClick={() => {
-                                    const next = member.assignedShifts.includes(
-                                      s,
+                                  onClick={() =>
+                                    extendAccess(
+                                      member.id,
+                                      parseInt(
+                                        extendDaysByMember[member.id] ?? "30",
+                                      ) || 30,
                                     )
-                                      ? member.assignedShifts.filter(
-                                          (x: string) => x !== s,
-                                        )
-                                      : [...member.assignedShifts, s];
-                                    assignShifts(member.id, next);
-                                  }}
-                                  className={`text-[10px] px-2 py-1 rounded-full border transition-all ${member.assignedShifts.includes(s) ? "bg-blue-100 text-blue-700 border-blue-300" : "bg-gray-50 text-gray-500 border-gray-200"}`}
+                                  }
+                                  className="px-3 py-1.5 bg-blue-50 text-blue-700 text-[11px] font-medium rounded-lg flex items-center gap-1"
                                 >
-                                  {s}
+                                  <RefreshCw size={10} /> Extend
                                 </button>
-                              ))}
-                            </div>
+                              </div>
+                            )}
+                            {canRevoke && member.role !== "owner" && (
+                              <button
+                                onClick={() => {
+                                  if (
+                                    confirm(
+                                      `Remove ${member.username}'s access?`,
+                                    )
+                                  )
+                                    revokeMember(member.id);
+                                }}
+                                className="px-3 py-1.5 bg-red-50 text-red-700 text-[11px] font-medium rounded-lg flex items-center gap-1"
+                              >
+                                <Ban size={10} /> Revoke
+                              </button>
+                            )}
                           </div>
                         </>
                       )}
-
-                      <div className="flex gap-2 pt-2 border-t border-gray-100 dark:border-gray-700">
-                        {canSetLimits && (
-                          <div className="flex items-center gap-2 flex-1">
-                            <input
-                              type="number"
-                              value={extendDaysByMember[member.id] ?? "30"}
-                              onChange={(e) =>
-                                setExtendDaysByMember((prev) => ({
-                                  ...prev,
-                                  [member.id]: e.target.value,
-                                }))
-                              }
-                              className="w-16 px-2 py-1 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded text-xs dark:text-white"
-                              placeholder="Days"
-                            />
-                            <button
-                              onClick={() =>
-                                extendAccess(
-                                  member.id,
-                                  parseInt(
-                                    extendDaysByMember[member.id] ?? "30",
-                                  ) || 30,
-                                )
-                              }
-                              className="px-3 py-1.5 bg-blue-50 text-blue-700 text-[11px] font-medium rounded-lg flex items-center gap-1"
-                            >
-                              <RefreshCw size={10} /> Extend
-                            </button>
-                          </div>
-                        )}
-                        {canRevoke && member.role !== "owner" && (
-                          <button
-                            onClick={() => {
-                              if (
-                                confirm(`Remove ${member.username}'s access?`)
-                              )
-                                revokeMember(member.id);
-                            }}
-                            className="px-3 py-1.5 bg-red-50 text-red-700 text-[11px] font-medium rounded-lg flex items-center gap-1"
-                          >
-                            <Ban size={10} /> Revoke
-                          </button>
-                        )}
-                      </div>
                     </div>
                   )}
                 </div>
@@ -1214,17 +1415,26 @@ export default function TeamManager() {
           )}
 
           {/* ============================================================
-              Access Codes — integrated into Team Access.
-              Lets the OWNER create username/password access codes so team
-              members can view station data WITHOUT signing up. This is a
-              lighter-weight alternative to invite links (which require a
-              full Supabase account).
+              Access Codes — fully interlinked with Invite Links. Both
+              access methods now share:
+              • the SAME role list (availableRoles — base + custom roles),
+              • the SAME tab-permission concept (allowedTabs picker uses
+                tabIdToLabel, mirroring the Roles & Permissions grid),
+              • the SAME share buttons (WhatsApp/Email/Copy) as invite links.
+              The list below is the management panel; the blended Team
+              Members list above also shows each code as a member with a
+              "Code" badge, and the unified "Add Team Member" card can open
+              this form directly.
           ============================================================ */}
           <div className="mt-6 border-t border-gray-200 dark:border-gray-700 pt-6">
             <AccessCodesView
               stationId={currentStation?.id}
               stationOwnerId={user?.authId}
               stationName={currentStation?.name}
+              codes={accessCodes}
+              availableRoles={availableRoles}
+              tabIdToLabel={tabIdToLabel}
+              onRefresh={loadAccessCodes}
             />
           </div>
         </>
@@ -1575,41 +1785,51 @@ function RolesAndPermissionsView(props: RolesAndPermissionsViewProps) {
 }
 
 // ============================================================
-// AccessCodesView — lets the station OWNER create username/password
-// access codes so team members can access station data WITHOUT signing
-// up. The owner shares a link (/#/station-access?owner=<uid>&station=<sid>)
-// and the member enters the username + password.
+// AccessCodeForm — the creation form, extracted so it can be reused BOTH
+// from the unified "Add Team Member" card (addMode === "code") AND from the
+// AccessCodesView panel below. Uses the SAME role list (availableRoles) as
+// the Invite-Link form, and adds an allowedTabs picker (checkboxes from
+// tabIdToLabel) so the owner can restrict which tabs an access-code member
+// sees — interlinking with the Roles & Permissions concept. empty
+// allowedTabs = all tabs (read-only viewers usually want all).
 // ============================================================
-function AccessCodesView({
+function AccessCodeForm({
   stationId,
-  stationOwnerId,
+  availableRoles,
+  tabIdToLabel,
+  stationName,
+  onCreated,
+  onCancel,
 }: {
   stationId?: string;
-  stationOwnerId?: string;
+  availableRoles: { id: string; label: string }[];
+  tabIdToLabel: Record<string, string>;
   stationName?: string;
+  stationOwnerId?: string;
+  getRoleLabel?: (role: string) => {
+    label: string;
+    color: string;
+    desc: string;
+  };
+  onCreated: () => void;
+  onCancel: () => void;
 }) {
-  const [codes, setCodes] = useState<StationAccessCode[]>([]);
-  const [showForm, setShowForm] = useState(false);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [memberName, setMemberName] = useState("");
-  const [memberRole, setMemberRole] = useState("staff");
+  const [memberRole, setMemberRole] = useState(
+    availableRoles[0]?.id ?? "staff",
+  );
   const [readOnly, setReadOnly] = useState(true);
+  const [allowedTabs, setAllowedTabs] = useState<string[]>([]);
   const [error, setError] = useState("");
-  const [toast, setToast] = useState("");
+  const [busy, setBusy] = useState(false);
 
-  const load = useCallback(async () => {
-    try {
-      const data = await getAccessCodes(stationId);
-      setCodes(data);
-    } catch (err) {
-      console.error("Failed to load access codes:", err);
-    }
-  }, [stationId]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
+  const toggleTab = (tabId: string) => {
+    setAllowedTabs((prev) =>
+      prev.includes(tabId) ? prev.filter((t) => t !== tabId) : [...prev, tabId],
+    );
+  };
 
   const handleCreate = async () => {
     setError("");
@@ -1617,30 +1837,178 @@ function AccessCodesView({
       setError("Username, password, and member name are required.");
       return;
     }
+    if (password.trim().length < 4) {
+      setError("Password must be at least 4 characters.");
+      return;
+    }
+    setBusy(true);
     try {
       await createAccessCode(
         {
-          username,
-          password,
-          memberName,
+          username: username.trim(),
+          password: password.trim(),
+          memberName: memberName.trim(),
           memberRole,
-          allowedTabs: [],
+          allowedTabs,
           readOnly,
         },
         stationId,
       );
-      setToast(`Access code created for ${memberName}`);
-      setTimeout(() => setToast(""), 3000);
-      setUsername("");
-      setPassword("");
-      setMemberName("");
-      setMemberRole("staff");
-      setReadOnly(true);
-      setShowForm(false);
-      load();
+      onCreated();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create code.");
+    } finally {
+      setBusy(false);
     }
+  };
+
+  return (
+    <div className="space-y-3">
+      <h3 className="text-sm font-bold text-blue-900 dark:text-blue-300">
+        Create Access Code
+      </h3>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <label className="text-xs text-gray-500">Username *</label>
+          <input
+            type="text"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+            placeholder="e.g. cashier1"
+          />
+        </div>
+        <div>
+          <label className="text-xs text-gray-500">Password *</label>
+          <input
+            type="text"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+            placeholder="min 4 characters"
+          />
+        </div>
+        <div>
+          <label className="text-xs text-gray-500">Member Name *</label>
+          <input
+            type="text"
+            value={memberName}
+            onChange={(e) => setMemberName(e.target.value)}
+            className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+            placeholder="e.g. John Mwangi"
+          />
+        </div>
+        <div>
+          <label className="text-xs text-gray-500">Role</label>
+          {/* Uses the SAME availableRoles as the Invite-Link form (base +
+              custom roles) — no more hardcoded list. */}
+          <select
+            value={memberRole}
+            onChange={(e) => setMemberRole(e.target.value)}
+            className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+          >
+            {availableRoles.length === 0 && (
+              <option value="staff">Staff</option>
+            )}
+            {availableRoles.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Allowed-tabs picker — interlinks with the Roles & Permissions /
+          Feature Access Control concept. Empty = all tabs (recommended for
+          read-only viewers). */}
+      <div>
+        <label className="text-xs text-gray-500 block mb-1">
+          Allowed Tabs{" "}
+          <span className="text-gray-400">
+            (empty = all tabs · restrict to limit what this member can view)
+          </span>
+        </label>
+        <div className="flex flex-wrap gap-1 max-h-32 overflow-y-auto p-2 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
+          {Object.entries(tabIdToLabel).map(([id, label]) => {
+            const selected = allowedTabs.includes(id);
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => toggleTab(id)}
+                className={`text-[10px] px-2 py-1 rounded-full border transition-all ${selected ? "bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-900/30 dark:text-blue-300" : "bg-white text-gray-500 border-gray-200 dark:bg-gray-800 dark:text-gray-400"}`}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={readOnly}
+          onChange={(e) => setReadOnly(e.target.checked)}
+          className="rounded"
+        />
+        Read-only access (recommended — member can view but not edit)
+      </label>
+      {error && <p className="text-sm text-red-500">{error}</p>}
+      <div className="flex gap-2 justify-end">
+        <button
+          onClick={onCancel}
+          className="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded-lg text-sm dark:text-white"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={handleCreate}
+          disabled={busy}
+          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium flex items-center gap-1.5"
+        >
+          <KeyRound size={14} /> {busy ? "Creating..." : "Create Code"}
+        </button>
+      </div>
+      {stationName && (
+        <p className="text-[10px] text-gray-400">For station: {stationName}</p>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// AccessCodesView — management panel for access codes. Now receives the
+// lifted `codes` + `onRefresh` from the parent (so the blended Team
+// Members list + stats stay in sync), plus `availableRoles` +
+// `tabIdToLabel` so the inline form uses the SAME role list + tab
+// permissions as Invite Links. Also adds WhatsApp/Email share buttons to
+// the access link (parity with invite links).
+// ============================================================
+function AccessCodesView({
+  stationId,
+  stationOwnerId,
+  stationName,
+  codes,
+  availableRoles,
+  tabIdToLabel,
+  onRefresh,
+}: {
+  stationId?: string;
+  stationOwnerId?: string;
+  stationName?: string;
+  codes: StationAccessCode[];
+  availableRoles: { id: string; label: string }[];
+  tabIdToLabel: Record<string, string>;
+  onRefresh: () => void | Promise<void>;
+}) {
+  const [showForm, setShowForm] = useState(false);
+  const [toast, setToast] = useState("");
+
+  const flash = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(""), 2500);
   };
 
   const handleDelete = async (id: string) => {
@@ -1651,19 +2019,47 @@ function AccessCodesView({
     )
       return;
     await deleteAccessCode(id, stationId);
-    load();
-    setToast("Access code deleted");
-    setTimeout(() => setToast(""), 3000);
+    await onRefresh();
+    flash("Access code deleted");
   };
 
   const handleToggle = async (id: string) => {
     await toggleAccessCode(id, stationId);
-    load();
+    await onRefresh();
   };
 
   const accessLink = stationOwnerId
     ? `${window.location.origin}/#/station-access?owner=${stationOwnerId}&station=${stationId || ""}`
     : "";
+
+  const copyLink = async () => {
+    try {
+      await navigator.clipboard?.writeText(accessLink);
+      flash("Link copied to clipboard");
+    } catch {
+      flash("Copy failed — select the link and copy manually");
+    }
+  };
+
+  const shareWhatsApp = () => {
+    const text = encodeURIComponent(
+      `Access ${stationName || "the fuel station"} data. Open the link and enter your access-code username + password:`,
+    );
+    window.open(
+      `https://wa.me/?text=${text}%20${encodeURIComponent(accessLink)}`,
+      "_blank",
+    );
+  };
+
+  const shareEmail = () => {
+    const subject = encodeURIComponent(
+      `Access code for ${stationName || "fuel station"}`,
+    );
+    const body = encodeURIComponent(
+      `Hello,\n\nUse the link below to access the station data. Enter the username + password I gave you:\n\n${accessLink}\n\nThis works on any device — no signup needed.`,
+    );
+    window.open(`mailto:?subject=${subject}&body=${body}`, "_blank");
+  };
 
   return (
     <div className="space-y-4">
@@ -1674,28 +2070,42 @@ function AccessCodesView({
         <p className="text-sm text-blue-700 dark:text-blue-300 mb-3">
           Create a username + password for a team member. Share the access link
           below — the member enters the credentials to view station data
-          (read-only by default) without creating an account.
+          (read-only by default) without creating an account. This is the
+          lighter-weight counterpart to an Invite Link.
         </p>
         {accessLink && (
-          <div className="flex items-center gap-2">
-            <input
-              type="text"
-              readOnly
-              value={accessLink}
-              onClick={(e) => (e.target as HTMLInputElement).select()}
-              className="flex-1 px-3 py-2 bg-white dark:bg-gray-800 border border-blue-300 dark:border-blue-700 rounded-lg text-xs dark:text-white font-mono"
-            />
-            <button
-              onClick={() => {
-                navigator.clipboard?.writeText(accessLink);
-                setToast("Link copied to clipboard");
-                setTimeout(() => setToast(""), 2000);
-              }}
-              className="px-3 py-2 bg-blue-600 text-white rounded-lg text-xs font-medium"
-            >
-              Copy Link
-            </button>
-          </div>
+          <>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                readOnly
+                value={accessLink}
+                onClick={(e) => (e.target as HTMLInputElement).select()}
+                className="flex-1 px-3 py-2 bg-white dark:bg-gray-800 border border-blue-300 dark:border-blue-700 rounded-lg text-xs dark:text-white font-mono"
+              />
+              <button
+                onClick={copyLink}
+                className="px-3 py-2 bg-blue-600 text-white rounded-lg text-xs font-medium flex items-center gap-1"
+              >
+                <Copy size={12} /> Copy
+              </button>
+            </div>
+            {/* Share buttons — parity with invite links. */}
+            <div className="mt-2 flex items-center gap-2">
+              <button
+                onClick={shareWhatsApp}
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-green-50 hover:bg-green-100 text-green-700 text-xs font-medium rounded-lg transition-colors"
+              >
+                <MessageCircle size={14} /> WhatsApp
+              </button>
+              <button
+                onClick={shareEmail}
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-medium rounded-lg transition-colors"
+              >
+                <Mail size={14} /> Email
+              </button>
+            </div>
+          </>
         )}
       </div>
 
@@ -1710,77 +2120,20 @@ function AccessCodesView({
       </div>
 
       {showForm && (
-        <div className="p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 space-y-3">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-gray-500">Username *</label>
-              <input
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
-                placeholder="e.g. cashier1"
-              />
-            </div>
-            <div>
-              <label className="text-xs text-gray-500">Password *</label>
-              <input
-                type="text"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
-                placeholder="min 4 characters"
-              />
-            </div>
-            <div>
-              <label className="text-xs text-gray-500">Member Name *</label>
-              <input
-                type="text"
-                value={memberName}
-                onChange={(e) => setMemberName(e.target.value)}
-                className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
-                placeholder="e.g. John Mwangi"
-              />
-            </div>
-            <div>
-              <label className="text-xs text-gray-500">Role</label>
-              <select
-                value={memberRole}
-                onChange={(e) => setMemberRole(e.target.value)}
-                className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
-              >
-                <option value="manager">Manager</option>
-                <option value="staff">Staff</option>
-                <option value="auditor">Auditor</option>
-                <option value="cashier">Cashier</option>
-                <option value="attendant">Attendant</option>
-              </select>
-            </div>
-          </div>
-          <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={readOnly}
-              onChange={(e) => setReadOnly(e.target.checked)}
-              className="rounded"
-            />
-            Read-only access (recommended — member can view but not edit)
-          </label>
-          {error && <p className="text-sm text-red-500">{error}</p>}
-          <div className="flex gap-2 justify-end">
-            <button
-              onClick={() => setShowForm(false)}
-              className="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded-lg text-sm dark:text-white"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleCreate}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium"
-            >
-              Create
-            </button>
-          </div>
+        <div className="p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
+          <AccessCodeForm
+            stationId={stationId}
+            availableRoles={availableRoles}
+            tabIdToLabel={tabIdToLabel}
+            stationName={stationName}
+            stationOwnerId={stationOwnerId}
+            onCreated={() => {
+              flash("Access code created");
+              onRefresh();
+              setShowForm(false);
+            }}
+            onCancel={() => setShowForm(false)}
+          />
         </div>
       )}
 
@@ -1797,7 +2150,7 @@ function AccessCodesView({
               className={`flex items-center justify-between p-3 rounded-lg border ${c.enabled ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800" : "bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700"}`}
             >
               <div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-semibold text-sm dark:text-white">
                     {c.memberName}
                   </span>
@@ -1808,6 +2161,12 @@ function AccessCodesView({
                   {c.readOnly && (
                     <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-500/10 text-gray-500">
                       Read-Only
+                    </span>
+                  )}
+                  {c.allowedTabs && c.allowedTabs.length > 0 && (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-600">
+                      {c.allowedTabs.length} tab
+                      {c.allowedTabs.length !== 1 ? "s" : ""}
                     </span>
                   )}
                   <span
