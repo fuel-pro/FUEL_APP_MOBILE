@@ -5025,3 +5025,61 @@ Founder QA Test, US station, USD:
 - Credit Accounts: Test Credit Customer, $5k limit, status selector + action buttons
 - Debt Payment Reminders: form saved, Schedule Reminder button, country-aware phone placeholder
 - Founder Console login: FOUNDER username -> 2FA verification screen
+
+## Session 2026-08-18 — Egress-reduction: Realtime kill-switch + Storage & Egress panel (DEPLOYED LIVE, commit bf4221b)
+
+Supabase Free-plan org entered grace period (Egress 7.095/5 GB = 142%,
+Realtime Messages 1,916,846/2,000,000 = 96%). The two highest-impact
+egress reducers were added on top of the existing at-rest compression.
+
+### 1. Global Realtime kill-switch (cloudStorageService.setRealtimeEnabled)
+
+`src/react-app/lib/cloud-storage-service.ts`:
+- New `realtimeEnabled` field (default ON), `setRealtimeEnabled(bool)`,
+  `isRealtimeEnabled()`. Persisted in localStorage
+  (`fuelpro_realtime_disabled=1` when OFF).
+- `subscribe()` + `subscribeToStation()` return a no-op unsubscribe and
+  open NO Supabase channels when disabled, so the ~30 per-component app_kv
+  realtime channels stop opening and Realtime message count drops to ~0.
+  Cross-device sync then relies on the read-through cache + manual refresh.
+- The two direct (non-cloudStorageService) channels also respect the flag:
+  `StationContext.tsx` `stations:realtime` and
+  `InventoryManagement.tsx` `inventory-products-<stationId>`. Legacy
+  `RealtimeSync.subscribeToCollection` is dead code (no runtime consumers).
+
+### 2. Storage & Egress panel (new StorageEgressPanel.tsx)
+
+Embedded as a "Storage & Egress" sub-tab in the Data Manager
+(`DataManager.tsx`, between Overview and Recovery). Surfaces a live
+compression-ratio estimate (scans the `fuelpro_cloud_*` localStorage cache),
+a one-click Low-bandwidth mode toggle (the Realtime kill-switch), and
+quota-aware status banners.
+
+### API rename note (parallel recovery merge on remote main)
+
+The remote `openhands-recovery-work` merge (commit 01a5794) renamed the
+compression exports: `compress`->`compressJson`,
+`decompress`->`decompressJson`, `isCompressedEnvelope`->`isCompressedPayload`.
+`cloud-storage-service.ts` already uses the new names (auto-merged).
+`StorageEgressPanel.tsx` imports `isCompressedPayload`. Tests now 16/16 pass.
+
+### Deploy state 2026-08-18 (commit bf4221b)
+
+- GitHub main: bf4221b (pushed, synced with origin/main).
+- Cloudflare Pages: LIVE (preview https://a458027f.fuel-app-mobile.pages.dev
+  + main alias). DataManager chunk has `setRealtimeEnabled`,
+  `Low-bandwidth mode`, `Storage & Egress` confirmed.
+- Vercel production: LIVE (git-source API deploy
+  dpl_CAc6PPJ3BpkoV69f7Da4pf6WSsjQ, READY, aliased to
+  fuel-app-mobile.vercel.app). DataManager chunk `DataManager-B5wgYjbe.js`
+  has all three markers confirmed (HTTP 200).
+- Supabase: NO schema changes (frontend-only client-side channel-open gate).
+- tsc 0 errors, vite build 110 precache, vitest 16/16 pass, prettier pass.
+
+### How to use (user-facing)
+
+Data Manager -> "Storage & Egress" sub-tab -> toggle "Low-bandwidth mode"
+ON. Immediately stops all Realtime subscriptions on the current device
+(drops Realtime message usage to ~0). Cross-device edits appear on next
+reload/navigation instead of instantly. Toggle OFF to restore instant
+live sync. Persists across reloads (`fuelpro_realtime_disabled` key).
