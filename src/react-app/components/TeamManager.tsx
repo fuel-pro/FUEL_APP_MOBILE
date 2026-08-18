@@ -205,7 +205,10 @@ function makeInviteLink(inv: any, station: any): string {
     maxUses: inv.maxUses,
     canCreateSubUsers: inv.canCreateSubUsers,
     canGrantPermissions: inv.canGrantPermissions,
-    permissionsSnapshot: inv.permissionsSnapshot,
+    // NOTE: permissionsSnapshot is intentionally omitted from the URL payload
+    // to keep the link short (URLs > 2000 chars are truncated by some
+    // browsers/email clients). The snapshot is re-resolved from the owner's
+    // cloud config on acceptance via PermissionContext.
     tabGrants: inv.tabGrants,
   });
   const base64 = btoa(payload)
@@ -266,10 +269,11 @@ export default function TeamManager() {
   const [newRoleBase, setNewRoleBase] = useState<BaseUserRole>("staff");
   // Per-role permission editor state: which role's permission panel is open
   const [permEditorRole, setPermEditorRole] = useState<string | null>(null);
-  // Inner sub-tab: "Team" (this component) vs "Shifts" (the formerly-standalone
-  // ShiftManagement module, now hosted here).
+  // Inner sub-tab: "Team" (this component, now includes Access Codes) vs
+  // "Roles & Permissions" vs "Shifts" (the formerly-standalone ShiftManagement
+  // module, now hosted here).
   const [activeView, setActiveView] = useState<
-    "team" | "shifts" | "roles" | "access"
+    "team" | "shifts" | "roles"
   >("team");
 
   // Tab ID to human-readable label mapping
@@ -490,18 +494,15 @@ export default function TeamManager() {
         </div>
       </div>
 
-      {/* Sub-tab switcher: Team access vs Shift scheduling */}
+      {/* Sub-tab switcher: Team access (includes Access Codes) vs Roles vs Shifts */}
       <SubTabBar
         tabs={[
           { id: "team", label: "Team Access", icon: Users },
           { id: "roles", label: "Roles & Permissions", icon: KeyRound },
-          { id: "access", label: "Access Codes", icon: KeyRound },
           { id: "shifts", label: "Shifts", icon: Calendar },
         ]}
         active={activeView}
-        onChange={(id) =>
-          setActiveView(id as "team" | "shifts" | "roles" | "access")
-        }
+        onChange={(id) => setActiveView(id as "team" | "shifts" | "roles")}
       />
 
       {activeView === "shifts" ? (
@@ -535,12 +536,6 @@ export default function TeamManager() {
           setNewRoleLabel={setNewRoleLabel}
           newRoleBase={newRoleBase}
           setNewRoleBase={setNewRoleBase}
-        />
-      ) : activeView === "access" ? (
-        <AccessCodesView
-          stationId={currentStation?.id}
-          stationOwnerId={user?.authId}
-          stationName={currentStation?.name}
         />
       ) : (
         <>
@@ -1217,6 +1212,21 @@ export default function TeamManager() {
               ))}
             </div>
           )}
+
+          {/* ============================================================
+              Access Codes — integrated into Team Access.
+              Lets the OWNER create username/password access codes so team
+              members can view station data WITHOUT signing up. This is a
+              lighter-weight alternative to invite links (which require a
+              full Supabase account).
+          ============================================================ */}
+          <div className="mt-6 border-t border-gray-200 dark:border-gray-700 pt-6">
+            <AccessCodesView
+              stationId={currentStation?.id}
+              stationOwnerId={user?.authId}
+              stationName={currentStation?.name}
+            />
+          </div>
         </>
       )}
     </div>

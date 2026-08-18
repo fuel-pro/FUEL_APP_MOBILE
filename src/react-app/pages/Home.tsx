@@ -501,13 +501,28 @@ function HomeContent() {
   const hasActiveBindings = bindings.some((b) => b.active);
   const setupAlreadyCompleted =
     localStorage.getItem("fuelpro_setup_complete") === "true";
+  // A returning user on a NEW device won't have the local setup flag, but they
+  // DO have an auth identity (logged-in user with a Supabase session). Treat
+  // an authenticated user with no local setup flag + no stations as a
+  // "syncing from cloud" state (not a brand-new user) so they don't see the
+  // SetupWizard while their cloud data loads. This is the core fix for the
+  // "site keeps forgetting my data" complaint — the wizard was showing on
+  // every fresh-device login before cloud data arrived.
+  const hasAuthIdentity = Boolean(
+    localStorage.getItem("fuelpro_auth_identity"),
+  );
 
   if (stations.length === 0 || !currentStation) {
     // Returning user: setup was completed before but stations are empty (cloud
     // sync pending or offline). Do NOT re-run the wizard — show a loading
-    // state that retries the cloud sync. Only brand-new users (no setup flag)
-    // or users who explicitly clicked "create station" see the wizard.
-    if (setupAlreadyCompleted && !showSetupWizard && !hasActiveBindings) {
+    // state that retries the cloud sync. Only brand-new users (no setup flag,
+    // no auth identity) or users who explicitly clicked "create station" see
+    // the wizard.
+    if (
+      (setupAlreadyCompleted || hasAuthIdentity) &&
+      !showSetupWizard &&
+      !hasActiveBindings
+    ) {
       return (
         <div className="min-h-screen bg-gradient-to-br from-slate-900 via-indigo-900 to-slate-900 flex items-center justify-center">
           <div className="text-center max-w-md px-4">

@@ -1251,6 +1251,21 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
     syncFromBackend().finally(() => {
       setIsStationLoading(false);
     });
+
+    // Sync the fuelpro_setup_complete flag from cloud so a returning user on a
+    // NEW device (where the local flag is absent) doesn't see the SetupWizard
+    // while their cloud stations load. The flag is written to cloud by
+    // SetupWizard.onComplete (via FuelContext's saveToCloud which includes it
+    // in the compact blob). Here we read it from the compact blob as a
+    // best-effort check.
+    cloudStorageService
+      .get<{ setupComplete?: boolean }>("user_setup_flag", undefined)
+      .then((flag) => {
+        if (flag?.setupComplete && !localStorage.getItem("fuelpro_setup_complete")) {
+          localStorage.setItem("fuelpro_setup_complete", "true");
+        }
+      })
+      .catch(() => {});
   }, [syncFromBackend]);
 
   // Also sync whenever the person signs in (covers login without a full

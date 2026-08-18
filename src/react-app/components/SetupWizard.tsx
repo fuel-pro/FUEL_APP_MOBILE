@@ -453,8 +453,15 @@ export default function SetupWizard({
       console.error("[SetupWizard] Failed to seed fuel_types_config:", e);
     }
 
-    // Mark setup as complete
+    // Mark setup as complete (local + cloud so it survives across devices)
     localStorage.setItem("fuelpro_setup_complete", "true");
+    try {
+      cloudStorageService
+        .set("user_setup_flag", { setupComplete: true }, undefined)
+        .catch(() => {});
+    } catch {
+      /* ignore */
+    }
 
     // Derive country-aware settings (currency, timezone, tax rate) from the
     // user's selected country so the station is genuinely world-wide — never
