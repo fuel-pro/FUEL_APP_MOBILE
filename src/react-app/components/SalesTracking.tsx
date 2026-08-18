@@ -610,6 +610,10 @@ export default function SalesTracking() {
       agoPumps: [...state.agoPumps],
       fuelPumpsByType: { ...(state.fuelPumpsByType || {}) },
       fuelPricesByType: { ...(state.fuelPricesByType || {}) },
+      // Per-fuel-type tank readings (Kerosene/LPG/V-Power/...) so cross-device
+      // sync + reload preserves them (was missing → tank inventory lost on
+      // reload for any non-petrol/diesel fuel).
+      fuelTankValuesByType: { ...(state.fuelTankValuesByType || {}) },
       expenses: [...state.expenses],
       tillPayment: state.tillPayment,
       pmsPrice: state.pmsPrice,
@@ -656,6 +660,12 @@ export default function SalesTracking() {
       dispatch({
         type: "SET_FUEL_PRICES_BY_TYPE",
         payload: data.fuelPricesByType,
+      });
+    // Restore per-fuel-type tank readings (Kerosene/LPG/V-Power/...).
+    if (data.fuelTankValuesByType)
+      dispatch({
+        type: "SET_TANK_VALUES",
+        payload: { fuelTankValuesByType: data.fuelTankValuesByType },
       });
     dispatch({ type: "SET_EXPENSES", payload: data.expenses || [] });
     dispatch({ type: "SET_TILL_PAYMENT", payload: data.tillPayment || 0 });

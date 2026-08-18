@@ -54,6 +54,9 @@ interface PriceEntry {
   effectiveDate: string;
   updatedBy: string;
   updatedAt: string;
+  /** "user" = explicitly set by the owner/manager (never auto-overwritten);
+   *  "auto" = last set by the EPRA/regulator auto-sync (may be refreshed). */
+  source?: "user" | "auto";
 }
 
 interface PriceHistory {
@@ -120,6 +123,7 @@ function normalizePriceEntry(
     effectiveDate: p?.effectiveDate ?? "",
     updatedBy: p?.updatedBy ?? "",
     updatedAt: p?.updatedAt ?? "",
+    source: p?.source === "user" || p?.source === "auto" ? p.source : "auto",
   };
 }
 
@@ -264,7 +268,12 @@ export default function PriceBoard() {
             p.isActive &&
             isSameFuelType(p.fuelType, CANONICAL_FUEL_TYPES.petrol.label),
         );
-        if (petrolEntry && petrolEntry.price !== fuelPrice.petrolPrice) {
+        // Don't auto-overwrite a price the owner/manager set explicitly.
+        if (
+          petrolEntry &&
+          petrolEntry.source !== "user" &&
+          petrolEntry.price !== fuelPrice.petrolPrice
+        ) {
           // Log history before updating
           const historyEntry: PriceHistory = {
             id: `ph_${Date.now()}_auto`,
@@ -282,6 +291,7 @@ export default function PriceBoard() {
           petrolEntry.effectiveDate = fuelPrice.effectiveDate;
           petrolEntry.updatedAt = new Date().toISOString();
           petrolEntry.updatedBy = "System";
+          petrolEntry.source = "auto";
           needsUpdate = true;
         }
       }
@@ -292,7 +302,12 @@ export default function PriceBoard() {
             p.isActive &&
             isSameFuelType(p.fuelType, CANONICAL_FUEL_TYPES.diesel.label),
         );
-        if (dieselEntry && dieselEntry.price !== fuelPrice.dieselPrice) {
+        // Don't auto-overwrite a price the owner/manager set explicitly.
+        if (
+          dieselEntry &&
+          dieselEntry.source !== "user" &&
+          dieselEntry.price !== fuelPrice.dieselPrice
+        ) {
           // Log history
           const historyEntry: PriceHistory = {
             id: `ph_${Date.now()}_auto_d`,
@@ -310,6 +325,7 @@ export default function PriceBoard() {
           dieselEntry.effectiveDate = fuelPrice.effectiveDate;
           dieselEntry.updatedAt = new Date().toISOString();
           dieselEntry.updatedBy = "System";
+          dieselEntry.source = "auto";
           needsUpdate = true;
         }
       }
@@ -320,7 +336,12 @@ export default function PriceBoard() {
             p.isActive &&
             isSameFuelType(p.fuelType, CANONICAL_FUEL_TYPES.kerosene.label),
         );
-        if (keroseneEntry && keroseneEntry.price !== fuelPrice.kerosenePrice) {
+        // Don't auto-overwrite a price the owner/manager set explicitly.
+        if (
+          keroseneEntry &&
+          keroseneEntry.source !== "user" &&
+          keroseneEntry.price !== fuelPrice.kerosenePrice
+        ) {
           // Log history
           const historyEntry: PriceHistory = {
             id: `ph_${Date.now()}_auto_k`,
@@ -338,6 +359,7 @@ export default function PriceBoard() {
           keroseneEntry.effectiveDate = fuelPrice.effectiveDate;
           keroseneEntry.updatedAt = new Date().toISOString();
           keroseneEntry.updatedBy = "System";
+          keroseneEntry.source = "auto";
           needsUpdate = true;
         }
       }
@@ -392,6 +414,10 @@ export default function PriceBoard() {
           ...next[idx],
           price: p.price,
           updatedAt: new Date().toISOString(),
+          // A price propagated from FuelTypesManager / "Set as my price" is
+          // an explicit user choice — mark it so the EPRA auto-sync won't
+          // overwrite it on the next refresh.
+          source: "user",
         };
         return next;
       });
@@ -450,6 +476,9 @@ export default function PriceBoard() {
                 previousPrice: old?.price || p.price,
                 updatedAt: new Date().toISOString(),
                 updatedBy: "Manager",
+                // Mark as user-set so the EPRA/regulator auto-sync never
+                // overwrites a price the owner/manager explicitly chose.
+                source: "user",
               }
             : p,
         ),
@@ -493,6 +522,7 @@ export default function PriceBoard() {
         previousPrice: formData.price!,
         updatedBy: "Manager",
         updatedAt: new Date().toISOString(),
+        source: "user",
       };
       setPrices((prev) => [...prev, newEntry]);
 
