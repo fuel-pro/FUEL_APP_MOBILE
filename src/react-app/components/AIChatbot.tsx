@@ -481,7 +481,7 @@ export default function AIChatbot() {
       lowerMsg.includes("owe")
     ) {
       if (!deliveryTracker || deliveryTracker.totalDebt === 0) {
-        return `**Debt Status**\n\nNo outstanding debts recorded.\n\nTo track customer debts:\n1. Go to **Delivery Tracker** tab\n2. Add deliveries with customer names\n3. The system will auto-calculate balances\n\nYou can also use the **Debt Reminder** tab to send payment reminders.`;
+        return `**Debt Status**\n\nNo outstanding debts recorded.\n\nTo track customer debts:\n1. Go to **Fuel Statement Report** tab\n2. Add deliveries with customer names\n3. The system will auto-calculate balances\n\nYou can also use the **Debt Payment Reminders** sub-tab (Credit Management) to send payment reminders.`;
       }
       return `**Outstanding Debts Summary**\n\n• Total Balance Due: ${currency} ${deliveryTracker.totalDebt?.toLocaleString()}\n• Total Records: ${deliveryTracker.totalRecords}\n• Unique Customers: ${deliveryTracker.uniqueCustomers}\n• Delivered To: ${deliveryTracker.deliveredTo || "N/A"}\n\n💡 Tip: Use the **Debt Reminder** tab to generate payment reminder letters.`;
     }

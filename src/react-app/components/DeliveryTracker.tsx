@@ -634,7 +634,7 @@ export default function DeliveryTracker() {
       <div className="card">
         <div className="flex justify-between items-center mb-6 pb-4 border-b border-gray-200 dark:border-gray-700">
           <h2 className="text-2xl font-bold text-blue-900 dark:text-blue-200">
-            Delivery Tracker
+            Fuel Statement Report
           </h2>
         </div>
 

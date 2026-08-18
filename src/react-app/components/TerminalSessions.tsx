@@ -286,12 +286,15 @@ export default function TerminalSessions() {
                 </label>
                 <input
                   type="number"
-                  value={openingCash}
+                  value={openingCash ?? ""}
                   onChange={(e) =>
-                    setOpeningCash(parseFloat(e.target.value) || 0)
+                    setOpeningCash(
+                      e.target.value === "" ? 0 : parseFloat(e.target.value) || 0,
+                    )
                   }
                   className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white"
                   min="0"
+                  placeholder="0"
                 />
               </div>
               <button
@@ -356,12 +359,15 @@ export default function TerminalSessions() {
                 </label>
                 <input
                   type="number"
-                  value={countedCash}
+                  value={countedCash ?? ""}
                   onChange={(e) =>
-                    setCountedCash(parseFloat(e.target.value) || 0)
+                    setCountedCash(
+                      e.target.value === "" ? 0 : parseFloat(e.target.value) || 0,
+                    )
                   }
                   className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white"
                   min="0"
+                  placeholder="0"
                 />
               </div>
               {countedCash !== openSessionsTotal && (

@@ -255,7 +255,7 @@ const defaultAdminSettings: AdminSettings = {
       order: 1,
     },
     delivery: {
-      label: "Delivery Tracker",
+      label: "Fuel Statement Report",
       icon: "Truck",
       enabled: true,
       order: 2,

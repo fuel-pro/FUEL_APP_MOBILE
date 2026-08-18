@@ -338,13 +338,18 @@ function ExpenseModal({
             <label className="text-gray-400 text-xs mb-2 block">Amount *</label>
             <input
               type="number"
-              value={form.amount}
+              value={form.amount ?? ""}
               onChange={(e) =>
-                setForm({ ...form, amount: parseFloat(e.target.value) || 0 })
+                setForm({
+                  ...form,
+                  amount:
+                    e.target.value === "" ? 0 : parseFloat(e.target.value) || 0,
+                })
               }
               className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white"
               min="0"
               required
+              placeholder="0"
             />
           </div>
           <div>

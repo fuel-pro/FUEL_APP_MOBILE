@@ -342,17 +342,19 @@ const ProductModal = ({
               </label>
               <input
                 type="number"
-                value={formData.cost_price}
+                value={formData.cost_price ?? ""}
                 onChange={(e) =>
                   setFormData({
                     ...formData,
-                    cost_price: parseFloat(e.target.value) || 0,
+                    cost_price:
+                      e.target.value === "" ? 0 : parseFloat(e.target.value) || 0,
                   })
                 }
                 className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white"
                 min="0"
                 step="0.01"
                 required
+                placeholder="0"
               />
             </div>
             <div>
@@ -361,17 +363,19 @@ const ProductModal = ({
               </label>
               <input
                 type="number"
-                value={formData.selling_price}
+                value={formData.selling_price ?? ""}
                 onChange={(e) =>
                   setFormData({
                     ...formData,
-                    selling_price: parseFloat(e.target.value) || 0,
+                    selling_price:
+                      e.target.value === "" ? 0 : parseFloat(e.target.value) || 0,
                   })
                 }
                 className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white"
                 min="0"
                 step="0.01"
                 required
+                placeholder="0"
               />
             </div>
           </div>
@@ -384,16 +388,18 @@ const ProductModal = ({
               </label>
               <input
                 type="number"
-                value={formData.stock_quantity}
+                value={formData.stock_quantity ?? ""}
                 onChange={(e) =>
                   setFormData({
                     ...formData,
-                    stock_quantity: parseFloat(e.target.value) || 0,
+                    stock_quantity:
+                      e.target.value === "" ? 0 : parseFloat(e.target.value) || 0,
                   })
                 }
                 className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white"
                 min="0"
                 step="0.01"
+                placeholder="0"
               />
             </div>
             <div>
@@ -402,16 +408,18 @@ const ProductModal = ({
               </label>
               <input
                 type="number"
-                value={formData.reorder_level}
+                value={formData.reorder_level ?? ""}
                 onChange={(e) =>
                   setFormData({
                     ...formData,
-                    reorder_level: parseFloat(e.target.value) || 0,
+                    reorder_level:
+                      e.target.value === "" ? 0 : parseFloat(e.target.value) || 0,
                   })
                 }
                 className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white"
                 min="0"
                 step="0.01"
+                placeholder="0"
               />
             </div>
           </div>
@@ -423,11 +431,12 @@ const ProductModal = ({
               </label>
               <input
                 type="number"
-                value={formData.tax_rate}
+                value={formData.tax_rate ?? ""}
                 onChange={(e) =>
                   setFormData({
                     ...formData,
-                    tax_rate: parseFloat(e.target.value) || 0,
+                    tax_rate:
+                      e.target.value === "" ? 0 : parseFloat(e.target.value) || 0,
                   })
                 }
                 className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white"

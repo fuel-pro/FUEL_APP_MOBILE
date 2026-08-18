@@ -453,15 +453,11 @@ export default function SetupWizard({
       console.error("[SetupWizard] Failed to seed fuel_types_config:", e);
     }
 
-    // Mark setup as complete (local + cloud so it survives across devices)
+    // Mark setup as complete (localStorage + cloud, so a returning user on a
+    // new device offline is not sent back to the wizard). The cloud key
+    // `setup_complete` is read by Home.tsx on mount to hydrate the local flag.
     localStorage.setItem("fuelpro_setup_complete", "true");
-    try {
-      cloudStorageService
-        .set("user_setup_flag", { setupComplete: true }, undefined)
-        .catch(() => {});
-    } catch {
-      /* ignore */
-    }
+    cloudStorageService.set("setup_complete", true, undefined).catch(() => {});
 
     // Derive country-aware settings (currency, timezone, tax rate) from the
     // user's selected country so the station is genuinely world-wide — never
@@ -788,6 +784,9 @@ export default function SetupWizard({
           <button
             onClick={() => {
               localStorage.setItem("fuelpro_setup_complete", "true");
+              cloudStorageService
+                .set("setup_complete", true, undefined)
+                .catch(() => {});
               onComplete();
             }}
             className="w-full mt-4 text-center text-sm text-slate-400 hover:text-white transition-colors"

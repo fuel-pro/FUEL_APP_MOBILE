@@ -534,7 +534,7 @@ export default function FuelOffloading() {
           ))}
         </div>
 
-        {/* Cross-tab links — connect offloading to Delivery Tracker + Supplier
+        {/* Cross-tab links — connect offloading to Fuel Statement Report + Supplier
             Management (same domain: fuel delivery). */}
         <div className="flex flex-wrap gap-2 mb-4">
           <button
@@ -542,7 +542,7 @@ export default function FuelOffloading() {
             className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/50 border border-blue-200 dark:border-blue-700"
           >
             <ArrowRight size={12} />
-            Delivery Tracker
+            Fuel Statement Report
           </button>
           <button
             onClick={() => switchToTab("suppliers")}

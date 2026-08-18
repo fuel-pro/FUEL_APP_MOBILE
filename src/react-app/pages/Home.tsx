@@ -14,6 +14,7 @@ import { useTenant } from "@/react-app/context/TenantContext";
 import { LocationProvider } from "@/react-app/context/LocationContext";
 import { useFuel } from "@/react-app/context/FuelContext";
 import { useTutorial } from "@/react-app/context/TutorialContext";
+import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 import OnboardingTutorial from "@/react-app/components/OnboardingTutorial";
 import Header from "@/react-app/components/Header";
 import TabNavigation from "@/react-app/components/TabNavigation";
@@ -217,6 +218,36 @@ function HomeContent() {
       setRole(binding.role);
     }
   }, [user, currentStation, getActiveBinding, setRole]);
+
+  // CLOUD-BACKED SETUP-COMPLETE CHECK (fixes "offline re-triggers setup
+  // wizard on a new device"). The `fuelpro_setup_complete` flag was only in
+  // localStorage, so on a fresh device/browser (empty localStorage) a
+  // returning user offline was sent back to the SetupWizard even though they
+  // already completed setup on another device. Now we also persist the flag
+  // to cloud (app_kv key `setup_complete`) per user and hydrate the local
+  // flag from cloud on mount so the "Loading your station data…" state shows
+  // instead of the wizard. The write happens in the wizard onComplete handler.
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const cloud = await cloudStorageService.get<boolean>(
+          "setup_complete",
+          undefined,
+        );
+        if (!cancelled && cloud === true) {
+          // Hydrate the local flag so the offline loading-state path runs.
+          localStorage.setItem("fuelpro_setup_complete", "true");
+        }
+      } catch {
+        /* cloud unavailable — the local flag still governs */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
 
   // Check for stations in localStorage after wizard completes
   // This fixes the race condition where createStation hasn't propagated yet.
@@ -571,6 +602,12 @@ function HomeContent() {
             // and were lost on the reload. Keeping state in memory lets the
             // normal debounced saves persist it.
             localStorage.setItem("fuelpro_setup_complete", "true");
+            // Also persist to cloud so a returning user on a NEW device
+            // (empty localStorage) offline is NOT sent back to the wizard —
+            // the cloud-backed check hydrates the local flag.
+            cloudStorageService
+              .set("setup_complete", true, undefined)
+              .catch(() => {});
             setShowSetupWizard(false);
           }}
           onAccessShared={

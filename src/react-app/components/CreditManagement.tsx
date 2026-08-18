@@ -519,11 +519,14 @@ export default function CreditManagement() {
                 <input
                   type="number"
                   placeholder="Credit Limit"
-                  value={newAcc.creditLimit}
+                  value={newAcc.creditLimit ?? ""}
                   onChange={(e) =>
                     setNewAcc({
                       ...newAcc,
-                      creditLimit: parseFloat(e.target.value) || 0,
+                      creditLimit:
+                        e.target.value === ""
+                          ? 0
+                          : parseFloat(e.target.value) || 0,
                     })
                   }
                   className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"

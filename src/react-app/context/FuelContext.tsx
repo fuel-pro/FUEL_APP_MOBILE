@@ -2221,6 +2221,23 @@ export function FuelProvider({ children }: { children: ReactNode }) {
   }, [user, stationId]);
 
   // ------------------------------------------------------------
+  // OFFLINE → ONLINE SYNC: when the offline write queue is flushed (by the
+  // cloudStorageService global online/visibility/interval listeners), a
+  // `cloudStorageSynced` CustomEvent is dispatched. Reload from cloud so the
+  // UI reflects the now-synced data immediately — this is the fix for
+  // "offline changes not updated immediately when back online". Without this,
+  // a component that loaded on mount would keep showing the pre-sync state.
+  useEffect(() => {
+    if (!user) return;
+    const handler = () => {
+      // Reload the compact blob from cloud (the just-flushed write is there).
+      loadFromCloud().catch(() => {});
+    };
+    window.addEventListener("cloudStorageSynced", handler);
+    return () => window.removeEventListener("cloudStorageSynced", handler);
+  }, [user, loadFromCloud]);
+
+  // ------------------------------------------------------------
   // Load fuel_types_config on mount/station change, keep fuelTypesRef in
   // sync, derive pmsPrice/agoPrice from the active petrol/diesel entries,
   // and subscribe to real-time cloud updates so a price edit in

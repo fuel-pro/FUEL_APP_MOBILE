@@ -28,6 +28,24 @@ function cacheKey(key: string): string {
   return `${CACHE_PREFIX}${key}`;
 }
 
+// ---------------------------------------------------------------------------
+// PER-KEY VERSION VECTOR (optimistic concurrency for multi-device writes)
+// ---------------------------------------------------------------------------
+// When two devices are open at once and both edit the same key, last-writer-
+// wins silently overwrites. To prevent this, we remember the `version` (and
+// `updated_at`) of the row we last READ, then pass `expected_version` to the
+// `upsert_app_kv_versioned` RPC. The RPC only applies the UPDATE when the
+// existing row's version matches our expectation; on a mismatch it returns
+// the remote value so we can merge and retry. This eliminates the "two
+// devices conflict, uncertain which data to rely on" problem.
+//
+// Map: effective cache key -> { version, updatedAt }.
+const knownVersions = new Map<string, { version: number; updatedAt?: string }>();
+
+function versionKey(key: string, stationId?: string): string {
+  return stationId ? `${key}__${stationId}` : key;
+}
+
 /**
  * Build the app_kv row id for a logical key, scoped by user (and optionally
  * by station).
@@ -97,6 +115,84 @@ function decodeRow<T = Json>(raw: unknown): T | null {
     return decompressJson<T>(coerced);
   }
   return coerced;
+}
+
+/**
+ * Merge two values for multi-device conflict resolution. The "local" value is
+ * the user's latest edit; "remote" is the newer revision from another device.
+ * Strategy:
+ *  - Objects: deep-merge, with LOCAL fields winning on conflict (the user's
+ *    most recent edit takes precedence), but remote keys the local edit
+ *    didn't touch are preserved (so a concurrent edit on another device isn't
+ *    lost).
+ *  - Arrays of records (objects with an `id` / `key` / `empId` field): union
+ *    by id, keeping the element from whichever side has it, and for shared
+ *    ids keeping the LOCAL (newer edit) element.
+ *  - Arrays of primitives: local wins (the user explicitly set a new list).
+ *  - Primitives: local wins (it's the user's latest edit).
+ *  - null/undefined remote: local wins; null/undefined local: remote wins.
+ */
+export function mergeValues<T>(remote: T | null, local: T): T {
+  if (remote == null) return local;
+  if (local == null) return remote;
+
+  if (Array.isArray(remote) && Array.isArray(local)) {
+    // Array-of-records union by id.
+    const allItems = [...remote, ...local];
+    const isRecord = (v: unknown): v is Record<string, unknown> =>
+      typeof v === "object" && v !== null && !Array.isArray(v);
+    if (allItems.every(isRecord)) {
+      const idKey = allItems
+        .map((r) => Object.keys(r).find((k) => /^(id|key|empId|uid|uid)$/i.test(k)))
+        .find(Boolean);
+      if (idKey) {
+        const byId = new Map<string, Record<string, unknown>>();
+        for (const r of remote as Record<string, unknown>[]) {
+          const id = String(r[idKey] ?? "");
+          if (id) byId.set(id, r);
+        }
+        // Local entries override remote (newer edit) for the same id.
+        for (const r of local as Record<string, unknown>[]) {
+          const id = String(r[idKey] ?? "");
+          if (id) byId.set(id, r);
+          else byId.set(`__noid_${Date.now()}_${Math.random()}`, r);
+        }
+        return Array.from(byId.values()) as T;
+      }
+    }
+    // Arrays of primitives or unidentifiable records: local wins.
+    return local;
+  }
+
+  if (
+    typeof remote === "object" &&
+    typeof local === "object" &&
+    !Array.isArray(remote) &&
+    !Array.isArray(local)
+  ) {
+    const merged: Record<string, unknown> = { ...(remote as Record<string, unknown>) };
+    for (const [k, v] of Object.entries(local as Record<string, unknown>)) {
+      // Local value wins, but if both are objects, deep-merge to preserve
+      // concurrent remote sub-edits.
+      const rv = merged[k];
+      if (
+        typeof v === "object" &&
+        v !== null &&
+        !Array.isArray(v) &&
+        typeof rv === "object" &&
+        rv !== null &&
+        !Array.isArray(rv)
+      ) {
+        merged[k] = mergeValues(rv as Record<string, unknown>, v as Record<string, unknown>);
+      } else {
+        merged[k] = v;
+      }
+    }
+    return merged as T;
+  }
+
+  // Primitives: local (user's latest edit) wins.
+  return local;
 }
 
 /**
@@ -383,7 +479,7 @@ class CloudStorageService {
       if (stationId) {
         const { data, error } = await client
           .from("app_kv")
-          .select("data")
+          .select("data, version, updated_at")
           .eq("id", scopedId)
           .eq("owner_id", ownerId)
           .maybeSingle();
@@ -391,6 +487,12 @@ class CloudStorageService {
         if (data?.data != null) {
           const value = decodeRow<T>(data.data);
           if (value != null) {
+            // Record the version we just read so the next set() can do an
+            // optimistic-concurrency check (prevents multi-device overwrites).
+            knownVersions.set(versionKey(key, stationId), {
+              version: (data.version as number) ?? 1,
+              updatedAt: data.updated_at as string | undefined,
+            });
             this.memoryCache.set(ck, { value, ts: Date.now() });
             writeCache(ck, value);
             // Auto-heal: if the stored row was a double-encoded string,
@@ -407,7 +509,7 @@ class CloudStorageService {
       const usId = userScopedId(key, ownerId);
       const { data: usData, error: usError } = await client
         .from("app_kv")
-        .select("data")
+        .select("data, version, updated_at")
         .eq("id", usId)
         .eq("owner_id", ownerId)
         .maybeSingle();
@@ -415,6 +517,10 @@ class CloudStorageService {
       if (usData?.data != null) {
         const value = decodeRow<T>(usData.data);
         if (value != null) {
+          knownVersions.set(versionKey(key, stationId), {
+            version: (usData.version as number) ?? 1,
+            updatedAt: usData.updated_at as string | undefined,
+          });
           this.memoryCache.set(ck, { value, ts: Date.now() });
           writeCache(ck, value);
           if (typeof usData.data === "string") {
@@ -430,13 +536,17 @@ class CloudStorageService {
       if (key !== usId) {
         const { data: legacy } = await client
           .from("app_kv")
-          .select("data")
+          .select("data, version, updated_at")
           .eq("id", key)
           .eq("owner_id", ownerId)
           .maybeSingle();
         if (legacy?.data != null) {
           const value = decodeRow<T>(legacy.data);
           if (value != null) {
+            knownVersions.set(versionKey(key, stationId), {
+              version: (legacy.version as number) ?? 1,
+              updatedAt: legacy.updated_at as string | undefined,
+            });
             this.memoryCache.set(ck, { value, ts: Date.now() });
             writeCache(ck, value);
             this.set(key, value, stationId).catch(() => {});
@@ -452,13 +562,22 @@ class CloudStorageService {
   }
 
   /**
-   * Persist a value to cloud (app_kv) upsert. Also writes the local cache so
-   * subsequent reads are instant and offline-capable.
+   * Persist a value to cloud (app_kv) with optimistic concurrency. Also
+   * writes the local cache so subsequent reads are instant and offline-capable.
+   *
+   * MULTI-DEVICE CONFLICT RESOLUTION: this uses the `upsert_app_kv_versioned`
+   * RPC so a write only applies when the row's current version matches the
+   * version we last READ (via get()). If another device wrote a newer revision
+   * in between, the RPC returns `{ ok: false, data: <remote> }` and we MERGE
+   * our edit into the remote value (deep-merge objects; for arrays of records,
+   * union-by-id keeping the most recent), then retry once. This prevents the
+   * "two devices open → uncertain which data to rely on → silent overwrite"
+   * problem. When the RPC is unavailable (older DB without migration 020),
+   * we fall back to a plain upsert (last-writer-wins) so the app never breaks.
    *
    * When `stationId` is provided, writes the station-scoped row and sets the
    * `station_id` column so station-filtered queries work. The legacy bare-key
-   * row (if any) is left in place for combined-view reads; it is NOT deleted
-   * so a user toggling Combined View still sees aggregated data.
+   * row (if any) is left in place for combined-view reads; it is NOT deleted.
    */
   async set<T = Json>(
     key: string,
@@ -477,25 +596,93 @@ class CloudStorageService {
       return;
     }
 
+    const scopedId = rowId(key, ownerId, stationId);
+    const stored = compressJson(value);
+    const expected = knownVersions.get(versionKey(key, stationId));
+    const expectedVersion = expected?.version ?? null;
+
     try {
       const client = getSupabaseClient();
-      // Compress the payload before writing to the DB to save storage space.
-      // compressJson returns the original value unchanged when it's too small
-      // to benefit, so tiny rows incur no overhead. The compressed form stays
-      // in the DB until the next read decompresses it (decodeRow in get()).
-      const stored = compressJson(value);
-      const { error } = await client.from("app_kv").upsert(
+      // Try the versioned conditional upsert (optimistic concurrency).
+      const { data: rpcData, error: rpcError } = await client.rpc(
+        "upsert_app_kv_versioned",
         {
-          id: rowId(key, ownerId, stationId),
-          collection: COLLECTION,
-          owner_id: ownerId,
-          station_id: stationId ?? null,
-          data: stored as unknown as Json,
-          updated_at: new Date().toISOString(),
+          p_id: scopedId,
+          p_owner_id: ownerId,
+          p_station_id: stationId ?? null,
+          p_collection: COLLECTION,
+          p_data: stored as unknown as Json,
+          p_expected_version: expectedVersion,
         },
-        { onConflict: "id" },
       );
-      if (error) throw error;
+      if (rpcError) {
+        // RPC missing (migration not applied yet) → fall back to plain upsert.
+        const { error } = await client.from("app_kv").upsert(
+          {
+            id: scopedId,
+            collection: COLLECTION,
+            owner_id: ownerId,
+            station_id: stationId ?? null,
+            data: stored as unknown as Json,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "id" },
+        );
+        if (error) throw error;
+      } else if (rpcData && (rpcData as { ok?: boolean }).ok === false) {
+        // CONFLICT: a newer revision exists on another device. Merge our edit
+        // into the remote value and retry once with the remote's version.
+        const remote = (rpcData as {
+          data: unknown;
+          version: number;
+        }).data;
+        const remoteVersion = (rpcData as { version: number }).version;
+        const remoteValue = decodeRow<T>(remote);
+        const merged = mergeValues(remoteValue, value) as T;
+        const mergedStored = compressJson(merged);
+        // Retry with the remote's version as the new expectation.
+        const { data: retryData, error: retryError } = await client.rpc(
+          "upsert_app_kv_versioned",
+          {
+            p_id: scopedId,
+            p_owner_id: ownerId,
+            p_station_id: stationId ?? null,
+            p_collection: COLLECTION,
+            p_data: mergedStored as unknown as Json,
+            p_expected_version: remoteVersion,
+          },
+        );
+        if (retryError) throw retryError;
+        // Record the new version from the retry response so future writes are
+        // consistent; update cache + memory to the merged result.
+        const retryVersion = (retryData as { version?: number })?.version;
+        if (typeof retryVersion === "number") {
+          knownVersions.set(versionKey(key, stationId), {
+            version: retryVersion,
+          });
+        }
+        writeCache(ck, merged);
+        this.memoryCache.set(ck, { value: merged, ts: Date.now() });
+      } else {
+        // Write applied. Record the new version for the next write.
+        const newVersion = (rpcData as { version?: number })?.version;
+        if (typeof newVersion === "number") {
+          knownVersions.set(versionKey(key, stationId), { version: newVersion });
+        } else {
+          // Fallback: re-read the version to stay consistent.
+          const { data: cur } = await client
+            .from("app_kv")
+            .select("version, updated_at")
+            .eq("id", scopedId)
+            .maybeSingle();
+          if (cur) {
+            knownVersions.set(versionKey(key, stationId), {
+              version: (cur.version as number) ?? 1,
+              updatedAt: cur.updated_at as string | undefined,
+            });
+          }
+        }
+      }
       // Success — remove any previously-queued op for this key (it's now live).
       this.dequeueKey(key, stationId);
     } catch (err) {
@@ -562,6 +749,12 @@ class CloudStorageService {
    * visibility change, and a periodic timer. Each queued op is replayed in
    * order; successfully-applied ops are removed. Returns the number of ops
    * still pending (0 = fully synced).
+   *
+   * After a successful flush the in-memory cache is invalidated for the
+   * affected keys and a `cloudStorageSynced` CustomEvent is dispatched so any
+   * listening component re-fetches and re-renders with the now-synced data —
+   * this is what makes offline edits "take effect immediately when back
+   * online" without requiring a manual refresh.
    */
   async flushOfflineQueue(): Promise<number> {
     const queue = readQueue();
@@ -571,23 +764,38 @@ class CloudStorageService {
     if (!ownerId) return queue.length;
 
     const remaining: QueuedOp[] = [];
+    const flushedKeys: Array<{ key: string; stationId?: string }> = [];
     let succeeded = 0;
     for (const op of queue) {
       try {
         const client = getSupabaseClient();
         if (op.op === "set") {
-          const { error } = await client.from("app_kv").upsert(
-            {
-              id: rowId(op.key, ownerId, op.stationId),
-              collection: COLLECTION,
-              owner_id: ownerId,
-              station_id: op.stationId ?? null,
-              data: op.value,
-              updated_at: new Date().toISOString(),
-            },
-            { onConflict: "id" },
-          );
-          if (error) throw error;
+          // Compress the queued value before writing (mirrors set()).
+          const stored = compressJson(op.value);
+          const scopedId = rowId(op.key, ownerId, op.stationId);
+          // Try the versioned RPC; fall back to plain upsert if unavailable.
+          const { error: rpcErr } = await client.rpc("upsert_app_kv_versioned", {
+            p_id: scopedId,
+            p_owner_id: ownerId,
+            p_station_id: op.stationId ?? null,
+            p_collection: COLLECTION,
+            p_data: stored as unknown as Json,
+            p_expected_version: null,
+          });
+          if (rpcErr) {
+            const { error } = await client.from("app_kv").upsert(
+              {
+                id: scopedId,
+                collection: COLLECTION,
+                owner_id: ownerId,
+                station_id: op.stationId ?? null,
+                data: stored as unknown as Json,
+                updated_at: new Date().toISOString(),
+              },
+              { onConflict: "id" },
+            );
+            if (error) throw error;
+          }
         } else {
           const scopedId = rowId(op.key, ownerId, op.stationId);
           const { error } = await client
@@ -598,6 +806,7 @@ class CloudStorageService {
           if (error) throw error;
         }
         succeeded++;
+        flushedKeys.push({ key: op.key, stationId: op.stationId });
       } catch {
         // Keep this op in the queue for the next flush attempt.
         remaining.push(op);
@@ -605,9 +814,27 @@ class CloudStorageService {
     }
     writeQueue(remaining);
     if (succeeded > 0) {
+      // Invalidate the memory cache for each flushed key so the next get()
+      // reads the freshly-synced cloud value, then notify the UI.
+      for (const { key, stationId } of flushedKeys) {
+        this.invalidate(key, stationId);
+      }
       console.log(
         `[CloudStorage] Flushed ${succeeded} offline write(s); ${remaining.length} still pending.`,
       );
+      // Tell any listening component to reload from cloud. This is the bridge
+      // between a background flush and the React layer that needs to refresh.
+      if (typeof window !== "undefined") {
+        try {
+          window.dispatchEvent(
+            new CustomEvent("cloudStorageSynced", {
+              detail: { count: succeeded, keys: flushedKeys },
+            }),
+          );
+        } catch {
+          /* ignore */
+        }
+      }
     }
     return remaining.length;
   }
@@ -932,10 +1159,11 @@ if (typeof window !== "undefined") {
       });
   };
 
-  // 1. Browser reports connectivity is back.
+  // 1. Browser reports connectivity is back. Minimal delay — the session is
+  //    usually already valid on a reconnect; flushing immediately is what
+  //    makes offline edits "take effect when back online" without lag.
   window.addEventListener("online", () => {
-    // Small delay to let auth/session settle after a reconnect.
-    setTimeout(safeFlush, 1500);
+    setTimeout(safeFlush, 500);
   });
 
   // 2. Tab becomes visible again (user returns to the app after being away).

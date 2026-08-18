@@ -1084,28 +1084,34 @@ export default function SalesTracking() {
                     <label className="text-xs">Till/M-Pesa</label>
                     <input
                       type="number"
-                      value={editableResult.tillAmount || 0}
+                      value={editableResult.tillAmount ?? ""}
                       onChange={(e) =>
                         updateEditableField(
                           "tillAmount",
-                          parseFloat(e.target.value) || 0,
+                          e.target.value === ""
+                            ? 0
+                            : parseFloat(e.target.value) || 0,
                         )
                       }
                       className="text-sm"
+                      placeholder="0"
                     />
                   </div>
                   <div className="form-group">
                     <label className="text-xs">Cash</label>
                     <input
                       type="number"
-                      value={editableResult.cashAmount || 0}
+                      value={editableResult.cashAmount ?? ""}
                       onChange={(e) =>
                         updateEditableField(
                           "cashAmount",
-                          parseFloat(e.target.value) || 0,
+                          e.target.value === ""
+                            ? 0
+                            : parseFloat(e.target.value) || 0,
                         )
                       }
                       className="text-sm"
+                      placeholder="0"
                     />
                   </div>
                 </div>
@@ -1143,12 +1149,14 @@ export default function SalesTracking() {
                           </select>
                           <input
                             type="number"
-                            value={pump.salesAmount}
+                            value={pump.salesAmount ?? ""}
                             onChange={(e) =>
                               updateEditablePump(
                                 i,
                                 "salesAmount",
-                                parseFloat(e.target.value) || 0,
+                                e.target.value === ""
+                                  ? 0
+                                  : parseFloat(e.target.value) || 0,
                               )
                             }
                             className="w-24 px-2 py-1 rounded border text-xs"
@@ -1187,12 +1195,14 @@ export default function SalesTracking() {
                             />
                             <input
                               type="number"
-                              value={expense.amount}
+                              value={expense.amount ?? ""}
                               onChange={(e) =>
                                 updateEditableExpense(
                                   i,
                                   "amount",
-                                  parseFloat(e.target.value) || 0,
+                                  e.target.value === ""
+                                    ? 0
+                                    : parseFloat(e.target.value) || 0,
                                 )
                               }
                               className="w-24 px-2 py-1 rounded border text-xs"
@@ -1388,28 +1398,34 @@ export default function SalesTracking() {
                     <label>Opening Meter (L)</label>
                     <input
                       type="number"
-                      value={tankVal.opening}
+                      value={tankVal.opening ?? ""}
                       onChange={(e) =>
                         setTank(
-                          parseFloat(e.target.value) || 0,
+                          e.target.value === ""
+                            ? 0
+                            : parseFloat(e.target.value) || 0,
                           tankVal.closing,
                         )
                       }
                       step="0.1"
+                      placeholder="0"
                     />
                   </div>
                   <div className="form-group">
                     <label>Closing Meter (L)</label>
                     <input
                       type="number"
-                      value={tankVal.closing}
+                      value={tankVal.closing ?? ""}
                       onChange={(e) =>
                         setTank(
                           tankVal.opening,
-                          parseFloat(e.target.value) || 0,
+                          e.target.value === ""
+                            ? 0
+                            : parseFloat(e.target.value) || 0,
                         )
                       }
                       step="0.1"
+                      placeholder="0"
                     />
                   </div>
                 </div>
