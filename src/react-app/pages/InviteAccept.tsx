@@ -259,6 +259,9 @@ export default function InviteAccept() {
     // 3) Upsert into the DB station_members table (server-side, cross-device,
     //    RLS-validated). This is the authoritative membership record used by
     //    AuthContext.syncBindingsFromCloud on every subsequent device login.
+    //    We ALSO store a cloud-KV backup so membership persists even when the
+    //    station_id is NOT a UUID (e.g. "default" or a legacy string id) — the
+    //    DB table requires a UUID station_id, but app_kv accepts any string.
     try {
       const sc = getSupabaseClient();
       const stationId = invite.stationId || "default";
@@ -277,7 +280,13 @@ export default function InviteAccept() {
             status: "accepted",
             invite_token: invite.id,
             invited_by_name: invite.createdBy,
+            invited_by_unique_id: invite.createdByUniqueId || null,
             expires_at: invite.expiresAt || null,
+            max_uses: invite.maxUses || 1,
+            can_create_subusers: invite.canCreateSubUsers || false,
+            can_grant_permissions: invite.canGrantPermissions || false,
+            member_email: user.email,
+            member_role: invite.role,
           },
           { onConflict: "station_id,user_id" },
         );
@@ -287,6 +296,50 @@ export default function InviteAccept() {
             dbErr.message,
           );
         }
+      }
+      // ALWAYS also store in cloud KV (app_kv) so membership persists for
+      // non-UUID station ids AND so the binding survives across devices even
+      // if the DB table has RLS issues. This is the same store the
+      // PermissionContext uses for team_members.
+      try {
+        const { cloudStorageService } = await import(
+          "@/react-app/lib/cloud-storage-service"
+        );
+        const membershipKey = "station_memberships";
+        const existing =
+          (await cloudStorageService.get<
+            Array<{
+              stationId: string;
+              stationName: string;
+              role: string;
+              userId: string;
+              email: string;
+              username: string;
+              invitedBy: string;
+              acceptedAt: string;
+            }>
+          >(membershipKey, stationId)) || [];
+        const idx = existing.findIndex(
+          (m) => m.stationId === stationId && m.userId === user.id,
+        );
+        const record = {
+          stationId,
+          stationName: invite.stationName || "Fuel Station",
+          role: invite.role,
+          userId: user.id,
+          email: user.email,
+          username: username.trim(),
+          invitedBy: invite.createdBy || "owner",
+          acceptedAt: new Date().toISOString(),
+        };
+        if (idx >= 0) {
+          existing[idx] = record;
+        } else {
+          existing.push(record);
+        }
+        await cloudStorageService.set(membershipKey, existing, stationId);
+      } catch (kvErr) {
+        console.warn("[InviteAccept] cloud KV membership write failed:", kvErr);
       }
     } catch (e) {
       console.warn("[InviteAccept] DB membership write failed:", e);
@@ -302,6 +355,29 @@ export default function InviteAccept() {
       invite.createdBy,
       invite.expiresAt,
     );
+
+    // 4b) Persist the station context so Home.tsx picks the right station on
+    //     the next reload. Without this, the invitee lands on the owner's
+    //     station (or "create station" screen) instead of the shared one.
+    try {
+      localStorage.setItem(
+        "fuelpro_current_station",
+        JSON.stringify({
+          stationId: invite.stationId || "default",
+          role: invite.role,
+        }),
+      );
+      localStorage.setItem(
+        "fuelpro_current_station_v3",
+        JSON.stringify({
+          stationId: invite.stationId || "default",
+          stationName: invite.stationName || "Fuel Station",
+          role: invite.role,
+        }),
+      );
+    } catch {
+      /* ignore quota errors */
+    }
 
     // 5) Record invite usage in localStorage (browser-local cache for the
     //    "already used by a different user" check on this device).

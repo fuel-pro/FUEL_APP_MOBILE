@@ -1025,13 +1025,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return bindings.some((b) => b.active && b.authId === user.authId);
   }, [bindings, user]);
 
-  // Sync role bindings from cloud (station_members table) — ensures cross-device station access
+  // Sync role bindings from cloud (station_members table + cloud KV) —
+  // ensures cross-device station access. Reads from BOTH the DB table (for
+  // UUID station ids) AND the cloud-KV `station_memberships` store (for any
+  // station id, including non-UUID legacy ids). This dual-source approach
+  // guarantees the invitee's binding persists regardless of the station id
+  // format.
   const syncBindingsFromCloud = useCallback(async () => {
     if (!user) return;
+    const cloudBindings: StationRoleBinding[] = [];
+    const sc = getSupabaseClient();
+    // Source 1: DB station_members table (UUID station ids only).
     try {
-      const sc = getSupabaseClient();
-      // Fetch accepted memberships for this user (by user_id or invited_email),
-      // joining stations to get the real station name (not the member's name).
       const { data: members, error } = await sc
         .from("station_members")
         .select("station_id, role, status, name, stations:station_id(name)")
@@ -1039,14 +1044,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .in("status", ["accepted", "active"]);
       if (error) {
         console.warn(
-          "[AuthContext] syncBindingsFromCloud error:",
+          "[AuthContext] syncBindingsFromCloud DB error:",
           error.message,
         );
-        return;
-      }
-      if (members && members.length > 0) {
-        setBindings((prev) => {
-          const cloudBindings: StationRoleBinding[] = members.map((m: any) => ({
+      } else if (members && members.length > 0) {
+        for (const m of members as any[]) {
+          cloudBindings.push({
             stationId: m.station_id,
             stationName: m.stations?.name || m.name || "Shared Station",
             role: (m.role as StationRoleBinding["role"]) || "staff",
@@ -1054,18 +1057,63 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             joinedAt: new Date().toISOString(),
             active: true,
             authId: user.authId,
-          }));
-          // Merge: keep existing owner bindings, add/update cloud bindings
-          const existingIds = new Set(cloudBindings.map((b) => b.stationId));
-          const merged = [
-            ...prev.filter((b) => !existingIds.has(b.stationId)),
-            ...cloudBindings,
-          ];
-          return merged;
-        });
+          });
+        }
       }
     } catch (err) {
-      console.warn("[AuthContext] syncBindingsFromCloud failed:", err);
+      console.warn("[AuthContext] syncBindingsFromCloud DB failed:", err);
+    }
+    // Source 2: cloud-KV station_memberships store (any station id format).
+    try {
+      const { data: allRows, error: kvErr } = await sc
+        .from("app_kv")
+        .select("id, data")
+        .eq("collection", "fuel_data")
+        .ilike("id", "station_memberships__%");
+      if (!kvErr && allRows) {
+        for (const row of allRows as any[]) {
+          let memberships: any[] = row.data;
+          if (typeof memberships === "string") {
+            try {
+              memberships = JSON.parse(memberships);
+            } catch {
+              continue;
+            }
+          }
+          if (!Array.isArray(memberships)) continue;
+          const mine = memberships.filter(
+            (m: any) =>
+              m?.userId === user.id ||
+              (m?.email && user.email && m.email === user.email),
+          );
+          for (const m of mine) {
+            // Don't duplicate if already found via the DB table.
+            if (cloudBindings.some((b) => b.stationId === m.stationId))
+              continue;
+            cloudBindings.push({
+              stationId: m.stationId,
+              stationName: m.stationName || "Shared Station",
+              role: (m.role as StationRoleBinding["role"]) || "staff",
+              invitedBy: m.invitedBy || "cloud",
+              joinedAt: m.acceptedAt || new Date().toISOString(),
+              active: true,
+              authId: user.authId,
+            });
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("[AuthContext] syncBindingsFromCloud KV failed:", err);
+    }
+    if (cloudBindings.length > 0) {
+      setBindings((prev) => {
+        const existingIds = new Set(cloudBindings.map((b) => b.stationId));
+        const merged = [
+          ...prev.filter((b) => !existingIds.has(b.stationId)),
+          ...cloudBindings,
+        ];
+        return merged;
+      });
     }
   }, [user]);
 
