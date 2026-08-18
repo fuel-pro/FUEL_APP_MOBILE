@@ -75,6 +75,13 @@ export interface CompanyData {
   email: string;
   logo: string;
   currency: string;
+  // Explicit currency CODE (e.g. "USD") stored separately from `currency`
+  // (which historically held a symbol like "$" / "KSh"). Resolved at display
+  // time via resolveCurrencySymbol() so cross-currency reloads stay correct.
+  companyCurrency?: string;
+  // ISO country code for the station (e.g. "US", "KE") used for tax-regime
+  // detection. `county` below is the sub-national region (Kenya county).
+  country?: string;
   bankName: string;
   branchName: string;
   accountHolder: string;
