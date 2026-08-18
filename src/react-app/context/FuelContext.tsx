@@ -95,10 +95,6 @@ export interface CompanyData {
   etrSerialNo: string;
   cuSerialNo: string;
   etrInvoicePrefix: string;
-  // Optional — present when set via SetupWizard / cloud hydration. Used by
-  // PointOfSale tax logic and currency resolution.
-  companyCurrency?: string;
-  country?: string;
 }
 
 export interface DeliveryColumn {
