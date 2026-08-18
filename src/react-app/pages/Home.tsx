@@ -507,20 +507,14 @@ function HomeContent() {
     // sync pending or offline). Do NOT re-run the wizard — show a loading
     // state that retries the cloud sync. Only brand-new users (no setup flag)
     // or users who explicitly clicked "create station" see the wizard.
-    if (
-      setupAlreadyCompleted &&
-      !showSetupWizard &&
-      !hasActiveBindings
-    ) {
+    if (setupAlreadyCompleted && !showSetupWizard && !hasActiveBindings) {
       return (
         <div className="min-h-screen bg-gradient-to-br from-slate-900 via-indigo-900 to-slate-900 flex items-center justify-center">
           <div className="text-center max-w-md px-4">
             <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-amber-400 to-amber-600 rounded-2xl flex items-center justify-center animate-pulse">
               <span className="text-2xl font-bold text-white">F</span>
             </div>
-            <h2 className="text-xl font-bold text-white font-serif">
-              FuelPro
-            </h2>
+            <h2 className="text-xl font-bold text-white font-serif">FuelPro</h2>
             <p className="text-gray-300 text-sm mt-2">
               Loading your station data…
             </p>

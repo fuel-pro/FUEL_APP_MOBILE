@@ -257,10 +257,7 @@ function enqueueSet(
   writeQueue(q);
 }
 
-function enqueueDelete(
-  key: string,
-  stationId: string | undefined,
-): void {
+function enqueueDelete(key: string, stationId: string | undefined): void {
   const q = readQueue().filter(
     (op) => !(op.key === key && op.stationId === stationId),
   );
@@ -270,7 +267,8 @@ function enqueueDelete(
 
 function removeQueuedOp(op: QueuedOp): void {
   const q = readQueue().filter(
-    (o) => !(o.key === op.key && o.stationId === op.stationId && o.ts === op.ts),
+    (o) =>
+      !(o.key === op.key && o.stationId === op.stationId && o.ts === op.ts),
   );
   writeQueue(q);
 }

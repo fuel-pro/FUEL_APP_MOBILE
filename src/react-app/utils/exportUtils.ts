@@ -671,10 +671,7 @@ export async function exportSalesPDF(state: any) {
     y = (doc as any).lastAutoTable.finalY + 10;
     const totalExp =
       state.summary?.totalExpenses ??
-      state.expenses.reduce(
-        (sum: number, e: any) => sum + (e.amount || 0),
-        0,
-      );
+      state.expenses.reduce((sum: number, e: any) => sum + (e.amount || 0), 0);
     doc.setFont("helvetica", "bold");
     doc.text(
       `Total Expenses: ${currencySymbol} ${formatNumber(totalExp, 2)}`,

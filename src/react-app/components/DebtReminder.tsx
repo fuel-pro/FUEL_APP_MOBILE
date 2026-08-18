@@ -108,7 +108,9 @@ export default function DebtReminder() {
         window.open(url, "_blank");
       }
       // SMS: no browser-native send; gateway integration needed.
-      showToast(`Auto-reminder sent to ${reminder.customerName} via ${reminder.method}`);
+      showToast(
+        `Auto-reminder sent to ${reminder.customerName} via ${reminder.method}`,
+      );
     },
     [showToast],
   );
@@ -122,9 +124,7 @@ export default function DebtReminder() {
             loadScheduledReminders();
           }
         })
-        .catch((err) =>
-          console.error("Scheduled reminder check failed:", err),
-        );
+        .catch((err) => console.error("Scheduled reminder check failed:", err));
     };
     // Check immediately on mount.
     check();
@@ -209,8 +209,14 @@ export default function DebtReminder() {
 
   const formatSchedule = (r: ScheduledReminder): string => {
     const parts: string[] = [];
-    parts.push(r.minute !== null ? `:${String(r.minute).padStart(2, "0")}` : "every minute");
-    parts.push(r.hour !== null ? `${String(r.hour).padStart(2, "0")}h` : "every hour");
+    parts.push(
+      r.minute !== null
+        ? `:${String(r.minute).padStart(2, "0")}`
+        : "every minute",
+    );
+    parts.push(
+      r.hour !== null ? `${String(r.hour).padStart(2, "0")}h` : "every hour",
+    );
     parts.push(r.dayOfMonth !== null ? `day ${r.dayOfMonth}` : "every day");
     parts.push(r.month !== null ? `month ${r.month}` : "every month");
     return parts.join(", ");
@@ -583,7 +589,9 @@ export default function DebtReminder() {
                 />
               </div>
               <div>
-                <label className="text-xs text-gray-500">Amount ({currencySymbol})</label>
+                <label className="text-xs text-gray-500">
+                  Amount ({currencySymbol})
+                </label>
                 <input
                   type="text"
                   value={schedAmount}
@@ -593,7 +601,9 @@ export default function DebtReminder() {
                 />
               </div>
               <div>
-                <label className="text-xs text-gray-500">Contact (phone/email) *</label>
+                <label className="text-xs text-gray-500">
+                  Contact (phone/email) *
+                </label>
                 <input
                   type="text"
                   value={schedContact}
@@ -606,7 +616,9 @@ export default function DebtReminder() {
                 <label className="text-xs text-gray-500">Method</label>
                 <select
                   value={schedMethod}
-                  onChange={(e) => setSchedMethod(e.target.value as ReminderMethod)}
+                  onChange={(e) =>
+                    setSchedMethod(e.target.value as ReminderMethod)
+                  }
                   className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
                 >
                   <option value="whatsapp">WhatsApp</option>
@@ -742,7 +754,11 @@ export default function DebtReminder() {
                       {formatSchedule(r)}
                     </span>
                     <span>
-                      {r.method === "whatsapp" ? "📱 WhatsApp" : r.method === "email" ? "✉️ Email" : "💬 SMS"}
+                      {r.method === "whatsapp"
+                        ? "📱 WhatsApp"
+                        : r.method === "email"
+                          ? "✉️ Email"
+                          : "💬 SMS"}
                     </span>
                     <span>→ {r.contact}</span>
                   </div>
@@ -753,7 +769,10 @@ export default function DebtReminder() {
                     className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg"
                     title={r.enabled ? "Pause" : "Enable"}
                   >
-                    <Bell size={14} className={r.enabled ? "text-green-600" : "text-gray-400"} />
+                    <Bell
+                      size={14}
+                      className={r.enabled ? "text-green-600" : "text-gray-400"}
+                    />
                   </button>
                   <button
                     onClick={() => handleDeleteScheduled(r.id)}

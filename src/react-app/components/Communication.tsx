@@ -1546,8 +1546,10 @@ function CommSettingsTab({ stationId }: { stationId?: string }) {
     }
   };
 
-  const update = (field: keyof CommIntegrationConfig, value: string | boolean) =>
-    setConfig((prev) => ({ ...prev, [field]: value }));
+  const update = (
+    field: keyof CommIntegrationConfig,
+    value: string | boolean,
+  ) => setConfig((prev) => ({ ...prev, [field]: value }));
 
   return (
     <div className="space-y-6">
@@ -1565,7 +1567,9 @@ function CommSettingsTab({ stationId }: { stationId?: string }) {
 
       {/* Default Sender Info */}
       <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
-        <h4 className="font-semibold dark:text-white mb-3">Default Sender Info</h4>
+        <h4 className="font-semibold dark:text-white mb-3">
+          Default Sender Info
+        </h4>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div>
             <label className="text-xs text-gray-500">Station Name</label>
@@ -1640,7 +1644,9 @@ function CommSettingsTab({ stationId }: { stationId?: string }) {
             />
           </div>
           <div>
-            <label className="text-xs text-gray-500">Sender ID / Shortcode</label>
+            <label className="text-xs text-gray-500">
+              Sender ID / Shortcode
+            </label>
             <input
               type="text"
               value={config.smsSender}

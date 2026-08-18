@@ -30,7 +30,9 @@ export default function StationAccess() {
     setSession(getAccessSession());
     // Pre-fill from URL query params if present (owner can share a
     // pre-filled link: /#/station-access?owner=<uid>&station=<sid>).
-    const params = new URLSearchParams(window.location.hash.split("?")[1] || "");
+    const params = new URLSearchParams(
+      window.location.hash.split("?")[1] || "",
+    );
     const owner = params.get("owner");
     const station = params.get("station");
     if (owner) setStationOwnerId(owner);
@@ -85,9 +87,7 @@ export default function StationAccess() {
               <h1 className="text-xl font-bold dark:text-white">
                 Station Access
               </h1>
-              <p className="text-sm text-gray-500">
-                Logged in as team member
-              </p>
+              <p className="text-sm text-gray-500">Logged in as team member</p>
             </div>
           </div>
 

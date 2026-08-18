@@ -48,10 +48,7 @@ function isDue(reminder: ScheduledReminder, now: Date): boolean {
   if (reminder.minute !== null && reminder.minute !== now.getMinutes())
     return false;
   if (reminder.hour !== null && reminder.hour !== now.getHours()) return false;
-  if (
-    reminder.dayOfMonth !== null &&
-    reminder.dayOfMonth !== now.getDate()
-  )
+  if (reminder.dayOfMonth !== null && reminder.dayOfMonth !== now.getDate())
     return false;
   if (reminder.month !== null && reminder.month !== now.getMonth() + 1)
     return false;
@@ -70,8 +67,7 @@ export function computeNextFireTime(r: ScheduledReminder): number | null {
     const candidate = new Date(now.getTime() + i * 60_000);
     if (r.minute !== null && r.minute !== candidate.getMinutes()) continue;
     if (r.hour !== null && r.hour !== candidate.getHours()) continue;
-    if (r.dayOfMonth !== null && r.dayOfMonth !== candidate.getDate())
-      continue;
+    if (r.dayOfMonth !== null && r.dayOfMonth !== candidate.getDate()) continue;
     if (r.month !== null && r.month !== candidate.getMonth() + 1) continue;
     return candidate.getTime();
   }
@@ -106,7 +102,10 @@ export async function saveScheduledReminders(
 }
 
 export async function addScheduledReminder(
-  reminder: Omit<ScheduledReminder, "id" | "createdAt" | "lastFiredAt" | "nextFireAt">,
+  reminder: Omit<
+    ScheduledReminder,
+    "id" | "createdAt" | "lastFiredAt" | "nextFireAt"
+  >,
   stationId?: string,
 ): Promise<ScheduledReminder> {
   const existing = await getScheduledReminders(stationId);

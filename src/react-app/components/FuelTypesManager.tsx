@@ -559,7 +559,11 @@ export default function FuelTypesManager() {
     const updatePump = (pumps: Pump[], idx: number, name: string): Pump[] =>
       pumps.map((p, i) =>
         i === idx
-          ? { ...p, name, id: `${code}-${idx + 1}-${name.replace(/\s+/g, "-").toLowerCase().slice(0, 8)}` }
+          ? {
+              ...p,
+              name,
+              id: `${code}-${idx + 1}-${name.replace(/\s+/g, "-").toLowerCase().slice(0, 8)}`,
+            }
           : p,
       );
     if (canonical === "petrol" && state.pmsPumps) {
@@ -744,7 +748,11 @@ export default function FuelTypesManager() {
                     step="0.01"
                     value={formPrice === "" ? "" : formPrice}
                     onChange={(e) =>
-                      setFormPrice(e.target.value === "" ? "" : parseFloat(e.target.value) || 0)
+                      setFormPrice(
+                        e.target.value === ""
+                          ? ""
+                          : parseFloat(e.target.value) || 0,
+                      )
                     }
                     className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
                   />
@@ -758,7 +766,11 @@ export default function FuelTypesManager() {
                     step="0.01"
                     value={formCostPrice === "" ? "" : formCostPrice}
                     onChange={(e) =>
-                      setFormCostPrice(e.target.value === "" ? "" : parseFloat(e.target.value) || 0)
+                      setFormCostPrice(
+                        e.target.value === ""
+                          ? ""
+                          : parseFloat(e.target.value) || 0,
+                      )
                     }
                     className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
                   />
@@ -771,7 +783,11 @@ export default function FuelTypesManager() {
                     type="number"
                     value={formTaxRate === "" ? "" : formTaxRate}
                     onChange={(e) =>
-                      setFormTaxRate(e.target.value === "" ? "" : parseFloat(e.target.value) || 0)
+                      setFormTaxRate(
+                        e.target.value === ""
+                          ? ""
+                          : parseFloat(e.target.value) || 0,
+                      )
                     }
                     className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
                   />
@@ -784,7 +800,11 @@ export default function FuelTypesManager() {
                     type="number"
                     value={formPumps === "" ? "" : formPumps}
                     onChange={(e) =>
-                      setFormPumps(e.target.value === "" ? "" : parseInt(e.target.value) || 0)
+                      setFormPumps(
+                        e.target.value === ""
+                          ? ""
+                          : parseInt(e.target.value) || 0,
+                      )
                     }
                     className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
                   />
@@ -1053,9 +1073,7 @@ export default function FuelTypesManager() {
                                       state.fuelPumpsByType?.[canonical] || [];
                                   // If the pump store hasn't been seeded yet,
                                   // synthesize display rows from the count.
-                                  if (
-                                    pumps.length < (ft.pumpCount || 0)
-                                  ) {
+                                  if (pumps.length < (ft.pumpCount || 0)) {
                                     const code =
                                       ft.code ||
                                       (canonical

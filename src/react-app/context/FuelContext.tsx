@@ -963,7 +963,11 @@ function sanitizeTabConfigs(
   const merged = authoritative.map((t) => {
     const savedTab = savedMap.get(t.id);
     return savedTab
-      ? { ...t, visible: savedTab.visible ?? t.visible, order: savedTab.order ?? t.order }
+      ? {
+          ...t,
+          visible: savedTab.visible ?? t.visible,
+          order: savedTab.order ?? t.order,
+        }
       : t;
   });
   // Also include any saved tabs that are NOT in authoritative (custom user tabs),
@@ -1186,7 +1190,8 @@ function fuelReducer(state: FuelState, action: FuelAction): FuelState {
         currentVal: number | undefined,
         incomingVal: number | undefined,
       ): number => {
-        const cur = typeof currentVal === "number" && currentVal > 0 ? currentVal : 0;
+        const cur =
+          typeof currentVal === "number" && currentVal > 0 ? currentVal : 0;
         const inc =
           typeof incomingVal === "number" && incomingVal > 0 ? incomingVal : 0;
         // If incoming is 0/stale, keep current (preserves fuel_types_config price).
@@ -2164,7 +2169,8 @@ export function FuelProvider({ children }: { children: ReactNode }) {
           // applying a stale remote write would revert our changes and cause
           // the "data keeps conflicting" flicker. The first load (lastLocalSaveTs
           // === 0) always accepts the remote value.
-          const remoteTs = typeof cd.lastSavedAt === "number" ? cd.lastSavedAt : 0;
+          const remoteTs =
+            typeof cd.lastSavedAt === "number" ? cd.lastSavedAt : 0;
           if (
             lastLocalSaveTsRef.current > 0 &&
             remoteTs > 0 &&

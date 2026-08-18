@@ -1634,7 +1634,12 @@ function AccessCodesView({
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Delete this access code? The member will no longer be able to log in.")) return;
+    if (
+      !confirm(
+        "Delete this access code? The member will no longer be able to log in.",
+      )
+    )
+      return;
     await deleteAccessCode(id, stationId);
     load();
     setToast("Access code deleted");
@@ -1814,7 +1819,10 @@ function AccessCodesView({
                   className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg"
                   title={c.enabled ? "Disable" : "Enable"}
                 >
-                  <KeyRound size={14} className={c.enabled ? "text-green-600" : "text-gray-400"} />
+                  <KeyRound
+                    size={14}
+                    className={c.enabled ? "text-green-600" : "text-gray-400"}
+                  />
                 </button>
                 <button
                   onClick={() => handleDelete(c.id)}

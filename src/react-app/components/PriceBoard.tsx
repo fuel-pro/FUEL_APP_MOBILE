@@ -902,9 +902,7 @@ export default function PriceBoard() {
                         setFormData({
                           ...formData,
                           price:
-                            e.target.value === ""
-                              ? 0
-                              : Number(e.target.value),
+                            e.target.value === "" ? 0 : Number(e.target.value),
                         })
                       }
                       className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
