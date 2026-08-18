@@ -365,7 +365,7 @@ export default function DeveloperControlCenterSection({
   const runBatchAction = async () => {
     const target = batchTarget;
     let count = 0;
-    let action = batchAction;
+    const action = batchAction;
 
     if (action === "export") {
       const data = (store as any)[target] || [];

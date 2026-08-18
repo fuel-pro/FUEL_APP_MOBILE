@@ -160,9 +160,7 @@ export default function ExpenseTracker() {
   // local changes. When the user adds/edits/deletes an expense, we set this
   // ref so the echo from our own cloud write doesn't wipe local state.
   const localModifiedRef = useRef(false);
-  const localModifiedTimer = useRef<ReturnType<typeof setTimeout> | null>(
-    null,
-  );
+  const localModifiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const flagLocalModified = () => {
     localModifiedRef.current = true;
@@ -592,8 +590,7 @@ export default function ExpenseTracker() {
                           {exp.description || ""}
                         </td>
                         <td className="px-4 py-3 text-right font-medium text-gray-900 dark:text-white">
-                          {currencySymbol}{" "}
-                          {(exp.amount || 0).toLocaleString()}
+                          {currencySymbol} {(exp.amount || 0).toLocaleString()}
                         </td>
                         <td className="px-4 py-3 text-center">
                           <span
@@ -665,8 +662,7 @@ export default function ExpenseTracker() {
                         <CatIcon size={12} /> {cat.label}
                       </span>
                       <span className="text-gray-900 dark:text-white font-medium">
-                        {currencySymbol}{" "}
-                        {(cat.total || 0).toLocaleString()} (
+                        {currencySymbol} {(cat.total || 0).toLocaleString()} (
                         {(pct || 0).toFixed(1)}%)
                       </span>
                     </div>

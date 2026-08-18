@@ -117,6 +117,18 @@ export default function AuthLogin() {
   const [success, setSuccess] = useState("");
   const [googleLoading, setGoogleLoading] = useState(false);
 
+  // Clear the Google spinner once auth completes (token-flow success path —
+  // the failure path clears it in handleGoogleLogin). Also add a safety
+  // timeout so a stuck GIS prompt never leaves the button spinning forever.
+  useEffect(() => {
+    if (user && googleLoading) setGoogleLoading(false);
+  }, [user, googleLoading]);
+  useEffect(() => {
+    if (!googleLoading) return;
+    const t = setTimeout(() => setGoogleLoading(false), 30_000);
+    return () => clearTimeout(t);
+  }, [googleLoading]);
+
   // Stable callback for email change with persistence
   const handleEmailChange = useCallback(
     (value: string) => {
@@ -282,7 +294,16 @@ export default function AuthLogin() {
     const result = await loginWithGoogleToken();
     if (!result.success) {
       setGoogleLoading(false);
-      setLocalError(result.error || "Google sign-in failed. Please try again.");
+      const err = result.error || "Google sign-in failed. Please try again.";
+      // Surface a clear, actionable message when the Google OAuth client
+      // hasn't been configured yet (the most common cause of failure).
+      const actionable =
+        /redirect_uri_mismatch|redirect.*uri|doesn't comply|OAuth 2\.0 policy|origin|not enabled|provider not/i.test(
+          err,
+        )
+          ? "Google sign-in isn't fully configured yet. The app owner needs to add this site to the Google OAuth client's Authorized JavaScript origins and Authorized redirect URIs in the Google Cloud Console (a free, one-time setup). Email and Username sign-in still work."
+          : err;
+      setLocalError(actionable);
     }
     // On success via redirect fallback the browser navigates to Google; the
     // spinner stays until that happens. On success via token flow the
@@ -413,7 +434,9 @@ export default function AuthLogin() {
             ) : (
               <>
                 <GoogleLogo className="w-5 h-5" />
-                {mode === "register" ? "Sign up with Google" : "Sign in with Google"}
+                {mode === "register"
+                  ? "Sign up with Google"
+                  : "Sign in with Google"}
               </>
             )}
           </button>

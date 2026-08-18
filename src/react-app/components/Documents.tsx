@@ -28,6 +28,11 @@ import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 import { getCurrencySymbol } from "../lib/currency";
 import { getFuelLabel } from "@/react-app/config/pricing";
 import { getSupabaseClient } from "@/supabase/client";
+import {
+  compressBlob,
+  compressedFilePath,
+  isCompressibleMimeType,
+} from "@/react-app/lib/compression";
 
 interface DocumentFolder {
   id: number;
@@ -178,14 +183,29 @@ const uploadFileToStorage = async (
   if (!user) return null;
 
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-  const filePath = `documents/${user.id}/${Date.now()}-${safeName}`;
+  const baseFilePath = `documents/${user.id}/${Date.now()}-${safeName}`;
+
+  // Gzip text-based files to save Storage; binary formats stored as-is.
+  const shouldCompress = isCompressibleMimeType(file.type || "", file.name);
+  let uploadBlob: Blob = file;
+  let filePath = baseFilePath;
+  let storedContentType = file.type || undefined;
+  if (shouldCompress) {
+    try {
+      uploadBlob = await compressBlob(file);
+      filePath = compressedFilePath(baseFilePath);
+      storedContentType = "application/gzip";
+    } catch {
+      uploadBlob = file;
+    }
+  }
 
   const { error } = await supabase.storage
     .from("fuelpro-files")
-    .upload(filePath, file, {
+    .upload(filePath, uploadBlob, {
       cacheControl: "3600",
       upsert: false,
-      contentType: file.type || undefined,
+      contentType: storedContentType,
     });
 
   if (error) {
