@@ -1,11 +1,34 @@
-import { useState, useEffect } from "react";
-import { Lock, User, LogIn, LogOut, Eye, Shield } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import {
+  Lock,
+  User,
+  LogIn,
+  LogOut,
+  Eye,
+  Shield,
+  Fuel,
+  ShoppingBag,
+  CreditCard,
+  Receipt,
+  Truck,
+  Users,
+  Gauge,
+  DollarSign,
+  RefreshCw,
+  AlertCircle,
+  LayoutDashboard,
+  TrendingUp,
+} from "lucide-react";
 import {
   loginWithAccessCode,
   getAccessSession,
   clearAccessSession,
   type StationAccessSession,
 } from "@/react-app/lib/station-access-code-service";
+import {
+  getStationSnapshot,
+  type StationSnapshot,
+} from "@/react-app/lib/station-snapshot-service";
 
 /**
  * Station Access page — lets a team member log in with a username + password
@@ -25,6 +48,9 @@ export default function StationAccess() {
   const [stationId, setStationId] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [snapshot, setSnapshot] = useState<StationSnapshot | null>(null);
+  const [snapshotLoading, setSnapshotLoading] = useState(false);
+  const [activeView, setActiveView] = useState<string>("dashboard");
 
   useEffect(() => {
     setSession(getAccessSession());
@@ -68,86 +94,521 @@ export default function StationAccess() {
     }
   };
 
+  // Fetch the public station snapshot (no Supabase session needed — the
+  // object is in a public Storage bucket). Re-fetches every 30s so the
+  // member sees near-live updates when the owner republishes.
+  const loadSnapshot = useCallback(async (sid: string) => {
+    setSnapshotLoading(true);
+    try {
+      const snap = await getStationSnapshot(sid);
+      setSnapshot(snap);
+    } finally {
+      setSnapshotLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!session?.stationId) return;
+    loadSnapshot(session.stationId);
+    const interval = setInterval(() => {
+      loadSnapshot(session.stationId);
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [session?.stationId, loadSnapshot]);
+
   const handleLogout = () => {
     clearAccessSession();
     setSession(null);
+    setSnapshot(null);
     setUsername("");
     setPassword("");
   };
 
+  // The allowed-views list, filtered by the access code's allowedTabs. If
+  // allowedTabs is empty, the member can see everything (read-only).
+  const allowedTabs = session?.allowedTabs ?? [];
+  const allViews = [
+    { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { id: "sales", label: "Sales", icon: TrendingUp },
+    { id: "pos", label: "Point of Sale", icon: ShoppingBag },
+    { id: "inventory", label: "Inventory", icon: Gauge },
+    { id: "credit", label: "Credit", icon: CreditCard },
+    { id: "invoices", label: "Invoices", icon: Receipt },
+    { id: "offloading", label: "Offloading", icon: Truck },
+    { id: "team", label: "Team", icon: Users },
+    { id: "fuelprices", label: "Fuel Prices", icon: Fuel },
+    { id: "expenses", label: "Expenses", icon: DollarSign },
+  ];
+  const visibleViews =
+    allowedTabs.length === 0
+      ? allViews
+      : allViews.filter((v) => allowedTabs.includes(v.id));
+
   if (session) {
+    const currency = snapshot?.currency || "USD";
+    const fmt = (n: number | undefined | null) =>
+      Number.isFinite(n as number)
+        ? `${currency === "KES" ? "KSh" : "$"}${(n as number).toLocaleString(undefined, { maximumFractionDigits: 2 })}`
+        : "—";
+
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white dark:bg-gray-900 rounded-2xl shadow-xl p-8">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-12 h-12 bg-green-500/10 rounded-full flex items-center justify-center">
-              <Shield className="text-green-600" size={24} />
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex flex-col">
+        {/* Header */}
+        <header className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 sticky top-0 z-10">
+          <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-green-500/10 rounded-full flex items-center justify-center">
+                <Fuel className="text-green-600" size={20} />
+              </div>
+              <div>
+                <h1 className="text-lg font-bold dark:text-white leading-tight">
+                  {snapshot?.stationName || "Station Access"}
+                </h1>
+                <p className="text-xs text-gray-500 flex items-center gap-2 flex-wrap">
+                  <span className="flex items-center gap-1">
+                    <Shield size={11} /> {session.memberName} ·{" "}
+                    {session.memberRole}
+                  </span>
+                  <span
+                    className={`flex items-center gap-1 ${session.readOnly ? "text-blue-600" : "text-green-600"}`}
+                  >
+                    <Eye size={11} />
+                    {session.readOnly ? "Read-Only" : "Full Access"}
+                  </span>
+                </p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-xl font-bold dark:text-white">
-                Station Access
-              </h1>
-              <p className="text-sm text-gray-500">Logged in as team member</p>
-            </div>
+            <button
+              onClick={handleLogout}
+              className="px-3 py-2 bg-red-50 hover:bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-lg text-xs font-medium flex items-center gap-1.5"
+            >
+              <LogOut size={14} /> Log Out
+            </button>
           </div>
-
-          <div className="space-y-3 mb-6">
-            <div className="flex justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-              <span className="text-sm text-gray-500">Name</span>
-              <span className="text-sm font-medium dark:text-white">
-                {session.memberName}
-              </span>
-            </div>
-            <div className="flex justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-              <span className="text-sm text-gray-500">Role</span>
-              <span className="text-sm font-medium dark:text-white">
-                {session.memberRole}
-              </span>
-            </div>
-            <div className="flex justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-              <span className="text-sm text-gray-500">Access Mode</span>
-              <span
-                className={`text-sm font-medium flex items-center gap-1 ${session.readOnly ? "text-blue-600" : "text-green-600"}`}
-              >
-                {session.readOnly ? (
-                  <>
-                    <Eye size={14} /> Read-Only
-                  </>
-                ) : (
-                  "Full Access"
-                )}
-              </span>
-            </div>
-            <div className="flex justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-              <span className="text-sm text-gray-500">Allowed Tabs</span>
-              <span className="text-sm font-medium dark:text-white">
-                {session.allowedTabs.length === 0
-                  ? "All tabs"
-                  : `${session.allowedTabs.length} tabs`}
-              </span>
-            </div>
+          {/* View switcher — the "approved sections" the member can access */}
+          <div className="max-w-6xl mx-auto px-4 pb-3 flex gap-2 overflow-x-auto">
+            {visibleViews.map((v) => {
+              const Icon = v.icon;
+              const isActive = activeView === v.id;
+              return (
+                <button
+                  key={v.id}
+                  onClick={() => setActiveView(v.id)}
+                  className={`px-3 py-2 rounded-lg text-xs font-medium flex items-center gap-1.5 whitespace-nowrap transition-colors ${isActive ? "bg-indigo-600 text-white" : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"}`}
+                >
+                  <Icon size={14} /> {v.label}
+                </button>
+              );
+            })}
           </div>
+        </header>
 
-          <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg mb-6">
-            <p className="text-xs text-blue-700 dark:text-blue-300">
-              You are viewing the station's shared data as{" "}
-              <strong>{session.memberName}</strong>.{" "}
-              {session.readOnly
-                ? "You have read-only access — changes are not saved."
-                : "You have edit access to the allowed tabs."}
-              {session.allowedTabs.length > 0 &&
-                ` Access is limited to: ${session.allowedTabs.join(", ")}.`}
-            </p>
-          </div>
+        {/* Content */}
+        <main className="flex-1 max-w-6xl mx-auto w-full px-4 py-6">
+          {snapshotLoading && !snapshot && (
+            <div className="flex items-center justify-center gap-2 text-gray-400 py-12">
+              <RefreshCw size={18} className="animate-spin" />
+              Loading station data…
+            </div>
+          )}
 
-          <button
-            onClick={handleLogout}
-            className="w-full py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-medium flex items-center justify-center gap-2"
-          >
-            <LogOut size={18} />
-            Log Out
-          </button>
-        </div>
+          {!snapshotLoading && !snapshot && (
+            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-6 text-center">
+              <AlertCircle className="mx-auto text-amber-500 mb-2" size={32} />
+              <h3 className="font-semibold text-amber-800 dark:text-amber-300 mb-1">
+                No shared data available yet
+              </h3>
+              <p className="text-sm text-amber-700 dark:text-amber-400">
+                The station owner hasn't published a data snapshot. Please ask
+                them to open the Team Manager tab → Access Codes → "Refresh
+                shared snapshot". The data will appear here automatically.
+              </p>
+            </div>
+          )}
+
+          {snapshot && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between text-xs text-gray-400">
+                <span>
+                  Last updated: {new Date(snapshot.updatedAt).toLocaleString()}
+                </span>
+                <button
+                  onClick={() => loadSnapshot(session.stationId)}
+                  className="flex items-center gap-1 hover:text-gray-600 dark:hover:text-gray-300"
+                >
+                  <RefreshCw size={11} /> Refresh
+                </button>
+              </div>
+
+              {/* DASHBOARD */}
+              {activeView === "dashboard" && (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <StatCard
+                    label="Total Revenue"
+                    value={fmt(snapshot.salesKpis.totalRevenue)}
+                    icon={DollarSign}
+                    color="green"
+                  />
+                  <StatCard
+                    label="Fuel Sold (L)"
+                    value={(
+                      snapshot.salesKpis.totalFuelSold || 0
+                    ).toLocaleString()}
+                    icon={Fuel}
+                    color="blue"
+                  />
+                  <StatCard
+                    label="Transactions"
+                    value={String(snapshot.salesKpis.transactionCount || 0)}
+                    icon={ShoppingBag}
+                    color="indigo"
+                  />
+                  <StatCard
+                    label="Fuel Types"
+                    value={String(snapshot.fuelPrices.length)}
+                    icon={Gauge}
+                    color="purple"
+                  />
+                </div>
+              )}
+
+              {/* FUEL PRICES */}
+              {activeView === "fuelprices" && (
+                <Card title="Current Pump Prices">
+                  {snapshot.fuelPrices.length === 0 ? (
+                    <Empty text="No fuel prices published." />
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      {snapshot.fuelPrices.map((f, i) => (
+                        <div
+                          key={i}
+                          className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg"
+                        >
+                          <p className="text-xs text-gray-500">{f.label}</p>
+                          <p className="text-lg font-bold dark:text-white">
+                            {fmt(f.price)}
+                          </p>
+                          {f.code && (
+                            <p className="text-[10px] text-gray-400">
+                              {f.code}/L
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </Card>
+              )}
+
+              {/* SALES */}
+              {activeView === "sales" && (
+                <Card title="Recent Sales">
+                  {snapshot.recentSales.length === 0 ? (
+                    <Empty text="No sales published." />
+                  ) : (
+                    <Table
+                      headers={[
+                        "Invoice",
+                        "Date",
+                        "Fuel",
+                        "Litres",
+                        "Total",
+                        "Payment",
+                      ]}
+                    >
+                      {snapshot.recentSales.map((s, i) => (
+                        <tr
+                          key={i}
+                          className="border-t border-gray-100 dark:border-gray-800"
+                        >
+                          <td className="px-3 py-2 text-xs dark:text-white">
+                            {s.invoice || "—"}
+                          </td>
+                          <td className="px-3 py-2 text-xs text-gray-500">
+                            {s.date || "—"}
+                          </td>
+                          <td className="px-3 py-2 text-xs text-gray-500">
+                            {s.fuel || "—"}
+                          </td>
+                          <td className="px-3 py-2 text-xs text-gray-500">
+                            {s.litres ?? "—"}
+                          </td>
+                          <td className="px-3 py-2 text-xs dark:text-white">
+                            {fmt(s.total)}
+                          </td>
+                          <td className="px-3 py-2 text-xs text-gray-500">
+                            {s.payment || "—"}
+                          </td>
+                        </tr>
+                      ))}
+                    </Table>
+                  )}
+                </Card>
+              )}
+
+              {/* POS (same recent sales, framed as POS history) */}
+              {activeView === "pos" && (
+                <Card title="Point of Sale — Recent Transactions">
+                  {snapshot.recentSales.length === 0 ? (
+                    <Empty text="No POS transactions published." />
+                  ) : (
+                    <Table
+                      headers={["Invoice", "Date", "Fuel", "Litres", "Total"]}
+                    >
+                      {snapshot.recentSales.map((s, i) => (
+                        <tr
+                          key={i}
+                          className="border-t border-gray-100 dark:border-gray-800"
+                        >
+                          <td className="px-3 py-2 text-xs dark:text-white">
+                            {s.invoice || "—"}
+                          </td>
+                          <td className="px-3 py-2 text-xs text-gray-500">
+                            {s.date || "—"}
+                          </td>
+                          <td className="px-3 py-2 text-xs text-gray-500">
+                            {s.fuel || "—"}
+                          </td>
+                          <td className="px-3 py-2 text-xs text-gray-500">
+                            {s.litres ?? "—"}
+                          </td>
+                          <td className="px-3 py-2 text-xs dark:text-white">
+                            {fmt(s.total)}
+                          </td>
+                        </tr>
+                      ))}
+                    </Table>
+                  )}
+                </Card>
+              )}
+
+              {/* INVENTORY (pumps + tank levels) */}
+              {activeView === "inventory" && (
+                <div className="space-y-4">
+                  <Card title="Pump Status">
+                    {snapshot.pumps.length === 0 ? (
+                      <Empty text="No pump data published." />
+                    ) : (
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        {snapshot.pumps.map((p, i) => (
+                          <div
+                            key={i}
+                            className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg text-center"
+                          >
+                            <p className="text-xs text-gray-500">{p.fuel}</p>
+                            <p className="text-xl font-bold dark:text-white">
+                              {p.count}
+                            </p>
+                            <p className="text-[10px] text-gray-400">pumps</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </Card>
+                  <Card title="Tank Levels">
+                    {snapshot.tankLevels.length === 0 ? (
+                      <Empty text="No tank data published." />
+                    ) : (
+                      <Table
+                        headers={[
+                          "Fuel",
+                          "Opening (L)",
+                          "Closing (L)",
+                          "Remaining (L)",
+                        ]}
+                      >
+                        {snapshot.tankLevels.map((t, i) => (
+                          <tr
+                            key={i}
+                            className="border-t border-gray-100 dark:border-gray-800"
+                          >
+                            <td className="px-3 py-2 text-xs dark:text-white">
+                              {t.fuel}
+                            </td>
+                            <td className="px-3 py-2 text-xs text-gray-500">
+                              {(t.opening || 0).toLocaleString()}
+                            </td>
+                            <td className="px-3 py-2 text-xs text-gray-500">
+                              {(t.closing || 0).toLocaleString()}
+                            </td>
+                            <td className="px-3 py-2 text-xs dark:text-white">
+                              {(t.closing || 0).toLocaleString()}
+                            </td>
+                          </tr>
+                        ))}
+                      </Table>
+                    )}
+                  </Card>
+                </div>
+              )}
+
+              {/* CREDIT */}
+              {activeView === "credit" && (
+                <Card title="Credit Accounts">
+                  {snapshot.creditAccounts.length === 0 ? (
+                    <Empty text="No credit accounts published." />
+                  ) : (
+                    <Table headers={["Customer", "Balance", "Limit", "Status"]}>
+                      {snapshot.creditAccounts.map((c, i) => (
+                        <tr
+                          key={i}
+                          className="border-t border-gray-100 dark:border-gray-800"
+                        >
+                          <td className="px-3 py-2 text-xs dark:text-white">
+                            {c.name}
+                          </td>
+                          <td className="px-3 py-2 text-xs text-gray-500">
+                            {fmt(c.balance)}
+                          </td>
+                          <td className="px-3 py-2 text-xs text-gray-500">
+                            {fmt(c.limit)}
+                          </td>
+                          <td className="px-3 py-2 text-xs text-gray-500">
+                            {c.status || "—"}
+                          </td>
+                        </tr>
+                      ))}
+                    </Table>
+                  )}
+                </Card>
+              )}
+
+              {/* INVOICES */}
+              {activeView === "invoices" && (
+                <Card title="Invoices">
+                  {snapshot.invoices.length === 0 ? (
+                    <Empty text="No invoices published." />
+                  ) : (
+                    <Table
+                      headers={[
+                        "Invoice #",
+                        "Customer",
+                        "Total",
+                        "Date",
+                        "Status",
+                      ]}
+                    >
+                      {snapshot.invoices.map((inv, i) => (
+                        <tr
+                          key={i}
+                          className="border-t border-gray-100 dark:border-gray-800"
+                        >
+                          <td className="px-3 py-2 text-xs dark:text-white">
+                            {inv.number || "—"}
+                          </td>
+                          <td className="px-3 py-2 text-xs text-gray-500">
+                            {inv.customer || "—"}
+                          </td>
+                          <td className="px-3 py-2 text-xs dark:text-white">
+                            {fmt(inv.total)}
+                          </td>
+                          <td className="px-3 py-2 text-xs text-gray-500">
+                            {inv.date || "—"}
+                          </td>
+                          <td className="px-3 py-2 text-xs text-gray-500">
+                            {inv.status || "—"}
+                          </td>
+                        </tr>
+                      ))}
+                    </Table>
+                  )}
+                </Card>
+              )}
+
+              {/* OFFLOADING */}
+              {activeView === "offloading" && (
+                <Card title="Fuel Offloading Records">
+                  {snapshot.offloading.length === 0 ? (
+                    <Empty text="No offloading records published." />
+                  ) : (
+                    <Table headers={["Truck", "Fuel", "Litres", "Date"]}>
+                      {snapshot.offloading.map((o, i) => (
+                        <tr
+                          key={i}
+                          className="border-t border-gray-100 dark:border-gray-800"
+                        >
+                          <td className="px-3 py-2 text-xs dark:text-white">
+                            {o.truck || "—"}
+                          </td>
+                          <td className="px-3 py-2 text-xs text-gray-500">
+                            {o.fuel || "—"}
+                          </td>
+                          <td className="px-3 py-2 text-xs text-gray-500">
+                            {(o.litres || 0).toLocaleString()}
+                          </td>
+                          <td className="px-3 py-2 text-xs text-gray-500">
+                            {o.date || "—"}
+                          </td>
+                        </tr>
+                      ))}
+                    </Table>
+                  )}
+                </Card>
+              )}
+
+              {/* TEAM */}
+              {activeView === "team" && (
+                <Card title="Team Members">
+                  {snapshot.employees.length === 0 ? (
+                    <Empty text="No team data published." />
+                  ) : (
+                    <Table headers={["Name", "Role", "Status"]}>
+                      {snapshot.employees.map((e, i) => (
+                        <tr
+                          key={i}
+                          className="border-t border-gray-100 dark:border-gray-800"
+                        >
+                          <td className="px-3 py-2 text-xs dark:text-white">
+                            {e.name}
+                          </td>
+                          <td className="px-3 py-2 text-xs text-gray-500">
+                            {e.role}
+                          </td>
+                          <td className="px-3 py-2 text-xs text-gray-500">
+                            {e.status || "—"}
+                          </td>
+                        </tr>
+                      ))}
+                    </Table>
+                  )}
+                </Card>
+              )}
+
+              {/* EXPENSES */}
+              {activeView === "expenses" && (
+                <Card title="Recent Expenses">
+                  {snapshot.expenses.length === 0 ? (
+                    <Empty text="No expenses published." />
+                  ) : (
+                    <Table headers={["Category", "Amount", "Date"]}>
+                      {snapshot.expenses.map((e, i) => (
+                        <tr
+                          key={i}
+                          className="border-t border-gray-100 dark:border-gray-800"
+                        >
+                          <td className="px-3 py-2 text-xs dark:text-white">
+                            {e.category}
+                          </td>
+                          <td className="px-3 py-2 text-xs dark:text-white">
+                            {fmt(e.amount)}
+                          </td>
+                          <td className="px-3 py-2 text-xs text-gray-500">
+                            {e.date || "—"}
+                          </td>
+                        </tr>
+                      ))}
+                    </Table>
+                  )}
+                </Card>
+              )}
+            </div>
+          )}
+        </main>
+
+        <footer className="text-center text-[10px] text-gray-400 py-3 px-4">
+          Read-only access via access code · Changes are not saved · Data
+          auto-refreshes every 30s
+        </footer>
       </div>
     );
   }
@@ -253,4 +714,87 @@ export default function StationAccess() {
       </div>
     </div>
   );
+}
+
+// --- Read-only viewer helper components ---
+
+function StatCard({
+  label,
+  value,
+  icon: Icon,
+  color,
+}: {
+  label: string;
+  value: string;
+  icon: React.ComponentType<{ size?: number; className?: string }>;
+  color: "green" | "blue" | "indigo" | "purple";
+}) {
+  const colorMap = {
+    green: "bg-green-500/10 text-green-600",
+    blue: "bg-blue-500/10 text-blue-600",
+    indigo: "bg-indigo-500/10 text-indigo-600",
+    purple: "bg-purple-500/10 text-purple-600",
+  };
+  return (
+    <div className="bg-white dark:bg-gray-900 rounded-xl p-4 border border-gray-100 dark:border-gray-800">
+      <div className="flex items-center gap-2 mb-2">
+        <div
+          className={`w-8 h-8 rounded-lg flex items-center justify-center ${colorMap[color]}`}
+        >
+          <Icon size={16} />
+        </div>
+        <span className="text-xs text-gray-500">{label}</span>
+      </div>
+      <p className="text-xl font-bold dark:text-white">{value}</p>
+    </div>
+  );
+}
+
+function Card({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 overflow-hidden">
+      <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800">
+        <h3 className="text-sm font-semibold dark:text-white">{title}</h3>
+      </div>
+      <div className="p-4">{children}</div>
+    </div>
+  );
+}
+
+function Table({
+  headers,
+  children,
+}: {
+  headers: string[];
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[480px]">
+        <thead>
+          <tr className="text-left">
+            {headers.map((h, i) => (
+              <th
+                key={i}
+                className="px-3 py-2 text-[10px] uppercase tracking-wide text-gray-400 font-semibold"
+              >
+                {h}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>{children}</tbody>
+      </table>
+    </div>
+  );
+}
+
+function Empty({ text }: { text: string }) {
+  return <p className="text-xs text-gray-400 text-center py-6">{text}</p>;
 }

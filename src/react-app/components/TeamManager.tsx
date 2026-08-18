@@ -26,6 +26,7 @@ import {
   Trash2,
   BadgeCheck,
   ShieldAlert,
+  Share2,
 } from "lucide-react";
 import { useAuth } from "@/react-app/context/AuthContext";
 import {
@@ -48,6 +49,16 @@ import {
   toggleAccessCode,
   type StationAccessCode,
 } from "@/react-app/lib/station-access-code-service";
+import {
+  publishStationSnapshot,
+  type StationSnapshot,
+} from "@/react-app/lib/station-snapshot-service";
+import { getDetectedCurrency } from "@/react-app/lib/currency";
+import {
+  normalizeFuelType,
+  getFuelLabel,
+  getFuelCode,
+} from "@/react-app/config/pricing";
 
 const BASE_ROLES: BaseUserRole[] = ["manager", "staff", "auditor"];
 
@@ -500,6 +511,240 @@ export default function TeamManager() {
   useEffect(() => {
     loadAccessCodes();
   }, [loadAccessCodes]);
+
+  // Build + publish a read-only snapshot of the station's operational data
+  // to a PUBLIC Supabase Storage object, so members logged in via access
+  // code (no Supabase session) can view the approved sections read-only.
+  const [publishing, setPublishing] = useState(false);
+  const [lastPublished, setLastPublished] = useState<number | null>(null);
+
+  const publishSnapshot = useCallback(async () => {
+    const stationId = currentStation?.id;
+    if (!stationId) return;
+    setPublishing(true);
+    try {
+      // Fuel prices — prefer the dynamic per-fuel-type price store, fall
+      // back to the legacy pmsPrice/agoPrice for stations that haven't
+      // migrated to fuel_types_config.
+      const fuelPrices: StationSnapshot["fuelPrices"] = [];
+      if (state.fuelTypes && Array.isArray(state.fuelTypes)) {
+        for (const ft of state.fuelTypes) {
+          if (ft.isActive === false) continue;
+          fuelPrices.push({
+            label:
+              ft.localName || getFuelLabel(ft.canonicalType || ft.name || ""),
+            price: Number(ft.price) || 0,
+            code: ft.code || getFuelCode(ft.canonicalType || ft.name || ""),
+          });
+        }
+      }
+      if (fuelPrices.length === 0) {
+        // Legacy fallback
+        if (state.pmsPrice)
+          fuelPrices.push({
+            label: "Super Petrol",
+            price: state.pmsPrice,
+            code: "PMS",
+          });
+        if (state.agoPrice)
+          fuelPrices.push({
+            label: "Diesel",
+            price: state.agoPrice,
+            code: "AGO",
+          });
+      }
+
+      // Pumps — count per fuel type
+      const pumps: StationSnapshot["pumps"] = [];
+      if (state.fuelPumpsByType) {
+        for (const [canonical, pumpArr] of Object.entries(
+          state.fuelPumpsByType,
+        )) {
+          pumps.push({
+            fuel: getFuelLabel(canonical),
+            count: Array.isArray(pumpArr) ? pumpArr.length : 0,
+          });
+        }
+      }
+      if (pumps.length === 0) {
+        pumps.push({
+          fuel: "Super Petrol",
+          count: state.pmsPumps?.length || 0,
+        });
+        pumps.push({ fuel: "Diesel", count: state.agoPumps?.length || 0 });
+      }
+
+      // Tank levels — per fuel type
+      const tankLevels: StationSnapshot["tankLevels"] = [];
+      if (state.fuelTankValuesByType) {
+        for (const [canonical, v] of Object.entries(
+          state.fuelTankValuesByType,
+        )) {
+          tankLevels.push({
+            fuel: getFuelLabel(canonical),
+            opening: Number(v?.opening) || 0,
+            closing: Number(v?.closing) || 0,
+          });
+        }
+      }
+      if (tankLevels.length === 0) {
+        tankLevels.push({
+          fuel: "Super Petrol",
+          opening: state.pmsTankOpening || 0,
+          closing: state.pmsTankClosing || 0,
+        });
+        tankLevels.push({
+          fuel: "Diesel",
+          opening: state.agoTankOpening || 0,
+          closing: state.agoTankClosing || 0,
+        });
+      }
+
+      // Recent sales — from salesHistory (compact blob)
+      const salesArr = Object.values(state.salesHistory || {}).flat() as any[];
+      const recentSales: StationSnapshot["recentSales"] = salesArr
+        .slice(-20)
+        .reverse()
+        .map((s: any) => ({
+          invoice: s.invoiceNumber || s.invoice || s.id,
+          date: s.date || s.createdAt,
+          total: Number(s.total || s.totalAmount || s.amount) || 0,
+          fuel:
+            s.fuelType ||
+            s.fuel ||
+            getFuelLabel(normalizeFuelType(s.fuelType || s.fuel || "")) ||
+            "",
+          litres: Number(s.litres || s.litresSold || s.quantity) || 0,
+          payment: s.paymentMethod || s.payment || "",
+        }));
+
+      // Sales KPIs
+      const totalRevenue = recentSales.reduce(
+        (sum, s) => sum + (s.total || 0),
+        0,
+      );
+      const totalFuelSold = recentSales.reduce(
+        (sum, s) => sum + (s.litres || 0),
+        0,
+      );
+
+      // Invoices
+      const invoicesArr = Object.values(state.invoices || {}) as any[];
+      const invoices: StationSnapshot["invoices"] = invoicesArr
+        .slice(-20)
+        .reverse()
+        .map((inv: any) => ({
+          number: inv.invoiceNumber || inv.number || inv.id,
+          customer: inv.customer || inv.clientName || "",
+          total: Number(inv.totalAmount || inv.total || inv.amount) || 0,
+          date: inv.date || inv.createdAt || inv.issueDate,
+          status: inv.status || inv.paid ? "paid" : "unpaid",
+        }));
+
+      // Offloading
+      const offloading: StationSnapshot["offloading"] = (
+        state.offloadingRecords || []
+      )
+        .slice(-20)
+        .reverse()
+        .map((o: any) => ({
+          truck: o.truckNumber || o.truck || o.vehicle,
+          fuel:
+            o.fuelType ||
+            getFuelLabel(normalizeFuelType(o.fuelType || "")) ||
+            "",
+          litres: Number(o.litres || o.quantity || o.volume) || 0,
+          date: o.date || o.offloadDate,
+        }));
+
+      // Expenses
+      const expenses: StationSnapshot["expenses"] = (state.expenses || [])
+        .slice(-20)
+        .reverse()
+        .map((e: any) => ({
+          category: e.category || e.type || "Other",
+          amount: Number(e.amount || e.cost) || 0,
+          date: e.date || e.createdAt,
+        }));
+
+      // Employees (team)
+      const employees: StationSnapshot["employees"] = (state.employees || [])
+        .slice(0, 50)
+        .map((e: any) => ({
+          name: e.name || e.fullName || e.employeeName || "",
+          role: e.role || e.position || "",
+          status: e.status || (e.active ? "active" : "inactive"),
+        }));
+
+      // Credit accounts (read-only names + balances) — loaded from the
+      // credit_accounts cloud key via cloudStorageService. We read it here
+      // so the member sees real credit data without a Supabase session.
+      let creditAccounts: StationSnapshot["creditAccounts"] = [];
+      try {
+        const { cloudStorageService } =
+          await import("@/react-app/lib/cloud-storage-service");
+        const accts = await cloudStorageService.get<any[]>(
+          "credit_accounts",
+          stationId,
+        );
+        if (Array.isArray(accts)) {
+          creditAccounts = accts.slice(0, 50).map((a: any) => ({
+            name: a.customerName || a.name || "",
+            balance: Number(a.balance || a.outstandingBalance || 0) || 0,
+            limit: Number(a.creditLimit || a.limit || 0) || 0,
+            status: a.status || "active",
+          }));
+        }
+      } catch {
+        /* credit optional */
+      }
+
+      const snapshot: Omit<StationSnapshot, "updatedAt"> = {
+        stationName:
+          currentStation?.name || state.companyData?.name || "Station",
+        stationLocation: currentStation?.location || state.companyData?.address,
+        currency: state.companyData?.currency || getDetectedCurrency() || "USD",
+        country: currentStation?.country,
+        fuelPrices,
+        pumps,
+        tankLevels,
+        recentSales,
+        salesKpis: {
+          totalRevenue,
+          totalFuelSold,
+          transactionCount: recentSales.length,
+        },
+        creditAccounts,
+        expenses,
+        invoices,
+        offloading,
+        employees,
+        companyData: {
+          name: state.companyData?.name || currentStation?.name,
+          phone: state.companyData?.phone,
+          email: state.companyData?.email,
+          kraPin: state.companyData?.kraPin,
+          vatNumber: state.companyData?.vatNumber,
+        },
+      };
+
+      const ok = await publishStationSnapshot(stationId, snapshot);
+      if (ok) setLastPublished(Date.now());
+    } catch (err) {
+      console.error("Failed to publish station snapshot:", err);
+    } finally {
+      setPublishing(false);
+    }
+  }, [currentStation, state]);
+
+  // Auto-publish the snapshot whenever access codes change (so a freshly
+  // created code has data to show) + on mount.
+  useEffect(() => {
+    if (accessCodes.length > 0 && currentStation?.id) {
+      publishSnapshot();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accessCodes.length, currentStation?.id]);
 
   // Combined member list: invite-accepted members (full accounts) +
   // access-code members (no-signup). Each entry carries an `accessMethod`
@@ -1427,6 +1672,34 @@ export default function TeamManager() {
               this form directly.
           ============================================================ */}
           <div className="mt-6 border-t border-gray-200 dark:border-gray-700 pt-6">
+            {/* Snapshot publisher — writes a public read-only snapshot so
+                members logged in via access code can view the approved
+                sections without a Supabase session. */}
+            <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+              <div className="flex items-center gap-2 text-xs text-gray-500">
+                <Share2 size={14} />
+                <span>
+                  Shared read-only snapshot
+                  {lastPublished && (
+                    <>
+                      {" "}
+                      · published {new Date(lastPublished).toLocaleTimeString()}
+                    </>
+                  )}
+                </span>
+              </div>
+              <button
+                onClick={() => publishSnapshot()}
+                disabled={publishing || !currentStation?.id}
+                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg text-xs font-medium flex items-center gap-1.5"
+              >
+                <RefreshCw
+                  size={14}
+                  className={publishing ? "animate-spin" : ""}
+                />
+                {publishing ? "Publishing…" : "Refresh shared snapshot"}
+              </button>
+            </div>
             <AccessCodesView
               stationId={currentStation?.id}
               stationOwnerId={user?.authId}

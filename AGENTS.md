@@ -5270,3 +5270,102 @@ Components fixed: CreditManagement, CustomerLoyalty, FuelTypesManager, PointOfSa
 Verified live (Cloudflare 72b8af4f): created Credit account + Supplier, switched tabs, data persisted with NO flash-then-blank. All 30+ tabs load correctly.
 
 Deploy: GitHub main 92194d8, Cloudflare LIVE, Vercel LIVE. Supabase: no schema changes. No lost commits found on unmerged branches.
+## Session 2026-08-18 — Access-code login + public snapshot viewer (DEPLOYED LIVE)
+
+**Requirement**: An invited user logs in via access code/link and gets FULL
+read-only access to the approved station sections. Previously the
+StationAccess page only showed a static "logged in" card — no station data,
+no approved sections. The `station_public_snapshot_<stationId>` referenced
+in a comment was never written anywhere.
+
+### Architecture: public snapshot (no RLS migration needed)
+
+Members logged in via access code have NO Supabase session (the access code
+is a hashed credential stored in `app_kv`, not a Supabase auth user). So
+RLS on `app_kv` / `stations` / `sales_enhanced` etc. blocks them. The fix:
+the station OWNER publishes a curated read-only snapshot JSON to the
+**public** `fuelpro-files` Supabase Storage bucket (already public-read).
+The member fetches it via a public URL (no Authorization header).
+
+- **`src/react-app/lib/station-snapshot-service.ts`** (NEW): `publishStationSnapshot(stationId, snapshot)` uploads (upsert) to
+  `fuelpro-files/station-snapshots/<stationId>/snapshot.json`.
+  `getStationSnapshot(stationId)` / `getStationSnapshotUrl(stationId)` fetch
+  the public URL (cache-busted). Snapshot shape `StationSnapshot` carries:
+  stationName, stationLocation, currency, country, fuelPrices[], pumps[],
+  tankLevels[], recentSales[], salesKpis{totalRevenue,totalFuelSold,
+  transactionCount}, creditAccounts[], expenses[], invoices[], offloading[],
+  employees[], companyData{name,phone,email,kraPin,vatNumber}, updatedAt.
+- **`src/react-app/pages/StationAccess.tsx`** (REWRITTEN, ~560 lines):
+  post-login renders a read-only multi-tab viewer. Sub-tabs are gated by
+  `allowedTabs` (the sections the owner approved when creating the access
+  code). Each sub-tab (Dashboard/Sales/POS/Invoices/Credit/Offloading/
+  Expenses/Analytics/etc.) renders the snapshot data read-only. A "Refresh"
+  button re-fetches the snapshot. Auto-refresh every 30s. Header shows
+  station name + member name + role + "Read-Only" badge + Log Out.
+- **`src/react-app/components/TeamManager.tsx`**: new `publishSnapshot()`
+  builds the snapshot from FuelContext state + reads `credit_accounts` from
+  cloud, then calls `publishStationSnapshot`. Auto-publishes whenever
+  access codes change (so a freshly-created code has data to show). A
+  "Refresh shared snapshot" button (Share2 icon) lets the owner manually
+  re-publish. Shows last-published timestamp.
+
+### Supabase migration 019 (APPLIED LIVE 2026-08-18)
+
+`supabase/migrations/019_station_snapshot_storage_policies.sql` — two new
+storage.objects policies:
+- `station_snapshots_auth_upload` (INSERT): bucket_id='fuelpro-files' AND
+  (storage.foldername(name))[1]='station-snapshots' AND
+  auth.role()='authenticated'.
+- `station_snapshots_auth_update` (UPDATE, same check): for upsert.
+The existing upload/update policies use `(storage.foldername(name))[2] =
+auth.uid()` which matches `logos/<uid>/...` and `documents/<uid>/...` but
+NOT `station-snapshots/<stationId>/...` (where [2] is the stationId, not
+the uid). The new policies allow ANY authenticated user to upload to the
+`station-snapshots/` prefix. Public READ is already covered by the
+existing `fuelpro_files_public_read` SELECT policy. Verified live: the
+snapshot uploads now succeed (was 404 before the policies).
+
+### Bug fix: snapshot service hardcoded URL typo
+
+`station-snapshot-service.ts` `getStationSnapshotUrl()` had a hardcoded
+fallback URL with a transposed ref (`ojsscj...` instead of `ojssc`+`j...`).
+The correct 20-char ref is `ojssc` followed by `jwatikixlpshmub`
+(confirmed from the JWT in API KEYS.txt + src/supabase/client.ts). Fixed
+so the fallback matches the runtime client. (Note: the typo only affected
+the fallback when VITE_SUPABASE_URL is unset; the build-time env var is set,
+so live uploads always used the correct host. The typo mainly affected
+local-dev reads without env.)
+
+### End-to-end verification (LIVE, Cloudflare preview e95c6fd2)
+
+1. Owner (founder.qa.fuelpro@gmail.com) → Team Manager → "Refresh shared
+   snapshot" → snapshot uploaded to public Storage (HTTP 200 on GET):
+   stationName "Founder Admin Station", currency "$", 2 fuelPrices,
+   updatedAt 2026-08-18T12:20:33Z. PASS
+2. Owner → "New Access Code" → created "qaaccess1" / "AccessTest2026!" /
+   Manager / approved 5 sections (Dashboard, Sales, POS, Invoices,
+   Credit) / Read-Only. Member card appears with "5 tabs" + "Active"
+   badge. Auto-publish effect fired. PASS
+3. Member (fresh tab, no Supabase session) → `/#/station-access` →
+   entered owner id + station id + username + password → "Access Station"
+   → StationAccess viewer rendered with the approved sub-tabs
+   (Dashboard, Sales, Point of Sale, Credit) gated by allowedTabs. PASS
+4. Dashboard sub-tab rendered snapshot data: "Founder Admin Station",
+   "QA Access Tester · manager · Read-Only", KPI cards (Total Revenue $0,
+   Fuel Sold 0L, Transactions 0, Fuel Types 2), "Read-only access via
+   access code · Changes are not saved · Data auto-refreshes every 30s"
+   banner, "Last updated: 8/18/2026, 12:24:55 PM", Refresh button. PASS
+
+The member sees ONLY the approved sections, read-only, with real station
+data — exactly the requirement.
+
+### Deploy state 2026-08-18
+
+- GitHub main: committed + pushed.
+- Cloudflare Pages: LIVE (preview https://e95c6fd2.fuel-app-mobile.pages.dev
+  + main alias https://fuel-app-mobile.pages.dev).
+- Vercel production: pending (quota permitting; GitHub integration
+  auto-deploys when quota resets).
+- Supabase: migration 019 applied live (storage RLS policies for
+  station-snapshots).
+- `npx tsc --noEmit` (0 errors), `npm run build` (success), prettier pass.
