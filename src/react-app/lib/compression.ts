@@ -47,6 +47,11 @@ const MIN_COMPRESS_BYTES = 256;
 /** Ratio below which we keep the compressed form (avoid expanding tiny data). */
 const MIN_RATIO = 0.9;
 
+/** Gzip compression level (1=fastest .. 9=smallest). 9 maximizes storage
+ *  savings which is the priority on the Supabase free plan (egress + storage
+ *  quotas). The CPU cost is acceptable for the payload sizes here (<1 MB). */
+const GZIP_LEVEL = 9;
+
 function utf8ToBytes(str: string): Uint8Array {
   return new TextEncoder().encode(str);
 }
@@ -84,7 +89,7 @@ export function compressJson<T>(value: T): unknown {
     const bytes = utf8ToBytes(json);
     if (bytes.length < MIN_COMPRESS_BYTES) return value;
 
-    const compressed = pako.gzip(bytes);
+    const compressed = pako.gzip(bytes, { level: GZIP_LEVEL });
     const ratio = compressed.length / bytes.length;
     if (ratio > MIN_RATIO) return value; // no meaningful gain
 
@@ -210,7 +215,7 @@ export function isCompressibleMimeType(
 export async function compressBlob(file: Blob): Promise<Blob> {
   const buffer = await file.arrayBuffer();
   const bytes = new Uint8Array(buffer);
-  const compressed = pako.gzip(bytes);
+  const compressed = pako.gzip(bytes, { level: GZIP_LEVEL });
   return new Blob([compressed], { type: "application/gzip" });
 }
 
