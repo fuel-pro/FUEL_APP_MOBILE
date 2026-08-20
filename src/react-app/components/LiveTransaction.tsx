@@ -22,6 +22,7 @@ import {
   Plug,
   Smartphone,
   Wallet,
+  HandCoins,
   Settings,
   Link2,
   ExternalLink,
@@ -218,10 +219,33 @@ export default function LiveTransaction() {
     success: boolean;
     error: string;
     checkout_request_id?: string;
+    pending?: boolean;
+    pendingMessage?: string;
   }>({
     loading: false,
     success: false,
     error: "",
+    pending: false,
+  });
+
+  // Manual payment recording (cash, bank transfer, M-PESA confirmation
+  // received offline) — writes to the shared unified transaction store so
+  // manual entries appear in the M-PESA Analyzer and across devices.
+  const [showManualPayment, setShowManualPayment] = useState(false);
+  const [manualPayment, setManualPayment] = useState<{
+    sender_info: string;
+    amount: number;
+    account_reference: string;
+    transaction_desc: string;
+    payment_method: string;
+    source_id: string;
+  }>({
+    sender_info: "",
+    amount: 0,
+    account_reference: "",
+    transaction_desc: "",
+    payment_method: "M-PESA",
+    source_id: "",
   });
 
   // Shared unified transactions (interlinked with M-PESA Analyzer)
@@ -331,7 +355,12 @@ export default function LiveTransaction() {
         transaction_desc: p.transaction_desc ?? prev.transaction_desc,
       }));
       if (p.openStkPush) {
-        setStkPushStatus({ loading: false, success: false, error: "" });
+        setStkPushStatus({
+          loading: false,
+          success: false,
+          error: "",
+          pending: false,
+        });
         setShowSTKPush(true);
       }
     });
@@ -567,11 +596,17 @@ export default function LiveTransaction() {
         loading: false,
         success: false,
         error: "Please fill in all required fields",
+        pending: false,
       });
       return;
     }
 
-    setStkPushStatus({ loading: true, success: false, error: "" });
+    setStkPushStatus({
+      loading: true,
+      success: false,
+      error: "",
+      pending: false,
+    });
 
     // 1) ALWAYS persist the pending STK Push request to the shared cloud store
     // FIRST — so the transaction record is cross-device durable regardless of
@@ -623,8 +658,10 @@ export default function LiveTransaction() {
       setStkPushStatus({
         loading: false,
         success: false,
-        error:
-          "STK Push request saved as pending. To trigger a real M-PESA prompt, configure the M-PESA Daraja integration in the Integration Hub (Payment Setup) — the live Daraja backend is not yet connected. The record is saved and will show in the M-PESA Analyzer.",
+        error: "",
+        pending: true,
+        pendingMessage:
+          "To trigger a real M-PESA prompt, configure the M-PESA Daraja integration in the Integration Hub (Payment Setup) — the live Daraja backend is not yet connected. The record is saved and will show in the M-PESA Analyzer.",
       });
       // Reset form; keep the modal open so the user sees the message.
       setStkPushData({
@@ -649,7 +686,9 @@ export default function LiveTransaction() {
         setStkPushStatus({
           loading: false,
           success: false,
-          error: `STK Push request saved as pending. The M-PESA Daraja backend returned HTTP ${response.status} (not deployed). The record is saved and visible in the M-PESA Analyzer. Connect the backend to trigger live prompts.`,
+          error: "",
+          pending: true,
+          pendingMessage: `The M-PESA Daraja backend returned HTTP ${response.status} (not deployed). The record is saved and visible in the M-PESA Analyzer. Connect the backend to trigger live prompts.`,
         });
         setStkPushData({
           phone_number: "",
@@ -677,9 +716,11 @@ export default function LiveTransaction() {
         setStkPushStatus({
           loading: false,
           success: false,
-          error:
+          error: "",
+          pending: true,
+          pendingMessage:
             data.error ||
-            "STK Push request saved as pending, but the Daraja API did not confirm. Check the Integration Hub config.",
+            "The Daraja API did not confirm the request. The record is saved as pending — check the Integration Hub config.",
         });
       }
       // Reset form regardless.
@@ -694,8 +735,10 @@ export default function LiveTransaction() {
       setStkPushStatus({
         loading: false,
         success: false,
-        error:
-          "STK Push request saved as pending. Network error reaching the Daraja backend. The record is saved and visible in the M-PESA Analyzer.",
+        error: "",
+        pending: true,
+        pendingMessage:
+          "Network error reaching the Daraja backend. The record is saved as pending and visible in the M-PESA Analyzer.",
       });
       setStkPushData({
         phone_number: "",
@@ -703,6 +746,132 @@ export default function LiveTransaction() {
         account_reference: "",
         transaction_desc: "",
       });
+    }
+  };
+
+  // Record a manually-received payment (cash, bank transfer, M-PESA
+  // confirmation received offline) into the shared unified transaction store
+  // so it appears in the M-PESA Analyzer and syncs across devices.
+  const recordManualPayment = async () => {
+    if (
+      !manualPayment.sender_info.trim() ||
+      !manualPayment.amount ||
+      !manualPayment.payment_method
+    ) {
+      setError("Please fill in sender, amount, and payment method");
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      setError("");
+
+      const source = paymentSources.find(
+        (s) => String(s.id) === manualPayment.source_id,
+      );
+
+      await addTransaction(
+        {
+          transaction_ref: `MAN_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          origin: "manual",
+          transaction_type: "Manual Payment",
+          amount: manualPayment.amount,
+          currency: /^[A-Z]{3}$/.test(state.companyData?.currency || "")
+            ? state.companyData?.currency
+            : currentStation?.currency || getDetectedCurrency(),
+          sender_info: manualPayment.sender_info,
+          description:
+            manualPayment.transaction_desc || "Manual payment record",
+          status: "completed",
+          payment_method: manualPayment.payment_method,
+          transaction_time: new Date().toISOString(),
+          source_name: source?.source_name,
+          source_type: source?.source_type,
+          account_reference: manualPayment.account_reference,
+        },
+        stationId,
+      );
+
+      setSuccess(
+        `Payment from ${manualPayment.sender_info} recorded successfully`,
+      );
+      setShowManualPayment(false);
+      setManualPayment({
+        sender_info: "",
+        amount: 0,
+        account_reference: "",
+        transaction_desc: "",
+        payment_method: "M-PESA",
+        source_id: "",
+      });
+      loadLiveTransactions();
+    } catch (err) {
+      console.error("Error recording manual payment:", err);
+      setError("Failed to record payment. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Import a payment source from the connected Integration Hub config
+  // (M-PESA Daraja or Kopo Kopo) — wires the Live Transaction tab to the
+  // Integration Hub so connected integrations are one-click usable here.
+  const importFromIntegrationHub = async (type: "mpesa" | "kopokopo") => {
+    try {
+      setIsLoading(true);
+      setError("");
+      const config = type === "mpesa" ? mpesaConfig : kopoConfig;
+      if (!config || !config.enabled) {
+        const label = type === "mpesa" ? "M-PESA" : "Kopo Kopo";
+        setError(
+          `${label} is not configured yet. Open the Integration Hub to set it up, then come back to import it as a payment source.`,
+        );
+        switchToTab("integration");
+        return;
+      }
+      const source_name =
+        config.name || (type === "mpesa" ? "M-PESA Daraja" : "Kopo Kopo");
+      // De-dupe by identifier
+      const identifier =
+        (type === "mpesa"
+          ? (config as MpesaIntegrationConfig).shortcode
+          : (config as KopokopoIntegrationConfig).tillNumber) ||
+        config.name ||
+        "";
+      if (
+        paymentSources.some(
+          (s) => s.identifier === identifier && s.source_name === source_name,
+        )
+      ) {
+        setSuccess(`${source_name} is already a registered payment source`);
+        return;
+      }
+      const newRecord: PaymentSource = {
+        id: Date.now(),
+        source_type: type === "mpesa" ? "mpesa_paybill" : "mpesa_buygoods",
+        source_name,
+        identifier,
+        account_info: JSON.stringify({
+          environment: config.environment || "sandbox",
+          importedFrom: "integration-hub",
+        }),
+        is_active: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      const updated = [...paymentSources, newRecord];
+      await cloudStorageService.set<PaymentSource[]>(
+        "payment_sources",
+        updated,
+        stationId,
+      );
+      setPaymentSources(updated);
+      setSuccess(`${source_name} imported from Integration Hub`);
+    } catch (err) {
+      console.error("Error importing integration:", err);
+      setError("Failed to import integration. Please try again.");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -811,13 +980,20 @@ export default function LiveTransaction() {
           <CreditCard className="text-green-400" />
           Live Transaction Monitor
         </h2>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <button
             onClick={() => setShowSTKPush(true)}
             className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm"
           >
             <Phone size={16} />
             STK Push
+          </button>
+          <button
+            onClick={() => setShowManualPayment(true)}
+            className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm"
+          >
+            <HandCoins size={16} />
+            Record Payment
           </button>
           <button
             onClick={() => setShowAddSource(true)}
@@ -1054,6 +1230,26 @@ export default function LiveTransaction() {
                 </span>
               </div>
               <ArrowRight size={14} className="text-blue-400" />
+            </button>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              onClick={() => importFromIntegrationHub("mpesa")}
+              disabled={isLoading}
+              className="bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50 text-white px-3 py-2 rounded-lg flex items-center gap-2 text-xs border border-emerald-500/50"
+              title="Import the connected M-PESA Daraja config as a payment source"
+            >
+              <Smartphone size={14} />
+              Import M-PESA
+            </button>
+            <button
+              onClick={() => importFromIntegrationHub("kopokopo")}
+              disabled={isLoading}
+              className="bg-blue-700 hover:bg-blue-600 disabled:opacity-50 text-white px-3 py-2 rounded-lg flex items-center gap-2 text-xs border border-blue-500/50"
+              title="Import the connected Kopo Kopo config as a payment source"
+            >
+              <Wallet size={14} />
+              Import Kopo Kopo
             </button>
           </div>
           <p className="mt-2 text-[11px] text-gray-500">
@@ -1319,9 +1515,34 @@ export default function LiveTransaction() {
                       loading: false,
                       success: false,
                       error: "",
+                      pending: false,
                     });
                   }}
                   className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded"
+                >
+                  Close
+                </button>
+              </div>
+            ) : stkPushStatus.pending ? (
+              <div className="text-center">
+                <Clock className="text-amber-400 mx-auto mb-4" size={48} />
+                <p className="text-amber-200 mb-4 font-semibold">
+                  STK Push recorded as pending
+                </p>
+                <p className="text-gray-300 text-sm mb-4">
+                  {stkPushStatus.pendingMessage}
+                </p>
+                <button
+                  onClick={() => {
+                    setShowSTKPush(false);
+                    setStkPushStatus({
+                      loading: false,
+                      success: false,
+                      error: "",
+                      pending: false,
+                    });
+                  }}
+                  className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded"
                 >
                   Close
                 </button>
@@ -1433,6 +1654,7 @@ export default function LiveTransaction() {
                         loading: false,
                         success: false,
                         error: "",
+                        pending: false,
                       });
                       setStkPushData({
                         phone_number: "",
@@ -1901,6 +2123,174 @@ export default function LiveTransaction() {
                 full view
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Manual Payment Modal — record cash / bank / offline payments */}
+      {showManualPayment && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-gray-800 rounded-lg p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+              <HandCoins className="text-amber-400" size={20} />
+              Record Payment
+            </h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm text-gray-300 mb-1">
+                  Sender / Customer Name *
+                </label>
+                <input
+                  type="text"
+                  value={manualPayment.sender_info}
+                  onChange={(e) =>
+                    setManualPayment({
+                      ...manualPayment,
+                      sender_info: e.target.value,
+                    })
+                  }
+                  className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white"
+                  placeholder="e.g., John Mwangi"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-300 mb-1">
+                  Amount (
+                  {resolveCurrencySymbol(
+                    state.companyData?.currency,
+                    currentStation?.currency,
+                  )}
+                  ) *
+                </label>
+                <input
+                  type="number"
+                  value={manualPayment.amount || ""}
+                  onChange={(e) =>
+                    setManualPayment({
+                      ...manualPayment,
+                      amount: parseFloat(e.target.value) || 0,
+                    })
+                  }
+                  className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white"
+                  placeholder="1000"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-300 mb-1">
+                  Payment Method *
+                </label>
+                <select
+                  value={manualPayment.payment_method}
+                  onChange={(e) =>
+                    setManualPayment({
+                      ...manualPayment,
+                      payment_method: e.target.value,
+                    })
+                  }
+                  className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white"
+                >
+                  {[
+                    "M-PESA",
+                    "Cash",
+                    "Bank Transfer",
+                    "Card",
+                    "Cheque",
+                    "Other",
+                  ].map((m) => (
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm text-gray-300 mb-1">
+                  Payment Source (optional)
+                </label>
+                <select
+                  value={manualPayment.source_id}
+                  onChange={(e) =>
+                    setManualPayment({
+                      ...manualPayment,
+                      source_id: e.target.value,
+                    })
+                  }
+                  className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white"
+                >
+                  <option value="">— Direct / Unspecified —</option>
+                  {paymentSources.map((s) => (
+                    <option key={s.id} value={String(s.id)}>
+                      {s.source_name} ({s.source_type.replace(/_/g, " ")})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm text-gray-300 mb-1">
+                  Account Reference
+                </label>
+                <input
+                  type="text"
+                  value={manualPayment.account_reference}
+                  onChange={(e) =>
+                    setManualPayment({
+                      ...manualPayment,
+                      account_reference: e.target.value,
+                    })
+                  }
+                  className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white"
+                  placeholder="INV-001 or Customer Account"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-300 mb-1">
+                  Description
+                </label>
+                <input
+                  type="text"
+                  value={manualPayment.transaction_desc}
+                  onChange={(e) =>
+                    setManualPayment({
+                      ...manualPayment,
+                      transaction_desc: e.target.value,
+                    })
+                  }
+                  className="w-full bg-gray-700 border border-gray-600 rounded p-2 text-white"
+                  placeholder="Payment for fuel"
+                />
+              </div>
+            </div>
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={recordManualPayment}
+                disabled={isLoading}
+                className="flex-1 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white py-2 rounded flex items-center justify-center gap-2"
+              >
+                {isLoading ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : (
+                  <HandCoins size={16} />
+                )}
+                Record Payment
+              </button>
+              <button
+                onClick={() => {
+                  setShowManualPayment(false);
+                  setManualPayment({
+                    sender_info: "",
+                    amount: 0,
+                    account_reference: "",
+                    transaction_desc: "",
+                    payment_method: "M-PESA",
+                    source_id: "",
+                  });
+                }}
+                disabled={isLoading}
+                className="flex-1 bg-gray-600 hover:bg-gray-700 disabled:opacity-50 text-white py-2 rounded"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}

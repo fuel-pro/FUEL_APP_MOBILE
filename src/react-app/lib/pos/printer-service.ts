@@ -646,15 +646,21 @@ class PrinterService {
     const text = new TextDecoder().decode(job.data);
     const printWindow = window.open("", "_blank");
     if (printWindow) {
+      // The receipt text is inserted via textContent (not interpolated into
+      // the HTML string) so receipt content can never inject markup/script.
       printWindow.document.write(`
         <html>
           <head><title>Print</title></head>
           <body>
-            <pre style="font-family: monospace; white-space: pre-wrap;">${text}</pre>
+            <pre id="content" style="font-family: monospace; white-space: pre-wrap;"></pre>
             <script>window.print(); window.close();</script>
           </body>
         </html>
       `);
+      const preElement = printWindow.document.getElementById("content");
+      if (preElement) {
+        preElement.textContent = text;
+      }
       printWindow.document.close();
     }
   }

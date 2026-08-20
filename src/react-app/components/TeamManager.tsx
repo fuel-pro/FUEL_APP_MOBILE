@@ -529,12 +529,11 @@ export default function TeamManager() {
       const fuelPrices: StationSnapshot["fuelPrices"] = [];
       if (state.fuelTypes && Array.isArray(state.fuelTypes)) {
         for (const ft of state.fuelTypes) {
-          if (ft.isActive === false) continue;
+          if (ft.active === false) continue;
           fuelPrices.push({
-            label:
-              ft.localName || getFuelLabel(ft.canonicalType || ft.name || ""),
+            label: ft.localName || getFuelLabel(ft.name || ""),
             price: Number(ft.price) || 0,
-            code: ft.code || getFuelCode(ft.canonicalType || ft.name || ""),
+            code: ft.code || getFuelCode(ft.name || ""),
           });
         }
       }
@@ -700,9 +699,11 @@ export default function TeamManager() {
       }
 
       const snapshot: Omit<StationSnapshot, "updatedAt"> = {
+        stationId,
         stationName:
           currentStation?.name || state.companyData?.name || "Station",
-        stationLocation: currentStation?.location || state.companyData?.address,
+        stationLocation:
+          currentStation?.location || state.companyData?.physicalAddress,
         currency: state.companyData?.currency || getDetectedCurrency() || "USD",
         country: currentStation?.country,
         fuelPrices,
@@ -721,10 +722,10 @@ export default function TeamManager() {
         employees,
         companyData: {
           name: state.companyData?.name || currentStation?.name,
-          phone: state.companyData?.phone,
+          phone: state.companyData?.contacts,
           email: state.companyData?.email,
           kraPin: state.companyData?.kraPin,
-          vatNumber: state.companyData?.vatNumber,
+          vatNumber: state.companyData?.vatRegNo,
         },
       };
 

@@ -810,6 +810,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return true;
         }
       }
+
+      // Fallback: check the founder_credentials table (Supabase). A username
+      // like "FOUNDER" maps to a real auth email; sign in via Supabase Auth.
+      // This makes the founder username work on the main login page (not just
+      // the FounderAccess gate).
+      try {
+        const client = getSupabaseClient();
+        const { data: cred } = await client
+          .from("founder_credentials")
+          .select("auth_email")
+          .ilike("username", username.trim())
+          .eq("is_active", true)
+          .maybeSingle();
+        if (cred?.auth_email) {
+          const { data, error: signInError } =
+            await client.auth.signInWithPassword({
+              email: cred.auth_email,
+              password,
+            });
+          if (!signInError && data.user) {
+            console.info(
+              "[AuthContext] Founder username login successful for:",
+              username,
+            );
+            setIsPending(false);
+            return true;
+          }
+        }
+      } catch (err) {
+        console.info("[AuthContext] founder_credentials lookup failed:", err);
+      }
+
       setError("Invalid username or password");
       setIsPending(false);
       return false;

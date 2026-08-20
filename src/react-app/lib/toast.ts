@@ -52,7 +52,27 @@ function renderToast(t: ToastMessage): HTMLDivElement {
     warning: "&#9888;",
     info: "&#9432;",
   };
-  el.innerHTML = `<span style="font-size:16px;flex-shrink:0">${icons[t.type]}</span><span style="flex:1">${t.message}</span><button onclick="this.parentElement.remove()" style="background:none;border:none;color:inherit;cursor:pointer;font-size:14px;padding:0;margin-left:4px;opacity:0.6">&times;</button>`;
+  // Build DOM nodes explicitly so user-controllable message text is never
+  // injected as HTML (prevents XSS via toast messages).
+  const iconSpan = document.createElement("span");
+  iconSpan.style.cssText = "font-size:16px;flex-shrink:0";
+  iconSpan.innerHTML = icons[t.type]; // hardcoded entity, safe
+
+  const messageSpan = document.createElement("span");
+  messageSpan.style.cssText = "flex:1";
+  messageSpan.textContent = t.message;
+
+  const closeBtn = document.createElement("button");
+  closeBtn.textContent = "×";
+  closeBtn.style.cssText =
+    "background:none;border:none;color:inherit;cursor:pointer;font-size:14px;padding:0;margin-left:4px;opacity:0.6";
+  closeBtn.onclick = () => {
+    el.remove();
+  };
+
+  el.appendChild(iconSpan);
+  el.appendChild(messageSpan);
+  el.appendChild(closeBtn);
   return el;
 }
 
