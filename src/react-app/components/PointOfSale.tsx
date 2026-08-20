@@ -876,9 +876,11 @@ export default function PointOfSale() {
     const printWindow = window.open("", "_blank");
     if (!printWindow) return;
 
-    const receiptContent = receiptRef.current.innerHTML;
-
-    printWindow.document.write(`
+    // ⚠️ SECURITY FIX: Use textContent instead of innerHTML to prevent XSS
+    // Get the text content safely from the receipt
+    const receiptText = receiptRef.current.textContent || "";
+    
+    const html = `
       <!DOCTYPE html>
       <html>
         <head>
@@ -920,12 +922,33 @@ export default function PointOfSale() {
           </style>
         </head>
         <body>
-          ${receiptContent}
+          <div id="receipt-content"></div>
           <script>window.print(); window.close();</script>
         </body>
       </html>
-    `);
+    `;
+    printWindow.document.write(html);
     printWindow.document.close();
+    
+    // Safely insert receipt content using textContent to prevent XSS
+    const contentDiv = printWindow.document.getElementById("receipt-content");
+    if (contentDiv && receiptRef.current) {
+      // Clone the receipt and sanitize it by using textContent
+      const clone = receiptRef.current.cloneNode(true) as HTMLElement;
+      // Replace all innerHTML with textContent recursively to strip any scripts
+      const sanitizeNode = (node: Node) => {
+        if (node.nodeType === Node.ELEMENT_NODE) {
+          const el = node as Element;
+          const text = el.textContent || "";
+          el.textContent = text;
+          for (let i = 0; i < el.children.length; i++) {
+            sanitizeNode(el.children[i]);
+          }
+        }
+      };
+      sanitizeNode(clone);
+      contentDiv.innerHTML = clone.innerHTML;
+    }
   };
 
   const formatDate = (isoString: string) => {

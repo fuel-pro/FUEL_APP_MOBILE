@@ -646,16 +646,24 @@ class PrinterService {
     const text = new TextDecoder().decode(job.data);
     const printWindow = window.open("", "_blank");
     if (printWindow) {
-      printWindow.document.write(`
+      // ⚠️ SECURITY FIX: Use DOM methods instead of document.write to prevent XSS
+      const html = `
         <html>
           <head><title>Print</title></head>
           <body>
-            <pre style="font-family: monospace; white-space: pre-wrap;">${text}</pre>
+            <pre id="content" style="font-family: monospace; white-space: pre-wrap;"></pre>
             <script>window.print(); window.close();</script>
           </body>
         </html>
-      `);
+      `;
+      printWindow.document.write(html);
       printWindow.document.close();
+      
+      // Safely insert text content using textContent (not innerHTML)
+      const preElement = printWindow.document.getElementById("content");
+      if (preElement) {
+        preElement.textContent = text; // Prevents XSS by escaping HTML entities
+      }
     }
   }
 

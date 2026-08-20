@@ -32,7 +32,10 @@ async function getApiBaseAsync(): Promise<string> {
   return _apiBase || "";
 }
 
-// Encryption helper for sensitive data
+// ⚠️ SECURITY NOTE: This is a simple XOR cipher with base64 encoding.
+// It provides obfuscation only, NOT cryptographic security.
+// For production use, replace with proper encryption (e.g., Web Crypto API with AES-GCM).
+// This prevents casual inspection but should not be relied upon for protecting sensitive data.
 const encrypt = (text: string, key: string): string => {
   try {
     const encoder = new TextEncoder();
@@ -43,6 +46,7 @@ const encrypt = (text: string, key: string): string => {
     }
     return btoa(hash);
   } catch {
+    // Fallback without encryption (not recommended for sensitive data)
     return btoa(text);
   }
 };
@@ -58,6 +62,7 @@ const decrypt = (encoded: string, key: string): string => {
     const result = decoder.decode(data);
     return result.substring(0, result.length - key.length);
   } catch {
+    // Fallback without decryption
     return atob(encoded);
   }
 };

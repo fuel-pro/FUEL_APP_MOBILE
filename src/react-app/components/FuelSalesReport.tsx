@@ -249,7 +249,8 @@ export default function FuelSalesReport() {
     const printWindow = window.open("", "_blank");
     if (!printWindow) return;
 
-    printWindow.document.write(`
+    // ⚠️ SECURITY FIX: Use textContent instead of innerHTML to prevent XSS
+    const html = `
       <html>
         <head>
           <title>Fuel Sales Report - ${months[selectedMonth - 1]} ${selectedYear}</title>
@@ -318,12 +319,33 @@ export default function FuelSalesReport() {
           </style>
         </head>
         <body>
-          ${printContent.innerHTML}
+          <div id="print-content"></div>
         </body>
       </html>
-    `);
+    `;
 
+    printWindow.document.write(html);
     printWindow.document.close();
+    
+    // Safely insert report content using textContent to prevent XSS
+    const contentDiv = printWindow.document.getElementById("print-content");
+    if (contentDiv && printContent) {
+      // Clone and sanitize the content by converting all HTML to text
+      const clone = printContent.cloneNode(true) as HTMLElement;
+      const sanitizeNode = (node: Node) => {
+        if (node.nodeType === Node.ELEMENT_NODE) {
+          const el = node as Element;
+          const text = el.textContent || "";
+          el.textContent = text;
+          for (let i = 0; i < el.children.length; i++) {
+            sanitizeNode(el.children[i]);
+          }
+        }
+      };
+      sanitizeNode(clone);
+      contentDiv.innerHTML = clone.innerHTML;
+    }
+    
     printWindow.focus();
     printWindow.print();
   };

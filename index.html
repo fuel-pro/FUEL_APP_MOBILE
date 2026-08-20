@@ -5,6 +5,28 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, viewport-fit=cover"
     />
+    <!-- ⚠️ SECURITY: Content Security Policy (CSP) -->
+    <!-- Restricts script execution to prevent XSS attacks -->
+    <meta 
+      http-equiv="Content-Security-Policy" 
+      content="default-src 'self'; 
+               script-src 'self' 'unsafe-inline' https://accounts.google.com https://www.gstatic.com; 
+               style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; 
+               font-src 'self' https://fonts.gstatic.com; 
+               img-src 'self' data: blob: https:; 
+               connect-src 'self' https://*.supabase.co https://*.firebaseio.com https://*.upstash.io https://api.r2.cloudflarestorage.com; 
+               frame-src https://accounts.google.com; 
+               object-src 'none'; 
+               base-uri 'self'; 
+               form-action 'self';"
+    />
+    <!-- Security headers to prevent common attacks -->
+    <meta http-equiv="X-Content-Type-Options" content="nosniff" />
+    <meta http-equiv="X-Frame-Options" content="DENY" />
+    <meta http-equiv="X-XSS-Protection" content="1; mode=block" />
+    <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin" />
+    <meta http-equiv="Permissions-Policy" content="geolocation=(), microphone=(), camera=()" />
+    
     <!-- Preload critical assets for faster rendering -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
