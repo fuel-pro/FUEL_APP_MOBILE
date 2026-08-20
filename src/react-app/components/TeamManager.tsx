@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Users,
   Link2,
@@ -28,6 +28,18 @@ import {
   ShieldAlert,
   Share2,
   UserPlus,
+  Search,
+  Download,
+  Activity,
+  Zap,
+  Lock,
+  Unlock,
+  Users2,
+  TrendingUp,
+  X,
+  CheckSquare,
+  Square,
+  UserX,
 } from "lucide-react";
 import { useAuth } from "@/react-app/context/AuthContext";
 import {
@@ -204,6 +216,112 @@ const PERMISSION_GROUPS: {
   },
 ];
 
+// Shift templates — configurable labels that match ShiftManagement's
+// templates. These are display labels; the actual shift schedule is
+// managed in the Shifts sub-tab. Kept here for the pump/shift assignment UI.
+const SHIFT_TEMPLATES = [
+  { id: "morning", label: "Morning (06:00-14:00)" },
+  { id: "afternoon", label: "Afternoon (14:00-22:00)" },
+  { id: "night", label: "Night (22:00-06:00)" },
+];
+
+// Quick role presets — one-click templates for common station roles.
+// Each preset pre-fills the custom-role creator with a sensible default
+// permission set. The owner can still fine-tune after creation.
+const ROLE_PRESETS: {
+  slug: string;
+  label: string;
+  base: BaseUserRole;
+  description: string;
+  perms: Partial<PermissionConfig>;
+}[] = [
+  {
+    slug: "cashier",
+    label: "Cashier",
+    base: "staff",
+    description: "Front-desk POS sales + basic inventory view.",
+    perms: {
+      canUsePOS: true,
+      canViewPOS: true,
+      canCreateSales: true,
+      canViewSales: true,
+      canViewInventory: true,
+      canViewFuelPrices: true,
+      canViewLiveTransactions: true,
+      canProcessMpesa: true,
+    },
+  },
+  {
+    slug: "accountant",
+    label: "Accountant",
+    base: "manager",
+    description: "Financial reporting, invoices, credit, expenses.",
+    perms: {
+      canViewSales: true,
+      canViewReports: true,
+      canExportReports: true,
+      canViewAnalytics: true,
+      canViewCredit: true,
+      canManageCredit: true,
+      canViewDebt: true,
+      canManageDebt: true,
+      canViewAudit: true,
+      canViewInvoices: true,
+    },
+  },
+  {
+    slug: "pump-attendant",
+    label: "Pump Attendant",
+    base: "staff",
+    description: "Pump operations + sales tracking only.",
+    perms: {
+      canUsePOS: true,
+      canViewPOS: true,
+      canCreateSales: true,
+      canViewFuelPrices: true,
+      canViewShifts: true,
+    },
+  },
+  {
+    slug: "supervisor",
+    label: "Shift Supervisor",
+    base: "manager",
+    description: "Manage shifts, assign pumps, view all operational data.",
+    perms: {
+      canViewSales: true,
+      canCreateSales: true,
+      canEditSales: true,
+      canViewPOS: true,
+      canUsePOS: true,
+      canManageShifts: true,
+      canAssignShifts: true,
+      canAssignPumps: true,
+      canViewEmployees: true,
+      canManageEmployees: true,
+      canViewInventory: true,
+      canManageInventory: true,
+    },
+  },
+  {
+    slug: "auditor-readonly",
+    label: "Read-Only Auditor",
+    base: "auditor",
+    description: "Full read-only access to all reports + audit trail.",
+    perms: {
+      canViewSales: true,
+      canViewReports: true,
+      canExportReports: true,
+      canViewAnalytics: true,
+      canViewAudit: true,
+      canViewInventory: true,
+      canViewCredit: true,
+      canViewDebt: true,
+      canViewPayroll: true,
+      canViewFuelPrices: true,
+    },
+  },
+];
+
 function makeInviteLink(inv: any, station: any): string {
   const payload = JSON.stringify({
     id: inv.id,
@@ -283,10 +401,29 @@ export default function TeamManager() {
   const [permEditorRole, setPermEditorRole] = useState<string | null>(null);
   // Inner sub-tab: "Team" (this component, now includes Access Codes) vs
   // "Roles & Permissions" vs "Shifts" (the formerly-standalone ShiftManagement
-  // module, now hosted here).
-  const [activeView, setActiveView] = useState<"team" | "shifts" | "roles">(
-    "team",
+  // module, now hosted here) vs "Activity" (new: team activity + health).
+  const [activeView, setActiveView] = useState<
+    "team" | "shifts" | "roles" | "activity"
+  >("team");
+
+  // ── Search + filter for the team members roster ──
+  const [memberSearch, setMemberSearch] = useState("");
+  const [memberFilterRole, setMemberFilterRole] = useState<string>("all");
+  const [memberFilterMethod, setMemberFilterMethod] = useState<string>("all");
+  const [memberFilterStatus, setMemberFilterStatus] = useState<string>("all");
+
+  // ── Bulk select for members (bulk enable/disable/delete) ──
+  const [selectedMembers, setSelectedMembers] = useState<Set<string>>(
+    new Set(),
   );
+  const [showBulkActions, setShowBulkActions] = useState(false);
+
+  // ── Toast notification ──
+  const [toast, setToast] = useState("");
+  const showToast = useCallback((msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(""), 3000);
+  }, []);
 
   // ── Access Codes (lifted into the main component so the unified Team
   //    Access view can show combined stats + a combined member list that
@@ -391,13 +528,9 @@ export default function TeamManager() {
     return out;
   })();
 
-  // Shift options — match the ShiftManagement module's templates so a member's
-  // assigned shift can be cross-referenced with the live shift schedule.
-  const shiftOptions = [
-    "Morning (06:00-14:00)",
-    "Afternoon (14:00-22:00)",
-    "Night (22:00-06:00)",
-  ];
+  // Shift options — derived from SHIFT_TEMPLATES so labels stay in sync with
+  // the ShiftManagement module. Used for the pump/shift assignment UI.
+  const shiftOptions = SHIFT_TEMPLATES.map((s) => s.label);
 
   const handleCreateInvite = () => {
     const r = inviteRole;
@@ -751,32 +884,246 @@ export default function TeamManager() {
   // Combined member list: invite-accepted members (full accounts) +
   // access-code members (no-signup). Each entry carries an `accessMethod`
   // badge so the UI can show "Invite" vs "Code" in one blended list.
-  const codeMembers = accessCodes.map((c) => ({
-    id: c.id,
-    username: c.username,
-    memberName: c.memberName,
-    role: c.memberRole,
-    invitedBy: "Access Code",
-    invitedByUniqueId: undefined as string | undefined,
-    invitedAt: c.createdAt,
-    expiresAt: undefined as number | undefined,
-    email: undefined as string | undefined,
-    uniqueId: undefined as string | undefined,
-    assignedPumps: [] as string[],
-    active: c.enabled,
-    accessMethod: "code" as const,
-    readOnly: c.readOnly,
-    accessCount: c.accessCount,
-    lastAccessedAt: c.lastAccessedAt,
-  }));
-  const inviteMembers = team.map((m) => ({
-    ...m,
-    accessMethod: "invite" as const,
-    readOnly: false,
-    accessCount: undefined as number | undefined,
-    lastAccessedAt: undefined as number | null | undefined,
-  }));
-  const combinedMembers = [...inviteMembers, ...codeMembers];
+  const codeMembers = useMemo(
+    () =>
+      accessCodes.map((c) => ({
+        id: c.id,
+        username: c.username,
+        memberName: c.memberName,
+        role: c.memberRole,
+        invitedBy: "Access Code",
+        invitedByUniqueId: undefined as string | undefined,
+        invitedAt: c.createdAt,
+        expiresAt: undefined as number | undefined,
+        email: undefined as string | undefined,
+        uniqueId: undefined as string | undefined,
+        assignedPumps: [] as string[],
+        active: c.enabled,
+        accessMethod: "code" as const,
+        readOnly: c.readOnly,
+        accessCount: c.accessCount,
+        lastAccessedAt: c.lastAccessedAt,
+      })),
+    [accessCodes],
+  );
+  const inviteMembers = useMemo(
+    () =>
+      team.map((m) => ({
+        ...m,
+        accessMethod: "invite" as const,
+        readOnly: false,
+        accessCount: undefined as number | undefined,
+        lastAccessedAt: undefined as number | null | undefined,
+      })),
+    [team],
+  );
+  const combinedMembers = useMemo(
+    () => [...inviteMembers, ...codeMembers],
+    [inviteMembers, codeMembers],
+  );
+
+  // ── Filtered members (search + filter) ──
+  const filteredMembers = useMemo(() => {
+    return combinedMembers.filter((m) => {
+      // Search: name, username, email, uniqueId
+      if (memberSearch.trim()) {
+        const q = memberSearch.toLowerCase().trim();
+        const haystack = [
+          m.username || "",
+          m.memberName || m.username || "",
+          m.email || "",
+          m.uniqueId || "",
+          m.role || "",
+        ]
+          .join(" ")
+          .toLowerCase();
+        if (!haystack.includes(q)) return false;
+      }
+      // Filter: role
+      if (memberFilterRole !== "all" && m.role !== memberFilterRole)
+        return false;
+      // Filter: access method
+      if (memberFilterMethod !== "all" && m.accessMethod !== memberFilterMethod)
+        return false;
+      // Filter: status
+      if (memberFilterStatus === "active" && !m.active) return false;
+      if (memberFilterStatus === "inactive" && m.active) return false;
+      return true;
+    });
+  }, [
+    combinedMembers,
+    memberSearch,
+    memberFilterRole,
+    memberFilterMethod,
+    memberFilterStatus,
+  ]);
+
+  // ── Bulk select helpers ──
+  const toggleSelectMember = (id: string) => {
+    setSelectedMembers((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+  const toggleSelectAll = () => {
+    if (selectedMembers.size === filteredMembers.length) {
+      setSelectedMembers(new Set());
+    } else {
+      setSelectedMembers(new Set(filteredMembers.map((m) => m.id)));
+    }
+  };
+
+  // ── Bulk actions ──
+  const handleBulkEnableCodes = async () => {
+    const ids = filteredMembers.filter(
+      (m) => selectedMembers.has(m.id) && m.accessMethod === "code",
+    );
+    for (const m of ids) {
+      if (!m.active) await toggleAccessCode(m.id, currentStation?.id);
+    }
+    await loadAccessCodes();
+    showToast(`Enabled ${ids.length} access code(s)`);
+    setSelectedMembers(new Set());
+  };
+  const handleBulkDisableCodes = async () => {
+    const ids = filteredMembers.filter(
+      (m) => selectedMembers.has(m.id) && m.accessMethod === "code",
+    );
+    for (const m of ids) {
+      if (m.active) await toggleAccessCode(m.id, currentStation?.id);
+    }
+    await loadAccessCodes();
+    showToast(`Disabled ${ids.length} access code(s)`);
+    setSelectedMembers(new Set());
+  };
+  const handleBulkDeleteCodes = async () => {
+    if (!confirm(`Delete ${selectedMembers.size} selected access code(s)?`))
+      return;
+    const ids = filteredMembers.filter(
+      (m) => selectedMembers.has(m.id) && m.accessMethod === "code",
+    );
+    for (const m of ids) {
+      await deleteAccessCode(m.id, currentStation?.id);
+    }
+    await loadAccessCodes();
+    showToast(`Deleted ${ids.length} access code(s)`);
+    setSelectedMembers(new Set());
+  };
+  const handleBulkRevokeMembers = async () => {
+    if (!confirm(`Revoke ${selectedMembers.size} selected member(s)?`)) return;
+    const ids = filteredMembers.filter(
+      (m) => selectedMembers.has(m.id) && m.accessMethod === "invite",
+    );
+    for (const m of ids) {
+      if (m.role !== "owner") revokeMember(m.id);
+    }
+    showToast(`Revoked ${ids.length} member(s)`);
+    setSelectedMembers(new Set());
+  };
+
+  // ── CSV export of team members ──
+  const exportMembersCSV = () => {
+    const rows: string[][] = [
+      [
+        "Name",
+        "Username",
+        "Role",
+        "Access Method",
+        "Status",
+        "Email",
+        "Unique ID",
+        "Invited By",
+        "Invited At",
+        "Expires At",
+        "Read-Only",
+        "Access Count",
+        "Last Accessed",
+      ],
+    ];
+    for (const m of filteredMembers) {
+      rows.push([
+        m.memberName || m.username || "",
+        m.username || "",
+        m.role || "",
+        m.accessMethod || "",
+        m.active ? "Active" : "Inactive",
+        m.email || "",
+        m.uniqueId || "",
+        m.invitedBy || "",
+        m.invitedAt ? new Date(m.invitedAt).toISOString() : "",
+        m.expiresAt ? new Date(m.expiresAt).toISOString() : "",
+        m.readOnly ? "Yes" : "No",
+        String(m.accessCount ?? ""),
+        m.lastAccessedAt ? new Date(m.lastAccessedAt).toISOString() : "",
+      ]);
+    }
+    const csv = rows
+      .map((r) => r.map((c) => `"${(c || "").replace(/"/g, '""')}"`).join(","))
+      .join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `team-members-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast("Exported team members to CSV");
+  };
+
+  // ── Team health metrics ──
+  const teamHealth = useMemo(() => {
+    const total = combinedMembers.length;
+    const active = combinedMembers.filter((m) => m.active).length;
+    const inviteCount = combinedMembers.filter(
+      (m) => m.accessMethod === "invite",
+    ).length;
+    const codeCount = combinedMembers.filter(
+      (m) => m.accessMethod === "code",
+    ).length;
+    const managers = combinedMembers.filter((m) => m.role === "manager").length;
+    const staff = combinedMembers.filter((m) => m.role === "staff").length;
+    const auditors = combinedMembers.filter((m) => m.role === "auditor").length;
+    const custom = combinedMembers.filter(
+      (m) => !["owner", "manager", "staff", "auditor"].includes(m.role),
+    ).length;
+    const readOnlyCount = combinedMembers.filter((m) => m.readOnly).length;
+    const expired = combinedMembers.filter(
+      (m) => m.expiresAt && new Date(m.expiresAt) < new Date(),
+    ).length;
+    const activeInvitesCount = activeInvites.length;
+    const totalCodes = accessCodes.length;
+    const enabledCodes = accessCodes.filter((c) => c.enabled).length;
+    const healthScore =
+      total === 0
+        ? 0
+        : Math.round(
+            ((active / total) * 0.4 +
+              (enabledCodes / Math.max(totalCodes, 1)) * 0.3 +
+              (1 - expired / Math.max(total, 1)) * 0.3) *
+              100,
+          );
+
+    return {
+      total,
+      active,
+      inactive: total - active,
+      inviteCount,
+      codeCount,
+      managers,
+      staff,
+      auditors,
+      custom,
+      readOnlyCount,
+      expired,
+      activeInvitesCount,
+      totalCodes,
+      enabledCodes,
+      disabledCodes: totalCodes - enabledCodes,
+      healthScore,
+    };
+  }, [combinedMembers, activeInvites.length, accessCodes]);
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
@@ -823,9 +1170,12 @@ export default function TeamManager() {
           { id: "team", label: "Team Access", icon: Users },
           { id: "roles", label: "Roles & Permissions", icon: KeyRound },
           { id: "shifts", label: "Shifts", icon: Calendar },
+          { id: "activity", label: "Activity & Health", icon: Activity },
         ]}
         active={activeView}
-        onChange={(id) => setActiveView(id as "team" | "shifts" | "roles")}
+        onChange={(id) =>
+          setActiveView(id as "team" | "shifts" | "roles" | "activity")
+        }
       />
 
       {activeView === "shifts" ? (
@@ -859,6 +1209,18 @@ export default function TeamManager() {
           setNewRoleLabel={setNewRoleLabel}
           newRoleBase={newRoleBase}
           setNewRoleBase={setNewRoleBase}
+        />
+      ) : activeView === "activity" ? (
+        <ActivityHealthView
+          teamHealth={teamHealth}
+          combinedMembers={combinedMembers}
+          accessCodes={accessCodes}
+          activeInvites={activeInvites}
+          usedInvites={usedInvites}
+          expiredInvites={expiredInvites}
+          getRoleLabel={getRoleLabel}
+          exportMembersCSV={exportMembersCSV}
+          showToast={showToast}
         />
       ) : (
         <>
@@ -926,7 +1288,10 @@ export default function TeamManager() {
               {availableRoles.length > 0 && (
                 <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
                   <div className="flex items-center gap-2 mb-3">
-                    <UserPlus size={16} className="text-indigo-600 dark:text-indigo-400" />
+                    <UserPlus
+                      size={16}
+                      className="text-indigo-600 dark:text-indigo-400"
+                    />
                     <h3 className="text-sm font-bold text-gray-900 dark:text-white">
                       Add Team Member
                     </h3>
@@ -970,7 +1335,9 @@ export default function TeamManager() {
                           className={`flex-1 px-3 py-2 rounded-md text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${addMode === "code" ? "bg-blue-600 text-white shadow" : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"}`}
                         >
                           <KeyRound size={14} /> Access Code
-                          <span className="text-[9px] opacity-80">(no signup)</span>
+                          <span className="text-[9px] opacity-80">
+                            (no signup)
+                          </span>
                         </button>
                       </div>
 
@@ -1048,7 +1415,8 @@ export default function TeamManager() {
                                     setInviteCanCreateSubUsers(e.target.checked)
                                   }
                                   disabled={
-                                    !isOwner && !hasPermission("canCreateSubUsers")
+                                    !isOwner &&
+                                    !hasPermission("canCreateSubUsers")
                                   }
                                 />
                                 Allow this sub-user to create further sub-users
@@ -1058,18 +1426,22 @@ export default function TeamManager() {
                                   type="checkbox"
                                   checked={inviteCanGrantPermissions}
                                   onChange={(e) =>
-                                    setInviteCanGrantPermissions(e.target.checked)
+                                    setInviteCanGrantPermissions(
+                                      e.target.checked,
+                                    )
                                   }
                                   disabled={
                                     !isOwner &&
                                     !hasPermission("canGrantPermissions")
                                   }
                                 />
-                                Allow this sub-user to grant permissions to others
+                                Allow this sub-user to grant permissions to
+                                others
                               </label>
                               {!isOwner && (
                                 <p className="text-[10px] text-amber-600 dark:text-amber-400">
-                                  You can only delegate powers you yourself hold.
+                                  You can only delegate powers you yourself
+                                  hold.
                                 </p>
                               )}
                             </div>
@@ -1209,7 +1581,8 @@ export default function TeamManager() {
                   station data without a Supabase session.
                   {lastPublished && (
                     <span className="block mt-1 text-gray-400">
-                      Last published: {new Date(lastPublished).toLocaleTimeString()}
+                      Last published:{" "}
+                      {new Date(lastPublished).toLocaleTimeString()}
                     </span>
                   )}
                 </p>
@@ -1314,7 +1687,8 @@ export default function TeamManager() {
                           Allowed
                         </span>
                         <span className="flex items-center gap-1">
-                          <ToggleLeft size={14} className="text-gray-400" /> Denied
+                          <ToggleLeft size={14} className="text-gray-400" />{" "}
+                          Denied
                         </span>
                         <span className="ml-auto text-gray-400">
                           Click to toggle
@@ -1348,7 +1722,10 @@ export default function TeamManager() {
                                         tabId,
                                       );
                                     else
-                                      grantTabToRole(targetRole as UserRole, tabId);
+                                      grantTabToRole(
+                                        targetRole as UserRole,
+                                        tabId,
+                                      );
                                   }}
                                   className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-all ${
                                     isAllowed
@@ -1370,7 +1747,9 @@ export default function TeamManager() {
                       ))}
                       <button
                         onClick={() => {
-                          if (confirm("Reset all role tab grants to default?")) {
+                          if (
+                            confirm("Reset all role tab grants to default?")
+                          ) {
                             setRoleTabGrants({
                               manager: [...DEFAULT_ROLE_TABS.manager],
                               staff: [...DEFAULT_ROLE_TABS.staff],
@@ -1387,19 +1766,173 @@ export default function TeamManager() {
                 </div>
               )}
 
-              {/* ── Team Members roster ── */}
+              {/* ── Team Members roster (with search + filter + bulk actions) ── */}
               <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
-                <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
                   <div className="flex items-center gap-2">
                     <Users size={16} className="text-purple-600" />
                     <h3 className="text-sm font-bold text-gray-900 dark:text-white">
                       Team Members
                       <span className="ml-2 text-[10px] text-gray-400 font-normal">
-                        ({combinedMembers.length})
+                        ({filteredMembers.length}
+                        {filteredMembers.length !== combinedMembers.length
+                          ? ` of ${combinedMembers.length}`
+                          : ""}
+                        )
                       </span>
                     </h3>
                   </div>
+                  {combinedMembers.length > 0 && (
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setShowBulkActions(!showBulkActions)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors ${showBulkActions ? "bg-indigo-600 text-white" : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300"}`}
+                        title="Toggle bulk select"
+                      >
+                        {showBulkActions ? (
+                          <CheckSquare size={14} />
+                        ) : (
+                          <Square size={14} />
+                        )}
+                        Bulk
+                      </button>
+                      <button
+                        onClick={exportMembersCSV}
+                        className="px-3 py-1.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors"
+                        title="Export to CSV"
+                      >
+                        <Download size={14} /> CSV
+                      </button>
+                    </div>
+                  )}
                 </div>
+
+                {/* Search + filter bar */}
+                {combinedMembers.length > 0 && (
+                  <div className="mb-3 space-y-2">
+                    <div className="flex gap-2">
+                      <div className="flex-1 relative">
+                        <Search
+                          size={14}
+                          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                        />
+                        <input
+                          type="text"
+                          value={memberSearch}
+                          onChange={(e) => setMemberSearch(e.target.value)}
+                          placeholder="Search by name, username, email, ID..."
+                          className="w-full pl-9 pr-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-xs dark:text-white"
+                        />
+                        {memberSearch && (
+                          <button
+                            onClick={() => setMemberSearch("")}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                          >
+                            <X size={14} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <select
+                        value={memberFilterRole}
+                        onChange={(e) => setMemberFilterRole(e.target.value)}
+                        className="px-2 py-1.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-[11px] dark:text-white"
+                      >
+                        <option value="all">All Roles</option>
+                        <option value="owner">Owner</option>
+                        <option value="manager">Manager</option>
+                        <option value="staff">Staff</option>
+                        <option value="auditor">Auditor</option>
+                        {customRoles.map((cr) => (
+                          <option key={cr.name} value={cr.name}>
+                            {cr.label}
+                          </option>
+                        ))}
+                      </select>
+                      <select
+                        value={memberFilterMethod}
+                        onChange={(e) => setMemberFilterMethod(e.target.value)}
+                        className="px-2 py-1.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-[11px] dark:text-white"
+                      >
+                        <option value="all">All Methods</option>
+                        <option value="invite">Invite Link</option>
+                        <option value="code">Access Code</option>
+                      </select>
+                      <select
+                        value={memberFilterStatus}
+                        onChange={(e) => setMemberFilterStatus(e.target.value)}
+                        className="px-2 py-1.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-[11px] dark:text-white"
+                      >
+                        <option value="all">All Statuses</option>
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                      </select>
+                      {(memberSearch ||
+                        memberFilterRole !== "all" ||
+                        memberFilterMethod !== "all" ||
+                        memberFilterStatus !== "all") && (
+                        <button
+                          onClick={() => {
+                            setMemberSearch("");
+                            setMemberFilterRole("all");
+                            setMemberFilterMethod("all");
+                            setMemberFilterStatus("all");
+                          }}
+                          className="px-2 py-1.5 text-[11px] text-gray-500 hover:text-gray-700 flex items-center gap-1"
+                        >
+                          <X size={12} /> Clear
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Bulk actions bar */}
+                    {showBulkActions && filteredMembers.length > 0 && (
+                      <div className="flex items-center gap-2 p-2 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg border border-indigo-200 dark:border-indigo-800 flex-wrap">
+                        <button
+                          onClick={toggleSelectAll}
+                          className="text-xs text-indigo-700 dark:text-indigo-300 font-medium flex items-center gap-1"
+                        >
+                          {selectedMembers.size === filteredMembers.length
+                            ? "Deselect All"
+                            : "Select All"}
+                        </button>
+                        {selectedMembers.size > 0 && (
+                          <>
+                            <span className="text-xs text-gray-500">
+                              {selectedMembers.size} selected
+                            </span>
+                            <button
+                              onClick={handleBulkEnableCodes}
+                              className="px-2.5 py-1 bg-green-100 text-green-700 text-[11px] font-medium rounded-lg flex items-center gap-1 hover:bg-green-200"
+                            >
+                              <Unlock size={12} /> Enable Codes
+                            </button>
+                            <button
+                              onClick={handleBulkDisableCodes}
+                              className="px-2.5 py-1 bg-amber-100 text-amber-700 text-[11px] font-medium rounded-lg flex items-center gap-1 hover:bg-amber-200"
+                            >
+                              <Lock size={12} /> Disable Codes
+                            </button>
+                            <button
+                              onClick={handleBulkRevokeMembers}
+                              className="px-2.5 py-1 bg-red-100 text-red-700 text-[11px] font-medium rounded-lg flex items-center gap-1 hover:bg-red-200"
+                            >
+                              <Ban size={12} /> Revoke Members
+                            </button>
+                            <button
+                              onClick={handleBulkDeleteCodes}
+                              className="px-2.5 py-1 bg-red-100 text-red-700 text-[11px] font-medium rounded-lg flex items-center gap-1 hover:bg-red-200"
+                            >
+                              <Trash2 size={12} /> Delete Codes
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {combinedMembers.length === 0 && (
                   <div className="text-center py-8">
                     <UserPlus
@@ -1414,272 +1947,320 @@ export default function TeamManager() {
                     </p>
                   </div>
                 )}
-                <div className="space-y-2">
-                {combinedMembers.map((member) => {
-              const isExpanded = expandedMember === member.id;
-              const RoleIcon = getRoleIcon(member.role);
-              const roleInfo = getRoleLabel(member.role);
-              const isExpired =
-                member.expiresAt && new Date(member.expiresAt) < new Date();
-              const isCode = member.accessMethod === "code";
-              return (
-                <div
-                  key={member.id}
-                  className={`bg-white dark:bg-gray-800 rounded-xl border overflow-hidden ${isExpired ? "border-red-200 dark:border-red-800 opacity-60" : "border-gray-200 dark:border-gray-700"}`}
-                >
-                  <div
-                    className="flex items-center gap-3 p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50"
-                    onClick={() =>
-                      setExpandedMember(isExpanded ? null : member.id)
-                    }
-                  >
-                    <div
-                      className={`p-2 rounded-lg ${roleInfo.color.split(" ")[0]}`}
-                    >
-                      <RoleIcon size={18} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm font-semibold text-gray-900 dark:text-white">
-                          {isCode ? member.memberName : member.username}
-                        </p>
-                        <span
-                          className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${roleInfo.color}`}
-                        >
-                          {roleInfo.label}
-                        </span>
-                        {/* Access-method badge — Invite vs Code. */}
-                        <span
-                          className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${isCode ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300" : "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300"}`}
-                        >
-                          {isCode ? "Code" : "Invite"}
-                        </span>
-                        {isCode && member.readOnly && (
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-500/10 text-gray-500">
-                            Read-Only
-                          </span>
-                        )}
-                        {isExpired && (
-                          <span className="text-[10px] px-2 py-0.5 bg-red-100 text-red-700 rounded-full">
-                            Expired
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-xs text-gray-500">
-                        Invited by {member.invitedBy}
-                        {member.invitedByUniqueId && (
-                          <span className="text-gray-400">
-                            {" "}
-                            (ID: {member.invitedByUniqueId})
-                          </span>
-                        )}{" "}
-                        on {new Date(member.invitedAt).toLocaleDateString()}
-                      </p>
-                      {(member.email || member.uniqueId) && (
-                        <p className="text-[10px] text-gray-400 truncate">
-                          {member.email && (
-                            <span className="flex items-center gap-1">
-                              <Mail size={9} /> {member.email}
-                            </span>
-                          )}
-                          {member.uniqueId && (
-                            <span className="ml-2">ID: {member.uniqueId}</span>
-                          )}
-                        </p>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {member.expiresAt && (
-                        <span className="text-[10px] text-gray-400 flex items-center gap-1">
-                          <Clock size={10} />{" "}
-                          {new Date(member.expiresAt).toLocaleDateString()}
-                        </span>
-                      )}
-                      {isExpanded ? (
-                        <ChevronUp size={16} className="text-gray-400" />
-                      ) : (
-                        <ChevronDown size={16} className="text-gray-400" />
-                      )}
-                    </div>
+                {combinedMembers.length > 0 && filteredMembers.length === 0 && (
+                  <div className="text-center py-8">
+                    <Search
+                      size={28}
+                      className="mx-auto text-gray-300 dark:text-gray-600 mb-2"
+                    />
+                    <p className="text-sm text-gray-400">
+                      No members match your search.
+                    </p>
                   </div>
+                )}
+                <div className="space-y-2">
+                  {filteredMembers.map((member) => {
+                    const isExpanded = expandedMember === member.id;
+                    const RoleIcon = getRoleIcon(member.role);
+                    const roleInfo = getRoleLabel(member.role);
+                    const isExpired =
+                      member.expiresAt &&
+                      new Date(member.expiresAt) < new Date();
+                    const isCode = member.accessMethod === "code";
+                    return (
+                      <div
+                        key={member.id}
+                        className={`bg-white dark:bg-gray-800 rounded-xl border overflow-hidden ${isExpired ? "border-red-200 dark:border-red-800 opacity-60" : "border-gray-200 dark:border-gray-700"}`}
+                      >
+                        <div
+                          className="flex items-center gap-3 p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                          onClick={() =>
+                            setExpandedMember(isExpanded ? null : member.id)
+                          }
+                        >
+                          {showBulkActions && (
+                            <input
+                              type="checkbox"
+                              checked={selectedMembers.has(member.id)}
+                              onChange={(e) => {
+                                e.stopPropagation();
+                                toggleSelectMember(member.id);
+                              }}
+                              onClick={(e) => e.stopPropagation()}
+                              className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 flex-shrink-0"
+                            />
+                          )}
+                          <div
+                            className={`p-2 rounded-lg ${roleInfo.color.split(" ")[0]}`}
+                          >
+                            <RoleIcon size={18} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                                {isCode ? member.memberName : member.username}
+                              </p>
+                              <span
+                                className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${roleInfo.color}`}
+                              >
+                                {roleInfo.label}
+                              </span>
+                              {/* Access-method badge — Invite vs Code. */}
+                              <span
+                                className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${isCode ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300" : "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300"}`}
+                              >
+                                {isCode ? "Code" : "Invite"}
+                              </span>
+                              {isCode && member.readOnly && (
+                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-500/10 text-gray-500">
+                                  Read-Only
+                                </span>
+                              )}
+                              {isExpired && (
+                                <span className="text-[10px] px-2 py-0.5 bg-red-100 text-red-700 rounded-full">
+                                  Expired
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-gray-500">
+                              Invited by {member.invitedBy}
+                              {member.invitedByUniqueId && (
+                                <span className="text-gray-400">
+                                  {" "}
+                                  (ID: {member.invitedByUniqueId})
+                                </span>
+                              )}{" "}
+                              on{" "}
+                              {new Date(member.invitedAt).toLocaleDateString()}
+                            </p>
+                            {(member.email || member.uniqueId) && (
+                              <p className="text-[10px] text-gray-400 truncate">
+                                {member.email && (
+                                  <span className="flex items-center gap-1">
+                                    <Mail size={9} /> {member.email}
+                                  </span>
+                                )}
+                                {member.uniqueId && (
+                                  <span className="ml-2">
+                                    ID: {member.uniqueId}
+                                  </span>
+                                )}
+                              </p>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {member.expiresAt && (
+                              <span className="text-[10px] text-gray-400 flex items-center gap-1">
+                                <Clock size={10} />{" "}
+                                {new Date(
+                                  member.expiresAt,
+                                ).toLocaleDateString()}
+                              </span>
+                            )}
+                            {isExpanded ? (
+                              <ChevronUp size={16} className="text-gray-400" />
+                            ) : (
+                              <ChevronDown
+                                size={16}
+                                className="text-gray-400"
+                              />
+                            )}
+                          </div>
+                        </div>
 
-                  {isExpanded && (
-                    <div className="border-t border-gray-100 dark:border-gray-700 p-4 space-y-3">
-                      {isCode ? (
-                        /* Access-code member actions: enable/disable, delete,
+                        {isExpanded && (
+                          <div className="border-t border-gray-100 dark:border-gray-700 p-4 space-y-3">
+                            {isCode ? (
+                              /* Access-code member actions: enable/disable, delete,
                            and a read-out of access usage. These interlink with
                            the AccessCodesView list below (same cloud store). */
-                        <>
-                          <div className="text-xs text-gray-500 space-y-1">
-                            <p>
-                              <KeyRound size={10} className="inline mr-1" />
-                              Username:{" "}
-                              <code className="font-mono bg-gray-100 dark:bg-gray-900 px-1 rounded">
-                                {member.username}
-                              </code>
-                            </p>
-                            <p>
-                              Accessed {member.accessCount ?? 0} time
-                              {(member.accessCount ?? 0) !== 1 ? "s" : ""}
-                              {member.lastAccessedAt
-                                ? ` · Last: ${new Date(member.lastAccessedAt).toLocaleString()}`
-                                : ""}
-                            </p>
-                            <p className="text-gray-400">
-                              Access method: Access Code (no signup needed).
-                              Manage in the Access Codes panel below.
-                            </p>
-                          </div>
-                          <div className="flex gap-2 pt-2 border-t border-gray-100 dark:border-gray-700">
-                            <button
-                              onClick={async () => {
-                                await toggleAccessCode(
-                                  member.id,
-                                  currentStation?.id,
-                                );
-                                loadAccessCodes();
-                              }}
-                              className="px-3 py-1.5 bg-blue-50 text-blue-700 text-[11px] font-medium rounded-lg flex items-center gap-1"
-                            >
-                              <KeyRound size={10} />
-                              {member.active ? "Disable" : "Enable"}
-                            </button>
-                            <button
-                              onClick={async () => {
-                                if (
-                                  confirm(
-                                    `Delete the access code for ${member.memberName}? They will no longer be able to log in.`,
-                                  )
-                                ) {
-                                  await deleteAccessCode(
-                                    member.id,
-                                    currentStation?.id,
-                                  );
-                                  loadAccessCodes();
-                                }
-                              }}
-                              className="px-3 py-1.5 bg-red-50 text-red-700 text-[11px] font-medium rounded-lg flex items-center gap-1"
-                            >
-                              <Trash2 size={10} /> Delete Code
-                            </button>
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          {canAssign && (
-                            <>
-                              <div>
-                                <label className="text-xs text-gray-500 flex items-center gap-1 mb-1">
-                                  <Fuel size={10} /> Assigned Pumps
-                                </label>
-                                <div className="flex flex-wrap gap-1">
-                                  {pumpOptions.length === 0 && (
-                                    <span className="text-[10px] text-gray-400">
-                                      No pumps configured for this station.
-                                    </span>
-                                  )}
-                                  {pumpOptions.map((p) => {
-                                    const selected =
-                                      member.assignedPumps.includes(p.id);
-                                    return (
-                                      <button
-                                        key={p.id}
-                                        onClick={() => {
-                                          const next = selected
-                                            ? member.assignedPumps.filter(
-                                                (x: string) => x !== p.id,
-                                              )
-                                            : [...member.assignedPumps, p.id];
-                                          assignPumps(member.id, next);
-                                        }}
-                                        className={`text-[10px] px-2 py-1 rounded-full border transition-all ${selected ? "bg-green-100 text-green-700 border-green-300" : "bg-gray-50 text-gray-500 border-gray-200"}`}
-                                      >
-                                        {p.label}
-                                      </button>
-                                    );
-                                  })}
+                              <>
+                                <div className="text-xs text-gray-500 space-y-1">
+                                  <p>
+                                    <KeyRound
+                                      size={10}
+                                      className="inline mr-1"
+                                    />
+                                    Username:{" "}
+                                    <code className="font-mono bg-gray-100 dark:bg-gray-900 px-1 rounded">
+                                      {member.username}
+                                    </code>
+                                  </p>
+                                  <p>
+                                    Accessed {member.accessCount ?? 0} time
+                                    {(member.accessCount ?? 0) !== 1 ? "s" : ""}
+                                    {member.lastAccessedAt
+                                      ? ` · Last: ${new Date(member.lastAccessedAt).toLocaleString()}`
+                                      : ""}
+                                  </p>
+                                  <p className="text-gray-400">
+                                    Access method: Access Code (no signup
+                                    needed). Manage in the Access Codes panel
+                                    below.
+                                  </p>
                                 </div>
-                              </div>
-                              <div>
-                                <label className="text-xs text-gray-500 flex items-center gap-1 mb-1">
-                                  <Calendar size={10} /> Assigned Shifts
-                                </label>
-                                <div className="flex flex-wrap gap-1">
-                                  {shiftOptions.map((s) => (
-                                    <button
-                                      key={s}
-                                      onClick={() => {
-                                        const next =
-                                          member.assignedShifts.includes(s)
-                                            ? member.assignedShifts.filter(
-                                                (x: string) => x !== s,
-                                              )
-                                            : [...member.assignedShifts, s];
-                                        assignShifts(member.id, next);
-                                      }}
-                                      className={`text-[10px] px-2 py-1 rounded-full border transition-all ${member.assignedShifts.includes(s) ? "bg-blue-100 text-blue-700 border-blue-300" : "bg-gray-50 text-gray-500 border-gray-200"}`}
-                                    >
-                                      {s}
-                                    </button>
-                                  ))}
+                                <div className="flex gap-2 pt-2 border-t border-gray-100 dark:border-gray-700">
+                                  <button
+                                    onClick={async () => {
+                                      await toggleAccessCode(
+                                        member.id,
+                                        currentStation?.id,
+                                      );
+                                      loadAccessCodes();
+                                    }}
+                                    className="px-3 py-1.5 bg-blue-50 text-blue-700 text-[11px] font-medium rounded-lg flex items-center gap-1"
+                                  >
+                                    <KeyRound size={10} />
+                                    {member.active ? "Disable" : "Enable"}
+                                  </button>
+                                  <button
+                                    onClick={async () => {
+                                      if (
+                                        confirm(
+                                          `Delete the access code for ${member.memberName}? They will no longer be able to log in.`,
+                                        )
+                                      ) {
+                                        await deleteAccessCode(
+                                          member.id,
+                                          currentStation?.id,
+                                        );
+                                        loadAccessCodes();
+                                      }
+                                    }}
+                                    className="px-3 py-1.5 bg-red-50 text-red-700 text-[11px] font-medium rounded-lg flex items-center gap-1"
+                                  >
+                                    <Trash2 size={10} /> Delete Code
+                                  </button>
                                 </div>
-                              </div>
-                            </>
-                          )}
+                              </>
+                            ) : (
+                              <>
+                                {canAssign && (
+                                  <>
+                                    <div>
+                                      <label className="text-xs text-gray-500 flex items-center gap-1 mb-1">
+                                        <Fuel size={10} /> Assigned Pumps
+                                      </label>
+                                      <div className="flex flex-wrap gap-1">
+                                        {pumpOptions.length === 0 && (
+                                          <span className="text-[10px] text-gray-400">
+                                            No pumps configured for this
+                                            station.
+                                          </span>
+                                        )}
+                                        {pumpOptions.map((p) => {
+                                          const selected =
+                                            member.assignedPumps.includes(p.id);
+                                          return (
+                                            <button
+                                              key={p.id}
+                                              onClick={() => {
+                                                const next = selected
+                                                  ? member.assignedPumps.filter(
+                                                      (x: string) => x !== p.id,
+                                                    )
+                                                  : [
+                                                      ...member.assignedPumps,
+                                                      p.id,
+                                                    ];
+                                                assignPumps(member.id, next);
+                                              }}
+                                              className={`text-[10px] px-2 py-1 rounded-full border transition-all ${selected ? "bg-green-100 text-green-700 border-green-300" : "bg-gray-50 text-gray-500 border-gray-200"}`}
+                                            >
+                                              {p.label}
+                                            </button>
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
+                                    <div>
+                                      <label className="text-xs text-gray-500 flex items-center gap-1 mb-1">
+                                        <Calendar size={10} /> Assigned Shifts
+                                      </label>
+                                      <div className="flex flex-wrap gap-1">
+                                        {shiftOptions.map((s) => (
+                                          <button
+                                            key={s}
+                                            onClick={() => {
+                                              const next =
+                                                member.assignedShifts.includes(
+                                                  s,
+                                                )
+                                                  ? member.assignedShifts.filter(
+                                                      (x: string) => x !== s,
+                                                    )
+                                                  : [
+                                                      ...member.assignedShifts,
+                                                      s,
+                                                    ];
+                                              assignShifts(member.id, next);
+                                            }}
+                                            className={`text-[10px] px-2 py-1 rounded-full border transition-all ${member.assignedShifts.includes(s) ? "bg-blue-100 text-blue-700 border-blue-300" : "bg-gray-50 text-gray-500 border-gray-200"}`}
+                                          >
+                                            {s}
+                                          </button>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  </>
+                                )}
 
-                          <div className="flex gap-2 pt-2 border-t border-gray-100 dark:border-gray-700">
-                            {canSetLimits && (
-                              <div className="flex items-center gap-2 flex-1">
-                                <input
-                                  type="number"
-                                  value={extendDaysByMember[member.id] ?? "30"}
-                                  onChange={(e) =>
-                                    setExtendDaysByMember((prev) => ({
-                                      ...prev,
-                                      [member.id]: e.target.value,
-                                    }))
-                                  }
-                                  className="w-16 px-2 py-1 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded text-xs dark:text-white"
-                                  placeholder="Days"
-                                />
-                                <button
-                                  onClick={() =>
-                                    extendAccess(
-                                      member.id,
-                                      parseInt(
-                                        extendDaysByMember[member.id] ?? "30",
-                                      ) || 30,
-                                    )
-                                  }
-                                  className="px-3 py-1.5 bg-blue-50 text-blue-700 text-[11px] font-medium rounded-lg flex items-center gap-1"
-                                >
-                                  <RefreshCw size={10} /> Extend
-                                </button>
-                              </div>
-                            )}
-                            {canRevoke && member.role !== "owner" && (
-                              <button
-                                onClick={() => {
-                                  if (
-                                    confirm(
-                                      `Remove ${member.username}'s access?`,
-                                    )
-                                  )
-                                    revokeMember(member.id);
-                                }}
-                                className="px-3 py-1.5 bg-red-50 text-red-700 text-[11px] font-medium rounded-lg flex items-center gap-1"
-                              >
-                                <Ban size={10} /> Revoke
-                              </button>
+                                <div className="flex gap-2 pt-2 border-t border-gray-100 dark:border-gray-700">
+                                  {canSetLimits && (
+                                    <div className="flex items-center gap-2 flex-1">
+                                      <input
+                                        type="number"
+                                        value={
+                                          extendDaysByMember[member.id] ?? "30"
+                                        }
+                                        onChange={(e) =>
+                                          setExtendDaysByMember((prev) => ({
+                                            ...prev,
+                                            [member.id]: e.target.value,
+                                          }))
+                                        }
+                                        className="w-16 px-2 py-1 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded text-xs dark:text-white"
+                                        placeholder="Days"
+                                      />
+                                      <button
+                                        onClick={() =>
+                                          extendAccess(
+                                            member.id,
+                                            parseInt(
+                                              extendDaysByMember[member.id] ??
+                                                "30",
+                                            ) || 30,
+                                          )
+                                        }
+                                        className="px-3 py-1.5 bg-blue-50 text-blue-700 text-[11px] font-medium rounded-lg flex items-center gap-1"
+                                      >
+                                        <RefreshCw size={10} /> Extend
+                                      </button>
+                                    </div>
+                                  )}
+                                  {canRevoke && member.role !== "owner" && (
+                                    <button
+                                      onClick={() => {
+                                        if (
+                                          confirm(
+                                            `Remove ${member.username}'s access?`,
+                                          )
+                                        )
+                                          revokeMember(member.id);
+                                      }}
+                                      className="px-3 py-1.5 bg-red-50 text-red-700 text-[11px] font-medium rounded-lg flex items-center gap-1"
+                                    >
+                                      <Ban size={10} /> Revoke
+                                    </button>
+                                  )}
+                                </div>
+                              </>
                             )}
                           </div>
-                        </>
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -1759,6 +2340,11 @@ export default function TeamManager() {
             />
           </div>
         </>
+      )}
+      {toast && (
+        <div className="fixed bottom-6 right-6 bg-gray-900 text-white px-4 py-3 rounded-xl shadow-2xl text-sm font-medium z-50 flex items-center gap-2">
+          <CheckCircle2 size={16} /> {toast}
+        </div>
       )}
     </div>
   );
@@ -1896,12 +2482,42 @@ function RolesAndPermissionsView(props: RolesAndPermissionsViewProps) {
       {canCreateRoles && (
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
           {!showRoleCreator ? (
-            <button
-              onClick={() => setShowRoleCreator(true)}
-              className="w-full py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-semibold flex items-center justify-center gap-2 transition-colors"
-            >
-              <Plus size={16} /> Create Custom Role
-            </button>
+            <div className="space-y-3">
+              {/* Quick presets */}
+              <div>
+                <p className="text-xs text-gray-500 mb-2 flex items-center gap-1">
+                  <Zap size={12} /> Quick Role Presets — one-click templates
+                </p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+                  {ROLE_PRESETS.map((preset) => (
+                    <button
+                      key={preset.slug}
+                      onClick={() => {
+                        setNewRoleName(preset.slug);
+                        setNewRoleLabel(preset.label);
+                        setNewRoleBase(preset.base);
+                        setShowRoleCreator(true);
+                      }}
+                      className="p-2.5 bg-purple-50 dark:bg-purple-900/20 hover:bg-purple-100 dark:hover:bg-purple-900/40 border border-purple-200 dark:border-purple-800 rounded-lg text-left transition-colors"
+                      title={preset.description}
+                    >
+                      <p className="text-xs font-semibold text-purple-700 dark:text-purple-300">
+                        {preset.label}
+                      </p>
+                      <p className="text-[10px] text-gray-500 mt-0.5 line-clamp-2">
+                        {preset.description}
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <button
+                onClick={() => setShowRoleCreator(true)}
+                className="w-full py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-semibold flex items-center justify-center gap-2 transition-colors"
+              >
+                <Plus size={16} /> Create Custom Role
+              </button>
+            </div>
           ) : (
             <div className="space-y-3">
               <h3 className="text-sm font-bold text-gray-900 dark:text-white">
@@ -2530,6 +3146,540 @@ function AccessCodesView({
       {toast && (
         <div className="fixed bottom-6 right-6 bg-gray-900 text-white px-4 py-3 rounded-xl shadow-2xl text-sm font-medium z-50">
           {toast}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// ActivityHealthView — new 4th sub-tab: team activity, health metrics,
+// role distribution, access insights, and quick actions. This is the
+// "analytics dashboard" for the Team Manager tab.
+// ============================================================
+
+interface ActivityHealthViewProps {
+  teamHealth: {
+    total: number;
+    active: number;
+    inactive: number;
+    inviteCount: number;
+    codeCount: number;
+    managers: number;
+    staff: number;
+    auditors: number;
+    custom: number;
+    readOnlyCount: number;
+    expired: number;
+    activeInvitesCount: number;
+    totalCodes: number;
+    enabledCodes: number;
+    disabledCodes: number;
+    healthScore: number;
+  };
+  combinedMembers: any[];
+  accessCodes: StationAccessCode[];
+  activeInvites: any[];
+  usedInvites: any[];
+  expiredInvites: any[];
+  getRoleLabel: (role: string) => {
+    label: string;
+    color: string;
+    desc: string;
+  };
+  exportMembersCSV: () => void;
+  showToast: (msg: string) => void;
+}
+
+function ActivityHealthView({
+  teamHealth,
+  combinedMembers,
+  activeInvites,
+  usedInvites,
+  expiredInvites,
+  getRoleLabel,
+  exportMembersCSV,
+}: ActivityHealthViewProps) {
+  const roleDistribution = useMemo(() => {
+    const roles: Record<string, number> = {};
+    for (const m of combinedMembers) {
+      const r = m.role || "unknown";
+      roles[r] = (roles[r] || 0) + 1;
+    }
+    return Object.entries(roles).sort(
+      (a, b) => (b[1] as number) - (a[1] as number),
+    );
+  }, [combinedMembers]);
+
+  const accessBreakdown = useMemo(() => {
+    const total = teamHealth.total || 1;
+    return [
+      {
+        label: "Invite Link",
+        count: teamHealth.inviteCount,
+        pct: Math.round((teamHealth.inviteCount / total) * 100),
+        color: "bg-indigo-500",
+        Icon: Link2,
+      },
+      {
+        label: "Access Code",
+        count: teamHealth.codeCount,
+        pct: Math.round((teamHealth.codeCount / total) * 100),
+        color: "bg-blue-500",
+        Icon: KeyRound,
+      },
+    ];
+  }, [teamHealth]);
+
+  const mostActiveMembers = useMemo(() => {
+    return [...combinedMembers]
+      .filter((m) => m.accessCount !== undefined && (m.accessCount ?? 0) > 0)
+      .sort((a, b) => (b.accessCount ?? 0) - (a.accessCount ?? 0))
+      .slice(0, 5);
+  }, [combinedMembers]);
+
+  const recentJoins = useMemo(() => {
+    return [...combinedMembers]
+      .filter((m) => m.invitedAt)
+      .sort(
+        (a, b) =>
+          new Date(b.invitedAt).getTime() - new Date(a.invitedAt).getTime(),
+      )
+      .slice(0, 5);
+  }, [combinedMembers]);
+
+  const healthColor =
+    teamHealth.healthScore >= 75
+      ? "text-green-600"
+      : teamHealth.healthScore >= 50
+        ? "text-amber-600"
+        : "text-red-600";
+
+  const totalInvites =
+    usedInvites.length + activeInvites.length + expiredInvites.length;
+  const conversionRate =
+    totalInvites > 0
+      ? Math.round((usedInvites.length / totalInvites) * 100)
+      : 0;
+
+  return (
+    <div className="space-y-4">
+      {/* Health Score Banner */}
+      <div className="bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 rounded-xl border border-indigo-200 dark:border-indigo-800 p-5">
+        <div className="flex items-center justify-between flex-wrap gap-4">
+          <div className="flex items-center gap-4">
+            <div className="relative w-16 h-16 flex items-center justify-center">
+              <svg className="absolute inset-0 -rotate-90" viewBox="0 0 64 64">
+                <circle
+                  cx="32"
+                  cy="32"
+                  r="28"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="6"
+                  className="text-gray-200 dark:text-gray-700"
+                />
+                <circle
+                  cx="32"
+                  cy="32"
+                  r="28"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="6"
+                  strokeDasharray={`${(teamHealth.healthScore / 100) * 176} 176`}
+                  className={healthColor}
+                  strokeLinecap="round"
+                />
+              </svg>
+              <span className={`text-xl font-bold ${healthColor}`}>
+                {teamHealth.healthScore}
+              </span>
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-gray-900 dark:text-white">
+                Team Health Score
+              </h3>
+              <p className="text-xs text-gray-500 mt-0.5">
+                {teamHealth.total === 0
+                  ? "No team members yet — add members to see health metrics."
+                  : teamHealth.healthScore >= 75
+                    ? "Excellent — your team is well-managed and active."
+                    : teamHealth.healthScore >= 50
+                      ? "Fair — consider enabling inactive codes or revoking expired members."
+                      : "Needs attention — check for expired/inactive members."}
+              </p>
+            </div>
+          </div>
+          {teamHealth.total > 0 && (
+            <button
+              onClick={exportMembersCSV}
+              className="px-4 py-2 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-xs font-medium flex items-center gap-2 border border-gray-200 dark:border-gray-600 transition-colors"
+            >
+              <Download size={14} /> Export Team CSV
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* KPI cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        {[
+          {
+            label: "Total Members",
+            value: teamHealth.total,
+            Icon: Users,
+            color: "text-purple-600",
+            bg: "bg-purple-50 dark:bg-purple-900/20",
+          },
+          {
+            label: "Active",
+            value: teamHealth.active,
+            Icon: UserCheck,
+            color: "text-green-600",
+            bg: "bg-green-50 dark:bg-green-900/20",
+          },
+          {
+            label: "Inactive",
+            value: teamHealth.inactive,
+            Icon: UserX,
+            color: "text-gray-500",
+            bg: "bg-gray-50 dark:bg-gray-800",
+          },
+          {
+            label: "Active Invites",
+            value: teamHealth.activeInvitesCount,
+            Icon: Link2,
+            color: "text-amber-600",
+            bg: "bg-amber-50 dark:bg-amber-900/20",
+          },
+          {
+            label: "Access Codes",
+            value: teamHealth.enabledCodes,
+            Icon: KeyRound,
+            color: "text-blue-600",
+            bg: "bg-blue-50 dark:bg-blue-900/20",
+          },
+          {
+            label: "Expired",
+            value: teamHealth.expired,
+            Icon: AlertTriangle,
+            color: "text-red-600",
+            bg: "bg-red-50 dark:bg-red-900/20",
+          },
+        ].map((s) => (
+          <div
+            key={s.label}
+            className={`rounded-xl p-3 border border-gray-200 dark:border-gray-700 ${s.bg}`}
+          >
+            <s.Icon size={16} className={s.color} />
+            <p className={`text-2xl font-bold mt-1 ${s.color}`}>{s.value}</p>
+            <p className="text-[10px] text-gray-500">{s.label}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Role Distribution */}
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Crown size={16} className="text-purple-600" />
+            <h3 className="text-sm font-bold text-gray-900 dark:text-white">
+              Role Distribution
+            </h3>
+          </div>
+          {roleDistribution.length === 0 ? (
+            <p className="text-xs text-gray-400 text-center py-4">
+              No members to analyze yet.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {roleDistribution.map(([role, count]) => {
+                const info = getRoleLabel(role);
+                const pct = Math.round(
+                  ((count as number) / (teamHealth.total || 1)) * 100,
+                );
+                return (
+                  <div key={role}>
+                    <div className="flex items-center justify-between text-xs mb-1">
+                      <span className="text-gray-600 dark:text-gray-300">
+                        {info.label}
+                      </span>
+                      <span className="text-gray-400">
+                        {count} ({pct}%)
+                      </span>
+                    </div>
+                    <div className="h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-indigo-500"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Access Method Breakdown */}
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Users2 size={16} className="text-indigo-600" />
+            <h3 className="text-sm font-bold text-gray-900 dark:text-white">
+              Access Method Breakdown
+            </h3>
+          </div>
+          {teamHealth.total === 0 ? (
+            <p className="text-xs text-gray-400 text-center py-4">
+              No members to analyze yet.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {accessBreakdown.map((am) => (
+                <div key={am.label}>
+                  <div className="flex items-center justify-between text-xs mb-1">
+                    <span className="flex items-center gap-1.5 text-gray-600 dark:text-gray-300">
+                      <am.Icon size={12} /> {am.label}
+                    </span>
+                    <span className="text-gray-400">
+                      {am.count} ({am.pct}%)
+                    </span>
+                  </div>
+                  <div className="h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full ${am.color}`}
+                      style={{ width: `${am.pct}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+              <div className="flex h-3 rounded-full overflow-hidden bg-gray-100 dark:bg-gray-700">
+                {accessBreakdown.map((am) => (
+                  <div
+                    key={am.label}
+                    className={am.color}
+                    style={{ width: `${am.pct}%` }}
+                    title={`${am.label}: ${am.count}`}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Most Active Members */}
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <TrendingUp size={16} className="text-green-600" />
+            <h3 className="text-sm font-bold text-gray-900 dark:text-white">
+              Most Active Members
+            </h3>
+          </div>
+          {mostActiveMembers.length === 0 ? (
+            <p className="text-xs text-gray-400 text-center py-4">
+              No access activity recorded yet. Activity is tracked when
+              access-code members log in.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {mostActiveMembers.map((m) => (
+                <div
+                  key={m.id}
+                  className="flex items-center gap-3 p-2 bg-gray-50 dark:bg-gray-900 rounded-lg"
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-gray-900 dark:text-white truncate">
+                      {m.memberName || m.username}
+                    </p>
+                    <p className="text-[10px] text-gray-400 truncate">
+                      {m.lastAccessedAt
+                        ? `Last: ${new Date(m.lastAccessedAt).toLocaleDateString()}`
+                        : "Never accessed"}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-bold text-indigo-600">
+                      {m.accessCount ?? 0}
+                    </p>
+                    <p className="text-[10px] text-gray-400">logins</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Recently Joined */}
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Clock size={16} className="text-blue-600" />
+            <h3 className="text-sm font-bold text-gray-900 dark:text-white">
+              Recently Joined
+            </h3>
+          </div>
+          {recentJoins.length === 0 ? (
+            <p className="text-xs text-gray-400 text-center py-4">
+              No members have joined yet.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {recentJoins.map((m) => {
+                const Icon = getRoleIcon(m.role);
+                return (
+                  <div
+                    key={m.id}
+                    className="flex items-center gap-3 p-2 bg-gray-50 dark:bg-gray-900 rounded-lg"
+                  >
+                    <div
+                      className={`p-1.5 rounded-lg ${getRoleLabel(m.role).color}`}
+                    >
+                      <Icon size={14} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-gray-900 dark:text-white truncate">
+                        {m.memberName || m.username}
+                      </p>
+                      <p className="text-[10px] text-gray-400">
+                        {getRoleLabel(m.role).label} ·{" "}
+                        {new Date(m.invitedAt).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <span
+                      className={`text-[10px] px-2 py-0.5 rounded-full ${m.accessMethod === "code" ? "bg-blue-100 text-blue-700" : "bg-indigo-100 text-indigo-700"}`}
+                    >
+                      {m.accessMethod === "code" ? "Code" : "Invite"}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Invite Activity Summary */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <Activity size={16} className="text-purple-600" />
+          <h3 className="text-sm font-bold text-gray-900 dark:text-white">
+            Invite Activity Summary
+          </h3>
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          <div className="text-center p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
+            <CheckCircle2 size={20} className="mx-auto text-green-500 mb-1" />
+            <p className="text-2xl font-bold text-green-600">
+              {usedInvites.length}
+            </p>
+            <p className="text-[10px] text-gray-500">Used Invites</p>
+          </div>
+          <div className="text-center p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
+            <Link2 size={20} className="mx-auto text-amber-500 mb-1" />
+            <p className="text-2xl font-bold text-amber-600">
+              {activeInvites.length}
+            </p>
+            <p className="text-[10px] text-gray-500">Pending Invites</p>
+          </div>
+          <div className="text-center p-3 bg-red-50 dark:bg-red-900/20 rounded-lg">
+            <AlertTriangle size={20} className="mx-auto text-red-500 mb-1" />
+            <p className="text-2xl font-bold text-red-600">
+              {expiredInvites.length}
+            </p>
+            <p className="text-[10px] text-gray-500">Expired Invites</p>
+          </div>
+        </div>
+        {totalInvites > 0 && (
+          <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-gray-500">Invite Conversion Rate</span>
+              <span className="font-semibold text-gray-700 dark:text-gray-300">
+                {conversionRate}%
+              </span>
+            </div>
+            <div className="mt-1 h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-green-500"
+                style={{ width: `${conversionRate}%` }}
+              />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Quick Recommendations */}
+      {teamHealth.total > 0 && (
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Zap size={16} className="text-amber-600" />
+            <h3 className="text-sm font-bold text-gray-900 dark:text-white">
+              Quick Recommendations
+            </h3>
+          </div>
+          <div className="space-y-2">
+            {teamHealth.expired > 0 && (
+              <div className="flex items-start gap-2 p-2 bg-red-50 dark:bg-red-900/20 rounded-lg">
+                <AlertTriangle
+                  size={14}
+                  className="text-red-500 mt-0.5 flex-shrink-0"
+                />
+                <p className="text-xs text-gray-600 dark:text-gray-300">
+                  <strong>{teamHealth.expired}</strong> member(s) have expired
+                  access. Consider revoking or extending their access.
+                </p>
+              </div>
+            )}
+            {teamHealth.disabledCodes > 0 && (
+              <div className="flex items-start gap-2 p-2 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
+                <Lock
+                  size={14}
+                  className="text-amber-500 mt-0.5 flex-shrink-0"
+                />
+                <p className="text-xs text-gray-600 dark:text-gray-300">
+                  <strong>{teamHealth.disabledCodes}</strong> access code(s) are
+                  disabled. Re-enable if the member should regain access.
+                </p>
+              </div>
+            )}
+            {teamHealth.activeInvitesCount > 3 && (
+              <div className="flex items-start gap-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                <Link2
+                  size={14}
+                  className="text-blue-500 mt-0.5 flex-shrink-0"
+                />
+                <p className="text-xs text-gray-600 dark:text-gray-300">
+                  <strong>{teamHealth.activeInvitesCount}</strong> pending
+                  invites. Consider cleaning up old unused invite links.
+                </p>
+              </div>
+            )}
+            {teamHealth.inactive > 0 && (
+              <div className="flex items-start gap-2 p-2 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                <UserX
+                  size={14}
+                  className="text-gray-400 mt-0.5 flex-shrink-0"
+                />
+                <p className="text-xs text-gray-600 dark:text-gray-300">
+                  <strong>{teamHealth.inactive}</strong> member(s) are inactive.
+                  Review if they still need access.
+                </p>
+              </div>
+            )}
+            {teamHealth.expired === 0 &&
+              teamHealth.disabledCodes === 0 &&
+              teamHealth.inactive === 0 && (
+                <div className="flex items-start gap-2 p-2 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                  <CheckCircle2
+                    size={14}
+                    className="text-green-500 mt-0.5 flex-shrink-0"
+                  />
+                  <p className="text-xs text-gray-600 dark:text-gray-300">
+                    All members are active and up to date. Great job!
+                  </p>
+                </div>
+              )}
+          </div>
         </div>
       )}
     </div>
