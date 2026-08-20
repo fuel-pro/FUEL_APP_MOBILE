@@ -27,6 +27,7 @@ import {
   BadgeCheck,
   ShieldAlert,
   Share2,
+  UserPlus,
 } from "lucide-react";
 import { useAuth } from "@/react-app/context/AuthContext";
 import {
@@ -779,22 +780,44 @@ export default function TeamManager() {
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <div className="p-2.5 bg-purple-100 dark:bg-purple-900/30 rounded-xl">
-          <Users size={24} className="text-purple-600 dark:text-purple-400" />
-        </div>
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-            Team Manager
-          </h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            Invite, manage, and control access for your team
-          </p>
+      {/* ── Professional header ── */}
+      <div className="bg-gradient-to-r from-purple-600 to-indigo-600 rounded-2xl p-5 text-white shadow-lg">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-white/20 rounded-xl">
+              <Users size={24} className="text-white" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold">Team Manager</h2>
+              <p className="text-sm text-white/80">
+                Manage access, roles, shifts &amp; permissions
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 text-xs">
+            <div className="bg-white/20 rounded-lg px-3 py-1.5 text-center">
+              <p className="text-lg font-bold leading-none">
+                {combinedMembers.filter((m) => m.active).length}
+              </p>
+              <p className="text-white/70 text-[10px]">Members</p>
+            </div>
+            <div className="bg-white/20 rounded-lg px-3 py-1.5 text-center">
+              <p className="text-lg font-bold leading-none">
+                {activeInvites.length}
+              </p>
+              <p className="text-white/70 text-[10px]">Invites</p>
+            </div>
+            <div className="bg-white/20 rounded-lg px-3 py-1.5 text-center">
+              <p className="text-lg font-bold leading-none">
+                {accessCodes.filter((c) => c.enabled).length}
+              </p>
+              <p className="text-white/70 text-[10px]">Codes</p>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Sub-tab switcher: Team access (includes Access Codes) vs Roles vs Shifts */}
+      {/* ── Sub-tab switcher ── */}
       <SubTabBar
         tabs={[
           { id: "team", label: "Team Access", icon: Users },
@@ -839,7 +862,7 @@ export default function TeamManager() {
         />
       ) : (
         <>
-          {/* Current User Badge */}
+          {/* ── Current User + Hierarchy banner ── */}
           <div className="bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 rounded-xl border border-purple-200 dark:border-purple-800 p-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -895,458 +918,504 @@ export default function TeamManager() {
             )}
           </div>
 
-          {/* Stats */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-            {[
-              {
-                label: "Team Members",
-                value: combinedMembers.filter((m) => m.active).length,
-                color: "text-purple-600",
-              },
-              {
-                label: "Managers",
-                value: combinedMembers.filter((m) => m.role === "manager")
-                  .length,
-                color: "text-blue-600",
-              },
-              {
-                label: "Staff",
-                value: combinedMembers.filter((m) => m.role === "staff").length,
-                color: "text-green-600",
-              },
-              {
-                label: "Active Invites",
-                value: activeInvites.length,
-                color: "text-amber-600",
-              },
-              {
-                label: "Access Codes",
-                value: accessCodes.filter((c) => c.enabled).length,
-                color: "text-indigo-600",
-              },
-            ].map((s) => (
-              <div
-                key={s.label}
-                className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 text-center"
-              >
-                <p
-                  className={`text-2xl font-bold ${s.color} dark:${s.color.replace("text-", "text-")}`}
-                >
-                  {s.value}
-                </p>
-                <p className="text-[10px] text-gray-500">{s.label}</p>
-              </div>
-            ))}
-          </div>
-
-          {/* ── Unified "Add Team Member" — blends Invite Links + Access Codes
-              into ONE entry point. The owner picks the access method:
-              • Invite Link  → full Supabase account (the member signs up).
-              • Access Code  → username/password, no signup needed (read-only
-                by default). Lighter-weight; great for casual/viewer access.
-              Both share the SAME role list (availableRoles) and the SAME
-              permission/delegation concepts, so a team built from either
-              method stays consistent. */}
-          {availableRoles.length > 0 && (
-            <div>
-              {!showCreate ? (
-                <div className="space-y-3">
-                  <button
-                    onClick={() => {
-                      setAddMode("invite");
-                      setShowCreate(true);
-                    }}
-                    className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-colors shadow-lg"
-                  >
-                    <Plus size={18} /> Add Team Member
-                  </button>
-                  {/* Quick secondary action: jump straight to a no-signup
-                      access code (the lighter-weight alternative). */}
-                  <button
-                    onClick={() => {
-                      setAddMode("code");
-                      setShowCreate(true);
-                    }}
-                    className="w-full py-2.5 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/20 dark:hover:bg-blue-900/40 text-blue-700 dark:text-blue-300 rounded-xl text-xs font-medium flex items-center justify-center gap-2 transition-colors border border-blue-200 dark:border-blue-800"
-                  >
-                    <KeyRound size={14} /> Quick Access Code (no signup)
-                  </button>
-                </div>
-              ) : (
-                <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-xl border border-indigo-200 dark:border-indigo-800 p-6 space-y-4">
-                  {/* Mode switcher — blend the two access methods. */}
-                  <div className="flex gap-2 p-1 bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
-                    <button
-                      onClick={() => setAddMode("invite")}
-                      className={`flex-1 px-3 py-2 rounded-md text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${addMode === "invite" ? "bg-indigo-600 text-white shadow" : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"}`}
-                    >
-                      <Link2 size={14} /> Invite Link
-                      <span className="text-[9px] opacity-80">
-                        (full account)
-                      </span>
-                    </button>
-                    <button
-                      onClick={() => setAddMode("code")}
-                      className={`flex-1 px-3 py-2 rounded-md text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${addMode === "code" ? "bg-blue-600 text-white shadow" : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"}`}
-                    >
-                      <KeyRound size={14} /> Access Code
-                      <span className="text-[9px] opacity-80">(no signup)</span>
-                    </button>
+          {/* ── Professional 2-column layout: actions (left) + roster (right) ── */}
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+            {/* LEFT column (2/5) — Add Member, Invites, Access Codes */}
+            <div className="lg:col-span-2 space-y-4">
+              {/* ── Add Team Member ── */}
+              {availableRoles.length > 0 && (
+                <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <UserPlus size={16} className="text-indigo-600 dark:text-indigo-400" />
+                    <h3 className="text-sm font-bold text-gray-900 dark:text-white">
+                      Add Team Member
+                    </h3>
                   </div>
-
-                  {addMode === "code" ? (
-                    <AccessCodeForm
-                      stationId={currentStation?.id}
-                      availableRoles={availableRoles}
-                      getRoleLabel={getRoleLabel}
-                      tabIdToLabel={tabIdToLabel}
-                      stationName={currentStation?.name}
-                      stationOwnerId={user?.authId}
-                      onCreated={() => {
-                        loadAccessCodes();
-                        setShowCreate(false);
-                      }}
-                      onCancel={() => setShowCreate(false)}
-                    />
+                  {!showCreate ? (
+                    <div className="space-y-2">
+                      <button
+                        onClick={() => {
+                          setAddMode("invite");
+                          setShowCreate(true);
+                        }}
+                        className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-colors shadow-lg"
+                      >
+                        <Plus size={18} /> Invite by Link
+                      </button>
+                      <button
+                        onClick={() => {
+                          setAddMode("code");
+                          setShowCreate(true);
+                        }}
+                        className="w-full py-2.5 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/20 dark:hover:bg-blue-900/40 text-blue-700 dark:text-blue-300 rounded-xl text-xs font-medium flex items-center justify-center gap-2 transition-colors border border-blue-200 dark:border-blue-800"
+                      >
+                        <KeyRound size={14} /> Quick Access Code (no signup)
+                      </button>
+                    </div>
                   ) : (
-                    <>
-                      <h3 className="text-sm font-bold text-indigo-900 dark:text-indigo-300">
-                        Create Access Invite
-                      </h3>
-                      <div>
-                        <label className="text-xs text-gray-600 dark:text-gray-400 block mb-2">
-                          Role
-                        </label>
-                        <div className="flex flex-wrap gap-2">
-                          {availableRoles.map((r) => (
-                            <button
-                              key={r.id}
-                              onClick={() => setInviteRole(r.id)}
-                              className={`px-4 py-2 rounded-lg text-xs font-medium transition-all ${inviteRole === r.id ? getRoleLabel(r.id).color + " ring-2 ring-offset-1 ring-indigo-400" : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700"}`}
-                            >
-                              {r.label}
-                            </button>
-                          ))}
-                        </div>
-                        <p className="text-xs text-gray-500 mt-1">
-                          {getRoleLabel(inviteRole).desc}
-                        </p>
+                    <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-xl border border-indigo-200 dark:border-indigo-800 p-4 space-y-3">
+                      {/* Mode switcher */}
+                      <div className="flex gap-2 p-1 bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
+                        <button
+                          onClick={() => setAddMode("invite")}
+                          className={`flex-1 px-3 py-2 rounded-md text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${addMode === "invite" ? "bg-indigo-600 text-white shadow" : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"}`}
+                        >
+                          <Link2 size={14} /> Invite Link
+                          <span className="text-[9px] opacity-80">
+                            (full account)
+                          </span>
+                        </button>
+                        <button
+                          onClick={() => setAddMode("code")}
+                          className={`flex-1 px-3 py-2 rounded-md text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${addMode === "code" ? "bg-blue-600 text-white shadow" : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"}`}
+                        >
+                          <KeyRound size={14} /> Access Code
+                          <span className="text-[9px] opacity-80">(no signup)</span>
+                        </button>
                       </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="text-xs text-gray-600 dark:text-gray-400 block mb-1">
-                            Expires in (days) - optional
-                          </label>
-                          <input
-                            type="number"
-                            value={expireDays}
-                            onChange={(e) => setExpireDays(e.target.value)}
-                            placeholder="Never"
-                            className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-xs text-gray-600 dark:text-gray-400 block mb-1">
-                            Max uses
-                          </label>
-                          <input
-                            type="number"
-                            value={maxUses}
-                            onChange={(e) => setMaxUses(e.target.value)}
-                            min="1"
-                            className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
-                          />
-                        </div>
-                      </div>
-                      {/* Delegation toggles — only shown if the inviter may grant
-                      them. The context clamps to what the inviter actually has. */}
-                      {(isOwner || hasPermission("canCreateSubUsers")) && (
-                        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3 space-y-2">
-                          <p className="text-xs font-semibold text-amber-800 dark:text-amber-300 flex items-center gap-1">
-                            <ShieldAlert size={12} /> Delegation (optional)
-                          </p>
-                          <label className="flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={inviteCanCreateSubUsers}
-                              onChange={(e) =>
-                                setInviteCanCreateSubUsers(e.target.checked)
-                              }
-                              disabled={
-                                !isOwner && !hasPermission("canCreateSubUsers")
-                              }
-                            />
-                            Allow this sub-user to create further sub-users
-                          </label>
-                          <label className="flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={inviteCanGrantPermissions}
-                              onChange={(e) =>
-                                setInviteCanGrantPermissions(e.target.checked)
-                              }
-                              disabled={
-                                !isOwner &&
-                                !hasPermission("canGrantPermissions")
-                              }
-                            />
-                            Allow this sub-user to grant permissions to others
-                          </label>
-                          {!isOwner && (
-                            <p className="text-[10px] text-amber-600 dark:text-amber-400">
-                              You can only delegate powers you yourself hold.
+
+                      {addMode === "code" ? (
+                        <AccessCodeForm
+                          stationId={currentStation?.id}
+                          availableRoles={availableRoles}
+                          getRoleLabel={getRoleLabel}
+                          tabIdToLabel={tabIdToLabel}
+                          stationName={currentStation?.name}
+                          stationOwnerId={user?.authId}
+                          onCreated={() => {
+                            loadAccessCodes();
+                            setShowCreate(false);
+                          }}
+                          onCancel={() => setShowCreate(false)}
+                        />
+                      ) : (
+                        <>
+                          <div>
+                            <label className="text-xs text-gray-600 dark:text-gray-400 block mb-2">
+                              Role
+                            </label>
+                            <div className="flex flex-wrap gap-2">
+                              {availableRoles.map((r) => (
+                                <button
+                                  key={r.id}
+                                  onClick={() => setInviteRole(r.id)}
+                                  className={`px-4 py-2 rounded-lg text-xs font-medium transition-all ${inviteRole === r.id ? getRoleLabel(r.id).color + " ring-2 ring-offset-1 ring-indigo-400" : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700"}`}
+                                >
+                                  {r.label}
+                                </button>
+                              ))}
+                            </div>
+                            <p className="text-xs text-gray-500 mt-1">
+                              {getRoleLabel(inviteRole).desc}
                             </p>
+                          </div>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="text-xs text-gray-600 dark:text-gray-400 block mb-1">
+                                Expires in (days) - optional
+                              </label>
+                              <input
+                                type="number"
+                                value={expireDays}
+                                onChange={(e) => setExpireDays(e.target.value)}
+                                placeholder="Never"
+                                className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-xs text-gray-600 dark:text-gray-400 block mb-1">
+                                Max uses
+                              </label>
+                              <input
+                                type="number"
+                                value={maxUses}
+                                onChange={(e) => setMaxUses(e.target.value)}
+                                min="1"
+                                className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+                              />
+                            </div>
+                          </div>
+                          {(isOwner || hasPermission("canCreateSubUsers")) && (
+                            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3 space-y-2">
+                              <p className="text-xs font-semibold text-amber-800 dark:text-amber-300 flex items-center gap-1">
+                                <ShieldAlert size={12} /> Delegation (optional)
+                              </p>
+                              <label className="flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={inviteCanCreateSubUsers}
+                                  onChange={(e) =>
+                                    setInviteCanCreateSubUsers(e.target.checked)
+                                  }
+                                  disabled={
+                                    !isOwner && !hasPermission("canCreateSubUsers")
+                                  }
+                                />
+                                Allow this sub-user to create further sub-users
+                              </label>
+                              <label className="flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={inviteCanGrantPermissions}
+                                  onChange={(e) =>
+                                    setInviteCanGrantPermissions(e.target.checked)
+                                  }
+                                  disabled={
+                                    !isOwner &&
+                                    !hasPermission("canGrantPermissions")
+                                  }
+                                />
+                                Allow this sub-user to grant permissions to others
+                              </label>
+                              {!isOwner && (
+                                <p className="text-[10px] text-amber-600 dark:text-amber-400">
+                                  You can only delegate powers you yourself hold.
+                                </p>
+                              )}
+                            </div>
                           )}
-                        </div>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={handleCreateInvite}
+                              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium rounded-lg flex items-center gap-1.5"
+                            >
+                              <Link2 size={14} /> Generate Link
+                            </button>
+                            <button
+                              onClick={() => setShowCreate(false)}
+                              className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-xs font-medium rounded-lg"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </>
                       )}
-                      <div className="flex gap-2">
-                        <button
-                          onClick={handleCreateInvite}
-                          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium rounded-lg flex items-center gap-1.5"
-                        >
-                          <Link2 size={14} /> Generate Link
-                        </button>
-                        <button
-                          onClick={() => setShowCreate(false)}
-                          className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-xs font-medium rounded-lg"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </>
+                    </div>
                   )}
                 </div>
               )}
-            </div>
-          )}
 
-          {/* Active Invites */}
-          {activeInvites.length > 0 && (
-            <div className="space-y-2">
-              <h3 className="text-sm font-bold text-gray-900 dark:text-white">
-                Active Invite Links
-              </h3>
-              {activeInvites.map((inv) => (
-                <div
-                  key={inv.id}
-                  className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4"
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div
-                        className={`px-2 py-1 rounded text-[10px] font-medium ${getRoleLabel(inv.role).color}`}
-                      >
-                        {getRoleLabel(inv.role).label}
-                      </div>
-                      <code className="text-xs text-gray-500 font-mono bg-gray-100 dark:bg-gray-900 px-2 py-1 rounded">
-                        {inv.id}
-                      </code>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {inv.expiresAt && (
-                        <span className="text-[10px] text-gray-500 flex items-center gap-1">
-                          <Clock size={10} /> Expires{" "}
-                          {new Date(inv.expiresAt).toLocaleDateString()}
-                        </span>
-                      )}
-                      <span className="text-[10px] text-gray-500">
-                        Uses: {inv.uses}/{inv.maxUses}
-                      </span>
-                    </div>
-                  </div>
-                  {/* Link row */}
-                  <div className="mt-2 flex items-center gap-2">
-                    <input
-                      readOnly
-                      value={getLink(inv)}
-                      className="flex-1 px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-[10px] font-mono dark:text-gray-300 truncate"
-                    />
-                    <button
-                      onClick={() => handleCopyLink(inv)}
-                      className={`px-3 py-2 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors flex-shrink-0 ${copiedId === inv.id ? "bg-green-100 text-green-700" : "bg-indigo-100 text-indigo-700 hover:bg-indigo-200"}`}
-                    >
-                      {copiedId === inv.id ? (
-                        <>
-                          <CheckCircle2 size={14} /> Copied
-                        </>
-                      ) : (
-                        <>
-                          <Copy size={14} /> Copy
-                        </>
-                      )}
-                    </button>
-                  </div>
-                  {/* Share buttons */}
-                  <div className="mt-2 flex items-center gap-2">
-                    <button
-                      onClick={() => handleShareWhatsApp(inv)}
-                      className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-green-50 hover:bg-green-100 text-green-700 text-xs font-medium rounded-lg transition-colors"
-                    >
-                      <MessageCircle size={14} /> WhatsApp
-                    </button>
-                    <button
-                      onClick={() => handleShareEmail(inv)}
-                      className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-medium rounded-lg transition-colors"
-                    >
-                      <Mail size={14} /> Email
-                    </button>
-                    <button
-                      onClick={() => {
-                        const link = getLink(inv);
-                        if (navigator.share) {
-                          navigator
-                            .share({
-                              title: "FuelPro Invite",
-                              text: `Join ${currentStation?.name || "Fuel Station"} as ${inv.role}`,
-                              url: link,
-                            })
-                            .catch(() => handleCopyLink(inv));
-                        } else {
-                          handleCopyLink(inv);
-                        }
-                      }}
-                      className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-gray-50 hover:bg-gray-100 text-gray-700 text-xs font-medium rounded-lg transition-colors"
-                    >
-                      <Link2 size={14} /> More
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Feature Access Control — Owner or delegated canGrantPermissions */}
-          {canManagePermissions && (
-            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-              <button
-                onClick={() => setShowFeatureGrant(!showFeatureGrant)}
-                className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg flex items-center justify-center">
-                    <Settings2
-                      size={16}
-                      className="text-indigo-600 dark:text-indigo-400"
-                    />
-                  </div>
-                  <div className="text-left">
+              {/* ── Active Invites ── */}
+              {activeInvites.length > 0 && (
+                <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Link2 size={16} className="text-amber-600" />
                     <h3 className="text-sm font-bold text-gray-900 dark:text-white">
-                      Feature Access Control
+                      Active Invites
+                      <span className="ml-2 text-[10px] text-gray-400 font-normal">
+                        ({activeInvites.length})
+                      </span>
                     </h3>
-                    <p className="text-xs text-gray-500">
-                      Grant or revoke tab access per role
-                    </p>
                   </div>
-                </div>
-                {showFeatureGrant ? (
-                  <ChevronUp size={16} className="text-gray-400" />
-                ) : (
-                  <ChevronDown size={16} className="text-gray-400" />
-                )}
-              </button>
-
-              {showFeatureGrant && (
-                <div className="border-t border-gray-100 dark:border-gray-700 p-4 space-y-4">
-                  {/* Legend */}
-                  <div className="flex items-center gap-4 text-xs text-gray-500">
-                    <span className="flex items-center gap-1">
-                      <ToggleRight size={14} className="text-green-500" />{" "}
-                      Allowed
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <ToggleLeft size={14} className="text-gray-400" /> Denied
-                    </span>
-                    <span className="ml-auto text-gray-400">
-                      Click to toggle
-                    </span>
-                  </div>
-
-                  {/* Roles to manage: base roles (manager/staff/auditor) +
-                      any custom roles the current user outranks. */}
-                  {(
-                    [
-                      ...BASE_ROLES,
-                      ...customRoles
-                        .filter((c) => outranks(c.name))
-                        .map((c) => c.name),
-                    ] as string[]
-                  ).map((targetRole) => (
-                    <div key={targetRole}>
-                      <h4
-                        className={`text-xs font-semibold mb-2 px-2 py-1 rounded inline-block ${getRoleLabel(targetRole).color}`}
+                  <div className="space-y-2">
+                    {activeInvites.map((inv) => (
+                      <div
+                        key={inv.id}
+                        className="bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 p-3"
                       >
-                        {getRoleLabel(targetRole).label} Access
-                      </h4>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
-                        {Object.keys(tabIdToLabel).map((tabId) => {
-                          const isAllowed =
-                            resolveTabGrants(targetRole).includes(tabId);
-                          return (
-                            <button
-                              key={tabId}
-                              onClick={() => {
-                                if (isAllowed)
-                                  revokeTabFromRole(
-                                    targetRole as UserRole,
-                                    tabId,
-                                  );
-                                else
-                                  grantTabToRole(targetRole as UserRole, tabId);
-                              }}
-                              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-all ${
-                                isAllowed
-                                  ? "bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800"
-                                  : "bg-gray-50 dark:bg-gray-900 text-gray-400 border border-gray-200 dark:border-gray-700"
-                              }`}
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div
+                              className={`px-2 py-1 rounded text-[10px] font-medium ${getRoleLabel(inv.role).color}`}
                             >
-                              {isAllowed ? (
-                                <ToggleRight size={16} />
-                              ) : (
-                                <ToggleLeft size={16} />
-                              )}
-                              <span>{tabIdToLabel[tabId]}</span>
-                            </button>
-                          );
-                        })}
+                              {getRoleLabel(inv.role).label}
+                            </div>
+                            <code className="text-[10px] text-gray-500 font-mono bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded">
+                              {inv.id}
+                            </code>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {inv.expiresAt && (
+                              <span className="text-[10px] text-gray-500 flex items-center gap-1">
+                                <Clock size={10} />{" "}
+                                {new Date(inv.expiresAt).toLocaleDateString()}
+                              </span>
+                            )}
+                            <span className="text-[10px] text-gray-500">
+                              {inv.uses}/{inv.maxUses}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="mt-2 flex items-center gap-2">
+                          <input
+                            readOnly
+                            value={getLink(inv)}
+                            className="flex-1 px-2 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg text-[10px] font-mono dark:text-gray-300 truncate"
+                          />
+                          <button
+                            onClick={() => handleCopyLink(inv)}
+                            className={`px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1 transition-colors flex-shrink-0 ${copiedId === inv.id ? "bg-green-100 text-green-700" : "bg-indigo-100 text-indigo-700 hover:bg-indigo-200"}`}
+                          >
+                            {copiedId === inv.id ? (
+                              <>
+                                <CheckCircle2 size={12} /> Copied
+                              </>
+                            ) : (
+                              <>
+                                <Copy size={12} /> Copy
+                              </>
+                            )}
+                          </button>
+                        </div>
+                        <div className="mt-1.5 flex items-center gap-2">
+                          <button
+                            onClick={() => handleShareWhatsApp(inv)}
+                            className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 bg-green-50 hover:bg-green-100 text-green-700 text-[10px] font-medium rounded-lg"
+                          >
+                            <MessageCircle size={12} /> WhatsApp
+                          </button>
+                          <button
+                            onClick={() => handleShareEmail(inv)}
+                            className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-[10px] font-medium rounded-lg"
+                          >
+                            <Mail size={12} /> Email
+                          </button>
+                          <button
+                            onClick={() => {
+                              const link = getLink(inv);
+                              if (navigator.share) {
+                                navigator
+                                  .share({
+                                    title: "FuelPro Invite",
+                                    text: `Join ${currentStation?.name || "Fuel Station"} as ${inv.role}`,
+                                    url: link,
+                                  })
+                                  .catch(() => handleCopyLink(inv));
+                              } else {
+                                handleCopyLink(inv);
+                              }
+                            }}
+                            className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 bg-gray-50 hover:bg-gray-100 text-gray-700 text-[10px] font-medium rounded-lg"
+                          >
+                            <Link2 size={12} /> Share
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  ))}
-
-                  {/* Reset to defaults */}
-                  <button
-                    onClick={() => {
-                      if (confirm("Reset all role tab grants to default?")) {
-                        setRoleTabGrants({
-                          manager: [...DEFAULT_ROLE_TABS.manager],
-                          staff: [...DEFAULT_ROLE_TABS.staff],
-                          auditor: [...DEFAULT_ROLE_TABS.auditor],
-                        });
-                      }
-                    }}
-                    className="w-full py-2 text-xs text-gray-500 hover:text-gray-700 bg-gray-50 dark:bg-gray-900 rounded-lg transition-colors"
-                  >
-                    Reset to Default Access
-                  </button>
+                    ))}
+                  </div>
                 </div>
               )}
-            </div>
-          )}
 
-          {/* Team Members — blended list of invite-accepted members (full
-              accounts) AND access-code members (no-signup). Each row shows an
-              "Invite"/"Code" badge so the owner can see at a glance how each
-              member accesses the station. */}
-          <div className="space-y-3">
-            <h3 className="text-sm font-bold text-gray-900 dark:text-white">
-              Team Members
-            </h3>
-            {combinedMembers.length === 0 && (
-              <p className="text-center text-sm text-gray-400 py-4">
-                No team members yet. Add a member via an invite link or an
-                access code above.
-              </p>
-            )}
-            {combinedMembers.map((member) => {
+              {/* ── Shared snapshot publisher ── */}
+              <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <Share2 size={16} className="text-indigo-600" />
+                  <h3 className="text-sm font-bold text-gray-900 dark:text-white">
+                    Shared Snapshot
+                  </h3>
+                </div>
+                <p className="text-xs text-gray-500 mb-2">
+                  Publishes a read-only snapshot so access-code members can view
+                  station data without a Supabase session.
+                  {lastPublished && (
+                    <span className="block mt-1 text-gray-400">
+                      Last published: {new Date(lastPublished).toLocaleTimeString()}
+                    </span>
+                  )}
+                </p>
+                <button
+                  onClick={() => publishSnapshot()}
+                  disabled={publishing || !currentStation?.id}
+                  className="w-full px-3 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg text-xs font-medium flex items-center justify-center gap-1.5"
+                >
+                  <RefreshCw
+                    size={14}
+                    className={publishing ? "animate-spin" : ""}
+                  />
+                  {publishing ? "Publishing…" : "Refresh shared snapshot"}
+                </button>
+              </div>
+            </div>
+
+            {/* RIGHT column (3/5) — Team Members + Feature Access + History */}
+            <div className="lg:col-span-3 space-y-4">
+              {/* ── Stats grid ── */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {[
+                  {
+                    label: "Active Members",
+                    value: combinedMembers.filter((m) => m.active).length,
+                    icon: UserCheck,
+                    color: "text-purple-600",
+                    bg: "bg-purple-50 dark:bg-purple-900/20",
+                  },
+                  {
+                    label: "Managers",
+                    value: combinedMembers.filter((m) => m.role === "manager")
+                      .length,
+                    icon: Crown,
+                    color: "text-blue-600",
+                    bg: "bg-blue-50 dark:bg-blue-900/20",
+                  },
+                  {
+                    label: "Staff",
+                    value: combinedMembers.filter((m) => m.role === "staff")
+                      .length,
+                    icon: User,
+                    color: "text-green-600",
+                    bg: "bg-green-50 dark:bg-green-900/20",
+                  },
+                  {
+                    label: "Access Codes",
+                    value: accessCodes.filter((c) => c.enabled).length,
+                    icon: KeyRound,
+                    color: "text-indigo-600",
+                    bg: "bg-indigo-50 dark:bg-indigo-900/20",
+                  },
+                ].map((s) => (
+                  <div
+                    key={s.label}
+                    className={`rounded-xl p-3 border border-gray-200 dark:border-gray-700 ${s.bg}`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <s.icon size={14} className={s.color} />
+                    </div>
+                    <p className={`text-xl font-bold ${s.color}`}>{s.value}</p>
+                    <p className="text-[10px] text-gray-500">{s.label}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* ── Feature Access Control (collapsible) ── */}
+              {canManagePermissions && (
+                <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+                  <button
+                    onClick={() => setShowFeatureGrant(!showFeatureGrant)}
+                    className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg flex items-center justify-center">
+                        <Settings2
+                          size={16}
+                          className="text-indigo-600 dark:text-indigo-400"
+                        />
+                      </div>
+                      <div className="text-left">
+                        <h3 className="text-sm font-bold text-gray-900 dark:text-white">
+                          Feature Access Control
+                        </h3>
+                        <p className="text-xs text-gray-500">
+                          Grant or revoke tab access per role
+                        </p>
+                      </div>
+                    </div>
+                    {showFeatureGrant ? (
+                      <ChevronUp size={16} className="text-gray-400" />
+                    ) : (
+                      <ChevronDown size={16} className="text-gray-400" />
+                    )}
+                  </button>
+
+                  {showFeatureGrant && (
+                    <div className="border-t border-gray-100 dark:border-gray-700 p-4 space-y-4">
+                      <div className="flex items-center gap-4 text-xs text-gray-500">
+                        <span className="flex items-center gap-1">
+                          <ToggleRight size={14} className="text-green-500" />{" "}
+                          Allowed
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <ToggleLeft size={14} className="text-gray-400" /> Denied
+                        </span>
+                        <span className="ml-auto text-gray-400">
+                          Click to toggle
+                        </span>
+                      </div>
+                      {(
+                        [
+                          ...BASE_ROLES,
+                          ...customRoles
+                            .filter((c) => outranks(c.name))
+                            .map((c) => c.name),
+                        ] as string[]
+                      ).map((targetRole) => (
+                        <div key={targetRole}>
+                          <h4
+                            className={`text-xs font-semibold mb-2 px-2 py-1 rounded inline-block ${getRoleLabel(targetRole).color}`}
+                          >
+                            {getRoleLabel(targetRole).label} Access
+                          </h4>
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                            {Object.keys(tabIdToLabel).map((tabId) => {
+                              const isAllowed =
+                                resolveTabGrants(targetRole).includes(tabId);
+                              return (
+                                <button
+                                  key={tabId}
+                                  onClick={() => {
+                                    if (isAllowed)
+                                      revokeTabFromRole(
+                                        targetRole as UserRole,
+                                        tabId,
+                                      );
+                                    else
+                                      grantTabToRole(targetRole as UserRole, tabId);
+                                  }}
+                                  className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-all ${
+                                    isAllowed
+                                      ? "bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800"
+                                      : "bg-gray-50 dark:bg-gray-900 text-gray-400 border border-gray-200 dark:border-gray-700"
+                                  }`}
+                                >
+                                  {isAllowed ? (
+                                    <ToggleRight size={16} />
+                                  ) : (
+                                    <ToggleLeft size={16} />
+                                  )}
+                                  <span>{tabIdToLabel[tabId]}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                      <button
+                        onClick={() => {
+                          if (confirm("Reset all role tab grants to default?")) {
+                            setRoleTabGrants({
+                              manager: [...DEFAULT_ROLE_TABS.manager],
+                              staff: [...DEFAULT_ROLE_TABS.staff],
+                              auditor: [...DEFAULT_ROLE_TABS.auditor],
+                            });
+                          }
+                        }}
+                        className="w-full py-2 text-xs text-gray-500 hover:text-gray-700 bg-gray-50 dark:bg-gray-900 rounded-lg transition-colors"
+                      >
+                        Reset to Default Access
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ── Team Members roster ── */}
+              <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <Users size={16} className="text-purple-600" />
+                    <h3 className="text-sm font-bold text-gray-900 dark:text-white">
+                      Team Members
+                      <span className="ml-2 text-[10px] text-gray-400 font-normal">
+                        ({combinedMembers.length})
+                      </span>
+                    </h3>
+                  </div>
+                </div>
+                {combinedMembers.length === 0 && (
+                  <div className="text-center py-8">
+                    <UserPlus
+                      size={32}
+                      className="mx-auto text-gray-300 dark:text-gray-600 mb-2"
+                    />
+                    <p className="text-sm text-gray-400">
+                      No team members yet.
+                    </p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      Add a member via an invite link or access code.
+                    </p>
+                  </div>
+                )}
+                <div className="space-y-2">
+                {combinedMembers.map((member) => {
               const isExpanded = expandedMember === member.id;
               const RoleIcon = getRoleIcon(member.role);
               const roleInfo = getRoleLabel(member.role);
@@ -1611,95 +1680,73 @@ export default function TeamManager() {
                 </div>
               );
             })}
+                </div>
+              </div>
+
+              {/* ── Invite History (used/expired) ── */}
+              {(usedInvites.length > 0 || expiredInvites.length > 0) && (
+                <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Clock size={16} className="text-gray-400" />
+                    <h3 className="text-sm font-bold text-gray-500 dark:text-gray-400">
+                      Invite History
+                    </h3>
+                  </div>
+                  <div className="space-y-2">
+                    {usedInvites.map((inv) => (
+                      <div
+                        key={inv.id}
+                        className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-900 rounded-lg text-xs text-gray-500"
+                      >
+                        <CheckCircle2 size={14} className="text-green-400" />
+                        <span
+                          className={`px-2 py-0.5 rounded ${getRoleLabel(inv.role).color}`}
+                        >
+                          {getRoleLabel(inv.role).label}
+                        </span>
+                        <span>
+                          used by <strong>{inv.usedBy}</strong> on{" "}
+                          {inv.usedAt
+                            ? new Date(inv.usedAt).toLocaleDateString()
+                            : "unknown"}
+                        </span>
+                      </div>
+                    ))}
+                    {expiredInvites.map((inv) => (
+                      <div
+                        key={inv.id}
+                        className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-900 rounded-lg text-xs text-gray-500"
+                      >
+                        <AlertTriangle size={14} className="text-amber-400" />
+                        <span
+                          className={`px-2 py-0.5 rounded ${getRoleLabel(inv.role).color}`}
+                        >
+                          {getRoleLabel(inv.role).label}
+                        </span>
+                        <span>
+                          expired on{" "}
+                          {inv.expiresAt
+                            ? new Date(inv.expiresAt).toLocaleDateString()
+                            : "unknown"}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
-          {/* Used/Expired Invites */}
-          {(usedInvites.length > 0 || expiredInvites.length > 0) && (
-            <div className="space-y-2">
-              <h3 className="text-sm font-bold text-gray-500 dark:text-gray-400">
-                History
+          {/* ── Access Codes panel (full-width below the grid) ── */}
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <KeyRound size={16} className="text-blue-600" />
+              <h3 className="text-sm font-bold text-gray-900 dark:text-white">
+                Access Codes
               </h3>
-              {usedInvites.map((inv) => (
-                <div
-                  key={inv.id}
-                  className="flex items-center gap-2 p-3 bg-gray-50 dark:bg-gray-900 rounded-lg text-xs text-gray-500"
-                >
-                  <CheckCircle2 size={14} className="text-green-400" />
-                  <span
-                    className={`px-2 py-0.5 rounded ${getRoleLabel(inv.role).color}`}
-                  >
-                    {getRoleLabel(inv.role).label}
-                  </span>
-                  <span>
-                    used by <strong>{inv.usedBy}</strong> on{" "}
-                    {inv.usedAt
-                      ? new Date(inv.usedAt).toLocaleDateString()
-                      : "unknown"}
-                  </span>
-                </div>
-              ))}
-              {expiredInvites.map((inv) => (
-                <div
-                  key={inv.id}
-                  className="flex items-center gap-2 p-3 bg-gray-50 dark:bg-gray-900 rounded-lg text-xs text-gray-500"
-                >
-                  <AlertTriangle size={14} className="text-amber-400" />
-                  <span
-                    className={`px-2 py-0.5 rounded ${getRoleLabel(inv.role).color}`}
-                  >
-                    {getRoleLabel(inv.role).label}
-                  </span>
-                  <span>
-                    expired on{" "}
-                    {inv.expiresAt
-                      ? new Date(inv.expiresAt).toLocaleDateString()
-                      : "unknown"}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* ============================================================
-              Access Codes — fully interlinked with Invite Links. Both
-              access methods now share:
-              • the SAME role list (availableRoles — base + custom roles),
-              • the SAME tab-permission concept (allowedTabs picker uses
-                tabIdToLabel, mirroring the Roles & Permissions grid),
-              • the SAME share buttons (WhatsApp/Email/Copy) as invite links.
-              The list below is the management panel; the blended Team
-              Members list above also shows each code as a member with a
-              "Code" badge, and the unified "Add Team Member" card can open
-              this form directly.
-          ============================================================ */}
-          <div className="mt-6 border-t border-gray-200 dark:border-gray-700 pt-6">
-            {/* Snapshot publisher — writes a public read-only snapshot so
-                members logged in via access code can view the approved
-                sections without a Supabase session. */}
-            <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
-              <div className="flex items-center gap-2 text-xs text-gray-500">
-                <Share2 size={14} />
-                <span>
-                  Shared read-only snapshot
-                  {lastPublished && (
-                    <>
-                      {" "}
-                      · published {new Date(lastPublished).toLocaleTimeString()}
-                    </>
-                  )}
-                </span>
-              </div>
-              <button
-                onClick={() => publishSnapshot()}
-                disabled={publishing || !currentStation?.id}
-                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg text-xs font-medium flex items-center gap-1.5"
-              >
-                <RefreshCw
-                  size={14}
-                  className={publishing ? "animate-spin" : ""}
-                />
-                {publishing ? "Publishing…" : "Refresh shared snapshot"}
-              </button>
+              <span className="text-[10px] text-gray-400 font-normal">
+                No-signup access for team members
+              </span>
             </div>
             <AccessCodesView
               stationId={currentStation?.id}
