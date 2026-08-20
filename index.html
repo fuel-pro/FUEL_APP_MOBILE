@@ -5,6 +5,14 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, viewport-fit=cover"
     />
+    <!-- Content Security Policy: allow only the domains the app actually uses
+         (Supabase REST/Realtime/Storage, Google Identity Services, Google Fonts,
+         Open-Meteo weather, Nominatim geocoding, allorigins CORS proxy fallback,
+         Safaricom Daraja, the Vercel API host, YouTube embeds in News). -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' 'unsafe-inline' https://accounts.google.com https://apis.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https: blob:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.open-meteo.com https://nominatim.openstreetmap.org https://api.allorigins.win https://accounts.google.com https://apis.google.com https://api.safaricom.co.ke https://sandbox.safaricom.co.ke https://api.safaricom.co https://sandbox.safaricom.co https://fuel-app-mobile.vercel.app https://*.vercel.app; frame-src 'self' https://accounts.google.com https://www.youtube.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self';"
+    />
     <!-- Preload critical assets for faster rendering -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
