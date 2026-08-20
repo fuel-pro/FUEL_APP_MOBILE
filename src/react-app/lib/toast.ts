@@ -47,12 +47,30 @@ function renderToast(t: ToastMessage): HTMLDivElement {
   el.style.cssText += colors[t.type];
 
   const icons: Record<ToastType, string> = {
-    success: "&#10003;",
-    error: "&#10007;",
-    warning: "&#9888;",
-    info: "&#9432;",
+    success: "✓",
+    error: "✗",
+    warning: "⚠",
+    info: "ℹ",
   };
-  el.innerHTML = `<span style="font-size:16px;flex-shrink:0">${icons[t.type]}</span><span style="flex:1">${t.message}</span><button onclick="this.parentElement.remove()" style="background:none;border:none;color:inherit;cursor:pointer;font-size:14px;padding:0;margin-left:4px;opacity:0.6">&times;</button>`;
+  
+  // Create elements safely to prevent XSS
+  const iconSpan = document.createElement("span");
+  iconSpan.style.cssText = "font-size:16px;flex-shrink:0";
+  iconSpan.textContent = icons[t.type];
+  
+  const messageSpan = document.createElement("span");
+  messageSpan.style.cssText = "flex:1";
+  messageSpan.textContent = t.message; // Safe: uses textContent instead of innerHTML
+  
+  const closeButton = document.createElement("button");
+  closeButton.textContent = "×";
+  closeButton.style.cssText = "background:none;border:none;color:inherit;cursor:pointer;font-size:14px;padding:0;margin-left:4px;opacity:0.6";
+  closeButton.onclick = () => { if (el.parentElement) el.parentElement.remove(); };
+  
+  el.appendChild(iconSpan);
+  el.appendChild(messageSpan);
+  el.appendChild(closeButton);
+  
   return el;
 }
 
