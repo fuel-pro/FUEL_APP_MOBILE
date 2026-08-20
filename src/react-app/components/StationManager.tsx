@@ -1,5 +1,6 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { useStations } from "@/react-app/context/StationContext";
+import { useAuth } from "@/react-app/context/AuthContext";
 import { useNavigate } from "react-router";
 import {
   Plus,
@@ -33,6 +34,15 @@ import {
   Calendar,
   Download,
   MoreHorizontal,
+  Building2,
+  UserCheck,
+  Link as LinkIcon,
+  MailOpen,
+  ShieldCheck,
+  Clock,
+  Inbox,
+  Loader2,
+  LogOut,
 } from "lucide-react";
 import {
   formatMoney,
@@ -48,6 +58,12 @@ import {
   startOfMonth,
   getCurrencySymbol,
 } from "@/react-app/lib/station-stats";
+import {
+  getSharedStations,
+  acceptInvite,
+  revokeMember,
+  type StationMember,
+} from "@/react-app/lib/station-share-service";
 
 interface StationManagerProps {
   onClose?: () => void;
@@ -657,6 +673,399 @@ function AccessModal({
   );
 }
 
+// ============================================================
+// Access Another Station — the modern invite-based station sharing flow.
+// Three tabs: Shared With You (accepted memberships) / Join by Invite
+// (paste a link/token) / Pending Invites (awaiting your acceptance).
+// Builds on the `station_members` DB table (migration 015/016), NOT the
+// legacy password-based sharedUsers model.
+// ============================================================
+
+interface SharedStationInfo {
+  stationId: string;
+  stationName: string;
+  role: string;
+  invitedBy: string;
+  status: string;
+  member: StationMember | null;
+}
+
+function RoleBadge({ role }: { role: string }) {
+  const styles: Record<string, string> = {
+    owner: "bg-amber-500/20 text-amber-400 border-amber-500/30",
+    manager: "bg-sky-500/20 text-sky-400 border-sky-500/30",
+    staff: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
+    auditor: "bg-purple-500/20 text-purple-400 border-purple-500/30",
+  };
+  const label = role ? role.charAt(0).toUpperCase() + role.slice(1) : "Member";
+  const cls = styles[role?.toLowerCase()] || "bg-gray-500/20 text-gray-400 border-gray-500/30";
+  return (
+    <span className={`px-2 py-0.5 rounded-full text-xs border ${cls}`}>{label}</span>
+  );
+}
+
+function AccessSharedStationModal({
+  ownedStations,
+  sharedStations,
+  pendingInvites,
+  onAccess,
+  onClose,
+  onInvitesChanged,
+}: {
+  ownedStations: any[];
+  sharedStations: SharedStationInfo[];
+  pendingInvites: SharedStationInfo[];
+  onAccess: (stationId: string) => void;
+  onClose: () => void;
+  onInvitesChanged: () => void;
+}) {
+  const [tab, setTab] = useState<"shared" | "join" | "pending">(
+    sharedStations.length > 0 ? "shared" : pendingInvites.length > 0 ? "pending" : "join",
+  );
+  const [inviteInput, setInviteInput] = useState("");
+  const [joining, setJoining] = useState(false);
+  const [joinError, setJoinError] = useState("");
+  const [joinSuccess, setJoinSuccess] = useState("");
+
+  // Extract the token from a pasted invite URL or raw token
+  const extractToken = (input: string): string => {
+    const trimmed = input.trim();
+    if (!trimmed) return "";
+    // If it's a URL with ?invite=TOKEN, extract the token
+    try {
+      const url = new URL(trimmed);
+      const token = url.searchParams.get("invite");
+      if (token) return token;
+    } catch {
+      // Not a URL — treat as raw token
+    }
+    return trimmed;
+  };
+
+  const handleJoin = async () => {
+    const token = extractToken(inviteInput);
+    if (!token) {
+      setJoinError("Please paste an invite link or token");
+      return;
+    }
+    setJoining(true);
+    setJoinError("");
+    setJoinSuccess("");
+    try {
+      const result = await acceptInvite(token);
+      if (result.success && result.stationId) {
+        setJoinSuccess(`Invite accepted! Switching to station...`);
+        onInvitesChanged();
+        setTimeout(() => {
+          onAccess(result.stationId!);
+        }, 1000);
+      } else {
+        setJoinError(result.error || "Failed to accept invite. The link may be invalid or expired.");
+      }
+    } catch (e: any) {
+      setJoinError(e?.message || "An error occurred while accepting the invite");
+    } finally {
+      setJoining(false);
+    }
+  };
+
+  const tabs = [
+    { id: "shared" as const, label: "Shared With You", icon: Building2, count: sharedStations.length },
+    { id: "pending" as const, label: "Pending Invites", icon: Inbox, count: pendingInvites.length },
+    { id: "join" as const, label: "Join by Invite", icon: LinkIcon, count: null },
+  ];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className={`${GLASS_CARD} w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col`}>
+        {/* Header */}
+        <div className="flex items-center justify-between p-6 border-b border-white/10">
+          <div>
+            <h2 className="text-lg font-bold text-white flex items-center gap-2">
+              <Building2 size={20} className="text-sky-400" />
+              Access Another Station
+            </h2>
+            <p className="text-xs text-gray-400 mt-1">
+              Switch to a station shared with you, accept a pending invite, or join via invite link
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex items-center gap-1 p-2 bg-white/5 border-b border-white/10">
+          {tabs.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
+                tab === t.id
+                  ? "bg-sky-500/30 text-sky-300"
+                  : "text-gray-400 hover:text-white hover:bg-white/5"
+              }`}
+            >
+              <t.icon size={15} />
+              {t.label}
+              {t.count !== null && t.count > 0 && (
+                <span className="px-1.5 py-0.5 bg-white/10 rounded-full text-[10px] font-bold">
+                  {t.count}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-6">
+          {tab === "shared" && (
+            <div className="space-y-3">
+              {sharedStations.length === 0 ? (
+                <div className="text-center py-12">
+                  <Building2 size={40} className="text-gray-600 mx-auto mb-3" />
+                  <p className="text-gray-400 text-sm mb-1">No stations shared with you yet</p>
+                  <p className="text-gray-500 text-xs">
+                    When a station owner invites you, the station will appear here
+                  </p>
+                </div>
+              ) : (
+                sharedStations.map((s) => (
+                  <div
+                    key={s.stationId}
+                    className="bg-white/5 border border-white/10 rounded-xl p-4 hover:bg-white/10 transition-colors group"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <div
+                          className={`w-11 h-11 rounded-xl ${avatarColor(s.stationName)} flex items-center justify-center text-white font-bold text-sm flex-shrink-0`}
+                        >
+                          {initialsOf(s.stationName)}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <h3 className="font-semibold text-white text-sm truncate">{s.stationName}</h3>
+                          <div className="flex items-center gap-2 mt-1 flex-wrap">
+                            <RoleBadge role={s.role} />
+                            {s.invitedBy && (
+                              <span className="text-xs text-gray-400 flex items-center gap-1">
+                                <UserCheck size={11} />
+                                Invited by {s.invitedBy}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => onAccess(s.stationId)}
+                        className="px-3 py-1.5 bg-sky-500 hover:bg-sky-600 text-white rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors flex-shrink-0"
+                      >
+                        <LogIn size={13} />
+                        Access
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+
+          {tab === "pending" && (
+            <div className="space-y-3">
+              {pendingInvites.length === 0 ? (
+                <div className="text-center py-12">
+                  <Inbox size={40} className="text-gray-600 mx-auto mb-3" />
+                  <p className="text-gray-400 text-sm mb-1">No pending invites</p>
+                  <p className="text-gray-500 text-xs">
+                    Invitations awaiting your acceptance will appear here
+                  </p>
+                </div>
+              ) : (
+                pendingInvites.map((s) => (
+                  <div
+                    key={s.stationId}
+                    className="bg-amber-500/5 border border-amber-500/20 rounded-xl p-4"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <div
+                          className={`w-11 h-11 rounded-xl ${avatarColor(s.stationName)} flex items-center justify-center text-white font-bold text-sm flex-shrink-0`}
+                        >
+                          {initialsOf(s.stationName)}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <h3 className="font-semibold text-white text-sm truncate">{s.stationName}</h3>
+                          <div className="flex items-center gap-2 mt-1 flex-wrap">
+                            <RoleBadge role={s.role} />
+                            <span className="text-xs text-amber-400 flex items-center gap-1">
+                              <Clock size={11} />
+                              Awaiting acceptance
+                            </span>
+                            {s.invitedBy && (
+                              <span className="text-xs text-gray-400">from {s.invitedBy}</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <AcceptPendingButton
+                        stationId={s.stationId}
+                        member={s.member}
+                        onAccepted={(stationId) => {
+                          onInvitesChanged();
+                          onAccess(stationId);
+                        }}
+                      />
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+
+          {tab === "join" && (
+            <div className="space-y-4">
+              <div className="text-center py-4">
+                <LinkIcon size={36} className="text-sky-400 mx-auto mb-3" />
+                <h3 className="text-white font-semibold text-sm mb-1">Join by Invite Link</h3>
+                <p className="text-gray-400 text-xs">
+                  Paste an invite link or token you received from a station owner
+                </p>
+              </div>
+
+              {joinError && (
+                <div className="p-3 bg-red-500/20 border border-red-500/30 rounded-lg text-red-400 text-sm flex items-start gap-2">
+                  <AlertTriangle size={16} className="flex-shrink-0 mt-0.5" />
+                  <span>{joinError}</span>
+                </div>
+              )}
+
+              {joinSuccess && (
+                <div className="p-3 bg-emerald-500/20 border border-emerald-500/30 rounded-lg text-emerald-400 text-sm flex items-start gap-2">
+                  <Check size={16} className="flex-shrink-0 mt-0.5" />
+                  <span>{joinSuccess}</span>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs text-gray-400 mb-1.5">Invite Link or Token</label>
+                <input
+                  type="text"
+                  value={inviteInput}
+                  onChange={(e) => setInviteInput(e.target.value)}
+                  placeholder="https://fuel-app-mobile.pages.dev/?invite=abc123... or just abc123..."
+                  className="w-full px-4 py-2.5 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-sky-400 text-sm"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !joining) handleJoin();
+                  }}
+                />
+              </div>
+
+              <button
+                onClick={handleJoin}
+                disabled={joining || !inviteInput.trim()}
+                className="w-full px-6 py-2.5 bg-sky-500 hover:bg-sky-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"
+              >
+                {joining ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin" />
+                    Accepting Invite...
+                  </>
+                ) : (
+                  <>
+                    <MailOpen size={16} />
+                    Accept Invite & Access Station
+                  </>
+                )}
+              </button>
+
+              <div className="p-3 bg-white/5 rounded-lg border border-white/10">
+                <p className="text-xs text-gray-400 flex items-start gap-2">
+                  <ShieldCheck size={14} className="text-sky-400 flex-shrink-0 mt-0.5" />
+                  <span>
+                    Only accept invites from station owners you trust. Once accepted, you'll
+                    have access to that station's data based on your assigned role (read-only
+                    or read-write). You can switch back to your own stations anytime from the
+                    station selector.
+                  </span>
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="p-4 border-t border-white/10 flex items-center justify-between">
+          <p className="text-xs text-gray-500">
+            {ownedStations.length} owned · {sharedStations.length} shared · {pendingInvites.length} pending
+          </p>
+          <button
+            onClick={onClose}
+            className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg text-sm transition-colors"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Sub-component for accepting a pending invite from within the modal
+function AcceptPendingButton({
+  stationId,
+  member,
+  onAccepted,
+}: {
+  stationId: string;
+  member: StationMember | null;
+  onAccepted: (stationId: string) => void;
+}) {
+  const [accepting, setAccepting] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleAccept = async () => {
+    if (!member?.invite_token) {
+      setError("No invite token found for this invite");
+      return;
+    }
+    setAccepting(true);
+    setError("");
+    try {
+      const result = await acceptInvite(member.invite_token);
+      if (result.success && result.stationId) {
+        onAccepted(result.stationId);
+      } else {
+        setError(result.error || "Failed to accept invite");
+      }
+    } catch (e: any) {
+      setError(e?.message || "An error occurred");
+    } finally {
+      setAccepting(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col items-end gap-1 flex-shrink-0">
+      <button
+        onClick={handleAccept}
+        disabled={accepting}
+        className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors"
+      >
+        {accepting ? (
+          <Loader2 size={13} className="animate-spin" />
+        ) : (
+          <Check size={13} />
+        )}
+        Accept
+      </button>
+      {error && <span className="text-[10px] text-red-400 max-w-[120px] text-right">{error}</span>}
+    </div>
+  );
+}
+
+
 // Combined View Modal
 function CombinedViewModal({
   stations,
@@ -664,6 +1073,7 @@ function CombinedViewModal({
   onClose,
 }: {
   stations: any[];
+
   combined: any;
   onClose: () => void;
 }) {
@@ -845,6 +1255,8 @@ export default function StationManager({ onClose }: StationManagerProps) {
     syncFromBackend,
   } = useStations();
 
+  const { user, bindings } = useAuth();
+
   const navigate = useNavigate();
 
   // UI state
@@ -856,12 +1268,92 @@ export default function StationManager({ onClose }: StationManagerProps) {
 
   // Modal state
   const [modal, setModal] = useState<{
-    type: "create" | "edit" | "share" | "access" | "combined" | "delete";
+    type:
+      | "create"
+      | "edit"
+      | "share"
+      | "access"
+      | "access-shared"
+      | "combined"
+      | "delete";
     station?: any;
   } | null>(null);
 
   // Form state
   const [editForm, setEditForm] = useState<any>(EMPTY_FORM);
+
+  // Shared/pending station data for the "Access Another Station" modal.
+  // SharedStations: stations the user is an accepted member of (from the
+  // station_members DB table). pendingInvites: invites awaiting acceptance
+  // (invited_email = user.email, status = pending). Both are loaded async
+  // from Supabase and refreshed on demand (onInvitesChanged).
+  const [sharedStations, setSharedStations] = useState<SharedStationInfo[]>([]);
+  const [pendingInvites, setPendingInvites] = useState<SharedStationInfo[]>([]);
+  const [invitesVersion, setInvitesVersion] = useState(0);
+
+  const loadSharedAndPending = useCallback(async () => {
+    if (!user?.id) return;
+    // Shared (accepted) stations — from station_members DB + AuthContext bindings
+    const members = await getSharedStations();
+    const fromBindings: SharedStationInfo[] = bindings
+      .filter((b) => b.active)
+      .map((b) => ({
+        stationId: b.stationId,
+        stationName: b.stationName,
+        role: b.role,
+        invitedBy: b.invitedBy,
+        status: "accepted",
+        member: members.find((m) => m.station_id === b.stationId) || null,
+      }));
+    const fromMembers: SharedStationInfo[] = members
+      .filter((m) => !fromBindings.some((b) => b.stationId === m.station_id))
+      .map((m) => ({
+        stationId: m.station_id,
+        stationName: m.name || "Shared Station",
+        role: m.role,
+        invitedBy: m.name || "Station Owner",
+        status: m.status,
+        member: m,
+      }));
+    // Deduplicate by stationId
+    const seen = new Set<string>();
+    const shared = [...fromBindings, ...fromMembers].filter((s) => {
+      if (seen.has(s.stationId)) return false;
+      seen.add(s.stationId);
+      return true;
+    });
+    setSharedStations(shared);
+
+    // Pending invites — query station_members where invited_email = user.email AND status = pending
+    try {
+      const { getSupabaseClient } = await import("@/supabase/client");
+      const sc = getSupabaseClient();
+      const { data: pendingRows } = await sc
+        .from("station_members")
+        .select("*, stations:station_id(name)")
+        .or(`user_id.eq.${user.id},invited_email.eq.${user.email}`)
+        .eq("status", "pending")
+        .order("created_at", { ascending: true });
+      const pending: SharedStationInfo[] = (pendingRows || []).map((row: any) => ({
+        stationId: row.station_id,
+        stationName: row.stations?.name || row.name || "Shared Station",
+        role: row.role || "staff",
+        invitedBy: row.invited_by_name || row.invited_by_unique_id || "Station Owner",
+        status: "pending",
+        member: row as StationMember,
+      }));
+      setPendingInvites(pending);
+    } catch (err) {
+      console.warn("[StationManager] Failed to load pending invites:", err);
+    }
+  }, [user?.id, user?.email, bindings]);
+
+  // Load shared/pending station data when the modal opens or invites are refreshed
+  useEffect(() => {
+    if (modal?.type === "access-shared" || invitesVersion > 0) {
+      loadSharedAndPending();
+    }
+  }, [modal?.type, invitesVersion, loadSharedAndPending]);
 
   // Show notice
   const showNotice = useCallback((msg: string) => {
@@ -1011,6 +1503,80 @@ export default function StationManager({ onClose }: StationManagerProps) {
     [switchStation, showNotice, closeModal, onClose],
   );
 
+  // Access a shared/member station — switches to it (the station is already
+  // loaded into StationContext.stations by the member-stations query).
+  const handleAccessSharedStation = useCallback(
+    (stationId: string) => {
+      const station = stations.find((s) => s.id === stationId);
+      switchStation(stationId);
+      showNotice(
+        station
+          ? `Switched to ${station.name}${station.ownerId && station.ownerId !== user?.id ? " (shared)" : ""}`
+          : "Station accessed successfully",
+      );
+      closeModal();
+      if (onClose) onClose();
+    },
+    [stations, switchStation, showNotice, closeModal, onClose, user?.id],
+  );
+
+  // Derived: split stations into owned vs shared (member) stations using the
+  // ownerId field (set by stationRowToStation) or the AuthContext bindings.
+  const ownedStations = useMemo(() => {
+    return stations.filter((s) => {
+      // If ownerId is known and matches the current user, it's owned
+      if (s.ownerId && user?.id && s.ownerId === user.id) return true;
+      // If there's a binding for this station with role "owner", it's owned
+      const binding = bindings.find((b) => b.stationId === s.id);
+      if (binding && binding.role === "owner") return true;
+      // If there's no binding at all AND ownerId is falsy, assume owned
+      // (member stations have a non-matching ownerId or a non-owner binding)
+      if (!binding && !s.ownerId) return true;
+      // If ownerId is set but doesn't match the user, it's shared (not owned)
+      if (s.ownerId && user?.id && s.ownerId !== user.id) return false;
+      // If there's a binding with a non-owner role, it's shared
+      if (binding && binding.role !== "owner") return false;
+      return true;
+    });
+  }, [stations, user?.id, bindings]);
+
+  const sharedStationsFromContext = useMemo(() => {
+    return stations.filter((s) => !ownedStations.includes(s));
+  }, [stations, ownedStations]);
+
+  // Leave a shared station — removes the user's membership from station_members
+  const handleLeaveSharedStation = useCallback(
+    async (stationId: string, stationName: string) => {
+      if (!confirm(`Leave "${stationName}"? You will no longer have access to this shared station.`)) {
+        return;
+      }
+      try {
+        // Find the membership record to revoke
+        const members = await getSharedStations();
+        const member = members.find((m) => m.station_id === stationId);
+        if (member) {
+          const result = await revokeMember(member.id);
+          if (!result.success) {
+            showNotice(`Failed to leave: ${result.error}`);
+            return;
+          }
+        }
+        // If we're currently on the station being left, switch to the first owned station
+        if (currentStation?.id === stationId) {
+          const firstOwned = ownedStations[0];
+          if (firstOwned) {
+            switchStation(firstOwned.id);
+          }
+        }
+        showNotice(`Left "${stationName}"`);
+        setInvitesVersion((v) => v + 1);
+      } catch (e: any) {
+        showNotice(`Failed to leave station: ${e?.message || "error"}`);
+      }
+    },
+    [currentStation?.id, ownedStations, switchStation, showNotice],
+  );
+
   const handleExport = useCallback(
     (station: any) => {
       downloadJson(`${station.name.replace(/\s+/g, "_")}_export.json`, station);
@@ -1084,7 +1650,7 @@ export default function StationManager({ onClose }: StationManagerProps) {
                 Station Manager
               </h1>
               <p className="text-xs text-gray-400">
-                {stations.length} station(s) | Manage access & data
+                {ownedStations.length} owned · {sharedStationsFromContext.length} shared | Manage access & data
               </p>
             </div>
           </div>
@@ -1121,8 +1687,8 @@ export default function StationManager({ onClose }: StationManagerProps) {
         {/* Stat cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <StatCard
-            label="Stations"
-            value={String(stations.length)}
+            label="Your Stations"
+            value={String(ownedStations.length)}
             icon={Layers}
             accent="text-amber-400"
           />
@@ -1139,10 +1705,10 @@ export default function StationManager({ onClose }: StationManagerProps) {
             accent="text-sky-400"
           />
           <StatCard
-            label="Shared Users"
-            value={String(stats.sharedUsers)}
-            icon={Users}
-            accent="text-purple-400"
+            label="Shared With You"
+            value={String(sharedStationsFromContext.length)}
+            icon={Building2}
+            accent="text-sky-400"
           />
         </div>
 
@@ -1219,6 +1785,20 @@ export default function StationManager({ onClose }: StationManagerProps) {
             <Plus size={16} />
             Create Station
           </button>
+
+          {/* Access Another Station button */}
+          <button
+            onClick={() => setModal({ type: "access-shared" })}
+            className="px-4 py-2 bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 rounded-xl text-sm font-medium flex items-center gap-2 transition-colors relative"
+          >
+            <Building2 size={16} />
+            Access Another Station
+            {(pendingInvites.length > 0 || sharedStations.length > 0) && (
+              <span className="absolute -top-1 -right-1 w-5 h-5 bg-amber-500 rounded-full text-[10px] font-bold flex items-center justify-center text-white">
+                {pendingInvites.length + sharedStations.length}
+              </span>
+            )}
+          </button>
         </div>
 
         {/* Station grid */}
@@ -1236,7 +1816,7 @@ export default function StationManager({ onClose }: StationManagerProps) {
               <SkeletonCard />
               <SkeletonCard />
             </div>
-          ) : stations.length === 0 ? (
+          ) : ownedStations.length === 0 && sharedStationsFromContext.length === 0 ? (
             <EmptyState onCreate={openCreate} />
           ) : visibleStations.length === 0 ? (
             <div className={`${GLASS_CARD} p-8 text-center`}>
@@ -1247,7 +1827,9 @@ export default function StationManager({ onClose }: StationManagerProps) {
             </div>
           ) : (
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              {visibleStations.map((s) => (
+              {visibleStations
+                .filter((s) => ownedStations.includes(s))
+                .map((s) => (
                 <StationCard
                   key={s.id}
                   station={s}
@@ -1263,6 +1845,88 @@ export default function StationManager({ onClose }: StationManagerProps) {
             </div>
           )}
         </div>
+
+        {/* Shared With You section — stations owned by OTHER users that this
+            user has been invited to access (read or read-write based on role). */}
+        {sharedStationsFromContext.length > 0 && (
+          <div>
+            <h2 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
+              <Building2 size={18} className="text-sky-400" />
+              Shared With You
+              <span className="text-sm text-gray-400 font-normal">
+                · {sharedStationsFromContext.length} station(s)
+              </span>
+            </h2>
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {sharedStationsFromContext.map((s) => {
+                const binding = bindings.find((b) => b.stationId === s.id);
+                const role = s.memberRole || s.userRole || binding?.role || "member";
+                const invitedBy = s.invitedBy || binding?.invitedBy || "Station Owner";
+                return (
+                  <div
+                    key={s.id}
+                    className={`${
+                      currentStation?.id === s.id
+                        ? "ring-2 ring-sky-400/50"
+                        : ""
+                    } ${GLASS_CARD} p-5 hover:bg-white/10 transition-all relative`}
+                  >
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={`w-12 h-12 rounded-xl ${avatarColor(
+                            s.name,
+                          )} flex items-center justify-center text-white font-bold text-sm`}
+                        >
+                          {initialsOf(s.name)}
+                        </div>
+                        <div>
+                          <h3 className="font-bold text-white text-sm flex items-center gap-2">
+                            {s.name}
+                            {currentStation?.id === s.id && (
+                              <span className="px-1.5 py-0.5 bg-sky-500/20 text-sky-400 text-[10px] rounded">
+                                Active
+                              </span>
+                            )}
+                          </h3>
+                          <div className="flex items-center gap-2 mt-1 flex-wrap">
+                            <RoleBadge role={role} />
+                            <span className="text-xs text-gray-400 flex items-center gap-1">
+                              <UserCheck size={11} />
+                              {invitedBy}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    {s.location && (
+                      <div className="flex items-center gap-2 text-xs text-gray-400 mb-3">
+                        <MapPin size={12} className="text-gray-500" />
+                        <span className="truncate">{s.location}</span>
+                      </div>
+                    )}
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleAccessSharedStation(s.id)}
+                        className="flex-1 px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-colors"
+                      >
+                        <LogIn size={15} />
+                        {currentStation?.id === s.id ? "Currently Active" : "Access Station"}
+                      </button>
+                      <button
+                        onClick={() => handleLeaveSharedStation(s.id, s.name)}
+                        title="Leave this shared station"
+                        className="px-3 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg text-sm transition-colors"
+                      >
+                        <LogOut size={15} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Notice toast */}
@@ -1307,6 +1971,17 @@ export default function StationManager({ onClose }: StationManagerProps) {
           stations={stations}
           onAccess={handleAccessStation}
           onClose={closeModal}
+        />
+      ) : null}
+
+      {modal?.type === "access-shared" ? (
+        <AccessSharedStationModal
+          ownedStations={ownedStations}
+          sharedStations={sharedStations}
+          pendingInvites={pendingInvites}
+          onAccess={handleAccessSharedStation}
+          onClose={closeModal}
+          onInvitesChanged={() => setInvitesVersion((v) => v + 1)}
         />
       ) : null}
 

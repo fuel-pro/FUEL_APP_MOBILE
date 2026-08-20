@@ -140,6 +140,9 @@ export interface Station {
   // Backend sync fields (optional)
   backendId?: number;
   userRole?: string;
+  ownerId?: string; // Supabase auth uid of the station owner ( distinguishes owned vs shared/member stations)
+  invitedBy?: string; // name/unique id of the user who invited this member (for shared stations)
+  memberRole?: string; // role on a shared station (manager/staff/auditor) from station_members
 }
 
 export interface AdminSettings {
@@ -558,6 +561,12 @@ function stationRowToStation(
     // whatever this device already had cached for them.
     access: cached?.access ?? [],
     sharedUsers: cached?.sharedUsers ?? [],
+    // Preserve ownership/membership metadata from the DB row so the UI can
+    // distinguish owned stations from shared/member stations.
+    ownerId: row.owner_id || cached?.ownerId,
+    userRole: row.user_role || cached?.userRole,
+    invitedBy: row.invited_by_name || row.invited_by_unique_id || cached?.invitedBy,
+    memberRole: row.member_role || cached?.memberRole,
   };
 }
 
@@ -796,13 +805,33 @@ async function syncStationsWithSupabase(
     .order("created_at", { ascending: true });
 
   // Fetch stations where the user is an accepted/active member (invited by the owner)
+  // Select membership metadata (role, invited_by) so the UI can show who invited
+  // the user and what role they have on the shared station.
   const { data: memberData, error: memberError } = await supabase
     .from("stations")
-    .select("*, station_members!inner(user_id, status)")
+    .select(
+      "*, station_members!inner(user_id, status, role, invited_by_name, invited_by_unique_id, member_role)",
+    )
     .eq("station_members.user_id", userId)
     .in("station_members.status", ["accepted", "active"])
     .neq("owner_id", userId)
     .order("created_at", { ascending: true });
+
+  // Flatten membership metadata onto each station row so stationRowToStation
+  // can pick it up (the join returns an array of station_members per station).
+  if (memberData) {
+    for (const row of memberData as any[]) {
+      const sm = Array.isArray(row.station_members)
+        ? row.station_members[0]
+        : row.station_members;
+      if (sm) {
+        row.user_role = sm.role;
+        row.member_role = sm.member_role || sm.role;
+        row.invited_by_name = sm.invited_by_name;
+        row.invited_by_unique_id = sm.invited_by_unique_id;
+      }
+    }
+  }
 
   let rows = [...(ownedData || []), ...(memberData || [])];
   const error = ownedError;
