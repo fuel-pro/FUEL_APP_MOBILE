@@ -27,7 +27,7 @@
  */
 
 import { supabase } from "@/supabase/client";
-import { compressJson, decompressJson } from "@/react-app/lib/compression";
+import { compressJson, decompressAny } from "@/react-app/lib/compression";
 
 // ═══════════════════════════════════════════════════
 // COLLECTIONS
@@ -136,7 +136,7 @@ export async function getRecord(
         .eq("id", id)
         .single();
       if (error) throw error;
-      return { success: true, data: decompressJson(data?.data) ?? data?.data };
+      return { success: true, data: decompressAny(data?.data) ?? data?.data };
     }
   } catch (err: any) {
     const localData = localStorage.getItem(`fuelpro_${collection}_${id}`);
@@ -225,7 +225,7 @@ export async function listRecords(
         success: true,
         data: (data ?? []).map((row) => ({
           id: row.id,
-          ...decompressJson(row.data),
+          ...decompressAny(row.data),
         })),
       };
     }

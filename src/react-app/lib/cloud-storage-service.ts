@@ -14,7 +14,7 @@
 import { getSupabaseClient } from "@/supabase/client";
 import {
   compressJson,
-  decompressJson,
+  decompressAny,
   isCompressedPayload,
 } from "@/react-app/lib/compression";
 
@@ -40,7 +40,10 @@ function cacheKey(key: string): string {
 // devices conflict, uncertain which data to rely on" problem.
 //
 // Map: effective cache key -> { version, updatedAt }.
-const knownVersions = new Map<string, { version: number; updatedAt?: string }>();
+const knownVersions = new Map<
+  string,
+  { version: number; updatedAt?: string }
+>();
 
 function versionKey(key: string, stationId?: string): string {
   return stationId ? `${key}__${stationId}` : key;
@@ -111,10 +114,9 @@ function coerceJson<T = Json>(raw: unknown): T | null {
 function decodeRow<T = Json>(raw: unknown): T | null {
   const coerced = coerceJson<T>(raw);
   if (coerced == null) return null;
-  if (isCompressedPayload(coerced)) {
-    return decompressJson<T>(coerced);
-  }
-  return coerced;
+  // Handles both the current `{__compressed,c,o}` envelope and the legacy
+  // `{__c:1,d,n,z}` envelope (including nested/double-wrapped rows).
+  return decompressAny<T>(coerced);
 }
 
 /**
@@ -136,6 +138,26 @@ export function mergeValues<T>(remote: T | null, local: T): T {
   if (remote == null) return local;
   if (local == null) return remote;
 
+  // Never merge compression envelopes as if they were data — decode both
+  // sides to plain values first, otherwise the object-merge branch would
+  // produce a corrupt hybrid ({staff:[], ..., __compressed:true, c:...}).
+  if (
+    isCompressedPayload(remote) ||
+    isCompressedPayload(local) ||
+    (typeof remote === "object" &&
+      remote !== null &&
+      (remote as Record<string, unknown>).__c === 1) ||
+    (typeof local === "object" &&
+      local !== null &&
+      (local as Record<string, unknown>).__c === 1)
+  ) {
+    const r = decompressAny(remote);
+    const l = decompressAny(local);
+    if (r == null) return (l ?? local) as T;
+    if (l == null) return r as T;
+    return mergeValues(r as T, l as T);
+  }
+
   if (Array.isArray(remote) && Array.isArray(local)) {
     // Array-of-records union by id.
     const allItems = [...remote, ...local];
@@ -143,7 +165,9 @@ export function mergeValues<T>(remote: T | null, local: T): T {
       typeof v === "object" && v !== null && !Array.isArray(v);
     if (allItems.every(isRecord)) {
       const idKey = allItems
-        .map((r) => Object.keys(r).find((k) => /^(id|key|empId|uid|uid)$/i.test(k)))
+        .map((r) =>
+          Object.keys(r).find((k) => /^(id|key|empId|uid|uid)$/i.test(k)),
+        )
         .find(Boolean);
       if (idKey) {
         const byId = new Map<string, Record<string, unknown>>();
@@ -170,7 +194,9 @@ export function mergeValues<T>(remote: T | null, local: T): T {
     !Array.isArray(remote) &&
     !Array.isArray(local)
   ) {
-    const merged: Record<string, unknown> = { ...(remote as Record<string, unknown>) };
+    const merged: Record<string, unknown> = {
+      ...(remote as Record<string, unknown>),
+    };
     for (const [k, v] of Object.entries(local as Record<string, unknown>)) {
       // Local value wins, but if both are objects, deep-merge to preserve
       // concurrent remote sub-edits.
@@ -183,7 +209,10 @@ export function mergeValues<T>(remote: T | null, local: T): T {
         rv !== null &&
         !Array.isArray(rv)
       ) {
-        merged[k] = mergeValues(rv as Record<string, unknown>, v as Record<string, unknown>);
+        merged[k] = mergeValues(
+          rv as Record<string, unknown>,
+          v as Record<string, unknown>,
+        );
       } else {
         merged[k] = v;
       }
@@ -787,10 +816,12 @@ class CloudStorageService {
       } else if (rpcData && (rpcData as { ok?: boolean }).ok === false) {
         // CONFLICT: a newer revision exists on another device. Merge our edit
         // into the remote value and retry once with the remote's version.
-        const remote = (rpcData as {
-          data: unknown;
-          version: number;
-        }).data;
+        const remote = (
+          rpcData as {
+            data: unknown;
+            version: number;
+          }
+        ).data;
         const remoteVersion = (rpcData as { version: number }).version;
         const remoteValue = decodeRow<T>(remote);
         const merged = mergeValues(remoteValue, value) as T;
@@ -822,7 +853,9 @@ class CloudStorageService {
         // Write applied. Record the new version for the next write.
         const newVersion = (rpcData as { version?: number })?.version;
         if (typeof newVersion === "number") {
-          knownVersions.set(versionKey(key, stationId), { version: newVersion });
+          knownVersions.set(versionKey(key, stationId), {
+            version: newVersion,
+          });
         } else {
           // Fallback: re-read the version to stay consistent.
           const { data: cur } = await client
@@ -929,14 +962,17 @@ class CloudStorageService {
           const stored = compressJson(op.value);
           const scopedId = rowId(op.key, ownerId, op.stationId);
           // Try the versioned RPC; fall back to plain upsert if unavailable.
-          const { error: rpcErr } = await client.rpc("upsert_app_kv_versioned", {
-            p_id: scopedId,
-            p_owner_id: ownerId,
-            p_station_id: op.stationId ?? null,
-            p_collection: COLLECTION,
-            p_data: stored as unknown as Json,
-            p_expected_version: null,
-          });
+          const { error: rpcErr } = await client.rpc(
+            "upsert_app_kv_versioned",
+            {
+              p_id: scopedId,
+              p_owner_id: ownerId,
+              p_station_id: op.stationId ?? null,
+              p_collection: COLLECTION,
+              p_data: stored as unknown as Json,
+              p_expected_version: null,
+            },
+          );
           if (rpcErr) {
             const { error } = await client.from("app_kv").upsert(
               {

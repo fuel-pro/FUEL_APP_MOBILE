@@ -9,6 +9,8 @@ import {
 } from "react";
 import { supabase } from "@/supabase/client";
 import { getSupabaseClient } from "@/supabase/client";
+import { cloudStorageService } from "@/react-app/lib/cloud-storage-service";
+import { decompressAny } from "@/react-app/lib/compression";
 import type { User, Session } from "@supabase/supabase-js";
 
 // ============================================================
@@ -1104,7 +1106,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .ilike("id", "station_memberships__%");
       if (!kvErr && allRows) {
         for (const row of allRows as any[]) {
-          let memberships: any[] = row.data;
+          // app_kv rows may be gzip-compressed envelopes — decode first.
+          let memberships: any[] = (decompressAny(row.data) ??
+            row.data) as any[];
           if (typeof memberships === "string") {
             try {
               memberships = JSON.parse(memberships);
@@ -1155,6 +1159,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       syncBindingsFromCloud().catch(() => {});
     }
   }, [user, syncBindingsFromCloud]);
+
+  // One-shot at-rest compression backfill: gzip-compress all of the user's
+  // existing app_kv rows (storage + egress savings). v2 also heals legacy
+  // `{__c:1,...}` envelopes (and nested double-wrapped rows) into the
+  // canonical single-layer envelope. Runs once per user per device, deferred
+  // so it never competes with initial hydration; failures leave the flag
+  // unset so it retries next session.
+  useEffect(() => {
+    if (!user?.id) return;
+    const flagKey = `fuelpro_data_compressed_v2_${user.id}`;
+    if (localStorage.getItem(flagKey)) return;
+    const t = setTimeout(() => {
+      cloudStorageService
+        .compressAllExistingData()
+        .then((r) => {
+          localStorage.setItem(flagKey, "1");
+          console.log(
+            `[CloudStorage] at-rest compression backfill: scanned=${r.scanned} compressed=${r.compressed} skipped=${r.skipped}`,
+          );
+        })
+        .catch(() => {
+          /* leave flag unset → retry next session */
+        });
+    }, 8000);
+    return () => clearTimeout(t);
+  }, [user?.id]);
 
   // ---- PASSWORD RESET ----
   const requestPasswordReset = useCallback(

@@ -14,6 +14,7 @@ import { currencySymbolFor, getVATRate } from "@/react-app/config/pricing";
 import { getRegionalConfig } from "@/react-app/config/regions";
 import { supabase, supabaseUrl, supabaseAnonKey } from "@/supabase/client";
 import { cloudStorageService } from "@/react-app/lib/cloud-storage-service";
+import { decompressAny } from "@/react-app/lib/compression";
 
 // Lazy API base URL getter using dynamic import to avoid circular deps
 let _apiBase: string | null = null;
@@ -887,22 +888,31 @@ async function syncStationsWithSupabase(
   ) {
     const compactKey = `user_${userId}_compact`;
     let kvRowData: any = null;
-    const { data: kvRow, error: kvError } = await supabase
-      .from("app_kv")
-      .select("data")
-      .eq("id", compactKey)
-      .eq("owner_id", userId)
-      .maybeSingle();
+    // Read via the cloud storage service: handles the owner-scoped row id,
+    // the legacy bare-key fallback, AND gzip envelope decompression.
+    try {
+      kvRowData = await cloudStorageService.get(compactKey);
+    } catch {
+      kvRowData = null;
+    }
+    if (!kvRowData) {
+      const { data: kvRow, error: kvError } = await supabase
+        .from("app_kv")
+        .select("data")
+        .eq("id", compactKey)
+        .eq("owner_id", userId)
+        .maybeSingle();
 
-    if (!kvError && kvRow?.data) {
-      kvRowData = kvRow.data;
-    } else {
-      // Direct fetch fallback (same RLS issue as the stations query above)
-      const directKv = await directFetch(
-        `app_kv?id=eq.${compactKey}&owner_id=eq.${userId}&select=data`,
-      );
-      if (directKv && directKv.length > 0) {
-        kvRowData = directKv[0].data;
+      if (!kvError && kvRow?.data) {
+        kvRowData = decompressAny(kvRow.data);
+      } else {
+        // Direct fetch fallback (same RLS issue as the stations query above)
+        const directKv = await directFetch(
+          `app_kv?id=eq.${compactKey}&owner_id=eq.${userId}&select=data`,
+        );
+        if (directKv && directKv.length > 0) {
+          kvRowData = decompressAny(directKv[0].data);
+        }
       }
     }
 
@@ -979,7 +989,7 @@ async function syncStationsWithSupabase(
       .in("id", kvIds);
     for (const row of kvRows || []) {
       const stationId = String(row.id).replace(/^station_data_/, "");
-      dataBlobs[stationId] = row.data;
+      dataBlobs[stationId] = decompressAny(row.data) ?? row.data;
     }
     // Direct fetch fallback for data blobs
     if (Object.keys(dataBlobs).length === 0) {
@@ -990,7 +1000,7 @@ async function syncStationsWithSupabase(
       if (directKvRows) {
         for (const row of directKvRows) {
           const stationId = String(row.id).replace(/^station_data_/, "");
-          dataBlobs[stationId] = row.data;
+          dataBlobs[stationId] = decompressAny(row.data) ?? row.data;
         }
       }
     }
@@ -1261,7 +1271,10 @@ export function StationProvider({ children }: { children: React.ReactNode }) {
     cloudStorageService
       .get<{ setupComplete?: boolean }>("user_setup_flag", undefined)
       .then((flag) => {
-        if (flag?.setupComplete && !localStorage.getItem("fuelpro_setup_complete")) {
+        if (
+          flag?.setupComplete &&
+          !localStorage.getItem("fuelpro_setup_complete")
+        ) {
           localStorage.setItem("fuelpro_setup_complete", "true");
         }
       })

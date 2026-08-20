@@ -11,6 +11,7 @@ import { describe, it, expect } from "vitest";
 import {
   compressJson,
   decompressJson,
+  decompressAny,
   isCompressedPayload,
   isCompressibleMimeType,
   compressBlob,
@@ -81,6 +82,48 @@ describe("compression — JSON (app_kv)", () => {
   it("decompressJson returns null for a corrupt compressed payload", () => {
     const corrupt = { [COMPRESSED_MARKER]: true, c: "!!!not-valid-base64!!!" };
     expect(decompressJson(corrupt)).toBeNull();
+  });
+
+  it("decompressAny decodes the legacy {__c:1,d} envelope", async () => {
+    const pako = (await import("pako")).default;
+    const value = [{ id: "fuel_1", name: "Super Petrol", price: 1.1 }];
+    const json = JSON.stringify(value);
+    const bytes = new TextEncoder().encode(json);
+    const gz = pako.gzip(bytes, { level: 9 });
+    let bin = "";
+    for (let i = 0; i < gz.length; i++) bin += String.fromCharCode(gz[i]);
+    const legacy = { __c: 1, d: btoa(bin), n: bytes.length, z: gz.length };
+    expect(decompressAny(legacy)).toEqual(value);
+  });
+
+  it("decompressAny unwraps nested legacy(current(value)) double-wrapped rows", async () => {
+    const pako = (await import("pako")).default;
+    const value = Array.from({ length: 50 }, (_, i) => ({
+      id: `fuel_${i}`,
+      name: "Diesel",
+      price: 1.1,
+    }));
+    // Inner: current-format envelope.
+    const inner = compressJson(value);
+    expect(isCompressedPayload(inner)).toBe(true);
+    // Outer: legacy-format envelope around the inner envelope.
+    const json = JSON.stringify(inner);
+    const bytes = new TextEncoder().encode(json);
+    const gz = pako.gzip(bytes, { level: 9 });
+    let bin = "";
+    for (let i = 0; i < gz.length; i++) bin += String.fromCharCode(gz[i]);
+    const outer = { __c: 1, d: btoa(bin), n: bytes.length, z: gz.length };
+    expect(decompressAny(outer)).toEqual(value);
+  });
+
+  it("compressJson never double-wraps — re-compressing an envelope yields one layer", () => {
+    const value = { rows: Array.from({ length: 50 }, (_, i) => ({ i })) };
+    const once = compressJson(value);
+    expect(isCompressedPayload(once)).toBe(true);
+    const twice = compressJson(once);
+    // Still exactly one envelope layer, decoding straight to the value.
+    expect(isCompressedPayload(twice)).toBe(true);
+    expect(decompressJson(twice)).toEqual(value);
   });
 });
 

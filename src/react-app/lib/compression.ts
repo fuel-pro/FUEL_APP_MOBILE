@@ -77,14 +77,70 @@ function base64ToBytes(b64: string): Uint8Array {
   return bytes;
 }
 
+/** Legacy envelope written by an earlier build: `{__c: 1, d, n, z}`. */
+interface LegacyEnvelope {
+  __c: number;
+  d: string;
+  n?: number;
+  z?: number;
+}
+
+function isLegacyEnvelope(raw: unknown): raw is LegacyEnvelope {
+  return (
+    typeof raw === "object" &&
+    raw !== null &&
+    !Array.isArray(raw) &&
+    (raw as Record<string, unknown>).__c === 1 &&
+    typeof (raw as Record<string, unknown>).d === "string"
+  );
+}
+
+function unwrapLegacyEnvelope<T>(env: LegacyEnvelope): T | null {
+  try {
+    const bytes = base64ToBytes(env.d);
+    return JSON.parse(bytesToUtf8(pako.ungzip(bytes))) as T;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fully unwrap a value that may be wrapped in one or more compression
+ * envelopes (current `{__compressed,c,o}` and/or legacy `{__c:1,d,n,z}` —
+ * rows written while both formats were live can be nested, e.g. a legacy
+ * envelope around a current envelope). Returns the plain value, or null when
+ * an envelope is present but undecodable.
+ */
+export function decompressAny<T = unknown>(raw: unknown): T | null {
+  let cur: unknown = raw;
+  for (let i = 0; i < 4; i++) {
+    if (isCompressedPayload(cur)) {
+      cur = decompressJson(cur);
+      continue;
+    }
+    if (isLegacyEnvelope(cur)) {
+      cur = unwrapLegacyEnvelope(cur);
+      continue;
+    }
+    return cur as T;
+  }
+  return null;
+}
+
 /**
  * Compress a JSON-serializable value into a `{__compressed, c}` payload
  * suitable for storing in the `app_kv.data` JSONB column. Returns the original
  * value unchanged when it is too small to benefit or when compression would
- * expand it.
+ * expand it. If the value is already a compression envelope (either format),
+ * it is first unwrapped so rows never accumulate nested layers.
  */
 export function compressJson<T>(value: T): unknown {
   try {
+    if (isCompressedPayload(value) || isLegacyEnvelope(value)) {
+      const plain = decompressAny<T>(value);
+      if (plain == null) return value; // undecodable — store as-is
+      value = plain;
+    }
     const json = JSON.stringify(value);
     const bytes = utf8ToBytes(json);
     if (bytes.length < MIN_COMPRESS_BYTES) return value;
