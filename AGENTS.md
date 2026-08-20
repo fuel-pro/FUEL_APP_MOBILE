@@ -5598,3 +5598,56 @@ UI, `setup_complete` key standardization). Merging would regress main. All
 other unmerged branches are either old divergent snapshots (200+ commits
 behind) or single-commit fixes already superseded. No lost work needs
 merging.
+
+## Session 2026-08-20 — Team Manager professional redesign (DEPLOYED LIVE, commit b690f0c)
+
+Restructured the Team Manager tab (`TeamManager.tsx`) from a flat vertical
+scroll into a professional 2-column card-based layout.
+
+### What changed
+
+- **Gradient header** with inline stat badges (Members / Invites / Codes),
+  replacing the plain icon + text header.
+- **2-column layout** (lg:grid-cols-5):
+  - LEFT (2/5): "Add Team Member" card (with "Invite by Link" + "Quick
+    Access Code" buttons), "Active Invites" card (compact share buttons),
+    "Shared Snapshot" publisher card.
+  - RIGHT (3/5): Stats grid (4 cards with icons + colored backgrounds:
+    Active Members / Managers / Staff / Access Codes), "Feature Access
+    Control" (collapsible), "Team Members" roster, "Invite History".
+- **Access Codes panel** moved to full-width below the grid (was a
+  separate section with its own snapshot publisher — now consolidated).
+- Each section is a self-contained card with icon + title + count badge.
+- Empty states have iconography (UserPlus icon) instead of plain text.
+- Invite links render in compact cards with smaller share buttons.
+
+### Verified live (Cloudflare preview 47b2ccb1 + main alias)
+
+Logged in as founder QA (`founder.qa.fuelpro@gmail.com`, US station, USD):
+- Team Manager tab renders the new gradient header with 0/0/0 stat badges.
+- 3 sub-tabs work: Team Access (2-column layout), Roles & Permissions
+  (hierarchy + Create Custom Role), Shifts (Schedule Shift + Add Employee +
+  Export + employee table).
+- All buttons render: "Invite by Link", "Quick Access Code", "Refresh
+  shared snapshot", "New Access Code", "Create Custom Role".
+- No crashes, no console errors.
+
+### Deploy state 2026-08-20
+
+- GitHub main: commit b690f0c (pushed, synced with origin/main).
+- Cloudflare Pages: LIVE (preview https://47b2ccb1.fuel-app-mobile.pages.dev
+  + main alias https://fuel-app-mobile.pages.dev). TeamManager chunk
+  with "Invite by Link", "Shared Snapshot", "Invite History" markers.
+- Vercel production: LIVE (prebuilt deploy, aliased to
+  fuel-app-mobile.vercel.app). Verified via chunk fetch.
+- Supabase: no schema changes (frontend-only).
+- tsc 0 errors, build 105 precache, prettier pass.
+
+### Lost commit re-audit (2026-08-20)
+
+Re-audited all 67 remote branches after the Team Manager redesign. No
+unmerged work found that needs merging. The `team-manager-access-codes-merge`
+branch is redundant (all its work is already on main in more complete form
+via the compression + access-code-login merges). All other unmerged
+branches are old divergent snapshots (200+ commits behind) or
+single-commit fixes already superseded.
