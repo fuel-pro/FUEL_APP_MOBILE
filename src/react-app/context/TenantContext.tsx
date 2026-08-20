@@ -33,7 +33,7 @@ export interface Company {
 export interface CompanySettings {
   enableMultiStation: boolean;
   enableKRAIntegration: boolean;
-  enableMPesa: boolean;
+  enableMPesa?: boolean;
   enableCloudSync: boolean;
   enableAutoReports: boolean;
   enableAI: boolean;
@@ -131,7 +131,15 @@ const CURRENT_STATION_KEY = "fuelpro_current_tenant_station_v1";
 function loadCompany(): Company | null {
   try {
     const raw = localStorage.getItem(COMPANY_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      // Migrate: remove stale enableMPesa:false defaults so country-based
+      // auto-enable (?? isKenya) takes effect. Only keep explicit opt-in (true).
+      if (parsed?.settings && parsed.settings.enableMPesa === false) {
+        delete parsed.settings.enableMPesa;
+      }
+      return parsed;
+    }
   } catch {}
   return null;
 }
@@ -148,7 +156,6 @@ function defaultSettings(): CompanySettings {
   return {
     enableMultiStation: true,
     enableKRAIntegration: false,
-    enableMPesa: false,
     enableCloudSync: false,
     enableAutoReports: true,
     enableAI: true,
@@ -167,7 +174,7 @@ function defaultSettings(): CompanySettings {
 // Resolve feature flags based on company settings + detected country
 function resolveFeatureFlags(
   company: Company | null,
-  countryCode: string
+  countryCode: string,
 ): FeatureFlags {
   const isKenya = countryCode === "KE";
   const isTanzania = countryCode === "TZ";
@@ -237,7 +244,7 @@ function resolveFeatureFlags(
 // Tab visibility based on feature flags
 export function getVisibleTabs(
   flags: FeatureFlags,
-  isAdmin: boolean
+  isAdmin: boolean,
 ): string[] {
   const tabs: { id: string; required: keyof FeatureFlags }[] = [
     { id: "dashboard", required: "pos" },
@@ -274,13 +281,13 @@ export function getVisibleTabs(
   ];
 
   const visible = tabs
-    .filter(t => {
+    .filter((t) => {
       // Admin sees everything
       if (isAdmin) return true;
       // Check feature flag
       return !!flags[t.required];
     })
-    .map(t => t.id);
+    .map((t) => t.id);
 
   return visible;
 }
@@ -331,13 +338,13 @@ export function TenantProvider({
       } catch {
         return null;
       }
-    }
+    },
   );
   const [country, setCountry] = useState(detectedCountry);
   const [isLoading, setIsLoading] = useState(true);
 
   const currentStation =
-    stations.find(s => s.id === currentStationId) || stations[0] || null;
+    stations.find((s) => s.id === currentStationId) || stations[0] || null;
   const hasCompany = !!company;
   const settings = company?.settings || defaultSettings();
   const featureFlags = resolveFeatureFlags(company, country);
@@ -390,12 +397,12 @@ export function TenantProvider({
       localStorage.setItem(CURRENT_COMPANY_KEY, newCompany.id);
       return newCompany;
     },
-    [country]
+    [country],
   );
 
   const updateCompany = useCallback((data: Partial<Company>) => {
-    setCompany(prev =>
-      prev ? { ...prev, ...data, updatedAt: new Date().toISOString() } : null
+    setCompany((prev) =>
+      prev ? { ...prev, ...data, updatedAt: new Date().toISOString() } : null,
     );
   }, []);
 
@@ -445,37 +452,37 @@ export function TenantProvider({
         updatedAt: new Date().toISOString(),
         data: {},
       };
-      setStations(prev => [...prev, station]);
+      setStations((prev) => [...prev, station]);
       setCurrentStationId(station.id);
       return station;
     },
-    [company, stations.length, settings.taxRate, country]
+    [company, stations.length, settings.taxRate, country],
   );
 
   const updateStation = useCallback(
     (id: string, data: Partial<StationProfile>) => {
-      setStations(prev =>
-        prev.map(s =>
+      setStations((prev) =>
+        prev.map((s) =>
           s.id === id
             ? { ...s, ...data, updatedAt: new Date().toISOString() }
-            : s
-        )
+            : s,
+        ),
       );
     },
-    []
+    [],
   );
 
   const deleteStation = useCallback(
     (id: string) => {
-      setStations(prev => {
-        const filtered = prev.filter(s => s.id !== id);
+      setStations((prev) => {
+        const filtered = prev.filter((s) => s.id !== id);
         if (currentStationId === id) {
           setCurrentStationId(filtered[0]?.id || null);
         }
         return filtered;
       });
     },
-    [currentStationId]
+    [currentStationId],
   );
 
   const switchStation = useCallback((id: string) => {
@@ -483,14 +490,14 @@ export function TenantProvider({
   }, []);
 
   const updateSettings = useCallback((partial: Partial<CompanySettings>) => {
-    setCompany(prev =>
+    setCompany((prev) =>
       prev
         ? {
             ...prev,
             settings: { ...prev.settings, ...partial },
             updatedAt: new Date().toISOString(),
           }
-        : null
+        : null,
     );
   }, []);
 
@@ -498,7 +505,7 @@ export function TenantProvider({
     (feature: keyof FeatureFlags): boolean => {
       return !!featureFlags[feature];
     },
-    [featureFlags]
+    [featureFlags],
   );
 
   return (

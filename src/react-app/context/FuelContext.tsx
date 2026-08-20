@@ -3,27 +3,62 @@ import React, {
   useContext,
   useReducer,
   useEffect,
+  useRef,
+  useCallback,
   ReactNode,
 } from "react";
 import { useAuth } from "@/react-app/context/AuthContext";
+import { useStations } from "@/react-app/context/StationContext";
 // Unified pricing - single source of truth for all fuel prices
-import { KENYA_BASE_PRICES, DEFAULT_PRICES } from "@/react-app/config/pricing";
+import {
+  KENYA_BASE_PRICES,
+  DEFAULT_PRICES,
+  getCountryPrice,
+  normalizeFuelType,
+} from "@/react-app/config/pricing";
+// Cross-device cloud storage (Supabase app_kv-backed) — replaces /api/user-data
+import { cloudStorageService } from "@/react-app/lib/cloud-storage-service";
+import {
+  getDetectedCountryCode,
+  getCurrencySymbol,
+} from "@/react-app/lib/currency";
+// Fuel interlink bus — in-device pub/sub for instant price/type propagation
+import {
+  emitFuelPriceChange,
+  onFuelPriceChange,
+} from "@/react-app/lib/fuel-interlink-bus";
+import type { CustomFuelType } from "@/react-app/components/FuelTypesManager";
 
-// Token storage key (must match AuthContext)
-const TOKEN_STORAGE_KEY = "fuelpro_token";
-
-// Helper to get auth token
-function getAuthToken(): string | null {
+// Resolve default prices from the detected country (world-wide, not Kenya-only)
+const _detectedCC = (() => {
   try {
-    return localStorage.getItem(TOKEN_STORAGE_KEY);
+    return getDetectedCountryCode();
   } catch {
-    return null;
+    return "";
   }
-}
+})();
+const _detectedPrices = _detectedCC
+  ? getCountryPrice(_detectedCC, "petrol")
+  : null;
+const DEFAULT_PMS_PRICE = _detectedPrices?.price ?? KENYA_BASE_PRICES.petrol;
+const DEFAULTAGO_PRICE = _detectedCC
+  ? getCountryPrice(_detectedCC, "diesel").price
+  : KENYA_BASE_PRICES.diesel;
 
-// Use unified pricing defaults (Kenya EPRA prices as default)
-const DEFAULT_PMS_PRICE = KENYA_BASE_PRICES.petrol; // 220.30 KES
-const DEFAULTAGO_PRICE = KENYA_BASE_PRICES.diesel;   // 250.01 KES
+/**
+ * Build the station-scoped compact-blob cloud key. Each station gets its own
+ * isolated FuelContext blob so companyData, salesHistory, debtHistory, etc.
+ * differ per station. Falls back to the legacy user-scoped key (no station
+ * segment) when there is no current station (Combined View, or pre-station
+ * migration), preserving backward compatibility.
+ */
+function compactCloudKey(
+  userId: string | undefined,
+  stationId: string | undefined,
+): string {
+  const uid = userId ? `user_${userId}` : "guest";
+  return stationId ? `${uid}_${stationId}_compact` : `${uid}_compact`;
+}
 
 // Types
 export interface Station {
@@ -40,11 +75,18 @@ export interface CompanyData {
   email: string;
   logo: string;
   currency: string;
+  // Explicit currency CODE (e.g. "USD") stored separately from `currency`
+  // (which historically held a symbol like "$" / "KSh"). Resolved at display
+  // time via resolveCurrencySymbol() so cross-currency reloads stay correct.
+  companyCurrency?: string;
+  // ISO country code for the station (e.g. "US", "KE") used for tax-regime
+  // detection. `county` below is the sub-national region (Kenya county).
+  country?: string;
   bankName: string;
   branchName: string;
   accountHolder: string;
   accountNumber: string;
-  // KRA eTIMS/ETR Configuration
+  // Tax compliance configuration (KRA eTIMS/ETR in Kenya, VAT/Tax ID elsewhere)
   kraPin: string;
   vatRegNo: string;
   physicalAddress: string;
@@ -116,7 +158,11 @@ export interface OffloadingRecord {
   time: string;
   truckReg: string;
   driverName: string;
-  fuelType: "PMS" | "AGO";
+  // Widened from "PMS" | "AGO" to string so the offloading form can capture
+  // ANY station fuel type (kerosene/IK, LPG, V-Power, premium diesel, CNG…).
+  // The previous 2-value union silently dropped/blocked every non-PMS/AGO fuel
+  // type and made the totals (which only counted PMS + AGO) undercount stock.
+  fuelType: string;
   quantity: number;
   rate: number;
   totalAmount: number;
@@ -267,6 +313,23 @@ export interface FuelState {
   salesHistory: Record<string, any>;
   pmsPumps: Pump[];
   agoPumps: Pump[];
+  /**
+   * Dynamic per-fuel-type pump store keyed by canonical fuel type
+   * ("petrol" | "diesel" | "kerosene" | "vpower" | "premium_diesel" |
+   * "lpg" | "cng") plus any custom raw fuel-type name. This is the single
+   * source of truth for pumps of fuels beyond PMS/AGO; the legacy
+   * pmsPumps/agoPumps arrays are kept in sync for backward compatibility
+   * (they mirror the "petrol"/"diesel" entries here).
+   */
+  fuelPumpsByType: Record<string, Pump[]>;
+  /** Dynamic per-fuel-type prices keyed by canonical fuel type. */
+  fuelPricesByType: Record<string, number>;
+  /**
+   * Dynamic per-fuel-type tank inventory (opening/closing litres) keyed by
+   * canonical fuel type. Replaces the hardcoded PMS/AGO-only tank fields for
+   * stations with other fuels (Kerosene, V-Power, LPG, etc.).
+   */
+  fuelTankValuesByType: Record<string, { opening: number; closing: number }>;
   expenses: Expense[];
   tillPayment: number;
   salesDate: string;
@@ -279,6 +342,8 @@ export interface FuelState {
   agoPrice: number;
   petrolPrice: number;
   dieselPrice: number;
+  kerosenePrice: number;
+  fuelTypes: CustomFuelType[];
   deliveredTo: string;
   totalOrder: string;
   deliveryYear: number;
@@ -320,6 +385,17 @@ type FuelAction =
   | { type: "SET_SALES_HISTORY"; payload: Record<string, any> }
   | { type: "SET_PMS_PUMPS"; payload: Pump[] }
   | { type: "SET_AGO_PUMPS"; payload: Pump[] }
+  | {
+      type: "SET_FUEL_PUMPS_BY_TYPE";
+      payload: Record<string, Pump[]>;
+    }
+  | { type: "ADD_FUEL_PUMP"; payload: { fuelType: string; pump: Pump } }
+  | { type: "UPDATE_FUEL_PUMP"; payload: { fuelType: string; pump: Pump } }
+  | { type: "REMOVE_FUEL_PUMP"; payload: { fuelType: string; pumpId: string } }
+  | {
+      type: "SET_FUEL_PRICES_BY_TYPE";
+      payload: Record<string, number>;
+    }
   | { type: "SET_EXPENSES"; payload: Expense[] }
   | { type: "SET_TILL_PAYMENT"; payload: number }
   | { type: "SET_SALES_DATE"; payload: string }
@@ -331,6 +407,10 @@ type FuelAction =
         pmsTankClosing?: number;
         agoTankOpening?: number;
         agoTankClosing?: number;
+        fuelTankValuesByType?: Record<
+          string,
+          { opening: number; closing: number }
+        >;
       };
     }
   | {
@@ -401,7 +481,7 @@ const initialState: FuelState = {
     language: "en",
     dateFormat: "DD/MM/YYYY",
     timeFormat: "24h",
-    currency: "Ksh",
+    currency: getCurrencySymbol(),
     notifications: {
       email: true,
       push: true,
@@ -427,7 +507,7 @@ const initialState: FuelState = {
     contacts: "",
     email: "",
     logo: "",
-    currency: "Ksh",
+    currency: getCurrencySymbol(),
     bankName: "",
     branchName: "",
     accountHolder: "",
@@ -451,9 +531,17 @@ const initialState: FuelState = {
       { key: "reg", label: "Reg No", editable: true },
       { key: "fuel", label: "Fuel Type", editable: true },
       { key: "litres", label: "Litres", editable: true },
-      { key: "amount", label: "Amount (Ksh)", editable: true },
+      {
+        key: "amount",
+        label: `Amount (${getCurrencySymbol()})`,
+        editable: true,
+      },
       { key: "name", label: "Name", editable: true },
-      { key: "debt", label: "Balance/Debt (Ksh)", editable: true },
+      {
+        key: "debt",
+        label: `Balance/Debt (${getCurrencySymbol()})`,
+        editable: true,
+      },
     ],
     rows: [],
     totals: {
@@ -473,6 +561,9 @@ const initialState: FuelState = {
   salesHistory: {},
   pmsPumps: [],
   agoPumps: [],
+  fuelPumpsByType: {},
+  fuelPricesByType: {},
+  fuelTankValuesByType: {},
   expenses: [],
   tillPayment: 0,
   salesDate: new Date().toISOString().split("T")[0],
@@ -481,10 +572,12 @@ const initialState: FuelState = {
   pmsTankClosing: 0,
   agoTankOpening: 0,
   agoTankClosing: 0,
-  pmsPrice: DEFAULT_PMS_PRICE,  // 220.30 KES (Kenya EPRA)
-  agoPrice: DEFAULTAGO_PRICE,     // 250.01 KES (Kenya EPRA)
+  pmsPrice: DEFAULT_PMS_PRICE,
+  agoPrice: DEFAULTAGO_PRICE,
   petrolPrice: DEFAULT_PMS_PRICE,
   dieselPrice: DEFAULTAGO_PRICE,
+  kerosenePrice: 0,
+  fuelTypes: [],
   deliveredTo: "",
   totalOrder: "",
   deliveryYear: new Date().getFullYear(), // Auto-set to current year
@@ -508,6 +601,7 @@ const initialState: FuelState = {
     customers: true, // CRITICAL: Enable loyalty/customers tab
   },
   tabConfigurations: [
+    // ─── DAILY OPERATIONS TABS (Most Frequently Used) ───
     {
       id: "dashboard",
       label: "Dashboard",
@@ -541,91 +635,20 @@ const initialState: FuelState = {
       visible: true,
     },
     {
-      id: "inventory",
-      label: "Inventory",
-      originalLabel: "Inventory",
-      description: "Track stock levels, manage products",
-      order: 4,
-      visible: true,
-    },
-    {
       id: "offloading",
       label: "Fuel Offloading",
       originalLabel: "Fuel Offloading",
       description: "Record fuel received from suppliers",
+      order: 4,
+      visible: true,
+    },
+    {
+      id: "inventory",
+      label: "Stock Management",
+      originalLabel: "Inventory",
+      description:
+        "Products catalog, stock adjustments, transfers, counts, wastage & auto-reorders",
       order: 5,
-      visible: true,
-    },
-    {
-      id: "delivery",
-      label: "Delivery Tracker",
-      originalLabel: "Delivery Tracker",
-      description: "Track fuel deliveries to customers",
-      order: 6,
-      visible: true,
-    },
-    {
-      id: "invoice",
-      label: "Invoice",
-      originalLabel: "Invoice",
-      description: "Generate and manage customer invoices",
-      order: 7,
-      visible: true,
-    },
-    {
-      id: "credit",
-      label: "Credit",
-      originalLabel: "Credit",
-      description: "Manage customer credit accounts",
-      order: 8,
-      visible: true,
-    },
-    {
-      id: "debt",
-      label: "Debt Reminder",
-      originalLabel: "Debt Reminder",
-      description: "Track outstanding customer balances",
-      order: 9,
-      visible: true,
-    },
-    {
-      id: "mpesa",
-      label: "M-PESA Analyzer",
-      originalLabel: "M-PESA Analyzer",
-      description: "Analyze mobile money transactions",
-      order: 10,
-      visible: true,
-    },
-    {
-      id: "payroll",
-      label: "Payroll System",
-      originalLabel: "Payroll System",
-      description: "Manage employee payments",
-      order: 11,
-      visible: true,
-    },
-    {
-      id: "shifts",
-      label: "Shifts",
-      originalLabel: "Shifts",
-      description: "Employee shift scheduling & attendance",
-      order: 12,
-      visible: true,
-    },
-    {
-      id: "customers",
-      label: "Customers",
-      originalLabel: "Customers",
-      description: "Customer loyalty & rewards program",
-      order: 13,
-      visible: true,
-    },
-    {
-      id: "quality",
-      label: "Fuel Quality",
-      originalLabel: "Fuel Quality",
-      description: "Test & certify fuel quality standards",
-      order: 14,
       visible: true,
     },
     {
@@ -633,15 +656,106 @@ const initialState: FuelState = {
       label: "Fuel Sales Report",
       originalLabel: "Fuel Sales Report",
       description: "Monthly fuel sales reporting",
+      order: 6,
+      visible: true,
+    },
+    {
+      id: "delivery",
+      label: "Fuel Statement Report",
+      originalLabel: "Delivery Tracker",
+      description: "Track fuel deliveries to customers",
+      order: 7,
+      visible: true,
+    },
+    // ─── REGULAR MANAGEMENT TABS (Frequently Used) ───
+    {
+      id: "invoice",
+      label: "Invoice",
+      originalLabel: "Invoice",
+      description: "Generate & manage customer invoices and sales invoices",
+      order: 8,
+      visible: true,
+    },
+    {
+      id: "credit",
+      label: "Credit",
+      originalLabel: "Credit",
+      description: "Manage customer credit accounts",
+      order: 9,
+      visible: true,
+    },
+    {
+      id: "customers",
+      label: "Customers",
+      originalLabel: "Customers",
+      description: "Customer loyalty & rewards program",
+      order: 10,
+      visible: true,
+    },
+    {
+      id: "mpesa",
+      label: "M-PESA Analyzer",
+      originalLabel: "M-PESA Analyzer",
+      description: "Analyze mobile money transactions",
+      order: 11,
+      visible: true,
+    },
+    {
+      id: "payroll",
+      label: "Payroll System",
+      originalLabel: "Payroll System",
+      description: "Manage employee payments",
+      order: 12,
+      visible: true,
+    },
+    {
+      id: "suppliers",
+      label: "Supplier Management",
+      originalLabel: "Supplier Management",
+      description: "Manage fuel suppliers, purchase orders & purchases",
+      order: 13,
+      visible: true,
+    },
+    {
+      id: "expenses",
+      label: "Expenses",
+      originalLabel: "Expenses",
+      description: "Track operational expenses & approvals",
+      order: 14,
+      visible: true,
+    },
+    {
+      id: "fueltypes",
+      label: "Fuel Type Manager",
+      originalLabel: "Fuel Type Manager",
+      description:
+        "Manage fuel products, pump settings, price board & quality testing",
       order: 15,
       visible: true,
     },
+    {
+      id: "team",
+      label: "Team Manager",
+      originalLabel: "Team Manager",
+      description: "Invite & manage team access and shift scheduling",
+      order: 16,
+      visible: true,
+    },
+    {
+      id: "maintenance",
+      label: "Maintenance",
+      originalLabel: "Maintenance",
+      description: "Equipment maintenance & servicing schedules",
+      order: 17,
+      visible: true,
+    },
+    // ─── ANALYTICS & REPORTING TABS (Regularly Used) ───
     {
       id: "reports",
       label: "Reports Center",
       originalLabel: "Reports Center",
       description: "Generate business reports and analytics",
-      order: 16,
+      order: 18,
       visible: true,
     },
     {
@@ -649,7 +763,7 @@ const initialState: FuelState = {
       label: "Analytics",
       originalLabel: "Analytics",
       description: "Predictions, trends & business intelligence",
-      order: 17,
+      order: 19,
       visible: true,
     },
     {
@@ -657,23 +771,32 @@ const initialState: FuelState = {
       label: "Audit Trail",
       originalLabel: "Audit Trail",
       description: "Complete activity log for compliance",
-      order: 18,
+      order: 20,
       visible: true,
     },
+    {
+      id: "pumpmapping",
+      label: "Pump Mapping V1",
+      originalLabel: "Pump Mapping V1",
+      description: "AI-powered pump ledger parsing & extraction",
+      order: 21,
+      visible: true,
+    },
+    // ─── ADMINISTRATIVE TABS (Occasionally Used) ───
     {
       id: "communication",
       label: "Communication",
       originalLabel: "Communication",
       description: "Client relationship management",
-      order: 19,
+      order: 22,
       visible: true,
     },
     {
-      id: "news",
-      label: "News",
-      originalLabel: "News",
-      description: "Fuel industry news, regulations, and price updates",
-      order: 20,
+      id: "documents",
+      label: "Document Center",
+      originalLabel: "Document Center",
+      description: "Smart document management & format conversion",
+      order: 23,
       visible: true,
     },
     {
@@ -681,15 +804,16 @@ const initialState: FuelState = {
       label: "Data Manager",
       originalLabel: "Data Manager",
       description: "Backup, restore & cloud sync",
-      order: 21,
+      order: 24,
       visible: true,
     },
     {
       id: "integration",
-      label: "Integrations",
-      originalLabel: "Integrations",
-      description: "Connect KRA, ETR, POS, Payroll, Banks & more",
-      order: 22,
+      label: "Integration Hub",
+      originalLabel: "Integration Hub",
+      description:
+        "Country-specific integrations & payment setup (M-PESA, Kopo Kopo, KRA, banks)",
+      order: 25,
       visible: true,
     },
     {
@@ -698,79 +822,42 @@ const initialState: FuelState = {
       originalLabel: "Compliance",
       description:
         "Country-specific regulations & compliance for all 195+ countries",
-      order: 23,
-      visible: true,
-    },
-    {
-      id: "docconverter",
-      label: "Doc Converter",
-      originalLabel: "Doc Converter",
-      description: "Zero-rejection document upload & format conversion",
-      order: 31,
-      visible: true,
-    },
-    {
-      id: "fueltypes",
-      label: "Fuel Types",
-      originalLabel: "Fuel Types",
-      description: "Add and manage custom fuel products",
-      order: 24,
-      visible: true,
-    },
-    {
-      id: "team",
-      label: "Team",
-      originalLabel: "Team",
-      description: "Invite and manage team access",
-      order: 25,
-      visible: true,
-    },
-    {
-      id: "documents",
-      label: "Documents",
-      originalLabel: "Documents",
-      description: "Smart document management",
       order: 26,
       visible: true,
     },
     {
-      id: "suppliers",
-      label: "Suppliers",
-      originalLabel: "Suppliers",
-      description: "Manage fuel suppliers & purchase orders",
+      id: "news",
+      label: "News",
+      originalLabel: "News",
+      description: "Fuel industry news, regulations, and price updates",
       order: 27,
       visible: true,
     },
+    // ─── SPECIALIZED TABS (Rarely Used) ───
     {
-      id: "maintenance",
-      label: "Maintenance",
-      originalLabel: "Maintenance",
-      description: "Equipment maintenance & servicing schedules",
+      id: "terminal",
+      label: "Terminal Sessions",
+      originalLabel: "Terminal Sessions",
+      description: "POS terminal session open/close & reconciliation",
       order: 28,
       visible: true,
     },
     {
-      id: "expenses",
-      label: "Expenses",
-      originalLabel: "Expenses",
-      description: "Track operational expenses & approvals",
+      id: "automation",
+      label: "Automation Engine",
+      originalLabel: "Automation Engine",
+      description:
+        "The site's brain — auto-reorder, auto-sync, auto-refresh, activity log",
       order: 29,
       visible: true,
     },
     {
-      id: "priceboard",
-      label: "Price Board",
-      originalLabel: "Price Board",
-      description: "Digital price board management",
+      id: "price-finder",
+      label: "Fuel Price Finder",
+      originalLabel: "Fuel Price Finder",
+      description:
+        "GPS-based nearby fuel price locator & auto fuel price comparison",
       order: 30,
-      visible: true,
-    },
-    {
-      id: "pumpmapping",
-      label: "Pump Mapping V1",
-      originalLabel: "Pump Mapping V1",
-      description: "AI-powered pump ledger parsing & extraction",
-      order: 31,
       visible: true,
     },
   ],
@@ -791,18 +878,105 @@ const initialState: FuelState = {
   dataBackups: [],
 };
 
-function fuelReducer(state: FuelState, action: FuelAction): FuelState {
-  // CRITICAL: Always load logo from storage during LOAD_FROM_STORAGE
-  if (action.type === "LOAD_FROM_STORAGE" && action.payload) {
-    // The logo is now loaded from both compact and individual companyData keys
-    // Just ensure companyData is properly merged
-    const incomingCompanyData = action.payload.companyData;
-    if (incomingCompanyData?.logo) {
-      // Logo is available - use it
-      console.log("Loading logo from storage:", incomingCompanyData.logo.substring(0, 50) + "...");
+/**
+ * Merge two companyData objects so an incoming EMPTY string/zero value never
+ * overwrites a non-empty existing value. This prevents a stale cloud/local
+ * blob (e.g. one where `name: ""` because it was saved before the field
+ * existed) from clobbering a populated in-memory value on reload or station
+ * switch. For each field, the incoming value wins ONLY when it is truthy
+ * (non-empty/non-zero); otherwise the existing value is kept.
+ */
+function mergeCompanyData(
+  existing: CompanyData,
+  incoming?: Partial<CompanyData> | null,
+): CompanyData {
+  if (!incoming) return { ...existing };
+  const merged = { ...existing };
+  (Object.keys(incoming) as (keyof CompanyData)[]).forEach((key) => {
+    const inc = incoming[key];
+    // Always let falsy incoming values fall back to the existing value,
+    // EXCEPT `currency` (default "KSh") and `etrInvoicePrefix` (default
+    // "INV") which are legitimately short strings we still want to carry.
+    if (inc !== undefined && inc !== null && inc !== "") {
+      (merged as Record<keyof CompanyData, unknown>)[key] = inc;
     }
-  }
+  });
+  return merged;
+}
 
+/**
+ * Count how many invoice line items carry REAL content (non-empty
+ * description OR non-zero price). Used by LOAD_FROM_STORAGE to decide
+ * whether an incoming items blob should overwrite the current in-progress
+ * draft: a stale all-empty-items blob (default rows) must not clobber a
+ * draft the user is actively editing.
+ */
+function itemsHaveContent(items?: InvoiceItem[] | null): number {
+  if (!items || !Array.isArray(items)) return 0;
+  return items.filter(
+    (it) => (it.desc && it.desc.trim() !== "") || it.price > 0,
+  ).length;
+}
+
+/**
+ * Tab IDs that have been DEPRECATED as top-level tabs and merged into parent
+ * components as inner sub-tabs. A stale cloud blob may still list these as
+ * standalone tabs, causing duplicates in the nav bar. This set is used to
+ * filter them out whenever tabConfigurations are loaded from storage/cloud.
+ */
+export const DEPRECATED_TOP_LEVEL_TAB_IDS = new Set([
+  "priceboard", // merged into Fuel Type Manager
+  "shifts", // merged into Team Manager
+  "quality", // merged into Fuel Type Manager
+  "docconverter", // merged into Document Center
+  "purchases", // merged into Supplier Management
+  "sales-invoices", // merged into Invoice
+  "debt", // merged into Credit Management
+  "integrations-settings", // merged into Integration Hub
+]);
+
+/**
+ * Sanitize tabConfigurations loaded from storage/cloud:
+ * 1. Remove any tab whose id is in DEPRECATED_TOP_LEVEL_TAB_IDS.
+ * 2. Merge in any NEW tabs from initialState that the blob is missing
+ *    (so newly-added tabs appear for existing users).
+ * 3. Preserve the user's customizations (visibility, order, label) for
+ *    tabs that still exist.
+ */
+function sanitizeTabConfigs(
+  saved: TabConfiguration[] | undefined,
+): TabConfiguration[] {
+  const authoritative = initialState.tabConfigurations;
+  if (!saved || !Array.isArray(saved) || saved.length === 0) {
+    return authoritative;
+  }
+  // Filter out deprecated tabs from the saved list.
+  const filtered = saved.filter(
+    (t) => t && t.id && !DEPRECATED_TOP_LEVEL_TAB_IDS.has(t.id),
+  );
+  // Build a map of authoritative tab ids for quick lookup.
+  const authoritativeIds = new Set(authoritative.map((t) => t.id));
+  // Keep saved customizations for tabs that still exist (not deprecated).
+  const savedMap = new Map(filtered.map((t) => [t.id, t]));
+  // Merge: start with authoritative (ensures new tabs are present), then
+  // overlay saved customizations (visibility/order) for tabs that exist.
+  const merged = authoritative.map((t) => {
+    const savedTab = savedMap.get(t.id);
+    return savedTab
+      ? {
+          ...t,
+          visible: savedTab.visible ?? t.visible,
+          order: savedTab.order ?? t.order,
+        }
+      : t;
+  });
+  // Also include any saved tabs that are NOT in authoritative (custom user tabs),
+  // as long as they're not deprecated.
+  const extraCustom = filtered.filter((t) => !authoritativeIds.has(t.id));
+  return [...merged, ...extraCustom];
+}
+
+function fuelReducer(state: FuelState, action: FuelAction): FuelState {
   switch (action.type) {
     case "SET_THEME":
       return { ...state, theme: action.payload };
@@ -822,7 +996,10 @@ function fuelReducer(state: FuelState, action: FuelAction): FuelState {
     case "SET_INVOICE_ITEMS":
       return { ...state, invoiceItems: action.payload };
     case "SET_INVOICE_SETTINGS":
-      return { ...state, invoiceSettings: action.payload };
+      return {
+        ...state,
+        invoiceSettings: { ...state.invoiceSettings, ...action.payload },
+      };
     case "SET_INVOICE_COUNTER":
       return { ...state, invoiceCounter: action.payload };
     case "SET_CLIENTS":
@@ -834,9 +1011,79 @@ function fuelReducer(state: FuelState, action: FuelAction): FuelState {
     case "SET_SALES_HISTORY":
       return { ...state, salesHistory: action.payload };
     case "SET_PMS_PUMPS":
-      return { ...state, pmsPumps: action.payload };
+      return {
+        ...state,
+        pmsPumps: action.payload,
+        fuelPumpsByType: { ...state.fuelPumpsByType, petrol: action.payload },
+      };
     case "SET_AGO_PUMPS":
-      return { ...state, agoPumps: action.payload };
+      return {
+        ...state,
+        agoPumps: action.payload,
+        fuelPumpsByType: { ...state.fuelPumpsByType, diesel: action.payload },
+      };
+    case "SET_FUEL_PUMPS_BY_TYPE": {
+      const byType = { ...action.payload };
+      // Keep legacy pmsPumps/agoPumps in sync with the petrol/diesel entries.
+      const pms = byType.petrol ?? state.pmsPumps;
+      const ago = byType.diesel ?? state.agoPumps;
+      return {
+        ...state,
+        fuelPumpsByType: byType,
+        pmsPumps: pms,
+        agoPumps: ago,
+      };
+    }
+    case "ADD_FUEL_PUMP": {
+      const { fuelType, pump } = action.payload;
+      const list = state.fuelPumpsByType[fuelType] ?? [];
+      const next = [...list, pump];
+      const byType = { ...state.fuelPumpsByType, [fuelType]: next };
+      const updates: Partial<FuelState> = {};
+      if (fuelType === "petrol") updates.pmsPumps = next;
+      if (fuelType === "diesel") updates.agoPumps = next;
+      return { ...state, fuelPumpsByType: byType, ...updates };
+    }
+    case "UPDATE_FUEL_PUMP": {
+      const { fuelType, pump } = action.payload;
+      const list = state.fuelPumpsByType[fuelType] ?? [];
+      const next = list.map((p) => (p.id === pump.id ? pump : p));
+      const byType = { ...state.fuelPumpsByType, [fuelType]: next };
+      const updates: Partial<FuelState> = {};
+      if (fuelType === "petrol") updates.pmsPumps = next;
+      if (fuelType === "diesel") updates.agoPumps = next;
+      return { ...state, fuelPumpsByType: byType, ...updates };
+    }
+    case "REMOVE_FUEL_PUMP": {
+      const { fuelType, pumpId } = action.payload;
+      const list = state.fuelPumpsByType[fuelType] ?? [];
+      const next = list.filter((p) => p.id !== pumpId);
+      const byType = { ...state.fuelPumpsByType, [fuelType]: next };
+      const updates: Partial<FuelState> = {};
+      if (fuelType === "petrol") updates.pmsPumps = next;
+      if (fuelType === "diesel") updates.agoPumps = next;
+      return { ...state, fuelPumpsByType: byType, ...updates };
+    }
+    case "SET_FUEL_PRICES_BY_TYPE": {
+      const prices = { ...action.payload };
+      // Mirror petrol/diesel into legacy scalars for backward compatibility.
+      const updates: Partial<FuelState> = {};
+      if (typeof prices.petrol === "number") {
+        updates.pmsPrice = prices.petrol;
+        updates.petrolPrice = prices.petrol;
+      }
+      if (typeof prices.diesel === "number") {
+        updates.agoPrice = prices.diesel;
+        updates.dieselPrice = prices.diesel;
+      }
+      if (typeof prices.kerosene === "number")
+        updates.kerosenePrice = prices.kerosene;
+      return {
+        ...state,
+        fuelPricesByType: { ...state.fuelPricesByType, ...prices },
+        ...updates,
+      };
+    }
     case "SET_EXPENSES":
       return { ...state, expenses: action.payload };
     case "SET_TILL_PAYMENT":
@@ -845,8 +1092,21 @@ function fuelReducer(state: FuelState, action: FuelAction): FuelState {
       return { ...state, salesDate: action.payload };
     case "SET_SHIFT":
       return { ...state, shift: action.payload };
-    case "SET_TANK_VALUES":
-      return { ...state, ...action.payload };
+    case "SET_TANK_VALUES": {
+      const { fuelTankValuesByType, ...rest } = action.payload;
+      return {
+        ...state,
+        ...rest,
+        ...(fuelTankValuesByType
+          ? {
+              fuelTankValuesByType: {
+                ...state.fuelTankValuesByType,
+                ...fuelTankValuesByType,
+              },
+            }
+          : {}),
+      };
+    }
     case "SET_PRICES":
       return { ...state, ...action.payload };
     case "SET_DELIVERY_INFO":
@@ -869,8 +1129,117 @@ function fuelReducer(state: FuelState, action: FuelAction): FuelState {
       return { ...state, chatHistory: action.payload };
     case "SET_DATA_BACKUPS":
       return { ...state, dataBackups: action.payload };
-    case "LOAD_FROM_STORAGE":
-      return { ...state, ...action.payload };
+    case "LOAD_FROM_STORAGE": {
+      const incoming = action.payload;
+      // Protect the in-progress invoice draft (invoiceItems) from being
+      // clobbered by a stale all-empty-items blob on reload/real-time echo.
+      const incomingItems = incoming.invoiceItems;
+      const currentItems = state.invoiceItems;
+      const invoiceItems =
+        incomingItems &&
+        itemsHaveContent(incomingItems) >= itemsHaveContent(currentItems)
+          ? incomingItems
+          : currentItems;
+      // Protect salesHistory, debtHistory, invoices, clients from being
+      // clobbered by a stale/empty real-time echo. An incoming collection
+      // wins ONLY when it has MORE entries than the current in-memory one;
+      // otherwise keep the current data so a just-saved record survives a
+      // delayed echo from an earlier (pre-save) cloud write.
+      const mergeCollections = (
+        current: Record<string, any> | any[] | undefined,
+        inc: Record<string, any> | any[] | undefined,
+      ) => {
+        const curLen = Array.isArray(current)
+          ? current.length
+          : current
+            ? Object.keys(current).length
+            : 0;
+        const incLen = Array.isArray(inc)
+          ? inc.length
+          : inc
+            ? Object.keys(inc).length
+            : 0;
+        if (incLen >= curLen) return inc ?? current;
+        return current ?? inc;
+      };
+      const salesHistory = mergeCollections(
+        state.salesHistory,
+        incoming.salesHistory,
+      );
+      const debtHistory = mergeCollections(
+        state.debtHistory,
+        incoming.debtHistory,
+      );
+      const invoices = mergeCollections(state.invoices, incoming.invoices);
+      const clients = mergeCollections(state.clients, incoming.clients);
+      const stationData =
+        incoming.stationData && Object.keys(incoming.stationData).length > 0
+          ? incoming.stationData
+          : state.stationData;
+      // PRICE STABILITY GUARD: fuel_types_config is the single source of truth
+      // for fuel prices. The compact blob also stores legacy scalar prices
+      // (pmsPrice/agoPrice/petrolPrice/dieselPrice) for backward compat, but
+      // these can be STALE (an older device's value) or ZERO (a freshly-created
+      // station that hasn't synced fuel_types_config yet). If we blindly apply
+      // them via the `...incoming` spread, prices flicker/revert on every
+      // refresh or cross-device load. Instead: keep the CURRENT price unless the
+      // incoming value is a POSITIVE number that DIFFERS from current (i.e. a
+      // genuine price update from another device). Never let a 0/undefined
+      // incoming value overwrite a positive current price.
+      const pickPrice = (
+        currentVal: number | undefined,
+        incomingVal: number | undefined,
+      ): number => {
+        const cur =
+          typeof currentVal === "number" && currentVal > 0 ? currentVal : 0;
+        const inc =
+          typeof incomingVal === "number" && incomingVal > 0 ? incomingVal : 0;
+        // If incoming is 0/stale, keep current (preserves fuel_types_config price).
+        if (inc === 0) return cur;
+        // Both positive: the fuel_types_config effect will reconcile; prefer the
+        // incoming value only if it differs (a real remote edit).
+        return inc;
+      };
+      return {
+        ...state,
+        ...incoming,
+        companyData: mergeCompanyData(state.companyData, incoming.companyData),
+        // Sanitize tabConfigurations: filter out deprecated top-level tabs that
+        // were merged into parent components as sub-tabs (priceboard, shifts,
+        // quality, docconverter). A stale cloud blob may still contain these,
+        // causing duplicate tabs to appear in the nav bar. Always merge with the
+        // authoritative initial state so new tabs are included and deprecated
+        // ones are removed.
+        tabConfigurations: sanitizeTabConfigs(
+          incoming.tabConfigurations ?? state.tabConfigurations,
+        ),
+        // Stable prices — never revert to 0/stale values from the compact blob.
+        pmsPrice: pickPrice(state.pmsPrice, incoming.pmsPrice),
+        agoPrice: pickPrice(state.agoPrice, incoming.agoPrice),
+        petrolPrice: pickPrice(state.petrolPrice, incoming.petrolPrice),
+        dieselPrice: pickPrice(state.dieselPrice, incoming.dieselPrice),
+        // Merge (not replace) the dynamic per-fuel-type stores so a stale
+        // cloud blob can't wipe pumps/prices/tank-values the user just set.
+        fuelPumpsByType: {
+          ...state.fuelPumpsByType,
+          ...(incoming.fuelPumpsByType || {}),
+        },
+        fuelPricesByType: {
+          ...state.fuelPricesByType,
+          ...(incoming.fuelPricesByType || {}),
+        },
+        fuelTankValuesByType: {
+          ...state.fuelTankValuesByType,
+          ...(incoming.fuelTankValuesByType || {}),
+        },
+        invoiceItems,
+        salesHistory,
+        debtHistory,
+        invoices,
+        clients,
+        stationData,
+      };
+    }
     // Station management
     case "ADD_STATION":
       return {
@@ -897,14 +1266,14 @@ function fuelReducer(state: FuelState, action: FuelAction): FuelState {
     case "UPDATE_STATION":
       return {
         ...state,
-        stations: state.stations.map(s =>
+        stations: state.stations.map((s) =>
           s.id === action.payload.id
             ? {
                 ...s,
                 name: action.payload.name,
                 location: action.payload.location || s.location,
               }
-            : s
+            : s,
         ),
       };
     case "DELETE_STATION": {
@@ -912,11 +1281,11 @@ function fuelReducer(state: FuelState, action: FuelAction): FuelState {
       delete deletedStationData[action.payload];
       return {
         ...state,
-        stations: state.stations.filter(s => s.id !== action.payload),
+        stations: state.stations.filter((s) => s.id !== action.payload),
         stationData: deletedStationData,
         currentStationId:
           state.currentStationId === action.payload
-            ? state.stations.find(s => s.id !== action.payload)?.id || null
+            ? state.stations.find((s) => s.id !== action.payload)?.id || null
             : state.currentStationId,
       };
     }
@@ -949,7 +1318,10 @@ function fuelReducer(state: FuelState, action: FuelAction): FuelState {
           ...state,
           currentStationId: action.payload,
           stationData: savedStationData,
-          companyData: loadedStation.companyData || state.companyData,
+          companyData: mergeCompanyData(
+            state.companyData,
+            loadedStation.companyData,
+          ),
           pmsPumps: loadedStation.pmsPumps || [],
           agoPumps: loadedStation.agoPumps || [],
           pmsTankOpening: loadedStation.pmsTankOpening || 0,
@@ -985,6 +1357,15 @@ interface FuelContextType {
   loadFromCloud: () => Promise<void>;
   isCloudSaving: boolean;
   lastCloudSave: Date | null;
+  /**
+   * Propagate a fuel-price change from FuelContext to the shared
+   * `fuel_types_config` cloud key (so FuelTypesManager / PriceBoard / POS /
+   * Invoice / Reports all see the new price), AND broadcast it on the
+   * in-device fuel-interlink bus for instant same-page updates. Call this
+   * alongside dispatch(SET_PRICES) from any component that edits a station
+   * pump price (PumpSettingsPanel, "Set as my price" actions, etc.).
+   */
+  syncPriceToFuelTypes: (raw: string, price: number) => void;
 }
 
 const FuelContext = createContext<FuelContextType | undefined>(undefined);
@@ -992,108 +1373,221 @@ const FuelContext = createContext<FuelContextType | undefined>(undefined);
 export function FuelProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(fuelReducer, initialState);
   const { user } = useAuth();
+  const { currentStation } = useStations();
+  const stationId = currentStation?.id;
   const [isCloudSaving, setIsCloudSaving] = React.useState(false);
   const [lastCloudSave, setLastCloudSave] = React.useState<Date | null>(null);
 
-  const saveToStorage = () => {
+  // Ref that always points to the latest state, so save/load callbacks can read
+  // current state WITHOUT being recreated on every state change. This breaks the
+  // save/load race where the load effect (which depended on saveToStorage) re-fired
+  // on every edit and overwrote fresh edits with stale localStorage data before the
+  // 300ms save debounce could persist them.
+  const stateRef = useRef(state);
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
+
+  // Ref that always points to the current station id, so saveToCloud/loadFromCloud
+  // (which are memoized on [user]) can scope the compact blob per-station without
+  // being recreated on every station switch. Each station gets its own isolated
+  // compact blob (companyData, salesHistory, debtHistory, etc.) so a user with
+  // multiple stations has independent data per station. Combined View aggregates.
+  const stationIdRef = useRef<string | undefined>(stationId);
+  useEffect(() => {
+    stationIdRef.current = stationId;
+  }, [stationId]);
+
+  // WORLDWIDE: reconcile companyData.currency with the STATION's currency.
+  // companyData.currency defaults to "KSh" (Kenya) and is persisted to the
+  // cloud blob that way — so a German (EUR) or US (USD) station ended up with
+  // companyData.currency = "KSh", leaking Kenya currency into invoices and
+  // reports. When the current station has an explicit currency, ensure
+  // companyData.currency (and userPreferences.currency) matches it. This is a
+  // one-way reconcile (station is the source of truth for currency); it only
+  // fires when they actually differ to avoid a save loop.
+  const stationCurrency = currentStation?.currency;
+  useEffect(() => {
+    if (!stationCurrency) return;
+    const cur = stateRef.current;
+    const companyMismatch = cur.companyData?.currency !== stationCurrency;
+    const prefsMismatch = cur.userPreferences?.currency !== stationCurrency;
+    if (companyMismatch || prefsMismatch) {
+      if (companyMismatch) {
+        dispatch({
+          type: "SET_COMPANY_DATA",
+          payload: {
+            ...cur.companyData,
+            currency: stationCurrency,
+          },
+        });
+      }
+      if (prefsMismatch) {
+        dispatch({
+          type: "SET_USER_PREFERENCES",
+          payload: {
+            ...cur.userPreferences,
+            currency: stationCurrency,
+          },
+        });
+      }
+    }
+  }, [stationCurrency]);
+
+  // CRITICAL: Guards the cross-device cloud-sync race. On login, the
+  // aggressive auto-save effect (1500ms) can fire BEFORE loadFromCloud has
+  // finished hydrating state from Supabase app_kv. When that happens,
+  // saveToCloud overwrites the cloud blob with the default/empty in-memory
+  // state, silently WIPING all data entered on another device. This ref
+  // blocks saveToCloud until the initial cloud load has completed. It is
+  // reset to false whenever the user changes (so each login re-loads).
+  const cloudLoadCompleteRef = useRef(false);
+  useEffect(() => {
+    cloudLoadCompleteRef.current = false;
+  }, [user]);
+
+  // Real-time echo guard: set before saveToCloud writes so the real-time
+  // subscription knows to skip the echo of our own write.
+  const skipRemoteUpdateRef = useRef(false);
+  // Tracks the timestamp of our most recent successful cloud save. Used for
+  // conflict resolution when two devices are open simultaneously: a real-time
+  // update from the other device is only applied if it is NEWER than our last
+  // save, preventing a stale remote write from clobbering our unsaved edits.
+  const lastLocalSaveTsRef = useRef(0);
+
+  // ============================================================
+  // FUEL TYPE / PRICE INTERLINK (FuelContext <-> fuel_types_config)
+  // ------------------------------------------------------------
+  // fuel_types_config (edited by FuelTypesManager) is the rich source of
+  // truth for the station's fuel types + their per-litre prices. FuelContext
+  // keeps legacy scalar pmsPrice/agoPrice for backwards compatibility. These
+  // two are kept in sync: when fuel_types_config loads (or changes via
+  // real-time), the active petrol/diesel entries drive pmsPrice/agoPrice; and
+  // syncPriceToFuelTypes() writes a FuelContext price change back into
+  // fuel_types_config + broadcasts on the interlink bus. This makes a price
+  // edited anywhere (Dashboard, PriceBoard, "Set as my price", PumpSettings)
+  // reflect everywhere instantly.
+  const fuelTypesRef = useRef<CustomFuelType[]>([]);
+  // Guard the FuelContext -> fuel_types_config derivation so we don't loop:
+  // while WE are applying a fuel_types_config change to pmsPrice/agoPrice, we
+  // must not re-broadcast it as a FuelContext change.
+  const applyingFuelTypesRef = useRef(false);
+  // Track the last price values we broadcast so the price-propagation effect
+  // only emits when a price actually changes (not on every state render).
+  const lastBroadcastPriceRef = useRef<{
+    pms: number | null;
+    ago: number | null;
+  }>({
+    pms: null,
+    ago: null,
+  });
+
+  const saveToStorage = useCallback(() => {
     try {
-      // Compact storage: use single compressed JSON blob instead of individual keys
-      const userKey = user?.id ? `user_${user.id}_compact` : "guest_compact";
+      const s = stateRef.current;
+      // Compact storage: single compressed JSON blob, station-scoped so each
+      // station's local cache is independent (matches the cloud key).
+      const userKey = compactCloudKey(user?.id, stationIdRef.current);
 
       // Create compact data object with only non-empty values
       const compactData: any = {
-        theme: state.theme,
-        themeSettings: state.themeSettings,
-        userPreferences: state.userPreferences,
+        theme: s.theme,
+        themeSettings: s.themeSettings,
+        userPreferences: s.userPreferences,
       };
 
       // Only include non-empty data to minimize storage
       // Always save companyData if it exists (even without name, for logo persistence)
-      if (state.companyData) compactData.companyData = state.companyData;
-      if (state.signatures?.manager || state.signatures?.director)
-        compactData.signatures = state.signatures;
-      if (state.invoiceCounter > 1)
-        compactData.invoiceCounter = state.invoiceCounter;
-      if (Object.keys(state.clients).length > 0)
-        compactData.clients = state.clients;
-      if (Object.keys(state.invoices).length > 0)
-        compactData.invoices = state.invoices;
-      if (Object.keys(state.debtHistory).length > 0)
-        compactData.debtHistory = state.debtHistory;
-      if (Object.keys(state.salesHistory).length > 0)
-        compactData.salesHistory = state.salesHistory;
-      if (state.deliveryData?.rows?.length > 0)
-        compactData.deliveryData = state.deliveryData;
-      if (state.invoiceItems?.length > 0)
-        compactData.invoiceItems = state.invoiceItems;
-      if (state.invoiceSettings?.quantityLabel !== "Qty (DAYS)")
-        compactData.invoiceSettings = state.invoiceSettings;
-      if (state.tillPayment !== 0) compactData.tillPayment = state.tillPayment;
-      if (state.pmsPumps?.length > 0) compactData.pmsPumps = state.pmsPumps;
-      if (state.agoPumps?.length > 0) compactData.agoPumps = state.agoPumps;
-      if (state.expenses?.length > 0) compactData.expenses = state.expenses;
-      if (state.salesDate !== new Date().toISOString().split("T")[0])
-        compactData.salesDate = state.salesDate;
-      if (state.shift !== "Day") compactData.shift = state.shift;
-      if (state.pmsTankOpening !== 0)
-        compactData.pmsTankOpening = state.pmsTankOpening;
-      if (state.pmsTankClosing !== 0)
-        compactData.pmsTankClosing = state.pmsTankClosing;
-      if (state.agoTankOpening !== 0)
-        compactData.agoTankOpening = state.agoTankOpening;
-      if (state.agoTankClosing !== 0)
-        compactData.agoTankClosing = state.agoTankClosing;
-      if (state.pmsPrice !== DEFAULT_PMS_PRICE) compactData.pmsPrice = state.pmsPrice;
-      if (state.agoPrice !== DEFAULTAGO_PRICE) compactData.agoPrice = state.agoPrice;
-      if (state.petrolPrice !== DEFAULT_PMS_PRICE)
-        compactData.petrolPrice = state.petrolPrice;
-      if (state.dieselPrice !== DEFAULTAGO_PRICE)
-        compactData.dieselPrice = state.dieselPrice;
-      if (state.deliveredTo) compactData.deliveredTo = state.deliveredTo;
-      if (state.totalOrder) compactData.totalOrder = state.totalOrder;
-      if (state.deliveryYear !== initialState.deliveryYear)
-        compactData.deliveryYear = state.deliveryYear;
-      if (state.offloadingRecords?.length > 0)
-        compactData.offloadingRecords = state.offloadingRecords;
+      if (s.companyData) compactData.companyData = s.companyData;
+      if (s.signatures?.manager || s.signatures?.director)
+        compactData.signatures = s.signatures;
+      if (s.invoiceCounter > 1) compactData.invoiceCounter = s.invoiceCounter;
+      if (Object.keys(s.clients).length > 0) compactData.clients = s.clients;
+      if (Object.keys(s.invoices).length > 0) compactData.invoices = s.invoices;
+      if (Object.keys(s.debtHistory).length > 0)
+        compactData.debtHistory = s.debtHistory;
+      if (Object.keys(s.salesHistory).length > 0)
+        compactData.salesHistory = s.salesHistory;
+      if (s.deliveryData?.rows?.length > 0)
+        compactData.deliveryData = s.deliveryData;
+      if (s.invoiceItems?.length > 0) compactData.invoiceItems = s.invoiceItems;
+      // Always save invoiceSettings — the old "!== Qty (DAYS)" conditional caused
+      // the label to be dropped from storage, then the load effect overwrote the
+      // user's custom label with the default on every state change.
+      compactData.invoiceSettings = s.invoiceSettings;
+      if (s.tillPayment !== 0) compactData.tillPayment = s.tillPayment;
+      if (s.pmsPumps?.length > 0) compactData.pmsPumps = s.pmsPumps;
+      if (s.agoPumps?.length > 0) compactData.agoPumps = s.agoPumps;
+      if (s.fuelPumpsByType && Object.keys(s.fuelPumpsByType).length > 0)
+        compactData.fuelPumpsByType = s.fuelPumpsByType;
+      if (s.fuelPricesByType && Object.keys(s.fuelPricesByType).length > 0)
+        compactData.fuelPricesByType = s.fuelPricesByType;
       if (
-        JSON.stringify(state.tabVisibility) !==
+        s.fuelTankValuesByType &&
+        Object.keys(s.fuelTankValuesByType).length > 0
+      )
+        compactData.fuelTankValuesByType = s.fuelTankValuesByType;
+      if (s.expenses?.length > 0) compactData.expenses = s.expenses;
+      if (s.salesDate !== new Date().toISOString().split("T")[0])
+        compactData.salesDate = s.salesDate;
+      if (s.shift !== "Day") compactData.shift = s.shift;
+      if (s.pmsTankOpening !== 0) compactData.pmsTankOpening = s.pmsTankOpening;
+      if (s.pmsTankClosing !== 0) compactData.pmsTankClosing = s.pmsTankClosing;
+      if (s.agoTankOpening !== 0) compactData.agoTankOpening = s.agoTankOpening;
+      if (s.agoTankClosing !== 0) compactData.agoTankClosing = s.agoTankClosing;
+      compactData.pmsPrice = s.pmsPrice; // always save (station-specific)
+      compactData.agoPrice = s.agoPrice; // always save (station-specific)
+      // always save
+      compactData.petrolPrice = s.petrolPrice; // always save (station-specific)
+      // always save
+      compactData.dieselPrice = s.dieselPrice; // always save (station-specific)
+      if (s.deliveredTo) compactData.deliveredTo = s.deliveredTo;
+      if (s.totalOrder) compactData.totalOrder = s.totalOrder;
+      if (s.deliveryYear !== initialState.deliveryYear)
+        compactData.deliveryYear = s.deliveryYear;
+      if (s.offloadingRecords?.length > 0)
+        compactData.offloadingRecords = s.offloadingRecords;
+      if (
+        JSON.stringify(s.tabVisibility) !==
         JSON.stringify(initialState.tabVisibility)
       )
-        compactData.tabVisibility = state.tabVisibility;
+        compactData.tabVisibility = s.tabVisibility;
       if (
-        state.tabConfigurations?.some(
-          t => t.label !== t.originalLabel || !t.visible
+        s.tabConfigurations?.some(
+          (t) => t.label !== t.originalLabel || !t.visible,
         )
       )
-        compactData.tabConfigurations = state.tabConfigurations;
-      if (state.employees?.length > 0) compactData.employees = state.employees;
-      if (state.payrollRecords?.length > 0)
-        compactData.payrollRecords = state.payrollRecords;
-      if (state.mpesaTransactions?.length > 0)
-        compactData.mpesaTransactions = state.mpesaTransactions;
+        compactData.tabConfigurations = s.tabConfigurations;
+      if (s.employees?.length > 0) compactData.employees = s.employees;
+      if (s.payrollRecords?.length > 0)
+        compactData.payrollRecords = s.payrollRecords;
+      if (s.mpesaTransactions?.length > 0)
+        compactData.mpesaTransactions = s.mpesaTransactions;
       // Multi-station support - always save station data
-      if (state.stations?.length > 0) compactData.stations = state.stations;
-      if (state.currentStationId)
-        compactData.currentStationId = state.currentStationId;
-      if (Object.keys(state.stationData || {}).length > 0)
-        compactData.stationData = state.stationData;
+      if (s.stations?.length > 0) compactData.stations = s.stations;
+      if (s.currentStationId) compactData.currentStationId = s.currentStationId;
+      if (Object.keys(s.stationData || {}).length > 0)
+        compactData.stationData = s.stationData;
       if (
-        JSON.stringify(state.reportSettings) !==
+        JSON.stringify(s.reportSettings) !==
         JSON.stringify(initialState.reportSettings)
       )
-        compactData.reportSettings = state.reportSettings;
-      if (state.chatHistory?.length > 0)
-        compactData.chatHistory = state.chatHistory.slice(-50); // Keep only last 50 messages
-      if (state.dataBackups?.length > 0)
-        compactData.dataBackups = state.dataBackups.slice(-5); // Keep only last 5 backups
+        compactData.reportSettings = s.reportSettings;
+      if (s.chatHistory?.length > 0)
+        compactData.chatHistory = s.chatHistory.slice(-50); // Keep only last 50 messages
+      if (s.dataBackups?.length > 0)
+        compactData.dataBackups = s.dataBackups.slice(-5); // Keep only last 5 backups
 
       // Save as single compressed JSON string
       localStorage.setItem(userKey, JSON.stringify(compactData));
 
       // CRITICAL: Always save companyData to individual key for logo persistence
       // This ensures logo survives even if compact storage has issues
-      if (state.companyData) {
-        localStorage.setItem(`${userKey}companyData`, JSON.stringify(state.companyData));
+      if (s.companyData) {
+        localStorage.setItem(
+          `${userKey}companyData`,
+          JSON.stringify(s.companyData),
+        );
       }
 
       // Clean up old individual keys EXCEPT companyData (keep for logo backup)
@@ -1107,126 +1601,140 @@ export function FuelProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error("Error saving to localStorage:", error);
     }
-  };
+  }, [user]);
 
   // Cloud storage with compression
-  const saveToCloud = async () => {
+  const saveToCloud = useCallback(async () => {
     if (!user) return;
+    // Block cloud saves until the initial cloud load has completed. Without
+    // this, the auto-save effect (1500ms) races ahead of loadFromCloud and
+    // overwrites the cloud blob with default/empty state, destroying all
+    // data entered on another device.
+    if (!cloudLoadCompleteRef.current) {
+      console.log(
+        "[FuelContext] Skipping cloud save — initial cloud load not yet complete",
+      );
+      return;
+    }
 
     try {
       setIsCloudSaving(true);
 
+      const s = stateRef.current;
       // Create compact data object (same as localStorage logic)
       const compactData: any = {
-        theme: state.theme,
-        themeSettings: state.themeSettings,
-        userPreferences: state.userPreferences,
+        theme: s.theme,
+        themeSettings: s.themeSettings,
+        userPreferences: s.userPreferences,
       };
 
       // Only include non-default/non-empty values for maximum compression
       // Always save companyData if it exists (even without name, for logo persistence)
-      if (state.companyData) compactData.companyData = state.companyData;
-      if (state.signatures?.manager || state.signatures?.director)
-        compactData.signatures = state.signatures;
-      if (state.invoiceCounter > 1)
-        compactData.invoiceCounter = state.invoiceCounter;
-      if (Object.keys(state.clients).length > 0)
-        compactData.clients = state.clients;
-      if (Object.keys(state.invoices).length > 0)
-        compactData.invoices = state.invoices;
-      if (Object.keys(state.debtHistory).length > 0)
-        compactData.debtHistory = state.debtHistory;
-      if (Object.keys(state.salesHistory).length > 0)
-        compactData.salesHistory = state.salesHistory;
-      if (state.deliveryData?.rows?.length > 0)
-        compactData.deliveryData = state.deliveryData;
-      if (state.invoiceItems?.length > 0)
-        compactData.invoiceItems = state.invoiceItems;
-      if (state.invoiceSettings?.quantityLabel !== "Qty (DAYS)")
-        compactData.invoiceSettings = state.invoiceSettings;
-      if (state.tillPayment !== 0) compactData.tillPayment = state.tillPayment;
-      if (state.pmsPumps?.length > 0) compactData.pmsPumps = state.pmsPumps;
-      if (state.agoPumps?.length > 0) compactData.agoPumps = state.agoPumps;
-      if (state.expenses?.length > 0) compactData.expenses = state.expenses;
-      if (state.salesDate !== new Date().toISOString().split("T")[0])
-        compactData.salesDate = state.salesDate;
-      if (state.shift !== "Day") compactData.shift = state.shift;
-      if (state.pmsTankOpening !== 0)
-        compactData.pmsTankOpening = state.pmsTankOpening;
-      if (state.pmsTankClosing !== 0)
-        compactData.pmsTankClosing = state.pmsTankClosing;
-      if (state.agoTankOpening !== 0)
-        compactData.agoTankOpening = state.agoTankOpening;
-      if (state.agoTankClosing !== 0)
-        compactData.agoTankClosing = state.agoTankClosing;
-      if (state.pmsPrice !== DEFAULT_PMS_PRICE) compactData.pmsPrice = state.pmsPrice;
-      if (state.agoPrice !== DEFAULTAGO_PRICE) compactData.agoPrice = state.agoPrice;
-      if (state.petrolPrice !== DEFAULT_PMS_PRICE)
-        compactData.petrolPrice = state.petrolPrice;
-      if (state.dieselPrice !== DEFAULTAGO_PRICE)
-        compactData.dieselPrice = state.dieselPrice;
-      if (state.deliveredTo) compactData.deliveredTo = state.deliveredTo;
-      if (state.totalOrder) compactData.totalOrder = state.totalOrder;
-      if (state.deliveryYear !== initialState.deliveryYear)
-        compactData.deliveryYear = state.deliveryYear;
-      if (state.offloadingRecords?.length > 0)
-        compactData.offloadingRecords = state.offloadingRecords;
+      if (s.companyData) compactData.companyData = s.companyData;
+      if (s.signatures?.manager || s.signatures?.director)
+        compactData.signatures = s.signatures;
+      if (s.invoiceCounter > 1) compactData.invoiceCounter = s.invoiceCounter;
+      if (Object.keys(s.clients).length > 0) compactData.clients = s.clients;
+      if (Object.keys(s.invoices).length > 0) compactData.invoices = s.invoices;
+      if (Object.keys(s.debtHistory).length > 0)
+        compactData.debtHistory = s.debtHistory;
+      if (Object.keys(s.salesHistory).length > 0)
+        compactData.salesHistory = s.salesHistory;
+      if (s.deliveryData?.rows?.length > 0)
+        compactData.deliveryData = s.deliveryData;
+      if (s.invoiceItems?.length > 0) compactData.invoiceItems = s.invoiceItems;
+      // Always save invoiceSettings (see saveToStorage comment).
+      compactData.invoiceSettings = s.invoiceSettings;
+      if (s.tillPayment !== 0) compactData.tillPayment = s.tillPayment;
+      if (s.pmsPumps?.length > 0) compactData.pmsPumps = s.pmsPumps;
+      if (s.agoPumps?.length > 0) compactData.agoPumps = s.agoPumps;
+      if (s.fuelPumpsByType && Object.keys(s.fuelPumpsByType).length > 0)
+        compactData.fuelPumpsByType = s.fuelPumpsByType;
+      if (s.fuelPricesByType && Object.keys(s.fuelPricesByType).length > 0)
+        compactData.fuelPricesByType = s.fuelPricesByType;
       if (
-        JSON.stringify(state.tabVisibility) !==
+        s.fuelTankValuesByType &&
+        Object.keys(s.fuelTankValuesByType).length > 0
+      )
+        compactData.fuelTankValuesByType = s.fuelTankValuesByType;
+      if (s.expenses?.length > 0) compactData.expenses = s.expenses;
+      if (s.salesDate !== new Date().toISOString().split("T")[0])
+        compactData.salesDate = s.salesDate;
+      if (s.shift !== "Day") compactData.shift = s.shift;
+      if (s.pmsTankOpening !== 0) compactData.pmsTankOpening = s.pmsTankOpening;
+      if (s.pmsTankClosing !== 0) compactData.pmsTankClosing = s.pmsTankClosing;
+      if (s.agoTankOpening !== 0) compactData.agoTankOpening = s.agoTankOpening;
+      if (s.agoTankClosing !== 0) compactData.agoTankClosing = s.agoTankClosing;
+      compactData.pmsPrice = s.pmsPrice; // always save (station-specific)
+      compactData.agoPrice = s.agoPrice; // always save (station-specific)
+      // always save
+      compactData.petrolPrice = s.petrolPrice; // always save (station-specific)
+      // always save
+      compactData.dieselPrice = s.dieselPrice; // always save (station-specific)
+      if (s.deliveredTo) compactData.deliveredTo = s.deliveredTo;
+      if (s.totalOrder) compactData.totalOrder = s.totalOrder;
+      if (s.deliveryYear !== initialState.deliveryYear)
+        compactData.deliveryYear = s.deliveryYear;
+      if (s.offloadingRecords?.length > 0)
+        compactData.offloadingRecords = s.offloadingRecords;
+      if (
+        JSON.stringify(s.tabVisibility) !==
         JSON.stringify(initialState.tabVisibility)
       )
-        compactData.tabVisibility = state.tabVisibility;
+        compactData.tabVisibility = s.tabVisibility;
       if (
-        state.tabConfigurations?.some(
-          t => t.label !== t.originalLabel || !t.visible
+        s.tabConfigurations?.some(
+          (t) => t.label !== t.originalLabel || !t.visible,
         )
       )
-        compactData.tabConfigurations = state.tabConfigurations;
-      if (state.employees?.length > 0) compactData.employees = state.employees;
-      if (state.payrollRecords?.length > 0)
-        compactData.payrollRecords = state.payrollRecords;
-      if (state.mpesaTransactions?.length > 0)
-        compactData.mpesaTransactions = state.mpesaTransactions.slice(-100); // Keep only last 100 transactions
+        compactData.tabConfigurations = s.tabConfigurations;
+      if (s.employees?.length > 0) compactData.employees = s.employees;
+      if (s.payrollRecords?.length > 0)
+        compactData.payrollRecords = s.payrollRecords;
+      if (s.mpesaTransactions?.length > 0)
+        compactData.mpesaTransactions = s.mpesaTransactions.slice(-100); // Keep only last 100 transactions
       // Multi-station support - always save station data
-      if (state.stations?.length > 0) compactData.stations = state.stations;
-      if (state.currentStationId)
-        compactData.currentStationId = state.currentStationId;
-      if (Object.keys(state.stationData || {}).length > 0)
-        compactData.stationData = state.stationData;
+      if (s.stations?.length > 0) compactData.stations = s.stations;
+      if (s.currentStationId) compactData.currentStationId = s.currentStationId;
+      if (Object.keys(s.stationData || {}).length > 0)
+        compactData.stationData = s.stationData;
       if (
-        JSON.stringify(state.reportSettings) !==
+        JSON.stringify(s.reportSettings) !==
         JSON.stringify(initialState.reportSettings)
       )
-        compactData.reportSettings = state.reportSettings;
-      if (state.chatHistory?.length > 0)
-        compactData.chatHistory = state.chatHistory.slice(-50); // Keep only last 50 messages
-      if (state.dataBackups?.length > 0)
-        compactData.dataBackups = state.dataBackups.slice(-3); // Keep only last 3 backups in cloud
+        compactData.reportSettings = s.reportSettings;
+      if (s.chatHistory?.length > 0)
+        compactData.chatHistory = s.chatHistory.slice(-50); // Keep only last 50 messages
+      if (s.dataBackups?.length > 0)
+        compactData.dataBackups = s.dataBackups.slice(-3); // Keep only last 3 backups in cloud
 
-      const authToken = getAuthToken();
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-      };
-      if (authToken) {
-        headers["Authorization"] = `Bearer ${authToken}`;
-      }
+      // Timestamp for conflict resolution: when two devices are open
+      // simultaneously, a real-time update from the other device should only
+      // overwrite local state if it is NEWER than our last save. This prevents
+      // a stale remote echo from clobbering unsaved local edits.
+      compactData.lastSavedAt = Date.now();
 
-      const response = await fetch("/api/user-data", {
-        method: "POST",
-        headers,
-        body: JSON.stringify({ data: compactData }),
-      });
-
-      if (!response.ok) {
-        throw new Error(
-          `Failed to save to cloud: ${response.status} ${response.statusText}`
-        );
-      }
+      // Persist to Supabase app_kv (cross-device). Keyed per-user + per-station
+      // so each station has its own isolated FuelContext blob (companyData,
+      // salesHistory, debtHistory, etc.). RLS-protected by owner_id. localStorage
+      // remains a read-through cache via saveToStorage for offline reads.
+      const cloudKey = compactCloudKey(user?.id, stationIdRef.current);
+      // Set the echo-skip flag so the real-time subscription doesn't
+      // re-dispatch our own write as if it came from another device.
+      skipRemoteUpdateRef.current = true;
+      // Record our save timestamp so the real-time handler can reject stale
+      // remote updates that predate our latest local write.
+      lastLocalSaveTsRef.current = compactData.lastSavedAt;
+      await cloudStorageService.set(
+        cloudKey,
+        compactData,
+        stationIdRef.current,
+      );
 
       setLastCloudSave(new Date());
 
       // Calculate and log storage savings
-      const fullSize = JSON.stringify(state).length;
+      const fullSize = JSON.stringify(s).length;
       const compactSize = JSON.stringify(compactData).length;
       const savings = ((1 - compactSize / fullSize) * 100).toFixed(1);
       console.log(`Compact data saved to cloud (${savings}% smaller)`);
@@ -1235,42 +1743,54 @@ export function FuelProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsCloudSaving(false);
     }
-  };
+  }, [user]);
 
-  const loadFromCloud = async () => {
+  const loadFromCloud = useCallback(async () => {
     if (!user) return;
 
     try {
-      const authToken = getAuthToken();
-      const headers: Record<string, string> = {};
-      if (authToken) {
-        headers["Authorization"] = `Bearer ${authToken}`;
-      }
+      // Read the station-scoped compact data blob from Supabase app_kv
+      // (cross-device). Each station has its own blob. Falls back to the
+      // legacy user-scoped blob (and then legacy bare-key) via
+      // cloudStorageService.get so existing data migrates transparently on
+      // first read. localStorage is only a read-through cache.
+      const cloudKey = compactCloudKey(user.id, stationIdRef.current);
+      const compactData = (await cloudStorageService.get<
+        Record<string, unknown>
+      >(cloudKey, stationIdRef.current)) as Record<string, unknown> | null;
 
-      const response = await fetch("/api/user-data", { headers });
-
-      if (!response.ok) {
-        throw new Error(
-          `Failed to load from cloud: ${response.status} ${response.statusText}`
-        );
-      }
-
-      const result = await response.json();
-
-      if (result.data && Object.keys(result.data).length > 0) {
-        // Validate that the loaded data has meaningful content
+      if (compactData && Object.keys(compactData).length > 0) {
+        // Validate that the loaded data has meaningful content. The check
+        // MUST include ALL business-data collections (salesHistory,
+        // debtHistory, expenses, invoices, clients, etc.) — not just a
+        // subset. Previously salesHistory was missing from this list, so a
+        // user whose only data was saved sales records would see an empty
+        // Fuel Sales tab on a new device (the blob existed in the cloud but
+        // was never loaded → false "no data" → stale default state).
+        const cd = compactData as any;
         const hasData =
-          result.data.companyData?.name ||
-          (result.data.deliveryData?.rows &&
-            result.data.deliveryData.rows.length > 0) ||
-          (result.data.invoiceItems && result.data.invoiceItems.length > 0) ||
-          (result.data.pmsPumps && result.data.pmsPumps.length > 0) ||
-          (result.data.agoPumps && result.data.agoPumps.length > 0) ||
-          (result.data.stations && result.data.stations.length > 0);
+          cd.companyData?.name ||
+          cd.companyData?.logo ||
+          (cd.deliveryData?.rows && cd.deliveryData.rows.length > 0) ||
+          (cd.invoiceItems && cd.invoiceItems.length > 0) ||
+          (cd.pmsPumps && cd.pmsPumps.length > 0) ||
+          (cd.agoPumps && cd.agoPumps.length > 0) ||
+          (cd.stations && cd.stations.length > 0) ||
+          (cd.salesHistory && Object.keys(cd.salesHistory).length > 0) ||
+          (cd.debtHistory && Object.keys(cd.debtHistory).length > 0) ||
+          (cd.invoices && Object.keys(cd.invoices).length > 0) ||
+          (cd.clients && Object.keys(cd.clients).length > 0) ||
+          (cd.expenses && cd.expenses.length > 0) ||
+          (cd.employees && cd.employees.length > 0) ||
+          (cd.payrollRecords && cd.payrollRecords.length > 0) ||
+          (cd.offloadingRecords && cd.offloadingRecords.length > 0) ||
+          (cd.mpesaTransactions && cd.mpesaTransactions.length > 0) ||
+          (cd.stationData && Object.keys(cd.stationData).length > 0) ||
+          cd.tillPayment;
 
-        if (hasData || result.data.theme || result.data.tabConfigurations) {
-          dispatch({ type: "LOAD_FROM_STORAGE", payload: result.data });
-          console.log("Data loaded from cloud successfully");
+        if (hasData || cd.theme || cd.tabConfigurations) {
+          dispatch({ type: "LOAD_FROM_STORAGE", payload: cd });
+          console.log("Data loaded from cloud (Supabase) successfully");
         } else {
           console.log("Cloud data appears empty, keeping current state");
         }
@@ -1279,27 +1799,30 @@ export function FuelProvider({ children }: { children: ReactNode }) {
       }
     } catch (error) {
       console.error("Error loading from cloud:", error);
-      throw error; // Re-throw so caller can handle fallback
+      // Re-throw so the caller can fall back to loadFromStorage.
+      throw error;
     }
-  };
+  }, [user]);
 
-  const loadFromStorage = () => {
+  const loadFromStorage = useCallback(() => {
     try {
-      const userKey = user?.id ? `user_${user.id}_compact` : "guest_compact";
-      
+      const userKey = compactCloudKey(user?.id, stationIdRef.current);
+
       // Try loading from compact storage first
       const compactData = localStorage.getItem(userKey);
 
       if (compactData) {
         // Load from compact JSON blob
         const parsed = JSON.parse(compactData);
-        
+
         // CRITICAL: Always check individual companyData key for logo (more reliable)
-        const individualCompanyData = localStorage.getItem(`${userKey}companyData`);
+        const individualCompanyData = localStorage.getItem(
+          `${userKey}companyData`,
+        );
         if (individualCompanyData) {
           parsed.companyData = JSON.parse(individualCompanyData);
         }
-        
+
         const loadedData: Partial<FuelState> = {
           ...initialState, // Start with defaults
           ...parsed, // Overlay saved values
@@ -1313,79 +1836,97 @@ export function FuelProvider({ children }: { children: ReactNode }) {
           (localStorage.getItem(`${oldUserKey}theme`) as "light" | "dark") ||
           "dark";
         const savedThemeSettings = localStorage.getItem(
-          `${oldUserKey}themeSettings`
+          `${oldUserKey}themeSettings`,
         );
         const savedUserPreferences = localStorage.getItem(
-          `${oldUserKey}userPreferences`
+          `${oldUserKey}userPreferences`,
         );
         const savedCompany = localStorage.getItem(`${oldUserKey}companyData`);
         const savedSignatures = localStorage.getItem(`${oldUserKey}signatures`);
         const savedInvoiceCounter = localStorage.getItem(
-          `${oldUserKey}invoiceCounter`
+          `${oldUserKey}invoiceCounter`,
         );
         const savedClients = localStorage.getItem(`${oldUserKey}clients`);
         const savedInvoices = localStorage.getItem(`${oldUserKey}invoices`);
-        const savedDebtHistory = localStorage.getItem(`${oldUserKey}debtHistory`);
+        const savedDebtHistory = localStorage.getItem(
+          `${oldUserKey}debtHistory`,
+        );
         const savedSalesHistory = localStorage.getItem(
-          `${oldUserKey}salesHistory`
+          `${oldUserKey}salesHistory`,
         );
         const savedDelivery = localStorage.getItem(
-          `${oldUserKey}fuelDeliveryData`
+          `${oldUserKey}fuelDeliveryData`,
         );
         const savedInvoiceItems = localStorage.getItem(
-          `${oldUserKey}invoiceItems`
+          `${oldUserKey}invoiceItems`,
         );
         const savedInvoiceSettings = localStorage.getItem(
-          `${oldUserKey}invoiceSettings`
+          `${oldUserKey}invoiceSettings`,
         );
-        const savedTillPayment = localStorage.getItem(`${oldUserKey}tillPayment`);
-        const savedPmsPumps = localStorage.getItem(`${oldUserKey}fuelPumps_pms`);
-        const savedAgoPumps = localStorage.getItem(`${oldUserKey}fuelPumps_ago`);
+        const savedTillPayment = localStorage.getItem(
+          `${oldUserKey}tillPayment`,
+        );
+        const savedPmsPumps = localStorage.getItem(
+          `${oldUserKey}fuelPumps_pms`,
+        );
+        const savedAgoPumps = localStorage.getItem(
+          `${oldUserKey}fuelPumps_ago`,
+        );
         const savedExpenses = localStorage.getItem(`${oldUserKey}fuelExpenses`);
         const savedSalesDate = localStorage.getItem(`${oldUserKey}salesDate`);
         const savedShift = localStorage.getItem(`${oldUserKey}shift`);
         const savedPmsTankOpening = localStorage.getItem(
-          `${oldUserKey}pmsTankOpening`
+          `${oldUserKey}pmsTankOpening`,
         );
         const savedPmsTankClosing = localStorage.getItem(
-          `${oldUserKey}pmsTankClosing`
+          `${oldUserKey}pmsTankClosing`,
         );
         const savedAgoTankOpening = localStorage.getItem(
-          `${oldUserKey}agoTankOpening`
+          `${oldUserKey}agoTankOpening`,
         );
         const savedAgoTankClosing = localStorage.getItem(
-          `${oldUserKey}agoTankClosing`
+          `${oldUserKey}agoTankClosing`,
         );
         const savedPmsPrice = localStorage.getItem(`${oldUserKey}pmsPrice`);
         const savedAgoPrice = localStorage.getItem(`${oldUserKey}agoPrice`);
-        const savedPetrolPrice = localStorage.getItem(`${oldUserKey}petrolPrice`);
-        const savedDieselPrice = localStorage.getItem(`${oldUserKey}dieselPrice`);
-        const savedDeliveredTo = localStorage.getItem(`${oldUserKey}deliveredTo`);
+        const savedPetrolPrice = localStorage.getItem(
+          `${oldUserKey}petrolPrice`,
+        );
+        const savedDieselPrice = localStorage.getItem(
+          `${oldUserKey}dieselPrice`,
+        );
+        const savedDeliveredTo = localStorage.getItem(
+          `${oldUserKey}deliveredTo`,
+        );
         const savedTotalOrder = localStorage.getItem(`${oldUserKey}totalOrder`);
         const savedDeliveryYear = localStorage.getItem(
-          `${oldUserKey}deliveryYear`
+          `${oldUserKey}deliveryYear`,
         );
         const savedOffloadingRecords = localStorage.getItem(
-          `${oldUserKey}offloadingRecords`
+          `${oldUserKey}offloadingRecords`,
         );
         const savedTabVisibility = localStorage.getItem(
-          `${oldUserKey}tabVisibility`
+          `${oldUserKey}tabVisibility`,
         );
         const savedTabConfigurations = localStorage.getItem(
-          `${oldUserKey}tabConfigurations`
+          `${oldUserKey}tabConfigurations`,
         );
         const savedEmployees = localStorage.getItem(`${oldUserKey}employees`);
         const savedPayrollRecords = localStorage.getItem(
-          `${oldUserKey}payrollRecords`
+          `${oldUserKey}payrollRecords`,
         );
         const savedMpesaTransactions = localStorage.getItem(
-          `${oldUserKey}mpesaTransactions`
+          `${oldUserKey}mpesaTransactions`,
         );
         const savedReportSettings = localStorage.getItem(
-          `${oldUserKey}reportSettings`
+          `${oldUserKey}reportSettings`,
         );
-        const savedChatHistory = localStorage.getItem(`${oldUserKey}chatHistory`);
-        const savedDataBackups = localStorage.getItem(`${oldUserKey}dataBackups`);
+        const savedChatHistory = localStorage.getItem(
+          `${oldUserKey}chatHistory`,
+        );
+        const savedDataBackups = localStorage.getItem(
+          `${oldUserKey}dataBackups`,
+        );
 
         const loadedData: Partial<FuelState> = {
           theme: savedTheme,
@@ -1475,7 +2016,7 @@ export function FuelProvider({ children }: { children: ReactNode }) {
             ? JSON.parse(savedTabVisibility)
             : initialState.tabVisibility,
           tabConfigurations: savedTabConfigurations
-            ? JSON.parse(savedTabConfigurations)
+            ? sanitizeTabConfigs(JSON.parse(savedTabConfigurations))
             : initialState.tabConfigurations,
           employees: savedEmployees
             ? JSON.parse(savedEmployees)
@@ -1502,66 +2043,427 @@ export function FuelProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error("Error loading from localStorage:", error);
     }
-  };
+  }, [user]);
 
   // INSTANT LOCAL AUTO-SAVE - saves to browser storage immediately for zero data loss
   useEffect(() => {
-    // Save to localStorage on EVERY state change with minimal debounce
     const timeoutId = setTimeout(() => {
-      saveToStorage(); // Always save, even empty states
-    }, 300); // Reduced to 300ms for near-instant local saves
+      saveToStorage();
+    }, 100); // 100ms — near-instant, batches only rapid keystrokes
 
     return () => clearTimeout(timeoutId);
   }, [state]);
 
-  // AGGRESSIVE AUTO-SAVE to cloud - ensures all business data is always saved
+  // AGGRESSIVE AUTO-SAVE to cloud - ensures all business data is always saved.
+  // Debounced to 2s so a burst of edits (typing, rapid line-item changes)
+  // collapses into ONE cloud write + ONE realtime broadcast instead of one
+  // per keystroke. This is a major realtime/egress saving on the Free plan
+  // (each cloud write echoes a postgres_changes event to every subscribed
+  // device). The echo guard (skipRemoteUpdateRef) and the local 100ms save
+  // keep data safe; the 2s window only delays the *cloud* mirror.
   useEffect(() => {
     if (!user) return;
 
-    // Immediate cloud save on ANY data change (with short debounce to batch rapid changes)
     const immediateCloudSave = setTimeout(() => {
-      // Save to cloud for ANY state change (including empty states to sync deletions)
       saveToCloud();
-    }, 1500); // Reduced to 1.5 seconds for faster cloud sync
+    }, 2000); // 2s — batches rapid edits into a single cloud sync
 
-    // Frequent periodic saves every 15 seconds for maximum reliability
-    const cloudSaveInterval = setInterval(() => {
-      saveToCloud();
-    }, 15000); // Save every 15 seconds regardless of changes
-
-    return () => {
-      clearTimeout(immediateCloudSave);
-      clearInterval(cloudSaveInterval);
-    };
+    return () => clearTimeout(immediateCloudSave);
   }, [user, state]);
 
-  // Load data from localStorage on mount AND when user changes
-  // Cloud sync: Load from cloud ONLY if localStorage is empty (first time on new device)
-  // After loading, always prefer localStorage (it's faster and more reliable)
+  // Load data on mount AND when user changes.
+  // Cloud (Supabase app_kv) is the source of truth — it is always consulted so
+  // that data entered on another device/browser is reflected here. localStorage
+  // is only a read-through cache (per cloud-storage-service.ts) and is used as a
+  // fallback when the network/auth is unavailable. Previously this effect skipped
+  // loadFromCloud whenever localStorage had data, which meant a refresh on the
+  // SAME browser never pulled the latest cloud state — so a logo (or any field)
+  // updated elsewhere vanished. It also broke cross-device sync entirely.
   useEffect(() => {
-    const timer = setTimeout(async () => {
-      // First, try to load from localStorage (always preferred)
-      loadFromStorage();
-      
-      // Then, if localStorage is empty, try to load from cloud
-      // This handles the case where a user logs in from a new device
-      const userKey = user?.id ? `user_${user.id}_compact` : "guest_compact";
-      const hasLocalData = localStorage.getItem(userKey);
-      
-      if (!hasLocalData && user) {
-        // No local data exists - this is a new device or first login
-        // Try to load from cloud
+    let cancelled = false;
+    // HYDRATE INSTANTLY from localStorage — no setTimeout delay. The UI shows
+    // cached data on the very first paint, then cloud data updates it.
+    loadFromStorage();
+
+    if (user) {
+      (async () => {
         try {
           await loadFromCloud();
-          // After loading from cloud, save to localStorage for faster future loads
-          saveToStorage();
+          if (!cancelled) {
+            saveToStorage();
+          }
         } catch (error) {
-          console.warn("Failed to load from cloud, will use defaults:", error);
+          console.warn("Failed to load from cloud, using local cache:", error);
+        } finally {
+          if (!cancelled) cloudLoadCompleteRef.current = true;
+        }
+      })();
+    } else {
+      cloudLoadCompleteRef.current = true;
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [user, loadFromCloud, loadFromStorage, saveToStorage]);
+
+  // CRITICAL: Reload cloud data when the current station changes. Each station
+  // has its own isolated FuelContext blob (companyData, salesHistory,
+  // debtHistory, etc.). Without this, switching stations keeps the previous
+  // station's data in memory, so edits bleed across stations. We:
+  // 1. Block saves (cloudLoadCompleteRef = false) so the auto-save effect
+  //    can't overwrite the new station's cloud blob with the old station's
+  //    in-memory state during the ~200-500ms load window.
+  // 2. Load the new station's blob from cloud (falling back to localStorage
+  //    cache, then defaults).
+  // 3. Unblock saves in finally.
+  // We skip the very first run (the mount effect above handles it) by tracking
+  // whether a station was previously selected.
+  const prevStationRef = useRef<string | undefined>(stationId);
+  useEffect(() => {
+    // Only react to an actual station CHANGE, not the initial mount.
+    if (prevStationRef.current === stationId) return;
+    prevStationRef.current = stationId;
+
+    if (!user) return;
+
+    let cancelled = false;
+    // Block saves until the new station's data is loaded.
+    cloudLoadCompleteRef.current = false;
+    loadFromStorage();
+    (async () => {
+      try {
+        await loadFromCloud();
+        if (!cancelled) saveToStorage();
+      } catch (error) {
+        console.warn("Failed to load station cloud data:", error);
+      } finally {
+        if (!cancelled) cloudLoadCompleteRef.current = true;
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user, stationId, loadFromCloud, loadFromStorage, saveToStorage]);
+
+  // REAL-TIME cross-device sync: subscribe to postgres_changes on the compact
+  // blob. When another device/browser writes to the same app_kv row (e.g. the
+  // user edits company data on their phone), this subscription fires INSTANTLY
+  // and dispatches LOAD_FROM_STORAGE so the new data is reflected here with
+  // zero delay — no polling, no reload required.
+  //
+  // A `skipRemoteUpdateRef` guard prevents echo: when THIS device writes, the
+  // real-time event comes back to us. We skip it because saveToCloud already
+  // updated local state synchronously.
+  useEffect(() => {
+    if (!user || !stationId) return;
+
+    const cloudKey = compactCloudKey(user.id, stationId);
+    const unsub = cloudStorageService.subscribe<Record<string, unknown>>(
+      cloudKey,
+      stationId,
+      (value) => {
+        // Skip our own echo.
+        if (skipRemoteUpdateRef.current) {
+          skipRemoteUpdateRef.current = false;
+          return;
+        }
+        if (value && Object.keys(value).length > 0) {
+          const cd = value as any;
+          // CONFLICT RESOLUTION (two devices open simultaneously): only apply
+          // the remote update if it is NEWER than our last local save. If we
+          // have unsaved-or-just-saved local edits that are newer, keep them —
+          // applying a stale remote write would revert our changes and cause
+          // the "data keeps conflicting" flicker. The first load (lastLocalSaveTs
+          // === 0) always accepts the remote value.
+          const remoteTs =
+            typeof cd.lastSavedAt === "number" ? cd.lastSavedAt : 0;
+          if (
+            lastLocalSaveTsRef.current > 0 &&
+            remoteTs > 0 &&
+            remoteTs < lastLocalSaveTsRef.current
+          ) {
+            console.log(
+              "[FuelContext] Skipping stale remote update (remote ts",
+              remoteTs,
+              "< local ts",
+              lastLocalSaveTsRef.current,
+              ")",
+            );
+            return;
+          }
+          const hasData =
+            cd.companyData?.name ||
+            cd.companyData?.logo ||
+            (cd.deliveryData?.rows && cd.deliveryData.rows.length > 0) ||
+            (cd.invoiceItems && cd.invoiceItems.length > 0) ||
+            (cd.pmsPumps && cd.pmsPumps.length > 0) ||
+            (cd.agoPumps && cd.agoPumps.length > 0) ||
+            (cd.stations && cd.stations.length > 0) ||
+            (cd.salesHistory && Object.keys(cd.salesHistory).length > 0) ||
+            (cd.debtHistory && Object.keys(cd.debtHistory).length > 0) ||
+            (cd.invoices && Object.keys(cd.invoices).length > 0) ||
+            (cd.clients && Object.keys(cd.clients).length > 0) ||
+            (cd.expenses && cd.expenses.length > 0) ||
+            (cd.employees && cd.employees.length > 0) ||
+            (cd.payrollRecords && cd.payrollRecords.length > 0) ||
+            (cd.offloadingRecords && cd.offloadingRecords.length > 0) ||
+            (cd.mpesaTransactions && cd.mpesaTransactions.length > 0) ||
+            (cd.stationData && Object.keys(cd.stationData).length > 0) ||
+            cd.tillPayment;
+          if (hasData || cd.theme || cd.tabConfigurations) {
+            dispatch({ type: "LOAD_FROM_STORAGE", payload: cd });
+          }
+        }
+      },
+    );
+
+    return () => unsub();
+  }, [user, stationId]);
+
+  // ------------------------------------------------------------
+  // OFFLINE → ONLINE SYNC: when the offline write queue is flushed (by the
+  // cloudStorageService global online/visibility/interval listeners), a
+  // `cloudStorageSynced` CustomEvent is dispatched. Reload from cloud so the
+  // UI reflects the now-synced data immediately — this is the fix for
+  // "offline changes not updated immediately when back online". Without this,
+  // a component that loaded on mount would keep showing the pre-sync state.
+  useEffect(() => {
+    if (!user) return;
+    const handler = () => {
+      // Reload the compact blob from cloud (the just-flushed write is there).
+      loadFromCloud().catch(() => {});
+    };
+    window.addEventListener("cloudStorageSynced", handler);
+    return () => window.removeEventListener("cloudStorageSynced", handler);
+  }, [user, loadFromCloud]);
+
+  // ------------------------------------------------------------
+  // Load fuel_types_config on mount/station change, keep fuelTypesRef in
+  // sync, derive pmsPrice/agoPrice from the active petrol/diesel entries,
+  // and subscribe to real-time cloud updates so a price edit in
+  // FuelTypesManager on another device propagates here instantly.
+  useEffect(() => {
+    let cancelled = false;
+    const applyFuelTypes = (list: CustomFuelType[]) => {
+      if (cancelled) return;
+      fuelTypesRef.current = list;
+      const s = stateRef.current;
+      const petrol = list.find(
+        (ft) => ft.active && normalizeFuelType(ft.name) === "petrol",
+      );
+      const diesel = list.find(
+        (ft) => ft.active && normalizeFuelType(ft.name) === "diesel",
+      );
+      const updates: Partial<{ pmsPrice: number; agoPrice: number }> = {};
+      if (
+        petrol &&
+        typeof petrol.price === "number" &&
+        petrol.price > 0 &&
+        petrol.price !== s.pmsPrice
+      ) {
+        updates.pmsPrice = petrol.price;
+      }
+      if (
+        diesel &&
+        typeof diesel.price === "number" &&
+        diesel.price > 0 &&
+        diesel.price !== s.agoPrice
+      ) {
+        updates.agoPrice = diesel.price;
+      }
+      // Mirror EVERY active fuel-type price into fuelPricesByType so the
+      // dynamic per-fuel price store stays in sync (kerosene, LPG, V-Power…).
+      const priceByType: Record<string, number> = {};
+      for (const ft of list) {
+        if (!ft.active) continue;
+        const canonical = normalizeFuelType(ft.name);
+        if (canonical && typeof ft.price === "number" && ft.price > 0) {
+          priceByType[canonical] = ft.price;
         }
       }
-    }, 100);
-    return () => clearTimeout(timer);
-  }, [user, loadFromStorage, saveToStorage, loadFromCloud]);
+      if (Object.keys(priceByType).length > 0) {
+        dispatch({ type: "SET_FUEL_PRICES_BY_TYPE", payload: priceByType });
+      }
+      if (Object.keys(updates).length > 0) {
+        applyingFuelTypesRef.current = true;
+        dispatch({ type: "SET_PRICES", payload: updates });
+        // Broadcast so same-page consumers (Dashboard, PriceBoard) update.
+        if (updates.pmsPrice != null) {
+          emitFuelPriceChange({
+            fuelType: "Super Petrol",
+            canonical: "petrol",
+            price: updates.pmsPrice,
+            source: "FuelContext.fuelTypesSync",
+          });
+        }
+        if (updates.agoPrice != null) {
+          emitFuelPriceChange({
+            fuelType: "Diesel",
+            canonical: "diesel",
+            price: updates.agoPrice,
+            source: "FuelContext.fuelTypesSync",
+          });
+        }
+        applyingFuelTypesRef.current = false;
+      }
+    };
+
+    (async () => {
+      try {
+        const data = await cloudStorageService.get<CustomFuelType[]>(
+          "fuel_types_config",
+          stationId,
+        );
+        if (data && Array.isArray(data)) applyFuelTypes(data);
+      } catch {
+        /* ignore */
+      }
+    })();
+
+    const unsub = cloudStorageService.subscribe<CustomFuelType[]>(
+      "fuel_types_config",
+      stationId,
+      (val) => {
+        if (val && Array.isArray(val)) applyFuelTypes(val);
+      },
+    );
+    return () => {
+      cancelled = true;
+      unsub?.();
+    };
+  }, [stationId]);
+
+  // ------------------------------------------------------------
+  // syncPriceToFuelTypes: write a FuelContext price change back into
+  // fuel_types_config (so FuelTypesManager/PriceBoard/POS/Invoice/Reports see
+  // it) and broadcast on the interlink bus. Exposed via context for any
+  // component that edits a station pump price.
+  const syncPriceToFuelTypes = useCallback((raw: string, price: number) => {
+    if (typeof price !== "number" || !isFinite(price) || price <= 0) return;
+    const canonical = normalizeFuelType(raw);
+    if (!canonical) return;
+    // Update the matching fuel_types_config entry (if any) and persist.
+    const list = fuelTypesRef.current;
+    if (list.length > 0) {
+      const idx = list.findIndex(
+        (ft) => normalizeFuelType(ft.name) === canonical,
+      );
+      if (idx >= 0 && list[idx].price !== price) {
+        const next = list.slice();
+        next[idx] = { ...next[idx], price };
+        fuelTypesRef.current = next;
+        cloudStorageService
+          .set("fuel_types_config", next, stationIdRef.current)
+          .catch(() => {});
+      }
+    }
+    // Also keep the legacy FuelContext scalar fields in sync for petrol/diesel.
+    if (canonical === "petrol" || canonical === "diesel") {
+      dispatch({
+        type: "SET_PRICES",
+        payload:
+          canonical === "petrol" ? { pmsPrice: price } : { agoPrice: price },
+      });
+    }
+    // Broadcast for instant same-page updates (Dashboard, PriceBoard, …).
+    emitFuelPriceChange({
+      fuelType: raw,
+      canonical,
+      price,
+      source: "FuelContext.syncPriceToFuelTypes",
+    });
+  }, []);
+
+  // Listen for price changes broadcast by OTHER components on the bus (e.g.
+  // FuelPriceLocator "Set as my price") and mirror them into FuelContext +
+  // fuel_types_config, so those actions update the Dashboard/legacy fields too.
+  useEffect(() => {
+    const unsub = onFuelPriceChange((p) => {
+      if (applyingFuelTypesRef.current) return; // avoid loop with our own emit
+      const canonical = p.canonical ?? normalizeFuelType(p.fuelType);
+      if (!canonical) return;
+      const list = fuelTypesRef.current;
+      if (list.length > 0) {
+        const idx = list.findIndex(
+          (ft) => normalizeFuelType(ft.name) === canonical,
+        );
+        if (idx >= 0 && list[idx].price !== p.price) {
+          const next = list.slice();
+          next[idx] = { ...next[idx], price: p.price };
+          fuelTypesRef.current = next;
+          cloudStorageService
+            .set("fuel_types_config", next, stationIdRef.current)
+            .catch(() => {});
+        }
+      }
+      if (canonical === "petrol" || canonical === "diesel") {
+        dispatch({
+          type: "SET_PRICES",
+          payload:
+            canonical === "petrol"
+              ? { pmsPrice: p.price }
+              : { agoPrice: p.price },
+        });
+      }
+    });
+    return () => unsub();
+  }, []);
+
+  // ------------------------------------------------------------
+  // Universal price-propagation effect: when ANY legacy scalar price field
+  // changes via dispatch(SET_PRICES) — e.g. DeliveryTracker's Petrol/Diesel
+  // Price inputs, SetupWizard price setup, or a restored LOAD_FROM_STORAGE —
+  // mirror the change into fuel_types_config + broadcast on the interlink
+  // bus so EVERY consumer (Dashboard cards, POS cart, Invoice hints,
+  // PriceBoard, Reports) stays in sync from a single source of truth.
+  // Note: petrol/diesel have TWO legacy fields each (petrolPrice/pmsPrice,
+  // dieselPrice/agoPrice) used by different components. We track all four and
+  // propagate any that changes.
+  useEffect(() => {
+    if (applyingFuelTypesRef.current) return;
+    // Resolve the effective petrol/diesel price: prefer pmsPrice/agoPrice, but
+    // also react to petrolPrice/dieselPrice edits (DeliveryTracker/SetupWizard).
+    const effectivePms = state.pmsPrice || state.petrolPrice;
+    const effectiveAgo = state.agoPrice || state.dieselPrice;
+    const last = lastBroadcastPriceRef.current;
+
+    const propagate = (
+      canonical: "petrol" | "diesel",
+      price: number,
+      label: string,
+    ) => {
+      if (price <= 0) return;
+      const list = fuelTypesRef.current;
+      if (list.length > 0) {
+        const idx = list.findIndex(
+          (ft) => normalizeFuelType(ft.name) === canonical,
+        );
+        if (idx >= 0 && list[idx].price !== price) {
+          const next = list.slice();
+          next[idx] = { ...next[idx], price };
+          fuelTypesRef.current = next;
+          cloudStorageService
+            .set("fuel_types_config", next, stationIdRef.current)
+            .catch(() => {});
+        }
+      }
+      emitFuelPriceChange({
+        fuelType: label,
+        canonical,
+        price,
+        source: "FuelContext.pricePropagate",
+      });
+    };
+
+    if (effectivePms > 0 && effectivePms !== last.pms) {
+      last.pms = effectivePms;
+      propagate("petrol", effectivePms, "Super Petrol");
+    }
+    if (effectiveAgo > 0 && effectiveAgo !== last.ago) {
+      last.ago = effectiveAgo;
+      propagate("diesel", effectiveAgo, "Diesel");
+    }
+  }, [state.pmsPrice, state.agoPrice, state.petrolPrice, state.dieselPrice]);
 
   // Apply theme to body - robust for all browsers
   useEffect(() => {
@@ -1569,7 +2471,7 @@ export function FuelProvider({ children }: { children: ReactNode }) {
       const isDark = state.theme === "dark";
       const html = document.documentElement;
       const body = document.body;
-      
+
       if (isDark) {
         html.classList.add("dark");
         html.classList.remove("light");
@@ -1601,6 +2503,7 @@ export function FuelProvider({ children }: { children: ReactNode }) {
         loadFromCloud,
         isCloudSaving,
         lastCloudSave,
+        syncPriceToFuelTypes,
       }}
     >
       {children}

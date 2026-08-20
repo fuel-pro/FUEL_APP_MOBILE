@@ -221,7 +221,7 @@ class CloudSyncEngine {
   }
 
   private notifyListeners(key: string, data: any) {
-    this.listeners.get(key)?.forEach(cb => {
+    this.listeners.get(key)?.forEach((cb) => {
       try {
         cb(data);
       } catch (e) {
@@ -271,7 +271,7 @@ function initDB(): Promise<IDBDatabase> {
       db = request.result;
       resolve(db);
     };
-    request.onupgradeneeded = event => {
+    request.onupgradeneeded = (event) => {
       const database = (event.target as IDBOpenDBRequest).result;
       if (!database.objectStoreNames.contains(STORE_NAME)) {
         database.createObjectStore(STORE_NAME, { keyPath: "key" });
@@ -387,7 +387,7 @@ export interface BackupRecord {
 async function createBackup(
   stationId: string,
   data: any,
-  name?: string
+  name?: string,
 ): Promise<BackupRecord> {
   const database = await initDB();
   const compressed = JSON.stringify(data);
@@ -421,11 +421,11 @@ async function getBackups(stationId: string): Promise<BackupRecord[]> {
       const all = request.result as BackupRecord[];
       resolve(
         all
-          .filter(b => b.stationId === stationId)
+          .filter((b) => b.stationId === stationId)
           .sort(
             (a, b) =>
-              new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-          )
+              new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+          ),
       );
     };
     request.onerror = () => reject(request.error);
@@ -460,7 +460,7 @@ let backupInterval: ReturnType<typeof setInterval> | null = null;
 export function startAutoBackup(
   stationId: string,
   getData: () => any,
-  intervalMs = 1000 * 60 * 30
+  intervalMs = 1000 * 60 * 30,
 ): void {
   stopAutoBackup();
   backupInterval = setInterval(async () => {
@@ -469,7 +469,7 @@ export function startAutoBackup(
       await createBackup(
         stationId,
         data,
-        `Auto ${new Date().toLocaleTimeString()}`
+        `Auto ${new Date().toLocaleTimeString()}`,
       );
       // Keep only last 50 backups
       const backups = await getBackups(stationId);
@@ -599,88 +599,179 @@ export const CloudStorage = {
   },
 };
 
-// Export audit log types and functions
+// Export audit log types and functions.
+//
+// MIGRATED 2026-08-12: audit logs were stored ONLY in IndexedDB
+// (browser-local). Entries logged on Device A were invisible on Device B,
+// violating the cross-device requirement. Now writes to the Supabase
+// `app_kv`-backed cloud store (key `audit_log`, scoped by owner via the
+// `__ownerId` suffix) as the source of truth, with IndexedDB retained as a
+// read-through cache + offline fallback. Same export API so callers need no
+// changes.
 export interface AuditEntry {
   id?: number;
   stationId: string;
   timestamp: string;
   action: string;
   category:
-    | "data"
-    | "sale"
-    | "payment"
-    | "inventory"
-    | "auth"
-    | "config"
-    | "sync";
+    "data" | "sale" | "payment" | "inventory" | "auth" | "config" | "sync";
   user?: string;
   details: string;
   oldValue?: any;
   newValue?: any;
 }
 
-export async function logAudit(
-  entry: Omit<AuditEntry, "id" | "timestamp">
-): Promise<void> {
-  const database = await initDB();
-  const fullEntry = { ...entry, timestamp: new Date().toISOString() };
-  return new Promise((resolve, reject) => {
-    const tx = database.transaction([AUDIT_STORE], "readwrite");
-    const store = tx.objectStore(AUDIT_STORE);
-    const request = store.add(fullEntry);
-    request.onsuccess = () => resolve();
-    request.onerror = () => reject(request.error);
+const AUDIT_CLOUD_KEY = "audit_log";
+
+/** Generate a stable string id for cloud entries (IndexedDB uses auto-increment
+ * numeric ids, but the cloud store needs a unique id within the array). */
+function auditId(): string {
+  return `audit_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+/** Read the full audit log from the cloud (source of truth). Falls back to
+ * IndexedDB if the cloud is unavailable (offline / no user). */
+async function readCloudAudit(): Promise<AuditEntry[]> {
+  try {
+    const { cloudStorageService } =
+      await import("../lib/cloud-storage-service");
+    const arr = await cloudStorageService.get<AuditEntry[]>(AUDIT_CLOUD_KEY);
+    if (Array.isArray(arr)) return arr;
+  } catch {
+    /* cloud unavailable — fall through to IndexedDB */
+  }
+  return readIndexedDBAudit();
+}
+
+/** Read audit log from IndexedDB (offline fallback / cache). */
+function readIndexedDBAudit(): Promise<AuditEntry[]> {
+  return new Promise((resolve) => {
+    initDB()
+      .then((database) => {
+        const tx = database.transaction([AUDIT_STORE], "readonly");
+        const store = tx.objectStore(AUDIT_STORE);
+        const request = store.getAll();
+        request.onsuccess = () =>
+          resolve((request.result as AuditEntry[]) || []);
+        request.onerror = () => resolve([]);
+      })
+      .catch(() => resolve([]));
   });
+}
+
+/** Write the full audit log array to the cloud (fire-and-forget). */
+async function writeCloudAudit(entries: AuditEntry[]): Promise<void> {
+  try {
+    const { cloudStorageService } =
+      await import("../lib/cloud-storage-service");
+    await cloudStorageService.set(AUDIT_CLOUD_KEY, entries);
+  } catch (e) {
+    console.error("[Audit] cloud write failed:", e);
+  }
+}
+
+/** Append a single entry to IndexedDB (offline cache). Best-effort. */
+function appendIndexedDBAudit(entry: AuditEntry): Promise<void> {
+  return new Promise((resolve) => {
+    initDB()
+      .then((database) => {
+        const tx = database.transaction([AUDIT_STORE], "readwrite");
+        const store = tx.objectStore(AUDIT_STORE);
+        store.add(entry);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => resolve();
+      })
+      .catch(() => resolve());
+  });
+}
+
+export async function logAudit(
+  entry: Omit<AuditEntry, "id" | "timestamp">,
+): Promise<void> {
+  const fullEntry: AuditEntry = {
+    ...entry,
+    timestamp: new Date().toISOString(),
+  };
+
+  // 1. Cloud (source of truth) — append to the array.
+  try {
+    const existing = await readCloudAudit();
+    // Assign a stable string id for cloud entries.
+    const cloudEntry = { ...fullEntry, id: undefined };
+    (cloudEntry as any)._id = auditId();
+    const updated = [...existing, cloudEntry].slice(-1000); // cap at 1000
+    await writeCloudAudit(updated);
+  } catch (e) {
+    console.error("[Audit] logAudit cloud failed:", e);
+  }
+
+  // 2. IndexedDB (offline cache) — best-effort, don't block.
+  appendIndexedDBAudit(fullEntry).catch(() => {});
 }
 
 export async function getAuditLog(
   stationId: string,
-  limit = 100
+  limit = 100,
 ): Promise<AuditEntry[]> {
-  const database = await initDB();
-  return new Promise((resolve, reject) => {
-    const tx = database.transaction([AUDIT_STORE], "readonly");
-    const store = tx.objectStore(AUDIT_STORE);
-    const index = store.index("stationId");
-    const request = index.getAll(stationId, limit);
-    request.onsuccess = () => {
-      const entries = (request.result as AuditEntry[]).sort(
-        (a, b) =>
-          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-      );
-      resolve(entries);
-    };
-    request.onerror = () => reject(request.error);
-  });
+  const all = await readCloudAudit();
+  // Filter by stationId if a real station is provided; "default" matches all.
+  const filtered =
+    stationId && stationId !== "default"
+      ? all.filter((e) => e.stationId === stationId)
+      : all;
+  return filtered
+    .sort(
+      (a, b) =>
+        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+    )
+    .slice(0, limit);
 }
 
 export async function getAuditLogByCategory(
   stationId: string,
   category: string,
-  limit = 50
+  limit = 50,
 ): Promise<AuditEntry[]> {
   const all = await getAuditLog(stationId, limit * 2);
-  return all.filter(e => e.category === category).slice(0, limit);
+  return all.filter((e) => e.category === category).slice(0, limit);
 }
 
 export async function clearOldAudit(daysToKeep = 90): Promise<void> {
-  const database = await initDB();
   const cutoff = Date.now() - daysToKeep * 24 * 60 * 60 * 1000;
-  return new Promise((resolve, reject) => {
-    const tx = database.transaction([AUDIT_STORE], "readwrite");
-    const store = tx.objectStore(AUDIT_STORE);
-    const index = store.index("timestamp");
-    const range = IDBKeyRange.upperBound(new Date(cutoff).toISOString());
-    const request = index.openCursor(range);
-    request.onsuccess = () => {
-      const cursor = request.result;
-      if (cursor) {
-        cursor.delete();
-        cursor.continue();
-      } else resolve();
-    };
-    request.onerror = () => reject(request.error);
-  });
+  const cutoffIso = new Date(cutoff).toISOString();
+
+  // Cloud: filter out old entries + re-write.
+  try {
+    const all = await readCloudAudit();
+    const kept = all.filter((e) => new Date(e.timestamp).getTime() >= cutoff);
+    if (kept.length !== all.length) {
+      await writeCloudAudit(kept);
+    }
+  } catch (e) {
+    console.error("[Audit] clearOldAudit cloud failed:", e);
+  }
+
+  // IndexedDB: use the timestamp index cursor (existing logic).
+  try {
+    const database = await initDB();
+    await new Promise<void>((resolve) => {
+      const tx = database.transaction([AUDIT_STORE], "readwrite");
+      const store = tx.objectStore(AUDIT_STORE);
+      const index = store.index("timestamp");
+      const range = IDBKeyRange.upperBound(cutoffIso);
+      const request = index.openCursor(range);
+      request.onsuccess = () => {
+        const cursor = request.result;
+        if (cursor) {
+          cursor.delete();
+          cursor.continue();
+        } else resolve();
+      };
+      request.onerror = () => resolve();
+    });
+  } catch (e) {
+    console.error("[Audit] clearOldAudit IndexedDB failed:", e);
+  }
 }
 
 // Make CloudStorage available globally

@@ -25,14 +25,33 @@ import {
   type ComplianceConfig,
 } from "@/react-app/config/compliance";
 import SearchableCountryDropdown from "@/react-app/components/SearchableCountryDropdown";
+import { useFuel } from "@/react-app/context/FuelContext";
+import { useStations } from "@/react-app/context/StationContext";
+import { getDetectedCountryCode } from "@/react-app/lib/currency";
+import { switchToTab } from "@/react-app/lib/mpesa-integration-service";
 
 export default function Compliance() {
+  const { state } = useFuel();
+  const { currentStation } = useStations();
+  const companyLogo = state?.companyData?.logo;
+  const companyName = state?.companyData?.name;
   const [selectedCountryCode, setSelectedCountryCode] = useState(() => {
+    // Prefer the station's explicit country, then the unified detector, then a
+    // localStorage hint, then timezone — never hard-default to Kenya.
+    const stationCountry =
+      (currentStation as any)?.country ||
+      (state?.companyData as any)?.country ||
+      (state?.companyData as any)?.companyCountry;
+    if (stationCountry && stationCountry.length === 2) {
+      return stationCountry.toUpperCase();
+    }
+    const detected = getDetectedCountryCode();
+    if (detected) return detected.toUpperCase();
     try {
       const saved = localStorage.getItem("fuelpro_location_country");
       if (saved) {
         const parsed = JSON.parse(saved);
-        return (parsed.currentCountry || parsed.country || "KE").toUpperCase();
+        return (parsed.currentCountry || parsed.country || "US").toUpperCase();
       }
     } catch {}
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -46,13 +65,13 @@ export default function Compliance() {
   });
 
   const [expandedSection, setExpandedSection] = useState<string | null>(
-    "overview"
+    "overview",
   );
   const [showTemplate, setShowTemplate] = useState(false);
 
   const config = useMemo(
     () => getComplianceConfig(selectedCountryCode),
-    [selectedCountryCode]
+    [selectedCountryCode],
   );
   const countries = useMemo(() => getAllComplianceCountries(), []);
 
@@ -84,6 +103,19 @@ export default function Compliance() {
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
+      {/* Print-only header with logo */}
+      <div className="hidden print:block text-center mb-4">
+        {companyLogo && (
+          <img
+            src={companyLogo}
+            alt="Logo"
+            className="mx-auto mb-2 max-h-20 max-w-[150px] object-contain"
+            crossOrigin="anonymous"
+          />
+        )}
+        {companyName && <h1 className="text-xl font-bold">{companyName}</h1>}
+      </div>
+
       {/* Header */}
       <div className="flex items-center gap-3 flex-wrap">
         <div className="p-2.5 bg-blue-100 dark:bg-blue-900/30 rounded-xl">
@@ -112,6 +144,14 @@ export default function Compliance() {
             title="Export JSON"
           >
             <Download size={18} />
+          </button>
+          <button
+            onClick={() => switchToTab("reports")}
+            className="px-3 py-2 rounded-lg bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-900/30 dark:hover:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 text-sm font-medium transition-all"
+            title="Open Reports Center"
+          >
+            <FileText size={16} className="inline mr-1" />
+            Reports
           </button>
         </div>
       </div>
@@ -178,7 +218,7 @@ export default function Compliance() {
 
       {/* Expandable Sections */}
       <div className="space-y-3">
-        {sections.map(section => {
+        {sections.map((section) => {
           const isExpanded = expandedSection === section.id;
           const SectionIcon = section.icon;
           return (
@@ -405,7 +445,7 @@ function FuelSection({ config }: { config: ComplianceConfig }) {
         {config.fuelRegulatorShort})
       </p>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-        {config.fuelTypes.map(ft => (
+        {config.fuelTypes.map((ft) => (
           <div
             key={ft.code}
             className="p-3 bg-gray-50 dark:bg-gray-900 rounded-lg"
@@ -488,7 +528,7 @@ function ReceiptsSection({ config }: { config: ComplianceConfig }) {
 function FeaturesSection({ config }: { config: ComplianceConfig }) {
   return (
     <div className="space-y-2">
-      {config.complianceFeatures.map(f => (
+      {config.complianceFeatures.map((f) => (
         <div
           key={f.id}
           className="flex items-start gap-3 p-3 bg-gray-50 dark:bg-gray-900 rounded-lg"
@@ -523,7 +563,7 @@ function PaymentsSection({ config }: { config: ComplianceConfig }) {
   return (
     <div className="space-y-2">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-        {config.paymentMethods.map(pm => (
+        {config.paymentMethods.map((pm) => (
           <div
             key={pm.id}
             className="p-3 bg-gray-50 dark:bg-gray-900 rounded-lg"
@@ -560,7 +600,7 @@ function PaymentsSection({ config }: { config: ComplianceConfig }) {
           Supported Banks
         </p>
         <div className="flex flex-wrap gap-2 mt-1">
-          {config.bankSupport.map(b => (
+          {config.bankSupport.map((b) => (
             <span
               key={b.code}
               className="text-[10px] px-2 py-1 bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700"
@@ -644,13 +684,13 @@ function generateComplianceTemplate(config: ComplianceConfig) {
         date_format: config.dateFormat,
         currency: config.currency,
       },
-      permits: config.requiredPermits.map(p => ({
+      permits: config.requiredPermits.map((p) => ({
         name: p,
         status: "pending",
         issued_by: config.fuelRegulatorShort,
         valid_until: `[YYYY-MM-DD]`,
       })),
-      fuel_operations: config.fuelTypes.map(ft => ({
+      fuel_operations: config.fuelTypes.map((ft) => ({
         type: ft.code,
         name: ft.localName,
         tax_rate: ft.taxRate,
@@ -669,7 +709,7 @@ function generateComplianceTemplate(config: ComplianceConfig) {
         etr_format: config.etrFormat,
         sample_receipt_number: `[AUTO-GENERATED]`,
       },
-      payment_methods: config.paymentMethods.map(pm => ({
+      payment_methods: config.paymentMethods.map((pm) => ({
         id: pm.id,
         name: pm.name,
         type: pm.type,

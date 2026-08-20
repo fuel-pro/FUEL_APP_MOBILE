@@ -3,16 +3,193 @@ import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
 import { formatNumber } from "./formatUtils";
+import { getCurrencySymbol } from "@/react-app/lib/currency";
+import {
+  getFuelLabel,
+  getFuelCode,
+  type CanonicalFuelType,
+} from "@/react-app/config/pricing";
 
-export function exportDeliveryPDF(state: any) {
+/**
+ * Load a logo image (data URL or external URL) as a base64 data URL so it can
+ * be embedded into a jsPDF document via `doc.addImage`. External URLs are
+ * fetched and drawn to an off-screen canvas to bypass CORS/tainting issues.
+ * Returns null if the image cannot be loaded (the caller simply omits it).
+ */
+export async function loadLogoAsDataURL(
+  logoSrc: string | undefined | null,
+): Promise<string | null> {
+  if (!logoSrc || typeof logoSrc !== "string" || logoSrc.trim() === "") {
+    return null;
+  }
+  // Already a data URL — use directly.
+  if (logoSrc.startsWith("data:")) {
+    return logoSrc;
+  }
+  try {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    const loaded = await new Promise<HTMLImageElement | null>((resolve) => {
+      img.onload = () => resolve(img);
+      img.onerror = () => resolve(null);
+      img.src = logoSrc;
+    });
+    if (!loaded) return null;
+    const canvas = document.createElement("canvas");
+    canvas.width = loaded.naturalWidth || loaded.width;
+    canvas.height = loaded.naturalHeight || loaded.height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+    ctx.drawImage(loaded, 0, 0);
+    try {
+      return canvas.toDataURL("image/png");
+    } catch {
+      // Canvas tainted by cross-origin image — fall back to fetching as blob.
+      try {
+        const resp = await fetch(logoSrc, { mode: "cors" });
+        const blob = await resp.blob();
+        return await new Promise<string | null>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () =>
+            resolve(typeof reader.result === "string" ? reader.result : null);
+          reader.onerror = () => resolve(null);
+          reader.readAsDataURL(blob);
+        });
+      } catch {
+        return null;
+      }
+    }
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Add the company logo to a jsPDF document at the given position. Returns the
+ * new Y coordinate after the logo (so subsequent text doesn't overlap).
+ * If the logo cannot be loaded, returns the original Y (no logo drawn).
+ */
+export async function addLogoToPDF(
+  doc: jsPDF,
+  logoSrc: string | undefined | null,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+): Promise<number> {
+  const dataUrl = await loadLogoAsDataURL(logoSrc);
+  if (!dataUrl) return y;
+  try {
+    doc.addImage(dataUrl, "PNG", x, y, w, h);
+    return y + h + 5;
+  } catch {
+    return y;
+  }
+}
+
+/**
+ * Derive the list of configured fuel types (canonical keys) from the app
+ * state. Used by the sales/delivery export functions so they iterate the
+ * station's ACTUAL fuel types (Kerosene, V-Power, LPG, …) instead of the
+ * legacy hardcoded PMS/AGO.
+ *
+ * Resolution order:
+ *  1. state.fuelTypes (the FuelTypesManager config array) — canonical keys.
+ *  2. state.fuelPumpsByType / state.fuelPricesByType / state.fuelTankValuesByType
+ *     keys (defense-in-depth: any fuel type that has pumps/prices/tank data).
+ *  3. Fallback: ["petrol", "diesel"] ONLY if nothing is configured (first run).
+ */
+function deriveFuelTypes(state: any): CanonicalFuelType[] {
+  const set = new Set<CanonicalFuelType>();
+  if (Array.isArray(state.fuelTypes)) {
+    for (const ft of state.fuelTypes) {
+      const key =
+        typeof ft === "string" ? ft : ft?.canonical || ft?.type || ft?.name;
+      if (key) set.add(key as CanonicalFuelType);
+    }
+  }
+  for (const store of [
+    state.fuelPumpsByType,
+    state.fuelPricesByType,
+    state.fuelTankValuesByType,
+  ]) {
+    if (store && typeof store === "object") {
+      for (const key of Object.keys(store)) {
+        if (key) set.add(key as CanonicalFuelType);
+      }
+    }
+  }
+  // Also include petrol/diesel if they have legacy pump arrays (pmsPumps/agoPumps)
+  if (Array.isArray(state.pmsPumps) && state.pmsPumps.length > 0)
+    set.add("petrol");
+  if (Array.isArray(state.agoPumps) && state.agoPumps.length > 0)
+    set.add("diesel");
+  if (set.size === 0) {
+    set.add("petrol");
+    set.add("diesel");
+  }
+  return Array.from(set);
+}
+
+/**
+ * Get the pump array for a given fuel type from state. Petrol/diesel use the
+ * legacy pmsPumps/agoPumps fields; all other types use fuelPumpsByType[type].
+ */
+function getPumpsForType(state: any, type: CanonicalFuelType): any[] {
+  if (type === "petrol")
+    return state.pmsPumps || state.fuelPumpsByType?.petrol || [];
+  if (type === "diesel")
+    return state.agoPumps || state.fuelPumpsByType?.diesel || [];
+  return state.fuelPumpsByType?.[type] || [];
+}
+
+/**
+ * Get the price for a given fuel type from state. Petrol/diesel use the legacy
+ * pmsPrice/agoPrice fields; all other types use fuelPricesByType[type].
+ */
+function getPriceForType(state: any, type: CanonicalFuelType): number {
+  if (type === "petrol")
+    return (
+      state.pmsPrice ?? state.petrolPrice ?? state.fuelPricesByType?.petrol ?? 0
+    );
+  if (type === "diesel")
+    return (
+      state.agoPrice ?? state.dieselPrice ?? state.fuelPricesByType?.diesel ?? 0
+    );
+  return state.fuelPricesByType?.[type] ?? 0;
+}
+
+/**
+ * Get the tank opening/closing values for a given fuel type. Petrol/diesel use
+ * the legacy pmsTankOpening/Closing fields; all other types use
+ * fuelTankValuesByType[type].
+ */
+function getTankForType(
+  state: any,
+  type: CanonicalFuelType,
+): { opening: number; closing: number } {
+  if (type === "petrol")
+    return {
+      opening: state.pmsTankOpening ?? 0,
+      closing: state.pmsTankClosing ?? 0,
+    };
+  if (type === "diesel")
+    return {
+      opening: state.agoTankOpening ?? 0,
+      closing: state.agoTankClosing ?? 0,
+    };
+  return state.fuelTankValuesByType?.[type] ?? { opening: 0, closing: 0 };
+}
+
+export async function exportDeliveryPDF(state: any) {
   const doc = new jsPDF();
 
+  // WORLDWIDE: derive the currency symbol from the company/station currency.
+  const currencySymbol = getCurrencySymbol(state.companyData?.currency);
+
   let y = 20;
-  if (state.companyData.logo) {
-    const img = new Image();
-    img.src = state.companyData.logo;
-    doc.addImage(img, "PNG", 80, 10, 50, 20);
-    y = 40;
+  if (state.companyData?.logo) {
+    y = await addLogoToPDF(doc, state.companyData.logo, 80, 10, 50, 20);
   }
 
   // Company name in gold with bold styling
@@ -38,21 +215,32 @@ export function exportDeliveryPDF(state: any) {
   y += 8;
   doc.text(`TOTAL ORDER: ${state.totalOrder || "N/A"} Litres`, 14, y);
   y += 8;
-  doc.text(`YEAR: ${state.deliveryYear || "2025"}`, 14, y);
+  doc.text(`YEAR: ${state.deliveryYear || new Date().getFullYear()}`, 14, y);
   y += 8;
-  doc.text(`Petrol Price: Ksh ${state.petrolPrice || "180"} /L`, 14, y);
-  y += 8;
-  doc.text(`Diesel Price: Ksh ${state.dieselPrice || "170"} /L`, 14, y);
-  y += 8;
+
+  // DYNAMIC: list each configured fuel's price (was hardcoded Petrol/Diesel).
+  const fuelTypes = deriveFuelTypes(state);
+  for (const ft of fuelTypes) {
+    const label = getFuelLabel(ft);
+    const price = getPriceForType(state, ft);
+    doc.text(
+      `${label} Price: ${currencySymbol} ${formatNumber(price)} /L`,
+      14,
+      y,
+    );
+    y += 8;
+  }
 
   // Create table data
   const headers = state.deliveryData.columns.map((col: any) => col.label);
   const data = state.deliveryData.rows.map((r: any) =>
     state.deliveryData.columns.map((col: any) => {
-      if (col.key === "amount") return "Ksh " + formatNumber(r.amount);
-      if (col.key === "debt") return "Ksh " + formatNumber(r.debt);
+      if (col.key === "amount")
+        return `${currencySymbol} ${formatNumber(r.amount)}`;
+      if (col.key === "debt")
+        return `${currencySymbol} ${formatNumber(r.debt)}`;
       return r[col.key] || "";
-    })
+    }),
   );
 
   autoTable(doc, {
@@ -69,17 +257,17 @@ export function exportDeliveryPDF(state: any) {
   doc.text(
     `Total Supplied: ${formatNumber(state.deliveryData.totals.totalSupplied)} L`,
     14,
-    finalY
+    finalY,
   );
   doc.text(
-    `Total Payments: ${state.companyData.currency} ${formatNumber(state.deliveryData.totals.totalPayments)}`,
+    `Total Payments: ${currencySymbol} ${formatNumber(state.deliveryData.totals.totalPayments)}`,
     70,
-    finalY
+    finalY,
   );
   doc.text(
-    `Balance Due: ${state.companyData.currency} ${formatNumber(state.deliveryData.totals.balanceDue, 2)}`,
+    `Balance Due: ${currencySymbol} ${formatNumber(state.deliveryData.totals.balanceDue, 2)}`,
     130,
-    finalY
+    finalY,
   );
   y = finalY + 10;
 
@@ -97,6 +285,19 @@ export function exportDeliveryPDF(state: any) {
 
 export function exportDeliveryExcel(state: any) {
   const wb = XLSX.utils.book_new();
+  // WORLDWIDE: derive the currency symbol from the company/station currency.
+  const currencySymbol = getCurrencySymbol(state.companyData?.currency);
+
+  // DYNAMIC: list each configured fuel's price (was hardcoded Petrol/Diesel).
+  const fuelTypes = deriveFuelTypes(state);
+  const priceRows: string[] = [];
+  for (const ft of fuelTypes) {
+    const label = getFuelLabel(ft);
+    const price = getPriceForType(state, ft);
+    priceRows.push(
+      `${label} Price: ${currencySymbol} ${formatNumber(price)} /L`,
+    );
+  }
 
   const ws_data = [
     [state.companyData.name || "Company Name"],
@@ -104,29 +305,28 @@ export function exportDeliveryExcel(state: any) {
     [],
     [`FUEL DELIVERED TO: ${state.deliveredTo || "Client"}`],
     [`TOTAL ORDER: ${state.totalOrder || "N/A"} Litres`],
-    [`YEAR: ${state.deliveryYear || "2025"}`],
-    [`Petrol Price: Ksh ${state.petrolPrice || "180"} /L`],
-    [`Diesel Price: Ksh ${state.dieselPrice || "170"} /L`],
+    [`YEAR: ${state.deliveryYear || new Date().getFullYear()}`],
+    ...priceRows.map((p) => [p]),
     [],
     state.deliveryData.columns.map((col: any) => col.label),
     ...state.deliveryData.rows.map((r: any) =>
       state.deliveryData.columns.map((col: any) => {
         if (col.key === "amount")
-          return state.companyData.currency + " " + formatNumber(r.amount);
+          return `${currencySymbol} ${formatNumber(r.amount)}`;
         if (col.key === "debt")
-          return state.companyData.currency + " " + formatNumber(r.debt);
+          return `${currencySymbol} ${formatNumber(r.debt)}`;
         return r[col.key] || "";
-      })
+      }),
     ),
     [],
     [
       `Total Supplied: ${formatNumber(state.deliveryData.totals.totalSupplied)} L`,
     ],
     [
-      `Total Payments: Ksh ${formatNumber(state.deliveryData.totals.totalPayments)}`,
+      `Total Payments: ${currencySymbol} ${formatNumber(state.deliveryData.totals.totalPayments)}`,
     ],
     [
-      `Balance Due: Ksh ${formatNumber(state.deliveryData.totals.balanceDue, 2)}`,
+      `Balance Due: ${currencySymbol} ${formatNumber(state.deliveryData.totals.balanceDue, 2)}`,
     ],
     [],
     [`P.O. Box: ${state.companyData.poBox || "N/A"}`],
@@ -140,31 +340,40 @@ export function exportDeliveryExcel(state: any) {
 }
 
 export function exportDeliveryTXT(state: any) {
+  // WORLDWIDE: derive the currency symbol from the company/station currency.
+  const currencySymbol = getCurrencySymbol(state.companyData?.currency);
   let txt = `=== ${state.companyData.name || "Company Name"} ===\nFuel Delivery Report\n\n`;
   txt += `FUEL DELIVERED TO: ${state.deliveredTo || "Client"}\n`;
   txt += `TOTAL ORDER: ${state.totalOrder || "N/A"} Litres\n`;
-  txt += `YEAR: ${state.deliveryYear || "2025"}\n`;
-  txt += `Petrol Price: ${state.companyData.currency} ${state.petrolPrice || "180"} /L\n`;
-  txt += `Diesel Price: ${state.companyData.currency} ${state.dieselPrice || "170"} /L\n\n`;
+  txt += `YEAR: ${state.deliveryYear || new Date().getFullYear()}\n`;
+
+  // DYNAMIC: list each configured fuel's price (was hardcoded Petrol/Diesel).
+  const fuelTypes = deriveFuelTypes(state);
+  for (const ft of fuelTypes) {
+    const label = getFuelLabel(ft);
+    const price = getPriceForType(state, ft);
+    txt += `${label} Price: ${currencySymbol} ${formatNumber(price)} /L\n`;
+  }
+  txt += "\n";
 
   txt += state.deliveryData.rows
     .map((r: any) =>
       state.deliveryData.columns
         .map((col: any) => {
           if (col.key === "amount")
-            return `${col.label}: ${state.companyData.currency}${formatNumber(r.amount)}`;
+            return `${col.label}: ${currencySymbol}${formatNumber(r.amount)}`;
           if (col.key === "debt")
-            return `${col.label}: ${state.companyData.currency}${formatNumber(r.debt)}`;
+            return `${col.label}: ${currencySymbol}${formatNumber(r.debt)}`;
           return `${col.label}: ${r[col.key] || ""}`;
         })
-        .join(" | ")
+        .join(" | "),
     )
     .join("\n");
 
   txt += `\n\n`;
   txt += `Total Supplied: ${formatNumber(state.deliveryData.totals.totalSupplied)} L\n`;
-  txt += `Total Payments: ${state.companyData.currency} ${formatNumber(state.deliveryData.totals.totalPayments)}\n`;
-  txt += `Balance Due: ${state.companyData.currency} ${formatNumber(state.deliveryData.totals.balanceDue, 2)}\n\n`;
+  txt += `Total Payments: ${currencySymbol} ${formatNumber(state.deliveryData.totals.totalPayments)}\n`;
+  txt += `Balance Due: ${currencySymbol} ${formatNumber(state.deliveryData.totals.balanceDue, 2)}\n\n`;
   txt += `P.O. Box: ${state.companyData.poBox || "N/A"}\n`;
   txt += `CONTACTS: ${state.companyData.contacts || "N/A"}\n`;
   txt += `EMAIL: ${state.companyData.email || "N/A"}`;
@@ -173,16 +382,16 @@ export function exportDeliveryTXT(state: any) {
   saveAs(blob, `Delivery_Report_${state.deliveredTo || "Client"}.txt`);
 }
 
-export function exportDebtPDF(state: any) {
+export async function exportDebtPDF(state: any) {
   const data = state.debtData;
   const doc = new jsPDF();
 
+  // WORLDWIDE: derive the currency symbol from the company/station currency.
+  const currencySymbol = getCurrencySymbol(state.companyData?.currency);
+
   let y = 20;
-  if (state.companyData.logo) {
-    const img = new Image();
-    img.src = state.companyData.logo;
-    doc.addImage(img, "PNG", 80, 10, 50, 20);
-    y = 40;
+  if (state.companyData?.logo) {
+    y = await addLogoToPDF(doc, state.companyData.logo, 80, 10, 50, 20);
   }
 
   doc.setFontSize(16);
@@ -204,7 +413,7 @@ export function exportDebtPDF(state: any) {
   const lines = [
     `Dear ${data.name},`,
     ``,
-    `This is a gentle reminder that KES ${data.amount} for fuel supplied remains unpaid.`,
+    `This is a gentle reminder that ${currencySymbol} ${data.amount} for fuel supplied remains unpaid.`,
     ``,
     `Kindly settle the amount via Till:`,
     `Buy Goods: ${data.till}`,
@@ -235,13 +444,15 @@ export function exportDebtPDF(state: any) {
 export function exportDebtExcel(state: any) {
   const data = state.debtData;
   const wb = XLSX.utils.book_new();
+  // WORLDWIDE: derive the currency symbol from the company/station currency.
+  const currencySymbol = getCurrencySymbol(state.companyData?.currency);
   const ws_data = [
     ["Fuel Debt Payment Reminder"],
     [],
     [`Dear ${data.name},`],
     [],
     [
-      `This is a gentle reminder that KES ${data.amount} for fuel supplied remains unpaid.`,
+      `This is a gentle reminder that ${currencySymbol} ${data.amount} for fuel supplied remains unpaid.`,
     ],
     [],
     ["Kindly settle the amount via Till:"],
@@ -275,20 +486,22 @@ export function exportDebtExcel(state: any) {
 export function exportDebtTXT(state: any) {
   const data = state.debtData;
   const companyName = state.companyData.name || "Company Name";
-  const txt = `=== ${companyName} ===\nFuel Debt Payment Reminder\n\nDear ${data.name},\n\nThis is a gentle reminder that KES ${data.amount} for fuel supplied remains unpaid.\n\nKindly settle the amount via Till:\nBuy Goods: ${data.till}\n\nFor bank transfer:\nBank: ${data.bank}\nA/C Name: ${data.acName}\nA/C No.: ${data.acNo}\n\nAfter payment, share the confirmation with us via ${data.method}: ${data.contact}\n\nThank you.\n\nBest regards,\n${data.manager}\nManager\n${companyName}\n\nP.O. Box: ${state.companyData.poBox || "N/A"}\nCONTACTS: ${state.companyData.contacts || "N/A"}\nEMAIL: ${state.companyData.email || "N/A"}`;
+  // WORLDWIDE: derive the currency symbol from the company/station currency.
+  const currencySymbol = getCurrencySymbol(state.companyData?.currency);
+  const txt = `=== ${companyName} ===\nFuel Debt Payment Reminder\n\nDear ${data.name},\n\nThis is a gentle reminder that ${currencySymbol} ${data.amount} for fuel supplied remains unpaid.\n\nKindly settle the amount via Till:\nBuy Goods: ${data.till}\n\nFor bank transfer:\nBank: ${data.bank}\nA/C Name: ${data.acName}\nA/C No.: ${data.acNo}\n\nAfter payment, share the confirmation with us via ${data.method}: ${data.contact}\n\nThank you.\n\nBest regards,\n${data.manager}\nManager\n${companyName}\n\nP.O. Box: ${state.companyData.poBox || "N/A"}\nCONTACTS: ${state.companyData.contacts || "N/A"}\nEMAIL: ${state.companyData.email || "N/A"}`;
   const blob = new Blob([txt], { type: "text/plain" });
   saveAs(blob, `Fuel_Debt_Reminder_${data.name}.txt`);
 }
 
-export function exportSalesPDF(state: any) {
+export async function exportSalesPDF(state: any) {
   const doc = new jsPDF();
 
+  // WORLDWIDE: derive the currency symbol from the company/station currency.
+  const currencySymbol = getCurrencySymbol(state.companyData?.currency);
+
   let y = 20;
-  if (state.companyData.logo) {
-    const img = new Image();
-    img.src = state.companyData.logo;
-    doc.addImage(img, "PNG", 80, 10, 50, 20);
-    y = 40;
+  if (state.companyData?.logo) {
+    y = await addLogoToPDF(doc, state.companyData.logo, 80, 10, 50, 20);
   }
 
   doc.setFontSize(16);
@@ -311,22 +524,29 @@ export function exportSalesPDF(state: any) {
   doc.text(`Shift: ${state.shift}`, 100, y);
   y += 15;
 
-  // Create PMS pumps table
-  if (state.pmsPumps && state.pmsPumps.length > 0) {
+  // DYNAMIC fuel-type pump tables — iterates the station's configured fuel
+  // types (Kerosene, V-Power, LPG, …) instead of the legacy hardcoded
+  // Petrol (PMS) + Diesel (AGO). A station with N fuel types gets N tables.
+  const fuelTypes = deriveFuelTypes(state);
+  for (const ft of fuelTypes) {
+    const pumps = getPumpsForType(state, ft);
+    if (!pumps || pumps.length === 0) continue;
+    const label = getFuelLabel(ft);
+    const code = getFuelCode(ft);
     doc.setFont("helvetica", "bold");
-    doc.text("Petrol (PMS) Pumps:", 15, y);
+    doc.text(`${label} (${code}) Pumps:`, 15, y);
     y += 10;
 
-    const pmsHeaders = [
+    const headers = [
       "Pump ID",
-      "Opening (Ksh)",
-      "Closing (Ksh)",
+      `Opening (${currencySymbol})`,
+      `Closing (${currencySymbol})`,
       "Opening (L)",
       "Closing (L)",
       "Sales (L)",
-      "Sales (Ksh)",
+      `Sales (${currencySymbol})`,
     ];
-    const pmsData = state.pmsPumps.map((p: any) => [
+    const data = pumps.map((p: any) => [
       p.id,
       formatNumber(p.openingKsh),
       formatNumber(p.closingKsh),
@@ -338,8 +558,8 @@ export function exportSalesPDF(state: any) {
 
     autoTable(doc, {
       startY: y,
-      head: [pmsHeaders],
-      body: pmsData,
+      head: [headers],
+      body: data,
       theme: "striped",
       headStyles: { fillColor: [26, 58, 95] },
     });
@@ -347,98 +567,153 @@ export function exportSalesPDF(state: any) {
     y = (doc as any).lastAutoTable.finalY + 15;
   }
 
-  // Create AGO pumps table
-  if (state.agoPumps && state.agoPumps.length > 0) {
-    doc.setFont("helvetica", "bold");
-    doc.text("Diesel (AGO) Pumps:", 15, y);
-    y += 10;
-
-    const agoHeaders = [
-      "Pump ID",
-      "Opening (Ksh)",
-      "Closing (Ksh)",
-      "Opening (L)",
-      "Closing (L)",
-      "Sales (L)",
-      "Sales (Ksh)",
-    ];
-    const agoData = state.agoPumps.map((p: any) => [
-      p.id,
-      formatNumber(p.openingKsh),
-      formatNumber(p.closingKsh),
-      formatNumber(p.openingL),
-      formatNumber(p.closingL),
-      formatNumber(p.salesL),
-      formatNumber(p.salesKsh),
-    ]);
-
-    autoTable(doc, {
-      startY: y,
-      head: [agoHeaders],
-      body: agoData,
-      theme: "striped",
-      headStyles: { fillColor: [26, 58, 95] },
-    });
-
-    y = (doc as any).lastAutoTable.finalY + 15;
-  }
-
-  // Add summary
+  // Add summary — dynamic per fuel type
   if (state.summary) {
     doc.setFont("helvetica", "bold");
     doc.text("Daily Summary:", 15, y);
     y += 10;
     doc.setFont("helvetica", "normal");
+    const salesByType =
+      (state.summary.salesByType as Record<string, number>) || {};
+    for (const ft of fuelTypes) {
+      const label = getFuelLabel(ft);
+      const sales = salesByType[ft] ?? 0;
+      doc.text(
+        `Total ${label} Sales: ${currencySymbol} ${formatNumber(sales, 2)}`,
+        15,
+        y,
+      );
+      y += 8;
+    }
     doc.text(
-      `Total Petrol Sales: Ksh ${formatNumber(state.summary.totalPmsSalesKsh, 2)}`,
+      `Total Revenue: ${currencySymbol} ${formatNumber(state.summary.totalRevenue, 2)}`,
       15,
-      y
+      y,
     );
     y += 8;
     doc.text(
-      `Total Diesel Sales: Ksh ${formatNumber(state.summary.totalAgoSalesKsh, 2)}`,
+      `Cash In Hand: ${currencySymbol} ${formatNumber(state.summary.cashInHand, 2)}`,
       15,
-      y
+      y,
     );
     y += 8;
     doc.text(
-      `Total Revenue: Ksh ${formatNumber(state.summary.totalRevenue, 2)}`,
+      `Net Income: ${currencySymbol} ${formatNumber(state.summary.netIncome, 2)}`,
       15,
-      y
+      y,
     );
-    y += 8;
-    doc.text(
-      `Cash In Hand: Ksh ${formatNumber(state.summary.cashInHand, 2)}`,
-      15,
-      y
-    );
-    y += 8;
-    doc.text(
-      `Net Income: Ksh ${formatNumber(state.summary.netIncome, 2)}`,
-      15,
-      y
-    );
+    y += 12;
   }
+
+  // Fuel Tank Inventory — one entry per configured fuel type (previously
+  // missing from the PDF). Shows the opening/closing tank levels for each fuel.
+  if (y > 250) {
+    doc.addPage();
+    y = 20;
+  }
+  doc.setFont("helvetica", "bold");
+  doc.text("Fuel Tank Inventory:", 15, y);
+  y += 8;
+  doc.setFont("helvetica", "normal");
+  for (const ft of fuelTypes) {
+    const label = getFuelLabel(ft);
+    const code = getFuelCode(ft);
+    const tv = getTankForType(state, ft);
+    doc.text(
+      `${label} (${code}): Opening ${formatNumber(tv.opening)} L, Closing ${formatNumber(tv.closing)} L`,
+      20,
+      y,
+    );
+    y += 7;
+  }
+  y += 8;
+
+  // Fuel Pricing per type (previously missing from the PDF).
+  doc.setFont("helvetica", "bold");
+  doc.text("Fuel Pricing:", 15, y);
+  y += 8;
+  doc.setFont("helvetica", "normal");
+  for (const ft of fuelTypes) {
+    const label = getFuelLabel(ft);
+    const code = getFuelCode(ft);
+    const price = getPriceForType(state, ft);
+    doc.text(
+      `${label} (${code}): ${currencySymbol} ${formatNumber(price)}/L`,
+      20,
+      y,
+    );
+    y += 7;
+  }
+  y += 8;
+
+  // Daily Expenses — each expense item (previously missing from the PDF).
+  if (state.expenses && state.expenses.length > 0) {
+    if (y > 250) {
+      doc.addPage();
+      y = 20;
+    }
+    doc.setFont("helvetica", "bold");
+    doc.text("Daily Expenses:", 15, y);
+    y += 8;
+    doc.setFont("helvetica", "normal");
+    const expHeaders = ["Description", `Amount (${currencySymbol})`];
+    const expData = state.expenses.map((e: any) => [
+      e.desc || e.description || "—",
+      formatNumber(e.amount || 0),
+    ]);
+    autoTable(doc, {
+      startY: y,
+      head: [expHeaders],
+      body: expData,
+      theme: "striped",
+      headStyles: { fillColor: [180, 53, 53] },
+    });
+    y = (doc as any).lastAutoTable.finalY + 10;
+    const totalExp =
+      state.summary?.totalExpenses ??
+      state.expenses.reduce((sum: number, e: any) => sum + (e.amount || 0), 0);
+    doc.setFont("helvetica", "bold");
+    doc.text(
+      `Total Expenses: ${currencySymbol} ${formatNumber(totalExp, 2)}`,
+      15,
+      y,
+    );
+    y += 12;
+  }
+
+  // Till/Mobile Payment (previously missing from the PDF).
+  doc.setFont("helvetica", "bold");
+  doc.text(
+    `Till/Mobile Payment: ${currencySymbol} ${formatNumber(state.tillPayment || 0, 2)}`,
+    15,
+    y,
+  );
 
   doc.save("Fuel_Sales_Report.pdf");
 }
 
 export function exportSalesExcel(state: any) {
   const wb = XLSX.utils.book_new();
+  // WORLDWIDE: derive the currency symbol from the company/station currency.
+  const currencySymbol = getCurrencySymbol(state.companyData?.currency);
 
-  // PMS Pumps sheet
-  if (state.pmsPumps && state.pmsPumps.length > 0) {
-    const pmsData = [
+  // DYNAMIC: one sheet per configured fuel type (was hardcoded Petrol/Diesel).
+  const fuelTypes = deriveFuelTypes(state);
+  for (const ft of fuelTypes) {
+    const pumps = getPumpsForType(state, ft);
+    if (!pumps || pumps.length === 0) continue;
+    const label = getFuelLabel(ft);
+    const sheetData = [
       [
         "Pump ID",
-        "Opening (Ksh)",
-        "Closing (Ksh)",
+        `Opening (${currencySymbol})`,
+        `Closing (${currencySymbol})`,
         "Opening (L)",
         "Closing (L)",
         "Sales (L)",
-        "Sales (Ksh)",
+        `Sales (${currencySymbol})`,
       ],
-      ...state.pmsPumps.map((p: any) => [
+      ...pumps.map((p: any) => [
         p.id,
         p.openingKsh,
         p.closingKsh,
@@ -448,34 +723,81 @@ export function exportSalesExcel(state: any) {
         p.salesKsh,
       ]),
     ];
-    const pmsWS = XLSX.utils.aoa_to_sheet(pmsData);
-    XLSX.utils.book_append_sheet(wb, pmsWS, "Petrol Pumps");
+    const ws = XLSX.utils.aoa_to_sheet(sheetData);
+    // Excel sheet names: max 31 chars, no special chars.
+    const sheetName = `${label} Pumps`.slice(0, 31);
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
   }
 
-  // AGO Pumps sheet
-  if (state.agoPumps && state.agoPumps.length > 0) {
-    const agoData = [
-      [
-        "Pump ID",
-        "Opening (Ksh)",
-        "Closing (Ksh)",
-        "Opening (L)",
-        "Closing (L)",
-        "Sales (L)",
-        "Sales (Ksh)",
-      ],
-      ...state.agoPumps.map((p: any) => [
-        p.id,
-        p.openingKsh,
-        p.closingKsh,
-        p.openingL,
-        p.closingL,
-        p.salesL,
-        p.salesKsh,
+  // Add summary sheet — dynamic per fuel type
+  if (state.summary) {
+    const salesByType =
+      (state.summary.salesByType as Record<string, number>) || {};
+    const summaryRows: (string | number)[][] = [["Daily Summary"]];
+    for (const ft of fuelTypes) {
+      const label = getFuelLabel(ft);
+      const sales = salesByType[ft] ?? 0;
+      summaryRows.push([`Total ${label} Sales`, sales]);
+    }
+    summaryRows.push(["Total Revenue", state.summary.totalRevenue ?? 0]);
+    summaryRows.push(["Cash In Hand", state.summary.cashInHand ?? 0]);
+    summaryRows.push(["Total Expenses", state.summary.totalExpenses ?? 0]);
+    summaryRows.push(["Net Income", state.summary.netIncome ?? 0]);
+    summaryRows.push([]);
+    summaryRows.push(["Till/Mobile Payment", state.tillPayment ?? 0]);
+    const summaryWS = XLSX.utils.aoa_to_sheet(summaryRows);
+    XLSX.utils.book_append_sheet(wb, summaryWS, "Summary");
+  }
+
+  // Fuel Tank Inventory sheet — one row per configured fuel type (previously
+  // missing from the Excel export).
+  const tankRows: (string | number)[][] = [
+    ["Fuel Tank Inventory"],
+    ["Fuel Type", "Code", "Opening (L)", "Closing (L)"],
+  ];
+  for (const ft of fuelTypes) {
+    const label = getFuelLabel(ft);
+    const code = getFuelCode(ft);
+    const tv = getTankForType(state, ft);
+    tankRows.push([label, code, tv.opening, tv.closing]);
+  }
+  const tankWS = XLSX.utils.aoa_to_sheet(tankRows);
+  XLSX.utils.book_append_sheet(wb, tankWS, "Tank Inventory");
+
+  // Fuel Pricing sheet (previously missing from Excel).
+  const priceRows: (string | number)[][] = [
+    ["Fuel Pricing"],
+    ["Fuel Type", "Code", `Price (${currencySymbol}/L)`],
+  ];
+  for (const ft of fuelTypes) {
+    const label = getFuelLabel(ft);
+    const code = getFuelCode(ft);
+    const price = getPriceForType(state, ft);
+    priceRows.push([label, code, price]);
+  }
+  const priceWS = XLSX.utils.aoa_to_sheet(priceRows);
+  XLSX.utils.book_append_sheet(wb, priceWS, "Fuel Pricing");
+
+  // Daily Expenses sheet — each expense item (previously missing from Excel).
+  if (state.expenses && state.expenses.length > 0) {
+    const expRows: (string | number)[][] = [
+      ["Daily Expenses"],
+      ["Description", `Amount (${currencySymbol})`],
+      ...state.expenses.map((e: any) => [
+        e.desc || e.description || "—",
+        e.amount || 0,
       ]),
+      [],
+      [
+        "Total Expenses",
+        state.expenses.reduce(
+          (sum: number, e: any) => sum + (e.amount || 0),
+          0,
+        ),
+      ],
     ];
-    const agoWS = XLSX.utils.aoa_to_sheet(agoData);
-    XLSX.utils.book_append_sheet(wb, agoWS, "Diesel Pumps");
+    const expWS = XLSX.utils.aoa_to_sheet(expRows);
+    XLSX.utils.book_append_sheet(wb, expWS, "Expenses");
   }
 
   // Add footer info sheet
@@ -492,35 +814,42 @@ export function exportSalesExcel(state: any) {
 }
 
 export function exportSalesTXT(state: any) {
+  // WORLDWIDE: derive the currency symbol from the company/station currency.
+  const currencySymbol = getCurrencySymbol(state.companyData?.currency);
   let txt = `=== ${state.companyData.name || "Company Name"} ===\nFuel Sales Report\n\n`;
   txt += `Date: ${state.salesDate}\nShift: ${state.shift}\n\n`;
 
-  // Add tank inventory
+  // DYNAMIC: tank inventory + pricing + pumps per configured fuel type.
+  const fuelTypes = deriveFuelTypes(state);
+
   txt += `Fuel Tank Inventory:\n`;
-  txt += `Petrol (PMS) Tank: Opening: ${formatNumber(state.pmsTankOpening)} L, Closing: ${formatNumber(state.pmsTankClosing)} L\n`;
-  txt += `Diesel (AGO) Tank: Opening: ${formatNumber(state.agoTankOpening)} L, Closing: ${formatNumber(state.agoTankClosing)} L\n\n`;
+  for (const ft of fuelTypes) {
+    const label = getFuelLabel(ft);
+    const code = getFuelCode(ft);
+    const tv = getTankForType(state, ft);
+    txt += `${label} (${code}) Tank: Opening: ${formatNumber(tv.opening)} L, Closing: ${formatNumber(tv.closing)} L\n`;
+  }
+  txt += "\n";
 
   txt += `Fuel Pricing:\n`;
-  txt += `Petrol (PMS): Ksh ${state.pmsPrice}/L\n`;
-  txt += `Diesel (AGO): Ksh ${state.agoPrice}/L\n\n`;
-
-  if (state.pmsPumps && state.pmsPumps.length > 0) {
-    txt += `Petrol (PMS) Pumps:\n`;
-    txt += state.pmsPumps
-      .map(
-        (p: any) =>
-          `${p.id}: Sales: ${formatNumber(p.salesL)} L, ${formatNumber(p.salesKsh)} Ksh`
-      )
-      .join("\n");
-    txt += "\n\n";
+  for (const ft of fuelTypes) {
+    const label = getFuelLabel(ft);
+    const code = getFuelCode(ft);
+    const price = getPriceForType(state, ft);
+    txt += `${label} (${code}): ${currencySymbol} ${formatNumber(price)}/L\n`;
   }
+  txt += "\n";
 
-  if (state.agoPumps && state.agoPumps.length > 0) {
-    txt += `Diesel (AGO) Pumps:\n`;
-    txt += state.agoPumps
+  for (const ft of fuelTypes) {
+    const pumps = getPumpsForType(state, ft);
+    if (!pumps || pumps.length === 0) continue;
+    const label = getFuelLabel(ft);
+    const code = getFuelCode(ft);
+    txt += `${label} (${code}) Pumps:\n`;
+    txt += pumps
       .map(
         (p: any) =>
-          `${p.id}: Sales: ${formatNumber(p.salesL)} L, ${formatNumber(p.salesKsh)} Ksh`
+          `${p.id}: Sales: ${formatNumber(p.salesL)} L, ${currencySymbol} ${formatNumber(p.salesKsh)}`,
       )
       .join("\n");
     txt += "\n\n";
@@ -529,22 +858,27 @@ export function exportSalesTXT(state: any) {
   if (state.expenses && state.expenses.length > 0) {
     txt += `Daily Expenses:\n`;
     txt += state.expenses
-      .map((e: any) => `${e.desc}: ${formatNumber(e.amount)} Ksh`)
+      .map((e: any) => `${e.desc}: ${currencySymbol} ${formatNumber(e.amount)}`)
       .join("\n");
     txt += "\n\n";
   }
 
-  txt += `Till/Mobile Payment: ${formatNumber(state.tillPayment)} Ksh\n\n`;
+  txt += `Till/Mobile Payment: ${currencySymbol} ${formatNumber(state.tillPayment)}\n\n`;
 
   if (state.summary) {
     txt += `Daily Summary:\n`;
-    txt += `Total Petrol Sales: Ksh ${formatNumber(state.summary.totalPmsSalesKsh, 2)}\n`;
-    txt += `Total Diesel Sales: Ksh ${formatNumber(state.summary.totalAgoSalesKsh, 2)}\n`;
-    txt += `Total Revenue: Ksh ${formatNumber(state.summary.totalRevenue, 2)}\n`;
-    txt += `Till/Mobile Payment: Ksh ${formatNumber(state.tillPayment, 2)}\n`;
-    txt += `Cash In Hand: Ksh ${formatNumber(state.summary.cashInHand, 2)}\n`;
-    txt += `Total Expenses: Ksh ${formatNumber(state.summary.totalExpenses, 2)}\n`;
-    txt += `Net Income: Ksh ${formatNumber(state.summary.netIncome, 2)}`;
+    const salesByType =
+      (state.summary.salesByType as Record<string, number>) || {};
+    for (const ft of fuelTypes) {
+      const label = getFuelLabel(ft);
+      const sales = salesByType[ft] ?? 0;
+      txt += `Total ${label} Sales: ${currencySymbol} ${formatNumber(sales, 2)}\n`;
+    }
+    txt += `Total Revenue: ${currencySymbol} ${formatNumber(state.summary.totalRevenue, 2)}\n`;
+    txt += `Till/Mobile Payment: ${currencySymbol} ${formatNumber(state.tillPayment, 2)}\n`;
+    txt += `Cash In Hand: ${currencySymbol} ${formatNumber(state.summary.cashInHand, 2)}\n`;
+    txt += `Total Expenses: ${currencySymbol} ${formatNumber(state.summary.totalExpenses, 2)}\n`;
+    txt += `Net Income: ${currencySymbol} ${formatNumber(state.summary.netIncome, 2)}`;
   }
 
   const blob = new Blob([txt], { type: "text/plain" });
@@ -552,34 +886,30 @@ export function exportSalesTXT(state: any) {
 }
 
 // Enhanced Invoice Export Functions - Matching CAR HIRE INVOICE Format Exactly
-export function exportInvoicePDF(invoiceData: any) {
+export async function exportInvoicePDF(invoiceData: any) {
   const doc = new jsPDF();
 
   let y = 20;
 
-  // Company logo at the very top (max 150px wide) - Enhanced loading
+  // WORLDWIDE: derive the currency symbol (€/$/KSh/…) from the company/station
+  // currency instead of the previously hardcoded "Ksh".
+  const currencySymbol = getCurrencySymbol(
+    invoiceData.companyData?.currency || invoiceData.currency,
+  );
+
+  // Company logo at the top-left (max 50x30). Logos are stored as Supabase
+  // Storage public URLs — loadLogoAsDataURL fetches + converts to base64 so
+  // jsPDF can embed them. Data URLs are used directly.
   if (invoiceData.companyData?.logo) {
-    try {
-      // Create a new image and wait for it to load before adding to PDF
-      const img = new Image();
-      img.crossOrigin = "anonymous";
-
-      // Convert logo to base64 if it's a URL, or use directly if already base64
-      let logoSrc = invoiceData.companyData.logo;
-
-      // Add image synchronously if it's already a data URL
-      if (logoSrc.startsWith("data:")) {
-        doc.addImage(logoSrc, "PNG", 15, 10, 50, 30);
-        y = 50;
-      } else {
-        // For external URLs, we'll skip for now to avoid CORS issues
-        console.warn(
-          "External logo URLs not supported in PDF export. Please upload logo as file."
-        );
-      }
-    } catch (error) {
-      console.warn("Could not load company logo for PDF:", error);
-    }
+    const logoY = await addLogoToPDF(
+      doc,
+      invoiceData.companyData.logo,
+      15,
+      10,
+      50,
+      30,
+    );
+    if (logoY > 10) y = logoY;
   }
 
   // INVOICE title (after logo, before company info)
@@ -655,8 +985,8 @@ export function exportInvoicePDF(invoiceData: any) {
     const data = invoiceData.invoiceItems.map((item: any) => [
       item.desc || "",
       item.qty || 0,
-      `Ksh${formatNumber(item.price, 0)}`,
-      `Ksh${formatNumber(item.total, 0)}`,
+      `${currencySymbol}${formatNumber(item.price, 0)}`,
+      `${currencySymbol}${formatNumber(item.total, 0)}`,
     ]);
 
     autoTable(doc, {
@@ -692,9 +1022,9 @@ export function exportInvoicePDF(invoiceData: any) {
   doc.setFont("helvetica", "bold");
   doc.setFontSize(12);
   doc.text(
-    ` Total Due: Ksh${formatNumber(invoiceData.totalDue || 0, 0)}`,
+    ` Total Due: ${currencySymbol}${formatNumber(invoiceData.totalDue || 0, 0)}`,
     120,
-    y
+    y,
   );
   y += 20;
 
@@ -734,6 +1064,11 @@ export function exportInvoicePDF(invoiceData: any) {
 
 export function exportInvoiceExcel(invoiceData: any) {
   const wb = XLSX.utils.book_new();
+
+  // WORLDWIDE: derive the currency symbol from the company/station currency.
+  const currencySymbol = getCurrencySymbol(
+    invoiceData.companyData?.currency || invoiceData.currency,
+  );
 
   // Invoice header data matching exact format
   const headerData = [["INVOICE"], []];
@@ -775,8 +1110,8 @@ export function exportInvoiceExcel(invoiceData: any) {
           ...invoiceData.invoiceItems.map((item: any) => [
             item.desc || "",
             item.qty || 0,
-            `Ksh${formatNumber(item.price, 0)}`,
-            `Ksh${formatNumber(item.total, 0)}`,
+            `${currencySymbol}${formatNumber(item.price, 0)}`,
+            `${currencySymbol}${formatNumber(item.total, 0)}`,
           ]),
         ]
       : [["No items added"]];
@@ -784,7 +1119,9 @@ export function exportInvoiceExcel(invoiceData: any) {
   // Totals data
   const totalsData = [
     [],
-    [` Total Due: Ksh${formatNumber(invoiceData.totalDue || 0, 0)}`],
+    [
+      ` Total Due: ${currencySymbol}${formatNumber(invoiceData.totalDue || 0, 0)}`,
+    ],
     [],
     ["Payment Should Be Made Through"],
   ];
@@ -829,12 +1166,20 @@ export function exportInvoiceExcel(invoiceData: any) {
 export function exportInvoiceTXT(invoiceData: any) {
   let txt = "";
 
+  // WORLDWIDE: derive the currency symbol from the company/station currency.
+  const currencySymbol = getCurrencySymbol(
+    invoiceData.companyData?.currency || invoiceData.currency,
+  );
+
   // INVOICE header
   txt += "INVOICE\n";
 
   // Company info (only if provided)
   if (invoiceData.companyData?.name) {
     txt += `${invoiceData.companyData.name}\n`;
+  }
+  if (invoiceData.companyData?.logo) {
+    txt += `[Company Logo: ${invoiceData.companyData.logo}]\n`;
   }
 
   // P.O. Box and contacts on same line
@@ -870,8 +1215,12 @@ export function exportInvoiceTXT(invoiceData: any) {
     invoiceData.invoiceItems.forEach((item: any) => {
       const desc = (item.desc || "").padEnd(40);
       const qty = (item.qty || 0).toString().padEnd(12);
-      const price = `Ksh${formatNumber(item.price, 0)}`.padEnd(15);
-      const total = `Ksh${formatNumber(item.total, 0)}`.padEnd(15);
+      const price = `${currencySymbol}${formatNumber(item.price, 0)}`.padEnd(
+        15,
+      );
+      const total = `${currencySymbol}${formatNumber(item.total, 0)}`.padEnd(
+        15,
+      );
       txt += `${desc} ${qty} ${price} ${total}\n`;
     });
   } else {
@@ -881,7 +1230,7 @@ export function exportInvoiceTXT(invoiceData: any) {
   txt += `\n`;
 
   // Total with leading space
-  txt += ` Total Due: Ksh${formatNumber(invoiceData.totalDue || 0, 0)}\n\n`;
+  txt += ` Total Due: ${currencySymbol}${formatNumber(invoiceData.totalDue || 0, 0)}\n\n`;
 
   // Payment information
   txt += `Payment Should Be Made Through\n`;

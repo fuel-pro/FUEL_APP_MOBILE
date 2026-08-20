@@ -1,9 +1,15 @@
 /**
  * FuelPro useLoyalty Hook
  * React hook for managing multi-station loyalty programs
+ *
+ * Cross-device cloud sync: customers, rewards, transactions, and per-station
+ * config are persisted to Supabase `app_kv` (RLS by owner_id, scoped row id)
+ * via `cloudStorageService`, so a loyalty member enrolled / points awarded on
+ * one device are visible on every other device. localStorage is kept ONLY as a
+ * read-through cache for instant first render.
  */
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   LoyaltyCustomer,
   StationReward,
@@ -15,12 +21,20 @@ import {
   generateCardNumber,
   DEFAULT_TIER_THRESHOLDS,
 } from "./loyaltyProgram";
+import { getCurrencySymbol } from "./currency";
+import cloudStorageService from "./cloud-storage-service";
 
 const LOYALTY_CUSTOMERS_KEY = "fuelpro_loyalty_customers";
 const LOYALTY_REWARDS_KEY = "fuelpro_loyalty_rewards";
 const LOYALTY_TRANSACTIONS_KEY = "fuelpro_loyalty_transactions";
 const LOYALTY_CONFIG_KEY = "fuelpro_loyalty_config";
-const LOYALTY_STATS_KEY = "fuelpro_loyalty_stats";
+
+// Cloud keys (station-scoped). These are the cross-device source of truth;
+// the LOYALTY_*_KEY constants above are now ONLY the localStorage cache names.
+const CLOUD_CUSTOMERS_KEY = "loyalty_customers";
+const CLOUD_REWARDS_KEY = "loyalty_rewards";
+const CLOUD_TXNS_KEY = "loyalty_transactions";
+const CLOUD_CONFIG_KEY = "loyalty_config";
 
 // ─── Storage Helpers ───
 function loadFromStorage<T>(key: string, defaultValue: T): T {
@@ -40,10 +54,34 @@ function saveToStorage<T>(key: string, data: T): void {
   }
 }
 
+/** Coerce an unknown cloud value into a LoyaltyCustomer array (defensive). */
+function normalizeCustomers(arr: unknown): LoyaltyCustomer[] {
+  if (!Array.isArray(arr)) return [];
+  return arr.filter(
+    (c) => c && typeof c === "object" && (c as LoyaltyCustomer).id,
+  );
+}
+
+/** Coerce an unknown cloud value into a LoyaltyTransaction array. */
+function normalizeTxns(arr: unknown): LoyaltyTransaction[] {
+  if (!Array.isArray(arr)) return [];
+  return arr.filter(
+    (t) => t && typeof t === "object" && (t as LoyaltyTransaction).id,
+  );
+}
+
+/** Coerce an unknown cloud value into a StationReward array. */
+function normalizeRewards(arr: unknown): StationReward[] {
+  if (!Array.isArray(arr)) return [];
+  return arr.filter(
+    (r) => r && typeof r === "object" && (r as StationReward).id,
+  );
+}
+
 // ─── Default Station Config ───
 function getDefaultStationConfig(
   stationId: string,
-  stationName: string
+  stationName: string,
 ): StationLoyaltyConfig {
   return {
     stationId,
@@ -67,7 +105,7 @@ function getDefaultStationConfig(
 function getDefaultRewards(stationId: string): StationReward[] {
   const now = new Date().toISOString();
   const yearLater = new Date(
-    Date.now() + 365 * 24 * 60 * 60 * 1000
+    Date.now() + 365 * 24 * 60 * 60 * 1000,
   ).toISOString();
 
   return [
@@ -156,8 +194,8 @@ function getDefaultRewards(stationId: string): StationReward[] {
     {
       id: `${stationId}_r6`,
       stationId,
-      name: "KSh 500 Voucher",
-      description: "KSh 500 off any purchase over KSh 2000",
+      name: `${getCurrencySymbol()} 500 Voucher`,
+      description: `${getCurrencySymbol()} 500 off any purchase over ${getCurrencySymbol()} 2000`,
       category: "voucher",
       pointsCost: 3000,
       value: 500,
@@ -207,61 +245,224 @@ function getDefaultRewards(stationId: string): StationReward[] {
 // ─── Main Hook ───
 export function useLoyalty(stationId: string) {
   // ─── State ───
-  const [customers, setCustomers] = useState<LoyaltyCustomer[]>(() =>
-    loadFromStorage(LOYALTY_CUSTOMERS_KEY, [])
-  );
-  const [rewards, setRewards] = useState<StationReward[]>(() =>
-    loadFromStorage(LOYALTY_REWARDS_KEY, getDefaultRewards(stationId))
-  );
-  const [transactions, setTransactions] = useState<LoyaltyTransaction[]>(() =>
-    loadFromStorage(LOYALTY_TRANSACTIONS_KEY, [])
-  );
+  // Initialize from the synchronous in-memory cloud cache (freshest
+  // cross-device data) for an instant first render, falling back to the
+  // localStorage read-through cache. The async cloud `get` in the load effect
+  // below reconciles with the authoritative source of truth.
+  const [customers, setCustomers] = useState<LoyaltyCustomer[]>(() => {
+    const cached = cloudStorageService.getCached<unknown>(
+      CLOUD_CUSTOMERS_KEY,
+      stationId,
+    );
+    const arr = normalizeCustomers(cached);
+    if (arr.length) return arr;
+    return loadFromStorage<LoyaltyCustomer[]>(LOYALTY_CUSTOMERS_KEY, []);
+  });
+  const [rewards, setRewards] = useState<StationReward[]>(() => {
+    const cached = cloudStorageService.getCached<unknown>(
+      CLOUD_REWARDS_KEY,
+      stationId,
+    );
+    const arr = normalizeRewards(cached);
+    if (arr.length) return arr;
+    return loadFromStorage<StationReward[]>(
+      LOYALTY_REWARDS_KEY,
+      getDefaultRewards(stationId),
+    );
+  });
+  const [transactions, setTransactions] = useState<LoyaltyTransaction[]>(() => {
+    const cached = cloudStorageService.getCached<unknown>(
+      CLOUD_TXNS_KEY,
+      stationId,
+    );
+    const arr = normalizeTxns(cached);
+    if (arr.length) return arr;
+    return loadFromStorage<LoyaltyTransaction[]>(LOYALTY_TRANSACTIONS_KEY, []);
+  });
   const [configs, setConfigs] = useState<Record<string, StationLoyaltyConfig>>(
     () => {
-      const stored = loadFromStorage<Record<string, StationLoyaltyConfig>>(
-        LOYALTY_CONFIG_KEY,
-        {}
-      );
+      const cached = cloudStorageService.getCached<
+        Record<string, StationLoyaltyConfig>
+      >(CLOUD_CONFIG_KEY, stationId);
+      const stored =
+        cached ||
+        loadFromStorage<Record<string, StationLoyaltyConfig>>(
+          LOYALTY_CONFIG_KEY,
+          {},
+        );
       if (!stored[stationId]) {
         stored[stationId] = getDefaultStationConfig(
           stationId,
-          `Station ${stationId.slice(0, 4)}`
+          `Station ${stationId.slice(0, 4)}`,
         );
         saveToStorage(LOYALTY_CONFIG_KEY, stored);
       }
       return stored;
-    }
+    },
   );
   const [isLoading, setIsLoading] = useState(false);
 
-  // ─── Persist to localStorage ───
+  // Echo guard: when state is set FROM the cloud (load or real-time
+  // subscription), we must NOT write it straight back to the cloud — that
+  // would create a write → realtime-echo → write loop. Each flag is set true
+  // immediately before a cloud-originated setState and consumed (reset) by the
+  // matching persist effect.
+  const skipWrite = useRef({
+    customers: false,
+    rewards: false,
+    transactions: false,
+    configs: false,
+  });
+
+  // ─── Load from cloud (authoritative) on mount / station change ───
+  useEffect(() => {
+    let cancelled = false;
+    setIsLoading(true);
+    (async () => {
+      const [cloudCust, cloudRew, cloudTxn, cloudCfg] = await Promise.all([
+        cloudStorageService.get<unknown>(CLOUD_CUSTOMERS_KEY, stationId),
+        cloudStorageService.get<unknown>(CLOUD_REWARDS_KEY, stationId),
+        cloudStorageService.get<unknown>(CLOUD_TXNS_KEY, stationId),
+        cloudStorageService.get<Record<string, StationLoyaltyConfig>>(
+          CLOUD_CONFIG_KEY,
+          stationId,
+        ),
+      ]);
+      if (cancelled) return;
+      if (cloudCust) {
+        skipWrite.current.customers = true;
+        setCustomers(normalizeCustomers(cloudCust));
+      }
+      if (cloudRew && normalizeRewards(cloudRew).length) {
+        skipWrite.current.rewards = true;
+        setRewards(normalizeRewards(cloudRew));
+      }
+      if (cloudTxn) {
+        skipWrite.current.transactions = true;
+        setTransactions(normalizeTxns(cloudTxn));
+      }
+      if (cloudCfg) {
+        if (!cloudCfg[stationId]) {
+          cloudCfg[stationId] = getDefaultStationConfig(
+            stationId,
+            `Station ${stationId.slice(0, 4)}`,
+          );
+        }
+        skipWrite.current.configs = true;
+        setConfigs(cloudCfg);
+      }
+      setIsLoading(false);
+    })();
+    // Real-time cross-device sync: edits on another device reflect instantly.
+    const unsubs = [
+      cloudStorageService.subscribe<unknown>(
+        CLOUD_CUSTOMERS_KEY,
+        stationId,
+        (val) => {
+          if (val) {
+            skipWrite.current.customers = true;
+            setCustomers(normalizeCustomers(val));
+          }
+        },
+      ),
+      cloudStorageService.subscribe<unknown>(
+        CLOUD_REWARDS_KEY,
+        stationId,
+        (val) => {
+          if (val) {
+            const arr = normalizeRewards(val);
+            if (arr.length) {
+              skipWrite.current.rewards = true;
+              setRewards(arr);
+            }
+          }
+        },
+      ),
+      cloudStorageService.subscribe<unknown>(
+        CLOUD_TXNS_KEY,
+        stationId,
+        (val) => {
+          if (val) {
+            skipWrite.current.transactions = true;
+            setTransactions(normalizeTxns(val));
+          }
+        },
+      ),
+      cloudStorageService.subscribe<Record<string, StationLoyaltyConfig>>(
+        CLOUD_CONFIG_KEY,
+        stationId,
+        (val) => {
+          if (val) {
+            skipWrite.current.configs = true;
+            setConfigs(val);
+          }
+        },
+      ),
+    ];
+    return () => {
+      cancelled = true;
+      unsubs.forEach((u) => u());
+    };
+  }, [stationId]);
+
+  // ─── Persist to localStorage cache (instant) + cloud (cross-device) ───
+  // Cloud writes are skipped when the state change originated from the cloud
+  // (echo guard) to prevent write → realtime-echo → write loops.
   useEffect(() => {
     saveToStorage(LOYALTY_CUSTOMERS_KEY, customers);
-  }, [customers]);
+    if (skipWrite.current.customers) {
+      skipWrite.current.customers = false;
+      return;
+    }
+    cloudStorageService
+      .set(CLOUD_CUSTOMERS_KEY, customers, stationId)
+      .catch(() => {});
+  }, [customers, stationId]);
   useEffect(() => {
     saveToStorage(LOYALTY_REWARDS_KEY, rewards);
-  }, [rewards]);
+    if (skipWrite.current.rewards) {
+      skipWrite.current.rewards = false;
+      return;
+    }
+    cloudStorageService
+      .set(CLOUD_REWARDS_KEY, rewards, stationId)
+      .catch(() => {});
+  }, [rewards, stationId]);
   useEffect(() => {
     saveToStorage(LOYALTY_TRANSACTIONS_KEY, transactions);
-  }, [transactions]);
+    if (skipWrite.current.transactions) {
+      skipWrite.current.transactions = false;
+      return;
+    }
+    cloudStorageService
+      .set(CLOUD_TXNS_KEY, transactions, stationId)
+      .catch(() => {});
+  }, [transactions, stationId]);
   useEffect(() => {
     saveToStorage(LOYALTY_CONFIG_KEY, configs);
-  }, [configs]);
+    if (skipWrite.current.configs) {
+      skipWrite.current.configs = false;
+      return;
+    }
+    cloudStorageService
+      .set(CLOUD_CONFIG_KEY, configs, stationId)
+      .catch(() => {});
+  }, [configs, stationId]);
 
   // ─── Station-specific data ───
   const stationCustomers = useMemo(
-    () => customers.filter(c => c.stationId === stationId),
-    [customers, stationId]
+    () => customers.filter((c) => c.stationId === stationId),
+    [customers, stationId],
   );
 
   const stationRewards = useMemo(
-    () => rewards.filter(r => r.stationId === stationId && r.isActive),
-    [rewards, stationId]
+    () => rewards.filter((r) => r.stationId === stationId && r.isActive),
+    [rewards, stationId],
   );
 
   const stationTransactions = useMemo(
-    () => transactions.filter(t => t.stationId === stationId),
-    [transactions, stationId]
+    () => transactions.filter((t) => t.stationId === stationId),
+    [transactions, stationId],
   );
 
   const config = useMemo(() => configs[stationId], [configs, stationId]);
@@ -269,19 +470,19 @@ export function useLoyalty(stationId: string) {
   // ─── Stats ───
   const stats: LoyaltyStats = useMemo(() => {
     const stationCusts = stationCustomers.filter(
-      c => c.cardStatus === "active"
+      (c) => c.cardStatus === "active",
     );
     return {
       stationId,
       totalCustomers: stationCustomers.length,
       activeCustomers: stationCusts.length,
       totalPointsIssued: stationTransactions
-        .filter(t => t.type === "earn")
+        .filter((t) => t.type === "earn")
         .reduce((s, t) => s + t.points, 0),
       totalPointsRedeemed: Math.abs(
         stationTransactions
-          .filter(t => t.type === "redeem")
-          .reduce((s, t) => s + t.points, 0)
+          .filter((t) => t.type === "redeem")
+          .reduce((s, t) => s + t.points, 0),
       ),
       totalRevenue: stationCusts.reduce((s, c) => s + c.totalSpent, 0),
       averageSpend:
@@ -290,10 +491,10 @@ export function useLoyalty(stationId: string) {
             stationCusts.length
           : 0,
       topTierBreakdown: {
-        Bronze: stationCusts.filter(c => c.tier === "Bronze").length,
-        Silver: stationCusts.filter(c => c.tier === "Silver").length,
-        Gold: stationCusts.filter(c => c.tier === "Gold").length,
-        Platinum: stationCusts.filter(c => c.tier === "Platinum").length,
+        Bronze: stationCusts.filter((c) => c.tier === "Bronze").length,
+        Silver: stationCusts.filter((c) => c.tier === "Silver").length,
+        Gold: stationCusts.filter((c) => c.tier === "Gold").length,
+        Platinum: stationCusts.filter((c) => c.tier === "Platinum").length,
       },
     };
   }, [stationCustomers, stationTransactions, stationId]);
@@ -318,7 +519,7 @@ export function useLoyalty(stationId: string) {
         | "updatedAt"
         | "createdBy"
       >,
-      createdBy: string
+      createdBy: string,
     ): LoyaltyCustomer => {
       const stationIndex = parseInt(stationId.slice(0, 2), 16) % 100;
       const customerIndex = stationCustomers.length + 1;
@@ -341,50 +542,50 @@ export function useLoyalty(stationId: string) {
         createdBy,
       };
 
-      setCustomers(prev => [newCustomer, ...prev]);
+      setCustomers((prev) => [newCustomer, ...prev]);
       return newCustomer;
     },
-    [stationId, stationCustomers.length]
+    [stationId, stationCustomers.length],
   );
 
   const updateCustomer = useCallback(
     (id: string, updates: Partial<LoyaltyCustomer>) => {
-      setCustomers(prev =>
-        prev.map(c =>
+      setCustomers((prev) =>
+        prev.map((c) =>
           c.id === id
             ? { ...c, ...updates, updatedAt: new Date().toISOString() }
-            : c
-        )
+            : c,
+        ),
       );
     },
-    []
+    [],
   );
 
   const deleteCustomer = useCallback((id: string) => {
-    setCustomers(prev => prev.filter(c => c.id !== id));
+    setCustomers((prev) => prev.filter((c) => c.id !== id));
   }, []);
 
   const getCustomer = useCallback(
     (id: string): LoyaltyCustomer | undefined => {
-      return customers.find(c => c.id === id);
+      return customers.find((c) => c.id === id);
     },
-    [customers]
+    [customers],
   );
 
   const findCustomerByPhone = useCallback(
     (phone: string): LoyaltyCustomer | undefined => {
       return customers.find(
-        c => c.phone === phone && c.stationId === stationId
+        (c) => c.phone === phone && c.stationId === stationId,
       );
     },
-    [customers, stationId]
+    [customers, stationId],
   );
 
   const findCustomerByCard = useCallback(
     (cardNumber: string): LoyaltyCustomer | undefined => {
-      return customers.find(c => c.cardNumber === cardNumber);
+      return customers.find((c) => c.cardNumber === cardNumber);
     },
-    [customers]
+    [customers],
   );
 
   // ─── Points Operations ───
@@ -395,16 +596,16 @@ export function useLoyalty(stationId: string) {
       amount: number,
       liters: number,
       fuelType: string,
-      processedBy: string
+      processedBy: string,
     ): LoyaltyTransaction | null => {
-      const customer = customers.find(c => c.id === customerId);
+      const customer = customers.find((c) => c.id === customerId);
       if (!customer || !config) return null;
 
       const points = calculatePointsEarned(
         liters,
         amount / liters,
         config,
-        customer.tier
+        customer.tier,
       );
       if (points === 0) return null;
 
@@ -432,8 +633,8 @@ export function useLoyalty(stationId: string) {
       };
 
       // Update customer
-      setCustomers(prev =>
-        prev.map(c =>
+      setCustomers((prev) =>
+        prev.map((c) =>
           c.id === customerId
             ? {
                 ...c,
@@ -445,23 +646,23 @@ export function useLoyalty(stationId: string) {
                 lastVisit: new Date().toISOString().split("T")[0],
                 updatedAt: new Date().toISOString(),
               }
-            : c
-        )
+            : c,
+        ),
       );
 
-      setTransactions(prev => [transaction, ...prev]);
+      setTransactions((prev) => [transaction, ...prev]);
 
       // Trigger notification if tier changed
       if (tierChanged && config.upgradeNotifications) {
         // Could trigger a toast/notification here
         console.log(
-          `[Loyalty] Customer ${customer.name} upgraded to ${newTier}!`
+          `[Loyalty] Customer ${customer.name} upgraded to ${newTier}!`,
         );
       }
 
       return transaction;
     },
-    [customers, config, stationId]
+    [customers, config, stationId],
   );
 
   const redeemPoints = useCallback(
@@ -469,10 +670,10 @@ export function useLoyalty(stationId: string) {
       customerId: string,
       rewardId: string,
       pointsCost: number,
-      processedBy: string
+      processedBy: string,
     ): LoyaltyTransaction | null => {
-      const customer = customers.find(c => c.id === customerId);
-      const reward = rewards.find(r => r.id === rewardId);
+      const customer = customers.find((c) => c.id === customerId);
+      const reward = rewards.find((r) => r.id === rewardId);
 
       if (!customer || !reward || customer.points < pointsCost) return null;
       if (
@@ -498,37 +699,37 @@ export function useLoyalty(stationId: string) {
       };
 
       // Update customer
-      setCustomers(prev =>
-        prev.map(c =>
+      setCustomers((prev) =>
+        prev.map((c) =>
           c.id === customerId
             ? {
                 ...c,
                 points: c.points - pointsCost,
                 updatedAt: new Date().toISOString(),
               }
-            : c
-        )
+            : c,
+        ),
       );
 
       // Update reward quantity
       if (reward.remainingQuantity !== undefined) {
-        setRewards(prev =>
-          prev.map(r =>
+        setRewards((prev) =>
+          prev.map((r) =>
             r.id === rewardId
               ? {
                   ...r,
                   remainingQuantity: r.remainingQuantity! - 1,
                   updatedAt: new Date().toISOString(),
                 }
-              : r
-          )
+              : r,
+          ),
         );
       }
 
-      setTransactions(prev => [transaction, ...prev]);
+      setTransactions((prev) => [transaction, ...prev]);
       return transaction;
     },
-    [customers, rewards, stationId]
+    [customers, rewards, stationId],
   );
 
   const adjustPoints = useCallback(
@@ -536,9 +737,9 @@ export function useLoyalty(stationId: string) {
       customerId: string,
       points: number,
       reason: string,
-      processedBy: string
+      processedBy: string,
     ): LoyaltyTransaction | null => {
-      const customer = customers.find(c => c.id === customerId);
+      const customer = customers.find((c) => c.id === customerId);
       if (!customer) return null;
 
       const transaction: LoyaltyTransaction = {
@@ -554,8 +755,8 @@ export function useLoyalty(stationId: string) {
         processedAt: new Date().toISOString(),
       };
 
-      setCustomers(prev =>
-        prev.map(c =>
+      setCustomers((prev) =>
+        prev.map((c) =>
           c.id === customerId
             ? {
                 ...c,
@@ -564,20 +765,20 @@ export function useLoyalty(stationId: string) {
                   points > 0 ? c.lifetimePoints + points : c.lifetimePoints,
                 updatedAt: new Date().toISOString(),
               }
-            : c
-        )
+            : c,
+        ),
       );
 
-      setTransactions(prev => [transaction, ...prev]);
+      setTransactions((prev) => [transaction, ...prev]);
       return transaction;
     },
-    [customers, stationId]
+    [customers, stationId],
   );
 
   // ─── Reward Operations ───
   const addReward = useCallback(
     (
-      data: Omit<StationReward, "id" | "stationId" | "createdAt" | "updatedAt">
+      data: Omit<StationReward, "id" | "stationId" | "createdAt" | "updatedAt">,
     ): StationReward => {
       const reward: StationReward = {
         ...data,
@@ -586,33 +787,33 @@ export function useLoyalty(stationId: string) {
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
-      setRewards(prev => [reward, ...prev]);
+      setRewards((prev) => [reward, ...prev]);
       return reward;
     },
-    [stationId]
+    [stationId],
   );
 
   const updateReward = useCallback(
     (id: string, updates: Partial<StationReward>) => {
-      setRewards(prev =>
-        prev.map(r =>
+      setRewards((prev) =>
+        prev.map((r) =>
           r.id === id
             ? { ...r, ...updates, updatedAt: new Date().toISOString() }
-            : r
-        )
+            : r,
+        ),
       );
     },
-    []
+    [],
   );
 
   const deleteReward = useCallback((id: string) => {
-    setRewards(prev => prev.filter(r => r.id !== id));
+    setRewards((prev) => prev.filter((r) => r.id !== id));
   }, []);
 
   // ─── Config Operations ───
   const updateConfig = useCallback(
     (updates: Partial<StationLoyaltyConfig>) => {
-      setConfigs(prev => ({
+      setConfigs((prev) => ({
         ...prev,
         [stationId]: {
           ...prev[stationId],
@@ -621,7 +822,7 @@ export function useLoyalty(stationId: string) {
         },
       }));
     },
-    [stationId]
+    [stationId],
   );
 
   // ─── Export/Import ───
@@ -636,9 +837,9 @@ export function useLoyalty(stationId: string) {
   }, [stationCustomers, stationRewards, stationTransactions, config]);
 
   const importCustomers = useCallback((data: LoyaltyCustomer[]) => {
-    setCustomers(prev => {
-      const existing = new Set(prev.map(c => c.id));
-      const newCustomers = data.filter(c => !existing.has(c.id));
+    setCustomers((prev) => {
+      const existing = new Set(prev.map((c) => c.id));
+      const newCustomers = data.filter((c) => !existing.has(c.id));
       return [...newCustomers, ...prev];
     });
   }, []);
@@ -682,23 +883,24 @@ export function useLoyalty(stationId: string) {
 // ─── Multi-Station Hook ───
 export function useAllStationLoyalty() {
   const [allCustomers, setAllCustomers] = useState<LoyaltyCustomer[]>(() =>
-    loadFromStorage(LOYALTY_CUSTOMERS_KEY, [])
+    loadFromStorage(LOYALTY_CUSTOMERS_KEY, []),
   );
   const [allRewards, setAllRewards] = useState<StationReward[]>(() =>
-    loadFromStorage(LOYALTY_REWARDS_KEY, [])
+    loadFromStorage(LOYALTY_REWARDS_KEY, []),
   );
 
   const getStationCustomers = useCallback(
-    (stationId: string) => allCustomers.filter(c => c.stationId === stationId),
-    [allCustomers]
+    (stationId: string) =>
+      allCustomers.filter((c) => c.stationId === stationId),
+    [allCustomers],
   );
 
   const getCustomerStation = useCallback(
     (customerId: string) => {
-      const customer = allCustomers.find(c => c.id === customerId);
+      const customer = allCustomers.find((c) => c.id === customerId);
       return customer?.stationId;
     },
-    [allCustomers]
+    [allCustomers],
   );
 
   return {

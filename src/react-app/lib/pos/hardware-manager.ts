@@ -1,5 +1,5 @@
 // POS Hardware Manager - Handles USB/Bluetooth device detection and management
-import { EventEmitter } from 'eventemitter3';
+import { EventEmitter } from "eventemitter3";
 
 // Augment global types for USB Web API if not already defined
 declare global {
@@ -15,8 +15,14 @@ declare global {
     selectConfiguration(configurationValue: number): Promise<void>;
     claimInterface(interfaceNumber: number): Promise<void>;
     releaseInterface(interfaceNumber: number): Promise<void>;
-    transferIn(endpointNumber: number, length: number): Promise<USBInTransferResult>;
-    transferOut(endpointNumber: number, data: BufferSource): Promise<USBOutTransferResult>;
+    transferIn(
+      endpointNumber: number,
+      length: number,
+    ): Promise<USBInTransferResult>;
+    transferOut(
+      endpointNumber: number,
+      data: BufferSource,
+    ): Promise<USBOutTransferResult>;
   }
 
   interface USBConfiguration {
@@ -43,8 +49,8 @@ declare global {
 
   interface USBEndpoint {
     endpointNumber: number;
-    direction: 'in' | 'out';
-    type: 'bulk' | 'interrupt' | 'isochronous';
+    direction: "in" | "out";
+    type: "bulk" | "interrupt" | "isochronous";
     packetSize: number;
   }
 
@@ -58,7 +64,7 @@ declare global {
     status: USBTransferStatus;
   }
 
-  type USBTransferStatus = 'ok' | 'stall' | 'babble';
+  type USBTransferStatus = "ok" | "stall" | "babble";
 
   interface BluetoothDevice {
     uuid: string;
@@ -69,47 +75,47 @@ declare global {
 export interface PrinterDevice {
   id: string;
   name: string;
-  type: 'usb' | 'bluetooth' | 'network';
+  type: "usb" | "bluetooth" | "network";
   vendorId?: number;
   productId?: number;
   connection?: USBDevice | BluetoothDevice;
-  status: 'connected' | 'disconnected' | 'error';
+  status: "connected" | "disconnected" | "error";
   capabilities: string[];
 }
 
 export interface CardReaderDevice {
   id: string;
   name: string;
-  type: 'usb' | 'bluetooth';
+  type: "usb" | "bluetooth";
   vendorId?: number;
   productId?: number;
   connection?: USBDevice | BluetoothDevice;
-  status: 'connected' | 'disconnected' | 'error' | 'waiting_for_card';
-  supportedMethods: ('swipe' | 'chip' | 'contactless')[];
+  status: "connected" | "disconnected" | "error" | "waiting_for_card";
+  supportedMethods: ("swipe" | "chip" | "contactless")[];
 }
 
 export interface CashDrawerDevice {
   id: string;
   name: string;
-  type: 'printer_connected' | 'usb' | 'bluetooth';
-  status: 'connected' | 'disconnected' | 'error';
+  type: "printer_connected" | "usb" | "bluetooth";
+  status: "connected" | "disconnected" | "error";
   connectedPrinter?: string;
 }
 
 export interface BarcodeScannerDevice {
   id: string;
   name: string;
-  type: 'usb' | 'bluetooth' | 'keyboard';
-  status: 'connected' | 'disconnected';
+  type: "usb" | "bluetooth" | "keyboard";
+  status: "connected" | "disconnected";
   onScan?: (barcode: string) => void;
 }
 
 export interface CustomerDisplayDevice {
   id: string;
   name: string;
-  type: 'usb' | 'network' | 'bluetooth';
+  type: "usb" | "network" | "bluetooth";
   connection?: USBDevice | BluetoothDevice;
-  status: 'connected' | 'disconnected' | 'error';
+  status: "connected" | "disconnected" | "error";
 }
 
 class HardwareManager extends EventEmitter {
@@ -130,40 +136,45 @@ class HardwareManager extends EventEmitter {
   }
 
   private initUSBListeners(): void {
-    if ('usb' in navigator) {
-      (navigator as any).usb.addEventListener('connect', (event: any) => {
+    if ("usb" in navigator) {
+      (navigator as any).usb.addEventListener("connect", (event: any) => {
         this.handleUSBConnect(event.device);
       });
-      (navigator as any).usb.addEventListener('disconnect', (event: any) => {
+      (navigator as any).usb.addEventListener("disconnect", (event: any) => {
         this.handleUSBDisconnect(event.device);
       });
     }
   }
 
   private initBluetoothListeners(): void {
-    if ('bluetooth' in navigator) {
+    if ("bluetooth" in navigator) {
       // Bluetooth device handling
     }
   }
 
   private initKeyboardScanner(): void {
     // Keyboard wedge scanners send data rapidly followed by Enter
-    let buffer = '';
+    let buffer = "";
     let bufferTimeout: number | null = null;
-    
-    document.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter' && buffer.length > 0) {
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" && buffer.length > 0) {
         this.barcodeScanners.forEach((scanner) => {
-          if (scanner.onScan && scanner.status === 'connected') {
+          if (scanner.onScan && scanner.status === "connected") {
             scanner.onScan(buffer);
           }
         });
-        buffer = '';
-      } else if (event.key.length === 1 && !event.ctrlKey && !event.altKey && !event.metaKey) {
+        buffer = "";
+      } else if (
+        event.key.length === 1 &&
+        !event.ctrlKey &&
+        !event.altKey &&
+        !event.metaKey
+      ) {
         buffer += event.key;
         if (bufferTimeout) clearTimeout(bufferTimeout);
         bufferTimeout = window.setTimeout(() => {
-          buffer = '';
+          buffer = "";
         }, 100);
       }
     });
@@ -171,86 +182,94 @@ class HardwareManager extends EventEmitter {
 
   private async handleUSBConnect(device: USBDevice): Promise<void> {
     const deviceInfo = this.identifyUSBDevice(device);
-    
+
     switch (deviceInfo.type) {
-      case 'printer':
+      case "printer": {
         const printer: PrinterDevice = {
           id: `usb-${device.vendorId}-${device.productId}`,
-          name: device.productName || 'USB Printer',
-          type: 'usb',
+          name: device.productName || "USB Printer",
+          type: "usb",
           vendorId: device.vendorId,
           productId: device.productId,
           connection: device,
-          status: 'connected',
-          capabilities: deviceInfo.capabilities || ['print', 'cut'],
+          status: "connected",
+          capabilities: deviceInfo.capabilities || ["print", "cut"],
         };
         this.printers.set(printer.id, printer);
-        this.emit('printerConnected', printer);
+        this.emit("printerConnected", printer);
         break;
-        
-      case 'cardReader':
+      }
+
+      case "cardReader": {
         const cardReader: CardReaderDevice = {
           id: `usb-${device.vendorId}-${device.productId}`,
-          name: device.productName || 'Card Reader',
-          type: 'usb',
+          name: device.productName || "Card Reader",
+          type: "usb",
           vendorId: device.vendorId,
           productId: device.productId,
           connection: device,
-          status: 'connected',
-          supportedMethods: ['swipe', 'chip', 'contactless'],
+          status: "connected",
+          supportedMethods: ["swipe", "chip", "contactless"],
         };
         this.cardReaders.set(cardReader.id, cardReader);
-        this.emit('cardReaderConnected', cardReader);
+        this.emit("cardReaderConnected", cardReader);
         break;
-        
-      case 'cashDrawer':
+      }
+
+      case "cashDrawer": {
         const cashDrawer: CashDrawerDevice = {
           id: `usb-${device.vendorId}-${device.productId}`,
-          name: device.productName || 'Cash Drawer',
-          type: 'usb',
-          status: 'connected',
+          name: device.productName || "Cash Drawer",
+          type: "usb",
+          status: "connected",
         };
         this.cashDrawers.set(cashDrawer.id, cashDrawer);
-        this.emit('cashDrawerConnected', cashDrawer);
+        this.emit("cashDrawerConnected", cashDrawer);
         break;
+      }
     }
   }
 
   private handleUSBDisconnect(device: USBDevice): void {
     const deviceId = `usb-${device.vendorId}-${device.productId}`;
-    
+
     if (this.printers.has(deviceId)) {
       this.printers.delete(deviceId);
-      this.emit('printerDisconnected', { id: deviceId });
+      this.emit("printerDisconnected", { id: deviceId });
     }
     if (this.cardReaders.has(deviceId)) {
       this.cardReaders.delete(deviceId);
-      this.emit('cardReaderDisconnected', { id: deviceId });
+      this.emit("cardReaderDisconnected", { id: deviceId });
     }
     if (this.cashDrawers.has(deviceId)) {
       this.cashDrawers.delete(deviceId);
-      this.emit('cashDrawerDisconnected', { id: deviceId });
+      this.emit("cashDrawerDisconnected", { id: deviceId });
     }
   }
 
-  private identifyUSBDevice(device: USBDevice): { type: string; capabilities?: string[] } {
+  private identifyUSBDevice(device: USBDevice): {
+    type: string;
+    capabilities?: string[];
+  } {
     // Common USB printer vendor IDs
-    const printerVendors = [0x04b8, 0x0416, 0x04a9, 0x0519, 0x0471, 0x0dd4, 0x0dd5];
+    const printerVendors = [
+      0x04b8, 0x0416, 0x04a9, 0x0519, 0x0471, 0x0dd4, 0x0dd5,
+    ];
     const cardReaderVendors = [0x076b, 0x0dd0, 0x0c15, 0x0b57];
-    
+
     if (printerVendors.includes(device.vendorId)) {
-      return { type: 'printer', capabilities: ['print', 'cut', 'cashDrawer'] };
+      return { type: "printer", capabilities: ["print", "cut", "cashDrawer"] };
     }
     if (cardReaderVendors.includes(device.vendorId)) {
-      return { type: 'cardReader' };
+      return { type: "cardReader" };
     }
-    
-    return { type: 'unknown' };
+
+    return { type: "unknown" };
   }
 
   async scanUSBDevices(): Promise<void> {
-    if (!('usb' in navigator)) {
-      console.warn('WebUSB not supported');
+    if (!("usb" in navigator)) {
+      console.warn("WebUSB not supported");
       return;
     }
 
@@ -264,55 +283,58 @@ class HardwareManager extends EventEmitter {
           { vendorId: 0x0c15 }, // MagTek
         ],
       });
-      
+
       await device.open();
       await device.selectConfiguration(1);
       await device.claimInterface(0);
-      
+
       await this.handleUSBConnect(device);
     } catch (error) {
-      console.error('USB device scan failed:', error);
-      this.emit('scanError', error);
+      console.error("USB device scan failed:", error);
+      this.emit("scanError", error);
     }
   }
 
   async scanBluetoothDevices(): Promise<void> {
-    if (!('bluetooth' in navigator)) {
-      console.warn('Web Bluetooth not supported');
+    if (!("bluetooth" in navigator)) {
+      console.warn("Web Bluetooth not supported");
       return;
     }
 
     try {
       const device = await (navigator as any).bluetooth.requestDevice({
         filters: [
-          { namePrefix: 'Printer' },
-          { namePrefix: 'TSP' },
-          { namePrefix: 'POS' },
-          { namePrefix: 'Card' },
+          { namePrefix: "Printer" },
+          { namePrefix: "TSP" },
+          { namePrefix: "POS" },
+          { namePrefix: "Card" },
         ],
-        optionalServices: ['00001101-0000-1000-8000-00805f9b34fb'], // Serial port
+        optionalServices: ["00001101-0000-1000-8000-00805f9b34fb"], // Serial port
       });
-      
-      this.emit('bluetoothDeviceFound', device);
+
+      this.emit("bluetoothDeviceFound", device);
     } catch (error) {
-      console.error('Bluetooth scan failed:', error);
-      this.emit('scanError', error);
+      console.error("Bluetooth scan failed:", error);
+      this.emit("scanError", error);
     }
   }
 
-  async addNetworkPrinter(ip: string, port: number = 9100): Promise<PrinterDevice> {
+  async addNetworkPrinter(
+    ip: string,
+    port: number = 9100,
+  ): Promise<PrinterDevice> {
     const printer: PrinterDevice = {
       id: `network-${ip}-${port}`,
       name: `Network Printer (${ip})`,
-      type: 'network',
-      status: 'connected',
-      capabilities: ['print', 'cut'],
+      type: "network",
+      status: "connected",
+      capabilities: ["print", "cut"],
     };
-    
+
     this.networkPrinters.set(printer.id, printer);
     this.printers.set(printer.id, printer);
-    this.emit('printerConnected', printer);
-    
+    this.emit("printerConnected", printer);
+
     return printer;
   }
 
@@ -355,12 +377,12 @@ class HardwareManager extends EventEmitter {
 
   registerBarcodeScanner(scanner: BarcodeScannerDevice): void {
     this.barcodeScanners.set(scanner.id, scanner);
-    this.emit('barcodeScannerConnected', scanner);
+    this.emit("barcodeScannerConnected", scanner);
   }
 
   unregisterBarcodeScanner(id: string): void {
     this.barcodeScanners.delete(id);
-    this.emit('barcodeScannerDisconnected', { id });
+    this.emit("barcodeScannerDisconnected", { id });
   }
 
   getCustomerDisplay(id?: string): CustomerDisplayDevice | undefined {
@@ -372,39 +394,43 @@ class HardwareManager extends EventEmitter {
 
   async disconnectDevice(id: string, type: string): Promise<void> {
     // Helper to check if connection has USB-like methods
-    const isUSBConnection = (conn: USBDevice | BluetoothDevice | undefined): conn is USBDevice => {
-      return conn !== undefined && 'vendorId' in conn && 'transferIn' in conn;
+    const isUSBConnection = (
+      conn: USBDevice | BluetoothDevice | undefined,
+    ): conn is USBDevice => {
+      return conn !== undefined && "vendorId" in conn && "transferIn" in conn;
     };
-    
+
     switch (type) {
-      case 'printer':
+      case "printer": {
         const printer = this.printers.get(id);
         if (isUSBConnection(printer?.connection)) {
           await printer.connection.close();
         }
         this.printers.delete(id);
-        this.emit('printerDisconnected', { id });
+        this.emit("printerDisconnected", { id });
         break;
-        
-      case 'cardReader':
+      }
+
+      case "cardReader": {
         const reader = this.cardReaders.get(id);
         if (isUSBConnection(reader?.connection)) {
           await reader.connection.close();
         }
         this.cardReaders.delete(id);
-        this.emit('cardReaderDisconnected', { id });
+        this.emit("cardReaderDisconnected", { id });
         break;
+      }
     }
   }
 
   disconnectAll(): void {
     this.printers.forEach((_, id) => {
-      this.disconnectDevice(id, 'printer');
+      this.disconnectDevice(id, "printer");
     });
     this.cardReaders.forEach((_, id) => {
-      this.disconnectDevice(id, 'cardReader');
+      this.disconnectDevice(id, "cardReader");
     });
-    this.emit('allDisconnected');
+    this.emit("allDisconnected");
   }
 
   getDeviceStatus(): {

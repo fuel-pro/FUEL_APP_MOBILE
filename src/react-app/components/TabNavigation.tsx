@@ -33,6 +33,9 @@ import {
   Monitor,
   FileUp,
   Gauge,
+  PackageSearch,
+  FileText,
+  Store,
 } from "lucide-react";
 
 interface TabNavigationProps {
@@ -84,6 +87,13 @@ const TabNavigation: React.FC<TabNavigationProps> = ({
     priceboard: <Monitor size={16} />,
     docconverter: <FileUp size={16} />,
     pumpmapping: <Gauge size={16} />,
+    // SalesZote-style additive modules
+    products: <PackageSearch size={16} />,
+    "sales-invoices": <FileText size={16} />,
+    purchases: <ShoppingCart size={16} />,
+    terminal: <Store size={16} />,
+    automation: <Activity size={16} />,
+    "price-finder": <Globe size={16} />,
   };
 
   // Check scroll position for arrow visibility
@@ -155,8 +165,8 @@ const TabNavigation: React.FC<TabNavigationProps> = ({
   // Get visible tabs sorted by order, filtered by role permissions
   const { canAccessTab } = usePermissions();
   const visibleTabs = state.tabConfigurations
-    .filter(tab => tab.visible !== false)
-    .filter(tab => canAccessTab(tab.id))
+    .filter((tab) => tab.visible !== false)
+    .filter((tab) => canAccessTab(tab.id))
     .sort((a, b) => a.order - b.order);
 
   return (
@@ -188,7 +198,7 @@ const TabNavigation: React.FC<TabNavigationProps> = ({
           div::-webkit-scrollbar { display: none !important; width: 0 !important; height: 0 !important; }
         `}</style>
 
-        {visibleTabs.map(tab => {
+        {visibleTabs.map((tab) => {
           const isActive = activeTab === tab.id;
           const icon = iconMap[tab.id];
 

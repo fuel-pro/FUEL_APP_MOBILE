@@ -1540,18 +1540,82 @@ export const REGIONAL_CONFIGS: Record<string, RegionalConfig> = {
 function generateDefaultConfig(
   countryCode: string,
   countryName: string,
-  currency: string
+  currency: string,
 ): RegionalConfig {
   const code = countryCode.toUpperCase();
   const taxRate = TAX_RATES[code] || 0;
   const tz = TIMEZONES[code] || "UTC";
   const phone = PHONE_CODES[code] || "";
 
+  // Resolve the proper currency symbol (e.g. "$" for USD, "€" for EUR) rather
+  // than using the raw currency code as the symbol. Falls back to the code
+  // itself when no known symbol mapping exists.
+  const symbolFor = (() => {
+    try {
+      const map: Record<string, string> = {
+        USD: "$",
+        EUR: "€",
+        GBP: "£",
+        JPY: "¥",
+        CNY: "¥",
+        INR: "₹",
+        KRW: "₩",
+        RUB: "₽",
+        BRL: "R$",
+        CHF: "Fr",
+        SEK: "kr",
+        NOK: "kr",
+        DKK: "kr",
+        PLN: "zł",
+        CZK: "Kč",
+        HUF: "Ft",
+        TRY: "₺",
+        ILS: "₪",
+        THB: "฿",
+        VND: "₫",
+        IDR: "Rp",
+        MYR: "RM",
+        PHP: "₱",
+        SGD: "S$",
+        HKD: "HK$",
+        TWD: "NT$",
+        UAH: "₴",
+        RON: "lei",
+        BGN: "лв",
+        HRK: "kn",
+        ISK: "kr",
+        MXN: "$",
+        ARS: "$",
+        CLP: "$",
+        COP: "$",
+        PEN: "S/",
+        ZAR: "R",
+        EGP: "E£",
+        NGN: "₦",
+        GHS: "GH₵",
+        KES: "KSh",
+        TZS: "TSh",
+        UGX: "USh",
+        RWF: "FRw",
+        ETB: "Br",
+        MAD: "DH",
+        DZD: "DA",
+        TND: "DT",
+        AUD: "A$",
+        NZD: "NZ$",
+        CAD: "C$",
+      };
+      return map[currency.toUpperCase()] || currency;
+    } catch {
+      return currency;
+    }
+  })();
+
   return {
     country: countryName,
     countryCode: code,
     currency,
-    currencySymbol: currency,
+    currencySymbol: symbolFor,
     taxAuthority: `${countryName} Tax Authority`,
     taxAuthorityShort: `${code}TA`,
     vatRate: taxRate,
@@ -1682,24 +1746,26 @@ export function getRegionalConfig(countryKeyOrCode: string): RegionalConfig {
     return generateDefaultConfig(
       upper,
       worldConfig.countryName,
-      worldConfig.defaultCurrency
+      worldConfig.defaultCurrency,
     );
   }
 
   // Check if countryKeyOrCode is a country name
   const byName = Object.values(WORLD_PAYMENT_CONFIGS).find(
-    c => c.countryName.toLowerCase() === countryKeyOrCode.toLowerCase()
+    (c) => c.countryName.toLowerCase() === countryKeyOrCode.toLowerCase(),
   );
   if (byName) {
     return generateDefaultConfig(
       byName.countryCode,
       byName.countryName,
-      byName.defaultCurrency
+      byName.defaultCurrency,
     );
   }
 
-  // Ultimate fallback: Kenya
-  return REGIONAL_CONFIGS.kenya;
+  // Ultimate fallback: neutral international default (USD / UTC), NOT Kenya.
+  // A world-wide app must never force Kenya-specific currency/timezone/tax on
+  // an unknown country.
+  return generateDefaultConfig("__", "International", "USD");
 }
 
 // ─── Get ALL countries (250+) ───
@@ -1719,7 +1785,7 @@ export function getAllCountries(): {
 
 // ─── Get country by code ───
 export function getCountryByCode(
-  code: string
+  code: string,
 ): { key: string; name: string; code: string; currency: string } | undefined {
   const config = WORLD_PAYMENT_CONFIGS[code.toUpperCase()];
   if (!config) return undefined;

@@ -284,6 +284,31 @@ CREATE POLICY "Authenticated users can insert audit logs"
   ON audit_log FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
 
 -- ============================================================
+-- APP KV TABLE (generic store for secrets / feature_flags / config / sales_analytics)
+-- Used by src/react-app/lib/restApiSync.ts for collections that don't
+-- have a dedicated table of their own.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS app_kv (
+  id TEXT PRIMARY KEY,
+  collection TEXT NOT NULL,
+  owner_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  station_id UUID REFERENCES stations(id) ON DELETE CASCADE,
+  data JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS app_kv_collection_idx ON app_kv (collection);
+
+ALTER TABLE app_kv ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can manage their own app_kv rows"
+  ON app_kv FOR ALL USING (
+    owner_id = auth.uid() OR
+    EXISTS (SELECT 1 FROM stations WHERE stations.id = app_kv.station_id AND stations.owner_id = auth.uid())
+  );
+
+-- ============================================================
 -- TRIGGER: Update timestamp
 -- ============================================================
 CREATE OR REPLACE FUNCTION update_updated_at()
@@ -303,3 +328,4 @@ CREATE TRIGGER update_shifts_updated_at BEFORE UPDATE ON shifts FOR EACH ROW EXE
 CREATE TRIGGER update_expenses_updated_at BEFORE UPDATE ON expenses FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 CREATE TRIGGER update_team_members_updated_at BEFORE UPDATE ON team_members FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 CREATE TRIGGER update_customers_updated_at BEFORE UPDATE ON customers FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+CREATE TRIGGER update_app_kv_updated_at BEFORE UPDATE ON app_kv FOR EACH ROW EXECUTE FUNCTION update_updated_at();

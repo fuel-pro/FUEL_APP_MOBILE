@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import { useStations } from "@/react-app/context/StationContext";
 import { useAuth } from "@/react-app/context/AuthContext";
 import { useNavigate } from "react-router";
+import cloudStorageService from "@/react-app/lib/cloud-storage-service";
+import { isKenyaStation } from "@/react-app/lib/currency";
 import {
   Shield,
   Settings,
@@ -325,7 +327,7 @@ function loadBatchUpdates(): BatchUpdateRecord[] {
 function saveBatchUpdates(records: BatchUpdateRecord[]) {
   localStorage.setItem(
     "fuelpro_batch_updates",
-    JSON.stringify(records.slice(0, 200))
+    JSON.stringify(records.slice(0, 200)),
   );
 }
 
@@ -350,7 +352,7 @@ export default function AdminPanel() {
     getAccessLogs,
     switchStation,
   } = useStations();
-  const { logout } = useAuth();
+  const { logout, user: adminUser } = useAuth();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<AdminTab>("overview");
   const [loginForm, setLoginForm] = useState({
@@ -388,6 +390,9 @@ export default function AdminPanel() {
     description: "",
   });
   const [customApis, setCustomApis] = useState<ApiKeyEntry[]>([]);
+  // Prevents save effects from overwriting cloud data with default state
+  // before the initial cloud load completes (cross-device overwrite race).
+  const cloudLoadCompleteRef = useRef(false);
   const [newModuleForm, setNewModuleForm] = useState({
     label: "",
     icon: "Puzzle",
@@ -399,7 +404,11 @@ export default function AdminPanel() {
   const [securityAttempts, setSecurityAttempts] = useState(0);
   const [securityLocked, setSecurityLocked] = useState(false);
 
-  // Load API keys from admin settings + custom
+  // Load API keys from admin settings + custom.
+  // Sync local form state from context ONLY when isAdmin flips to true
+  // (i.e. when the panel is opened). Including `adminSettings` in deps would
+  // re-sync on every adminSettings change and overwrite the user's in-progress
+  // form edits before they click Save.
   useEffect(() => {
     if (isAdmin) {
       setApiKeys(adminSettings.apiKeys);
@@ -414,15 +423,87 @@ export default function AdminPanel() {
         /* ignore */
       }
     }
-  }, [isAdmin, adminSettings, getAccessLogs]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdmin]);
 
-  // Persist modules
+  // Persist modules — localStorage (instant) + cloud (cross-device)
   useEffect(() => {
     saveAdminModules(modules);
+    if (!cloudLoadCompleteRef.current) return; // skip until cloud load done
+    cloudStorageService
+      .set("admin_modules", modules, undefined)
+      .catch(() => {});
   }, [modules]);
   useEffect(() => {
     saveBatchUpdates(batchRecords);
+    if (!cloudLoadCompleteRef.current) return; // skip until cloud load done
+    cloudStorageService
+      .set("batch_updates", batchRecords.slice(0, 200), undefined)
+      .catch(() => {});
   }, [batchRecords]);
+
+  // Load admin modules + batch updates + custom APIs from cloud on mount,
+  // and subscribe to real-time changes so another device's edits sync instantly.
+  useEffect(() => {
+    if (!adminUser) return;
+    cloudLoadCompleteRef.current = false;
+    let cancelled = false;
+    (async () => {
+      try {
+        const [cloudModules, cloudBatch, cloudApis] = await Promise.all([
+          cloudStorageService.get<AdminFeatureModule[]>(
+            "admin_modules",
+            undefined,
+          ),
+          cloudStorageService.get<BatchUpdateRecord[]>(
+            "batch_updates",
+            undefined,
+          ),
+          cloudStorageService.get<ApiKeyEntry[]>("custom_apis", undefined),
+        ]);
+        if (cancelled) return;
+        if (
+          cloudModules &&
+          Array.isArray(cloudModules) &&
+          cloudModules.length > 0
+        )
+          setModules(cloudModules);
+        if (cloudBatch && Array.isArray(cloudBatch))
+          setBatchRecords(cloudBatch);
+        if (cloudApis && Array.isArray(cloudApis)) setCustomApis(cloudApis);
+      } finally {
+        if (!cancelled) cloudLoadCompleteRef.current = true;
+      }
+    })();
+
+    const unsubs = [
+      cloudStorageService.subscribe<AdminFeatureModule[]>(
+        "admin_modules",
+        undefined,
+        (val) => {
+          if (val && Array.isArray(val) && val.length > 0) setModules(val);
+        },
+      ),
+      cloudStorageService.subscribe<BatchUpdateRecord[]>(
+        "batch_updates",
+        undefined,
+        (val) => {
+          if (val && Array.isArray(val)) setBatchRecords(val);
+        },
+      ),
+      cloudStorageService.subscribe<ApiKeyEntry[]>(
+        "custom_apis",
+        undefined,
+        (val) => {
+          if (val && Array.isArray(val)) setCustomApis(val);
+        },
+      ),
+    ];
+    return () => {
+      cancelled = true;
+      unsubs.forEach((u) => u());
+    };
+  }, [adminUser]);
 
   // Security lockout
   useEffect(() => {
@@ -496,10 +577,10 @@ export default function AdminPanel() {
               <input
                 type="text"
                 value={loginForm.username}
-                onChange={e =>
-                  setLoginForm(p => ({ ...p, username: e.target.value }))
+                onChange={(e) =>
+                  setLoginForm((p) => ({ ...p, username: e.target.value }))
                 }
-                onKeyDown={e => e.key === "Enter" && handleLogin()}
+                onKeyDown={(e) => e.key === "Enter" && handleLogin()}
                 placeholder="Enter founder username"
                 className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/30 text-sm transition-all"
                 autoFocus
@@ -514,17 +595,20 @@ export default function AdminPanel() {
                 <input
                   type={loginForm.showPassword ? "text" : "password"}
                   value={loginForm.password}
-                  onChange={e =>
-                    setLoginForm(p => ({ ...p, password: e.target.value }))
+                  onChange={(e) =>
+                    setLoginForm((p) => ({ ...p, password: e.target.value }))
                   }
-                  onKeyDown={e => e.key === "Enter" && handleLogin()}
+                  onKeyDown={(e) => e.key === "Enter" && handleLogin()}
                   placeholder="Enter founder password"
                   className="w-full px-4 py-3 pr-12 rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/30 text-sm transition-all"
                   disabled={securityLocked}
                 />
                 <button
                   onClick={() =>
-                    setLoginForm(p => ({ ...p, showPassword: !p.showPassword }))
+                    setLoginForm((p) => ({
+                      ...p,
+                      showPassword: !p.showPassword,
+                    }))
                   }
                   className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300"
                 >
@@ -582,11 +666,11 @@ export default function AdminPanel() {
     }
     const success = loginAdmin(loginForm.username, loginForm.password);
     if (!success) {
-      setSecurityAttempts(p => p + 1);
+      setSecurityAttempts((p) => p + 1);
       setLoginError(
-        `Invalid founder credentials. ${5 - securityAttempts - 1} attempts remaining.`
+        `Invalid founder credentials. ${5 - securityAttempts - 1} attempts remaining.`,
       );
-      setLoginForm(p => ({ ...p, password: "" }));
+      setLoginForm((p) => ({ ...p, password: "" }));
     } else {
       setLoginError("");
       setSecurityAttempts(0);
@@ -607,7 +691,7 @@ export default function AdminPanel() {
       addedAt: new Date().toISOString(),
       isCustom: true,
     };
-    setModules(prev => [...prev, mod]);
+    setModules((prev) => [...prev, mod]);
     setNewModuleForm({ label: "", icon: "Puzzle", description: "" });
     setShowAddModule(false);
     addUpdateRecord({
@@ -622,7 +706,7 @@ export default function AdminPanel() {
       !confirm("Remove this feature from admin panel? This cannot be undone.")
     )
       return;
-    setModules(prev => prev.filter(m => m.id !== id));
+    setModules((prev) => prev.filter((m) => m.id !== id));
     addUpdateRecord({
       type: "system",
       description: `Removed admin feature: ${id}`,
@@ -631,14 +715,14 @@ export default function AdminPanel() {
   }
 
   function handleToggleModule(id: string) {
-    setModules(prev =>
-      prev.map(m => (m.id === id ? { ...m, enabled: !m.enabled } : m))
+    setModules((prev) =>
+      prev.map((m) => (m.id === id ? { ...m, enabled: !m.enabled } : m)),
     );
   }
 
   function handleReorderModule(id: string, direction: "up" | "down") {
-    setModules(prev => {
-      const idx = prev.findIndex(m => m.id === id);
+    setModules((prev) => {
+      const idx = prev.findIndex((m) => m.id === id);
       if (idx === -1) return prev;
       const newModules = [...prev];
       const swapIdx = direction === "up" ? idx - 1 : idx + 1;
@@ -664,6 +748,7 @@ export default function AdminPanel() {
     const updated = [...customApis, entry];
     setCustomApis(updated);
     localStorage.setItem("fuelpro_custom_apis", JSON.stringify(updated));
+    cloudStorageService.set("custom_apis", updated, undefined).catch(() => {});
     updateApiKey(newApiForm.key, newApiForm.value);
     setNewApiForm({ key: "", value: "", category: "General", description: "" });
     addUpdateRecord({
@@ -674,9 +759,10 @@ export default function AdminPanel() {
   }
 
   function handleRemoveCustomApi(key: string) {
-    const updated = customApis.filter(a => a.key !== key);
+    const updated = customApis.filter((a) => a.key !== key);
     setCustomApis(updated);
     localStorage.setItem("fuelpro_custom_apis", JSON.stringify(updated));
+    cloudStorageService.set("custom_apis", updated, undefined).catch(() => {});
   }
 
   // ===== BATCH UPLOAD =====
@@ -704,13 +790,13 @@ export default function AdminPanel() {
           // Apply config changes
           if (parsed.apiKeys) {
             Object.entries(parsed.apiKeys).forEach(([k, v]) =>
-              updateApiKey(k, v as string)
+              updateApiKey(k, v as string),
             );
             affectedComponents.push("API Keys");
           }
           if (parsed.tabConfig) {
             Object.entries(parsed.tabConfig).forEach(([k, v]) =>
-              updateTabConfig(k, v as any)
+              updateTabConfig(k, v as any),
             );
             affectedComponents.push("Tab Configuration");
           }
@@ -730,10 +816,10 @@ export default function AdminPanel() {
             affectedComponents.push("Station Data");
           }
           if (parsed.modules) {
-            setModules(prev => [
+            setModules((prev) => [
               ...prev,
               ...parsed.modules.filter(
-                (m: any) => !prev.find(p => p.id === m.id)
+                (m: any) => !prev.find((p) => p.id === m.id),
               ),
             ]);
             affectedComponents.push("Admin Modules");
@@ -745,9 +831,9 @@ export default function AdminPanel() {
 
       // Store all files for reference
       const reader = new FileReader();
-      reader.onload = ev => {
+      reader.onload = (ev) => {
         const store = JSON.parse(
-          localStorage.getItem("fuelpro_batch_files") || "{}"
+          localStorage.getItem("fuelpro_batch_files") || "{}",
         );
         store[file.name] = {
           content: ev.target?.result,
@@ -772,10 +858,10 @@ export default function AdminPanel() {
       status: "applied",
     };
 
-    setBatchRecords(prev => [record, ...prev]);
+    setBatchRecords((prev) => [record, ...prev]);
     setBatchUploading(false);
     setBatchResult(
-      `Successfully processed ${files.length} file(s). Affected: ${affectedComponents.join(", ") || "Site-wide configuration"}`
+      `Successfully processed ${files.length} file(s). Affected: ${affectedComponents.join(", ") || "Site-wide configuration"}`,
     );
     addUpdateRecord({
       type: "files",
@@ -860,7 +946,7 @@ export default function AdminPanel() {
 
   // Sidebar modules (filtered to enabled)
   const sidebarModules = modules
-    .filter(m => m.enabled)
+    .filter((m) => m.enabled)
     .sort((a, b) => a.order - b.order);
 
   return (
@@ -908,7 +994,7 @@ export default function AdminPanel() {
         {/* Sidebar */}
         <aside className="w-56 bg-white/5 border-r border-white/10 min-h-[calc(100vh-56px)] sticky top-14 overflow-y-auto">
           <nav className="p-2 space-y-0.5">
-            {sidebarModules.map(mod => (
+            {sidebarModules.map((mod) => (
               <button
                 key={mod.id}
                 onClick={() => setActiveTab(mod.id)}
@@ -947,7 +1033,7 @@ export default function AdminPanel() {
                 <div className="bg-white/5 rounded-xl p-5 border border-white/10">
                   <Puzzle size={24} className="text-purple-400 mb-3" />
                   <p className="text-2xl font-bold">
-                    {modules.filter(m => m.isCustom).length}
+                    {modules.filter((m) => m.isCustom).length}
                   </p>
                   <p className="text-sm text-gray-400">Custom Features</p>
                 </div>
@@ -1011,7 +1097,7 @@ export default function AdminPanel() {
                   <h3 className="font-semibold mb-3 text-sm">Import Data</h3>
                   <textarea
                     value={importText}
-                    onChange={e => setImportText(e.target.value)}
+                    onChange={(e) => setImportText(e.target.value)}
                     placeholder="Paste JSON backup data..."
                     className="w-full h-32 px-4 py-3 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 text-xs font-mono focus:outline-none resize-none"
                   />
@@ -1031,7 +1117,7 @@ export default function AdminPanel() {
                   Updates
                 </h3>
                 <div className="space-y-2 max-h-64 overflow-auto">
-                  {adminSettings.updateHistory.slice(0, 10).map(u => (
+                  {adminSettings.updateHistory.slice(0, 10).map((u) => (
                     <div
                       key={u.id}
                       className={`flex items-center gap-3 p-3 rounded-lg ${u.reverted ? "bg-red-500/5" : "bg-white/5"}`}
@@ -1077,32 +1163,32 @@ export default function AdminPanel() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <input
                     value={newStation.name}
-                    onChange={e =>
-                      setNewStation(p => ({ ...p, name: e.target.value }))
+                    onChange={(e) =>
+                      setNewStation((p) => ({ ...p, name: e.target.value }))
                     }
                     placeholder="Station Name *"
                     className="px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400"
                   />
                   <input
                     value={newStation.location}
-                    onChange={e =>
-                      setNewStation(p => ({ ...p, location: e.target.value }))
+                    onChange={(e) =>
+                      setNewStation((p) => ({ ...p, location: e.target.value }))
                     }
                     placeholder="Location"
                     className="px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400"
                   />
                   <input
                     value={newStation.phone}
-                    onChange={e =>
-                      setNewStation(p => ({ ...p, phone: e.target.value }))
+                    onChange={(e) =>
+                      setNewStation((p) => ({ ...p, phone: e.target.value }))
                     }
                     placeholder="Phone"
                     className="px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400"
                   />
                   <input
                     value={newStation.email}
-                    onChange={e =>
-                      setNewStation(p => ({ ...p, email: e.target.value }))
+                    onChange={(e) =>
+                      setNewStation((p) => ({ ...p, email: e.target.value }))
                     }
                     placeholder="Email"
                     className="px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400"
@@ -1123,7 +1209,7 @@ export default function AdminPanel() {
                   </h3>
                 </div>
                 <div className="divide-y divide-white/5">
-                  {stations.map(s => (
+                  {stations.map((s) => (
                     <div key={s.id} className="p-4 flex items-center gap-4">
                       <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center text-sm font-bold">
                         {s.name.charAt(0).toUpperCase()}
@@ -1187,8 +1273,8 @@ export default function AdminPanel() {
                       <div className="col-span-3">
                         <input
                           value={config.label}
-                          onChange={e =>
-                            setTabConfigs(p => ({
+                          onChange={(e) =>
+                            setTabConfigs((p) => ({
                               ...p,
                               [tabId]: { ...p[tabId], label: e.target.value },
                             }))
@@ -1200,8 +1286,8 @@ export default function AdminPanel() {
                         <input
                           type="number"
                           value={config.order}
-                          onChange={e =>
-                            setTabConfigs(p => ({
+                          onChange={(e) =>
+                            setTabConfigs((p) => ({
                               ...p,
                               [tabId]: {
                                 ...p[tabId],
@@ -1215,7 +1301,7 @@ export default function AdminPanel() {
                       <div className="col-span-2">
                         <button
                           onClick={() =>
-                            setTabConfigs(p => ({
+                            setTabConfigs((p) => ({
                               ...p,
                               [tabId]: {
                                 ...p[tabId],
@@ -1268,24 +1354,24 @@ export default function AdminPanel() {
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                   <input
                     value={newApiForm.key}
-                    onChange={e =>
-                      setNewApiForm(p => ({ ...p, key: e.target.value }))
+                    onChange={(e) =>
+                      setNewApiForm((p) => ({ ...p, key: e.target.value }))
                     }
                     placeholder="API Key Name (e.g., stripe_api)"
                     className="px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 text-sm focus:outline-none"
                   />
                   <input
                     value={newApiForm.value}
-                    onChange={e =>
-                      setNewApiForm(p => ({ ...p, value: e.target.value }))
+                    onChange={(e) =>
+                      setNewApiForm((p) => ({ ...p, value: e.target.value }))
                     }
                     placeholder="API Key Value"
                     className="px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 text-sm focus:outline-none"
                   />
                   <select
                     value={newApiForm.category}
-                    onChange={e =>
-                      setNewApiForm(p => ({ ...p, category: e.target.value }))
+                    onChange={(e) =>
+                      setNewApiForm((p) => ({ ...p, category: e.target.value }))
                     }
                     className="px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-white text-sm focus:outline-none"
                   >
@@ -1326,8 +1412,11 @@ export default function AdminPanel() {
                 </div>
                 <input
                   value={newApiForm.description}
-                  onChange={e =>
-                    setNewApiForm(p => ({ ...p, description: e.target.value }))
+                  onChange={(e) =>
+                    setNewApiForm((p) => ({
+                      ...p,
+                      description: e.target.value,
+                    }))
                   }
                   placeholder="Description (optional)"
                   className="mt-3 w-full px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 text-sm focus:outline-none"
@@ -1343,7 +1432,7 @@ export default function AdminPanel() {
                       API Keys ({customApis.length})
                     </h3>
                   </div>
-                  {customApis.map(api => (
+                  {customApis.map((api) => (
                     <div
                       key={api.key}
                       className="px-5 py-3 border-b border-white/5 flex items-center gap-3"
@@ -1368,7 +1457,10 @@ export default function AdminPanel() {
                         />
                         <button
                           onClick={() =>
-                            setShowKey(p => ({ ...p, [api.key]: !p[api.key] }))
+                            setShowKey((p) => ({
+                              ...p,
+                              [api.key]: !p[api.key],
+                            }))
                           }
                           className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-600 hover:text-gray-400"
                         >
@@ -1400,7 +1492,21 @@ export default function AdminPanel() {
                   </button>
                 </div>
                 {[
-                  { key: "kra_etims", label: "KRA eTIMS API", icon: Receipt },
+                  ...(isKenyaStation()
+                    ? [
+                        {
+                          key: "kra_etims",
+                          label: "KRA eTIMS API",
+                          icon: Receipt,
+                        },
+                      ]
+                    : [
+                        {
+                          key: "tax_api",
+                          label: "Tax Authority API",
+                          icon: Receipt,
+                        },
+                      ]),
                   {
                     key: "mpesa_api",
                     label: "M-Pesa Daraja API",
@@ -1430,15 +1536,15 @@ export default function AdminPanel() {
                       <input
                         type={showKey[key] ? "text" : "password"}
                         value={apiKeys[key] || ""}
-                        onChange={e =>
-                          setApiKeys(p => ({ ...p, [key]: e.target.value }))
+                        onChange={(e) =>
+                          setApiKeys((p) => ({ ...p, [key]: e.target.value }))
                         }
                         placeholder={`Enter ${label}...`}
                         className="w-full px-3 py-2 pr-10 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400"
                       />
                       <button
                         onClick={() =>
-                          setShowKey(p => ({ ...p, [key]: !p[key] }))
+                          setShowKey((p) => ({ ...p, [key]: !p[key] }))
                         }
                         className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white"
                       >
@@ -1475,20 +1581,20 @@ export default function AdminPanel() {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   <input
                     value={newModuleForm.label}
-                    onChange={e =>
-                      setNewModuleForm(p => ({ ...p, label: e.target.value }))
+                    onChange={(e) =>
+                      setNewModuleForm((p) => ({ ...p, label: e.target.value }))
                     }
                     placeholder="Feature Name (e.g., Analytics Hub)"
                     className="px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 text-sm focus:outline-none"
                   />
                   <select
                     value={newModuleForm.icon}
-                    onChange={e =>
-                      setNewModuleForm(p => ({ ...p, icon: e.target.value }))
+                    onChange={(e) =>
+                      setNewModuleForm((p) => ({ ...p, icon: e.target.value }))
                     }
                     className="px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-white text-sm focus:outline-none"
                   >
-                    {Object.keys(FEATURE_ICONS).map(icon => (
+                    {Object.keys(FEATURE_ICONS).map((icon) => (
                       <option key={icon} value={icon} className="bg-gray-800">
                         {icon}
                       </option>
@@ -1504,8 +1610,8 @@ export default function AdminPanel() {
                 </div>
                 <input
                   value={newModuleForm.description}
-                  onChange={e =>
-                    setNewModuleForm(p => ({
+                  onChange={(e) =>
+                    setNewModuleForm((p) => ({
                       ...p,
                       description: e.target.value,
                     }))
@@ -1527,7 +1633,7 @@ export default function AdminPanel() {
                 </div>
                 {modules
                   .sort((a, b) => a.order - b.order)
-                  .map(mod => (
+                  .map((mod) => (
                     <div
                       key={mod.id}
                       className="grid grid-cols-12 gap-2 px-4 py-3 border-b border-white/5 items-center"
@@ -1696,7 +1802,7 @@ export default function AdminPanel() {
                     Upload History ({batchRecords.length})
                   </h3>
                 </div>
-                {batchRecords.map(r => (
+                {batchRecords.map((r) => (
                   <div key={r.id} className="px-5 py-3 border-b border-white/5">
                     <div className="flex items-center gap-3">
                       <div
@@ -1758,7 +1864,7 @@ export default function AdminPanel() {
                     </div>
                     <button
                       onClick={() =>
-                        setSystemCfg(p => ({
+                        setSystemCfg((p) => ({
                           ...p,
                           [key]: !p[key as keyof typeof p],
                         }))
@@ -1801,7 +1907,7 @@ export default function AdminPanel() {
                   <div className="col-span-2">Status</div>
                   <div className="col-span-1"></div>
                 </div>
-                {adminSettings.updateHistory.map(u => (
+                {adminSettings.updateHistory.map((u) => (
                   <div
                     key={u.id}
                     className={`grid grid-cols-12 gap-2 px-4 py-3 border-b border-white/5 items-center ${u.reverted ? "opacity-50" : ""}`}
@@ -1877,7 +1983,7 @@ export default function AdminPanel() {
                       {log.action}
                     </div>
                     <div className="col-span-3 text-[10px] text-gray-400">
-                      {stations.find(s => s.id === log.stationId)?.name ||
+                      {stations.find((s) => s.id === log.stationId)?.name ||
                         log.stationId}
                     </div>
                     <div className="col-span-3 text-[10px] text-gray-400">
@@ -1915,8 +2021,8 @@ export default function AdminPanel() {
                   <input
                     type="password"
                     value={pwForm.current}
-                    onChange={e =>
-                      setPwForm(p => ({ ...p, current: e.target.value }))
+                    onChange={(e) =>
+                      setPwForm((p) => ({ ...p, current: e.target.value }))
                     }
                     placeholder="Current Password"
                     className="w-full px-4 py-2.5 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
@@ -1924,8 +2030,8 @@ export default function AdminPanel() {
                   <input
                     type="password"
                     value={pwForm.new}
-                    onChange={e =>
-                      setPwForm(p => ({ ...p, new: e.target.value }))
+                    onChange={(e) =>
+                      setPwForm((p) => ({ ...p, new: e.target.value }))
                     }
                     placeholder="New Password"
                     className="w-full px-4 py-2.5 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
@@ -1933,8 +2039,8 @@ export default function AdminPanel() {
                   <input
                     type="password"
                     value={pwForm.confirm}
-                    onChange={e =>
-                      setPwForm(p => ({ ...p, confirm: e.target.value }))
+                    onChange={(e) =>
+                      setPwForm((p) => ({ ...p, confirm: e.target.value }))
                     }
                     placeholder="Confirm New Password"
                     className="w-full px-4 py-2.5 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
@@ -1958,12 +2064,12 @@ export default function AdminPanel() {
                       }
                       const ok = updateAdminPassword(
                         pwForm.current,
-                        pwForm.new
+                        pwForm.new,
                       );
                       setPwMsg(
                         ok
                           ? "Password updated successfully"
-                          : "Current password incorrect"
+                          : "Current password incorrect",
                       );
                       if (ok) setPwForm({ current: "", new: "", confirm: "" });
                     }}
@@ -2003,15 +2109,15 @@ export default function AdminPanel() {
           )}
 
           {/* CUSTOM MODULES FALLBACK */}
-          {modules.find(m => m.id === activeTab)?.isCustom && (
+          {modules.find((m) => m.id === activeTab)?.isCustom && (
             <div className="flex items-center justify-center h-64">
               <div className="text-center">
                 <Puzzle size={40} className="mx-auto text-purple-400 mb-4" />
                 <h3 className="text-lg font-semibold">
-                  {modules.find(m => m.id === activeTab)?.label}
+                  {modules.find((m) => m.id === activeTab)?.label}
                 </h3>
                 <p className="text-sm text-gray-400 mt-2">
-                  {modules.find(m => m.id === activeTab)?.description}
+                  {modules.find((m) => m.id === activeTab)?.description}
                 </p>
                 <p className="text-xs text-gray-600 mt-4">
                   Custom feature module - configure via batch upload or API

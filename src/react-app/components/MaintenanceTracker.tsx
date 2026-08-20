@@ -1,4 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
+import cloudStorageService from "@/react-app/lib/cloud-storage-service";
+import { useAuth } from "@/react-app/context/AuthContext";
+import { useStations } from "@/react-app/context/StationContext";
+import { getCurrencySymbol } from "../lib/currency";
 import {
   Wrench,
   Plus,
@@ -19,18 +23,18 @@ import {
   Droplets,
   Zap,
   Cog,
+  Receipt,
 } from "lucide-react";
+import {
+  navigateToTab,
+  type ExpensePrefill,
+} from "@/react-app/lib/mpesa-integration-service";
 
 interface MaintenanceRecord {
   id: string;
   equipmentName: string;
   equipmentType:
-    | "pump"
-    | "tank"
-    | "dispenser"
-    | "generator"
-    | "compressor"
-    | "other";
+    "pump" | "tank" | "dispenser" | "generator" | "compressor" | "other";
   stationId: string;
   description: string;
   priority: "low" | "medium" | "high" | "critical";
@@ -46,6 +50,67 @@ interface MaintenanceRecord {
 
 const STORAGE_KEY = "fuelpro_maintenance_v2";
 
+const VALID_EQUIPMENT_TYPES = [
+  "pump",
+  "tank",
+  "dispenser",
+  "generator",
+  "compressor",
+  "other",
+] as const;
+const VALID_PRIORITIES = ["low", "medium", "high", "critical"] as const;
+const VALID_STATUSES = [
+  "scheduled",
+  "in_progress",
+  "completed",
+  "overdue",
+] as const;
+
+function normalizeMaintenanceRecord(
+  r: Partial<MaintenanceRecord> | null | undefined,
+): MaintenanceRecord {
+  const id =
+    r?.id || `mt_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const equipmentType = (VALID_EQUIPMENT_TYPES as readonly string[]).includes(
+    r?.equipmentType as string,
+  )
+    ? (r!.equipmentType as MaintenanceRecord["equipmentType"])
+    : "other";
+  const priority = (VALID_PRIORITIES as readonly string[]).includes(
+    r?.priority as string,
+  )
+    ? (r!.priority as MaintenanceRecord["priority"])
+    : "medium";
+  const status = (VALID_STATUSES as readonly string[]).includes(
+    r?.status as string,
+  )
+    ? (r!.status as MaintenanceRecord["status"])
+    : "scheduled";
+  return {
+    id,
+    equipmentName: r?.equipmentName ?? "",
+    equipmentType,
+    stationId: r?.stationId ?? "default",
+    description: r?.description ?? "",
+    priority,
+    status,
+    assignedTo: r?.assignedTo ?? "",
+    cost: typeof r?.cost === "number" ? r.cost : 0,
+    scheduledDate: r?.scheduledDate ?? "",
+    completedDate: r?.completedDate,
+    nextDueDate: r?.nextDueDate ?? "",
+    notes: r?.notes ?? "",
+    createdAt: r?.createdAt ?? new Date().toISOString(),
+  };
+}
+
+function normalizeMaintenanceRecords(arr: unknown): MaintenanceRecord[] {
+  if (!Array.isArray(arr)) return [];
+  return arr.map((r) =>
+    normalizeMaintenanceRecord(r as Partial<MaintenanceRecord>),
+  );
+}
+
 const EQUIPMENT_TYPES = [
   { value: "pump", label: "Fuel Pump", icon: Fuel },
   { value: "tank", label: "Storage Tank", icon: Droplets },
@@ -58,7 +123,7 @@ const EQUIPMENT_TYPES = [
 function loadRecords(): MaintenanceRecord[] {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) return JSON.parse(saved);
+    if (saved) return normalizeMaintenanceRecords(JSON.parse(saved));
   } catch {
     /* ignore */
   }
@@ -66,7 +131,28 @@ function loadRecords(): MaintenanceRecord[] {
 }
 
 export default function MaintenanceTracker() {
-  const [records, setRecords] = useState<MaintenanceRecord[]>(loadRecords);
+  const { user } = useAuth();
+  const { currentStation } = useStations();
+  const stationId = currentStation?.id;
+  // Resolve currency from the React-context station (not the synchronous
+  // localStorage read) so it's correct on fresh devices / multi-currency.
+  const currencySymbol = useMemo(
+    () =>
+      getCurrencySymbol(
+        (currentStation as any)?.companyCurrency ||
+          (currentStation as any)?.currency,
+      ),
+    [currentStation],
+  );
+  const [records, setRecords] = useState<MaintenanceRecord[]>(() => {
+    const cloudCached = cloudStorageService.getCached<unknown[]>(
+      "maintenance_records",
+      stationId,
+    );
+    if (Array.isArray(cloudCached))
+      return normalizeMaintenanceRecords(cloudCached);
+    return loadRecords();
+  });
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -90,23 +176,82 @@ export default function MaintenanceTracker() {
     notes: "",
   });
 
+  // Prevents the save effect from overwriting cloud data with default state
+  // before the initial cloud load completes (cross-device overwrite race).
+  const cloudLoadCompleteRef = useRef(false);
+  // Echo guard: prevents the real-time subscribe callback from overwriting
+  // uncommitted local edits (the cloud write echoes back and wipes state).
+  const localModifiedRef = useRef(false);
+  const recordsRef = useRef(records);
+  recordsRef.current = records;
+
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
-  }, [records]);
+    if (!cloudLoadCompleteRef.current) return; // skip until cloud load done
+    cloudStorageService
+      .set("maintenance_records", records, stationId)
+      .catch(() => {});
+  }, [records, stationId]);
+
+  // Load from cloud on mount + real-time cross-device sync
+  useEffect(() => {
+    if (!user) return;
+    cloudLoadCompleteRef.current = false;
+    localModifiedRef.current = false;
+    let cancelled = false;
+    (async () => {
+      try {
+        const cloudData = await cloudStorageService.get<MaintenanceRecord[]>(
+          "maintenance_records",
+          stationId,
+        );
+        if (!cancelled && cloudData && !localModifiedRef.current)
+          setRecords(normalizeMaintenanceRecords(cloudData));
+      } finally {
+        if (!cancelled) cloudLoadCompleteRef.current = true;
+      }
+    })();
+    // Real-time: when another device updates records, update instantly
+    const unsubs = [
+      cloudStorageService.subscribe<MaintenanceRecord[]>(
+        "maintenance_records",
+        stationId,
+        (val) => {
+          if (!val || localModifiedRef.current) return;
+          setRecords(normalizeMaintenanceRecords(val));
+        },
+      ),
+    ];
+    return () => {
+      cancelled = true;
+      unsubs.forEach((u) => u());
+    };
+  }, [user, stationId]);
+
+  // Post-load flush: if the user made changes before/during the cloud load,
+  // re-push the latest local state to cloud so it's not lost.
+  useEffect(() => {
+    if (cloudLoadCompleteRef.current && localModifiedRef.current) {
+      cloudStorageService
+        .set("maintenance_records", recordsRef.current, stationId)
+        .catch(() => {});
+    }
+  }, [cloudLoadCompleteRef.current]);
 
   const showNotification = (
     message: string,
-    type: "success" | "warning" = "success"
+    type: "success" | "warning" = "success",
   ) => {
     setNotification({ message, type });
     setTimeout(() => setNotification(null), 3000);
   };
 
-  const filtered = records.filter(r => {
+  const filtered = records.filter((r) => {
+    const term = searchTerm.toLowerCase();
     const matchesSearch =
-      r.equipmentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      r.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      r.assignedTo.toLowerCase().includes(searchTerm.toLowerCase());
+      (r.equipmentName || "").toLowerCase().includes(term) ||
+      (r.description || "").toLowerCase().includes(term) ||
+      (r.assignedTo || "").toLowerCase().includes(term);
     const matchesStatus = statusFilter === "all" || r.status === statusFilter;
     const matchesPriority =
       priorityFilter === "all" || r.priority === priorityFilter;
@@ -117,15 +262,16 @@ export default function MaintenanceTracker() {
     if (!formData.equipmentName || !formData.description) {
       showNotification(
         "Equipment name and description are required",
-        "warning"
+        "warning",
       );
       return;
     }
+    localModifiedRef.current = true;
     if (editingId) {
-      setRecords(prev =>
-        prev.map(r =>
-          r.id === editingId ? ({ ...r, ...formData } as MaintenanceRecord) : r
-        )
+      setRecords((prev) =>
+        prev.map((r) =>
+          r.id === editingId ? ({ ...r, ...formData } as MaintenanceRecord) : r,
+        ),
       );
       showNotification("Maintenance record updated");
     } else {
@@ -135,7 +281,7 @@ export default function MaintenanceTracker() {
         stationId: "default",
         createdAt: new Date().toISOString(),
       };
-      setRecords(prev => [newRecord, ...prev]);
+      setRecords((prev) => [newRecord, ...prev]);
       showNotification("Maintenance record added");
     }
     setShowForm(false);
@@ -144,14 +290,16 @@ export default function MaintenanceTracker() {
 
   const handleDelete = (id: string) => {
     if (confirm("Delete this maintenance record?")) {
-      setRecords(prev => prev.filter(r => r.id !== id));
+      localModifiedRef.current = true;
+      setRecords((prev) => prev.filter((r) => r.id !== id));
       showNotification("Record deleted");
     }
   };
 
   const updateStatus = (id: string, newStatus: MaintenanceRecord["status"]) => {
-    setRecords(prev =>
-      prev.map(r =>
+    localModifiedRef.current = true;
+    setRecords((prev) =>
+      prev.map((r) =>
         r.id === id
           ? {
               ...r,
@@ -161,8 +309,8 @@ export default function MaintenanceTracker() {
                   ? new Date().toISOString()
                   : r.completedDate,
             }
-          : r
-      )
+          : r,
+      ),
     );
     showNotification(`Status updated to ${newStatus}`);
   };
@@ -190,12 +338,12 @@ export default function MaintenanceTracker() {
 
   const stats = {
     total: records.length,
-    scheduled: records.filter(r => r.status === "scheduled").length,
-    inProgress: records.filter(r => r.status === "in_progress").length,
-    completed: records.filter(r => r.status === "completed").length,
-    overdue: records.filter(r => r.status === "overdue").length,
+    scheduled: records.filter((r) => r.status === "scheduled").length,
+    inProgress: records.filter((r) => r.status === "in_progress").length,
+    completed: records.filter((r) => r.status === "completed").length,
+    overdue: records.filter((r) => r.status === "overdue").length,
     critical: records.filter(
-      r => r.priority === "critical" && r.status !== "completed"
+      (r) => r.priority === "critical" && r.status !== "completed",
     ).length,
   };
 
@@ -286,7 +434,7 @@ export default function MaintenanceTracker() {
             color: "text-red-600 dark:text-red-400",
             bg: "bg-red-50 dark:bg-red-500/10",
           },
-        ].map(s => (
+        ].map((s) => (
           <div key={s.label} className={`${s.bg} rounded-xl p-3 text-center`}>
             <p className={`text-xl font-bold ${s.color}`}>{s.value}</p>
             <p className="text-[10px] text-gray-500 mt-0.5">{s.label}</p>
@@ -303,14 +451,14 @@ export default function MaintenanceTracker() {
           />
           <input
             value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
+            onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search equipment or technician..."
             className="w-full pl-9 pr-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500/30"
           />
         </div>
         <select
           value={statusFilter}
-          onChange={e => setStatusFilter(e.target.value)}
+          onChange={(e) => setStatusFilter(e.target.value)}
           className="px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-gray-300 focus:outline-none"
         >
           <option value="all">All Status</option>
@@ -321,7 +469,7 @@ export default function MaintenanceTracker() {
         </select>
         <select
           value={priorityFilter}
-          onChange={e => setPriorityFilter(e.target.value)}
+          onChange={(e) => setPriorityFilter(e.target.value)}
           className="px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-gray-300 focus:outline-none"
         >
           <option value="all">All Priority</option>
@@ -334,10 +482,10 @@ export default function MaintenanceTracker() {
 
       {/* Records */}
       <div className="space-y-3">
-        {filtered.map(record => {
+        {filtered.map((record) => {
           const EquipIcon =
-            EQUIPMENT_TYPES.find(e => e.value === record.equipmentType)?.icon ||
-            Wrench;
+            EQUIPMENT_TYPES.find((e) => e.value === record.equipmentType)
+              ?.icon || Wrench;
           return (
             <div
               key={record.id}
@@ -365,38 +513,44 @@ export default function MaintenanceTracker() {
                         {record.equipmentName}
                       </h3>
                       <p className="text-xs text-gray-500">
-                        {record.description.slice(0, 60)}
-                        {record.description.length > 60 ? "..." : ""}
+                        {(record.description || "").slice(0, 60)}
+                        {(record.description || "").length > 60 ? "..." : ""}
                       </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <span
-                      className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${statusColors[record.status]}`}
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${statusColors[record.status] || statusColors.scheduled}`}
                     >
-                      {record.status.replace("_", " ")}
+                      {(record.status || "scheduled").replace("_", " ")}
                     </span>
                     <span
-                      className={`text-xs font-bold ${priorityColors[record.priority]}`}
+                      className={`text-xs font-bold ${priorityColors[record.priority] || priorityColors.medium}`}
                     >
-                      {priorityIcons[record.priority]} {record.priority}
+                      {priorityIcons[record.priority] || priorityIcons.medium}{" "}
+                      {record.priority || "medium"}
                     </span>
                   </div>
                 </div>
 
                 <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
                   <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
-                    <Clock size={12} /> {record.assignedTo}
+                    <Clock size={12} /> {record.assignedTo || ""}
                   </div>
                   <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
                     <Calendar size={12} />{" "}
-                    {new Date(record.scheduledDate).toLocaleDateString()}
+                    {new Date(
+                      record.scheduledDate || Date.now(),
+                    ).toLocaleDateString()}
                   </div>
                   <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
-                    Next: {new Date(record.nextDueDate).toLocaleDateString()}
+                    Next:{" "}
+                    {new Date(
+                      record.nextDueDate || Date.now(),
+                    ).toLocaleDateString()}
                   </div>
                   <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
-                    KES {record.cost.toLocaleString()}
+                    {currencySymbol} {(record.cost || 0).toLocaleString()}
                   </div>
                 </div>
 
@@ -444,6 +598,22 @@ export default function MaintenanceTracker() {
                     <Edit3 size={12} />
                   </button>
                   <button
+                    onClick={() =>
+                      navigateToTab("expenses", {
+                        category: "maintenance",
+                        amount: record.cost,
+                        description: `Maintenance — ${record.equipmentName} (${record.equipmentType})`,
+                        reference: record.id,
+                        paymentMethod: "Bank Transfer",
+                      } satisfies ExpensePrefill)
+                    }
+                    disabled={!record.cost || record.cost <= 0}
+                    className="p-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 rounded-lg transition-colors disabled:opacity-40"
+                    title="Record this maintenance cost as an expense"
+                  >
+                    <Receipt size={12} />
+                  </button>
+                  <button
                     onClick={() => handleDelete(record.id)}
                     className="p-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-600 rounded-lg transition-colors"
                   >
@@ -456,21 +626,25 @@ export default function MaintenanceTracker() {
                     <div className="grid grid-cols-2 gap-3 text-xs text-gray-600 dark:text-gray-400">
                       <div>
                         <span className="text-gray-500">Full Description:</span>{" "}
-                        {record.description}
+                        {record.description || ""}
                       </div>
                       <div>
-                        <span className="text-gray-500">Cost:</span> KES{" "}
-                        {record.cost.toLocaleString()}
+                        <span className="text-gray-500">Cost:</span>{" "}
+                        {currencySymbol} {(record.cost || 0).toLocaleString()}
                       </div>
                       {record.completedDate && (
                         <div>
                           <span className="text-gray-500">Completed:</span>{" "}
-                          {new Date(record.completedDate).toLocaleDateString()}
+                          {new Date(
+                            record.completedDate || Date.now(),
+                          ).toLocaleDateString()}
                         </div>
                       )}
                       <div>
                         <span className="text-gray-500">Next Service:</span>{" "}
-                        {new Date(record.nextDueDate).toLocaleDateString()}
+                        {new Date(
+                          record.nextDueDate || Date.now(),
+                        ).toLocaleDateString()}
                       </div>
                       {record.notes && (
                         <div className="col-span-2">
@@ -518,7 +692,7 @@ export default function MaintenanceTracker() {
                     </label>
                     <input
                       value={formData.equipmentName}
-                      onChange={e =>
+                      onChange={(e) =>
                         setFormData({
                           ...formData,
                           equipmentName: e.target.value,
@@ -533,7 +707,7 @@ export default function MaintenanceTracker() {
                     </label>
                     <select
                       value={formData.equipmentType}
-                      onChange={e =>
+                      onChange={(e) =>
                         setFormData({
                           ...formData,
                           equipmentType: e.target.value as any,
@@ -541,7 +715,7 @@ export default function MaintenanceTracker() {
                       }
                       className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
                     >
-                      {EQUIPMENT_TYPES.map(t => (
+                      {EQUIPMENT_TYPES.map((t) => (
                         <option key={t.value} value={t.value}>
                           {t.label}
                         </option>
@@ -555,7 +729,7 @@ export default function MaintenanceTracker() {
                   </label>
                   <textarea
                     value={formData.description}
-                    onChange={e =>
+                    onChange={(e) =>
                       setFormData({ ...formData, description: e.target.value })
                     }
                     rows={2}
@@ -569,7 +743,7 @@ export default function MaintenanceTracker() {
                     </label>
                     <select
                       value={formData.priority}
-                      onChange={e =>
+                      onChange={(e) =>
                         setFormData({
                           ...formData,
                           priority: e.target.value as any,
@@ -577,7 +751,7 @@ export default function MaintenanceTracker() {
                       }
                       className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
                     >
-                      {["low", "medium", "high", "critical"].map(p => (
+                      {["low", "medium", "high", "critical"].map((p) => (
                         <option key={p} value={p}>
                           {p}
                         </option>
@@ -590,7 +764,7 @@ export default function MaintenanceTracker() {
                     </label>
                     <select
                       value={formData.status}
-                      onChange={e =>
+                      onChange={(e) =>
                         setFormData({
                           ...formData,
                           status: e.target.value as any,
@@ -599,22 +773,22 @@ export default function MaintenanceTracker() {
                       className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
                     >
                       {["scheduled", "in_progress", "completed", "overdue"].map(
-                        s => (
+                        (s) => (
                           <option key={s} value={s}>
                             {s.replace("_", " ")}
                           </option>
-                        )
+                        ),
                       )}
                     </select>
                   </div>
                   <div>
                     <label className="text-xs text-gray-500 mb-1 block">
-                      Cost (KES)
+                      Cost ({currencySymbol})
                     </label>
                     <input
                       type="number"
                       value={formData.cost}
-                      onChange={e =>
+                      onChange={(e) =>
                         setFormData({
                           ...formData,
                           cost: Number(e.target.value),
@@ -631,7 +805,7 @@ export default function MaintenanceTracker() {
                     </label>
                     <input
                       value={formData.assignedTo}
-                      onChange={e =>
+                      onChange={(e) =>
                         setFormData({ ...formData, assignedTo: e.target.value })
                       }
                       className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
@@ -644,7 +818,7 @@ export default function MaintenanceTracker() {
                     <input
                       type="date"
                       value={formData.scheduledDate}
-                      onChange={e =>
+                      onChange={(e) =>
                         setFormData({
                           ...formData,
                           scheduledDate: e.target.value,
@@ -661,7 +835,7 @@ export default function MaintenanceTracker() {
                   <input
                     type="date"
                     value={formData.nextDueDate}
-                    onChange={e =>
+                    onChange={(e) =>
                       setFormData({ ...formData, nextDueDate: e.target.value })
                     }
                     className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
@@ -673,7 +847,7 @@ export default function MaintenanceTracker() {
                   </label>
                   <textarea
                     value={formData.notes}
-                    onChange={e =>
+                    onChange={(e) =>
                       setFormData({ ...formData, notes: e.target.value })
                     }
                     rows={2}

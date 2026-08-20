@@ -20,7 +20,7 @@ interface Props {
   logAudit: (
     e: string,
     d: string,
-    s: "success" | "warning" | "danger" | "info"
+    s: "success" | "warning" | "danger" | "info",
   ) => void;
 }
 
@@ -50,8 +50,8 @@ export default function TrialAnalyticsSection({ logAudit }: Props) {
         color: "bg-purple-400",
       },
     ];
-    const maxCount = Math.max(...stages.map(s => s.count), 1);
-    return stages.map(s => ({ ...s, pct: (s.count / maxCount) * 100 }));
+    const maxCount = Math.max(...stages.map((s) => s.count), 1);
+    return stages.map((s) => ({ ...s, pct: (s.count / maxCount) * 100 }));
   }, [trial, trialStatus, sub]);
 
   const conversionRate = useMemo(() => {
@@ -263,7 +263,7 @@ export default function TrialAnalyticsSection({ logAudit }: Props) {
               { label: "IP Hash", value: trial.ipHash },
               { label: "Verified", value: trial.verified ? "Yes" : "No" },
               { label: "Used", value: trial.trialUsed ? "Yes" : "No" },
-            ].map(d => (
+            ].map((d) => (
               <div
                 key={d.label}
                 className="flex justify-between py-1 border-b border-white/[0.04]"

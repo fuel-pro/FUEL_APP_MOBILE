@@ -1,6 +1,12 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { FileText, Printer, TrendingUp, Download, Loader2 } from "lucide-react";
 import { useFuel } from "@/react-app/context/FuelContext";
+import { useStationFuelTypes } from "@/react-app/hooks/useStationFuelTypes";
+import { resolveCurrencySymbol } from "@/react-app/lib/currency";
+import {
+  getFuelLabel,
+  type CanonicalFuelType,
+} from "@/react-app/config/pricing";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import { silentPrintService } from "@/react-app/lib/silent-print-service";
@@ -8,23 +14,22 @@ import { silentPrintService } from "@/react-app/lib/silent-print-service";
 interface SalesEntry {
   date: string;
   shift: "DAY" | "NIGHT";
-  petrolSales: number;
-  dieselSales: number;
+  /** Per-fuel-type sales: { petrol: {sales, litres}, diesel: {...}, kerosene: {...}, ... } */
+  fuelSales: Record<string, { sales: number; litres: number }>;
   totalSales: number;
 }
 
 export default function FuelSalesReport() {
   const { state } = useFuel();
+  const fuelTypeApi = useStationFuelTypes();
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [reportData, setReportData] = useState<SalesEntry[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [isPrinting, setIsPrinting] = useState(false);
-  const [totals, setTotals] = useState({
-    petrol: 0,
-    diesel: 0,
-    total: 0,
-  });
+  const [totals, setTotals] = useState<
+    Record<string, { sales: number; litres: number }>
+  >({});
 
   const months = [
     "January",
@@ -41,11 +46,11 @@ export default function FuelSalesReport() {
     "December",
   ];
 
-  // Generate year options for unlimited range (100+ years in each direction)
+  // Generate year options for a sensible range (10 years back, 5 forward)
   const generateYearOptions = () => {
     const currentYear = new Date().getFullYear();
-    const startYear = currentYear - 100;
-    const endYear = currentYear + 100;
+    const startYear = currentYear - 10;
+    const endYear = currentYear + 5;
     const years = [];
 
     for (let year = startYear; year <= endYear; year++) {
@@ -57,9 +62,96 @@ export default function FuelSalesReport() {
 
   const yearOptions = generateYearOptions();
 
+  // DYNAMIC fuel types — the station's configured fuel types (Kerosene,
+  // V-Power, LPG, …) instead of hardcoded Petrol/Diesel. Falls back to
+  // petrol+diesel only when no fuel types are configured (first run).
+  const trackedFuelTypes: CanonicalFuelType[] = useMemo(() => {
+    const active = fuelTypeApi.activeFuelTypes;
+    const set = new Set<CanonicalFuelType>();
+    for (const ft of active) {
+      const c = fuelTypeApi.canonicalOf(ft.name);
+      if (c) set.add(c);
+    }
+    if (set.size === 0) {
+      set.add("petrol");
+      set.add("diesel");
+    }
+    return Array.from(set);
+  }, [fuelTypeApi]);
+
+  // Helper: compute sales (litres + currency) for ONE fuel type from a saved
+  // sales-tracking record. Reads fuelPumpsByType[type] (dynamic) with a
+  // fallback to pmsPumps/agoPumps (legacy) for petrol/diesel, and
+  // fuelTankValuesByType[type] / pmsTank* / agoTank* for tank-delta fallback.
+  const computeFuelSales = (salesData: any, ft: CanonicalFuelType) => {
+    let sales = 0;
+    let litres = 0;
+    const pumps =
+      ft === "petrol"
+        ? salesData.pmsPumps || salesData.fuelPumpsByType?.petrol || []
+        : ft === "diesel"
+          ? salesData.agoPumps || salesData.fuelPumpsByType?.diesel || []
+          : salesData.fuelPumpsByType?.[ft] || [];
+    const price =
+      ft === "petrol"
+        ? Number(salesData.pmsPrice) ||
+          Number(salesData.petrolPrice) ||
+          Number(salesData.fuelPricesByType?.petrol) ||
+          0
+        : ft === "diesel"
+          ? Number(salesData.agoPrice) ||
+            Number(salesData.dieselPrice) ||
+            Number(salesData.fuelPricesByType?.diesel) ||
+            0
+          : Number(salesData.fuelPricesByType?.[ft]) || 0;
+    (pumps || []).forEach((pump: any) => {
+      const openingKsh = Number(pump.openingKsh) || 0;
+      const closingKsh = Number(pump.closingKsh) || 0;
+      const openingL = Number(pump.openingL) || 0;
+      const closingL = Number(pump.closingL) || 0;
+      sales += Math.max(0, closingKsh - openingKsh);
+      litres += Math.max(0, closingL - openingL);
+    });
+    // If pumps had no Ksh sales but had litre readings, compute value.
+    if (sales === 0 && litres === 0 && price > 0) {
+      (pumps || []).forEach((pump: any) => {
+        litres += Math.max(
+          0,
+          (Number(pump.closingL) || 0) - (Number(pump.openingL) || 0),
+        );
+      });
+      sales = Math.round(litres * price * 100) / 100;
+    }
+    // Tank-delta fallback.
+    if (sales === 0 && litres === 0) {
+      const tank =
+        ft === "petrol"
+          ? {
+              opening: Number(salesData.pmsTankOpening) || 0,
+              closing: Number(salesData.pmsTankClosing) || 0,
+            }
+          : ft === "diesel"
+            ? {
+                opening: Number(salesData.agoTankOpening) || 0,
+                closing: Number(salesData.agoTankClosing) || 0,
+              }
+            : salesData.fuelTankValuesByType?.[ft] || {
+                opening: 0,
+                closing: 0,
+              };
+      const delta = Number(tank.closing) - Number(tank.opening);
+      if (delta > 0 && price > 0) {
+        litres = Math.round(delta * 100) / 100;
+        sales = Math.round(delta * price * 100) / 100;
+      }
+    }
+    sales = Math.round(sales * 100) / 100;
+    return { sales, litres };
+  };
+
   useEffect(() => {
     generateReport();
-  }, [selectedMonth, selectedYear, state.salesHistory]);
+  }, [selectedMonth, selectedYear, state.salesHistory, trackedFuelTypes]);
 
   const generateReport = () => {
     // Get real sales data EXCLUSIVELY from saved Sales Tracking records
@@ -78,78 +170,76 @@ export default function FuelSalesReport() {
             salesDate.getMonth() + 1 === selectedMonth &&
             salesDate.getFullYear() === selectedYear
           ) {
-            // Only process if we have actual sales data
-            if (salesData && (salesData.pmsPumps || salesData.agoPumps)) {
-              // Calculate petrol sales from all PMS pumps (with rounding for safety)
-              const petrolSales = Math.round(
-                (salesData.pmsPumps || []).reduce(
-                  (sum: number, pump: any) => sum + (pump.salesKsh || 0),
-                  0
-                ) * 100
-              ) / 100;
+            // Check if we have ANY fuel data (pumps OR tank readings) across
+            // ALL configured fuel types — not just PMS/AGO.
+            const hasAnyData = trackedFuelTypes.some((ft) => {
+              const r = computeFuelSales(salesData, ft);
+              return r.sales > 0 || r.litres > 0;
+            });
+            if (!hasAnyData) return;
 
-              // Calculate diesel sales from all AGO pumps (with rounding for safety)
-              const dieselSales = Math.round(
-                (salesData.agoPumps || []).reduce(
-                  (sum: number, pump: any) => sum + (pump.salesKsh || 0),
-                  0
-                ) * 100
-              ) / 100;
-
-              // Format date as DD/MM/YYYY(SHIFT)
-              const day = salesDate.getDate().toString().padStart(2, "0");
-              const month = selectedMonth.toString().padStart(2, "0");
-              const year = selectedYear.toString();
-              const shift =
-                salesData.shift === "Night" || salesData.shift === "NIGHT"
-                  ? "NIGHT"
-                  : "DAY";
-              const formattedDate = `${day}/${month}/${year}(${shift})`;
-
-              // Only add entry if there are actual sales (petrol or diesel)
-              if (petrolSales > 0 || dieselSales > 0) {
-                entries.push({
-                  date: formattedDate,
-                  shift: shift as "DAY" | "NIGHT",
-                  petrolSales,
-                  dieselSales,
-                  totalSales: Math.round((petrolSales + dieselSales) * 100) / 100,
-                });
-              }
+            // DYNAMIC: compute sales per fuel type.
+            const fuelSales: Record<string, { sales: number; litres: number }> =
+              {};
+            let totalSales = 0;
+            for (const ft of trackedFuelTypes) {
+              const r = computeFuelSales(salesData, ft);
+              fuelSales[ft] = r;
+              totalSales += r.sales;
             }
+            totalSales = Math.round(totalSales * 100) / 100;
+
+            // Format date as DD/MM/YYYY(SHIFT)
+            const day = salesDate.getDate().toString().padStart(2, "0");
+            const month = selectedMonth.toString().padStart(2, "0");
+            const year = selectedYear.toString();
+            const shift =
+              salesData.shift === "Night" || salesData.shift === "NIGHT"
+                ? "NIGHT"
+                : "DAY";
+            const formattedDate = `${day}/${month}/${year}(${shift})`;
+
+            entries.push({
+              date: formattedDate,
+              shift: shift as "DAY" | "NIGHT",
+              fuelSales,
+              totalSales,
+            });
           }
-        }
+        },
       );
     }
 
     // Sort entries by date for better presentation
     entries.sort((a, b) => {
       const dateA = new Date(
-        a.date.split("(")[0].split("/").reverse().join("-")
+        a.date.split("(")[0].split("/").reverse().join("-"),
       );
       const dateB = new Date(
-        b.date.split("(")[0].split("/").reverse().join("-")
+        b.date.split("(")[0].split("/").reverse().join("-"),
       );
       return dateA.getTime() - dateB.getTime();
     });
 
     setReportData(entries);
 
-    // Calculate totals from real data only
-    const petrolTotal = entries.reduce(
-      (sum, entry) => sum + entry.petrolSales,
-      0
-    );
-    const dieselTotal = entries.reduce(
-      (sum, entry) => sum + entry.dieselSales,
-      0
-    );
-
-    setTotals({
-      petrol: petrolTotal,
-      diesel: dieselTotal,
-      total: petrolTotal + dieselTotal,
-    });
+    // DYNAMIC totals per fuel type
+    const newTotals: Record<string, { sales: number; litres: number }> = {};
+    for (const ft of trackedFuelTypes) {
+      const salesTotal = entries.reduce(
+        (sum, e) => sum + (e.fuelSales[ft]?.sales || 0),
+        0,
+      );
+      const litresTotal = entries.reduce(
+        (sum, e) => sum + (e.fuelSales[ft]?.litres || 0),
+        0,
+      );
+      newTotals[ft] = {
+        sales: Math.round(salesTotal * 100) / 100,
+        litres: Math.round(litresTotal * 100) / 100,
+      };
+    }
+    setTotals(newTotals);
   };
 
   const handlePrint = () => {
@@ -159,7 +249,8 @@ export default function FuelSalesReport() {
     const printWindow = window.open("", "_blank");
     if (!printWindow) return;
 
-    printWindow.document.write(`
+    // ⚠️ SECURITY FIX: Use textContent instead of innerHTML to prevent XSS
+    const html = `
       <html>
         <head>
           <title>Fuel Sales Report - ${months[selectedMonth - 1]} ${selectedYear}</title>
@@ -228,12 +319,33 @@ export default function FuelSalesReport() {
           </style>
         </head>
         <body>
-          ${printContent.innerHTML}
+          <div id="print-content"></div>
         </body>
       </html>
-    `);
+    `;
 
+    printWindow.document.write(html);
     printWindow.document.close();
+    
+    // Safely insert report content using textContent to prevent XSS
+    const contentDiv = printWindow.document.getElementById("print-content");
+    if (contentDiv && printContent) {
+      // Clone and sanitize the content by converting all HTML to text
+      const clone = printContent.cloneNode(true) as HTMLElement;
+      const sanitizeNode = (node: Node) => {
+        if (node.nodeType === Node.ELEMENT_NODE) {
+          const el = node as Element;
+          const text = el.textContent || "";
+          el.textContent = text;
+          for (let i = 0; i < el.children.length; i++) {
+            sanitizeNode(el.children[i]);
+          }
+        }
+      };
+      sanitizeNode(clone);
+      contentDiv.innerHTML = clone.innerHTML;
+    }
+    
     printWindow.focus();
     printWindow.print();
   };
@@ -246,25 +358,23 @@ export default function FuelSalesReport() {
     try {
       const reportHTML = document.getElementById("report-content");
       const reportDataForPrint = {
-        stationName: state.companyData.name || 'FuelPro Station',
+        stationName: state.companyData.name || "",
         monthYear: `${months[selectedMonth - 1]} ${selectedYear}`,
         period: `${months[selectedMonth - 1]} ${selectedYear}`,
-        currency: state.companyData.currency || 'Ksh',
-        entries: reportData.map(entry => ({
+        currency: resolveCurrencySymbol(state.companyData.currency, undefined),
+        fuelTypes: trackedFuelTypes,
+        entries: reportData.map((entry) => ({
           date: entry.date,
-          petrolSales: entry.petrolSales,
-          dieselSales: entry.dieselSales,
+          fuelSales: entry.fuelSales,
           totalSales: entry.totalSales,
         })),
-        totals: {
-          petrol: totals.petrol,
-          diesel: totals.diesel,
-          total: totals.total,
-        },
+        totals: Object.fromEntries(
+          trackedFuelTypes.map((ft) => [ft, totals[ft]?.sales || 0]),
+        ),
       };
 
       await silentPrintService.queueSalesReport(reportDataForPrint);
-      
+
       setTimeout(() => setIsPrinting(false), 1500);
     } catch (error) {
       console.error("Silent print error:", error);
@@ -386,14 +496,14 @@ export default function FuelSalesReport() {
     } catch (error) {
       console.error("Error generating PDF:", error);
       import("@/react-app/lib/toast").then(({ toastError }) =>
-        toastError("Error generating PDF. Please try again.")
+        toastError("Error generating PDF. Please try again."),
       );
     } finally {
       setIsSaving(false);
     }
   };
 
-  const currency = state.companyData.currency || "Ksh";
+  const currency = resolveCurrencySymbol(state.companyData.currency, undefined);
 
   return (
     <div className="p-4 md:p-6 space-y-6 text-white min-h-screen">
@@ -408,7 +518,7 @@ export default function FuelSalesReport() {
           <div className="flex gap-2">
             <select
               value={selectedMonth}
-              onChange={e => setSelectedMonth(parseInt(e.target.value))}
+              onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
               className="bg-gray-700 border border-gray-600 rounded p-2 text-white text-sm"
             >
               {months.map((month, index) => (
@@ -419,10 +529,10 @@ export default function FuelSalesReport() {
             </select>
             <select
               value={selectedYear}
-              onChange={e => setSelectedYear(parseInt(e.target.value))}
+              onChange={(e) => setSelectedYear(parseInt(e.target.value))}
               className="bg-gray-700 border border-gray-600 rounded p-2 text-white text-sm"
             >
-              {yearOptions.map(year => (
+              {yearOptions.map((year) => (
                 <option key={year} value={year}>
                   {year}
                 </option>
@@ -469,34 +579,52 @@ export default function FuelSalesReport() {
         </div>
       </div>
 
-      {/* Quick Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-green-900/30 border border-green-600 p-4 rounded-lg">
-          <div className="flex items-center gap-2 mb-2">
-            <TrendingUp className="text-green-400" size={20} />
-            <span className="text-sm text-green-300">Petrol Sales</span>
-          </div>
-          <div className="text-xl font-bold text-white">
-            {currency} {totals.petrol.toFixed(2)}
-          </div>
-        </div>
-        <div className="bg-blue-900/30 border border-blue-600 p-4 rounded-lg">
-          <div className="flex items-center gap-2 mb-2">
-            <TrendingUp className="text-blue-400" size={20} />
-            <span className="text-sm text-blue-300">Diesel Sales</span>
-          </div>
-          <div className="text-xl font-bold text-white">
-            {currency} {totals.diesel.toFixed(2)}
-          </div>
-        </div>
+      {/* Quick Stats — DYNAMIC per configured fuel type */}
+      <div
+        className={`grid gap-4 ${trackedFuelTypes.length >= 3 ? "grid-cols-2 md:grid-cols-4" : "grid-cols-1 md:grid-cols-3"}`}
+      >
+        {trackedFuelTypes.map((ft) => {
+          const label = getFuelLabel(ft);
+          const t = totals[ft] || { sales: 0, litres: 0 };
+          return (
+            <div
+              key={ft}
+              className="bg-slate-700/30 border border-slate-500 p-4 rounded-lg"
+            >
+              <div className="flex items-center gap-2 mb-2">
+                <TrendingUp className="text-indigo-400" size={20} />
+                <span className="text-sm text-slate-300">{label} Sales</span>
+              </div>
+              <div className="text-xl font-bold text-white">
+                {currency} {t.sales.toFixed(2)}
+              </div>
+              {t.litres > 0 && (
+                <div className="text-xs text-slate-300 mt-1">
+                  {t.litres.toFixed(2)} L sold
+                </div>
+              )}
+            </div>
+          );
+        })}
         <div className="bg-purple-900/30 border border-purple-600 p-4 rounded-lg">
           <div className="flex items-center gap-2 mb-2">
             <TrendingUp className="text-purple-400" size={20} />
             <span className="text-sm text-purple-300">Total Revenue</span>
           </div>
           <div className="text-xl font-bold text-white">
-            {currency} {totals.total.toFixed(2)}
+            {currency}{" "}
+            {trackedFuelTypes
+              .reduce((sum, ft) => sum + (totals[ft]?.sales || 0), 0)
+              .toFixed(2)}
           </div>
+          {trackedFuelTypes.some((ft) => (totals[ft]?.litres || 0) > 0) && (
+            <div className="text-xs text-purple-300 mt-1">
+              {trackedFuelTypes
+                .reduce((sum, ft) => sum + (totals[ft]?.litres || 0), 0)
+                .toFixed(2)}{" "}
+              L total
+            </div>
+          )}
         </div>
       </div>
 
@@ -552,12 +680,22 @@ export default function FuelSalesReport() {
                     <th className="border border-gray-400 p-3 text-left">
                       DD/MM/YYYY(SHIFT)
                     </th>
-                    <th className="border border-gray-400 p-3 text-right">
-                      Total Petrol Sales ({currency})
-                    </th>
-                    <th className="border border-gray-400 p-3 text-right">
-                      Total Diesel Sales ({currency})
-                    </th>
+                    {trackedFuelTypes.map((ft) => (
+                      <th
+                        key={ft}
+                        className="border border-gray-400 p-3 text-right"
+                      >
+                        {getFuelLabel(ft)} (L)
+                      </th>
+                    ))}
+                    {trackedFuelTypes.map((ft) => (
+                      <th
+                        key={`sales-${ft}`}
+                        className="border border-gray-400 p-3 text-right"
+                      >
+                        {getFuelLabel(ft)} Sales ({currency})
+                      </th>
+                    ))}
                     <th className="border border-gray-400 p-3 text-right">
                       Total Sales/Revenue ({currency})
                     </th>
@@ -572,12 +710,22 @@ export default function FuelSalesReport() {
                       <td className="border border-gray-400 p-3">
                         {entry.date}
                       </td>
-                      <td className="border border-gray-400 p-3 text-right">
-                        {entry.petrolSales.toFixed(2)}
-                      </td>
-                      <td className="border border-gray-400 p-3 text-right">
-                        {entry.dieselSales.toFixed(2)}
-                      </td>
+                      {trackedFuelTypes.map((ft) => (
+                        <td
+                          key={ft}
+                          className="border border-gray-400 p-3 text-right"
+                        >
+                          {(entry.fuelSales[ft]?.litres || 0).toFixed(2)}
+                        </td>
+                      ))}
+                      {trackedFuelTypes.map((ft) => (
+                        <td
+                          key={`sales-${ft}`}
+                          className="border border-gray-400 p-3 text-right"
+                        >
+                          {(entry.fuelSales[ft]?.sales || 0).toFixed(2)}
+                        </td>
+                      ))}
                       <td className="border border-gray-400 p-3 text-right">
                         {entry.totalSales.toFixed(2)}
                       </td>
@@ -591,21 +739,29 @@ export default function FuelSalesReport() {
           {/* Totals - Only show if there's data */}
           {reportData.length > 0 && (
             <div className="totals mt-6 space-y-2">
-              <div className="text-white">
-                <span className="font-semibold">
-                  Monthly Total Petrol Sales:
-                </span>{" "}
-                {currency} {totals.petrol.toFixed(2)}
-              </div>
-              <div className="text-white">
-                <span className="font-semibold">
-                  Monthly Total Diesel Sales:
-                </span>{" "}
-                {currency} {totals.diesel.toFixed(2)}
-              </div>
+              {trackedFuelTypes.map((ft) => {
+                const label = getFuelLabel(ft);
+                const t = totals[ft] || { sales: 0, litres: 0 };
+                return (
+                  <div key={ft} className="text-white">
+                    <span className="font-semibold">
+                      Monthly Total {label} Sales:
+                    </span>{" "}
+                    {currency} {t.sales.toFixed(2)}
+                    {t.litres > 0 && (
+                      <span className="text-gray-300 ml-2">
+                        ({t.litres.toFixed(2)} L)
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
               <div className="text-white text-lg">
                 <span className="font-bold">Total Monthly Sales/Revenue:</span>{" "}
-                {currency} {totals.total.toFixed(2)}
+                {currency}{" "}
+                {trackedFuelTypes
+                  .reduce((sum, ft) => sum + (totals[ft]?.sales || 0), 0)
+                  .toFixed(2)}
               </div>
             </div>
           )}

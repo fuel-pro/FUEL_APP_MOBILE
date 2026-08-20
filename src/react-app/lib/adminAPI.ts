@@ -1,3 +1,5 @@
+import { getCurrencySymbol, getDetectedCountryCode } from "./currency";
+import { getCountryPrice } from "@/react-app/config/pricing";
 /**
  * FuelPro Admin API Client
  * Frontend API client for secure backend communication
@@ -8,7 +10,18 @@
 import { AdminUser, AdminAPIClient } from "./adminAuth";
 import { AuditFilter, AuditLogEntry, auditLog } from "./auditLogger";
 import { getFirebaseFirestore } from "@/firebase/client";
-import { collection, getDocs, doc, getDoc, query, where, orderBy, limit, onSnapshot, Timestamp } from "firebase/firestore";
+import {
+  collection,
+  getDocs,
+  doc,
+  getDoc,
+  query,
+  where,
+  orderBy,
+  limit,
+  onSnapshot,
+  Timestamp,
+} from "firebase/firestore";
 
 // ═══════════════════════════════════════════════════════════════════
 // API CLIENT INSTANCE
@@ -29,16 +42,18 @@ async function getFirebaseUsers(): Promise<AdminUser[]> {
     const usersRef = collection(db, "users");
     const q = query(usersRef, orderBy("createdAt", "desc"));
     const snapshot = await getDocs(q);
-    
-    return snapshot.docs.map(doc => ({
+
+    return snapshot.docs.map((doc) => ({
       id: doc.id,
       ...doc.data(),
-      createdAt: doc.data().createdAt instanceof Timestamp 
-        ? doc.data().createdAt.toDate().toISOString() 
-        : doc.data().createdAt,
-      lastLogin: doc.data().lastLogin instanceof Timestamp 
-        ? doc.data().lastLogin.toDate().toISOString() 
-        : doc.data().lastLogin,
+      createdAt:
+        doc.data().createdAt instanceof Timestamp
+          ? doc.data().createdAt.toDate().toISOString()
+          : doc.data().createdAt,
+      lastLogin:
+        doc.data().lastLogin instanceof Timestamp
+          ? doc.data().lastLogin.toDate().toISOString()
+          : doc.data().lastLogin,
     })) as AdminUser[];
   } catch (error) {
     console.error("[AdminAPI] Error fetching Firebase users:", error);
@@ -55,8 +70,8 @@ async function getFirebaseStations(): Promise<StationData[]> {
     const stationsRef = collection(db, "stations");
     const q = query(stationsRef, orderBy("createdAt", "desc"));
     const snapshot = await getDocs(q);
-    
-    return snapshot.docs.map(doc => ({
+
+    return snapshot.docs.map((doc) => ({
       id: doc.id,
       ...doc.data(),
     })) as StationData[];
@@ -74,7 +89,7 @@ async function getFirebaseSettings(): Promise<GlobalSettings | null> {
     const db = getFirebaseFirestore();
     const settingsRef = doc(db, "settings", "global");
     const snapshot = await getDoc(settingsRef);
-    
+
     if (snapshot.exists()) {
       return snapshot.data() as GlobalSettings;
     }
@@ -215,10 +230,12 @@ export const AdminAuthAPI = {
       }
 
       const data = await response.json();
-      
+
       // Check if user has admin/founder role
       if (data.user?.role !== "founder" && data.user?.role !== "admin") {
-        throw new Error("Admin access required. This account does not have admin privileges.");
+        throw new Error(
+          "Admin access required. This account does not have admin privileges.",
+        );
       }
 
       // Store admin token
@@ -237,7 +254,7 @@ export const AdminAuthAPI = {
     try {
       // Clear admin token
       localStorage.removeItem("fuelpro_admin_token");
-      
+
       // Call main auth logout
       await fetch("/api/auth/logout", {
         method: "POST",
@@ -265,7 +282,7 @@ export const AdminAuthAPI = {
       }
 
       const data = await response.json();
-      
+
       // Update admin token if present
       if (data.token) {
         localStorage.setItem("fuelpro_admin_token", data.token);
@@ -305,7 +322,7 @@ export const AdminUsersAPI = {
   }) {
     const query = new URLSearchParams(params as any).toString();
     return api.get<PaginatedResponse<AdminUser>>(
-      `/admin/users${query ? `?${query}` : ""}`
+      `/admin/users${query ? `?${query}` : ""}`,
     );
   },
 
@@ -335,7 +352,7 @@ export const AdminStationsAPI = {
   async list(params?: { page?: number; limit?: number; search?: string }) {
     const query = new URLSearchParams(params as any).toString();
     return api.get<PaginatedResponse<StationData>>(
-      `/admin/stations${query ? `?${query}` : ""}`
+      `/admin/stations${query ? `?${query}` : ""}`,
     );
   },
 
@@ -380,7 +397,7 @@ export const AdminSettingsAPI = {
 
   async export() {
     return api.get<{ settings: GlobalSettings; exportedAt: string }>(
-      "/admin/settings/export"
+      "/admin/settings/export",
     );
   },
 
@@ -394,7 +411,7 @@ export const AdminAuditAPI = {
   async list(filter?: AuditFilter) {
     const params = new URLSearchParams(filter as any).toString();
     return api.get<PaginatedResponse<AuditLogEntry>>(
-      `/admin/audit${params ? `?${params}` : ""}`
+      `/admin/audit${params ? `?${params}` : ""}`,
     );
   },
 
@@ -430,7 +447,7 @@ export const AdminAPIKeysAPI = {
         name,
         permissions,
         expiresIn,
-      }
+      },
     );
   },
 
@@ -457,7 +474,7 @@ export const AdminSystemAPI = {
   async createBackup() {
     return api.post<{ backupId: string; createdAt: string }>(
       "/admin/system/backup",
-      {}
+      {},
     );
   },
 
@@ -482,7 +499,7 @@ export const AdminWebhooksAPI = {
 
   async update(
     id: string,
-    data: Partial<{ url: string; events: string[]; isActive: boolean }>
+    data: Partial<{ url: string; events: string[]; isActive: boolean }>,
   ) {
     return api.put<any>(`/admin/webhooks/${id}`, data);
   },
@@ -494,7 +511,7 @@ export const AdminWebhooksAPI = {
   async test(id: string) {
     return api.post<{ success: boolean; response: any }>(
       `/admin/webhooks/${id}/test`,
-      {}
+      {},
     );
   },
 
@@ -512,8 +529,10 @@ export class AdminAPI {
   // Firebase-powered API - Real-time data from Firestore
   // Fallback to API calls when Firebase is not available
 
-  static async simulateResponse<T>(data: T, delay = 300): Promise<T> {
-    await new Promise(resolve => setTimeout(resolve, delay));
+  static async simulateResponse<T>(data: T, delay = 0): Promise<T> {
+    if (delay > 0) {
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
     return data;
   }
 
@@ -527,10 +546,10 @@ export class AdminAPI {
       console.info("[AdminAPI] Using Firebase users:", firebaseUsers.length);
       return firebaseUsers;
     }
-    
+
     // Fallback to API
     try {
-      return await AdminUsersAPI.list();
+      return (await AdminUsersAPI.list()).data;
     } catch (error) {
       console.error("[AdminAPI] Error fetching users:", error);
       return [];
@@ -544,13 +563,16 @@ export class AdminAPI {
     // Try Firebase first
     const firebaseStations = await getFirebaseStations();
     if (firebaseStations.length > 0) {
-      console.info("[AdminAPI] Using Firebase stations:", firebaseStations.length);
+      console.info(
+        "[AdminAPI] Using Firebase stations:",
+        firebaseStations.length,
+      );
       return firebaseStations;
     }
-    
+
     // Fallback to API
     try {
-      return await AdminStationsAPI.list();
+      return (await AdminStationsAPI.list()).data;
     } catch (error) {
       console.error("[AdminAPI] Error fetching stations:", error);
       return [];
@@ -567,31 +589,55 @@ export class AdminAPI {
       console.info("[AdminAPI] Using Firebase settings");
       return firebaseSettings;
     }
-    
+
     // Fallback to API
     try {
       return await AdminSettingsAPI.get();
     } catch (error) {
-      console.error("[AdminAPI] Error fetching settings, using defaults:", error);
+      console.error(
+        "[AdminAPI] Error fetching settings, using defaults:",
+        error,
+      );
+      // Country-aware defaults: derive currency/timezone/symbol/prices from
+      // the detected station country so a non-Kenya station never inherits
+      // Kenyan KSh defaults (Nairobi timezone, mpesa, KSh prices, "FuelPro
+      // Kenya").
+      const country = getDetectedCountryCode();
+      const symbol = getCurrencySymbol();
+      const pms = getCountryPrice(country, "petrol");
+      const ago = getCountryPrice(country, "diesel");
+      const kerosene = getCountryPrice(country, "kerosene");
+      const timezone =
+        Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+      const isKenya = country === "KE";
       // Return default settings
       return {
         company: {
-          name: "FuelPro Kenya",
-          address: "123 Business Park, Nairobi",
-          phone: "+254700123456",
+          name: isKenya ? "FuelPro Kenya" : "FuelPro",
+          address: isKenya ? "123 Business Park, Nairobi" : "",
+          phone: isKenya ? "+254 700 000 000" : "",
           email: "info@fuelpro.app",
         },
         localization: {
-          currency: "KES",
-          currencySymbol: "KSh",
-          timezone: "Africa/Nairobi",
+          currency: pms.currency,
+          currencySymbol: symbol,
+          timezone,
           dateFormat: "DD/MM/YYYY",
           language: "en",
         },
         business: {
-          fuelTypes: ["PMS", "AGO", "Kerosene"],
-          defaultPrices: { PMS: 183.5, AGO: 168.3, Kerosene: 103.5 },
-          taxRate: 0.16,
+          // Dynamic: derive fuel types from the detected country's canonical set
+          // rather than hardcoding PMS/AGO/Kerosene for every station.
+          fuelTypes: isKenya
+            ? ["PMS", "AGO", "IK"]
+            : ["PMS", "AGO", "IK", "LPG"],
+          defaultPrices: {
+            PMS: pms.price,
+            AGO: ago.price,
+            Kerosene: kerosene.price,
+            IK: kerosene.price,
+          },
+          taxRate: isKenya ? 0.16 : 0,
         },
         security: {
           sessionTimeout: 3600,
@@ -599,7 +645,8 @@ export class AdminAPI {
           mfaRequired: false,
         },
         integrations: {
-          mpesa: { enabled: true, environment: "production" },
+          // mpesa is Kenya-specific; disable it for non-Kenya stations.
+          mpesa: { enabled: isKenya, environment: "production" },
           firebase: { enabled: true },
           supabase: { enabled: false },
           seafile: { enabled: false },
@@ -616,17 +663,23 @@ export class AdminAPI {
 
   // Keep legacy mock methods for backwards compatibility
   static getMockUsers(): AdminUser[] {
-    console.warn("[AdminAPI] getMockUsers() is deprecated. Use getUsers() instead.");
+    console.warn(
+      "[AdminAPI] getMockUsers() is deprecated. Use getUsers() instead.",
+    );
     return [];
   }
 
   static getMockSettings(): GlobalSettings {
-    console.warn("[AdminAPI] getMockSettings() is deprecated. Use getSettings() instead.");
+    console.warn(
+      "[AdminAPI] getMockSettings() is deprecated. Use getSettings() instead.",
+    );
     return this.getSettings as any;
   }
 
   static getMockStations(): StationData[] {
-    console.warn("[AdminAPI] getMockStations() is deprecated. Use getStations() instead.");
+    console.warn(
+      "[AdminAPI] getMockStations() is deprecated. Use getStations() instead.",
+    );
     return [];
   }
 }

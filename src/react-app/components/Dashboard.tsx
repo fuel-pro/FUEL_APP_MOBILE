@@ -2,7 +2,11 @@ import { useFuel } from "@/react-app/context/FuelContext";
 import { useLocation } from "@/react-app/context/LocationContext";
 import { useStations } from "@/react-app/context/StationContext";
 import { useAutoSync } from "@/react-app/hooks/useAutoSync";
-import { getPriceForCity } from "@/react-app/services/DataSyncService";
+import { useStationFuelTypes } from "@/react-app/hooks/useStationFuelTypes";
+import {
+  getSyncedFuelPrice,
+  getPriceForCity,
+} from "@/react-app/services/DataSyncService";
 import RegulatoryAlerts from "@/react-app/components/RegulatoryAlerts";
 import SyncStatusIndicator from "@/react-app/components/SyncStatusIndicator";
 import WeatherWidget from "@/react-app/components/WeatherWidget";
@@ -25,29 +29,31 @@ import {
   Wallet,
   Globe,
   Zap,
-  TrendingUpIcon,
   FileText,
-  Info,
+  Smartphone,
+  Truck,
+  Plug,
 } from "lucide-react";
 import { formatNumber } from "@/react-app/utils/formatUtils";
+import {
+  CANONICAL_FUEL_TYPES,
+  currencySymbolFor,
+} from "@/react-app/config/pricing";
+import { getCountryById } from "@/react-app/config/countries";
+import {
+  navigateToTab,
+  type StkPushPrefill,
+  type FuelPricePrefill,
+} from "@/react-app/lib/mpesa-integration-service";
 import { useState, useEffect, useMemo, useCallback } from "react";
+import { on } from "@/react-app/lib/automation-engine";
 
-// Lazy API base URL getter using dynamic import to avoid circular deps
-let _apiBase: string | null = null;
-let _apiPromise: Promise<string> | null = null;
+// API base URL getter. Uses the VITE_BACKEND_URL env var (empty string when
+// unset, which makes the fetch a same-origin relative path — correct on
+// Vercel where /api/* is served by the same origin, and a harmless 404 on
+// static-only hosts where the result is ignored).
 function getApiBase(): string {
-  if (_apiBase) return _apiBase;
-  // Use environment variable or empty string (Firebase-only mode)
   return import.meta.env.VITE_BACKEND_URL || "";
-}
-// Async version for callers that can await
-async function getApiBaseAsync(): Promise<string> {
-  if (_apiBase) return _apiBase;
-  if (!_apiPromise) {
-    _apiPromise = import("@/utils/apiConfig").then(m => m.getBackendUrl());
-  }
-  _apiBase = await _apiPromise;
-  return _apiBase || "";
 }
 
 // Import chart.js components
@@ -76,17 +82,61 @@ ChartJS.register(
   Title,
   Tooltip,
   Legend,
-  Filler
+  Filler,
 );
+
+/**
+ * Tank fill percentage for the Dashboard tank-level bar.
+ *
+ * Uses the period's opening reading as the true capacity denominator (the
+ * opening reading is the tank's known-full level at the start of the period),
+ * so the bar shows real fill rather than the old `closing/(closing+5000)`
+ * magic-number heuristic that was wrong for every station whose tank wasn't
+ * ~5000 L. When no opening reading exists, falls back to the closing reading
+ * alone (treats it as full) so the bar is never 0% for a tank that clearly
+ * has fuel.
+ */
+function tankFillPercent(opening: number, closing: number): number {
+  const o = Math.max(0, Number(opening) || 0);
+  const c = Math.max(0, Number(closing) || 0);
+  if (c <= 0) return 0;
+  const denom = o > 0 ? o : c;
+  return Math.min(100, Math.max(0, (c / denom) * 100));
+}
 
 export default function Dashboard() {
   const { state } = useFuel();
   const location = useLocation();
   const { currentStation } = useStations();
-  const { fuelPrice, taxRates, exchangeRates, isSyncing, lastSync, syncNow, locationPrice, currentLocation, refreshLocation, refreshPrices } =
-    useAutoSync(location.currentCountry.id);
+  // Dynamic fuel-type support for the "Current Pump Prices" cards: read the
+  // station's configured fuel types so the cards reflect EVERY fuel the
+  // station sells (Kerosene, LPG, V-Power, etc.), not just Petrol/Diesel.
+  // NOTE: prefer the real StationContext station id (currentStation?.id) —
+  // that is the id FuelTypesManager writes fuel_types_config under. The
+  // FuelContext `state.currentStationId` is a legacy "default_station" value
+  // that resolves to a DIFFERENT (empty) cloud row, so the cards would never
+  // show the configured fuel types.
+  const stationId = currentStation?.id ?? state.currentStationId ?? undefined;
+  const fuelTypeApi = useStationFuelTypes(stationId);
+  // The station's country is the authoritative source for pricing/tax/currency
+  // — NOT the GPS-detected country (which may be a VPN/tourist location and
+  // would otherwise show foreign prices on a station's dashboard). Fall back to
+  // the detected country only until the station has been loaded from cloud.
+  const stationCountry = currentStation?.country || location.currentCountry.id;
+  const {
+    fuelPrice,
+    taxRates,
+    exchangeRates: _exchangeRates,
+    isSyncing,
+    lastSync: _lastSync,
+    syncNow,
+    locationPrice,
+    currentLocation,
+    refreshLocation: _refreshLocation,
+    refreshPrices,
+  } = useAutoSync(stationCountry);
   const [currentTime, setCurrentTime] = useState(new Date());
-  
+
   // Backend data state
   const [backendStats, setBackendStats] = useState<{
     totalRevenue: number;
@@ -98,31 +148,349 @@ export default function Dashboard() {
   const [hasBackendData, setHasBackendData] = useState(false);
   // Production mode - use real data
 
+  // Resolve the station's own country profile (authoritative) for fuel-
+  // regulation labels and the default city, falling back to the GPS-detected
+  // profile so the UI always has a valid object even before the station loads
+  // from cloud. Declared before stationCity so the capital fallback is in
+  // scope.
+  const stationCountryProfile =
+    getCountryById(stationCountry.toUpperCase()) || location.currentCountry;
+
   // Use precise location-based fuel prices (auto-synced with GPS)
-  const stationCity = currentStation?.location || "Nairobi";
-  const regionalPrice = getPriceForCity(fuelPrice, stationCity);
-  // Prefer location-based price from GPS, then fall back to regional, then national, then default
-  const displayPmsPrice = locationPrice?.petrolPrice 
-    ?? (regionalPrice.isRegional ? regionalPrice.petrol : null)
-    ?? fuelPrice?.petrolPrice 
-    ?? state.pmsPrice;
-  const displayAgoPrice = locationPrice?.dieselPrice
-    ?? (regionalPrice.isRegional ? regionalPrice.diesel : null)
-    ?? fuelPrice?.dieselPrice
-    ?? state.agoPrice;
-  const displayKerosenePrice = locationPrice?.kerosenePrice 
-    ?? fuelPrice?.kerosenePrice 
-    ?? 0; // Kerosene price not in base state
+  const stationCity =
+    currentStation?.location || stationCountryProfile?.capital || "—";
+  // The useAutoSync hook's `fuelPrice` state can lag the synced cache during a
+  // country switch (the station loads from cloud AFTER the hook's initial KE
+  // sync). Read the persisted synced price for the STATION's country directly
+  // so a German station shows €1.85 immediately instead of the Kenya default
+  // (state.pmsPrice = 214.03) until the hook catches up.
+  const effectiveFuelPrice = fuelPrice ?? getSyncedFuelPrice(stationCountry);
+  const regionalPrice = getPriceForCity(effectiveFuelPrice, stationCity);
+  // Prefer the STATION'S OWN configured price (state.pmsPrice/agoPrice) over
+  // the global/EPRA synced price. The user's configured pump price is the
+  // authoritative price they actually charge — the global price is only a
+  // reference. Previously the global price took priority, causing a US station
+  // with $1.10/L configured to show $3.45/L (global average) on the Dashboard.
+  // Sanity guard for the legacy scalar prices: if the station is NOT in
+  // Kenya but a stored price looks like a Kenya KSh price (>= 100 per
+  // litre — absurd in USD/EUR/etc.), it's a stale Kenya default. Fall
+  // through to the country-appropriate fallback instead so a US station
+  // doesn't show "$220.08/L" for petrol or "$229.95/L" for diesel.
+  const pmsPriceSanityOk =
+    stationCountry === "KE" || !state.pmsPrice || state.pmsPrice < 100;
+  const displayPmsPrice = pmsPriceSanityOk
+    ? (state.pmsPrice ??
+      locationPrice?.petrolPrice ??
+      (regionalPrice.isRegional ? regionalPrice.petrol : null) ??
+      effectiveFuelPrice?.petrolPrice ??
+      fuelTypeApi.getPriceFor(CANONICAL_FUEL_TYPES.petrol.label) ??
+      0)
+    : (locationPrice?.petrolPrice ??
+      (regionalPrice.isRegional ? regionalPrice.petrol : null) ??
+      effectiveFuelPrice?.petrolPrice ??
+      fuelTypeApi.getPriceFor(CANONICAL_FUEL_TYPES.petrol.label) ??
+      0);
+  const agoPriceSanityOk =
+    stationCountry === "KE" || !state.agoPrice || state.agoPrice < 100;
+  const displayAgoPrice = agoPriceSanityOk
+    ? (state.agoPrice ??
+      locationPrice?.dieselPrice ??
+      (regionalPrice.isRegional ? regionalPrice.diesel : null) ??
+      effectiveFuelPrice?.dieselPrice ??
+      fuelTypeApi.getPriceFor(CANONICAL_FUEL_TYPES.diesel.label) ??
+      0)
+    : (locationPrice?.dieselPrice ??
+      (regionalPrice.isRegional ? regionalPrice.diesel : null) ??
+      effectiveFuelPrice?.dieselPrice ??
+      fuelTypeApi.getPriceFor(CANONICAL_FUEL_TYPES.diesel.label) ??
+      0);
+  const keroseneConfigured = fuelTypeApi.getPriceFor(
+    CANONICAL_FUEL_TYPES.kerosene.label,
+  );
+  const keroseneSanityOk =
+    stationCountry === "KE" || !keroseneConfigured || keroseneConfigured < 100;
+  const displayKerosenePrice = keroseneSanityOk
+    ? (keroseneConfigured ??
+      locationPrice?.kerosenePrice ??
+      effectiveFuelPrice?.kerosenePrice ??
+      0)
+    : (locationPrice?.kerosenePrice ??
+      effectiveFuelPrice?.kerosenePrice ??
+      0);
   // Show the detected city for location-based pricing
-  const priceCityName = locationPrice?.cityName || regionalPrice.cityName || "Nairobi";
+  const priceCityName =
+    locationPrice?.cityName || regionalPrice.cityName || stationCity;
   const isLocationBased = !!locationPrice;
-  const currencySymbol = location.currencySymbol;
+
+  /**
+   * Dynamic "Current Pump Prices" card list. Built from the station's
+   * configured fuel types (canonical-normalized) so a station selling
+   * Kerosene/LPG/V-Power etc. shows a card for EACH fuel — not just the
+   * hardcoded Petrol/Diesel/Kerosene. Falls back to the 3 legacy cards
+   * (petrol/diesel/kerosene) when the station hasn't configured fuel types
+   * yet, so there's no regression for existing stations.
+   */
+  const priceCards: Array<{
+    key: string;
+    label: string;
+    price: number;
+    color: string;
+  }> = useMemo(() => {
+    const active = fuelTypeApi.activeFuelTypes;
+    if (active.length > 0) {
+      // Map the configured fuel types to display prices. The user's
+      // explicitly-configured price (ft.price, set in Fuel Type Manager) is
+      // the source of truth — prefer it over the national-average fallback so
+      // a station that sells Kerosene at $164.90 doesn't show the national
+      // average of $3.20. Only when the configured price is 0/missing do we
+      // fall back to the location/regional/national resolved price
+      // (petrol/diesel/kerosene) or the FuelContext dynamic price store.
+      return active.map((ft) => {
+        const canonical = fuelTypeApi.canonicalOf(ft.name);
+        const label = fuelTypeApi.labelOf(ft.name);
+        let configured =
+          typeof ft.price === "number" && ft.price > 0 ? ft.price : null;
+        // Sanity guard: if the station is NOT in Kenya and the configured
+        // price looks like a Kenya KSh price (>= 100 per litre — absurd in
+        // USD/EUR/etc.), the stored value is a stale Kenya default. Discard
+        // it so the country-appropriate fallback is used instead.
+        if (
+          configured != null &&
+          stationCountry !== "KE" &&
+          configured >= 100
+        ) {
+          configured = null;
+        }
+        let price = 0;
+        if (configured != null) {
+          price = configured;
+        } else if (canonical === "petrol") price = displayPmsPrice;
+        else if (canonical === "diesel") price = displayAgoPrice;
+        else if (canonical === "kerosene") price = displayKerosenePrice;
+        else {
+          price =
+            fuelTypeApi.getPriceFor(ft.name) ??
+            state.fuelPricesByType?.[canonical ?? ft.name] ??
+            ft.price ??
+            0;
+        }
+        const color =
+          canonical === "petrol"
+            ? "text-green-700 dark:text-green-400"
+            : canonical === "diesel"
+              ? "text-amber-700 dark:text-amber-400"
+              : canonical === "kerosene"
+                ? "text-rose-700 dark:text-rose-400"
+                : "text-indigo-700 dark:text-indigo-400";
+        return { key: ft.id || canonical || ft.name, label, price, color };
+      });
+    }
+    // Fallback: legacy 3 cards.
+    return [
+      {
+        key: "petrol",
+        label: CANONICAL_FUEL_TYPES.petrol.label,
+        price: displayPmsPrice,
+        color: "text-green-700 dark:text-green-400",
+      },
+      {
+        key: "diesel",
+        label: CANONICAL_FUEL_TYPES.diesel.label,
+        price: displayAgoPrice,
+        color: "text-amber-700 dark:text-amber-400",
+      },
+      {
+        key: "kerosene",
+        label: CANONICAL_FUEL_TYPES.kerosene.label,
+        price: displayKerosenePrice,
+        color: "text-rose-700 dark:text-rose-400",
+      },
+    ];
+  }, [
+    fuelTypeApi,
+    displayPmsPrice,
+    displayAgoPrice,
+    displayKerosenePrice,
+    state.fuelPricesByType,
+    stationCountry,
+  ]);
+
+  /**
+   * Dynamic "Pump Status" card list. One card per configured fuel type,
+   * showing the count of pumps for that fuel (from the FuelContext
+   * per-canonical-type store `fuelPumpsByType`, falling back to the legacy
+   * `pmsPumps`/`agoPumps` for petrol/diesel). When no fuel types are
+   * configured, falls back to the legacy petrol/diesel pair.
+   */
+  const pumpStatusCards: Array<{
+    key: string;
+    label: string;
+    count: number;
+    bg: string;
+    text: string;
+  }> = useMemo(() => {
+    const active = fuelTypeApi.activeFuelTypes;
+    if (active.length > 0) {
+      const palette: Record<string, { bg: string; text: string }> = {
+        petrol: {
+          bg: "bg-green-50 dark:bg-green-900/20",
+          text: "text-green-700 dark:text-green-300",
+        },
+        diesel: {
+          bg: "bg-amber-50 dark:bg-amber-900/20",
+          text: "text-amber-700 dark:text-amber-300",
+        },
+        kerosene: {
+          bg: "bg-rose-50 dark:bg-rose-900/20",
+          text: "text-rose-700 dark:text-rose-300",
+        },
+      };
+      const fallback = {
+        bg: "bg-indigo-50 dark:bg-indigo-900/20",
+        text: "text-indigo-700 dark:text-indigo-300",
+      };
+      return active.map((ft) => {
+        const canonical = fuelTypeApi.canonicalOf(ft.name);
+        const pumps =
+          (canonical && state.fuelPumpsByType?.[canonical]) ||
+          (canonical === "petrol"
+            ? state.pmsPumps
+            : canonical === "diesel"
+              ? state.agoPumps
+              : []) ||
+          [];
+        const colors = (canonical && palette[canonical]) || fallback;
+        return {
+          key: ft.id || canonical || ft.name,
+          label: fuelTypeApi.labelOf(ft.name),
+          count: Array.isArray(pumps) ? pumps.length : 0,
+          ...colors,
+        };
+      });
+    }
+    return [
+      {
+        key: "petrol",
+        label: CANONICAL_FUEL_TYPES.petrol.label,
+        count: state.pmsPumps.length,
+        bg: "bg-green-50 dark:bg-green-900/20",
+        text: "text-green-700 dark:text-green-300",
+      },
+      {
+        key: "diesel",
+        label: CANONICAL_FUEL_TYPES.diesel.label,
+        count: state.agoPumps.length,
+        bg: "bg-amber-50 dark:bg-amber-900/20",
+        text: "text-amber-700 dark:text-amber-300",
+      },
+    ];
+  }, [fuelTypeApi, state.fuelPumpsByType, state.pmsPumps, state.agoPumps]);
+
+  // Tank Level cards — dynamic per fuel type (was hardcoded to only
+  // Super Petrol Tank + Diesel Tank). A station with Kerosene/V-Power/LPG
+  // etc. gets a tank card for each configured fuel type.
+  const tankLevelCards: Array<{
+    key: string;
+    label: string;
+    opening: number;
+    closing: number;
+    barClass: string;
+  }> = useMemo(() => {
+    const active = fuelTypeApi.activeFuelTypes;
+    const barPalette: Record<string, string> = {
+      petrol: "from-green-400 to-green-600",
+      diesel: "from-amber-400 to-amber-600",
+      kerosene: "from-rose-400 to-rose-600",
+    };
+    const fallbackBar = "from-indigo-400 to-indigo-600";
+    const build = (
+      key: string,
+      label: string,
+      opening: number,
+      closing: number,
+      canonical?: string | null,
+    ) => ({
+      key,
+      label,
+      opening,
+      closing,
+      barClass: (canonical && barPalette[canonical]) || fallbackBar,
+    });
+    if (active.length > 0) {
+      return active.map((ft) => {
+        const canonical = fuelTypeApi.canonicalOf(ft.name);
+        const tv =
+          canonical === "petrol"
+            ? { opening: state.pmsTankOpening, closing: state.pmsTankClosing }
+            : canonical === "diesel"
+              ? { opening: state.agoTankOpening, closing: state.agoTankClosing }
+              : (state.fuelTankValuesByType?.[canonical || ft.name] ?? {
+                  opening: 0,
+                  closing: 0,
+                });
+        return build(
+          ft.id || canonical || ft.name,
+          fuelTypeApi.labelOf(ft.name),
+          tv.opening,
+          tv.closing,
+          canonical,
+        );
+      });
+    }
+    return [
+      build(
+        "petrol",
+        CANONICAL_FUEL_TYPES.petrol.label,
+        state.pmsTankOpening,
+        state.pmsTankClosing,
+        "petrol",
+      ),
+      build(
+        "diesel",
+        CANONICAL_FUEL_TYPES.diesel.label,
+        state.agoTankOpening,
+        state.agoTankClosing,
+        "diesel",
+      ),
+    ];
+  }, [
+    fuelTypeApi,
+    state.fuelTankValuesByType,
+    state.pmsTankOpening,
+    state.pmsTankClosing,
+    state.agoTankOpening,
+    state.agoTankClosing,
+  ]);
+
+  // Currency symbol must match the STATION's currency (e.g. "€" for a German
+  // station), never the GPS/browser-detected currency. Fall back to the
+  // location-derived symbol only if the station has no currency set.
+  const currencySymbol =
+    currentStation?.currencySymbol ||
+    currencySymbolFor(currentStation?.currency || "") ||
+    location.currencySymbol;
   const [animatedValues, setAnimatedValues] = useState({
     revenue: 0,
     profit: 0,
     fuelSold: 0,
     debt: 0,
   });
+  // Locale for date/number formatting — derived from the STATION's country
+  // (never a hardcoded "en-KE"), so a German station formats dates in de-DE.
+  // Falls back to the browser locale if the station country is unknown.
+  const stationLocale = useMemo(() => {
+    const langs = stationCountryProfile?.languages;
+    const cc = stationCountryProfile?.id || stationCountry;
+    if (langs && langs.length > 0 && cc) {
+      try {
+        const loc = new Intl.Locale(`${langs[0]}-${cc.toUpperCase()}`);
+        return loc.toString();
+      } catch {
+        /* fall through */
+      }
+    }
+    return undefined; // browser default
+  }, [stationCountryProfile, stationCountry]);
 
   // Fetch dashboard stats from backend
   const fetchBackendStats = useCallback(async () => {
@@ -136,14 +504,16 @@ export default function Dashboard() {
           token = session.token;
         }
       }
-    } catch { /* no session */ }
-    
+    } catch {
+      /* no session */
+    }
+
     if (!token) return;
-    
+
     setBackendLoading(true);
     try {
       const res = await fetch(`${getApiBase()}/api/dashboard/stats`, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
         const data = await res.json();
@@ -153,7 +523,7 @@ export default function Dashboard() {
         }
       }
     } catch (e) {
-      console.warn('Failed to fetch backend stats:', e);
+      console.warn("Failed to fetch backend stats:", e);
     } finally {
       setBackendLoading(false);
     }
@@ -166,10 +536,177 @@ export default function Dashboard() {
     return () => clearInterval(interval);
   }, [fetchBackendStats]);
 
+  // Re-fetch dashboard data when the automation engine signals a refresh
+  // (e.g. a sale completed or a price changed elsewhere in the app).
+  useEffect(() => {
+    const unsubSale = on("sale:completed", () => {
+      fetchBackendStats();
+    });
+    const unsubPrice = on("price:changed", () => {
+      refreshPrices();
+      fetchBackendStats();
+    });
+    const onRefresh = () => {
+      fetchBackendStats();
+    };
+    window.addEventListener("automation:refresh-dashboard", onRefresh);
+    window.addEventListener("automation:refresh-prices", onRefresh);
+    return () => {
+      unsubSale();
+      unsubPrice();
+      window.removeEventListener("automation:refresh-dashboard", onRefresh);
+      window.removeEventListener("automation:refresh-prices", onRefresh);
+    };
+  }, [fetchBackendStats, refreshPrices]);
+
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
+
+  // Calculate totals from sales history (declared before the animation
+  // effect so the effect can depend on these values — otherwise the KPI
+  // cards never re-animate when sales data loads from cloud after mount,
+  // leaving them stuck at 0).
+  const {
+    totalRevenue,
+    netProfit,
+    totalFuelSold,
+    totalDebt,
+    totalExpenses,
+    todaySales,
+  } = useMemo(() => {
+    const history = Object.values(state.salesHistory);
+    let revenue = 0;
+    let expenses = 0;
+    let fuel = 0;
+    let profit = 0;
+
+    history.forEach((entry: any) => {
+      const pmsTotal = (entry.pmsPumps || []).reduce(
+        (s: number, p: any) => s + (p.salesKsh || 0),
+        0,
+      );
+      const agoTotal = (entry.agoPumps || []).reduce(
+        (s: number, p: any) => s + (p.salesKsh || 0),
+        0,
+      );
+      // Sum dynamic fuel types from Sales Tracking (fuelPumpsByType is a
+      // Record<fuelType, Pump[]> — covers LPG, Kerosene, V-Power, etc.)
+      const byTypeTotal = Object.values(entry.fuelPumpsByType || {}).reduce(
+        (s: number, pumps: any) =>
+          s +
+          (Array.isArray(pumps)
+            ? pumps.reduce((ps: number, p: any) => ps + (p.salesKsh || 0), 0)
+            : 0),
+        0,
+      );
+      // Also count POS sales (from PointOfSale tab) — previously these were
+      // silently excluded, so a completed POS sale never showed in Total Revenue.
+      const pos = entry.posSales || {};
+      const posPms = pos.pmsAmount || 0;
+      const posAgo = pos.agoAmount || 0;
+      const posByType = Object.values(pos.byTypeAmount || {}).reduce(
+        (s: number, v: any) => s + (Number(v) || 0),
+        0,
+      );
+      // byTypeAmount may include PMS/AGO too, so avoid double-counting:
+      // prefer byTypeAmount when present (it's the canonical record), else
+      // fall back to pmsAmount + agoAmount.
+      const posTotal =
+        Object.keys(pos.byTypeAmount || {}).length > 0
+          ? posByType
+          : posPms + posAgo;
+      revenue += pmsTotal + agoTotal + byTypeTotal + posTotal;
+
+      // Fuel sold: pump litres + POS litres
+      fuel += (entry.pmsPumps || []).reduce(
+        (s: number, p: any) => s + (p.salesL || 0),
+        0,
+      );
+      fuel += (entry.agoPumps || []).reduce(
+        (s: number, p: any) => s + (p.salesL || 0),
+        0,
+      );
+      // Dynamic fuel type litres from Sales Tracking
+      fuel += Object.values(entry.fuelPumpsByType || {}).reduce(
+        (s: number, pumps: any) =>
+          s +
+          (Array.isArray(pumps)
+            ? pumps.reduce((ps: number, p: any) => ps + (p.salesL || 0), 0)
+            : 0),
+        0,
+      ) as number;
+      const posLitresByType = Object.values(pos.byTypeLitres || {}).reduce(
+        (s: number, v: any) => s + (Number(v) || 0),
+        0,
+      );
+      const posLitres =
+        Object.keys(pos.byTypeLitres || {}).length > 0
+          ? posLitresByType
+          : (pos.pmsLitres || 0) + (pos.agoLitres || 0);
+      fuel += posLitres;
+
+      expenses += (entry.expenses || []).reduce(
+        (s: number, e: any) => s + (e.amount || 0),
+        0,
+      );
+    });
+
+    profit = revenue - expenses;
+    const debt = state.deliveryData.totals.balanceDue;
+
+    // Get today's sales
+    const today = new Date().toISOString().split("T")[0];
+    const todayEntry: any = Object.entries(state.salesHistory).find(([k]) =>
+      k.startsWith(today),
+    );
+    const tSales = todayEntry
+      ? (() => {
+          const e = todayEntry[1] as any;
+          const pms = (e.pmsPumps || []).reduce(
+            (s: number, p: any) => s + (p.salesKsh || 0),
+            0,
+          );
+          const ago = (e.agoPumps || []).reduce(
+            (s: number, p: any) => s + (p.salesKsh || 0),
+            0,
+          );
+          // Dynamic fuel type pump sales from Sales Tracking
+          const byType = Object.values(e.fuelPumpsByType || {}).reduce(
+            (s: number, pumps: any) =>
+              s +
+              (Array.isArray(pumps)
+                ? pumps.reduce(
+                    (ps: number, p: any) => ps + (p.salesKsh || 0),
+                    0,
+                  )
+                : 0),
+            0,
+          );
+          // Include POS sales for today too
+          const pos = e.posSales || {};
+          const posByType = Object.values(pos.byTypeAmount || {}).reduce(
+            (s: number, v: any) => s + (Number(v) || 0),
+            0,
+          );
+          const posTotal =
+            Object.keys(pos.byTypeAmount || {}).length > 0
+              ? posByType
+              : (pos.pmsAmount || 0) + (pos.agoAmount || 0);
+          return pms + ago + byType + posTotal;
+        })()
+      : 0;
+
+    return {
+      totalRevenue: revenue,
+      netProfit: profit,
+      totalFuelSold: fuel,
+      totalDebt: debt,
+      totalExpenses: expenses,
+      todaySales: tSales,
+    };
+  }, [state.salesHistory, state.deliveryData.totals]);
 
   // Animate KPI values on mount - use backend data if available, then local
   useEffect(() => {
@@ -180,7 +717,7 @@ export default function Dashboard() {
       fuelSold: 0,
       debt: 0,
     };
-    
+
     if (hasBackendData && backendStats) {
       targets = {
         revenue: backendStats.totalRevenue,
@@ -204,10 +741,10 @@ export default function Dashboard() {
         debt: 0,
       };
     }
-    
+
     const duration = 1000;
     const steps = 30;
-    const interval = duration / steps;
+    const intervalMs = duration / steps;
     let step = 0;
 
     const animTimer = setInterval(() => {
@@ -221,88 +758,48 @@ export default function Dashboard() {
         debt: targets.debt * eased,
       });
       if (step >= steps) clearInterval(animTimer);
-    }, interval);
+    }, intervalMs);
 
     return () => clearInterval(animTimer);
-  }, [hasBackendData, backendStats]);
-
-  // Calculate totals from sales history
-  const {
+  }, [
+    hasBackendData,
+    backendStats,
     totalRevenue,
     netProfit,
     totalFuelSold,
     totalDebt,
-    totalExpenses,
-    todaySales,
-  } = useMemo(() => {
-    const history = Object.values(state.salesHistory);
-    let revenue = 0;
-    let expenses = 0;
-    let fuel = 0;
-    let profit = 0;
-
-    history.forEach((entry: any) => {
-      const pmsTotal = (entry.pmsPumps || []).reduce(
-        (s: number, p: any) => s + (p.salesKsh || 0),
-        0
-      );
-      const agoTotal = (entry.agoPumps || []).reduce(
-        (s: number, p: any) => s + (p.salesKsh || 0),
-        0
-      );
-      revenue += pmsTotal + agoTotal;
-      fuel += (entry.pmsPumps || []).reduce(
-        (s: number, p: any) => s + (p.salesL || 0),
-        0
-      );
-      fuel += (entry.agoPumps || []).reduce(
-        (s: number, p: any) => s + (p.salesL || 0),
-        0
-      );
-      expenses += (entry.expenses || []).reduce(
-        (s: number, e: any) => s + (e.amount || 0),
-        0
-      );
-    });
-
-    profit = revenue - expenses;
-    const debt = state.deliveryData.totals.balanceDue;
-
-    // Get today's sales
-    const today = new Date().toISOString().split("T")[0];
-    const todayEntry: any = Object.entries(state.salesHistory).find(([k]) =>
-      k.startsWith(today)
-    );
-    const tSales = todayEntry
-      ? (() => {
-          const e = todayEntry[1] as any;
-          const pms = (e.pmsPumps || []).reduce(
-            (s: number, p: any) => s + (p.salesKsh || 0),
-            0
-          );
-          const ago = (e.agoPumps || []).reduce(
-            (s: number, p: any) => s + (p.salesKsh || 0),
-            0
-          );
-          return pms + ago;
-        })()
-      : 0;
-
-    return {
-      totalRevenue: revenue,
-      netProfit: profit,
-      totalFuelSold: fuel,
-      totalDebt: debt,
-      totalExpenses: expenses,
-      todaySales: tSales,
-    };
-  }, [state.salesHistory, state.deliveryData.totals]);
+  ]);
 
   // Chart data - Sales over last 7 days
   const salesChartData = useMemo(() => {
     const days: string[] = [];
-    const pmsData: number[] = [];
-    const agoData: number[] = [];
+    // Collect ALL fuel types that appear in the sales history (dynamic,
+    // not hardcoded to PMS/AGO). A station with Kerosene/LPG/V-Power gets
+    // a line for each.
+    const allFuelTypes = new Set<string>();
+    Object.values(state.salesHistory).forEach((entry: any) => {
+      if (entry.fuelPumpsByType) {
+        Object.keys(entry.fuelPumpsByType).forEach((t) => {
+          if (t) allFuelTypes.add(t);
+        });
+      }
+      // Legacy entries store pmsPumps/agoPumps separately
+      if (entry.pmsPumps?.length) allFuelTypes.add("petrol");
+      if (entry.agoPumps?.length) allFuelTypes.add("diesel");
+    });
+    // If no history yet, fall back to the station's configured fuel types
+    if (allFuelTypes.size === 0 && state.fuelTypes?.length > 0) {
+      state.fuelTypes.forEach((ft: any) => {
+        if (ft.isActive && ft.canonicalType) allFuelTypes.add(ft.canonicalType);
+      });
+    }
+    if (allFuelTypes.size === 0) {
+      allFuelTypes.add("petrol");
+      allFuelTypes.add("diesel");
+    }
+
+    const seriesData: Record<string, number[]> = {};
+    allFuelTypes.forEach((t) => (seriesData[t] = []));
 
     for (let i = 6; i >= 0; i--) {
       const d = new Date();
@@ -310,79 +807,153 @@ export default function Dashboard() {
       const dateStr = d.toISOString().split("T")[0];
       days.push(d.toLocaleDateString("en-US", { weekday: "short" }));
 
-      let pms = 0,
-        ago = 0;
+      const dayTotals: Record<string, number> = {};
+      allFuelTypes.forEach((t) => (dayTotals[t] = 0));
+
       Object.entries(state.salesHistory).forEach(
         ([key, entry]: [string, any]) => {
           if (key.startsWith(dateStr)) {
-            pms += (entry.pmsPumps || []).reduce(
+            // New format: fuelPumpsByType
+            if (entry.fuelPumpsByType) {
+              Object.entries(entry.fuelPumpsByType).forEach(
+                ([type, pumps]: [string, any]) => {
+                  if (!dayTotals[type]) dayTotals[type] = 0;
+                  dayTotals[type] += (pumps || []).reduce(
+                    (s: number, p: any) => s + (p.salesKsh || 0),
+                    0,
+                  );
+                },
+              );
+            }
+            // Legacy: pmsPumps/agoPumps
+            const pmsRev = (entry.pmsPumps || []).reduce(
               (s: number, p: any) => s + (p.salesKsh || 0),
-              0
+              0,
             );
-            ago += (entry.agoPumps || []).reduce(
+            const agoRev = (entry.agoPumps || []).reduce(
               (s: number, p: any) => s + (p.salesKsh || 0),
-              0
+              0,
             );
+            if (pmsRev > 0)
+              dayTotals["petrol"] = (dayTotals["petrol"] || 0) + pmsRev;
+            if (agoRev > 0)
+              dayTotals["diesel"] = (dayTotals["diesel"] || 0) + agoRev;
           }
-        }
+        },
       );
-      pmsData.push(pms);
-      agoData.push(ago);
+      allFuelTypes.forEach((t) => seriesData[t].push(dayTotals[t] || 0));
     }
+
+    const colors = [
+      "rgb(34, 197, 94)",
+      "rgb(234, 179, 8)",
+      "rgb(99, 102, 241)",
+      "rgb(236, 72, 153)",
+      "rgb(20, 184, 166)",
+      "rgb(249, 115, 22)",
+      "rgb(139, 92, 246)",
+    ];
 
     return {
       labels: days,
-      datasets: [
-        {
-          label: "Petrol (PMS)",
-          data: pmsData,
-          borderColor: "rgb(34, 197, 94)",
-          backgroundColor: "rgba(34, 197, 94, 0.1)",
+      datasets: Array.from(allFuelTypes).map((type, idx) => {
+        const label =
+          (CANONICAL_FUEL_TYPES as any)[type]?.label ||
+          type.charAt(0).toUpperCase() + type.slice(1);
+        const color = colors[idx % colors.length];
+        return {
+          label,
+          data: seriesData[type],
+          borderColor: color,
+          backgroundColor: color.replace("rgb", "rgba").replace(")", ", 0.1)"),
           fill: true,
           tension: 0.4,
           pointRadius: 4,
           pointHoverRadius: 6,
-        },
-        {
-          label: "Diesel (AGO)",
-          data: agoData,
-          borderColor: "rgb(234, 179, 8)",
-          backgroundColor: "rgba(234, 179, 8, 0.1)",
-          fill: true,
-          tension: 0.4,
-          pointRadius: 4,
-          pointHoverRadius: 6,
-        },
-      ],
+        };
+      }),
     };
-  }, [state.salesHistory]);
+  }, [state.salesHistory, state.fuelTypes]);
 
   // Fuel type distribution
   const fuelDistData = useMemo(() => {
     const history = Object.values(state.salesHistory);
-    let pms = 0,
-      ago = 0;
+    const totals: Record<string, number> = {};
+
     history.forEach((entry: any) => {
-      pms += (entry.pmsPumps || []).reduce(
+      // New format: fuelPumpsByType
+      if (entry.fuelPumpsByType) {
+        Object.entries(entry.fuelPumpsByType).forEach(
+          ([type, pumps]: [string, any]) => {
+            if (!totals[type]) totals[type] = 0;
+            totals[type] += (pumps || []).reduce(
+              (s: number, p: any) => s + (p.salesL || 0),
+              0,
+            );
+          },
+        );
+      }
+      // Legacy: pmsPumps/agoPumps
+      const pmsL = (entry.pmsPumps || []).reduce(
         (s: number, p: any) => s + (p.salesL || 0),
-        0
+        0,
       );
-      ago += (entry.agoPumps || []).reduce(
+      const agoL = (entry.agoPumps || []).reduce(
         (s: number, p: any) => s + (p.salesL || 0),
-        0
+        0,
       );
+      if (pmsL > 0) totals["petrol"] = (totals["petrol"] || 0) + pmsL;
+      if (agoL > 0) totals["diesel"] = (totals["diesel"] || 0) + agoL;
     });
-    if (pms === 0 && ago === 0) {
-      pms = 1;
-      ago = 1;
-    } // default for empty state
+
+    const types = Object.keys(totals).filter((t) => totals[t] > 0);
+    // If no data, show a default empty state
+    if (types.length === 0) {
+      return {
+        labels: ["No sales data"],
+        datasets: [
+          {
+            data: [1],
+            backgroundColor: ["rgba(100, 116, 139, 0.4)"],
+            borderColor: ["rgb(100, 116, 139)"],
+            borderWidth: 2,
+          },
+        ],
+      };
+    }
+
+    const colors = [
+      "rgba(34, 197, 94, 0.8)",
+      "rgba(234, 179, 8, 0.8)",
+      "rgba(99, 102, 241, 0.8)",
+      "rgba(236, 72, 153, 0.8)",
+      "rgba(20, 184, 166, 0.8)",
+      "rgba(249, 115, 22, 0.8)",
+      "rgba(139, 92, 246, 0.8)",
+    ];
+    const borderColors = [
+      "rgb(34, 197, 94)",
+      "rgb(234, 179, 8)",
+      "rgb(99, 102, 241)",
+      "rgb(236, 72, 153)",
+      "rgb(20, 184, 166)",
+      "rgb(249, 115, 22)",
+      "rgb(139, 92, 246)",
+    ];
+
     return {
-      labels: ["Petrol (PMS)", "Diesel (AGO)"],
+      labels: types.map(
+        (t) =>
+          (CANONICAL_FUEL_TYPES as any)[t]?.label ||
+          t.charAt(0).toUpperCase() + t.slice(1),
+      ),
       datasets: [
         {
-          data: [pms, ago],
-          backgroundColor: ["rgba(34, 197, 94, 0.8)", "rgba(234, 179, 8, 0.8)"],
-          borderColor: ["rgb(34, 197, 94)", "rgb(234, 179, 8)"],
+          data: types.map((t) => totals[t]),
+          backgroundColor: types.map((_, i) => colors[i % colors.length]),
+          borderColor: types.map(
+            (_, i) => borderColors[i % borderColors.length],
+          ),
           borderWidth: 2,
         },
       ],
@@ -399,7 +970,7 @@ export default function Dashboard() {
       });
     });
     const labels = Object.keys(expenseMap).slice(0, 6);
-    const data = labels.map(l => expenseMap[l]);
+    const data = labels.map((l) => expenseMap[l]);
     if (labels.length === 0) {
       labels.push("No Data");
       data.push(0);
@@ -408,7 +979,7 @@ export default function Dashboard() {
       labels,
       datasets: [
         {
-          label: "Amount (Ksh)",
+          label: `Amount (${currencySymbol})`,
           data,
           backgroundColor: [
             "rgba(59, 130, 246, 0.8)",
@@ -422,7 +993,7 @@ export default function Dashboard() {
         },
       ],
     };
-  }, [state.salesHistory]);
+  }, [state.salesHistory, currencySymbol]);
 
   const chartOptions = {
     responsive: true,
@@ -541,10 +1112,61 @@ export default function Dashboard() {
       color: "bg-rose-500 hover:bg-rose-600",
       desc: "View reports",
     },
+    {
+      label: "Credit",
+      icon: Wallet,
+      tab: "credit",
+      color: "bg-pink-500 hover:bg-pink-600",
+      desc: "Customer credit & debt reminders",
+    },
+    {
+      label: "STK Push",
+      icon: Smartphone,
+      tab: "livetransaction",
+      color: "bg-cyan-500 hover:bg-cyan-600",
+      desc: "Collect M-PESA payment",
+      payload: { openStkPush: true } as Partial<StkPushPrefill>,
+    },
+    {
+      label: "Expenses",
+      icon: Receipt,
+      tab: "expenses",
+      color: "bg-orange-500 hover:bg-orange-600",
+      desc: "Record an expense",
+    },
+    {
+      label: "Suppliers",
+      icon: Truck,
+      tab: "suppliers",
+      color: "bg-indigo-500 hover:bg-indigo-600",
+      desc: "Purchases & suppliers",
+    },
+    {
+      label: "Integration Hub",
+      icon: Plug,
+      tab: "integration",
+      color: "bg-teal-500 hover:bg-teal-600",
+      desc: "M-PESA / Kopo Kopo setup",
+    },
+    {
+      label: "Payroll",
+      icon: Users,
+      tab: "payroll",
+      color: "bg-fuchsia-500 hover:bg-fuchsia-600",
+      desc: "Employee payroll",
+    },
   ];
 
   const switchToTab = (tabId: string) => {
     window.dispatchEvent(new CustomEvent("changeTab", { detail: tabId }));
+  };
+
+  const launchAction = (action: (typeof quickActions)[number]) => {
+    if (action.payload) {
+      navigateToTab(action.tab, action.payload);
+    } else {
+      switchToTab(action.tab);
+    }
   };
 
   return (
@@ -560,14 +1182,16 @@ export default function Dashboard() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <SyncStatusIndicator
-            countryCode={location.currentCountry.id}
-            compact
-          />
+          <SyncStatusIndicator countryCode={stationCountry} compact />
+          {backendLoading && (
+            <span className="text-xs text-blue-500 animate-pulse hidden sm:inline">
+              syncing stats…
+            </span>
+          )}
           <div className="flex items-center gap-3 bg-white dark:bg-gray-800 rounded-xl px-4 py-2.5 shadow-sm border border-gray-200 dark:border-gray-700">
             <Clock size={18} className="text-blue-500" />
             <span className="text-sm font-mono text-gray-700 dark:text-gray-300">
-              {currentTime.toLocaleString("en-KE", {
+              {currentTime.toLocaleString(stationLocale, {
                 weekday: "short",
                 year: "numeric",
                 month: "short",
@@ -596,13 +1220,13 @@ export default function Dashboard() {
             </div>
           </div>
           <p className="text-2xl font-bold text-gray-900 dark:text-white">
-            Ksh {formatNumber(animatedValues.revenue, 0)}
+            {currencySymbol} {formatNumber(animatedValues.revenue, 0)}
           </p>
           <div className="flex items-center gap-1 mt-2">
             <ArrowUpRight size={14} className="text-green-500" />
             <span className="text-xs text-green-600 dark:text-green-400">
               {todaySales > 0
-                ? `Ksh ${formatNumber(todaySales)} today`
+                ? `${currencySymbol} ${formatNumber(todaySales)} today`
                 : "No sales today"}
             </span>
           </div>
@@ -632,7 +1256,7 @@ export default function Dashboard() {
           <p
             className={`text-2xl font-bold ${netProfit >= 0 ? "text-gray-900 dark:text-white" : "text-red-600 dark:text-red-400"}`}
           >
-            Ksh {formatNumber(animatedValues.profit, 0)}
+            {currencySymbol} {formatNumber(animatedValues.profit, 0)}
           </p>
           <div className="flex items-center gap-1 mt-2">
             {netProfit >= 0 ? (
@@ -642,7 +1266,7 @@ export default function Dashboard() {
             )}
             <span className="text-xs text-gray-500 dark:text-gray-400">
               {totalExpenses > 0
-                ? `Ksh ${formatNumber(totalExpenses)} expenses`
+                ? `${currencySymbol} ${formatNumber(totalExpenses)} expenses`
                 : "No expenses recorded"}
             </span>
           </div>
@@ -666,8 +1290,9 @@ export default function Dashboard() {
           <div className="flex items-center gap-1 mt-2">
             <Fuel size={14} className="text-blue-500" />
             <span className="text-xs text-gray-500 dark:text-gray-400">
-              PMS: {currencySymbol} {displayPmsPrice}/L | AGO: {currencySymbol}{" "}
-              {displayAgoPrice}/L
+              {priceCards
+                .map((c) => `${c.label}: ${currencySymbol} ${c.price ?? 0}/L`)
+                .join(" | ")}
             </span>
           </div>
         </div>
@@ -696,7 +1321,7 @@ export default function Dashboard() {
           <p
             className={`text-2xl font-bold ${totalDebt > 0 ? "text-red-600 dark:text-red-400" : "text-gray-900 dark:text-white"}`}
           >
-            Ksh {formatNumber(animatedValues.debt, 0)}
+            {currencySymbol} {formatNumber(animatedValues.debt, 0)}
           </p>
           <div className="flex items-center gap-1 mt-2">
             <Users size={14} className="text-gray-500" />
@@ -711,7 +1336,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         {/* Current Pump Prices */}
         <div
-          className={`rounded-xl p-3 border shadow-sm ${fuelPrice ? "bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/10 border-blue-200 dark:border-blue-800" : "bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700"}`}
+          className={`rounded-xl p-3 border shadow-sm ${effectiveFuelPrice ? "bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/10 border-blue-200 dark:border-blue-800" : "bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700"}`}
         >
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-200 flex items-center gap-2">
@@ -724,92 +1349,126 @@ export default function Dashboard() {
               Current Pump Prices
             </h3>
             <span className="text-[9px] bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full font-medium">
-              {fuelPrice?.priceSettingBody ||
-                location.currentCountry.fuelRegulations.priceSettingBody}
+              {effectiveFuelPrice?.priceSettingBody ||
+                stationCountryProfile.fuelRegulations.priceSettingBody}
             </span>
           </div>
           {/* Location-based price indicator */}
           <div className="mb-2 flex items-center gap-2">
-            {currentLocation && (
-              <span className="text-[10px] text-blue-600 dark:text-blue-400">
-                📍 {currentLocation.latitude.toFixed(4)}, {currentLocation.longitude.toFixed(4)}
-              </span>
-            )}
+            {currentLocation?.latitude != null &&
+              currentLocation?.longitude != null && (
+                <span className="text-[10px] text-blue-600 dark:text-blue-400">
+                  📍 {currentLocation.latitude.toFixed(4)},{" "}
+                  {currentLocation.longitude.toFixed(4)}
+                </span>
+              )}
             <span
               className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${isLocationBased ? "bg-green-100 dark:bg-green-800 text-green-700 dark:text-green-300" : "bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400"}`}
             >
               {isLocationBased
-                ? `📍 GPS: ${priceCityName} (${locationPrice.transportSurcharge >= 0 ? '+' : ''}${locationPrice.transportSurcharge.toFixed(2)})`
+                ? `📍 GPS: ${priceCityName} (${(Number(locationPrice?.transportSurcharge) || 0) >= 0 ? "+" : ""}${(Number(locationPrice?.transportSurcharge) || 0).toFixed(2)})`
                 : regionalPrice.isRegional
-                ? `EPRA ${regionalPrice.cityName} Price`
-                : `${stationCity} - National Average`}
+                  ? `${stationCountryProfile.fuelRegulations.priceSettingBody} ${regionalPrice.cityName} Price`
+                  : `${stationCity} - National Average`}
             </span>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="bg-white dark:bg-gray-800 rounded-lg p-3 text-center">
-              <p className="text-[10px] text-gray-500 uppercase tracking-wide">
-                Super Petrol
-              </p>
-              <p className="text-xl font-bold text-green-700 dark:text-green-400">
-                {currencySymbol} {displayPmsPrice.toFixed(2)}
-              </p>
-              <p className="text-[9px] text-gray-400">per litre</p>
-              {regionalPrice.isRegional && (
-                <p className="text-[9px] text-green-600 dark:text-green-400 mt-0.5">
-                  {regionalPrice.cityName}
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {priceCards.map((card) => (
+              <div
+                key={card.key}
+                className="bg-white dark:bg-gray-800 rounded-lg p-3 text-center"
+              >
+                <p className="text-[10px] text-gray-500 uppercase tracking-wide">
+                  {card.label}
                 </p>
-              )}
-            </div>
-            <div className="bg-white dark:bg-gray-800 rounded-lg p-3 text-center">
-              <p className="text-[10px] text-gray-500 uppercase tracking-wide">
-                Diesel
-              </p>
-              <p className="text-xl font-bold text-amber-700 dark:text-amber-400">
-                {currencySymbol} {displayAgoPrice.toFixed(2)}
-              </p>
-              <p className="text-[9px] text-gray-400">per litre</p>
-              {regionalPrice.isRegional && (
-                <p className="text-[9px] text-amber-600 dark:text-amber-400 mt-0.5">
-                  {regionalPrice.cityName}
+                <p className={`text-xl font-bold ${card.color}`}>
+                  {currencySymbol} {(card.price ?? 0).toFixed(2)}
                 </p>
-              )}
-            </div>
+                <p className="text-[9px] text-gray-400">per litre</p>
+                {isLocationBased ? (
+                  <p className={`text-[9px] mt-0.5 ${card.color}`}>
+                    {priceCityName}
+                  </p>
+                ) : regionalPrice.isRegional ? (
+                  <p className={`text-[9px] mt-0.5 ${card.color}`}>
+                    {regionalPrice.cityName}
+                  </p>
+                ) : null}
+              </div>
+            ))}
           </div>
-          {fuelPrice?.breakdown && (
+          {/* Fuel price interlinks — jump to the editor/finder/price-board so
+              a price change here is reflected everywhere, and vice-versa. */}
+          <div className="flex flex-wrap gap-1.5 mt-2">
+            <button
+              onClick={() =>
+                navigateToTab("fueltypes", {
+                  fuelType: CANONICAL_FUEL_TYPES.petrol.label,
+                  price: displayPmsPrice,
+                } as FuelPricePrefill)
+              }
+              className="text-[9px] px-2 py-1 rounded-lg bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-200 dark:hover:bg-indigo-800"
+              title="Edit fuel types & prices in Fuel Type Manager"
+            >
+              Edit Prices
+            </button>
+            <button
+              onClick={() =>
+                navigateToTab("fueltypes", {
+                  view: "priceboard",
+                } as FuelPricePrefill)
+              }
+              className="text-[9px] px-2 py-1 rounded-lg bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 hover:bg-purple-200"
+              title="Open Price Board"
+            >
+              Price Board
+            </button>
+            <button
+              onClick={() => navigateToTab("price-finder")}
+              className="text-[9px] px-2 py-1 rounded-lg bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300 hover:bg-teal-200"
+              title="Find nearby market fuel prices"
+            >
+              Find Prices
+            </button>
+          </div>
+          {effectiveFuelPrice?.breakdown && (
             <div className="mt-3 pt-3 border-t border-blue-200/50 dark:border-blue-800/30">
               <div className="grid grid-cols-3 gap-2 text-center">
                 <div>
                   <p className="text-[9px] text-gray-500">Landed Cost</p>
                   <p className="text-xs font-semibold text-gray-700 dark:text-gray-300">
-                    {currencySymbol} {fuelPrice.breakdown.landedCost.toFixed(2)}
+                    {currencySymbol}{" "}
+                    {effectiveFuelPrice.breakdown.landedCost.toFixed(2)}
                   </p>
                 </div>
                 <div>
                   <p className="text-[9px] text-gray-500">Taxes</p>
                   <p className="text-xs font-semibold text-gray-700 dark:text-gray-300">
-                    {currencySymbol} {fuelPrice.breakdown.taxes.toFixed(2)}
+                    {currencySymbol}{" "}
+                    {effectiveFuelPrice.breakdown.taxes.toFixed(2)}
                   </p>
                 </div>
                 <div>
                   <p className="text-[9px] text-gray-500">Margins</p>
                   <p className="text-xs font-semibold text-gray-700 dark:text-gray-300">
-                    {currencySymbol} {fuelPrice.breakdown.margins.toFixed(2)}
+                    {currencySymbol}{" "}
+                    {effectiveFuelPrice.breakdown.margins.toFixed(2)}
                   </p>
                 </div>
               </div>
             </div>
           )}
           <div className="flex items-center justify-between mt-3">
-            {fuelPrice ? (
+            {effectiveFuelPrice ? (
               <p className="text-[9px] text-gray-500 dark:text-gray-500">
                 Source:{" "}
                 <a
-                  href={fuelPrice.sourceUrl}
+                  href={effectiveFuelPrice.sourceUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-blue-500 hover:underline"
                 >
-                  {fuelPrice.sourceName}
+                  {effectiveFuelPrice.sourceName}
                 </a>
                 {isSyncing && (
                   <span className="ml-1 text-blue-400 animate-pulse">
@@ -826,8 +1485,8 @@ export default function Dashboard() {
               </button>
             )}
             <p className="text-[9px] text-gray-400">
-              {fuelPrice
-                ? new Date(fuelPrice.lastUpdated).toLocaleDateString()
+              {effectiveFuelPrice
+                ? new Date(effectiveFuelPrice.lastUpdated).toLocaleDateString()
                 : "Not synced"}
             </p>
           </div>
@@ -883,18 +1542,21 @@ export default function Dashboard() {
                 </span>
               </div>
             )}
-            <div className="flex justify-between text-xs">
-              <span className="text-gray-600 dark:text-gray-400">
-                Excise Duty/L
-              </span>
-              <span className="font-semibold text-gray-800 dark:text-gray-200">
-                {currencySymbol}{" "}
-                {(taxRates
-                  ? taxRates.exciseDutyPerLiter
-                  : location.revenueAuthority.exciseDuty
-                ).toFixed(2)}
-              </span>
-            </div>
+            {(() => {
+              const exciseDuty = taxRates
+                ? taxRates.exciseDutyPerLiter
+                : location.revenueAuthority.exciseDuty;
+              return exciseDuty > 0 ? (
+                <div className="flex justify-between text-xs">
+                  <span className="text-gray-600 dark:text-gray-400">
+                    Excise Duty/L
+                  </span>
+                  <span className="font-semibold text-gray-800 dark:text-gray-200">
+                    {currencySymbol} {exciseDuty.toFixed(2)}
+                  </span>
+                </div>
+              ) : null;
+            })()}
             <div className="flex justify-between text-xs">
               <span className="text-gray-600 dark:text-gray-400">
                 Min. Wage (monthly)
@@ -903,7 +1565,7 @@ export default function Dashboard() {
                 {currencySymbol}{" "}
                 {(
                   taxRates || location.payrollConfig
-                ).minimumWage.toLocaleString()}
+                ).minimumWage.toLocaleString(stationLocale)}
               </span>
             </div>
           </div>
@@ -921,7 +1583,7 @@ export default function Dashboard() {
 
         {/* Regulatory Alerts */}
         <div className="bg-white dark:bg-gray-800 rounded-xl p-3 border border-gray-200 dark:border-gray-700 shadow-sm">
-          <RegulatoryAlerts countryCode={location.currentCountry.id} />
+          <RegulatoryAlerts countryCode={stationCountry} />
         </div>
       </div>
 
@@ -935,7 +1597,7 @@ export default function Dashboard() {
               Sales Trend (Last 7 Days)
             </h3>
             <span className="text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
-              Ksh
+              {currencySymbol}
             </span>
           </div>
           <div className="h-64">
@@ -952,37 +1614,20 @@ export default function Dashboard() {
           <div className="h-48">
             <Doughnut data={fuelDistData} options={doughnutOptions} />
           </div>
-          <div className="mt-4 grid grid-cols-2 gap-2 text-center">
-            <div
-              className={`rounded-lg p-2 ${fuelPrice ? "bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800" : "bg-gray-50 dark:bg-gray-700/30"}`}
-            >
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                PMS Price
-              </p>
-              <p className="font-semibold text-green-700 dark:text-green-300">
-                {currencySymbol} {displayPmsPrice}/L
-              </p>
-              {fuelPrice && (
-                <p className="text-[9px] text-green-600 dark:text-green-400 mt-0.5 flex items-center justify-center gap-0.5">
-                  <Globe size={8} /> Auto-synced
+          <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-2 text-center">
+            {priceCards.map((card) => (
+              <div
+                key={card.key}
+                className="rounded-lg p-2 bg-gray-50 dark:bg-gray-700/30 border border-gray-200 dark:border-gray-700"
+              >
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  {card.label} Price
                 </p>
-              )}
-            </div>
-            <div
-              className={`rounded-lg p-2 ${fuelPrice ? "bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800" : "bg-gray-50 dark:bg-gray-700/30"}`}
-            >
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                AGO Price
-              </p>
-              <p className="font-semibold text-amber-700 dark:text-amber-300">
-                {currencySymbol} {displayAgoPrice}/L
-              </p>
-              {fuelPrice && (
-                <p className="text-[9px] text-amber-600 dark:text-amber-400 mt-0.5 flex items-center justify-center gap-0.5">
-                  <Globe size={8} /> Auto-synced
+                <p className={`font-semibold ${card.color}`}>
+                  {currencySymbol} {card.price ?? 0}/L
                 </p>
-              )}
-            </div>
+              </div>
+            ))}
           </div>
         </div>
       </div>
@@ -1007,10 +1652,10 @@ export default function Dashboard() {
             Quick Actions
           </h3>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {quickActions.map(action => (
+            {quickActions.map((action) => (
               <button
                 key={action.label}
-                onClick={() => switchToTab(action.tab)}
+                onClick={() => launchAction(action)}
                 className={`${action.color} text-white rounded-xl p-4 text-left transition-all hover:scale-[1.02] active:scale-[0.98] shadow-sm`}
               >
                 <action.icon size={24} className="mb-2 opacity-90" />
@@ -1022,62 +1667,43 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Tank Levels */}
+      {/* Tank Levels — dynamic per fuel type (was hardcoded to only
+          Super Petrol Tank + Diesel Tank). */}
       <div className="bg-white dark:bg-gray-800 rounded-xl p-3 shadow-sm border border-gray-200 dark:border-gray-700">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
           <Fuel size={18} className="text-blue-500" />
           Tank Levels
         </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {/* PMS Tank */}
-          <div>
-            <div className="flex justify-between items-center mb-2">
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                Petrol (PMS) Tank
-              </span>
-              <span className="text-xs text-gray-500 dark:text-gray-400">
-                {formatNumber(state.pmsTankClosing - state.pmsTankOpening, 0)} L
-                dispensed
-              </span>
-            </div>
-            <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-green-400 to-green-600 rounded-full transition-all duration-500"
-                style={{
-                  width: `${Math.min(100, state.pmsTankClosing > 0 ? (state.pmsTankClosing / (state.pmsTankClosing + 5000)) * 100 : 0)}%`,
-                }}
-              />
-            </div>
-            <div className="flex justify-between mt-1 text-xs text-gray-500 dark:text-gray-400">
-              <span>Opening: {formatNumber(state.pmsTankOpening)} L</span>
-              <span>Closing: {formatNumber(state.pmsTankClosing)} L</span>
-            </div>
-          </div>
-
-          {/* AGO Tank */}
-          <div>
-            <div className="flex justify-between items-center mb-2">
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                Diesel (AGO) Tank
-              </span>
-              <span className="text-xs text-gray-500 dark:text-gray-400">
-                {formatNumber(state.agoTankClosing - state.agoTankOpening, 0)} L
-                dispensed
-              </span>
-            </div>
-            <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-amber-400 to-amber-600 rounded-full transition-all duration-500"
-                style={{
-                  width: `${Math.min(100, state.agoTankClosing > 0 ? (state.agoTankClosing / (state.agoTankClosing + 5000)) * 100 : 0)}%`,
-                }}
-              />
-            </div>
-            <div className="flex justify-between mt-1 text-xs text-gray-500 dark:text-gray-400">
-              <span>Opening: {formatNumber(state.agoTankOpening)} L</span>
-              <span>Closing: {formatNumber(state.agoTankClosing)} L</span>
-            </div>
-          </div>
+        <div
+          className={`grid gap-3 ${tankLevelCards.length > 2 ? "grid-cols-1 md:grid-cols-3" : "grid-cols-1 md:grid-cols-2"}`}
+        >
+          {tankLevelCards.map((card) => {
+            const dispensed = card.closing - card.opening;
+            return (
+              <div key={card.key}>
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {card.label} Tank
+                  </span>
+                  <span className="text-xs text-gray-500 dark:text-gray-400">
+                    {formatNumber(dispensed, 0)} L dispensed
+                  </span>
+                </div>
+                <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full bg-gradient-to-r ${card.barClass} rounded-full transition-all duration-500`}
+                    style={{
+                      width: `${tankFillPercent(card.opening, card.closing)}%`,
+                    }}
+                  />
+                </div>
+                <div className="flex justify-between mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  <span>Opening: {formatNumber(card.opening)} L</span>
+                  <span>Closing: {formatNumber(card.closing)} L</span>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -1088,22 +1714,17 @@ export default function Dashboard() {
           Pump Status
         </h3>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div className="text-center p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
-            <p className="text-2xl font-bold text-green-700 dark:text-green-300">
-              {state.pmsPumps.length}
-            </p>
-            <p className="text-xs text-gray-500 dark:text-gray-400">
-              PMS Pumps
-            </p>
-          </div>
-          <div className="text-center p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
-            <p className="text-2xl font-bold text-amber-700 dark:text-amber-300">
-              {state.agoPumps.length}
-            </p>
-            <p className="text-xs text-gray-500 dark:text-gray-400">
-              AGO Pumps
-            </p>
-          </div>
+          {pumpStatusCards.map((card) => (
+            <div
+              key={card.key}
+              className={`text-center p-3 ${card.bg} rounded-lg`}
+            >
+              <p className={`text-2xl font-bold ${card.text}`}>{card.count}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                {card.label} Pumps
+              </p>
+            </div>
+          ))}
           <div className="text-center p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
             <p className="text-2xl font-bold text-blue-700 dark:text-blue-300">
               {Object.keys(state.invoices).length}

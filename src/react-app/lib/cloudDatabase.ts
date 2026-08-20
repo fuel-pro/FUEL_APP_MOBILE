@@ -1,9 +1,9 @@
 /**
  * Cloud Database - FuelPro
- * 
+ *
  * This module provides a complete cloud-synced database using Supabase.
  * All data is stored in Supabase and syncs in real-time across all devices.
- * 
+ *
  * Setup Required:
  * 1. Create a Supabase project at https://supabase.com
  * 2. Get the URL and anon key from Project Settings > API
@@ -18,8 +18,12 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
 // CONFIGURATION
 // ═══════════════════════════════════════════════════
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://placeholder.supabase.co";
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "placeholder-key";
+const SUPABASE_URL =
+  import.meta.env.VITE_SUPABASE_URL ||
+  "https://ojjscjwatikixlpshmub.supabase.co";
+const SUPABASE_ANON_KEY =
+  import.meta.env.VITE_SUPABASE_ANON_KEY ||
+  "sb_publishable_-uUkeBG1KzESv3O4v90rcw_jY9NxTc4";
 
 let supabase: SupabaseClient | null = null;
 let isInitialized = false;
@@ -30,32 +34,43 @@ let isInitialized = false;
 
 export async function initCloudDatabase(): Promise<boolean> {
   if (isInitialized) return !!supabase;
-  
+
   try {
     // Check if Supabase is configured
-    if (!SUPABASE_URL.includes("supabase.co") || SUPABASE_ANON_KEY === "placeholder-key") {
+    if (
+      !SUPABASE_URL.includes("supabase.co") ||
+      SUPABASE_ANON_KEY === "placeholder-key"
+    ) {
       console.warn("Cloud Database: Supabase not configured, using mock mode");
       return false;
     }
-    
+
     supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       auth: {
         persistSession: true,
         autoRefreshToken: true,
       },
     });
-    
+
     // Test connection
-    const { data, error } = await supabase.from("_health").select("id").limit(1);
+    const { data, error } = await supabase
+      .from("_health")
+      .select("id")
+      .limit(1);
     if (error) {
       console.warn("Cloud Database: Connection test failed", error.message);
       // Try alternative tables
-      const { error: altError } = await supabase.from("stations").select("id").limit(1);
+      const { error: altError } = await supabase
+        .from("stations")
+        .select("id")
+        .limit(1);
       if (altError) {
-        console.warn("Cloud Database: No tables found, will create on first use");
+        console.warn(
+          "Cloud Database: No tables found, will create on first use",
+        );
       }
     }
-    
+
     isInitialized = true;
     console.log("Cloud Database: Connected successfully");
     return true;
@@ -83,7 +98,7 @@ export async function cloudCreate(
   collection: string,
   data: Record<string, any>,
   userId?: string,
-  stationId?: string
+  stationId?: string,
 ): Promise<{ success: boolean; id?: string; error?: string }> {
   const connected = await initCloudDatabase();
   if (!connected || !supabase) {
@@ -113,7 +128,7 @@ export async function cloudCreate(
 
 export async function cloudRead(
   collection: string,
-  id: string
+  id: string,
 ): Promise<{ success: boolean; data?: any; error?: string }> {
   const connected = await initCloudDatabase();
   if (!connected || !supabase) {
@@ -140,7 +155,7 @@ export async function cloudRead(
 export async function cloudUpdate(
   collection: string,
   id: string,
-  data: Record<string, any>
+  data: Record<string, any>,
 ): Promise<{ success: boolean; error?: string }> {
   const connected = await initCloudDatabase();
   if (!connected || !supabase) {
@@ -165,7 +180,7 @@ export async function cloudUpdate(
 
 export async function cloudDelete(
   collection: string,
-  id: string
+  id: string,
 ): Promise<{ success: boolean; error?: string }> {
   const connected = await initCloudDatabase();
   if (!connected || !supabase) {
@@ -187,7 +202,7 @@ export async function cloudDelete(
 
 export async function cloudList(
   collection: string,
-  filter?: { userId?: string; stationId?: string; limit?: number }
+  filter?: { userId?: string; stationId?: string; limit?: number },
 ): Promise<{ success: boolean; data?: any[]; error?: string }> {
   const connected = await initCloudDatabase();
   if (!connected || !supabase) {
@@ -196,7 +211,7 @@ export async function cloudList(
 
   try {
     let query = supabase.from(collection).select("*");
-    
+
     if (filter?.userId) {
       query = query.eq("user_id", filter.userId);
     }
@@ -355,7 +370,9 @@ export function getCloudDatabaseStatus(): {
 } {
   return {
     connected: !!supabase,
-    configured: SUPABASE_URL.includes("supabase.co") && SUPABASE_ANON_KEY !== "placeholder-key",
+    configured:
+      SUPABASE_URL.includes("supabase.co") &&
+      SUPABASE_ANON_KEY !== "placeholder-key",
     url: SUPABASE_URL,
     provider: "supabase",
   };

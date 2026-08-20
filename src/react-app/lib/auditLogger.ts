@@ -206,7 +206,7 @@ export class AuditLogger {
     this.saveToStorage();
 
     // Notify listeners
-    this.listeners.forEach(listener => listener(entry));
+    this.listeners.forEach((listener) => listener(entry));
 
     // Console output in development
     if (import.meta.env.DEV) {
@@ -273,33 +273,33 @@ export class AuditLogger {
 
     if (filter) {
       if (filter.startDate) {
-        results = results.filter(l => l.timestamp >= filter.startDate!);
+        results = results.filter((l) => l.timestamp >= filter.startDate!);
       }
       if (filter.endDate) {
-        results = results.filter(l => l.timestamp <= filter.endDate!);
+        results = results.filter((l) => l.timestamp <= filter.endDate!);
       }
       if (filter.userId) {
-        results = results.filter(l => l.userId === filter.userId);
+        results = results.filter((l) => l.userId === filter.userId);
       }
       if (filter.action) {
-        results = results.filter(l => l.action === filter.action);
+        results = results.filter((l) => l.action === filter.action);
       }
       if (filter.severity) {
-        results = results.filter(l => l.severity === filter.severity);
+        results = results.filter((l) => l.severity === filter.severity);
       }
       if (filter.targetType) {
-        results = results.filter(l => l.targetType === filter.targetType);
+        results = results.filter((l) => l.targetType === filter.targetType);
       }
       if (filter.success !== undefined) {
-        results = results.filter(l => l.success === filter.success);
+        results = results.filter((l) => l.success === filter.success);
       }
       if (filter.search) {
         const search = filter.search.toLowerCase();
         results = results.filter(
-          l =>
+          (l) =>
             l.description.toLowerCase().includes(search) ||
             l.userEmail.toLowerCase().includes(search) ||
-            l.action.toLowerCase().includes(search)
+            l.action.toLowerCase().includes(search),
         );
       }
     }
@@ -309,19 +309,19 @@ export class AuditLogger {
   }
 
   getLogById(id: string): AuditLogEntry | undefined {
-    return this.logs.find(l => l.id === id);
+    return this.logs.find((l) => l.id === id);
   }
 
   getLogsByUser(userId: string, limit = 50): AuditLogEntry[] {
     return this.logs
-      .filter(l => l.userId === userId)
+      .filter((l) => l.userId === userId)
       .sort((a, b) => b.timestamp.localeCompare(a.timestamp))
       .slice(0, limit);
   }
 
   getLogsByTarget(targetType: string, targetId: string): AuditLogEntry[] {
     return this.logs
-      .filter(l => l.targetType === targetType && l.targetId === targetId)
+      .filter((l) => l.targetType === targetType && l.targetId === targetId)
       .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
   }
 
@@ -333,7 +333,7 @@ export class AuditLogger {
 
   getCriticalLogs(): AuditLogEntry[] {
     return this.logs
-      .filter(l => l.severity === "critical" || l.severity === "error")
+      .filter((l) => l.severity === "critical" || l.severity === "error")
       .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
   }
 
@@ -349,7 +349,7 @@ export class AuditLogger {
 
     if (dateRange) {
       logs = logs.filter(
-        l => l.timestamp >= dateRange.start && l.timestamp <= dateRange.end
+        (l) => l.timestamp >= dateRange.start && l.timestamp <= dateRange.end,
       );
     }
 
@@ -358,7 +358,7 @@ export class AuditLogger {
     const byUser: Record<string, number> = {};
     let failedActions = 0;
 
-    logs.forEach(log => {
+    logs.forEach((log) => {
       byAction[log.action] = (byAction[log.action] || 0) + 1;
       bySeverity[log.severity] = (bySeverity[log.severity] || 0) + 1;
       byUser[log.userEmail] = (byUser[log.userEmail] || 0) + 1;
@@ -400,7 +400,7 @@ export class AuditLogger {
       "IP Address",
     ];
 
-    const rows = this.logs.map(log => [
+    const rows = this.logs.map((log) => [
       log.id,
       log.timestamp,
       log.action,
@@ -414,7 +414,7 @@ export class AuditLogger {
       log.ipAddress || "",
     ]);
 
-    return [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
+    return [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
   }
 
   // ─── Listeners ───
@@ -448,7 +448,7 @@ export const auditLog = {
 
   userCreate: (
     user: AdminUser,
-    newUser: { id: string; email: string; name: string }
+    newUser: { id: string; email: string; name: string },
   ) => {
     AuditLogger.getInstance().log({
       action: "USER_CREATE",
@@ -463,7 +463,7 @@ export const auditLog = {
   userUpdate: (
     user: AdminUser,
     targetUser: { id: string; email: string },
-    changes: Record<string, { old: any; new: any }>
+    changes: Record<string, { old: any; new: any }>,
   ) => {
     AuditLogger.getInstance().log({
       action: "USER_UPDATE",
@@ -492,7 +492,7 @@ export const auditLog = {
     user: AdminUser,
     targetUser: { id: string; email: string },
     oldRole: string,
-    newRole: string
+    newRole: string,
   ) => {
     AuditLogger.getInstance().log({
       action: "USER_ROLE_CHANGE",
@@ -508,7 +508,7 @@ export const auditLog = {
 
   settingsUpdate: (
     user: AdminUser,
-    changes: Record<string, { old: any; new: any }>
+    changes: Record<string, { old: any; new: any }>,
   ) => {
     AuditLogger.getInstance().log({
       action: "SETTINGS_UPDATE",
@@ -533,7 +533,7 @@ export const auditLog = {
   stationUpdate: (
     user: AdminUser,
     station: { id: string; name: string },
-    changes: Record<string, { old: any; new: any }>
+    changes: Record<string, { old: any; new: any }>,
   ) => {
     AuditLogger.getInstance().log({
       action: "STATION_UPDATE",

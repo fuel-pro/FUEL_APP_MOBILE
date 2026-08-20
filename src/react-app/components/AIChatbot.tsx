@@ -15,6 +15,8 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { useFuel } from "@/react-app/context/FuelContext";
+import { getCurrencySymbol, isKenyaStation } from "@/react-app/lib/currency";
+import { useStationFuelTypes } from "@/react-app/hooks/useStationFuelTypes";
 
 // Declare Speech Recognition types
 declare global {
@@ -52,14 +54,17 @@ interface Message {
 
 export default function AIChatbot() {
   const { state } = useFuel();
+  // Unified fuel types so the AI assistant knows about ALL the station's
+  // configured fuels (and their live prices), not just petrol/diesel.
+  const fuelTypeApi = useStationFuelTypes();
+  const mobilePayTerm = isKenyaStation() ? "M-PESA" : "digital payments";
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "1",
       type: "assistant",
-      content:
-        "Hello! I'm your FuelPro AI Assistant powered by Google Gemini. I have access to all your business data - sales, deliveries, invoices, M-PESA transactions, payroll, and more. Ask me anything about your fuel station operations!",
+      content: `Hello! I'm your FuelPro AI Assistant powered by Google Gemini. I have access to all your business data - sales, deliveries, invoices, ${mobilePayTerm} transactions, payroll, and more. Ask me anything about your fuel station operations!`,
       timestamp: new Date(),
     },
   ]);
@@ -72,7 +77,7 @@ export default function AIChatbot() {
     "connected" | "error" | "checking"
   >("connected");
   const [lastFailedMessage, setLastFailedMessage] = useState<string | null>(
-    null
+    null,
   );
   const [retryCount, setRetryCount] = useState(0);
 
@@ -85,7 +90,7 @@ export default function AIChatbot() {
     const context: any = {
       timestamp: new Date().toISOString(),
       businessName: state.companyData.name || "Fuel Station",
-      currency: state.companyData.currency || "Ksh",
+      currency: state.companyData.currency || getCurrencySymbol() || "USD",
       theme: state.theme,
       currentDate: state.salesDate,
       currentShift: state.shift,
@@ -93,8 +98,8 @@ export default function AIChatbot() {
 
     // Available Tabs Configuration (for AI to know what features exist)
     context.availableTabs = state.tabConfigurations
-      .filter(t => t.visible)
-      .map(t => ({ id: t.id, name: t.label, description: t.description }));
+      .filter((t) => t.visible)
+      .map((t) => ({ id: t.id, name: t.label, description: t.description }));
 
     // Company Information (complete)
     context.company = {
@@ -118,12 +123,18 @@ export default function AIChatbot() {
         : null,
     };
 
-    // Fuel Prices & Tank Levels
+    // Fuel Prices & Tank Levels — enriched with ALL station fuel types so the
+    // AI can answer questions about any fuel the station sells (not just PMS/AGO).
     context.fuelPrices = {
       petrol: state.petrolPrice || state.pmsPrice,
       diesel: state.dieselPrice || state.agoPrice,
       pms: state.pmsPrice,
       ago: state.agoPrice,
+      allFuelTypes: fuelTypeApi.activeFuelTypes.map((ft) => ({
+        name: ft.name,
+        price: ft.price,
+        active: ft.active,
+      })),
     };
 
     context.tankLevels = {
@@ -142,23 +153,23 @@ export default function AIChatbot() {
     // TODAY'S SALES - Full pump details
     const pmsTotal = state.pmsPumps.reduce(
       (sum, p) => sum + (Number(p.salesKsh) || 0),
-      0
+      0,
     );
     const agoTotal = state.agoPumps.reduce(
       (sum, p) => sum + (Number(p.salesKsh) || 0),
-      0
+      0,
     );
     const pmsLitres = state.pmsPumps.reduce(
       (sum, p) => sum + (Number(p.salesL) || 0),
-      0
+      0,
     );
     const agoLitres = state.agoPumps.reduce(
       (sum, p) => sum + (Number(p.salesL) || 0),
-      0
+      0,
     );
     const totalExpenses = state.expenses.reduce(
       (sum, e) => sum + (Number(e.amount) || 0),
-      0
+      0,
     );
 
     context.todaySales = {
@@ -192,15 +203,15 @@ export default function AIChatbot() {
       const deliveries = state.deliveryData.rows;
       const totalSupplied = deliveries.reduce(
         (sum, d) => sum + (Number(d.amount) || 0),
-        0
+        0,
       );
       const totalDebt = deliveries.reduce(
         (sum, d) => sum + (Number(d.debt) || 0),
-        0
+        0,
       );
-      const uniqueCustomers = [...new Set(deliveries.map(d => d.name))].filter(
-        n => n
-      );
+      const uniqueCustomers = [
+        ...new Set(deliveries.map((d) => d.name)),
+      ].filter((n) => n);
 
       context.deliveryTracker = {
         totalRecords: deliveries.length,
@@ -225,10 +236,10 @@ export default function AIChatbot() {
           balance: data.balance || 0,
           deliveryCount: data.deliveries?.length || 0,
           recentDeliveries: data.deliveries?.slice(-3),
-        })
+        }),
       );
 
-      const clientsWithDebt = clientsList.filter(c => c.balance > 0);
+      const clientsWithDebt = clientsList.filter((c) => c.balance > 0);
 
       context.clients = {
         totalClients: clientsList.length,
@@ -246,7 +257,7 @@ export default function AIChatbot() {
       currentItems: state.invoiceItems,
       currentTotal: state.invoiceItems.reduce(
         (sum, item) => sum + (Number(item.total) || 0),
-        0
+        0,
       ),
       invoiceCounter: state.invoiceCounter,
       invoiceSettings: state.invoiceSettings,
@@ -266,15 +277,15 @@ export default function AIChatbot() {
     if (state.offloadingRecords.length > 0) {
       const totalOffloaded = state.offloadingRecords.reduce(
         (sum, r) => sum + (Number(r.quantity) || 0),
-        0
+        0,
       );
       const totalCost = state.offloadingRecords.reduce(
         (sum, r) => sum + (Number(r.totalAmount) || 0),
-        0
+        0,
       );
       const suppliers = [
-        ...new Set(state.offloadingRecords.map(r => r.supplier)),
-      ].filter(s => s);
+        ...new Set(state.offloadingRecords.map((r) => r.supplier)),
+      ].filter((s) => s);
 
       context.offloading = {
         totalRecords: state.offloadingRecords.length,
@@ -289,7 +300,7 @@ export default function AIChatbot() {
     if (state.mpesaTransactions.length > 0) {
       const totalMpesa = state.mpesaTransactions.reduce(
         (sum, t) => sum + (Number(t.amount) || 0),
-        0
+        0,
       );
       context.mpesaTransactions = {
         totalTransactions: state.mpesaTransactions.length,
@@ -302,16 +313,16 @@ export default function AIChatbot() {
     if (state.employees.length > 0) {
       const totalPayroll = state.employees.reduce(
         (sum, e) => sum + (Number(e.basicSalary) || 0),
-        0
+        0,
       );
-      const activeEmployees = state.employees.filter(e => e.isActive);
+      const activeEmployees = state.employees.filter((e) => e.isActive);
 
       context.payroll = {
         totalEmployees: state.employees.length,
         activeEmployees: activeEmployees.length,
         totalMonthlyPayroll: totalPayroll,
-        positions: [...new Set(state.employees.map(e => e.position))].filter(
-          r => r
+        positions: [...new Set(state.employees.map((e) => e.position))].filter(
+          (r) => r,
         ),
         employees: state.employees,
         payrollRecords: state.payrollRecords.slice(-20),
@@ -321,7 +332,7 @@ export default function AIChatbot() {
     // SALES HISTORY - Historical records
     if (Object.keys(state.salesHistory).length > 0) {
       const salesDates = Object.keys(state.salesHistory).sort();
-      const recentSales = salesDates.slice(-10).map(key => ({
+      const recentSales = salesDates.slice(-10).map((key) => ({
         key,
         ...state.salesHistory[key],
       }));
@@ -413,7 +424,7 @@ export default function AIChatbot() {
   // Local AI response generator - analyzes business data and generates intelligent responses
   const generateLocalResponse = (message: string, context: any): string => {
     const lowerMsg = message.toLowerCase();
-    const currency = context.currency || "Ksh";
+    const currency = context.currency || getCurrencySymbol();
     const {
       todaySales,
       deliveryTracker,
@@ -433,9 +444,34 @@ export default function AIChatbot() {
         lowerMsg.includes("income"))
     ) {
       if (!todaySales || todaySales.totalRevenue === 0) {
-        return `**Today's Sales Summary**\n\nNo sales have been recorded for today (${context.currentDate}).\n\nTo record sales:\n1. Go to **Sales Tracking** tab\n2. Enter pump opening and closing readings\n3. Add any expenses\n4. Save the data\n\nCurrent fuel prices:\n• Petrol (PMS): ${currency} ${fuelPrices?.petrol || "N/A"}/L\n• Diesel (AGO): ${currency} ${fuelPrices?.diesel || "N/A"}/L`;
+        const fuelLines = fuelTypeApi.activeFuelTypes
+          .map(
+            (ft) =>
+              `• ${fuelTypeApi.labelOf(ft.name)}: ${currency} ${fuelTypeApi.getPriceFor(ft.name) ?? "N/A"}/L`,
+          )
+          .join("\n");
+        return `**Today's Sales Summary**\n\nNo sales have been recorded for today (${context.currentDate}).\n\nTo record sales:\n1. Go to **Sales Tracking** tab\n2. Enter pump opening and closing readings\n3. Add any expenses\n4. Save the data\n\nCurrent fuel prices:\n${fuelLines}`;
       }
-      return `**Today's Sales Summary**\n\n**Date:** ${todaySales.date} (${todaySales.shift} Shift)\n\n**Petrol (PMS):**\n• Litres: ${todaySales.petrol?.litres?.toLocaleString() || 0} L\n• Amount: ${currency} ${todaySales.petrol?.amount?.toLocaleString() || 0}\n• Pumps: ${todaySales.petrol?.pumpCount || 0}\n\n🛢️ **Diesel (AGO):**\n• Litres: ${todaySales.diesel?.litres?.toLocaleString() || 0} L\n• Amount: ${currency} ${todaySales.diesel?.amount?.toLocaleString() || 0}\n• Pumps: ${todaySales.diesel?.pumpCount || 0}\n\n💰 **Totals:**\n• Total Revenue: ${currency} ${todaySales.totalRevenue?.toLocaleString()}\n• Till/M-Pesa: ${currency} ${todaySales.tillPayment?.toLocaleString()}\n• Total Expenses: ${currency} ${todaySales.totalExpenses?.toLocaleString()}\n• Cash in Hand: ${currency} ${todaySales.cashInHand?.toLocaleString()}\n• Net Income: ${currency} ${todaySales.netIncome?.toLocaleString()}`;
+      // Per-fuel sales block: each active station fuel type gets its own line.
+      // PMS/AGO resolve to todaySales.petrol/diesel (which carry litres/amount/
+      // pumpCount); other fuels fall back to their configured price only.
+      const salesFuelBlock = fuelTypeApi.activeFuelTypes
+        .map((ft) => {
+          const canonical = fuelTypeApi.canonicalOf(ft.name);
+          const sales =
+            canonical === "petrol"
+              ? todaySales.petrol
+              : canonical === "diesel"
+                ? todaySales.diesel
+                : null;
+          const label = fuelTypeApi.labelOf(ft.name);
+          if (sales) {
+            return `**${label}:**\n• Litres: ${sales?.litres?.toLocaleString() || 0} L\n• Amount: ${currency} ${sales?.amount?.toLocaleString() || 0}\n• Pumps: ${sales?.pumpCount || 0}`;
+          }
+          return `**${label}:**\n• Price: ${currency} ${fuelTypeApi.getPriceFor(ft.name) ?? "N/A"}/L`;
+        })
+        .join("\n\n");
+      return `**Today's Sales Summary**\n\n**Date:** ${todaySales.date} (${todaySales.shift} Shift)\n\n${salesFuelBlock}\n\n💰 **Totals:**\n• Total Revenue: ${currency} ${todaySales.totalRevenue?.toLocaleString()}\n• Till/M-Pesa: ${currency} ${todaySales.tillPayment?.toLocaleString()}\n• Total Expenses: ${currency} ${todaySales.totalExpenses?.toLocaleString()}\n• Cash in Hand: ${currency} ${todaySales.cashInHand?.toLocaleString()}\n• Net Income: ${currency} ${todaySales.netIncome?.toLocaleString()}`;
     }
 
     // Debt queries
@@ -445,7 +481,7 @@ export default function AIChatbot() {
       lowerMsg.includes("owe")
     ) {
       if (!deliveryTracker || deliveryTracker.totalDebt === 0) {
-        return `**Debt Status**\n\nNo outstanding debts recorded.\n\nTo track customer debts:\n1. Go to **Delivery Tracker** tab\n2. Add deliveries with customer names\n3. The system will auto-calculate balances\n\nYou can also use the **Debt Reminder** tab to send payment reminders.`;
+        return `**Debt Status**\n\nNo outstanding debts recorded.\n\nTo track customer debts:\n1. Go to **Fuel Statement Report** tab\n2. Add deliveries with customer names\n3. The system will auto-calculate balances\n\nYou can also use the **Debt Payment Reminders** sub-tab (Credit Management) to send payment reminders.`;
       }
       return `**Outstanding Debts Summary**\n\n• Total Balance Due: ${currency} ${deliveryTracker.totalDebt?.toLocaleString()}\n• Total Records: ${deliveryTracker.totalRecords}\n• Unique Customers: ${deliveryTracker.uniqueCustomers}\n• Delivered To: ${deliveryTracker.deliveredTo || "N/A"}\n\n💡 Tip: Use the **Debt Reminder** tab to generate payment reminder letters.`;
     }
@@ -457,7 +493,32 @@ export default function AIChatbot() {
 
     // Fuel price queries
     if (lowerMsg.includes("price") || lowerMsg.includes("fuel")) {
-      return `**Current Fuel Prices & Tank Levels**\n\n**Prices:**\n• Petrol (PMS): ${currency} ${fuelPrices?.pms || "N/A"}/L\n• Diesel (AGO): ${currency} ${fuelPrices?.ago || "N/A"}/L\n\n**Tank Levels:**\n• PMS Tank: Opening ${tankLevels?.pms?.opening || 0}L → Closing ${tankLevels?.pms?.closing || 0}L\n• AGO Tank: Opening ${tankLevels?.ago?.opening || 0}L → Closing ${tankLevels?.ago?.closing || 0}L\n\n**Consumption:**\n• PMS: ${(tankLevels?.pms?.opening || 0) - (tankLevels?.pms?.closing || 0)} Litres dispensed\n• AGO: ${(tankLevels?.ago?.opening || 0) - (tankLevels?.ago?.closing || 0)} Litres dispensed`;
+      const allFuelLines = fuelTypeApi.activeFuelTypes
+        .map(
+          (ft) =>
+            `• ${fuelTypeApi.labelOf(ft.name)}: ${currency} ${fuelTypeApi.getPriceFor(ft.name) ?? "N/A"}/L`,
+        )
+        .join("\n");
+      // Per-fuel tank level / consumption lines. PMS/AGO resolve to the
+      // legacy tankLevels.{pms,ago}; other fuels have no tank record yet.
+      const tankLines = fuelTypeApi.activeFuelTypes
+        .map((ft) => {
+          const canonical = fuelTypeApi.canonicalOf(ft.name);
+          const tank =
+            canonical === "petrol"
+              ? tankLevels?.pms
+              : canonical === "diesel"
+                ? tankLevels?.ago
+                : null;
+          const label = fuelTypeApi.labelOf(ft.name);
+          if (tank) {
+            const dispensed = (tank.opening || 0) - (tank.closing || 0);
+            return `• ${label}: Opening ${tank.opening || 0}L → Closing ${tank.closing || 0}L (${dispensed} Litres dispensed)`;
+          }
+          return `• ${label}: tank data not configured`;
+        })
+        .join("\n");
+      return `**Current Fuel Prices & Tank Levels**\n\n**Prices:**\n${allFuelLines}\n\n**Tank Levels & Consumption:**\n${tankLines}`;
     }
 
     // Payroll queries
@@ -505,7 +566,25 @@ export default function AIChatbot() {
       lowerMsg.includes("status") ||
       lowerMsg.includes("business")
     ) {
-      return `**Business Overview - ${context.businessName}**\n\n**Sales:**\n• Today's Revenue: ${currency} ${todaySales?.totalRevenue?.toLocaleString() || 0}\n• PMS Sales: ${currency} ${todaySales?.petrol?.amount?.toLocaleString() || 0}\n• AGO Sales: ${currency} ${todaySales?.diesel?.amount?.toLocaleString() || 0}\n\n💰 **Financials:**\n• Outstanding Debt: ${currency} ${deliveryTracker?.totalDebt?.toLocaleString() || 0}\n• Total Expenses Today: ${currency} ${todaySales?.totalExpenses?.toLocaleString() || 0}\n• Saved Invoices: ${invoices?.savedInvoices || 0}\n\n**Fuel:**\n• PMS Price: ${currency} ${fuelPrices?.pms}/L\n• AGO Price: ${currency} ${fuelPrices?.ago}/L\n• PMS Pumps: ${todaySales?.petrol?.pumpCount || 0}\n• AGO Pumps: ${todaySales?.diesel?.pumpCount || 0}\n\n👥 **Staff:** ${payroll?.totalEmployees || 0} employees\n🚛 **Offloading:** ${offloading?.totalRecords || 0} records\n📅 **Sales History:** ${salesHistory?.totalDaysRecorded || 0} days recorded`;
+      // Per-fuel sales/pump summary lines for ALL active station fuels. PMS/
+      // AGO resolve to todaySales.petrol/diesel; others report their price.
+      const salesOverviewLines = fuelTypeApi.activeFuelTypes
+        .map((ft) => {
+          const canonical = fuelTypeApi.canonicalOf(ft.name);
+          const sales =
+            canonical === "petrol"
+              ? todaySales?.petrol
+              : canonical === "diesel"
+                ? todaySales?.diesel
+                : null;
+          const label = fuelTypeApi.labelOf(ft.name);
+          if (sales) {
+            return `• ${label} Sales: ${currency} ${sales?.amount?.toLocaleString() || 0} (${sales?.pumpCount || 0} pumps)`;
+          }
+          return `• ${label} Price: ${currency} ${fuelTypeApi.getPriceFor(ft.name) ?? "N/A"}/L`;
+        })
+        .join("\n");
+      return `**Business Overview - ${context.businessName}**\n\n**Sales:**\n• Today's Revenue: ${currency} ${todaySales?.totalRevenue?.toLocaleString() || 0}\n${salesOverviewLines}\n\n💰 **Financials:**\n• Outstanding Debt: ${currency} ${deliveryTracker?.totalDebt?.toLocaleString() || 0}\n• Total Expenses Today: ${currency} ${todaySales?.totalExpenses?.toLocaleString() || 0}\n• Saved Invoices: ${invoices?.savedInvoices || 0}\n\n👥 **Staff:** ${payroll?.totalEmployees || 0} employees\n🚛 **Offloading:** ${offloading?.totalRecords || 0} records\n📅 **Sales History:** ${salesHistory?.totalDaysRecorded || 0} days recorded`;
     }
 
     // Help
@@ -528,7 +607,7 @@ export default function AIChatbot() {
     };
 
     if (!isRetry) {
-      setMessages(prev => [...prev, userMessage]);
+      setMessages((prev) => [...prev, userMessage]);
     }
     setInputMessage("");
     setIsLoading(true);
@@ -538,10 +617,7 @@ export default function AIChatbot() {
       // Build comprehensive context from all business data
       const businessContext = buildBusinessContext();
 
-      // Simulate processing delay for realistic feel
-      await new Promise(r => setTimeout(r, 800 + Math.random() * 600));
-
-      // Generate local AI response
+      // Generate local AI response — no artificial delay
       const response = generateLocalResponse(message, businessContext);
 
       const assistantMessage: Message = {
@@ -557,7 +633,7 @@ export default function AIChatbot() {
         ],
       };
 
-      setMessages(prev => [...prev, assistantMessage]);
+      setMessages((prev) => [...prev, assistantMessage]);
       setConnectionStatus("connected");
       setLastFailedMessage(null);
       setRetryCount(0);
@@ -583,7 +659,7 @@ export default function AIChatbot() {
           "Business overview",
         ],
       };
-      setMessages(prev => [...prev, errorMessage]);
+      setMessages((prev) => [...prev, errorMessage]);
       setConnectionStatus("error");
       setLastFailedMessage(message);
     } finally {
@@ -593,9 +669,9 @@ export default function AIChatbot() {
 
   const retryLastMessage = () => {
     if (lastFailedMessage && retryCount < 3) {
-      setRetryCount(prev => prev + 1);
+      setRetryCount((prev) => prev + 1);
       // Remove the last error message before retrying
-      setMessages(prev => prev.filter((_, idx) => idx !== prev.length - 1));
+      setMessages((prev) => prev.filter((_, idx) => idx !== prev.length - 1));
       sendMessage(lastFailedMessage, true);
     }
   };
@@ -764,8 +840,7 @@ export default function AIChatbot() {
                 {
                   id: "1",
                   type: "assistant",
-                  content:
-                    "Hello! I'm your FuelPro AI Assistant powered by Google Gemini. I have access to all your business data - sales, deliveries, invoices, M-PESA transactions, payroll, and more. Ask me anything about your fuel station operations!",
+                  content: `Hello! I'm your FuelPro AI Assistant powered by Google Gemini. I have access to all your business data - sales, deliveries, invoices, ${mobilePayTerm} transactions, payroll, and more. Ask me anything about your fuel station operations!`,
                   timestamp: new Date(),
                 },
               ]);
@@ -798,7 +873,7 @@ export default function AIChatbot() {
 
           {/* Messages */}
           <div className="flex-1 p-4 overflow-y-auto h-[calc(650px-190px)] space-y-4">
-            {messages.map(message => (
+            {messages.map((message) => (
               <div
                 key={message.id}
                 className={`flex gap-3 ${message.type === "user" ? "flex-row-reverse" : ""}`}
@@ -944,8 +1019,8 @@ export default function AIChatbot() {
                 <input
                   type="text"
                   value={inputMessage}
-                  onChange={e => setInputMessage(e.target.value)}
-                  placeholder="Ask about sales, debts, M-PESA, payroll..."
+                  onChange={(e) => setInputMessage(e.target.value)}
+                  placeholder={`Ask about sales, debts, ${mobilePayTerm.toLowerCase()}, payroll...`}
                   className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 text-sm"
                   disabled={isLoading}
                 />

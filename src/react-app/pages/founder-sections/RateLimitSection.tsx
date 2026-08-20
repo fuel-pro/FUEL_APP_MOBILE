@@ -55,7 +55,7 @@ interface Props {
   logAudit: (
     e: string,
     d: string,
-    s: "success" | "warning" | "danger" | "info"
+    s: "success" | "warning" | "danger" | "info",
   ) => void;
 }
 
@@ -64,7 +64,7 @@ export default function RateLimitSection({ logAudit }: Props) {
   const [saved, setSaved] = useState(false);
 
   const update = (k: keyof RateConfig, v: number | boolean) => {
-    setCfg(p => ({ ...p, [k]: v }));
+    setCfg((p) => ({ ...p, [k]: v }));
     setSaved(false);
   };
 
@@ -75,7 +75,7 @@ export default function RateLimitSection({ logAudit }: Props) {
     logAudit(
       "Rate Limits Updated",
       "Security limits configuration saved",
-      "success"
+      "success",
     );
   };
 
@@ -122,7 +122,7 @@ export default function RateLimitSection({ logAudit }: Props) {
             <input
               type="number"
               value={cfg.loginAttempts}
-              onChange={e => update("loginAttempts", Number(e.target.value))}
+              onChange={(e) => update("loginAttempts", Number(e.target.value))}
               className={input}
             />
           </div>
@@ -133,7 +133,7 @@ export default function RateLimitSection({ logAudit }: Props) {
             <input
               type="number"
               value={cfg.loginWindow}
-              onChange={e => update("loginWindow", Number(e.target.value))}
+              onChange={(e) => update("loginWindow", Number(e.target.value))}
               className={input}
             />
           </div>
@@ -144,7 +144,9 @@ export default function RateLimitSection({ logAudit }: Props) {
             <input
               type="number"
               value={cfg.lockoutDuration}
-              onChange={e => update("lockoutDuration", Number(e.target.value))}
+              onChange={(e) =>
+                update("lockoutDuration", Number(e.target.value))
+              }
               className={input}
             />
           </div>
@@ -155,7 +157,7 @@ export default function RateLimitSection({ logAudit }: Props) {
             <input
               type="number"
               value={cfg.passwordMinLength}
-              onChange={e =>
+              onChange={(e) =>
                 update("passwordMinLength", Number(e.target.value))
               }
               className={input}
@@ -165,7 +167,9 @@ export default function RateLimitSection({ logAudit }: Props) {
             <input
               type="checkbox"
               checked={cfg.requireStrongPassword}
-              onChange={e => update("requireStrongPassword", e.target.checked)}
+              onChange={(e) =>
+                update("requireStrongPassword", e.target.checked)
+              }
               className="rounded accent-amber-500"
             />
             <span className="text-xs text-gray-400">
@@ -186,7 +190,7 @@ export default function RateLimitSection({ logAudit }: Props) {
             <input
               type="number"
               value={cfg.apiRequests}
-              onChange={e => update("apiRequests", Number(e.target.value))}
+              onChange={(e) => update("apiRequests", Number(e.target.value))}
               className={input}
             />
           </div>
@@ -197,7 +201,7 @@ export default function RateLimitSection({ logAudit }: Props) {
             <input
               type="number"
               value={cfg.apiWindow}
-              onChange={e => update("apiWindow", Number(e.target.value))}
+              onChange={(e) => update("apiWindow", Number(e.target.value))}
               className={input}
             />
           </div>
@@ -208,7 +212,7 @@ export default function RateLimitSection({ logAudit }: Props) {
             <input
               type="number"
               value={cfg.sessionTimeout}
-              onChange={e => update("sessionTimeout", Number(e.target.value))}
+              onChange={(e) => update("sessionTimeout", Number(e.target.value))}
               className={input}
             />
           </div>
@@ -226,7 +230,7 @@ export default function RateLimitSection({ logAudit }: Props) {
             <input
               type="number"
               value={cfg.inviteMaxUses}
-              onChange={e => update("inviteMaxUses", Number(e.target.value))}
+              onChange={(e) => update("inviteMaxUses", Number(e.target.value))}
               className={input}
             />
           </div>
@@ -237,7 +241,9 @@ export default function RateLimitSection({ logAudit }: Props) {
             <input
               type="number"
               value={cfg.inviteExpiryDays}
-              onChange={e => update("inviteExpiryDays", Number(e.target.value))}
+              onChange={(e) =>
+                update("inviteExpiryDays", Number(e.target.value))
+              }
               className={input}
             />
           </div>
@@ -255,7 +261,7 @@ export default function RateLimitSection({ logAudit }: Props) {
             <input
               type="number"
               value={cfg.maxStationsPerUser}
-              onChange={e =>
+              onChange={(e) =>
                 update("maxStationsPerUser", Number(e.target.value))
               }
               className={input}
@@ -268,7 +274,7 @@ export default function RateLimitSection({ logAudit }: Props) {
             <input
               type="number"
               value={cfg.maxTeamMembers}
-              onChange={e => update("maxTeamMembers", Number(e.target.value))}
+              onChange={(e) => update("maxTeamMembers", Number(e.target.value))}
               className={input}
             />
           </div>

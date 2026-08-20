@@ -1,3 +1,5 @@
+import { getCurrencySymbol } from "../lib/currency";
+
 export const formatNumber = (num: number, decimals: number = 2): string => {
   return new Intl.NumberFormat("en-US", {
     minimumFractionDigits: decimals,
@@ -7,7 +9,7 @@ export const formatNumber = (num: number, decimals: number = 2): string => {
 
 export const formatCurrency = (
   amount: number,
-  currency: string = "KES"
+  currency: string = getCurrencySymbol(),
 ): string => {
   return `${currency} ${formatNumber(amount, 2)}`;
 };

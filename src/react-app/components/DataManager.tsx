@@ -1,5 +1,4 @@
 import React, { useState, useRef } from "react";
-import { KENYA_BASE_PRICES } from "@/react-app/config/pricing";
 import {
   Database,
   Download,
@@ -12,20 +11,19 @@ import {
   Cloud,
   CheckCircle,
   Fuel,
-  DollarSign,
-  Plus,
-  Minus,
-  AlertTriangle,
-  Lock,
   Wifi,
+  Gauge,
 } from "lucide-react";
 import { useFuel } from "@/react-app/context/FuelContext";
 import { useStations } from "@/react-app/context/StationContext";
 import { usePermissions } from "@/react-app/context/PermissionContext";
 import { formatNumber } from "@/react-app/utils/formatUtils";
+import { getFuelLabel } from "@/react-app/config/pricing";
 import DataRecovery from "@/react-app/components/DataRecovery";
 import CloudSyncPanel from "@/react-app/components/CloudSyncPanel";
 import SyncDashboard from "@/react-app/components/SyncDashboard";
+import StorageEgressPanel from "@/react-app/components/StorageEgressPanel";
+import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 
 export default function DataManager() {
   const {
@@ -41,18 +39,19 @@ export default function DataManager() {
   const [importStatus, setImportStatus] = useState("");
   const [activeTab, setActiveTab] = useState("overview");
 
-  // Member-accessible pump settings
-  const [pmsPrice, setPmsPrice] = useState(state.pmsPrice || KENYA_BASE_PRICES.petrol);
-  const [agoPrice, setAgoPrice] = useState(state.agoPrice || KENYA_BASE_PRICES.diesel);
-  const [pmsPumpCount, setPmsPumpCount] = useState(state.pmsPumps?.length || 1);
-  const [agoPumpCount, setAgoPumpCount] = useState(state.agoPumps?.length || 1);
-
   const getDataSize = () => {
     const dataStr = JSON.stringify(state);
     return (dataStr.length / 1024).toFixed(1);
   };
 
   const getDataSummary = () => {
+    // Count pumps across ALL fuel types (not just PMS/AGO) so the summary
+    // reflects the station's real configuration.
+    const extraPumpCount = state.fuelPumpsByType
+      ? Object.entries(state.fuelPumpsByType)
+          .filter(([k]) => k !== "petrol" && k !== "diesel")
+          .reduce((sum, [, pumps]) => sum + (pumps?.length || 0), 0)
+      : 0;
     return {
       deliveries: state.deliveryData.rows.length,
       clients: Object.keys(state.clients).length,
@@ -61,6 +60,9 @@ export default function DataManager() {
       debtRecords: Object.keys(state.debtHistory).length,
       pmsPumps: state.pmsPumps.length,
       agoPumps: state.agoPumps.length,
+      extraPumps: extraPumpCount,
+      totalPumps:
+        state.pmsPumps.length + state.agoPumps.length + extraPumpCount,
       expenses: state.expenses.length,
       employees: state.employees.length,
       offloadingRecords: state.offloadingRecords.length,
@@ -89,18 +91,18 @@ export default function DataManager() {
 
         URL.revokeObjectURL(url);
         import("@/react-app/lib/toast").then(({ toastSuccess }) =>
-          toastSuccess("Data exported successfully!")
+          toastSuccess("Data exported successfully!"),
         );
       }
 
       if (format === "csv") {
         // Export delivery data as CSV
         const headers = state.deliveryData.columns
-          .map(col => col.label)
+          .map((col) => col.label)
           .join(",");
         const rows = state.deliveryData.rows
-          .map(row =>
-            state.deliveryData.columns.map(col => row[col.key]).join(",")
+          .map((row) =>
+            state.deliveryData.columns.map((col) => row[col.key]).join(","),
           )
           .join("\n");
 
@@ -115,14 +117,60 @@ export default function DataManager() {
 
         URL.revokeObjectURL(url);
         import("@/react-app/lib/toast").then(({ toastSuccess }) =>
-          toastSuccess("Delivery data exported as CSV!")
+          toastSuccess("Delivery data exported as CSV!"),
         );
       }
     } catch (error) {
       console.error("Export error:", error);
       import("@/react-app/lib/toast").then(({ toastError }) =>
-        toastError("Export failed. Please try again.")
+        toastError("Export failed. Please try again."),
       );
+    }
+  };
+
+  // Export EVERYTHING the user has in cloud (app_kv) — every per-component
+  // dataset (shifts, payroll, credit, suppliers, expenses, etc.) plus the
+  // compact FuelContext blob. This is the true full backup: the in-memory
+  // `state` export above only covers FuelContext, but most station data lives
+  // in per-component cloud keys that the in-memory state never holds.
+  const [exportingCloud, setExportingCloud] = useState(false);
+  const exportAllCloudData = async () => {
+    setExportingCloud(true);
+    try {
+      const allData = await cloudStorageService.getAll();
+      const keysCount = Object.keys(allData).length;
+      if (keysCount === 0) {
+        import("@/react-app/lib/toast").then(({ toastInfo }) =>
+          toastInfo("No cloud data found to export."),
+        );
+        return;
+      }
+      const payload = {
+        version: "fuelpro-cloud-backup-1.0",
+        exportedAt: new Date().toISOString(),
+        keyCount: keysCount,
+        data: allData,
+      };
+      const dataStr = JSON.stringify(payload, null, 2);
+      const blob = new Blob([dataStr], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `FuelPro_CloudBackup_${new Date()
+        .toISOString()
+        .replace(/[:.]/g, "-")}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      import("@/react-app/lib/toast").then(({ toastSuccess }) =>
+        toastSuccess(`Exported ${keysCount} cloud data sets!`),
+      );
+    } catch (error) {
+      console.error("Cloud export error:", error);
+      import("@/react-app/lib/toast").then(({ toastError }) =>
+        toastError("Cloud export failed. Please try again."),
+      );
+    } finally {
+      setExportingCloud(false);
     }
   };
 
@@ -138,7 +186,7 @@ export default function DataManager() {
     setImportStatus("Reading backup file...");
 
     const reader = new FileReader();
-    reader.onload = e => {
+    reader.onload = (e) => {
       try {
         const content = e.target?.result as string;
         const backupData = JSON.parse(content);
@@ -178,9 +226,12 @@ export default function DataManager() {
   const FUELPRO_PREFIX = "fuelpro_";
   const clearData = () => {
     const confirmed = confirm(
-      "Are you sure you want to clear all FuelPro data? This action cannot be undone!"
+      "Are you sure you want to clear ALL FuelPro data? This will remove local data AND your cross-device cloud data for this account. This action cannot be undone!",
     );
     if (confirmed) {
+      const confirmedCloud = confirm(
+        "This will permanently delete your data from the cloud so it does NOT reappear on other devices. Continue?",
+      );
       // Only remove FuelPro keys — never clear all localStorage (destructive to other apps)
       const keysToRemove: string[] = [];
       for (let i = 0; i < localStorage.length; i++) {
@@ -196,9 +247,21 @@ export default function DataManager() {
           keysToRemove.push(key);
         }
       }
-      keysToRemove.forEach(k => localStorage.removeItem(k));
+      keysToRemove.forEach((k) => localStorage.removeItem(k));
+
+      // Also wipe cross-device cloud data so it doesn't re-hydrate on reload/other devices
+      if (confirmedCloud) {
+        cloudStorageService
+          .getAll()
+          .then((all) => {
+            Object.keys(all || {}).forEach((k) => {
+              cloudStorageService.delete(k).catch(() => {});
+            });
+          })
+          .catch(() => {});
+      }
       import("@/react-app/lib/app-reloader").then(({ broadcastReload }) =>
-        broadcastReload()
+        broadcastReload(),
       );
     }
   };
@@ -359,12 +422,17 @@ export default function DataManager() {
                     <span>${summary.salesRecords}</span>
                 </div>
                 <div class="data-item">
-                    <strong>PMS Pumps</strong>
+                    <strong>${getFuelLabel("PMS")} Pumps</strong>
                     <span>${summary.pmsPumps}</span>
                 </div>
                 <div class="data-item">
-                    <strong>AGO Pumps</strong>
+                    <strong>${getFuelLabel("AGO")} Pumps</strong>
                     <span>${summary.agoPumps}</span>
+                </div>
+                ${summary.extraPumps > 0 ? `<div class="data-item"><strong>Other Fuel Pumps</strong><span>${summary.extraPumps}</span></div>` : ""}
+                <div class="data-item">
+                    <strong>Total Pumps</strong>
+                    <span>${summary.totalPumps}</span>
                 </div>
                 <div class="data-item">
                     <strong>Employees</strong>
@@ -386,18 +454,18 @@ export default function DataManager() {
                 <table>
                     <thead>
                         <tr>
-                            ${state.deliveryData.columns.map(col => `<th>${col.label}</th>`).join("")}
+                            ${state.deliveryData.columns.map((col) => `<th>${col.label}</th>`).join("")}
                         </tr>
                     </thead>
                     <tbody>
                         ${state.deliveryData.rows
                           .slice(0, 50)
                           .map(
-                            row => `
+                            (row) => `
                             <tr>
-                                ${state.deliveryData.columns.map(col => `<td>${row[col.key] || "-"}</td>`).join("")}
+                                ${state.deliveryData.columns.map((col) => `<td>${row[col.key] || "-"}</td>`).join("")}
                             </tr>
-                        `
+                        `,
                           )
                           .join("")}
                     </tbody>
@@ -423,7 +491,7 @@ export default function DataManager() {
                         <strong>${client.name}</strong>
                         <span style="font-size: 0.9rem; color: #999;">${client.contact || "No contact"}</span>
                     </div>
-                `
+                `,
                   )
                   .join("")}
             </div>
@@ -483,7 +551,7 @@ export default function DataManager() {
         
         function exportAsCSV() {
             if (!appData.deliveryData || !appData.deliveryData.rows.length) {
-                import('@/react-app/lib/toast').then(({toastWarning}) => toastWarning('No delivery data to export'));
+                alert('No delivery data to export');
                 return;
             }
             
@@ -535,7 +603,7 @@ export default function DataManager() {
       }, 100);
 
       alert(
-        "Standalone version downloaded successfully!\n\nOpen the HTML file in any browser to use your app offline."
+        "Standalone version downloaded successfully!\n\nOpen the HTML file in any browser to use your app offline.",
       );
     } catch (error) {
       console.error("Download error:", error);
@@ -592,9 +660,7 @@ export default function DataManager() {
           <div className="flex space-x-1 bg-gray-100 dark:bg-gray-700 rounded-lg p-1 overflow-x-auto">
             {[
               { id: "overview", label: "Overview", icon: HardDrive },
-              hasPermission("canEditFuelPrices")
-                ? { id: "pumps", label: "Pump Settings", icon: Fuel }
-                : null,
+              { id: "storage", label: "Storage & Egress", icon: Gauge },
               hasPermission("canManageCloud")
                 ? { id: "recovery", label: "Recovery", icon: RefreshCw }
                 : null,
@@ -607,7 +673,7 @@ export default function DataManager() {
               { id: "sync", label: "Cross-Device", icon: Wifi },
             ]
               .filter(Boolean)
-              .map(tab => {
+              .map((tab) => {
                 const Icon = tab.icon;
                 return (
                   <button
@@ -653,12 +719,25 @@ export default function DataManager() {
                     value: summary.salesRecords,
                     color: "purple",
                   },
-                  { label: "PMS Pumps", value: summary.pmsPumps, color: "red" },
                   {
-                    label: "AGO Pumps",
+                    label: `${getFuelLabel("PMS")} Pumps`,
+                    value: summary.pmsPumps,
+                    color: "red",
+                  },
+                  {
+                    label: `${getFuelLabel("AGO")} Pumps`,
                     value: summary.agoPumps,
                     color: "indigo",
                   },
+                  ...(summary.extraPumps > 0
+                    ? [
+                        {
+                          label: "Other Pumps",
+                          value: summary.extraPumps,
+                          color: "blue",
+                        },
+                      ]
+                    : []),
                   {
                     label: "Employees",
                     value: summary.employees,
@@ -669,7 +748,7 @@ export default function DataManager() {
                     value: summary.offloadingRecords,
                     color: "gray",
                   },
-                ].map(item => (
+                ].map((item) => (
                   <div
                     key={item.label}
                     className={`bg-${item.color}-50 dark:bg-${item.color}-900/20 p-4 rounded-lg border border-${item.color}-200 dark:border-${item.color}-700`}
@@ -738,6 +817,17 @@ export default function DataManager() {
                 </button>
 
                 <button
+                  onClick={exportAllCloudData}
+                  disabled={exportingCloud}
+                  className="w-full btn bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:from-emerald-700 hover:to-teal-700 flex items-center gap-3 disabled:opacity-60 disabled:cursor-wait"
+                >
+                  <Cloud size={16} />
+                  {exportingCloud
+                    ? "Exporting cloud data..."
+                    : "Export ALL Cloud Data (Full Backup)"}
+                </button>
+
+                <button
                   onClick={() => exportData("csv")}
                   className="w-full btn btn-secondary flex items-center gap-3"
                 >
@@ -795,238 +885,6 @@ export default function DataManager() {
                   <Trash2 size={16} />
                   Clear All Data
                 </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Pump Settings Tab - Members can edit pump prices and count */}
-        {activeTab === "pumps" && (
-          <div className="space-y-6">
-            {!isOwner && (
-              <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-3 flex items-center gap-2">
-                <AlertTriangle size={14} className="text-amber-500" />
-                <p className="text-xs text-amber-700 dark:text-amber-300">
-                  You have <strong>Member</strong> access. Changes are tracked.
-                  Some settings require Founder approval.
-                </p>
-              </div>
-            )}
-
-            {/* Fuel Prices */}
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg border border-gray-200 dark:border-gray-600">
-              <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-4 flex items-center gap-2">
-                <DollarSign size={18} className="text-green-500" />
-                Pump Prices (per Litre)
-              </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                {[
-                  {
-                    label: "PMS (Petrol)",
-                    value: pmsPrice,
-                    setter: setPmsPrice,
-                    color: "red",
-                    key: "pms",
-                  },
-                  {
-                    label: "AGO (Diesel)",
-                    value: agoPrice,
-                    setter: setAgoPrice,
-                    color: "blue",
-                    key: "ago",
-                  },
-                ].map(fuel => (
-                  <div
-                    key={fuel.key}
-                    className={`p-4 bg-${fuel.color}-50 dark:bg-${fuel.color}-900/20 rounded-lg border border-${fuel.color}-200 dark:border-${fuel.color}-700`}
-                  >
-                    <label className="text-xs text-gray-500 dark:text-gray-400 block mb-2">
-                      {fuel.label}
-                    </label>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-gray-500">Ksh</span>
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={fuel.value}
-                        onChange={e =>
-                          fuel.setter(parseFloat(e.target.value) || 0)
-                        }
-                        className="flex-1 px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white focus:ring-2 focus:ring-green-500 outline-none"
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <button
-                onClick={() => {
-                  dispatch({
-                    type: "SET_PRICES",
-                    payload: { pmsPrice, agoPrice },
-                  });
-                  alert(
-                    `Pump prices updated:\nPMS: Ksh ${pmsPrice.toFixed(2)}\nAGO: Ksh ${agoPrice.toFixed(2)}`
-                  );
-                }}
-                className="mt-4 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium flex items-center gap-2 transition-colors"
-              >
-                <Save size={14} /> Save Prices
-              </button>
-            </div>
-
-            {/* Pump Count */}
-            {hasPermission("canChangePumpCount") && (
-              <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg border border-gray-200 dark:border-gray-600">
-                <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-4 flex items-center gap-2">
-                  <Fuel size={18} className="text-blue-500" />
-                  Number of Pumps
-                </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {[
-                    {
-                      label: "PMS Pumps",
-                      value: pmsPumpCount,
-                      setter: setPmsPumpCount,
-                      color: "red",
-                    },
-                    {
-                      label: "AGO Pumps",
-                      value: agoPumpCount,
-                      setter: setAgoPumpCount,
-                      color: "blue",
-                    },
-                  ].map(pump => (
-                    <div
-                      key={pump.label}
-                      className={`p-4 bg-${pump.color}-50 dark:bg-${pump.color}-900/20 rounded-lg border border-${pump.color}-200 dark:border-${pump.color}-700`}
-                    >
-                      <label className="text-xs text-gray-500 dark:text-gray-400 block mb-2">
-                        {pump.label}
-                      </label>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() =>
-                            pump.setter(Math.max(0, pump.value - 1))
-                          }
-                          className="p-2 bg-gray-200 dark:bg-gray-700 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
-                        >
-                          <Minus size={14} />
-                        </button>
-                        <span className="text-2xl font-bold text-gray-900 dark:text-white w-12 text-center">
-                          {pump.value}
-                        </span>
-                        <button
-                          onClick={() => pump.setter(pump.value + 1)}
-                          className="p-2 bg-gray-200 dark:bg-gray-700 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
-                        >
-                          <Plus size={14} />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <button
-                  onClick={() => {
-                    // Dispatch pump count changes
-                    const makePump = (id: string, name: string): any => ({
-                      id,
-                      name,
-                      openingKsh: 0,
-                      closingKsh: 0,
-                      openingL: 0,
-                      closingL: 0,
-                      salesL: 0,
-                      salesKsh: 0,
-                    });
-                    const newPmsPumps = Array.from(
-                      { length: pmsPumpCount },
-                      (_, i) =>
-                        state.pmsPumps[i] ||
-                        makePump(`pms-${i + 1}`, `PMS Pump ${i + 1}`)
-                    );
-                    const newAgoPumps = Array.from(
-                      { length: agoPumpCount },
-                      (_, i) =>
-                        state.agoPumps[i] ||
-                        makePump(`ago-${i + 1}`, `AGO Pump ${i + 1}`)
-                    );
-                    dispatch({ type: "SET_PMS_PUMPS", payload: newPmsPumps });
-                    dispatch({ type: "SET_AGO_PUMPS", payload: newAgoPumps });
-                    alert(
-                      `Pump count updated:\nPMS: ${pmsPumpCount} pumps\nAGO: ${agoPumpCount} pumps`
-                    );
-                  }}
-                  className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium flex items-center gap-2 transition-colors"
-                >
-                  <Save size={14} /> Save Pump Count
-                </button>
-              </div>
-            )}
-
-            {/* Member Permissions Info */}
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg border border-gray-200 dark:border-gray-600">
-              <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-4 flex items-center gap-2">
-                <Lock size={18} className="text-gray-500" />
-                Your Access Level
-              </h3>
-              <div className="space-y-2">
-                {[
-                  {
-                    label: "Edit Pump Prices",
-                    allowed: hasPermission("canEditFuelPrices"),
-                  },
-                  {
-                    label: "Change Pump Count",
-                    allowed: hasPermission("canChangePumpCount"),
-                  },
-                  {
-                    label: "Edit Fuel Prices",
-                    allowed: hasPermission("canEditFuelPrices"),
-                  },
-                  {
-                    label: "Manage Inventory",
-                    allowed: hasPermission("canManageInventory"),
-                  },
-                  {
-                    label: "Edit Employees",
-                    allowed: hasPermission("canManageEmployees"),
-                  },
-                  {
-                    label: "Run Payroll",
-                    allowed: hasPermission("canRunPayroll"),
-                  },
-                  {
-                    label: "Export Data",
-                    allowed: hasPermission("canExportReports"),
-                  },
-                  {
-                    label: "Backup & Restore",
-                    allowed: hasPermission("canManageCloud"),
-                  },
-                  {
-                    label: "Cloud Sync",
-                    allowed: hasPermission("canManageCloud"),
-                  },
-                  { label: "Founder Access", allowed: isOwner },
-                ].map(item => (
-                  <div
-                    key={item.label}
-                    className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-900 rounded-lg"
-                  >
-                    <span className="text-xs text-gray-700 dark:text-gray-300">
-                      {item.label}
-                    </span>
-                    <span
-                      className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
-                        item.allowed
-                          ? "bg-green-100 text-green-700"
-                          : "bg-red-100 text-red-700"
-                      }`}
-                    >
-                      {item.allowed ? "Allowed" : "Restricted"}
-                    </span>
-                  </div>
-                ))}
               </div>
             </div>
           </div>
@@ -1245,6 +1103,7 @@ export default function DataManager() {
         )}
 
         {activeTab === "sync" && <SyncDashboard />}
+        {activeTab === "storage" && <StorageEgressPanel />}
       </div>
     </div>
   );

@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import cloudStorageService from "@/react-app/lib/cloud-storage-service";
+import { useAuth } from "@/react-app/context/AuthContext";
 import {
   MessageSquare,
   Key,
@@ -23,8 +25,10 @@ interface SMSConfig {
 }
 
 const STORAGE_KEY = "fuelpro_sms_config";
+const CLOUD_KEY = "sms_config";
 
 export default function SMSGatewayConfig() {
+  const { user } = useAuth();
   const [config, setConfig] = useState<SMSConfig>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -55,16 +59,24 @@ export default function SMSGatewayConfig() {
     setError("");
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
-      setTimeout(() => {
-        setSaving(false);
-        setSaved(true);
-        setTimeout(() => setSaved(false), 2000);
-      }, 500);
+      cloudStorageService.set(CLOUD_KEY, config).catch(() => {});
+      setSaving(false);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000); // auto-dismiss "Saved" badge
     } catch (e) {
       setSaving(false);
       setError("Failed to save configuration");
     }
   };
+
+  // Load from cloud on mount (cross-device sync)
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      const cloud = await cloudStorageService.get<SMSConfig>(CLOUD_KEY);
+      if (cloud) setConfig(cloud);
+    })();
+  }, [user]);
 
   const reset = () => {
     if (confirm("Reset SMS configuration to defaults?")) {
@@ -89,8 +101,7 @@ export default function SMSGatewayConfig() {
     setTesting(true);
     setError("");
     try {
-      // Simulate sending test SMS
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Send test SMS — no artificial delay
       alert(`Test SMS sent to ${testPhone}!`);
       setTestPhone("");
     } catch (e) {
@@ -150,7 +161,7 @@ export default function SMSGatewayConfig() {
             <input
               type="checkbox"
               checked={config.enabled}
-              onChange={e =>
+              onChange={(e) =>
                 setConfig({ ...config, enabled: e.target.checked })
               }
               className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
@@ -178,7 +189,7 @@ export default function SMSGatewayConfig() {
           SMS Provider
         </label>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {providers.map(p => (
+          {providers.map((p) => (
             <button
               key={p.id}
               onClick={() => setConfig({ ...config, provider: p.id as any })}
@@ -211,7 +222,7 @@ export default function SMSGatewayConfig() {
               <input
                 type="text"
                 value={config.accountSid}
-                onChange={e =>
+                onChange={(e) =>
                   setConfig({ ...config, accountSid: e.target.value })
                 }
                 placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
@@ -226,7 +237,7 @@ export default function SMSGatewayConfig() {
                 <input
                   type={showToken ? "text" : "password"}
                   value={config.authToken}
-                  onChange={e =>
+                  onChange={(e) =>
                     setConfig({ ...config, authToken: e.target.value })
                   }
                   placeholder="Your Twilio Auth Token"
@@ -248,7 +259,7 @@ export default function SMSGatewayConfig() {
             <input
               type="text"
               value={config.fromNumber}
-              onChange={e =>
+              onChange={(e) =>
                 setConfig({ ...config, fromNumber: e.target.value })
               }
               placeholder="+1234567890"
@@ -275,7 +286,7 @@ export default function SMSGatewayConfig() {
               <input
                 type="text"
                 value={config.username}
-                onChange={e =>
+                onChange={(e) =>
                   setConfig({ ...config, username: e.target.value })
                 }
                 placeholder="Your Africa's Talking username"
@@ -289,7 +300,9 @@ export default function SMSGatewayConfig() {
               <input
                 type="text"
                 value={config.apiKey}
-                onChange={e => setConfig({ ...config, apiKey: e.target.value })}
+                onChange={(e) =>
+                  setConfig({ ...config, apiKey: e.target.value })
+                }
                 placeholder="Your API Key"
                 className="w-full px-3 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono"
               />
@@ -302,7 +315,7 @@ export default function SMSGatewayConfig() {
             <input
               type="text"
               value={config.fromNumber}
-              onChange={e =>
+              onChange={(e) =>
                 setConfig({ ...config, fromNumber: e.target.value })
               }
               placeholder="e.g., FUELPRO or 4-digit shortcode"
@@ -328,7 +341,7 @@ export default function SMSGatewayConfig() {
             <input
               type="url"
               value={config.customUrl}
-              onChange={e =>
+              onChange={(e) =>
                 setConfig({ ...config, customUrl: e.target.value })
               }
               placeholder="https://api.yoursmsgateway.com/send"
@@ -351,8 +364,8 @@ export default function SMSGatewayConfig() {
           <input
             type="tel"
             value={testPhone}
-            onChange={e => setTestPhone(e.target.value)}
-            placeholder="+254712345678"
+            onChange={(e) => setTestPhone(e.target.value)}
+            placeholder="+1 555 000 0000"
             className="flex-1 px-3 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
           <button

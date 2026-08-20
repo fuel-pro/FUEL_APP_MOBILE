@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import {
   Plus,
   DollarSign,
@@ -11,6 +11,9 @@ import {
   X,
 } from "lucide-react";
 import { useFuel } from "@/react-app/context/FuelContext";
+import { useStationFuelTypes } from "@/react-app/hooks/useStationFuelTypes";
+import { useAuth } from "@/react-app/context/AuthContext";
+import { useStations } from "@/react-app/context/StationContext";
 import SignatureCanvas from "@/react-app/components/SignatureCanvas";
 import ExportDropdown from "@/react-app/components/ExportDropdown";
 import {
@@ -19,23 +22,141 @@ import {
   exportDeliveryTXT,
 } from "@/react-app/utils/exportUtils";
 import { formatNumber } from "@/react-app/utils/formatUtils";
+import {
+  getCurrencySymbol,
+  resolveCurrencySymbol,
+} from "@/react-app/lib/currency";
+import cloudStorageService from "@/react-app/lib/cloud-storage-service";
+import { normalizeFuelType, getFuelLabel } from "@/react-app/config/pricing";
+
+/** Generate a unique row id (stable across devices/sessions). */
+function rowId(): string {
+  return `dlv-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
 
 export default function DeliveryTracker() {
-  const { state, dispatch } = useFuel();
+  const { state, dispatch, syncPriceToFuelTypes } = useFuel();
+  const { user } = useAuth();
+  const { currentStation } = useStations();
+  const stationId = currentStation?.id;
+  const currencySymbol = resolveCurrencySymbol(
+    state.companyData?.currency,
+    currentStation?.currency,
+  );
+  const fuelTypeApi = useStationFuelTypes(stationId);
+
+  // ─── Signatures (cross-device cloud-persisted) ───
+  const SIG_KEY = "delivery_signatures";
   const [managerSignature, setManagerSignature] = useState("");
   const [directorSignature, setDirectorSignature] = useState("");
+  // Refs to guard against real-time echo overwriting in-progress edits
+  const managerSignatureRef = useRef("");
+  const directorSignatureRef = useRef("");
+  managerSignatureRef.current = managerSignature;
+  directorSignatureRef.current = directorSignature;
 
-  // Signature state management
+  // Load signatures from cloud on mount; seed from in-memory cache for
+  // instant first render. Save back to cloud whenever they change.
   useEffect(() => {
-    // Signatures are ready for use in export functions
-    if (managerSignature || directorSignature) {
-      console.log("Signatures updated");
-    }
-  }, [managerSignature, directorSignature]);
+    if (!user) return;
+    let cancelled = false;
+    (async () => {
+      const cloud = await cloudStorageService.get<{
+        manager?: string;
+        director?: string;
+      }>(SIG_KEY, stationId);
+      if (!cancelled && cloud) {
+        if (cloud.manager) setManagerSignature(cloud.manager);
+        if (cloud.director) setDirectorSignature(cloud.director);
+      }
+    })();
+    const unsub = cloudStorageService.subscribe<{
+      manager?: string;
+      director?: string;
+    }>(SIG_KEY, stationId, (val) => {
+      // Guard against echo: skip if the value matches what we just saved
+      // (the real-time event echoes back our own write).
+      if (!val) return;
+      if (
+        val.manager !== undefined &&
+        val.manager !== managerSignatureRef.current
+      ) {
+        setManagerSignature(val.manager);
+      }
+      if (
+        val.director !== undefined &&
+        val.director !== directorSignatureRef.current
+      ) {
+        setDirectorSignature(val.director);
+      }
+    });
+    return () => {
+      cancelled = true;
+      unsub();
+    };
+  }, [user, stationId]);
+
+  const saveSignatures = useCallback(
+    (mgr: string, dir: string) => {
+      if (!user) return;
+      cloudStorageService
+        .set(SIG_KEY, { manager: mgr, director: dir }, stationId)
+        .catch(() => {});
+    },
+    [user, stationId],
+  );
+
+  const handleManagerSig = useCallback(
+    (data: string) => {
+      setManagerSignature(data);
+      saveSignatures(data, directorSignature);
+    },
+    [directorSignature, saveSignatures],
+  );
+  const handleDirectorSig = useCallback(
+    (data: string) => {
+      setDirectorSignature(data);
+      saveSignatures(managerSignature, data);
+    },
+    [managerSignature, saveSignatures],
+  );
+
+  // ─── Modal state (replaces prompt/alert) ───
+  const [paymentModal, setPaymentModal] = useState(false);
+  const [coDebtModal, setCoDebtModal] = useState(false);
+  const [columnModal, setColumnModal] = useState(false);
+  const [paymentAmount, setPaymentAmount] = useState("");
+  const [paymentName, setPaymentName] = useState("");
+  const [coDebtAmount, setCoDebtAmount] = useState("");
+  const [columnName, setColumnName] = useState("");
+
+  // ─── Row filter (functional header dropdowns) ───
+  const [filterDate, setFilterDate] = useState("");
+  const [filterFuel, setFilterFuel] = useState("");
+
+  // ─── Station fuel types (replaces hardcoded Petrol/Diesel) ───
+  // Uses fuelTypeApi.activeFuelTypes (from fuel_types_config cloud key) as
+  // the primary source — same source the Dashboard + POS use — so the
+  // dropdown is always in sync with the station's configured fuels.
+  const stationFuelOptions = useMemo<string[]>(() => {
+    const fromApi = (fuelTypeApi.activeFuelTypes || [])
+      .map((ft) => getFuelLabel(ft.name) || ft.localName || ft.name || "")
+      .filter((label): label is string => Boolean(label));
+    const fromState = (state.fuelTypes || [])
+      .filter((ft) => ft.active !== false)
+      .map((ft) => ft.localName || ft.name || "")
+      .filter((label): label is string => Boolean(label));
+    const unique = [...new Set([...fromApi, ...fromState])];
+    if (unique.length > 0) return unique;
+    // Fallback to the two legacy fuels if no fuel types configured yet
+    return ["Super Petrol", "Diesel"];
+  }, [fuelTypeApi.activeFuelTypes, state.fuelTypes]);
+
+  const defaultFuel = stationFuelOptions[0] || "Super Petrol";
 
   const addDeliveryRow = () => {
-    const newRow: any = {};
-    state.deliveryData.columns.forEach(col => {
+    const newRow: any = { _id: rowId() };
+    state.deliveryData.columns.forEach((col) => {
       switch (col.key) {
         case "date":
           newRow.date = new Date().toISOString().split("T")[0];
@@ -44,7 +165,7 @@ export default function DeliveryTracker() {
           newRow.reg = "";
           break;
         case "fuel":
-          newRow.fuel = "Petrol";
+          newRow.fuel = defaultFuel;
           break;
         case "litres":
           newRow.litres = 0;
@@ -73,14 +194,16 @@ export default function DeliveryTracker() {
     updateDeliveryTotals(updatedData);
   };
 
-  const addPaymentRow = () => {
-    const amount = parseFloat(
-      prompt("Enter payment amount (Ksh):", "0") || "0"
-    );
-    const name = prompt("Payment from:", "") || "";
+  const submitPayment = () => {
+    const amount = parseFloat(paymentAmount) || 0;
+    if (amount <= 0) {
+      setPaymentModal(false);
+      return;
+    }
+    const name = paymentName.trim();
 
-    const newRow: any = {};
-    state.deliveryData.columns.forEach(col => {
+    const newRow: any = { _id: rowId() };
+    state.deliveryData.columns.forEach((col) => {
       switch (col.key) {
         case "date":
           newRow.date = new Date().toISOString().split("T")[0];
@@ -116,15 +239,20 @@ export default function DeliveryTracker() {
 
     dispatch({ type: "SET_DELIVERY_DATA", payload: updatedData });
     updateDeliveryTotals(updatedData);
+    setPaymentModal(false);
+    setPaymentAmount("");
+    setPaymentName("");
   };
 
-  const addCarriedOverDebt = () => {
-    const amount = parseFloat(
-      prompt("Carried Over Debt Amount (Ksh):", "0") || "0"
-    );
+  const submitCoDebt = () => {
+    const amount = parseFloat(coDebtAmount) || 0;
+    if (amount <= 0) {
+      setCoDebtModal(false);
+      return;
+    }
 
-    const newRow: any = {};
-    state.deliveryData.columns.forEach(col => {
+    const newRow: any = { _id: rowId() };
+    state.deliveryData.columns.forEach((col) => {
       switch (col.key) {
         case "date":
           newRow.date = "C/O";
@@ -160,11 +288,16 @@ export default function DeliveryTracker() {
 
     dispatch({ type: "SET_DELIVERY_DATA", payload: updatedData });
     updateDeliveryTotals(updatedData);
+    setCoDebtModal(false);
+    setCoDebtAmount("");
   };
 
-  const addColumn = () => {
-    const colName = prompt("Enter column name:");
-    if (!colName) return;
+  const submitColumn = () => {
+    const colName = columnName.trim();
+    if (!colName) {
+      setColumnModal(false);
+      return;
+    }
 
     const key = colName.toLowerCase().replace(/\s+/g, "");
     const newColumn = { key, label: colName, editable: true };
@@ -175,6 +308,8 @@ export default function DeliveryTracker() {
     };
 
     dispatch({ type: "SET_DELIVERY_DATA", payload: updatedData });
+    setColumnModal(false);
+    setColumnName("");
   };
 
   const moveColumnLeft = (columnIndex: number) => {
@@ -224,21 +359,21 @@ export default function DeliveryTracker() {
     ];
     if (essentialColumns.includes(column.key)) {
       alert(
-        `Cannot delete the "${column.label}" column as it is essential for calculations.`
+        `Cannot delete the "${column.label}" column as it is essential for calculations.`,
       );
       return;
     }
 
     if (
       confirm(
-        `Delete the "${column.label}" column? This will remove all data in this column.`
+        `Delete the "${column.label}" column? This will remove all data in this column.`,
       )
     ) {
       const updatedColumns = [...state.deliveryData.columns];
       updatedColumns.splice(columnIndex, 1);
 
       // Remove the column data from all rows
-      const updatedRows = state.deliveryData.rows.map(row => {
+      const updatedRows = state.deliveryData.rows.map((row) => {
         const newRow = { ...row };
         delete newRow[column.key];
         return newRow;
@@ -261,8 +396,18 @@ export default function DeliveryTracker() {
     if (field === "litres" || field === "fuel") {
       const litres = parseFloat(value) || 0;
       const fuel = field === "fuel" ? value : row.fuel;
-      const price = fuel === "Petrol" ? state.petrolPrice : state.dieselPrice;
-      const amount = litres * price;
+      // Use the unified bus-fresh price so delivery amounts match the station's
+      // current fuel price. normalizeFuelType maps both legacy ("Petrol") and
+      // canonical ("Super Petrol") spellings to the same key.
+      const canonical = normalizeFuelType(fuel);
+      const price =
+        fuelTypeApi.getPriceFor(fuel) ??
+        (canonical === "diesel"
+          ? state.dieselPrice
+          : canonical === "kerosene"
+            ? state.kerosenePrice
+            : state.petrolPrice);
+      const amount = litres * (price || 0);
 
       row[field] = field === "litres" ? litres : value;
       row.amount = amount;
@@ -335,6 +480,13 @@ export default function DeliveryTracker() {
     dispatch({ type: "SET_DELIVERY_DATA", payload: updatedData });
   };
 
+  const [toast, setToast] = useState("");
+
+  const showToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(""), 3000);
+  };
+
   const saveClient = () => {
     const name = state.deliveredTo.trim() || `Client_${Date.now()}`;
     const clientData = {
@@ -348,7 +500,7 @@ export default function DeliveryTracker() {
       payload: { ...state.clients, [name]: clientData },
     });
 
-    alert(`Client "${name}" saved!`);
+    showToast(`Client "${name}" saved!`);
   };
 
   const loadClient = (name: string) => {
@@ -360,7 +512,7 @@ export default function DeliveryTracker() {
       type: "SET_DELIVERY_INFO",
       payload: {
         deliveredTo: data.deliveredTo,
-        deliveryYear: data.year || 2025,
+        deliveryYear: data.year || new Date().getFullYear(),
       },
     });
   };
@@ -389,7 +541,9 @@ export default function DeliveryTracker() {
   };
 
   const exportHandlers = {
-    pdf: () => exportDeliveryPDF(state),
+    pdf: async () => {
+      await exportDeliveryPDF(state);
+    },
     excel: () => exportDeliveryExcel(state),
     txt: () => exportDeliveryTXT(state),
     whatsapp: () => {
@@ -407,35 +561,80 @@ export default function DeliveryTracker() {
   };
 
   const getDeliveryData = () => {
-    const headers = state.deliveryData.columns.map(col => col.label);
+    const headers = state.deliveryData.columns.map((col) => col.label);
     const rows = state.deliveryData.rows
-      .map(r =>
+      .map((r) =>
         state.deliveryData.columns
-          .map(col => {
-            if (col.key === "amount") return `Ksh${formatNumber(r.amount)}`;
-            if (col.key === "debt") return `Ksh${formatNumber(r.debt)}`;
+          .map((col) => {
+            if (col.key === "amount")
+              return `${currencySymbol}${formatNumber(r.amount)}`;
+            if (col.key === "debt")
+              return `${currencySymbol}${formatNumber(r.debt)}`;
             return r[col.key] || "";
           })
-          .join(" | ")
+          .join(" | "),
       )
       .join("\n");
 
-    return `FUEL DELIVERED TO: ${state.deliveredTo || "Client"}\nTOTAL ORDER: ${state.totalOrder || "N/A"} Litres\nYEAR: ${state.deliveryYear}\nPetrol Price: Ksh ${state.petrolPrice} /L\nDiesel Price: Ksh ${state.dieselPrice} /L\n\n${headers.join(" | ")}\n${rows}\n\nTotal Supplied: ${formatNumber(state.deliveryData.totals.totalSupplied)} L\nTotal Payments: Ksh ${formatNumber(state.deliveryData.totals.totalPayments)}\nBalance Due: Ksh ${formatNumber(state.deliveryData.totals.balanceDue, 2)}`;
+    const priceLines = stationFuelOptions
+      .map((label) => {
+        const ft = fuelTypeApi.findFuelType(label);
+        const price =
+          ft?.price ??
+          (label === "Super Petrol" || label === "Petrol"
+            ? state.petrolPrice
+            : label === "Diesel"
+              ? state.dieselPrice
+              : null);
+        return price != null
+          ? `${label} Price: ${currencySymbol} ${price} /L`
+          : null;
+      })
+      .filter(Boolean)
+      .join("\n");
+
+    return `FUEL DELIVERED TO: ${state.deliveredTo || "Client"}\nTOTAL ORDER: ${state.totalOrder || "N/A"} Litres\nYEAR: ${state.deliveryYear}\n${priceLines}\n\n${headers.join(" | ")}\n${rows}\n\nTotal Supplied: ${formatNumber(state.deliveryData.totals.totalSupplied)} L\nTotal Payments: ${currencySymbol} ${formatNumber(state.deliveryData.totals.totalPayments)}\nBalance Due: ${currencySymbol} ${formatNumber(state.deliveryData.totals.balanceDue, 2)}`;
   };
 
+  // Recalculate totals once on mount so cumulative debt is correct after a
+  // cloud reload. Runs only once — updateDeliveryTotals is called inline by
+  // every mutation handler for subsequent changes.
+  const totalsInitialized = useRef(false);
   useEffect(() => {
+    if (totalsInitialized.current) return;
     if (state.deliveryData.rows.length > 0) {
+      totalsInitialized.current = true;
       updateDeliveryTotals(state.deliveryData);
     }
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.deliveryData.rows.length]);
+
+  // Filter rows by the header date/fuel dropdowns. The index is preserved so
+  // updateCell/deleteRow still operate on the correct row in the full array.
+  const filteredRows = useMemo(() => {
+    return state.deliveryData.rows
+      .map((row, index) => ({ row, index }))
+      .filter(({ row }) => {
+        if (filterDate && row.date !== filterDate) return false;
+        if (filterFuel && row.fuel !== filterFuel) return false;
+        return true;
+      });
+  }, [state.deliveryData.rows, filterDate, filterFuel]);
 
   return (
     <div className="p-6 space-y-6">
+      {/* Toast */}
+      {toast && (
+        <div className="fixed top-4 right-4 z-50 bg-green-600 text-white px-4 py-2 rounded-lg shadow-lg animate-fade-in">
+          {toast}
+        </div>
+      )}
+
       {/* Header */}
       <div className="card">
         <div className="flex justify-between items-center mb-6 pb-4 border-b border-gray-200 dark:border-gray-700">
           <h2 className="text-2xl font-bold text-blue-900 dark:text-blue-200">
-            Delivery Tracker
+            Fuel Statement Report
           </h2>
         </div>
 
@@ -446,7 +645,7 @@ export default function DeliveryTracker() {
             <input
               type="text"
               value={state.deliveredTo}
-              onChange={e =>
+              onChange={(e) =>
                 dispatch({
                   type: "SET_DELIVERY_INFO",
                   payload: { deliveredTo: e.target.value },
@@ -460,7 +659,7 @@ export default function DeliveryTracker() {
             <input
               type="text"
               value={state.totalOrder}
-              onChange={e =>
+              onChange={(e) =>
                 dispatch({
                   type: "SET_DELIVERY_INFO",
                   payload: { totalOrder: e.target.value },
@@ -473,8 +672,8 @@ export default function DeliveryTracker() {
             <label>Year</label>
             <input
               type="number"
-              value={state.deliveryYear}
-              onChange={e =>
+              value={state.deliveryYear ?? ""}
+              onChange={(e) =>
                 dispatch({
                   type: "SET_DELIVERY_INFO",
                   payload: { deliveryYear: parseInt(e.target.value) },
@@ -483,33 +682,61 @@ export default function DeliveryTracker() {
             />
           </div>
           <div className="form-group">
-            <label>Petrol Price (Ksh/L)</label>
+            <label>Petrol Price ({currencySymbol}/L)</label>
             <input
               type="number"
-              value={state.petrolPrice}
-              onChange={e =>
+              value={state.petrolPrice ?? ""}
+              onChange={(e) => {
+                const v = parseFloat(e.target.value);
                 dispatch({
                   type: "SET_PRICES",
-                  payload: { petrolPrice: parseFloat(e.target.value) },
-                })
-              }
+                  payload: { petrolPrice: v, pmsPrice: v },
+                });
+              }}
               step="0.1"
             />
           </div>
           <div className="form-group">
-            <label>Diesel Price (Ksh/L)</label>
+            <label>Diesel Price ({currencySymbol}/L)</label>
             <input
               type="number"
-              value={state.dieselPrice}
-              onChange={e =>
+              value={state.dieselPrice ?? ""}
+              onChange={(e) => {
+                const v = parseFloat(e.target.value);
                 dispatch({
                   type: "SET_PRICES",
-                  payload: { dieselPrice: parseFloat(e.target.value) },
-                })
-              }
+                  payload: { dieselPrice: v, agoPrice: v },
+                });
+              }}
               step="0.1"
             />
           </div>
+          {/* Dynamic price inputs for extra fuel types (Kerosene, LPG,
+              V-Power, etc.) — not limited to just Petrol/Diesel. */}
+          {stationFuelOptions
+            .filter(
+              (label) => !["Super Petrol", "Petrol", "Diesel"].includes(label),
+            )
+            .map((label) => {
+              const ft = fuelTypeApi.findFuelType(label);
+              const priceVal = ft?.price ?? "";
+              return (
+                <div className="form-group" key={label}>
+                  <label>
+                    {label} Price ({currencySymbol}/L)
+                  </label>
+                  <input
+                    type="number"
+                    value={priceVal}
+                    onChange={(e) => {
+                      const v = parseFloat(e.target.value);
+                      syncPriceToFuelTypes(label, v);
+                    }}
+                    step="0.1"
+                  />
+                </div>
+              );
+            })}
         </div>
 
         {/* Table */}
@@ -554,14 +781,25 @@ export default function DeliveryTracker() {
                         {col.key === "date" && (
                           <input
                             type="date"
+                            value={filterDate}
+                            onChange={(e) => setFilterDate(e.target.value)}
                             className="text-xs bg-transparent border border-white/30 rounded px-1 flex-1"
+                            title="Filter by date"
                           />
                         )}
                         {col.key === "fuel" && (
-                          <select className="text-xs bg-transparent border border-white/30 rounded px-1 flex-1">
+                          <select
+                            value={filterFuel}
+                            onChange={(e) => setFilterFuel(e.target.value)}
+                            className="text-xs bg-transparent border border-white/30 rounded px-1 flex-1"
+                            title="Filter by fuel type"
+                          >
                             <option value="">All</option>
-                            <option value="Petrol">Petrol</option>
-                            <option value="Diesel">Diesel</option>
+                            {stationFuelOptions.map((f) => (
+                              <option key={f} value={f}>
+                                {f}
+                              </option>
+                            ))}
                           </select>
                         )}
                       </div>
@@ -572,15 +810,15 @@ export default function DeliveryTracker() {
               </tr>
             </thead>
             <tbody>
-              {state.deliveryData.rows.map((row, index) => (
-                <tr key={index}>
-                  {state.deliveryData.columns.map(col => (
+              {filteredRows.map(({ row, index }) => (
+                <tr key={row._id || index}>
+                  {state.deliveryData.columns.map((col) => (
                     <td key={col.key}>
                       {col.key === "date" ? (
                         <input
                           type="date"
                           value={row.date || ""}
-                          onChange={e =>
+                          onChange={(e) =>
                             updateCell(index, col.key, e.target.value)
                           }
                           className="w-full bg-transparent border-none outline-none"
@@ -589,7 +827,7 @@ export default function DeliveryTracker() {
                         <input
                           type="text"
                           value={row.reg || ""}
-                          onChange={e =>
+                          onChange={(e) =>
                             updateCell(index, col.key, e.target.value)
                           }
                           className="w-full bg-transparent border-none outline-none"
@@ -600,21 +838,24 @@ export default function DeliveryTracker() {
                           <span>-</span>
                         ) : (
                           <select
-                            value={row.fuel || "Petrol"}
-                            onChange={e =>
+                            value={row.fuel || defaultFuel}
+                            onChange={(e) =>
                               updateCell(index, col.key, e.target.value)
                             }
                             className="w-full bg-transparent border-none outline-none"
                           >
-                            <option value="Petrol">Petrol</option>
-                            <option value="Diesel">Diesel</option>
+                            {stationFuelOptions.map((f) => (
+                              <option key={f} value={f}>
+                                {f}
+                              </option>
+                            ))}
                           </select>
                         )
                       ) : col.key === "litres" ? (
                         <input
                           type="number"
                           value={row.litres || 0}
-                          onChange={e =>
+                          onChange={(e) =>
                             updateCell(index, col.key, e.target.value)
                           }
                           step="0.1"
@@ -624,7 +865,7 @@ export default function DeliveryTracker() {
                         <input
                           type="number"
                           value={row.amount || 0}
-                          onChange={e =>
+                          onChange={(e) =>
                             updateCell(index, col.key, e.target.value)
                           }
                           step="0.01"
@@ -634,7 +875,7 @@ export default function DeliveryTracker() {
                         <input
                           type="text"
                           value={row.name || ""}
-                          onChange={e =>
+                          onChange={(e) =>
                             updateCell(index, col.key, e.target.value)
                           }
                           className="w-full bg-transparent border-none outline-none"
@@ -645,7 +886,7 @@ export default function DeliveryTracker() {
                         <input
                           type="text"
                           value={row[col.key] || ""}
-                          onChange={e =>
+                          onChange={(e) =>
                             updateCell(index, col.key, e.target.value)
                           }
                           className="w-full bg-transparent border-none outline-none"
@@ -669,8 +910,11 @@ export default function DeliveryTracker() {
         </div>
 
         {/* Action Buttons Row */}
-        <div className="flex gap-3 mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg justify-center">
-          <button onClick={addCarriedOverDebt} className="btn btn-outline">
+        <div className="flex gap-3 mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg justify-center flex-wrap">
+          <button
+            onClick={() => setCoDebtModal(true)}
+            className="btn btn-outline"
+          >
             <ArrowRight size={16} />
             C/O Debt
           </button>
@@ -678,11 +922,17 @@ export default function DeliveryTracker() {
             <Plus size={16} />
             Add
           </button>
-          <button onClick={addPaymentRow} className="btn btn-secondary">
+          <button
+            onClick={() => setPaymentModal(true)}
+            className="btn btn-secondary"
+          >
             <DollarSign size={16} />
             Payment
           </button>
-          <button onClick={addColumn} className="btn btn-outline">
+          <button
+            onClick={() => setColumnModal(true)}
+            className="btn btn-outline"
+          >
             <Columns size={16} />
             Column
           </button>
@@ -695,22 +945,46 @@ export default function DeliveryTracker() {
             {formatNumber(state.deliveryData.totals.totalSupplied)} L
           </div>
           <div>
-            <strong>Total Payments:</strong> Ksh{" "}
+            <strong>Total Payments:</strong> {currencySymbol}{" "}
             {formatNumber(state.deliveryData.totals.totalPayments)}
           </div>
           <div>
-            <strong>Balance Due:</strong> Ksh{" "}
+            <strong>Balance Due:</strong> {currencySymbol}{" "}
             {formatNumber(state.deliveryData.totals.balanceDue, 2)}
           </div>
         </div>
       </div>
 
-      {/* Signatures */}
+      {/* Signatures (cross-device cloud-persisted) */}
       <div className="card">
         <h3 className="text-xl font-bold mb-4">Signatures</h3>
-        <div className="space-y-4">
-          <SignatureCanvas onSave={setManagerSignature} />
-          <SignatureCanvas onSave={setDirectorSignature} />
+        <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+          Signatures are saved to the cloud and available on every device you
+          log in from.
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <h4 className="text-sm font-semibold mb-2">Manager Signature</h4>
+            {managerSignature && (
+              <img
+                src={managerSignature}
+                alt="Manager signature"
+                className="max-h-24 mb-2 border border-gray-200 dark:border-gray-700 rounded"
+              />
+            )}
+            <SignatureCanvas onSave={handleManagerSig} />
+          </div>
+          <div>
+            <h4 className="text-sm font-semibold mb-2">Director Signature</h4>
+            {directorSignature && (
+              <img
+                src={directorSignature}
+                alt="Director signature"
+                className="max-h-24 mb-2 border border-gray-200 dark:border-gray-700 rounded"
+              />
+            )}
+            <SignatureCanvas onSave={handleDirectorSig} />
+          </div>
         </div>
       </div>
 
@@ -730,7 +1004,10 @@ export default function DeliveryTracker() {
           </div>
         </div>
         <div className="history-panel">
-          {Object.keys(state.clients).map(key => (
+          {Object.keys(state.clients).length === 0 && (
+            <p className="text-sm text-gray-400 p-2">No saved clients yet.</p>
+          )}
+          {Object.keys(state.clients).map((key) => (
             <div key={key} className="history-item">
               <span>{key}</span>
               <div className="flex gap-2">
@@ -753,6 +1030,145 @@ export default function DeliveryTracker() {
           title="Export Delivery Report"
         />
       </div>
+
+      {/* ─── Modals (replace prompt/alert) ─── */}
+
+      {/* Payment modal */}
+      {paymentModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full p-6 space-y-4">
+            <div className="flex justify-between items-center">
+              <h3 className="text-lg font-bold">Record Payment</h3>
+              <button
+                onClick={() => setPaymentModal(false)}
+                className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="form-group">
+              <label>Payment Amount ({currencySymbol})</label>
+              <input
+                type="number"
+                value={paymentAmount}
+                onChange={(e) => setPaymentAmount(e.target.value)}
+                placeholder="0"
+                autoFocus
+                step="0.01"
+                min="0"
+              />
+            </div>
+            <div className="form-group">
+              <label>Payment From (optional)</label>
+              <input
+                type="text"
+                value={paymentName}
+                onChange={(e) => setPaymentName(e.target.value)}
+                placeholder="Customer name"
+              />
+            </div>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setPaymentModal(false)}
+                className="btn btn-outline"
+              >
+                Cancel
+              </button>
+              <button onClick={submitPayment} className="btn btn-primary">
+                <DollarSign size={16} />
+                Save Payment
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Carried Over Debt modal */}
+      {coDebtModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full p-6 space-y-4">
+            <div className="flex justify-between items-center">
+              <h3 className="text-lg font-bold">Add Carried Over Debt</h3>
+              <button
+                onClick={() => setCoDebtModal(false)}
+                className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              This adds a starting debt balance carried over from a previous
+              period.
+            </p>
+            <div className="form-group">
+              <label>Debt Amount ({currencySymbol})</label>
+              <input
+                type="number"
+                value={coDebtAmount}
+                onChange={(e) => setCoDebtAmount(e.target.value)}
+                placeholder="0"
+                autoFocus
+                step="0.01"
+                min="0"
+              />
+            </div>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setCoDebtModal(false)}
+                className="btn btn-outline"
+              >
+                Cancel
+              </button>
+              <button onClick={submitCoDebt} className="btn btn-primary">
+                <ArrowRight size={16} />
+                Add Debt
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Column modal */}
+      {columnModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full p-6 space-y-4">
+            <div className="flex justify-between items-center">
+              <h3 className="text-lg font-bold">Add Custom Column</h3>
+              <button
+                onClick={() => setColumnModal(false)}
+                className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="form-group">
+              <label>Column Name</label>
+              <input
+                type="text"
+                value={columnName}
+                onChange={(e) => setColumnName(e.target.value)}
+                placeholder="e.g. Driver, Invoice No, Notes"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") submitColumn();
+                }}
+              />
+            </div>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setColumnModal(false)}
+                className="btn btn-outline"
+              >
+                Cancel
+              </button>
+              <button onClick={submitColumn} className="btn btn-primary">
+                <Columns size={16} />
+                Add Column
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

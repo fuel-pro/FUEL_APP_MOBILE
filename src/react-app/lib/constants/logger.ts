@@ -1,6 +1,6 @@
 /**
  * CENTRALIZED LOGGING UTILITY
- * 
+ *
  * Provides consistent logging with levels, namespaces, and production controls.
  */
 
@@ -28,18 +28,18 @@ const isProduction = !isDevelopment;
 
 class Logger {
   private namespace: string;
-  
+
   constructor(namespace: string) {
     this.namespace = namespace;
   }
-  
+
   /**
    * Create a child logger with a sub-namespace
    */
   child(subNamespace: string): Logger {
     return new Logger(`${this.namespace}:${subNamespace}`);
   }
-  
+
   /**
    * Format log message with namespace and timestamp
    */
@@ -47,7 +47,7 @@ class Logger {
     const timestamp = new Date().toISOString();
     return `[${timestamp}] [${this.namespace}] ${message}`;
   }
-  
+
   /**
    * Debug level - detailed information for debugging
    */
@@ -56,7 +56,7 @@ class Logger {
       console.debug(this.formatMessage(message), ...args);
     }
   }
-  
+
   /**
    * Info level - general information
    */
@@ -65,7 +65,7 @@ class Logger {
       console.info(this.formatMessage(message), ...args);
     }
   }
-  
+
   /**
    * Warn level - warning messages
    */
@@ -74,7 +74,7 @@ class Logger {
       console.warn(this.formatMessage(message), ...args);
     }
   }
-  
+
   /**
    * Error level - error messages
    */
@@ -83,15 +83,20 @@ class Logger {
       console.error(this.formatMessage(message), ...args);
     }
   }
-  
+
   /**
    * Log with custom level
    */
   log(level: LogLevel, message: string, ...args: unknown[]): void {
-    const levels: (keyof typeof console)[] = ["debug", "info", "warn", "error"];
-    const method = levels[level] || "log";
+    const methods: ((...args: unknown[]) => void)[] = [
+      console.debug,
+      console.info,
+      console.warn,
+      console.error,
+    ];
+    const fn = methods[level] ?? console.log;
     if (currentLevel <= level) {
-      console[method](this.formatMessage(message), ...args);
+      fn(this.formatMessage(message), ...args);
     }
   }
 }
@@ -113,33 +118,33 @@ export const loggers = {
   app: createLogger("app"),
   auth: createLogger("auth"),
   station: createLogger("station"),
-  
+
   // Data
   fuel: createLogger("fuel"),
   price: createLogger("price"),
   sales: createLogger("sales"),
   inventory: createLogger("inventory"),
-  
+
   // Sync
   sync: createLogger("sync"),
   cloud: createLogger("cloud"),
   api: createLogger("api"),
-  
+
   // UI
   ui: createLogger("ui"),
   theme: createLogger("theme"),
   tab: createLogger("tab"),
-  
+
   // Integration
   mpesa: createLogger("mpesa"),
   printer: createLogger("printer"),
   storage: createLogger("storage"),
-  
+
   // Utils
   currency: createLogger("currency"),
   format: createLogger("format"),
   date: createLogger("date"),
-  
+
   // General
   default: createLogger("app"),
 };

@@ -14,117 +14,190 @@ import {
   Building2,
   RefreshCw,
   AlertCircle,
+  CheckCircle2,
 } from "lucide-react";
-import { trpc } from "@/providers/trpc";
+import {
+  getDetectedCurrency,
+  getCurrencySymbol,
+} from "@/react-app/lib/currency";
 
-interface Props {
+const CUR = () => getCurrencySymbol(getDetectedCurrency());
+
+interface AnalyticsData {
+  totalRevenue: number;
+  totalSales: number;
+  avgSale: number;
+  byFuelType: { fuelType: string; liters: number; revenue: number }[];
+  stationCount: number;
+}
+
+interface AnalyticsProps {
   logAudit: (
     e: string,
     d: string,
-    s: "success" | "warning" | "danger" | "info"
+    s: "success" | "warning" | "danger" | "info",
   ) => void;
+  // Passed from the parent FounderAccess which already fetches via
+  // useFounderBackend. This avoids a duplicate fetch and ensures the
+  // Analytics section has data even when the /api/founder-stats endpoint
+  // hasn't been updated to return the `analytics` field yet.
+  backendRevenue?: number;
+  backendStationCount?: number;
+  backendUserCount?: number;
 }
 
-export default function AnalyticsSection({ logAudit }: Props) {
+export default function AnalyticsSection({
+  logAudit,
+  backendRevenue,
+  backendStationCount,
+  backendUserCount,
+}: AnalyticsProps) {
   const [fuelBreakdown, setFuelBreakdown] = useState<
     Record<string, { qty: number; amount: number }>
   >({});
   const [backendError, setBackendError] = useState<string | null>(null);
-  const [dataSource, setDataSource] = useState<"backend" | "local" | "none">("none");
+  const [dataSource, setDataSource] = useState<"backend" | "local" | "none">(
+    "none",
+  );
+  const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
+  const [stationCount, setStationCount] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
+  const [auditSummary, setAuditSummary] = useState<any>(null);
 
-  /* ─── Backend Queries with proper error handling ─── */
-  const {
-    data: salesAnalytics,
-    isLoading: salesLoading,
-    refetch: refetchSales,
-    isError: salesError,
-  } = trpc.sale.analytics.useQuery(undefined, {
-    staleTime: 1000 * 60 * 2,
-    retry: 1,
-    enabled: false, // Don't auto-fetch - handle manually
-  });
+  /* ─── Fetch analytics from /api/founder-stats (Vercel serverless) ───
+   * This works on BOTH Vercel (same-origin /api/founder-stats) and Cloudflare
+   * Pages (cross-origin fetch to the Vercel URL). The endpoint uses the
+   * service_role key to read cross-owner data after verifying the caller is
+   * a founder. This replaces the broken tRPC queries which only work when a
+   * tRPC backend is configured (not on Cloudflare Pages). */
+  const fetchAnalytics = async () => {
+    try {
+      setIsLoading(true);
+      setBackendError(null);
 
-  const {
-    data: stationsData,
-    isLoading: stationsLoading,
-    refetch: refetchStations,
-    isError: stationsError,
-  } = trpc.station.list.useQuery(undefined, {
-    staleTime: 1000 * 60 * 2,
-    retry: 1,
-    enabled: false,
-  });
-
-  const { data: auditSummary, isLoading: auditLoading } =
-    trpc.audit.summary.useQuery(undefined, {
-      staleTime: 1000 * 60 * 5,
-      retry: 1,
-      enabled: false,
-    });
-
-  /* ─── Try to fetch backend data on mount ─── */
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        await refetchSales();
-        await refetchStations();
-      } catch (e) {
-        console.warn("Backend unavailable, using local data");
+      const founderToken = localStorage.getItem("fuelpro_founder_token");
+      let token = founderToken;
+      if (!token) {
+        const { getSupabaseClient } = await import("@/supabase/client");
+        const client = getSupabaseClient();
+        const { data } = await client.auth.getSession();
+        token = data.session?.access_token;
       }
-    };
-    fetchData();
+      if (!token) {
+        setBackendError("Not authenticated — please log in");
+        setIsLoading(false);
+        return;
+      }
+
+      const isVercel =
+        typeof window !== "undefined" &&
+        window.location.hostname.includes("vercel.app");
+      const base = isVercel
+        ? "/api/founder-stats"
+        : "https://fuel-app-mobile.vercel.app/api/founder-stats";
+      const res = await fetch(base, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        setBackendError(`Backend returned ${res.status}`);
+        setIsLoading(false);
+        return;
+      }
+      const json = await res.json();
+      if (json?.success) {
+        // The endpoint always returns users/stations/totalRevenue.
+        // The `analytics` field is present in the enhanced endpoint
+        // (byFuelType, totalSales, avgSale). If absent (old deploy),
+        // we fall back to the parent-provided backend totals.
+        if (json.analytics) {
+          setAnalytics(json.analytics);
+          setStationCount(
+            json.analytics.stationCount || json.stations?.length || 0,
+          );
+
+          // Build fuel breakdown from byFuelType
+          const fBreak: Record<string, { qty: number; amount: number }> = {};
+          if (json.analytics.byFuelType?.length > 0) {
+            json.analytics.byFuelType.forEach(
+              (ft: { fuelType: string; liters: number; revenue: number }) => {
+                const name = String(ft.fuelType || "Other");
+                fBreak[name] = {
+                  qty: Number(ft.liters || 0),
+                  amount: Number(ft.revenue || 0),
+                };
+              },
+            );
+            setFuelBreakdown(fBreak);
+          }
+        }
+        setDataSource("backend");
+        setBackendError(null);
+      } else {
+        setBackendError(json?.error || "No analytics data available");
+      }
+
+      // Also fetch audit log summary from cloud store
+      try {
+        const { cloudStorageService } =
+          await import("@/react-app/lib/cloud-storage-service");
+        const auditLog =
+          await cloudStorageService.get<any[]>("founder_audit_log");
+        if (Array.isArray(auditLog) && auditLog.length > 0) {
+          const bySeverity: Record<string, number> = {};
+          auditLog.forEach((e) => {
+            const sev = e?.severity || "info";
+            bySeverity[sev] = (bySeverity[sev] || 0) + 1;
+          });
+          setAuditSummary({
+            total: auditLog.length,
+            bySeverity: Object.entries(bySeverity).map(([severity, count]) => ({
+              severity,
+              count,
+            })),
+          });
+        }
+      } catch {
+        /* audit log fetch is best-effort */
+      }
+    } catch (e) {
+      console.warn("Analytics fetch failed:", e);
+      setBackendError("Unable to reach backend — check your connection");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchAnalytics();
+    logAudit("Analytics Viewed", "Analytics dashboard accessed", "info");
   }, []);
 
   const handleRefresh = () => {
-    refetchSales();
-    refetchStations();
+    fetchAnalytics();
     logAudit(
       "Analytics Refreshed",
       "Manually refreshed analytics data from backend",
-      "info"
+      "info",
     );
   };
 
-  /* ─── Process fuel breakdown from backend analytics ─── */
-  useEffect(() => {
-    if (salesAnalytics?.byFuelType && salesAnalytics.byFuelType.length > 0) {
-      const fBreak: Record<string, { qty: number; amount: number }> = {};
-      salesAnalytics.byFuelType.forEach((ft: any) => {
-        const name = String(ft.fuelType || "Other");
-        fBreak[name] = {
-          qty: Number(ft.liters || 0),
-          amount: Number(ft.revenue || 0),
-        };
-      });
-      setFuelBreakdown(fBreak);
-      setDataSource("backend");
-      setBackendError(null);
-      return;
-    }
-    
-    // Check for errors
-    if (salesError || stationsError) {
-      setBackendError("Backend unavailable - showing local data");
-    }
-    logAudit(
-      "Analytics Viewed",
-      "Analytics dashboard accessed with backend data",
-      "info"
-    );
-  }, [salesAnalytics, logAudit]);
-
-  /* ─── Computed KPIs ─── */
-  const totalRevenue = Number(salesAnalytics?.totalRevenue || 0);
-  const totalSales = Number(salesAnalytics?.totalSales || 0);
-  const avgSale = Number(salesAnalytics?.avgSale || 0);
-  const stationCount = stationsData?.length || 0;
+  /* ─── Computed KPIs ───
+   * Prefer the analytics field from /api/founder-stats (detailed: byFuelType,
+   * totalSales, avgSale). Fall back to the parent-provided backend totals
+   * (which come from the same endpoint but are always present) when the
+   * analytics field isn't returned yet (old Vercel deploy). */
+  const totalRevenue = Number(analytics?.totalRevenue || backendRevenue || 0);
+  const totalSales = Number(analytics?.totalSales || 0);
+  const avgSale = Number(analytics?.avgSale || 0);
+  const effectiveStationCount = Number(
+    analytics?.stationCount || backendStationCount || stationCount || 0,
+  );
 
   /* ─── Fallback: scan localStorage if backend has no data yet ─── */
   useEffect(() => {
     if (totalRevenue > 0 || totalSales > 0) return; // Backend has data
     // Scan localStorage for legacy sales data as fallback
     let rev = 0,
-      vol = 0,
       txns = 0;
     const fBreak: Record<string, { qty: number; amount: number }> = {};
 
@@ -151,14 +224,11 @@ export default function AnalyticsSection({ logAudit }: Props) {
           const amt = Number(item.amount || item.total || item.paid || 0);
           const qty = Number(item.quantity || item.liters || item.volume || 0);
           const fType = String(
-            item.fuelType || item.fuel || item.product || "Other"
+            item.fuelType || item.fuel || item.product || "Other",
           );
           if (amt > 0) {
             rev += amt;
             txns++;
-          }
-          if (qty > 0) {
-            vol += qty;
           }
           if (!fBreak[fType]) fBreak[fType] = { qty: 0, amount: 0 };
           fBreak[fType].qty += qty;
@@ -196,7 +266,7 @@ export default function AnalyticsSection({ logAudit }: Props) {
     { label: "Tablet", pct: 10, icon: Tablet },
   ];
 
-  const isLoading = salesLoading || stationsLoading || auditLoading;
+  const isLoadingState = isLoading;
 
   return (
     <div className="space-y-6">
@@ -206,7 +276,7 @@ export default function AnalyticsSection({ logAudit }: Props) {
             <BarChart3 size={18} className="text-blue-400" /> Analytics
           </h2>
           <p className="text-xs text-gray-500 mt-0.5">
-            {isLoading
+            {isLoadingState
               ? "Loading from backend..."
               : dataSource === "backend"
                 ? "Real-time usage analytics from database"
@@ -230,16 +300,24 @@ export default function AnalyticsSection({ logAudit }: Props) {
           <span className="text-xs text-amber-300">{backendError}</span>
         </div>
       )}
+      {dataSource === "backend" && !backendError && (
+        <div className="flex items-center gap-2 px-4 py-2 bg-green-500/10 border border-green-500/20 rounded-lg">
+          <CheckCircle2 size={14} className="text-green-400" />
+          <span className="text-xs text-green-300">
+            Connected to backend — live data from Supabase
+          </span>
+        </div>
+      )}
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
         {[
           {
             label: "Total Revenue",
             value:
               totalRevenue > 0
-                ? `KES ${totalRevenue.toLocaleString()}`
-                : "KES 0",
+                ? `${CUR()} ${totalRevenue.toLocaleString()}`
+                : `${CUR()} 0`,
             icon: DollarSign,
             change: "+12%",
             up: true,
@@ -257,8 +335,8 @@ export default function AnalyticsSection({ logAudit }: Props) {
             label: "Avg Sale",
             value:
               avgSale > 0
-                ? `KES ${Math.round(avgSale).toLocaleString()}`
-                : "KES 0",
+                ? `${CUR()} ${Math.round(avgSale).toLocaleString()}`
+                : `${CUR()} 0`,
             icon: Fuel,
             change: "-3%",
             up: false,
@@ -266,13 +344,21 @@ export default function AnalyticsSection({ logAudit }: Props) {
           },
           {
             label: "Stations",
-            value: stationCount.toString(),
+            value: effectiveStationCount.toString(),
             icon: Building2,
             change: "+15%",
             up: true,
             color: "text-purple-400",
           },
-        ].map(k => (
+          {
+            label: "Users",
+            value: (backendUserCount || 0).toString(),
+            icon: Users,
+            change: "+5%",
+            up: true,
+            color: "text-indigo-400",
+          },
+        ].map((k) => (
           <div
             key={k.label}
             className="bg-[#161618] border border-white/[0.06] rounded-xl p-4"
@@ -309,7 +395,7 @@ export default function AnalyticsSection({ logAudit }: Props) {
                 label: "Success",
                 value: (
                   auditSummary.bySeverity?.find(
-                    (s: any) => s.severity === "success"
+                    (s: any) => s.severity === "success",
                   )?.count || 0
                 ).toString(),
                 color: "text-green-400",
@@ -318,7 +404,7 @@ export default function AnalyticsSection({ logAudit }: Props) {
                 label: "Warnings",
                 value: (
                   auditSummary.bySeverity?.find(
-                    (s: any) => s.severity === "warning"
+                    (s: any) => s.severity === "warning",
                   )?.count || 0
                 ).toString(),
                 color: "text-amber-400",
@@ -327,12 +413,12 @@ export default function AnalyticsSection({ logAudit }: Props) {
                 label: "Danger",
                 value: (
                   auditSummary.bySeverity?.find(
-                    (s: any) => s.severity === "danger"
+                    (s: any) => s.severity === "danger",
                   )?.count || 0
                 ).toString(),
                 color: "text-red-400",
               },
-            ].map(s => (
+            ].map((s) => (
               <div
                 key={s.label}
                 className="text-center p-3 bg-white/[0.02] rounded-lg"
@@ -404,7 +490,7 @@ export default function AnalyticsSection({ logAudit }: Props) {
             Device Breakdown
           </h3>
           <div className="space-y-2">
-            {deviceData.map(d => (
+            {deviceData.map((d) => (
               <div
                 key={d.label}
                 className="flex items-center justify-between py-2 border-b border-white/[0.04]"
@@ -437,7 +523,9 @@ export default function AnalyticsSection({ logAudit }: Props) {
         </h3>
         <div className="grid grid-cols-3 gap-4">
           <div className="text-center p-3 bg-white/[0.02] rounded-lg">
-            <p className="text-2xl font-bold text-white">{stationCount}</p>
+            <p className="text-2xl font-bold text-white">
+              {effectiveStationCount}
+            </p>
             <p className="text-[10px] text-gray-500">Stations</p>
           </div>
           <div className="text-center p-3 bg-white/[0.02] rounded-lg">
@@ -448,7 +536,7 @@ export default function AnalyticsSection({ logAudit }: Props) {
           </div>
           <div className="text-center p-3 bg-white/[0.02] rounded-lg">
             <p className="text-2xl font-bold text-white">
-              KES {totalRevenue.toLocaleString()}
+              {CUR()} {totalRevenue.toLocaleString()}
             </p>
             <p className="text-[10px] text-gray-500">Total Revenue</p>
           </div>

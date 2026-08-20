@@ -12,6 +12,10 @@ import { useAuth } from "@/react-app/context/AuthContext";
 import { usePermissions } from "@/react-app/context/PermissionContext";
 import { useTenant } from "@/react-app/context/TenantContext";
 import { LocationProvider } from "@/react-app/context/LocationContext";
+import { useFuel } from "@/react-app/context/FuelContext";
+import { useTutorial } from "@/react-app/context/TutorialContext";
+import cloudStorageService from "@/react-app/lib/cloud-storage-service";
+import OnboardingTutorial from "@/react-app/components/OnboardingTutorial";
 import Header from "@/react-app/components/Header";
 import TabNavigation from "@/react-app/components/TabNavigation";
 import MobileBottomNav from "@/react-app/components/MobileBottomNav";
@@ -26,81 +30,91 @@ import FirstLoginChoice from "@/react-app/components/FirstLoginChoice";
 // All tab content lazy-loaded to reduce main bundle
 const Dashboard = lazy(() => import("@/react-app/components/Dashboard"));
 const DeliveryTracker = lazy(
-  () => import("@/react-app/components/DeliveryTracker")
+  () => import("@/react-app/components/DeliveryTracker"),
 );
 const FuelOffloading = lazy(
-  () => import("@/react-app/components/FuelOffloading")
+  () => import("@/react-app/components/FuelOffloading"),
 );
 const Invoice = lazy(() => import("@/react-app/components/Invoice"));
-const DebtReminder = lazy(() => import("@/react-app/components/DebtReminder"));
+// DebtReminder merged into CreditManagement as a sub-tab (no top-level tab).
 const SalesTracking = lazy(
-  () => import("@/react-app/components/SalesTracking")
+  () => import("@/react-app/components/SalesTracking"),
 );
 const ReportsCenter = lazy(
-  () => import("@/react-app/components/ReportsCenter")
+  () => import("@/react-app/components/ReportsCenter"),
 );
 const MPESAAnalyzer = lazy(
-  () => import("@/react-app/components/MPESAAnalyzer")
+  () => import("@/react-app/components/MPESAAnalyzer"),
 );
 const PayrollSystem = lazy(
-  () => import("@/react-app/components/PayrollSystem")
+  () => import("@/react-app/components/PayrollSystem"),
 );
 const DataManager = lazy(() => import("@/react-app/components/DataManager"));
 const News = lazy(() => import("@/react-app/components/News"));
 const LiveTransaction = lazy(
-  () => import("@/react-app/components/LiveTransaction")
+  () => import("@/react-app/components/LiveTransaction"),
 );
 const FuelSalesReport = lazy(
-  () => import("@/react-app/components/FuelSalesReport")
+  () => import("@/react-app/components/FuelSalesReport"),
 );
 const Communication = lazy(
-  () => import("@/react-app/components/Communication")
+  () => import("@/react-app/components/Communication"),
 );
 const PointOfSale = lazy(() => import("@/react-app/components/PointOfSale"));
 const InventoryManagement = lazy(
-  () => import("@/react-app/components/InventoryManagement")
+  () => import("@/react-app/components/InventoryManagement"),
 );
 const CustomerLoyalty = lazy(
-  () => import("@/react-app/components/CustomerLoyalty")
+  () => import("@/react-app/components/CustomerLoyalty"),
 );
 const AuditTrail = lazy(() => import("@/react-app/components/AuditTrail"));
-const ShiftManagement = lazy(
-  () => import("@/react-app/components/ShiftManagement")
-);
-const FuelQualityTesting = lazy(
-  () => import("@/react-app/components/FuelQualityTesting")
-);
 const CreditManagement = lazy(
-  () => import("@/react-app/components/CreditManagement")
+  () => import("@/react-app/components/CreditManagement"),
 );
 const AdvancedAnalytics = lazy(
-  () => import("@/react-app/components/AdvancedAnalytics")
+  () => import("@/react-app/components/AdvancedAnalytics"),
 );
 const IntegrationHub = lazy(
-  () => import("@/react-app/components/IntegrationHub")
+  () => import("@/react-app/components/IntegrationHub"),
 );
 const Compliance = lazy(() => import("@/react-app/components/Compliance"));
-const DocumentConverter = lazy(
-  () => import("@/react-app/components/DocumentConverter")
-);
 const FuelTypesManager = lazy(
-  () => import("@/react-app/components/FuelTypesManager")
+  () => import("@/react-app/components/FuelTypesManager"),
 );
 const TeamManager = lazy(() => import("@/react-app/components/TeamManager"));
 const DocumentCenter = lazy(
-  () => import("@/react-app/components/DocumentCenter")
+  () => import("@/react-app/components/DocumentCenter"),
 );
 const SupplierManagement = lazy(
-  () => import("@/react-app/components/SupplierManagement")
+  () => import("@/react-app/components/SupplierManagement"),
 );
 const MaintenanceTracker = lazy(
-  () => import("@/react-app/components/MaintenanceTracker")
+  () => import("@/react-app/components/MaintenanceTracker"),
 );
 const ExpenseTracker = lazy(
-  () => import("@/react-app/components/ExpenseTracker")
+  () => import("@/react-app/components/ExpenseTracker"),
 );
-const PriceBoard = lazy(() => import("@/react-app/components/PriceBoard"));
-const PumpMappingV1 = lazy(() => import("@/react-app/components/PumpMappingV1"));
+const PumpMappingV1 = lazy(
+  () => import("@/react-app/components/PumpMappingV1"),
+);
+const FuelPriceLocator = lazy(
+  () => import("@/react-app/components/FuelPriceLocator"),
+);
+
+// ─── SalesZote-style POS business suite modules ───
+// These are ADDITIVE features layered onto the existing FuelPro tab system
+// (not a replica/replacement of app.saleszote.com). Only the modules that
+// provide genuinely new capability not already covered by a FuelPro tab are
+// wired in here; modules that duplicate an existing FuelPro tab reuse the
+// FuelPro component instead.
+// NOTE: ProductsManagement was merged into InventoryManagement (Stock
+// Management) as a "Products" sub-tab — no longer a standalone top-level tab.
+const TerminalSessions = lazy(
+  () => import("@/react-app/components/TerminalSessions"),
+);
+const AutomationPanel = lazy(
+  () => import("@/react-app/components/AutomationPanel"),
+);
 
 // ─── Cross-Tab Data Sync ───
 // Shared state channel for real-time updates between tabs
@@ -116,7 +130,7 @@ function useCrossTabSync() {
       // Fallback: use localStorage events
       localStorage.setItem(
         "fuelpro_sync_event",
-        JSON.stringify({ event, data, timestamp: Date.now() })
+        JSON.stringify({ event, data, timestamp: Date.now() }),
       );
     }
   }, []);
@@ -126,7 +140,7 @@ function useCrossTabSync() {
       let bc: BroadcastChannel | null = null;
       try {
         bc = new BroadcastChannel(SYNC_CHANNEL);
-        bc.onmessage = e => {
+        bc.onmessage = (e) => {
           if (e.data.event === event) handler(e.data.data);
         };
       } catch {
@@ -150,7 +164,7 @@ function useCrossTabSync() {
         window.removeEventListener("storage", storageHandler);
       };
     },
-    []
+    [],
   );
 
   return { broadcast, subscribe };
@@ -171,6 +185,8 @@ function HomeContent() {
   const { setRole } = usePermissions();
   const { featureFlags, isFeatureEnabled } = useTenant();
   const { broadcast, subscribe } = useCrossTabSync();
+  const { state: fuelState } = useFuel();
+  const tutorial = useTutorial();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("dashboard");
@@ -178,6 +194,21 @@ function HomeContent() {
   const [showStationManager, setShowStationManager] = useState(false);
   const [showCombined, setShowCombined] = useState(false);
   const [lastSaleTime, setLastSaleTime] = useState(Date.now());
+  const [automationNotice, setAutomationNotice] = useState<{
+    title: string;
+    message: string;
+  } | null>(null);
+
+  // One-time onboarding tutorial: auto-launch the first time a logged-in user
+  // reaches the main dashboard (after station setup). It is a one-time
+  // experience — once completed/skipped it won't show again unless replayed
+  // from the Header Help menu. "Remind me later" snoozes it for 3 days.
+  useEffect(() => {
+    if (tutorial.shouldAutoStart && !tutorial.active) {
+      const t = setTimeout(() => tutorial.startTutorial("basic"), 800);
+      return () => clearTimeout(t);
+    }
+  }, [tutorial.shouldAutoStart, tutorial.active]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-login to role
   useEffect(() => {
@@ -188,18 +219,73 @@ function HomeContent() {
     }
   }, [user, currentStation, getActiveBinding, setRole]);
 
+  // CLOUD-BACKED SETUP-COMPLETE CHECK (fixes "offline re-triggers setup
+  // wizard on a new device"). The `fuelpro_setup_complete` flag was only in
+  // localStorage, so on a fresh device/browser (empty localStorage) a
+  // returning user offline was sent back to the SetupWizard even though they
+  // already completed setup on another device. Now we also persist the flag
+  // to cloud (app_kv key `setup_complete`) per user and hydrate the local
+  // flag from cloud on mount so the "Loading your station data…" state shows
+  // instead of the wizard. The write happens in the wizard onComplete handler.
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const cloud = await cloudStorageService.get<boolean>(
+          "setup_complete",
+          undefined,
+        );
+        if (!cancelled && cloud === true) {
+          // Hydrate the local flag so the offline loading-state path runs.
+          localStorage.setItem("fuelpro_setup_complete", "true");
+        }
+      } catch {
+        /* cloud unavailable — the local flag still governs */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
   // Check for stations in localStorage after wizard completes
-  // This fixes the race condition where createStation hasn't propagated yet
+  // This fixes the race condition where createStation hasn't propagated yet.
+  // IMPORTANT: checks the USER-SCOPED key (fuelpro_stations_v3_<userId>),
+  // not the legacy bare key — using the bare key caused a reload loop when
+  // StationContext hadn't hydrated from the scoped key yet but the bare key
+  // had leftover data. Also uses safeReload (loop-guarded) instead of a
+  // raw window.location.reload().
   useEffect(() => {
     if (!showSetupWizard && stations.length === 0) {
       const interval = setInterval(() => {
         try {
-          const raw = localStorage.getItem("fuelpro_stations_v3");
+          // Resolve the user-scoped stations key (mirrors StationContext).
+          let scopedKey = "fuelpro_stations_v3";
+          const identityRaw = localStorage.getItem("fuelpro_auth_identity");
+          if (identityRaw) {
+            const id = JSON.parse(identityRaw)?.id;
+            if (typeof id === "string" && id)
+              scopedKey = `fuelpro_stations_v3_${id}`;
+          }
+          const raw =
+            localStorage.getItem(scopedKey) ||
+            localStorage.getItem("fuelpro_stations_v3");
           if (raw) {
             const parsed = JSON.parse(raw);
-            if (parsed.length > 0) {
+            const stationList = Array.isArray(parsed)
+              ? parsed
+              : parsed?.stations;
+            if (stationList && stationList.length > 0) {
               clearInterval(interval);
-              window.location.reload();
+              if (
+                typeof window !== "undefined" &&
+                typeof window.__fuelproSafeReload === "function"
+              ) {
+                window.__fuelproSafeReload("home-station-found");
+              } else {
+                window.location.reload();
+              }
             }
           }
         } catch {}
@@ -222,10 +308,10 @@ function HomeContent() {
   useEffect(() => {
     const unsub1 = subscribe("sale_made", () => setLastSaleTime(Date.now()));
     const unsub2 = subscribe("inventory_update", () =>
-      setLastSaleTime(Date.now())
+      setLastSaleTime(Date.now()),
     );
     const unsub3 = subscribe("tab_change", (tabId: string) =>
-      setActiveTab(tabId)
+      setActiveTab(tabId),
     );
     return () => {
       unsub1();
@@ -247,23 +333,35 @@ function HomeContent() {
     return () => window.removeEventListener("changeTab", handleChangeTab);
   }, [broadcast]);
 
+  // Automation notification toast — listens for `automation:notify`
+  // CustomEvents fired by the automation engine (e.g. auto-reorder created)
+  // and surfaces them as a transient toast near the bottom of the page.
+  useEffect(() => {
+    const onNotify = (e: Event) => {
+      const detail = (e as CustomEvent).detail || {};
+      const title = detail.title || "Automation";
+      const message = detail.message || "";
+      setAutomationNotice({ title, message });
+      setTimeout(() => setAutomationNotice(null), 5000);
+    };
+    window.addEventListener("automation:notify", onNotify);
+    return () => window.removeEventListener("automation:notify", onNotify);
+  }, []);
+
   // Validate tab access - redirect if current tab is restricted by feature flag
   const { canAccessTab } = usePermissions();
   useEffect(() => {
     const tabFeatureMap: Record<string, keyof typeof featureFlags> = {
-      mpesa: "mpesa",
       communication: "email",
       audit: "audit",
       regional: "compliance",
-      priceboard: "priceboard",
       fueltypes: "fueltypes",
       maintenance: "maintenance",
-      quality: "quality",
     };
     const requiredFeature = tabFeatureMap[activeTab];
     if (requiredFeature && !featureFlags[requiredFeature]) {
       const fallbackTabs = ["dashboard", "pos", "sales", "inventory"];
-      const fallback = fallbackTabs.find(t => canAccessTab(t));
+      const fallback = fallbackTabs.find((t) => canAccessTab(t));
       if (fallback && fallback !== activeTab) setActiveTab(fallback);
     }
   }, [activeTab, canAccessTab, featureFlags]);
@@ -271,16 +369,29 @@ function HomeContent() {
   // Filter tab configurations based on feature flags
   const filteredTabConfig = useMemo(() => {
     const config = { ...adminSettings.tabConfig };
-    // Hide M-PESA tab if not in Kenya/TZ
-    if (!featureFlags.mpesa) {
-      config.mpesa = { ...config.mpesa, enabled: false };
-    }
+    // M-PESA Analyzer is available to ALL users — the statement analysis
+    // (paste SMS text, pattern match, AI extract) is country-agnostic.
+    // The Kenya-specific Daraja STK Push API gracefully degrades inside
+    // the component based on the configured integration.
     // Compliance tab controlled by compliance feature flag
     if (!featureFlags.compliance) {
       config.regional = { ...config.regional, enabled: false };
     }
     return config;
   }, [adminSettings.tabConfig, featureFlags]);
+
+  // Resolve a tab's display label from adminSettings first, then fall back to
+  // FuelContext's authoritative tabConfigurations (which use the canonical
+  // lowercase ids). Prevents the raw tab id (e.g. "fuelsalesreport") leaking
+  // into the mobile heading when the two configs use different casing.
+  const resolveTabLabel = (tabId: string): string => {
+    const adminEntry =
+      filteredTabConfig[tabId as keyof typeof filteredTabConfig];
+    if (adminEntry?.label) return adminEntry.label;
+    const fuelEntry = fuelState.tabConfigurations?.find((t) => t.id === tabId);
+    if (fuelEntry?.label) return fuelEntry.label;
+    return tabId;
+  };
 
   // ─── Render tab content with cross-tab data ───
   const renderTabContent = () => {
@@ -324,14 +435,12 @@ function HomeContent() {
         return <FuelOffloading />;
       case "invoice":
         return <Invoice />;
-      case "debt":
-        return <DebtReminder />;
       case "sales":
         return <SalesTracking />;
       case "reports":
         return <ReportsCenter />;
       case "mpesa":
-        return featureFlags.mpesa ? <MPESAAnalyzer /> : null;
+        return <MPESAAnalyzer />;
       case "payroll":
         return <PayrollSystem />;
       case "data":
@@ -352,10 +461,6 @@ function HomeContent() {
         return <CustomerLoyalty />;
       case "audit":
         return <AuditTrail {...commonProps} />;
-      case "shifts":
-        return <ShiftManagement />;
-      case "quality":
-        return <FuelQualityTesting />;
       case "credit":
         return <CreditManagement />;
       case "analytics":
@@ -364,8 +469,6 @@ function HomeContent() {
         return <IntegrationHub />;
       case "regional":
         return <Compliance />;
-      case "docconverter":
-        return <DocumentConverter />;
       case "fueltypes":
         return <FuelTypesManager />;
       case "team":
@@ -378,10 +481,18 @@ function HomeContent() {
         return <MaintenanceTracker />;
       case "expenses":
         return <ExpenseTracker />;
-      case "priceboard":
-        return <PriceBoard />;
       case "pumpmapping":
         return <PumpMappingV1 />;
+      // ─── SalesZote-style additive modules ───
+      // Each maps to a genuinely-new capability. Where a SalesZote module
+      // duplicates a FuelPro tab, the FuelPro component is reused above.
+      // "products" was merged into "inventory" (Stock Management) as a sub-tab.
+      case "terminal":
+        return <TerminalSessions />;
+      case "automation":
+        return <AutomationPanel />;
+      case "price-finder":
+        return <FuelPriceLocator />;
       default:
         return <Dashboard />;
     }
@@ -407,18 +518,101 @@ function HomeContent() {
     );
   }
 
-  // No stations: show FirstLoginChoice
+  // No stations: route based on whether the user has shared-station bindings.
+  //  - New user (no bindings): go straight to the SetupWizard — the station
+  //    setup is part of the "account sign up" flow, not a separate choice.
+  //  - Invited team member (has active bindings): show FirstLoginChoice so they
+  //    can access the shared station they were invited to.
+  //  - Returning user who ALREADY completed setup (fuelpro_setup_complete flag
+  //    is set) but stations haven't loaded yet (cloud sync in progress, or
+  //    offline): show a "syncing your station" loading state instead of forcing
+  //    the setup wizard again. This fixes the "offline keeps asking me to set
+  //    up again" bug — the user already set up on another device; we just need
+  //    to wait for (or retry) the cloud load instead of re-running the wizard.
+  const hasActiveBindings = bindings.some((b) => b.active);
+  const setupAlreadyCompleted =
+    localStorage.getItem("fuelpro_setup_complete") === "true";
+  // A returning user on a NEW device won't have the local setup flag, but they
+  // DO have an auth identity (logged-in user with a Supabase session). Treat
+  // an authenticated user with no local setup flag + no stations as a
+  // "syncing from cloud" state (not a brand-new user) so they don't see the
+  // SetupWizard while their cloud data loads. This is the core fix for the
+  // "site keeps forgetting my data" complaint — the wizard was showing on
+  // every fresh-device login before cloud data arrived.
+  const hasAuthIdentity = Boolean(
+    localStorage.getItem("fuelpro_auth_identity"),
+  );
+
   if (stations.length === 0 || !currentStation) {
-    if (showSetupWizard) {
+    // Returning user: setup was completed before but stations are empty (cloud
+    // sync pending or offline). Do NOT re-run the wizard — show a loading
+    // state that retries the cloud sync. Only brand-new users (no setup flag,
+    // no auth identity) or users who explicitly clicked "create station" see
+    // the wizard.
+    if (
+      (setupAlreadyCompleted || hasAuthIdentity) &&
+      !showSetupWizard &&
+      !hasActiveBindings
+    ) {
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-slate-900 via-indigo-900 to-slate-900 flex items-center justify-center">
+          <div className="text-center max-w-md px-4">
+            <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-amber-400 to-amber-600 rounded-2xl flex items-center justify-center animate-pulse">
+              <span className="text-2xl font-bold text-white">F</span>
+            </div>
+            <h2 className="text-xl font-bold text-white font-serif">FuelPro</h2>
+            <p className="text-gray-300 text-sm mt-2">
+              Loading your station data…
+            </p>
+            <p className="text-gray-500 text-xs mt-1">
+              If you're offline, your data will sync automatically when you're
+              back online.
+            </p>
+            <div className="mt-4 w-48 h-1 bg-white/10 rounded-full mx-auto overflow-hidden">
+              <div
+                className="h-full bg-amber-500 rounded-full animate-pulse"
+                style={{ width: "60%" }}
+              />
+            </div>
+            <button
+              onClick={() => {
+                // Allow the user to manually retry if they've been stuck.
+                localStorage.removeItem("fuelpro_setup_complete");
+                setShowSetupWizard(true);
+              }}
+              className="mt-6 px-4 py-2 text-xs text-gray-400 hover:text-gray-200 underline"
+            >
+              Station not found? Set up a new one
+            </button>
+          </div>
+        </div>
+      );
+    }
+    if (showSetupWizard || !hasActiveBindings) {
       return (
         <SetupWizard
           onComplete={() => {
-            setShowSetupWizard(false);
-            // Clear localStorage flags and force full reload
+            // Mark setup complete WITHOUT reloading. The previous
+            // window.location.reload() fired synchronously right after the
+            // wizard dispatched SET_COMPANY_DATA / SET_TANK_VALUES /
+            // SET_PRICES / SET_PUMPS — before the debounced saveToStorage
+            // (100ms) and saveToCloud (300ms) could persist them. That wiped
+            // the wizard-entered tanks, pumps, prices, KRA PIN, and company
+            // data from memory, so they never reached localStorage or cloud
+            // and were lost on the reload. Keeping state in memory lets the
+            // normal debounced saves persist it.
             localStorage.setItem("fuelpro_setup_complete", "true");
-            // Force a complete page reload to reset all React state
-            window.location.reload();
+            // Also persist to cloud so a returning user on a NEW device
+            // (empty localStorage) offline is NOT sent back to the wizard —
+            // the cloud-backed check hydrates the local flag.
+            cloudStorageService
+              .set("setup_complete", true, undefined)
+              .catch(() => {});
+            setShowSetupWizard(false);
           }}
+          onAccessShared={
+            hasActiveBindings ? () => setShowSetupWizard(false) : undefined
+          }
         />
       );
     }
@@ -432,18 +626,18 @@ function HomeContent() {
           if (verifyStationAccess(stationId, password)) {
             switchStation(stationId);
             const accesses = JSON.parse(
-              localStorage.getItem("fuelpro_shared_access") || "[]"
+              localStorage.getItem("fuelpro_shared_access") || "[]",
             );
             accesses.push({ stationId, date: new Date().toISOString() });
             localStorage.setItem(
               "fuelpro_shared_access",
-              JSON.stringify(accesses)
+              JSON.stringify(accesses),
             );
             return true;
           }
           return false;
         }}
-        onSelectStation={stationId => {
+        onSelectStation={(stationId) => {
           switchStation(stationId);
           return true;
         }}
@@ -492,6 +686,12 @@ function HomeContent() {
   }
 
   // ─── MAIN APP ───
+  // The original FuelPro tab system is the primary app shell. SalesZote-style
+  // POS modules are layered in as ADDITIONAL tabs (see renderTabContent) rather
+  // than replacing the whole interface, so existing FuelPro features (Delivery,
+  // Offloading, Invoice, Debt, M-PESA, Payroll, Pump Mapping, etc.) remain
+  // first-class and the result is an enhancement, not a replica of
+  // app.saleszote.com.
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-20 md:pb-0 transition-colors duration-300">
       <Header
@@ -504,7 +704,7 @@ function HomeContent() {
         <div className="hidden md:block">
           <TabNavigation
             activeTab={activeTab}
-            onTabChange={tab => {
+            onTabChange={(tab) => {
               setActiveTab(tab);
               broadcast("tab_change", tab);
             }}
@@ -515,8 +715,7 @@ function HomeContent() {
         <div className="md:hidden mb-1 sm:mb-2">
           <div className="bg-white dark:bg-gray-800 rounded-lg sm:rounded-xl px-3 py-2 sm:px-4 sm:py-3 shadow-sm border border-gray-200 dark:border-gray-700 flex items-center justify-between">
             <h2 className="text-base sm:text-lg font-bold text-gray-800 dark:text-gray-100 capitalize">
-              {filteredTabConfig[activeTab as keyof typeof filteredTabConfig]
-                ?.label || activeTab}
+              {resolveTabLabel(activeTab)}
             </h2>
             {featureFlags.mpesa && activeTab === "mpesa" && (
               <span className="text-[10px] px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-full font-medium">
@@ -542,7 +741,7 @@ function HomeContent() {
       {/* Mobile Bottom Navigation - NO duplicate AI here */}
       <MobileBottomNav
         activeTab={activeTab}
-        onTabChange={tab => {
+        onTabChange={(tab) => {
           setActiveTab(tab);
           broadcast("tab_change", tab);
         }}
@@ -553,12 +752,27 @@ function HomeContent() {
 
       {/* Cloud Sync Indicator */}
       <CloudSyncIndicator />
+
+      {/* One-time onboarding tutorial overlay (auto-launches on first login,
+          replayable from the Header Help menu). */}
+      <OnboardingTutorial />
+
+      {/* Automation notification toast */}
+      {automationNotice && (
+        <div className="fixed bottom-20 right-4 z-50 bg-amber-500/95 text-white rounded-xl shadow-lg p-4 max-w-sm">
+          <p className="font-semibold text-sm">{automationNotice.title}</p>
+          <p className="text-white/80 text-xs mt-1">
+            {automationNotice.message}
+          </p>
+        </div>
+      )}
     </div>
   );
 }
 
 export default function Home() {
   const { currentStation } = useStations();
+  const { state } = useFuel();
   const stationId = currentStation?.id || "default";
 
   // Detect country for tenant context
@@ -584,7 +798,13 @@ export default function Home() {
   }, []);
 
   return (
-    <LocationProvider stationId={stationId}>
+    <LocationProvider
+      stationId={stationId}
+      stationLocation={currentStation?.location}
+      stationCountry={currentStation?.country}
+      stationCurrency={currentStation?.currency}
+      companyCurrency={state?.companyData?.currency}
+    >
       <HomeContent />
     </LocationProvider>
   );

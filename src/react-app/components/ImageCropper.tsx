@@ -39,7 +39,7 @@ export default function ImageCropper({
   const [canvasSize, setCanvasSize] = useState({ width: 300, height: 400 });
   const [isEnhancing, setIsEnhancing] = useState(false);
   const [enhancedImage, setEnhancedImage] = useState<HTMLImageElement | null>(
-    null
+    null,
   );
 
   // Load image
@@ -153,7 +153,7 @@ export default function ImageCropper({
       -drawWidth / 2,
       -drawHeight / 2,
       drawWidth,
-      drawHeight
+      drawHeight,
     );
     ctx.restore();
 
@@ -165,14 +165,14 @@ export default function ImageCropper({
         0,
         cropArea.y + cropArea.height,
         canvas.width,
-        canvas.height - cropArea.y - cropArea.height
+        canvas.height - cropArea.y - cropArea.height,
       );
       ctx.fillRect(0, cropArea.y, cropArea.x, cropArea.height);
       ctx.fillRect(
         cropArea.x + cropArea.width,
         cropArea.y,
         canvas.width - cropArea.x - cropArea.width,
-        cropArea.height
+        cropArea.height,
       );
 
       ctx.strokeStyle = "#f59e0b";
@@ -187,25 +187,25 @@ export default function ImageCropper({
         cropArea.x - handleSize / 2,
         cropArea.y - handleSize / 2,
         handleSize,
-        handleSize
+        handleSize,
       );
       ctx.fillRect(
         cropArea.x + cropArea.width - handleSize / 2,
         cropArea.y - handleSize / 2,
         handleSize,
-        handleSize
+        handleSize,
       );
       ctx.fillRect(
         cropArea.x - handleSize / 2,
         cropArea.y + cropArea.height - handleSize / 2,
         handleSize,
-        handleSize
+        handleSize,
       );
       ctx.fillRect(
         cropArea.x + cropArea.width - handleSize / 2,
         cropArea.y + cropArea.height - handleSize / 2,
         handleSize,
-        handleSize
+        handleSize,
       );
     }
   }, [image, enhancedImage, cropArea, rotation, canvasSize]);
@@ -234,7 +234,7 @@ export default function ImageCropper({
       0,
       0,
       enhanceCanvas.width,
-      enhanceCanvas.height
+      enhanceCanvas.height,
     );
     const data = imageData.data;
 
@@ -327,7 +327,7 @@ export default function ImageCropper({
         y: (clientY - rect.top) * scaleY,
       };
     },
-    []
+    [],
   );
 
   const handleMouseDown = useCallback(
@@ -338,7 +338,7 @@ export default function ImageCropper({
       setDragStart(coords);
       setCropArea({ x: coords.x, y: coords.y, width: 0, height: 0 });
     },
-    [getCanvasCoords]
+    [getCanvasCoords],
   );
 
   const handleMouseMove = useCallback(
@@ -353,16 +353,16 @@ export default function ImageCropper({
       const y = Math.max(0, Math.min(dragStart.y, coords.y));
       const width = Math.min(
         Math.abs(coords.x - dragStart.x),
-        canvas.width - x
+        canvas.width - x,
       );
       const height = Math.min(
         Math.abs(coords.y - dragStart.y),
-        canvas.height - y
+        canvas.height - y,
       );
 
       setCropArea({ x, y, width, height });
     },
-    [isDragging, dragStart, getCanvasCoords]
+    [isDragging, dragStart, getCanvasCoords],
   );
 
   const handleMouseUp = useCallback(() => {
@@ -373,12 +373,12 @@ export default function ImageCropper({
   }, [cropArea]);
 
   const handleRotate = () => {
-    setRotation(prev => (prev + 90) % 360);
+    setRotation((prev) => (prev + 90) % 360);
     setCropArea(null);
   };
 
-  const handleZoomIn = () => setZoom(prev => Math.min(prev + 0.25, 3));
-  const handleZoomOut = () => setZoom(prev => Math.max(prev - 0.25, 0.5));
+  const handleZoomIn = () => setZoom((prev) => Math.min(prev + 0.25, 3));
+  const handleZoomOut = () => setZoom((prev) => Math.max(prev - 0.25, 0.5));
   const handleResetCrop = () => setCropArea(null);
 
   const handleConfirmCrop = async () => {
@@ -400,7 +400,7 @@ export default function ImageCropper({
       ctx.drawImage(
         sourceImage,
         -sourceImage.width / 2,
-        -sourceImage.height / 2
+        -sourceImage.height / 2,
       );
     } else {
       // Cropped region
@@ -425,14 +425,14 @@ export default function ImageCropper({
       tempCtx.drawImage(
         sourceImage,
         -sourceImage.width / 2,
-        -sourceImage.height / 2
+        -sourceImage.height / 2,
       );
 
       ctx.drawImage(tempCanvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
     }
 
     outputCanvas.toBlob(
-      blob => {
+      (blob) => {
         if (blob) {
           const croppedFile = new File([blob], file.name, {
             type: "image/jpeg",
@@ -441,7 +441,7 @@ export default function ImageCropper({
         }
       },
       "image/jpeg",
-      0.95
+      0.95,
     );
   };
 

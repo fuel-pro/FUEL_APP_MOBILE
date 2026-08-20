@@ -1,13 +1,16 @@
 // ESC/POS Printer Service - Handles thermal printer communication
-import { hardwareManager, type PrinterDevice } from './hardware-manager';
-import { getCurrencySymbol } from '@/react-app/lib/currency';
+import { hardwareManager, type PrinterDevice } from "./hardware-manager";
+import { getCurrencySymbol } from "@/react-app/lib/currency";
 
 // Import type-only to ensure USB types are available
-import type {} from './hardware-manager';
+import type {} from "./hardware-manager";
 
 export interface ReceiptData {
   stationName: string;
   stationLocation: string;
+  stationPhone?: string;
+  stationEmail?: string;
+  logoUrl?: string;
   receiptNumber: string;
   date: string;
   time: string;
@@ -25,10 +28,14 @@ export interface ReceiptData {
   footerMessage?: string;
   currencyCode?: string; // Currency code (KES, UGX, etc.)
   currencySymbol?: string; // Currency symbol (KSh, USh, etc.)
+  settings?: { paperWidth?: number; copies?: number; silent?: boolean };
 }
 
 // Helper to get currency info for receipts
-export function getReceiptCurrency(currencyCode?: string): { code: string; symbol: string } {
+export function getReceiptCurrency(currencyCode?: string): {
+  code: string;
+  symbol: string;
+} {
   const code = currencyCode || getDetectedCurrencyForReceipt();
   const symbol = getCurrencySymbol(code);
   return { code, symbol };
@@ -40,7 +47,7 @@ function getDetectedCurrencyForReceipt(): string {
     // Try to get from station context
     const stationCurrency = localStorage.getItem("fuelpro_station_currency");
     if (stationCurrency) return stationCurrency;
-    
+
     // Try to get from location context
     const location = localStorage.getItem("fuelpro_location_country");
     if (location) {
@@ -48,9 +55,9 @@ function getDetectedCurrencyForReceipt(): string {
       if (parsed.currency) return parsed.currency;
     }
   } catch {}
-  
-  // Fallback to Kenya
-  return "KES";
+
+  // Fallback to detected currency
+  return getCurrencySymbol();
 }
 
 export interface ReceiptItem {
@@ -62,7 +69,7 @@ export interface ReceiptItem {
 
 export interface PrintJob {
   id: string;
-  status: 'pending' | 'printing' | 'completed' | 'error';
+  status: "pending" | "printing" | "completed" | "error";
   data: Uint8Array;
   printerId: string;
   retries: number;
@@ -78,17 +85,17 @@ class PrinterService {
   private maxRetries = 3;
 
   // ESC/POS Commands
-  private readonly ESC = 0x1B;
-  private readonly GS = 0x1D;
-  private readonly LF = 0x0A;
+  private readonly ESC = 0x1b;
+  private readonly GS = 0x1d;
+  private readonly LF = 0x0a;
 
   // ESC/POS command builders
   private cmdInit(): Uint8Array {
     return new Uint8Array([this.ESC, 0x40]); // Initialize printer
   }
 
-  private cmdAlign(align: 'left' | 'center' | 'right'): Uint8Array {
-    const alignCode = align === 'left' ? 0 : align === 'center' ? 1 : 2;
+  private cmdAlign(align: "left" | "center" | "right"): Uint8Array {
+    const alignCode = align === "left" ? 0 : align === "center" ? 1 : 2;
     return new Uint8Array([this.ESC, 0x61, alignCode]);
   }
 
@@ -105,7 +112,7 @@ class PrinterService {
   }
 
   private cmdUnderline(on: boolean): Uint8Array {
-    return new Uint8Array([this.ESC, 0x2D, on ? 1 : 0]);
+    return new Uint8Array([this.ESC, 0x2d, on ? 1 : 0]);
   }
 
   private cmdFontSize(size: 0 | 1 | 2 | 3): Uint8Array {
@@ -125,7 +132,7 @@ class PrinterService {
   }
 
   private cmdOpenCashDrawer(): Uint8Array {
-    return new Uint8Array([this.ESC, 0x70, 0x00, 0x19, 0xFA]); // Standard drawer kick
+    return new Uint8Array([this.ESC, 0x70, 0x00, 0x19, 0xfa]); // Standard drawer kick
   }
 
   private cmdBeep(): Uint8Array {
@@ -153,76 +160,92 @@ class PrinterService {
   }
 
   private formatCurrency(amount: number): string {
-    return `Ksh ${amount.toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    // Use the browser default locale (undefined) so the receipt formats
+    // amounts per the station/user locale instead of the hardcoded "en-KE".
+    return `${getCurrencySymbol()} ${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   }
 
   private formatLine(left: string, right: string, width: number = 42): string {
     const padding = width - left.length - right.length;
     if (padding < 1) {
-      return left.slice(0, width - right.length - 1) + ' ' + right;
+      return left.slice(0, width - right.length - 1) + " " + right;
     }
-    return left + ' '.repeat(padding) + right;
+    return left + " ".repeat(padding) + right;
   }
 
   buildReceipt(receipt: ReceiptData): Uint8Array {
     const commands: Uint8Array[] = [];
-    
+
     // Initialize
     commands.push(this.cmdInit());
-    
+
     // Header - Station Info
-    commands.push(this.cmdAlign('center'));
+    commands.push(this.cmdAlign("center"));
     commands.push(this.cmdBold(true));
     commands.push(this.cmdDoubleHeight(true));
     commands.push(this.textToBytes(receipt.stationName));
     commands.push(this.newline());
-    
+
     commands.push(this.cmdDoubleHeight(false));
     commands.push(this.cmdBold(false));
     commands.push(this.textToBytes(receipt.stationLocation));
     commands.push(this.newline());
-    commands.push(this.textToBytes('Tel: +254-700-000-000'));
-    commands.push(this.newline());
-    
-    // Divider
-    commands.push(this.textToBytes('========================================'));
-    commands.push(this.newline());
-    
-    // Receipt Info
-    commands.push(this.cmdAlign('left'));
-    commands.push(this.textToBytes(this.formatLine('Receipt #:', receipt.receiptNumber)));
-    commands.push(this.newline());
-    commands.push(this.textToBytes(this.formatLine('Date:', receipt.date)));
-    commands.push(this.newline());
-    commands.push(this.textToBytes(this.formatLine('Time:', receipt.time)));
-    commands.push(this.newline());
-    
-    if (receipt.transactionRef) {
-      commands.push(this.textToBytes(this.formatLine('Ref:', receipt.transactionRef)));
+    if (receipt.stationPhone) {
+      commands.push(this.textToBytes(`Tel: ${receipt.stationPhone}`));
       commands.push(this.newline());
     }
-    
+    if (receipt.stationEmail) {
+      commands.push(this.textToBytes(`Email: ${receipt.stationEmail}`));
+      commands.push(this.newline());
+    }
+
+    // Divider
+    commands.push(this.textToBytes("========================================"));
+    commands.push(this.newline());
+
+    // Receipt Info
+    commands.push(this.cmdAlign("left"));
+    commands.push(
+      this.textToBytes(this.formatLine("Receipt #:", receipt.receiptNumber)),
+    );
+    commands.push(this.newline());
+    commands.push(this.textToBytes(this.formatLine("Date:", receipt.date)));
+    commands.push(this.newline());
+    commands.push(this.textToBytes(this.formatLine("Time:", receipt.time)));
+    commands.push(this.newline());
+
+    if (receipt.transactionRef) {
+      commands.push(
+        this.textToBytes(this.formatLine("Ref:", receipt.transactionRef)),
+      );
+      commands.push(this.newline());
+    }
+
     // Customer
     if (receipt.customerName) {
-      commands.push(this.textToBytes(this.formatLine('Customer:', receipt.customerName)));
+      commands.push(
+        this.textToBytes(this.formatLine("Customer:", receipt.customerName)),
+      );
       commands.push(this.newline());
     }
-    
-    commands.push(this.textToBytes(this.formatLine('Attendant:', receipt.attendantName)));
+
+    commands.push(
+      this.textToBytes(this.formatLine("Attendant:", receipt.attendantName)),
+    );
     commands.push(this.newline());
-    
+
     // Divider
-    commands.push(this.textToBytes('----------------------------------------'));
+    commands.push(this.textToBytes("----------------------------------------"));
     commands.push(this.newline());
-    
+
     // Items Header
     commands.push(this.cmdBold(true));
-    commands.push(this.textToBytes(this.formatLine('ITEM', 'TOTAL')));
+    commands.push(this.textToBytes(this.formatLine("ITEM", "TOTAL")));
     commands.push(this.newline());
     commands.push(this.cmdBold(false));
-    commands.push(this.textToBytes('----------------------------------------'));
+    commands.push(this.textToBytes("----------------------------------------"));
     commands.push(this.newline());
-    
+
     // Items
     for (const item of receipt.items) {
       const itemLine = `${item.name} x${item.quantity}`;
@@ -230,87 +253,121 @@ class PrinterService {
       commands.push(this.textToBytes(this.formatLine(itemLine, priceLine)));
       commands.push(this.newline());
     }
-    
+
     // Divider
-    commands.push(this.textToBytes('----------------------------------------'));
+    commands.push(this.textToBytes("----------------------------------------"));
     commands.push(this.newline());
-    
+
     // Totals
-    commands.push(this.textToBytes(this.formatLine('Subtotal:', this.formatCurrency(receipt.subtotal))));
+    commands.push(
+      this.textToBytes(
+        this.formatLine("Subtotal:", this.formatCurrency(receipt.subtotal)),
+      ),
+    );
     commands.push(this.newline());
-    
+
     if (receipt.discount > 0) {
-      commands.push(this.textToBytes(this.formatLine('Discount:', '-' + this.formatCurrency(receipt.discount))));
+      commands.push(
+        this.textToBytes(
+          this.formatLine(
+            "Discount:",
+            "-" + this.formatCurrency(receipt.discount),
+          ),
+        ),
+      );
       commands.push(this.newline());
     }
-    
+
     if (receipt.tax > 0) {
-      commands.push(this.textToBytes(this.formatLine('Tax (VAT):', this.formatCurrency(receipt.tax))));
+      commands.push(
+        this.textToBytes(
+          this.formatLine("Tax (VAT):", this.formatCurrency(receipt.tax)),
+        ),
+      );
       commands.push(this.newline());
     }
-    
+
     commands.push(this.cmdBold(true));
     commands.push(this.cmdDoubleHeight(true));
-    commands.push(this.textToBytes(this.formatLine('TOTAL:', this.formatCurrency(receipt.total))));
+    commands.push(
+      this.textToBytes(
+        this.formatLine("TOTAL:", this.formatCurrency(receipt.total)),
+      ),
+    );
     commands.push(this.newline());
     commands.push(this.cmdDoubleHeight(false));
     commands.push(this.cmdBold(false));
-    
+
     // Payment Info
     commands.push(this.newline());
-    commands.push(this.textToBytes('----------------------------------------'));
+    commands.push(this.textToBytes("----------------------------------------"));
     commands.push(this.newline());
-    
-    commands.push(this.textToBytes(this.formatLine('Payment:', receipt.paymentMethod.toUpperCase())));
+
+    commands.push(
+      this.textToBytes(
+        this.formatLine("Payment:", receipt.paymentMethod.toUpperCase()),
+      ),
+    );
     commands.push(this.newline());
-    commands.push(this.textToBytes(this.formatLine('Paid:', this.formatCurrency(receipt.amountPaid))));
+    commands.push(
+      this.textToBytes(
+        this.formatLine("Paid:", this.formatCurrency(receipt.amountPaid)),
+      ),
+    );
     commands.push(this.newline());
-    
+
     if (receipt.change > 0) {
       commands.push(this.cmdBold(true));
-      commands.push(this.textToBytes(this.formatLine('CHANGE:', this.formatCurrency(receipt.change))));
+      commands.push(
+        this.textToBytes(
+          this.formatLine("CHANGE:", this.formatCurrency(receipt.change)),
+        ),
+      );
       commands.push(this.newline());
       commands.push(this.cmdBold(false));
     }
-    
+
     // Footer
     commands.push(this.newline());
-    commands.push(this.cmdAlign('center'));
-    commands.push(this.textToBytes('----------------------------------------'));
+    commands.push(this.cmdAlign("center"));
+    commands.push(this.textToBytes("----------------------------------------"));
     commands.push(this.newline());
-    
-    commands.push(this.textToBytes('Thank you for your business!'));
+
+    commands.push(this.textToBytes("Thank you for your business!"));
     commands.push(this.newline());
-    commands.push(this.textToBytes('Please come again'));
+    commands.push(this.textToBytes("Please come again"));
     commands.push(this.newline());
-    
+
     if (receipt.footerMessage) {
       commands.push(this.textToBytes(receipt.footerMessage));
       commands.push(this.newline());
     }
-    
+
     commands.push(this.newline());
     commands.push(this.newline());
-    
+
     // Cut paper
     commands.push(this.cmdCut());
-    
+
     return this.combineBytes(...commands);
   }
 
-  async printReceipt(receipt: ReceiptData, printerId?: string): Promise<boolean> {
-    const printer = printerId 
+  async printReceipt(
+    receipt: ReceiptData,
+    printerId?: string,
+  ): Promise<boolean> {
+    const printer = printerId
       ? hardwareManager.getPrinter(printerId)
       : hardwareManager.getPrinter();
-    
+
     if (!printer) {
-      throw new Error('No printer connected');
+      throw new Error("No printer connected");
     }
 
     const data = this.buildReceipt(receipt);
     const job: PrintJob = {
       id: `job-${Date.now()}`,
-      status: 'pending',
+      status: "pending",
       data,
       printerId: printer.id,
       retries: 0,
@@ -321,20 +378,27 @@ class PrinterService {
     return this.processPrintQueue();
   }
 
-  async printText(text: string, options?: { cut?: boolean; bold?: boolean; align?: 'left' | 'center' | 'right' }): Promise<boolean> {
+  async printText(
+    text: string,
+    options?: {
+      cut?: boolean;
+      bold?: boolean;
+      align?: "left" | "center" | "right";
+    },
+  ): Promise<boolean> {
     const printer = hardwareManager.getPrinter();
     if (!printer) {
-      throw new Error('No printer connected');
+      throw new Error("No printer connected");
     }
 
     const commands: Uint8Array[] = [this.cmdInit()];
-    
+
     if (options?.bold) commands.push(this.cmdBold(true));
     if (options?.align) commands.push(this.cmdAlign(options.align));
-    
+
     commands.push(this.textToBytes(text));
     commands.push(this.newline());
-    
+
     if (options?.cut) {
       commands.push(this.cmdFeed(3));
       commands.push(this.cmdCut());
@@ -343,7 +407,7 @@ class PrinterService {
     const data = this.combineBytes(...commands);
     const job: PrintJob = {
       id: `job-${Date.now()}`,
-      status: 'pending',
+      status: "pending",
       data,
       printerId: printer.id,
       retries: 0,
@@ -354,10 +418,13 @@ class PrinterService {
     return this.processPrintQueue();
   }
 
-  async printBarcode(data: string, type: 'ean13' | 'ean8' | 'upc' | 'code39' | 'code128' = 'code128'): Promise<boolean> {
+  async printBarcode(
+    data: string,
+    type: "ean13" | "ean8" | "upc" | "code39" | "code128" = "code128",
+  ): Promise<boolean> {
     const printer = hardwareManager.getPrinter();
     if (!printer) {
-      throw new Error('No printer connected');
+      throw new Error("No printer connected");
     }
 
     // ESC/POS barcode commands simplified
@@ -370,7 +437,7 @@ class PrinterService {
 
     const job: PrintJob = {
       id: `job-${Date.now()}`,
-      status: 'pending',
+      status: "pending",
       data: this.combineBytes(...commands),
       printerId: printer.id,
       retries: 0,
@@ -382,33 +449,33 @@ class PrinterService {
   }
 
   async testPrint(printerId?: string): Promise<boolean> {
-    const printer = printerId 
+    const printer = printerId
       ? hardwareManager.getPrinter(printerId)
       : hardwareManager.getPrinter();
-    
+
     if (!printer) {
-      throw new Error('No printer connected');
+      throw new Error("No printer connected");
     }
 
     const commands: Uint8Array[] = [
       this.cmdInit(),
-      this.cmdAlign('center'),
+      this.cmdAlign("center"),
       this.cmdBold(true),
       this.cmdDoubleHeight(true),
       this.cmdFontSize(2),
-      this.textToBytes('FUELPRO'),
+      this.textToBytes("FUELPRO"),
       this.newline(),
       this.cmdDoubleHeight(false),
       this.cmdFontSize(0),
-      this.textToBytes('TEST PRINT'),
+      this.textToBytes("TEST PRINT"),
       this.newline(),
       this.newline(),
       this.cmdBold(false),
-      this.textToBytes('Printer: ' + printer.name),
+      this.textToBytes("Printer: " + printer.name),
       this.newline(),
-      this.textToBytes('Status: OK'),
+      this.textToBytes("Status: OK"),
       this.newline(),
-      this.textToBytes('Date: ' + new Date().toLocaleString()),
+      this.textToBytes("Date: " + new Date().toLocaleString()),
       this.newline(),
       this.newline(),
       this.newline(),
@@ -417,7 +484,7 @@ class PrinterService {
 
     const job: PrintJob = {
       id: `job-test-${Date.now()}`,
-      status: 'pending',
+      status: "pending",
       data: this.combineBytes(...commands),
       printerId: printer.id,
       retries: 0,
@@ -429,38 +496,40 @@ class PrinterService {
   }
 
   async openCashDrawer(printerId?: string): Promise<boolean> {
-    const printer = printerId 
+    const printer = printerId
       ? hardwareManager.getPrinter(printerId)
       : hardwareManager.getPrinter();
-    
+
     if (!printer) {
-      throw new Error('No printer connected');
+      throw new Error("No printer connected");
     }
 
-    if (printer.type === 'network') {
+    if (printer.type === "network") {
       return this.openCashDrawerNetwork(printer);
-    } else if (printer.type === 'usb' && printer.connection) {
+    } else if (printer.type === "usb" && printer.connection) {
       return this.openCashDrawerUSB(printer);
     }
 
     return false;
   }
 
-  private async openCashDrawerNetwork(printer: PrinterDevice): Promise<boolean> {
+  private async openCashDrawerNetwork(
+    printer: PrinterDevice,
+  ): Promise<boolean> {
     try {
       const match = printer.name.match(/\((\d+\.\d+\.\d+\.\d+)\)/);
       if (!match) return false;
-      
+
       const ip = match[1];
       const command = this.cmdOpenCashDrawer();
       const response = await fetch(`http://${ip}:9100`, {
-        method: 'POST',
-        body: command,
-        mode: 'no-cors',
+        method: "POST",
+        body: command as BodyInit,
+        mode: "no-cors",
       });
       return true;
     } catch (error) {
-      console.error('Failed to open cash drawer:', error);
+      console.error("Failed to open cash drawer:", error);
       return false;
     }
   }
@@ -468,15 +537,21 @@ class PrinterService {
   private async openCashDrawerUSB(printer: PrinterDevice): Promise<boolean> {
     try {
       const device = printer.connection as USBDevice;
-      const endpointOut = device.configuration?.interfaces[0]?.alternates[0]?.endpoints.find(e => e.direction === 'out');
-      
+      const endpointOut =
+        device.configuration?.interfaces[0]?.alternates[0]?.endpoints.find(
+          (e) => e.direction === "out",
+        );
+
       if (!endpointOut) return false;
-      
+
       const command = this.cmdOpenCashDrawer();
-      await device.transferOut(endpointOut.endpointNumber, command);
+      await device.transferOut(
+        endpointOut.endpointNumber,
+        command as BufferSource,
+      );
       return true;
     } catch (error) {
-      console.error('Failed to open cash drawer:', error);
+      console.error("Failed to open cash drawer:", error);
       return false;
     }
   }
@@ -489,32 +564,32 @@ class PrinterService {
     this.isProcessing = true;
     const job = this.printQueue.shift()!;
     this.currentJob = job;
-    job.status = 'printing';
+    job.status = "printing";
 
     try {
       const printer = hardwareManager.getPrinter(job.printerId);
       if (!printer) {
-        throw new Error('Printer not found');
+        throw new Error("Printer not found");
       }
 
-      if (printer.type === 'network') {
+      if (printer.type === "network") {
         await this.printNetwork(job);
-      } else if (printer.type === 'usb' && printer.connection) {
+      } else if (printer.type === "usb" && printer.connection) {
         await this.printUSB(job);
       } else {
         // Fallback: Open in new window for manual printing
         this.printFallback(job);
       }
 
-      job.status = 'completed';
+      job.status = "completed";
       job.completedAt = new Date();
     } catch (error) {
       job.retries++;
       if (job.retries < this.maxRetries) {
         this.printQueue.unshift(job);
       } else {
-        job.status = 'error';
-        job.error = error instanceof Error ? error.message : 'Unknown error';
+        job.status = "error";
+        job.error = error instanceof Error ? error.message : "Unknown error";
       }
     } finally {
       this.isProcessing = false;
@@ -524,7 +599,7 @@ class PrinterService {
       }
     }
 
-    return job.status === 'completed';
+    return job.status === "completed";
   }
 
   private async printNetwork(job: PrintJob): Promise<void> {
@@ -532,13 +607,13 @@ class PrinterService {
     if (!printer) return;
 
     const match = printer.name.match(/\((\d+\.\d+\.\d+\.\d+)\)/);
-    if (!match) throw new Error('Invalid network printer address');
+    if (!match) throw new Error("Invalid network printer address");
 
     const ip = match[1];
     const response = await fetch(`http://${ip}:9100`, {
-      method: 'POST',
-      body: job.data,
-      mode: 'no-cors',
+      method: "POST",
+      body: job.data as BodyInit,
+      mode: "no-cors",
     });
 
     if (!response.ok && response.status !== 0) {
@@ -551,30 +626,44 @@ class PrinterService {
     if (!printer?.connection) return;
 
     const device = printer.connection as USBDevice;
-    const endpointOut = device.configuration?.interfaces[0]?.alternates[0]?.endpoints.find(e => e.direction === 'out');
-    
+    const endpointOut =
+      device.configuration?.interfaces[0]?.alternates[0]?.endpoints.find(
+        (e) => e.direction === "out",
+      );
+
     if (!endpointOut) {
-      throw new Error('No output endpoint found');
+      throw new Error("No output endpoint found");
     }
 
-    await device.transferOut(endpointOut.endpointNumber, job.data);
+    await device.transferOut(
+      endpointOut.endpointNumber,
+      job.data as BufferSource,
+    );
   }
 
   private printFallback(job: PrintJob): void {
     // Create printable HTML version
     const text = new TextDecoder().decode(job.data);
-    const printWindow = window.open('', '_blank');
+    const printWindow = window.open("", "_blank");
     if (printWindow) {
-      printWindow.document.write(`
+      // ⚠️ SECURITY FIX: Use DOM methods instead of document.write to prevent XSS
+      const html = `
         <html>
           <head><title>Print</title></head>
           <body>
-            <pre style="font-family: monospace; white-space: pre-wrap;">${text}</pre>
+            <pre id="content" style="font-family: monospace; white-space: pre-wrap;"></pre>
             <script>window.print(); window.close();</script>
           </body>
         </html>
-      `);
+      `;
+      printWindow.document.write(html);
       printWindow.document.close();
+      
+      // Safely insert text content using textContent (not innerHTML)
+      const preElement = printWindow.document.getElementById("content");
+      if (preElement) {
+        preElement.textContent = text; // Prevents XSS by escaping HTML entities
+      }
     }
   }
 

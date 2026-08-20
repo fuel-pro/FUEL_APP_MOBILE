@@ -3,12 +3,18 @@ import { useStations } from "@/react-app/context/StationContext";
 import { useAuth } from "@/react-app/context/AuthContext";
 import { useTheme } from "@/react-app/context/ThemeContext";
 import { useLocation } from "@/react-app/context/LocationContext";
+import { useTutorial } from "@/react-app/context/TutorialContext";
 import LocationSelector from "@/react-app/components/LocationSelector";
 import TabConfigModal from "@/react-app/components/TabConfigModal";
 import SyncStatusIndicator from "@/react-app/components/SyncStatusIndicator";
 import RoleSelector from "@/react-app/components/RoleSelector";
 import { useNavigate } from "react-router";
 import { useState, useEffect, useRef } from "react";
+import { uploadStationLogo } from "@/react-app/lib/logo-storage-service";
+import {
+  getDetectedCurrency,
+  getCurrencySymbol,
+} from "@/react-app/lib/currency";
 import {
   Fuel,
   Sun,
@@ -30,6 +36,8 @@ import {
   Globe,
   LayoutDashboard,
   Crown,
+  Loader2,
+  HelpCircle,
 } from "lucide-react";
 
 interface HeaderProps {
@@ -46,6 +54,7 @@ export default function Header({
   const { currentStation, stations, switchStation } = useStations();
   const { resolvedTheme, toggleTheme } = useTheme();
   const location = useLocation();
+  const tutorial = useTutorial();
   const navigate = useNavigate();
   const [showEditInfo, setShowEditInfo] = useState(false);
   const [showQRCode, setShowQRCode] = useState(false);
@@ -53,7 +62,9 @@ export default function Header({
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [showTabConfig, setShowTabConfig] = useState(false);
   const [editData, setEditData] = useState({ ...state.companyData });
+  const [editDirty, setEditDirty] = useState(false);
   const [logoPreview, setLogoPreview] = useState(state.companyData.logo || "");
+  const [logoUploading, setLogoUploading] = useState(false);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
 
   // Close mobile menu on outside click
@@ -70,14 +81,23 @@ export default function Header({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // CRITICAL: Sync logoPreview with state after loading from storage
-  // This fixes logo disappearing after refresh
+  // CRITICAL: Sync the Company Profile form with the authoritative
+  // state.companyData whenever it changes (e.g. after an async cloud load on a
+  // fresh device/browser). Without this, editData is captured once at mount
+  // from the default/empty state and never updates — so the user sees empty
+  // fields and must re-type their company details every session, even though
+  // the data is correctly persisted in cloud storage. We only re-sync when the
+  // user has NOT started editing (editDirty flag) so in-progress edits are not
+  // clobbered. Also tracks the logo so a cloud-loaded logo wins over a stale
+  // local blob URL preview after refresh.
   useEffect(() => {
-    if (state.companyData.logo && !logoPreview) {
-      setLogoPreview(state.companyData.logo);
-      setEditData(prev => ({ ...prev, logo: state.companyData.logo }));
+    if (!editDirty) {
+      setEditData({ ...state.companyData });
     }
-  }, [state.companyData.logo]);
+    if (state.companyData.logo) {
+      setLogoPreview(state.companyData.logo);
+    }
+  }, [state.companyData, editDirty]);
 
   const handleToggleTheme = () => {
     toggleTheme();
@@ -85,23 +105,50 @@ export default function Header({
 
   const handleEditInfo = () => {
     dispatch({ type: "SET_COMPANY_DATA", payload: editData });
+    setEditDirty(false);
     setShowEditInfo(false);
   };
 
-  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Wrapper that marks the form as dirty so the cloud-sync effect above does
+  // not clobber in-progress edits with freshly-loaded state.
+  const updateEdit = (patch: Partial<typeof editData>) => {
+    setEditDirty(true);
+    setEditData((prev) => ({ ...prev, ...patch }));
+  };
+
+  const handleLogoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const result = reader.result as string;
-        setLogoPreview(result);
-        setEditData(p => ({ ...p, logo: result }));
-        dispatch({
-          type: "SET_COMPANY_DATA",
-          payload: { ...state.companyData, logo: result },
-        });
-      };
-      reader.readAsDataURL(file);
+    if (!file) return;
+
+    // Show an instant local preview so the user gets feedback while uploading.
+    const localPreview = URL.createObjectURL(file);
+    setLogoPreview(localPreview);
+    setLogoUploading(true);
+
+    try {
+      if (!user?.id) {
+        throw new Error("You must be signed in to upload a logo.");
+      }
+      // Upload to Supabase Storage (cross-device) and store the public URL —
+      // NOT a base64 blob — so the logo survives refresh and syncs to every
+      // device signed into the same account.
+      const { url } = await uploadStationLogo(file, user.id);
+      setLogoPreview(url);
+      setEditData((p) => ({ ...p, logo: url }));
+      dispatch({
+        type: "SET_COMPANY_DATA",
+        payload: { ...state.companyData, logo: url },
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("Logo upload failed:", msg);
+      alert(`Could not upload logo: ${msg}`);
+      // Revert preview to whatever was previously persisted.
+      setLogoPreview(state.companyData.logo || "");
+    } finally {
+      setLogoUploading(false);
+      // Reset the input so the same file can be re-selected.
+      if (e.target) e.target.value = "";
     }
   };
 
@@ -156,24 +203,32 @@ export default function Header({
               <div className="relative inline-block">
                 <button
                   onClick={() => setShowStationMenu(!showStationMenu)}
-                  className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 rounded-lg text-xs transition-colors border border-amber-500/30"
+                  aria-haspopup="listbox"
+                  aria-expanded={showStationMenu}
+                  className="flex h-10 items-center gap-1.5 px-2.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 rounded-lg text-xs transition-all duration-150 border border-amber-500/30 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
                 >
                   <Layers size={12} />
                   <span className="max-w-20 truncate">
                     {currentStation?.name}
                   </span>
-                  <ChevronDown size={10} />
+                  <ChevronDown
+                    size={10}
+                    className={`transition-transform duration-150 ${showStationMenu ? "rotate-180" : ""}`}
+                  />
                 </button>
                 {showStationMenu && (
-                  <div className="absolute top-full left-0 mt-1 w-52 bg-gray-800 rounded-xl shadow-xl border border-white/10 overflow-hidden z-50">
-                    {stations.map(s => (
+                  <div
+                    className="absolute top-full left-0 mt-1 w-52 bg-gray-800 rounded-xl shadow-xl border border-white/10 overflow-hidden z-50 transition-all duration-150 origin-top"
+                    role="listbox"
+                  >
+                    {stations.map((s) => (
                       <button
                         key={s.id}
                         onClick={() => {
                           switchStation(s.id);
                           setShowStationMenu(false);
                         }}
-                        className={`w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-white/5 transition-colors ${currentStation?.id === s.id ? "bg-amber-500/10" : ""}`}
+                        className={`w-full flex h-10 items-center gap-2.5 px-3 text-left hover:bg-white/5 transition-colors duration-150 ${currentStation?.id === s.id ? "bg-amber-500/10" : ""}`}
                       >
                         <div className="w-6 h-6 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-md flex items-center justify-center text-[10px] font-bold text-white">
                           {s.name.charAt(0).toUpperCase()}
@@ -249,12 +304,19 @@ export default function Header({
               <span className="hidden lg:inline">Tabs</span>
             </button>
             <label className="px-2.5 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-xs text-gray-300 transition-colors flex items-center gap-1.5 cursor-pointer">
-              <Image size={12} />
-              <span className="hidden lg:inline">Logo</span>
+              {logoUploading ? (
+                <Loader2 size={12} className="animate-spin" />
+              ) : (
+                <Image size={12} />
+              )}
+              <span className="hidden lg:inline">
+                {logoUploading ? "Uploading…" : "Logo"}
+              </span>
               <input
                 type="file"
                 accept="image/*"
                 onChange={handleLogoChange}
+                disabled={logoUploading}
                 className="hidden"
               />
             </label>
@@ -264,6 +326,14 @@ export default function Header({
             >
               <QrCode size={12} />
               <span className="hidden lg:inline">QR</span>
+            </button>
+            <button
+              onClick={() => tutorial.startTutorial("basic")}
+              title="Replay the onboarding tutorial"
+              className="px-2.5 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-xs text-gray-300 transition-colors flex items-center gap-1.5"
+            >
+              <HelpCircle size={12} />
+              <span className="hidden lg:inline">Tutorial</span>
             </button>
             <SyncStatusIndicator
               countryCode={location.currentCountry.id}
@@ -333,7 +403,7 @@ export default function Header({
                   </button>
                   {showStationMenu && (
                     <div className="absolute right-0 top-full mt-1 w-48 bg-gray-800 rounded-xl shadow-xl border border-white/10 overflow-hidden z-50">
-                      {stations.map(s => (
+                      {stations.map((s) => (
                         <button
                           key={s.id}
                           onClick={() => {
@@ -377,12 +447,19 @@ export default function Header({
                 <span className="text-[10px] text-gray-400">Tabs</span>
               </button>
               <label className="flex flex-col items-center gap-1.5 p-3 bg-white/5 rounded-xl hover:bg-white/10 transition-colors cursor-pointer">
-                <Image size={16} className="text-gray-300" />
-                <span className="text-[10px] text-gray-400">Logo</span>
+                {logoUploading ? (
+                  <Loader2 size={16} className="text-gray-300 animate-spin" />
+                ) : (
+                  <Image size={16} className="text-gray-300" />
+                )}
+                <span className="text-[10px] text-gray-400">
+                  {logoUploading ? "Uploading…" : "Logo"}
+                </span>
                 <input
                   type="file"
                   accept="image/*"
-                  onChange={e => {
+                  disabled={logoUploading}
+                  onChange={(e) => {
                     handleLogoChange(e);
                     setShowMobileMenu(false);
                   }}
@@ -398,6 +475,16 @@ export default function Header({
               >
                 <QrCode size={16} className="text-gray-300" />
                 <span className="text-[10px] text-gray-400">QR Code</span>
+              </button>
+              <button
+                onClick={() => {
+                  tutorial.startTutorial("basic");
+                  setShowMobileMenu(false);
+                }}
+                className="flex flex-col items-center gap-1.5 p-3 bg-white/5 rounded-xl hover:bg-white/10 transition-colors"
+              >
+                <HelpCircle size={16} className="text-amber-400" />
+                <span className="text-[10px] text-gray-400">Tutorial</span>
               </button>
               <button
                 onClick={() => {
@@ -486,9 +573,7 @@ export default function Header({
                 </label>
                 <input
                   value={editData.name}
-                  onChange={e =>
-                    setEditData(p => ({ ...p, name: e.target.value }))
-                  }
+                  onChange={(e) => updateEdit({ name: e.target.value })}
                   placeholder="e.g. Acme Fuel Station Ltd"
                   className="w-full px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400"
                 />
@@ -499,23 +584,19 @@ export default function Header({
                 </label>
                 <input
                   value={editData.poBox}
-                  onChange={e =>
-                    setEditData(p => ({ ...p, poBox: e.target.value }))
-                  }
+                  onChange={(e) => updateEdit({ poBox: e.target.value })}
                   placeholder="e.g. 12345-00100"
                   className="w-full px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400"
                 />
               </div>
               <div>
                 <label className="block text-[10px] text-gray-400 mb-0.5">
-                  Contacts (e.g. +254...)
+                  Contacts (phone)
                 </label>
                 <input
                   value={editData.contacts}
-                  onChange={e =>
-                    setEditData(p => ({ ...p, contacts: e.target.value }))
-                  }
-                  placeholder="+254 700 000 000"
+                  onChange={(e) => updateEdit({ contacts: e.target.value })}
+                  placeholder="+1 555 000 0000"
                   className="w-full px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400"
                 />
               </div>
@@ -527,10 +608,8 @@ export default function Header({
                 </label>
                 <input
                   value={editData.email}
-                  onChange={e =>
-                    setEditData(p => ({ ...p, email: e.target.value }))
-                  }
-                  placeholder="info@company.co.ke"
+                  onChange={(e) => updateEdit({ email: e.target.value })}
+                  placeholder="info@company.com"
                   type="email"
                   className="w-full px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400"
                 />
@@ -541,43 +620,17 @@ export default function Header({
                 </label>
                 <select
                   value={editData.currency}
-                  onChange={e =>
-                    setEditData(p => ({ ...p, currency: e.target.value }))
-                  }
+                  onChange={(e) => updateEdit({ currency: e.target.value })}
                   className="w-full px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-white text-sm focus:outline-none focus:ring-1 focus:ring-amber-400"
                 >
-                  <option value="Ksh" className="bg-gray-800">
-                    Ksh — Kenyan Shilling
-                  </option>
-                  <option value="UGX" className="bg-gray-800">
-                    UGX — Uganda Shilling
-                  </option>
-                  <option value="TZS" className="bg-gray-800">
-                    TZS — Tanzania Shilling
-                  </option>
-                  <option value="NGN" className="bg-gray-800">
-                    NGN — Nigerian Naira
-                  </option>
-                  <option value="ZAR" className="bg-gray-800">
-                    ZAR — South African Rand
-                  </option>
-                  <option value="GHS" className="bg-gray-800">
-                    GHS — Ghana Cedi
-                  </option>
-                  <option value="RWF" className="bg-gray-800">
-                    RWF — Rwanda Franc
-                  </option>
-                  <option value="USD" className="bg-gray-800">
-                    USD — US Dollar
-                  </option>
-                  <option value="GBP" className="bg-gray-800">
-                    GBP — British Pound
-                  </option>
-                  <option value="EUR" className="bg-gray-800">
-                    EUR — Euro
-                  </option>
-                  <option value="INR" className="bg-gray-800">
-                    INR — Indian Rupee
+                  {/* Detected station currency — shown first so the default
+                      selection reflects the station's locale rather than
+                      Kenya. */}
+                  <option
+                    value={getCurrencySymbol(getDetectedCurrency())}
+                    className="bg-gray-800"
+                  >
+                    {getDetectedCurrency()} — Detected
                   </option>
                   <option value="BRL" className="bg-gray-800">
                     BRL — Brazilian Real
@@ -585,8 +638,119 @@ export default function Header({
                   <option value="CNY" className="bg-gray-800">
                     CNY — Chinese Yuan
                   </option>
+                  <option value="EUR" className="bg-gray-800">
+                    EUR — Euro
+                  </option>
+                  <option value="GBP" className="bg-gray-800">
+                    GBP — British Pound
+                  </option>
+                  <option value="GHS" className="bg-gray-800">
+                    GHS — Ghana Cedi
+                  </option>
+                  <option value="INR" className="bg-gray-800">
+                    INR — Indian Rupee
+                  </option>
                   <option value="JPY" className="bg-gray-800">
                     JPY — Japanese Yen
+                  </option>
+                  <option value="KES" className="bg-gray-800">
+                    KES — Kenyan Shilling
+                  </option>
+                  <option value="NGN" className="bg-gray-800">
+                    NGN — Nigerian Naira
+                  </option>
+                  <option value="RWF" className="bg-gray-800">
+                    RWF — Rwanda Franc
+                  </option>
+                  <option value="TZS" className="bg-gray-800">
+                    TZS — Tanzania Shilling
+                  </option>
+                  <option value="UGX" className="bg-gray-800">
+                    UGX — Uganda Shilling
+                  </option>
+                  <option value="USD" className="bg-gray-800">
+                    USD — US Dollar
+                  </option>
+                  <option value="ZAR" className="bg-gray-800">
+                    ZAR — South African Rand
+                  </option>
+                  <option value="AUD" className="bg-gray-800">
+                    AUD — Australian Dollar
+                  </option>
+                  <option value="CAD" className="bg-gray-800">
+                    CAD — Canadian Dollar
+                  </option>
+                  <option value="CHF" className="bg-gray-800">
+                    CHF — Swiss Franc
+                  </option>
+                  <option value="CNY" className="bg-gray-800">
+                    CNY — Chinese Yuan
+                  </option>
+                  <option value="SGD" className="bg-gray-800">
+                    SGD — Singapore Dollar
+                  </option>
+                  <option value="HKD" className="bg-gray-800">
+                    HKD — Hong Kong Dollar
+                  </option>
+                  <option value="NZD" className="bg-gray-800">
+                    NZD — New Zealand Dollar
+                  </option>
+                  <option value="AED" className="bg-gray-800">
+                    AED — UAE Dirham
+                  </option>
+                  <option value="SAR" className="bg-gray-800">
+                    SAR — Saudi Riyal
+                  </option>
+                  <option value="BRL" className="bg-gray-800">
+                    BRL — Brazilian Real
+                  </option>
+                  <option value="MXN" className="bg-gray-800">
+                    MXN — Mexican Peso
+                  </option>
+                  <option value="RUB" className="bg-gray-800">
+                    RUB — Russian Ruble
+                  </option>
+                  <option value="TRY" className="bg-gray-800">
+                    TRY — Turkish Lira
+                  </option>
+                  <option value="KRW" className="bg-gray-800">
+                    KRW — South Korean Won
+                  </option>
+                  <option value="IDR" className="bg-gray-800">
+                    IDR — Indonesian Rupiah
+                  </option>
+                  <option value="MYR" className="bg-gray-800">
+                    MYR — Malaysian Ringgit
+                  </option>
+                  <option value="THB" className="bg-gray-800">
+                    THB — Thai Baht
+                  </option>
+                  <option value="PHP" className="bg-gray-800">
+                    PHP — Philippine Peso
+                  </option>
+                  <option value="VND" className="bg-gray-800">
+                    VND — Vietnamese Dong
+                  </option>
+                  <option value="EGP" className="bg-gray-800">
+                    EGP — Egyptian Pound
+                  </option>
+                  <option value="MAD" className="bg-gray-800">
+                    MAD — Moroccan Dirham
+                  </option>
+                  <option value="PKR" className="bg-gray-800">
+                    PKR — Pakistani Rupee
+                  </option>
+                  <option value="BDT" className="bg-gray-800">
+                    BDT — Bangladeshi Taka
+                  </option>
+                  <option value="ARS" className="bg-gray-800">
+                    ARS — Argentine Peso
+                  </option>
+                  <option value="CLP" className="bg-gray-800">
+                    CLP — Chilean Peso
+                  </option>
+                  <option value="COP" className="bg-gray-800">
+                    COP — Colombian Peso
                   </option>
                 </select>
               </div>
@@ -596,9 +760,7 @@ export default function Header({
                 </label>
                 <input
                   value={editData.vatRegNo}
-                  onChange={e =>
-                    setEditData(p => ({ ...p, vatRegNo: e.target.value }))
-                  }
+                  onChange={(e) => updateEdit({ vatRegNo: e.target.value })}
                   placeholder="VAT Reg No"
                   className="w-full px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400"
                 />
@@ -616,9 +778,7 @@ export default function Header({
                     </label>
                     <input
                       value={editData.bankName}
-                      onChange={e =>
-                        setEditData(p => ({ ...p, bankName: e.target.value }))
-                      }
+                      onChange={(e) => updateEdit({ bankName: e.target.value })}
                       placeholder="e.g. Equity Bank"
                       className="w-full px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400"
                     />
@@ -629,8 +789,8 @@ export default function Header({
                     </label>
                     <input
                       value={editData.branchName}
-                      onChange={e =>
-                        setEditData(p => ({ ...p, branchName: e.target.value }))
+                      onChange={(e) =>
+                        updateEdit({ branchName: e.target.value })
                       }
                       placeholder="e.g. Mombasa Road"
                       className="w-full px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400"
@@ -642,11 +802,10 @@ export default function Header({
                     </label>
                     <input
                       value={editData.accountHolder}
-                      onChange={e =>
-                        setEditData(p => ({
-                          ...p,
+                      onChange={(e) =>
+                        updateEdit({
                           accountHolder: e.target.value,
-                        }))
+                        })
                       }
                       placeholder="Account holder name"
                       className="w-full px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400"
@@ -658,11 +817,10 @@ export default function Header({
                     </label>
                     <input
                       value={editData.accountNumber}
-                      onChange={e =>
-                        setEditData(p => ({
-                          ...p,
+                      onChange={(e) =>
+                        updateEdit({
                           accountNumber: e.target.value,
-                        }))
+                        })
                       }
                       placeholder="1234567890"
                       type="text"
@@ -695,7 +853,7 @@ export default function Header({
         >
           <div
             className="bg-gray-800 rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-white/20"
-            onClick={e => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold">Company QR Code</h3>

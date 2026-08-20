@@ -1,6 +1,6 @@
 /**
  * Firebase Client SDK Configuration
- * 
+ *
  * This file configures Firebase Client SDK for browser-side operations.
  * Used for:
  * - User authentication (sign-in/sign-up)
@@ -9,22 +9,44 @@
  * - Cloud messaging
  */
 
-import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
-import { getAuth, Auth, connectAuthEmulator } from 'firebase/auth';
-import { getFirestore, Firestore, connectFirestoreEmulator } from 'firebase/firestore';
-import { getDatabase, Database, connectDatabaseEmulator } from 'firebase/database';
-import { getStorage, FirebaseStorage, connectStorageEmulator } from 'firebase/storage';
+import { initializeApp, getApps, FirebaseApp } from "firebase/app";
+import { getAuth, Auth, connectAuthEmulator } from "firebase/auth";
+import {
+  getFirestore,
+  Firestore,
+  connectFirestoreEmulator,
+} from "firebase/firestore";
+import {
+  getDatabase,
+  Database,
+  connectDatabaseEmulator,
+} from "firebase/database";
+import {
+  getStorage,
+  FirebaseStorage,
+  connectStorageEmulator,
+} from "firebase/storage";
 
 // Firebase configuration from environment variables
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaSyCgIOzDrLRpFVBVlABmgMJnX0iLa9c8J98',
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'fuel-pro-1.firebaseapp.com',
-  databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL || 'https://fuel-pro-1.firebaseio.com',
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || 'fuel-pro-1',
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || 'fuel-pro-1.firebasestorage.app',
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '434474929988',
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || '1:434474929988:web:f141473bd3acfba6d41111',
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || 'G-XYZ4QZX2Z4',
+  apiKey:
+    import.meta.env.VITE_FIREBASE_API_KEY ||
+    "AIzaSyCgIOzDrLRpFVBVlABmgMJnX0iLa9c8J98",
+  authDomain:
+    import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "fuel-pro-1.firebaseapp.com",
+  databaseURL:
+    import.meta.env.VITE_FIREBASE_DATABASE_URL ||
+    "https://fuel-pro-1.firebaseio.com",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "fuel-pro-1",
+  storageBucket:
+    import.meta.env.VITE_FIREBASE_STORAGE_BUCKET ||
+    "fuel-pro-1.firebasestorage.app",
+  messagingSenderId:
+    import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "434474929988",
+  appId:
+    import.meta.env.VITE_FIREBASE_APP_ID ||
+    "1:434474929988:web:f141473bd3acfba6d41111",
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || "G-XYZ4QZX2Z4",
 };
 
 // Singleton Firebase app instance
@@ -64,12 +86,14 @@ export function getFirebaseAuth(): Auth {
 
   const app = getFirebaseApp();
   firebaseAuth = getAuth(app);
-  
+
   // Connect to emulator in development if configured
-  if (import.meta.env.VITE_USE_FIREBASE_EMULATOR === 'true') {
-    connectAuthEmulator(firebaseAuth, 'http://localhost:9099', { disableWarnings: true });
+  if (import.meta.env.VITE_USE_FIREBASE_EMULATOR === "true") {
+    connectAuthEmulator(firebaseAuth, "http://localhost:9099", {
+      disableWarnings: true,
+    });
   }
-  
+
   return firebaseAuth;
 }
 
@@ -83,12 +107,12 @@ export function getFirebaseFirestore(): Firestore {
 
   const app = getFirebaseApp();
   firebaseFirestore = getFirestore(app);
-  
+
   // Connect to emulator in development if configured
-  if (import.meta.env.VITE_USE_FIREBASE_EMULATOR === 'true') {
-    connectFirestoreEmulator(firebaseFirestore, 'localhost', 8080);
+  if (import.meta.env.VITE_USE_FIREBASE_EMULATOR === "true") {
+    connectFirestoreEmulator(firebaseFirestore, "localhost", 8080);
   }
-  
+
   return firebaseFirestore;
 }
 
@@ -102,12 +126,12 @@ export function getFirebaseDatabase(): Database {
 
   const app = getFirebaseApp();
   firebaseDatabase = getDatabase(app);
-  
+
   // Connect to emulator in development if configured
-  if (import.meta.env.VITE_USE_FIREBASE_EMULATOR === 'true') {
-    connectDatabaseEmulator(firebaseDatabase, 'localhost', 9000);
+  if (import.meta.env.VITE_USE_FIREBASE_EMULATOR === "true") {
+    connectDatabaseEmulator(firebaseDatabase, "localhost", 9000);
   }
-  
+
   return firebaseDatabase;
 }
 
@@ -121,12 +145,12 @@ export function getFirebaseStorage(): FirebaseStorage {
 
   const app = getFirebaseApp();
   firebaseStorage = getStorage(app);
-  
+
   // Connect to emulator in development if configured
-  if (import.meta.env.VITE_USE_FIREBASE_EMULATOR === 'true') {
-    connectStorageEmulator(firebaseStorage, 'localhost', 9199);
+  if (import.meta.env.VITE_USE_FIREBASE_EMULATOR === "true") {
+    connectStorageEmulator(firebaseStorage, "localhost", 9199);
   }
-  
+
   return firebaseStorage;
 }
 

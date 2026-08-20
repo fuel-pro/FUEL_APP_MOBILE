@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import {
   ShoppingCart,
   Plus,
@@ -17,11 +17,36 @@ import {
   Award,
 } from "lucide-react";
 import { useFuel } from "@/react-app/context/FuelContext";
-import { useLocation } from "@/react-app/context/LocationContext";
+import {
+  navigateToTab,
+  type FuelPricePrefill,
+} from "@/react-app/lib/mpesa-integration-service";
+import { useStationFuelTypes } from "@/react-app/hooks/useStationFuelTypes";
+import { useAuth } from "@/react-app/context/AuthContext";
+import { useStations } from "@/react-app/context/StationContext";
 import { formatNumber } from "@/react-app/utils/formatUtils";
+import {
+  CANONICAL_FUEL_TYPES,
+  getVATRate,
+  normalizeFuelType,
+} from "@/react-app/config/pricing";
+import {
+  getCurrencySymbol,
+  resolveCurrencySymbol,
+  getCurrencyByCountry,
+  getDetectedCountryCode,
+  isKenyaStation,
+} from "@/react-app/lib/currency";
+import { getCountryById } from "@/react-app/config/countries";
 import QRCode from "qrcode";
 import { useLoyalty } from "@/react-app/lib/useLoyalty";
 import { LoyaltyCustomer, TIER_COLORS } from "@/react-app/lib/loyaltyProgram";
+import cloudStorageService from "@/react-app/lib/cloud-storage-service";
+import { emit } from "@/react-app/lib/automation-engine";
+import {
+  addTransaction,
+  type UnifiedTransaction,
+} from "@/react-app/lib/mpesa-integration-service";
 
 interface CartItem {
   id: string;
@@ -29,9 +54,12 @@ interface CartItem {
   quantity: number;
   unitPrice: number;
   total: number;
-  fuelType?: "PMS" | "AGO";
+  /** Canonical fuel-type label (e.g. "Super Petrol", "Diesel", "Kerosene",
+   * "LPG"). Widened from "PMS"|"AGO" so ANY configured fuel type can be sold
+   * and tracked — not just Petrol/Diesel. */
+  fuelType?: string;
   litres?: number;
-  vatCategory: "A" | "B" | "E"; // A=16%, B=0%, E=Exempt
+  vatCategory: "A" | "B" | "E"; // A=standard-rated, B=0%, E=Exempt
   hsCode?: string;
 }
 
@@ -39,7 +67,7 @@ interface POSTransaction {
   id: string;
   items: CartItem[];
   subtotal: number;
-  vatA: number; // 16% VAT
+  vatA: number; // Standard-rate VAT
   vatB: number; // 0% VAT
   vatE: number; // Exempt
   totalVat: number;
@@ -60,7 +88,44 @@ interface POSTransaction {
 
 export default function PointOfSale() {
   const { state, dispatch } = useFuel();
-  const location = useLocation();
+  const { user } = useAuth();
+  const { currentStation } = useStations();
+  const stationId = currentStation?.id;
+  // Resolve currency symbol from companyData first, then the station record,
+  // then the detected currency. This ensures a US station shows "$" even if
+  // companyData.currency was stored as a symbol (e.g. "KSh") from a stale
+  // session.
+  const currencySymbol = resolveCurrencySymbol(
+    state.companyData?.currency,
+    currentStation?.currency,
+  );
+  // A station is treated as Kenyan (KRA eTIMS / 16% VAT) when the
+  // timezone+station-data detector resolves Kenya OR the station explicitly
+  // carries a KRA PIN AND is in Kenya. The country gate on the KRA-PIN check
+  // is essential: a US/EU station may have a leftover KRA PIN in its data
+  // (e.g. from a template or migration) but must NOT be forced into the Kenya
+  // tax regime. isKenyaStation() reads localStorage synchronously and may
+  // return false on a fresh device before cloud station data hydrates, so we
+  // also check currentStation.country directly as a fast path.
+  const stationCountry = (
+    (currentStation as { country?: string })?.country ||
+    state.companyData?.country ||
+    state.companyData?.county ||
+    ""
+  ).toUpperCase();
+  const hasKraPin = Boolean(
+    currentStation?.kraPin || state.companyData?.kraPin,
+  );
+  // Kenya tax regime (KRA eTIMS / 16% VAT) applies ONLY when we can
+  // positively confirm the station is in Kenya. The old `hasKraPin &&
+  // stationCountry !== "US"` gate was wrong: on a fresh device before
+  // cloud hydration, stationCountry is "" (empty), so `!== "US"` was
+  // true and a leftover KRA PIN forced Kenya mode on a US station.
+  // Now we require an explicit "KE" country OR the timezone/station-data
+  // detector to resolve Kenya. A KRA PIN alone NEVER activates Kenya mode.
+  const kenyaStation =
+    stationCountry === "KE" || (stationCountry === "" && isKenyaStation());
+  const fuelTypeApi = useStationFuelTypes(stationId);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [paymentMethod, setPaymentMethod] = useState<
     "cash" | "mpesa" | "card" | "bank"
@@ -72,11 +137,46 @@ export default function PointOfSale() {
   const [showSettings, setShowSettings] = useState(false);
   const [currentTransaction, setCurrentTransaction] =
     useState<POSTransaction | null>(null);
-  const [transactions, setTransactions] = useState<POSTransaction[]>([]);
+  // Load POS transactions from cloud on mount (cross-device sync). The
+  // `transactions` state is initialized from the synchronous in-memory cache
+  // (getCached) so the first render is instant; the async cloud fetch then
+  // refreshes it with the authoritative cross-device source of truth.
+  const [transactions, setTransactions] = useState<POSTransaction[]>(() => {
+    if (!user) return [];
+    const cached = cloudStorageService.getCached<POSTransaction[]>(
+      "pos_transactions",
+      stationId,
+    );
+    if (cached && Array.isArray(cached)) return cached;
+    try {
+      const local = JSON.parse(
+        localStorage.getItem("fuelpro_pos_transactions") || "[]",
+      );
+      if (Array.isArray(local)) return local;
+    } catch {
+      /* ignore */
+    }
+    return [];
+  });
   const [fiscalCounter, setFiscalCounter] = useState(1);
-  const [quickSaleType, setQuickSaleType] = useState<
-    "petrol" | "diesel" | "custom"
-  >("petrol");
+  // Race-condition guard: prevents the async cloud-load effect from
+  // overwriting local state (processPayment) before the load completes, and
+  // prevents the real-time echo from wiping uncommitted local edits. Without
+  // this, switching to the tab shows cached transactions for a glimpse then
+  // the cloud load wipes them (the "flash then blank" bug).
+  const cloudLoadCompleteRef = useRef(false);
+  const localModifiedRef = useRef(false);
+  const transactionsRef = useRef(transactions);
+  transactionsRef.current = transactions;
+  // The selected quick-sale fuel — the canonical display LABEL of the active
+  // fuel type (e.g. "Super Petrol", "Diesel", "Kerosene", "LPG"). Defaults to
+  // the canonical petrol label so the first render works before cloud data
+  // hydrates. The buttons below render dynamically from the station's active
+  // fuel types (fuel_types_config), so a station with Kerosene/LPG/V-Power
+  // configured can sell those from POS too — not just hardcoded Petrol/Diesel.
+  const [quickSaleFuel, setQuickSaleFuel] = useState<string>(
+    CANONICAL_FUEL_TYPES.petrol.label,
+  );
   const [quickSaleLitres, setQuickSaleLitres] = useState("");
   const [customItemName, setCustomItemName] = useState("");
   const [customItemPrice, setCustomItemPrice] = useState("");
@@ -87,30 +187,32 @@ export default function PointOfSale() {
   const receiptRef = useRef<HTMLDivElement>(null);
 
   // ─── Loyalty Integration ───
-  const stationId = location.currentLocation?.stationId || "default";
+  // Use the REAL station id (not a LocationContext-derived value that may be
+  // "default" / mismatched) so loyalty customers are scoped to the actual
+  // station and cross-device cloud data resolves correctly.
+  const loyaltyStationId = stationId || "default";
   const {
-    customers,
     earnPoints,
     findCustomerByPhone,
     findCustomerByCard,
     config: loyaltyConfig,
-  } = useLoyalty(stationId);
+  } = useLoyalty(loyaltyStationId);
   const [loyaltyCustomer, setLoyaltyCustomer] =
     useState<LoyaltyCustomer | null>(null);
   const [showLoyaltyScanner, setShowLoyaltyScanner] = useState(false);
-  const [loyaltyLookupMode, setLoyaltyLookupMode] = useState<"phone" | "card">(
-    "phone"
-  );
 
   // Loyalty lookup by phone or card number
-  const lookupLoyaltyCustomer = (input: string) => {
-    let customer = findCustomerByPhone(input);
-    if (!customer) {
-      customer = findCustomerByCard(input);
-    }
-    setLoyaltyCustomer(customer || null);
-    return customer;
-  };
+  const lookupLoyaltyCustomer = useCallback(
+    (input: string) => {
+      let customer = findCustomerByPhone(input);
+      if (!customer) {
+        customer = findCustomerByCard(input);
+      }
+      setLoyaltyCustomer(customer || null);
+      return customer;
+    },
+    [findCustomerByPhone, findCustomerByCard],
+  );
 
   // Auto-lookup when phone changes
   useEffect(() => {
@@ -122,17 +224,67 @@ export default function PointOfSale() {
     } else if (!customerPhone) {
       setLoyaltyCustomer(null);
     }
-  }, [customerPhone]);
+  }, [customerPhone, lookupLoyaltyCustomer]);
+
+  // Refresh POS transactions from the authoritative cloud source on mount /
+  // user / station change. The instant initial render comes from the
+  // `transactions` useState initializer (cache/localStorage); this async fetch
+  // resolves the true cross-device state and reconciles any divergence.
+  useEffect(() => {
+    if (!user) return;
+    cloudLoadCompleteRef.current = false;
+    localModifiedRef.current = false;
+    let cancelled = false;
+    (async () => {
+      const cloud = await cloudStorageService.get<POSTransaction[]>(
+        "pos_transactions",
+        stationId,
+      );
+      if (!cancelled && cloud && Array.isArray(cloud) && !localModifiedRef.current) {
+        setTransactions(cloud);
+        // Seed the fiscal counter from the persisted sale history so invoice
+        // numbers never collide across sessions/devices (a fresh device would
+        // otherwise reset to #1 and re-generate today's invoice numbers).
+        setFiscalCounter((prev) => Math.max(prev, cloud.length + 1));
+      }
+      if (!cancelled) cloudLoadCompleteRef.current = true;
+    })();
+    // Real-time cross-device sync: a sale completed on another device appears
+    // in "Recent Transactions" instantly without a page reload.
+    const unsub = cloudStorageService.subscribe<POSTransaction[]>(
+      "pos_transactions",
+      stationId,
+      (val) => {
+        if (!val || !Array.isArray(val) || localModifiedRef.current) return;
+        setTransactions(val);
+        setFiscalCounter((prev) => Math.max(prev, val.length + 1));
+      },
+    );
+    return () => {
+      cancelled = true;
+      unsub();
+    };
+  }, [user, stationId]);
+
+  // Post-load flush: if the user made changes before/during the cloud load,
+  // re-push the latest local state to cloud so it's not lost.
+  useEffect(() => {
+    if (cloudLoadCompleteRef.current && localModifiedRef.current) {
+      cloudStorageService
+        .set("pos_transactions", transactionsRef.current, stationId)
+        .catch(() => {});
+    }
+  }, [cloudLoadCompleteRef.current]);
 
   // Award points after successful transaction
   const awardLoyaltyPoints = (transaction: POSTransaction) => {
     if (!loyaltyCustomer || !loyaltyConfig?.isEnabled) return;
 
     // Calculate total liters from fuel items
-    const fuelItems = transaction.items.filter(item => item.litres);
+    const fuelItems = transaction.items.filter((item) => item.litres);
     const totalLiters = fuelItems.reduce(
       (sum, item) => sum + (item.litres || 0),
-      0
+      0,
     );
     const fuelType = fuelItems[0]?.fuelType || "PMS";
 
@@ -143,12 +295,12 @@ export default function PointOfSale() {
         transaction.total,
         totalLiters,
         fuelType,
-        transaction.cashier || "POS"
+        transaction.cashier || "POS",
       );
 
       // Refresh customer data
-      setLoyaltyCustomer(prev =>
-        prev ? findCustomerByPhone(prev.phone) || prev : null
+      setLoyaltyCustomer((prev) =>
+        prev ? findCustomerByPhone(prev.phone) || prev : null,
       );
     }
   };
@@ -168,16 +320,55 @@ export default function PointOfSale() {
     email: state.companyData.email || "",
   };
 
-  const VAT_RATE = 0.16; // 16% VAT in Kenya
+  // Country-aware VAT rate: resolve the station's ISO country code and look it
+  // up in the unified TAX_RATES table. Defaults to 0% only when the country is
+  // genuinely unknown. Resolution order:
+  //   1. The station's explicit country field (authoritative — set by the
+  //      user during setup/wizard). A KRA PIN alone does NOT override a
+  //      non-Kenyan country: a US/EU station may carry a leftover KRA PIN
+  //      from a template but must use its own tax regime.
+  //   2. If isKenyaStation() (timezone + station data detection) → KE.
+  //   3. The browser/timezone-detected country code.
+  //   4. "KE" as a final default (the app's primary market) — never 0% by
+  //      accident, which would produce non-compliant receipts.
+  const detectedCountryCode = getDetectedCountryCode();
+  const countryCode = currentStation?.country
+    ? currentStation.country
+    : kenyaStation
+      ? "KE"
+      : detectedCountryCode || "KE";
+  const VAT_RATE = getVATRate(countryCode);
+  const vatPercent = (VAT_RATE * 100).toFixed(2);
 
-  // Generate unique invoice number in KRA format
+  // Locale for date/number formatting — derived from the STATION's country
+  // (never a hardcoded "en-KE"), so a German station formats dates in de-DE.
+  // Falls back to the browser locale if the station country is unknown.
+  const stationLocale = useMemo(() => {
+    const profile = getCountryById(countryCode.toUpperCase());
+    const langs = profile?.languages;
+    const cc = profile?.id || countryCode;
+    if (langs && langs.length > 0 && cc) {
+      try {
+        return new Intl.Locale(`${langs[0]}-${cc.toUpperCase()}`).toString();
+      } catch {
+        /* fall through */
+      }
+    }
+    return undefined; // browser default
+  }, [countryCode]);
+
+  // Generate unique invoice number. The counter gives a human-readable
+  // sequence; a short random suffix guarantees global uniqueness across
+  // devices/sessions (two devices loading the same counter seed and selling
+  // concurrently would otherwise collide on the same day).
   const generateInvoiceNumber = () => {
     const date = new Date();
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, "0");
     const day = String(date.getDate()).padStart(2, "0");
     const counter = String(fiscalCounter).padStart(6, "0");
-    return `${etrConfig.invoicePrefix}${year}${month}${day}${counter}`;
+    const suffix = Math.random().toString(36).slice(2, 6).toUpperCase();
+    return `${etrConfig.invoicePrefix}${year}${month}${day}${counter}${suffix}`;
   };
 
   // Generate CU Invoice Number (Control Unit format)
@@ -205,7 +396,7 @@ export default function PointOfSale() {
 
   // Generate QR code for receipt verification
   const generateQRData = async (
-    transaction: Omit<POSTransaction, "qrCodeData">
+    transaction: Omit<POSTransaction, "qrCodeData">,
   ) => {
     const qrData = {
       pin: etrConfig.kraPin,
@@ -217,7 +408,16 @@ export default function PointOfSale() {
       sig: transaction.cuSignature,
     };
 
-    const qrString = `https://itax.kra.go.ke/etims/validate?data=${encodeURIComponent(JSON.stringify(qrData))}`;
+    // Country-aware verification URL — Kenya stations validate at KRA iTax;
+    // others use a generic FuelPro verification endpoint so the QR is never
+    // hardcoded to a Kenya-only authority.
+    const profile = getCountryById(countryCode.toUpperCase());
+    const verifyUrl =
+      profile?.fuelRegulations?.priceSettingBody &&
+      countryCode.toUpperCase() === "KE"
+        ? "https://itax.kra.go.ke/etims/validate"
+        : `${window.location.origin}/verify`;
+    const qrString = `${verifyUrl}?data=${encodeURIComponent(JSON.stringify(qrData))}`;
 
     try {
       const qrUrl = await QRCode.toDataURL(qrString, {
@@ -246,11 +446,27 @@ export default function PointOfSale() {
     const litres = parseFloat(quickSaleLitres) || 0;
     if (litres <= 0) return;
 
+    const label = quickSaleFuel;
+    // Use the unified bus-fresh price (falls back to legacy state field if the
+    // station has no matching fuel_types_config entry) so the charged total
+    // always matches the displayed per-litre price.
     const price =
-      quickSaleType === "petrol" ? state.petrolPrice : state.dieselPrice;
+      fuelTypeApi.getPriceFor(label) ??
+      (fuelTypeApi.canonicalOf(label) === "diesel"
+        ? state.dieselPrice
+        : state.petrolPrice) ??
+      0;
     const total = litres * price;
-    const fuelName =
-      quickSaleType === "petrol" ? "Super Petrol (PMS)" : "Diesel (AGO)";
+    const fuelName = label;
+    // Resolve the fuel code (PMS/AGO/IK/LPG…) from the configured entry if
+    // available; fall back to the canonical code so the receipt still has a
+    // machine-readable fuel identifier for unknown custom fuels.
+    const canonical = fuelTypeApi.canonicalOf(label);
+    const configuredCode = fuelTypeApi.findFuelType(label)?.code;
+    const _fuelCode =
+      configuredCode ||
+      (canonical ? CANONICAL_FUEL_TYPES[canonical]?.code : undefined) ||
+      (canonical === "diesel" ? "AGO" : "PMS");
 
     const newItem: CartItem = {
       id: `fuel-${Date.now()}`,
@@ -258,10 +474,14 @@ export default function PointOfSale() {
       quantity: 1,
       unitPrice: total,
       total: total,
-      fuelType: quickSaleType === "petrol" ? "PMS" : "AGO",
+      // Store the canonical fuel-type LABEL (e.g. "Super Petrol", "Kerosene",
+      // "LPG") so the receipt groups fuels correctly by their real type —
+      // NOT collapsed into "PMS"/"AGO". This is the key fix: a Kerosene/LPG
+      // sale no longer masquerades as Petrol/Diesel on the receipt.
+      fuelType: label,
       litres: litres,
-      vatCategory: "A", // Fuel is VAT-able at 16%
-      hsCode: quickSaleType === "petrol" ? "2710.12.10" : "2710.19.20",
+      vatCategory: "A", // Fuel is standard-rated (VAT-able)
+      hsCode: canonical === "diesel" ? "2710.19.20" : "2710.12.10",
     };
 
     setCart([...cart, newItem]);
@@ -278,7 +498,7 @@ export default function PointOfSale() {
       quantity: 1,
       unitPrice: price,
       total: price,
-      vatCategory: "A", // Default to 16% VAT
+      vatCategory: "A", // Default to standard-rate VAT
     };
 
     setCart([...cart, newItem]);
@@ -288,18 +508,18 @@ export default function PointOfSale() {
 
   const updateQuantity = (itemId: string, delta: number) => {
     setCart(
-      cart.map(item => {
+      cart.map((item) => {
         if (item.id === itemId) {
           const newQty = Math.max(1, item.quantity + delta);
           return { ...item, quantity: newQty, total: item.unitPrice * newQty };
         }
         return item;
-      })
+      }),
     );
   };
 
   const removeItem = (itemId: string) => {
-    setCart(cart.filter(item => item.id !== itemId));
+    setCart(cart.filter((item) => item.id !== itemId));
   };
 
   const clearCart = () => {
@@ -308,14 +528,14 @@ export default function PointOfSale() {
 
   // Calculate VAT by category
   const calculateVAT = () => {
-    let vatA = 0,
-      vatB = 0,
+    let vatA = 0;
+    const vatB = 0,
       vatE = 0;
     let taxableA = 0,
       taxableB = 0,
       exemptE = 0;
 
-    cart.forEach(item => {
+    cart.forEach((item) => {
       const itemTotal = item.total;
       if (item.vatCategory === "A") {
         // VAT inclusive calculation
@@ -342,7 +562,7 @@ export default function PointOfSale() {
   const initiateSTKPush = async () => {
     if (!customerPhone) {
       import("@/react-app/lib/toast").then(({ toastWarning }) =>
-        toastWarning("Please enter customer phone number for M-Pesa payment")
+        toastWarning("Please enter customer phone number for M-Pesa payment"),
       );
       return;
     }
@@ -368,6 +588,14 @@ export default function PointOfSale() {
     const receiptNumber = generateReceiptNumber();
     const timestamp = new Date().toISOString();
 
+    // Cashier identity: prefer the logged-in user's name, then their email
+    // local-part, then a station-scoped fallback — never a hardcoded "Cashier 1".
+    const cashier =
+      user?.name ||
+      (user?.email ? user.email.split("@")[0] : undefined) ||
+      currentStation?.name ||
+      "Cashier";
+
     const transactionData: Omit<POSTransaction, "qrCodeData"> = {
       id: `txn-${Date.now()}`,
       items: [...cart],
@@ -384,7 +612,7 @@ export default function PointOfSale() {
       timestamp,
       receiptNumber,
       invoiceNumber,
-      cashier: "Cashier 1",
+      cashier,
       cuInvoiceNo,
       cuSignature,
       fiscalCounter,
@@ -398,22 +626,36 @@ export default function PointOfSale() {
       qrCodeData: qrString,
     };
 
-    // Save transaction locally (serverless mode)
+    // CLOUD-FIRST persistence — the cloud (app_kv) is the source of truth, NOT
+    // localStorage. We merge the new transaction into the cloud-backed
+    // `transactions` state (loaded on mount), persist the merged list to cloud,
+    // then mirror to localStorage ONLY as a read-through cache. This prevents
+    // the cross-device data-loss bug where a new device with empty localStorage
+    // would overwrite the cloud with just the single new transaction,
+    // destroying every prior sale from other devices.
+    const merged = [transaction, ...transactions];
+    const trimmed = merged.slice(0, 200); // keep the most recent 200
+    localModifiedRef.current = true;
+    setTransactions(trimmed);
     try {
-      const localTransactions = JSON.parse(
-        localStorage.getItem("fuelpro_pos_transactions") || "[]"
-      );
-      localTransactions.push({
-        ...transaction,
-        savedAt: new Date().toISOString(),
-      });
       localStorage.setItem(
         "fuelpro_pos_transactions",
-        JSON.stringify(localTransactions.slice(-100))
+        JSON.stringify(trimmed.map((t) => ({ ...t, savedAt: timestamp }))),
       );
-    } catch (error) {
-      console.error("Failed to save POS transaction locally:", error);
+    } catch (cacheErr) {
+      console.warn("POS localStorage cache write failed:", cacheErr);
     }
+    await cloudStorageService.set("pos_transactions", trimmed, stationId);
+
+    // Sale is now persisted to cloud — notify the automation engine so
+    // downstream reactions (stock adjustment, dashboard refresh, reorder
+    // checks) fire.
+    emit({
+      type: "sale:completed",
+      stationId: currentStation?.id || "",
+      total,
+      items: cart,
+    });
 
     // Sync fuel sales to salesHistory for reporting
     syncFuelSalesToHistory(cart, timestamp, paymentMethod);
@@ -425,13 +667,47 @@ export default function PointOfSale() {
     };
     awardLoyaltyPoints(transactionForLoyalty);
 
-    // Add credit sale to delivery tracking if customer has a name
-    if (customerName && paymentMethod !== "cash" && paymentMethod !== "mpesa") {
+    // Add a CREDIT sale (bank/deferred) to delivery tracking so the customer
+    // owes a balance. Cash and M-Pesa are settled on the spot — they are NOT
+    // debt. Previously card/bank were wrongly treated as debt too.
+    if (
+      customerName &&
+      (paymentMethod === "bank" || paymentMethod === "card")
+    ) {
       addToDeliveryTracking(cart, customerName, timestamp);
     }
 
+    // ─── Interlink: M-Pesa POS sale → shared unified transaction store ───
+    // An M-Pesa sale completed at the POS is a real digital inflow, so mirror
+    // it into the shared `mpesa_transactions` cloud store. It then appears in
+    // the Live Transaction feed + M-PESA Analyzer (cross-device) just like an
+    // STK Push / statement inflow, keeping all payment records in one place.
+    if (paymentMethod === "mpesa") {
+      const unified: UnifiedTransaction = {
+        id: transaction.id,
+        transaction_ref: receiptNumber,
+        origin: "stk_push",
+        transaction_type: "POS M-Pesa Sale",
+        amount: total,
+        currency:
+          state.companyData?.currency || getCurrencyByCountry(countryCode),
+        sender_info: customerPhone || "",
+        description: `POS sale ${invoiceNumber} (${cart
+          .map((i) => i.name)
+          .join(", ")})`,
+        status: "completed",
+        payment_method: "M-PESA",
+        transaction_time: timestamp,
+        receipt: receiptNumber,
+        is_online: true,
+        date: timestamp.split("T")[0],
+        time: new Date(timestamp).toLocaleTimeString(),
+        account_reference: currentStation?.code || undefined,
+      };
+      addTransaction(unified, currentStation?.id).catch(() => {});
+    }
+
     setCurrentTransaction(transaction);
-    setTransactions([transaction, ...transactions]);
     setShowReceipt(true);
     setCart([]);
     setCustomerPhone("");
@@ -445,29 +721,45 @@ export default function PointOfSale() {
   const syncFuelSalesToHistory = (
     items: CartItem[],
     timestamp: string,
-    payment: string
+    payment: string,
   ) => {
     const date = timestamp.split("T")[0];
     const shift = new Date(timestamp).getHours() < 14 ? "Day" : "Night";
     const key = `${date}_${shift}`;
 
-    // Calculate fuel totals from POS items
+    // Calculate fuel totals from POS items. Group by canonical fuel type so
+    // Kerosene/LPG/V-Power sales are tracked under their own fuel, not
+    // collapsed into PMS/AGO. Petrol→pmsLitres, Diesel→agoLitres for legacy
+    // backward compatibility; other fuels tracked in posSales.byType.
     let pmsLitres = 0,
       pmsAmount = 0;
     let agoLitres = 0,
       agoAmount = 0;
+    const byTypeLitres: Record<string, number> = {};
+    const byTypeAmount: Record<string, number> = {};
 
-    items.forEach(item => {
-      if (item.fuelType === "PMS") {
-        pmsLitres += item.litres || item.quantity;
+    items.forEach((item) => {
+      if (!item.fuelType) return;
+      const canonical = normalizeFuelType(item.fuelType);
+      const litres = item.litres || item.quantity;
+      byTypeLitres[item.fuelType] = (byTypeLitres[item.fuelType] || 0) + litres;
+      byTypeAmount[item.fuelType] =
+        (byTypeAmount[item.fuelType] || 0) + item.total;
+      if (canonical === "petrol") {
+        pmsLitres += litres;
         pmsAmount += item.total;
-      } else if (item.fuelType === "AGO") {
-        agoLitres += item.litres || item.quantity;
+      } else if (canonical === "diesel") {
+        agoLitres += litres;
         agoAmount += item.total;
       }
     });
 
-    if (pmsLitres === 0 && agoLitres === 0) return;
+    if (
+      pmsLitres === 0 &&
+      agoLitres === 0 &&
+      Object.keys(byTypeLitres).length === 0
+    )
+      return;
 
     // Get existing sales data or create new
     const existingSales = state.salesHistory[key] || {
@@ -475,15 +767,24 @@ export default function PointOfSale() {
       shift,
       pmsPumps: state.pmsPumps,
       agoPumps: state.agoPumps,
+      fuelPumpsByType: state.fuelPumpsByType,
       expenses: [],
       tillPayment: 0,
       pmsPrice: state.pmsPrice,
       agoPrice: state.agoPrice,
+      fuelPricesByType: state.fuelPricesByType,
       pmsTankOpening: state.pmsTankOpening,
       pmsTankClosing: state.pmsTankClosing,
       agoTankOpening: state.agoTankOpening,
       agoTankClosing: state.agoTankClosing,
-      posSales: { pmsLitres: 0, pmsAmount: 0, agoLitres: 0, agoAmount: 0 },
+      posSales: {
+        pmsLitres: 0,
+        pmsAmount: 0,
+        agoLitres: 0,
+        agoAmount: 0,
+        byTypeLitres: {},
+        byTypeAmount: {},
+      },
     };
 
     // Accumulate POS sales
@@ -492,11 +793,25 @@ export default function PointOfSale() {
       pmsAmount: 0,
       agoLitres: 0,
       agoAmount: 0,
+      byTypeLitres: {},
+      byTypeAmount: {},
     };
     posSales.pmsLitres += pmsLitres;
     posSales.pmsAmount += pmsAmount;
     posSales.agoLitres += agoLitres;
     posSales.agoAmount += agoAmount;
+    posSales.byTypeLitres = {
+      ...(posSales.byTypeLitres || {}),
+    };
+    posSales.byTypeAmount = {
+      ...(posSales.byTypeAmount || {}),
+    };
+    for (const ft of Object.keys(byTypeLitres)) {
+      posSales.byTypeLitres[ft] =
+        (posSales.byTypeLitres[ft] || 0) + byTypeLitres[ft];
+      posSales.byTypeAmount[ft] =
+        (posSales.byTypeAmount[ft] || 0) + byTypeAmount[ft];
+    }
 
     // Update till payment for M-Pesa transactions
     const tillPayment =
@@ -516,15 +831,15 @@ export default function PointOfSale() {
   const addToDeliveryTracking = (
     items: CartItem[],
     customer: string,
-    timestamp: string
+    timestamp: string,
   ) => {
-    const fuelItems = items.filter(item => item.fuelType);
+    const fuelItems = items.filter((item) => item.fuelType);
     if (fuelItems.length === 0) return;
 
     const date = timestamp.split("T")[0];
     const totalLitres = fuelItems.reduce(
       (sum, item) => sum + (item.litres || item.quantity),
-      0
+      0,
     );
     const totalAmount = fuelItems.reduce((sum, item) => sum + item.total, 0);
     const fuelType = fuelItems[0].fuelType || "PMS";
@@ -543,7 +858,7 @@ export default function PointOfSale() {
     const totals = {
       totalSupplied: updatedRows.reduce(
         (sum, row) => sum + (row.amount || 0),
-        0
+        0,
       ),
       totalPayments: state.deliveryData.totals.totalPayments,
       balanceDue: updatedRows.reduce((sum, row) => sum + (row.debt || 0), 0),
@@ -561,9 +876,11 @@ export default function PointOfSale() {
     const printWindow = window.open("", "_blank");
     if (!printWindow) return;
 
-    const receiptContent = receiptRef.current.innerHTML;
-
-    printWindow.document.write(`
+    // ⚠️ SECURITY FIX: Use textContent instead of innerHTML to prevent XSS
+    // Get the text content safely from the receipt
+    const receiptText = receiptRef.current.textContent || "";
+    
+    const html = `
       <!DOCTYPE html>
       <html>
         <head>
@@ -605,17 +922,38 @@ export default function PointOfSale() {
           </style>
         </head>
         <body>
-          ${receiptContent}
+          <div id="receipt-content"></div>
           <script>window.print(); window.close();</script>
         </body>
       </html>
-    `);
+    `;
+    printWindow.document.write(html);
     printWindow.document.close();
+    
+    // Safely insert receipt content using textContent to prevent XSS
+    const contentDiv = printWindow.document.getElementById("receipt-content");
+    if (contentDiv && receiptRef.current) {
+      // Clone the receipt and sanitize it by using textContent
+      const clone = receiptRef.current.cloneNode(true) as HTMLElement;
+      // Replace all innerHTML with textContent recursively to strip any scripts
+      const sanitizeNode = (node: Node) => {
+        if (node.nodeType === Node.ELEMENT_NODE) {
+          const el = node as Element;
+          const text = el.textContent || "";
+          el.textContent = text;
+          for (let i = 0; i < el.children.length; i++) {
+            sanitizeNode(el.children[i]);
+          }
+        }
+      };
+      sanitizeNode(clone);
+      contentDiv.innerHTML = clone.innerHTML;
+    }
   };
 
   const formatDate = (isoString: string) => {
     const date = new Date(isoString);
-    return date.toLocaleDateString("en-KE", {
+    return date.toLocaleDateString(stationLocale, {
       day: "2-digit",
       month: "2-digit",
       year: "numeric",
@@ -632,7 +970,7 @@ export default function PointOfSale() {
         width: 120,
         margin: 1,
       })
-        .then(url => setQrCodeUrl(url))
+        .then((url) => setQrCodeUrl(url))
         .catch(console.error);
     }
   }, [currentTransaction]);
@@ -658,7 +996,7 @@ export default function PointOfSale() {
             className="btn btn-outline btn-sm flex items-center gap-1"
           >
             <Settings size={16} />
-            KRA Settings
+            {kenyaStation ? "KRA Settings" : "Tax Settings"}
           </button>
           <div className="text-sm text-gray-500 dark:text-gray-400">
             Fiscal #{fiscalCounter} | Today: {transactions.length}
@@ -666,24 +1004,36 @@ export default function PointOfSale() {
         </div>
       </div>
 
-      {/* KRA Compliance Banner */}
-      {!etrConfig.kraPin || etrConfig.kraPin === "P000000000X" ? (
-        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-300 dark:border-yellow-700 rounded-lg p-3">
-          <p className="text-sm text-yellow-800 dark:text-yellow-200 flex items-center gap-2">
-            <QrCode size={16} />
-            <span>
-              <strong>KRA eTIMS Setup Required:</strong> Configure your KRA PIN
-              and ETR details in Settings for tax-compliant receipts.
-            </span>
-          </p>
-        </div>
+      {/* KRA / Tax Compliance Banner */}
+      {kenyaStation ? (
+        !etrConfig.kraPin || etrConfig.kraPin === "P000000000X" ? (
+          <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-300 dark:border-yellow-700 rounded-lg p-3">
+            <p className="text-sm text-yellow-800 dark:text-yellow-200 flex items-center gap-2">
+              <QrCode size={16} />
+              <span>
+                <strong>KRA eTIMS Setup Required:</strong> Configure your KRA
+                PIN and ETR details in Settings for tax-compliant receipts.
+              </span>
+            </p>
+          </div>
+        ) : (
+          <div className="bg-green-50 dark:bg-green-900/20 border border-green-300 dark:border-green-700 rounded-lg p-2">
+            <p className="text-sm text-green-800 dark:text-green-200 flex items-center gap-2">
+              <Check size={16} />
+              <span>
+                <strong>KRA eTIMS Ready:</strong> PIN: {etrConfig.kraPin} | ETR:{" "}
+                {etrConfig.etrSerialNo}
+              </span>
+            </p>
+          </div>
+        )
       ) : (
-        <div className="bg-green-50 dark:bg-green-900/20 border border-green-300 dark:border-green-700 rounded-lg p-2">
-          <p className="text-sm text-green-800 dark:text-green-200 flex items-center gap-2">
-            <Check size={16} />
+        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-300 dark:border-blue-700 rounded-lg p-3">
+          <p className="text-sm text-blue-800 dark:text-blue-200 flex items-center gap-2">
+            <Settings size={16} />
             <span>
-              <strong>KRA eTIMS Ready:</strong> PIN: {etrConfig.kraPin} | ETR:{" "}
-              {etrConfig.etrSerialNo}
+              <strong>Tax Settings:</strong> Configure your VAT/tax registration
+              in Settings for compliant receipts.
             </span>
           </p>
         </div>
@@ -696,44 +1046,114 @@ export default function PointOfSale() {
           <div className="card">
             <h3 className="text-lg font-semibold mb-4">Quick Fuel Sale</h3>
             <div className="flex flex-wrap gap-4 items-end">
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
+                {/* Render one button per ACTIVE fuel type configured for this
+                    station (from fuel_types_config, via useStationFuelTypes).
+                    Falls back to the canonical Petrol + Diesel buttons when
+                    the station has no configured fuel types yet (first run /
+                    before cloud hydration) so POS is never empty. */}
+                {(() => {
+                  const active = fuelTypeApi.activeFuelTypes;
+                  if (active.length > 0) {
+                    return active.map((ft) => {
+                      const selected =
+                        fuelTypeApi.labelOf(ft.name) === quickSaleFuel;
+                      return (
+                        <button
+                          key={ft.id || ft.name}
+                          onClick={() =>
+                            setQuickSaleFuel(fuelTypeApi.labelOf(ft.name))
+                          }
+                          className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                            selected
+                              ? "bg-green-500 text-white"
+                              : "bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
+                          }`}
+                        >
+                          {fuelTypeApi.labelOf(ft.name)} ({currencySymbol}{" "}
+                          {(fuelTypeApi.getPriceFor(ft.name) ?? 0).toFixed(2)}
+                          /L)
+                        </button>
+                      );
+                    });
+                  }
+                  // Fallback: no configured fuel types — show canonical
+                  // Petrol + Diesel so the cashier can still make a sale.
+                  return (
+                    <>
+                      <button
+                        onClick={() =>
+                          setQuickSaleFuel(CANONICAL_FUEL_TYPES.petrol.label)
+                        }
+                        className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                          quickSaleFuel === CANONICAL_FUEL_TYPES.petrol.label
+                            ? "bg-green-500 text-white"
+                            : "bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
+                        }`}
+                      >
+                        {CANONICAL_FUEL_TYPES.petrol.label} ({currencySymbol}{" "}
+                        {(
+                          fuelTypeApi.getPriceFor(
+                            CANONICAL_FUEL_TYPES.petrol.label,
+                          ) ??
+                          state.petrolPrice ??
+                          0
+                        ).toFixed(2)}
+                        /L)
+                      </button>
+                      <button
+                        onClick={() =>
+                          setQuickSaleFuel(CANONICAL_FUEL_TYPES.diesel.label)
+                        }
+                        className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                          quickSaleFuel === CANONICAL_FUEL_TYPES.diesel.label
+                            ? "bg-yellow-500 text-white"
+                            : "bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
+                        }`}
+                      >
+                        {CANONICAL_FUEL_TYPES.diesel.label} ({currencySymbol}{" "}
+                        {(
+                          fuelTypeApi.getPriceFor(
+                            CANONICAL_FUEL_TYPES.diesel.label,
+                          ) ??
+                          state.dieselPrice ??
+                          0
+                        ).toFixed(2)}
+                        /L)
+                      </button>
+                    </>
+                  );
+                })()}
                 <button
-                  onClick={() => setQuickSaleType("petrol")}
-                  className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                    quickSaleType === "petrol"
-                      ? "bg-green-500 text-white"
-                      : "bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
-                  }`}
+                  onClick={() =>
+                    navigateToTab("fueltypes", {
+                      view: "fueltypes",
+                    } as FuelPricePrefill)
+                  }
+                  className="px-3 py-2 rounded-lg font-medium bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-200 text-sm"
+                  title="Edit fuel types & prices in Fuel Type Manager"
                 >
-                  Petrol (Ksh {state.petrolPrice}/L)
-                </button>
-                <button
-                  onClick={() => setQuickSaleType("diesel")}
-                  className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                    quickSaleType === "diesel"
-                      ? "bg-yellow-500 text-white"
-                      : "bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
-                  }`}
-                >
-                  Diesel (Ksh {state.dieselPrice}/L)
+                  Edit Fuels
                 </button>
               </div>
               <div className="flex gap-2 items-center">
                 <input
                   type="number"
                   value={quickSaleLitres}
-                  onChange={e => setQuickSaleLitres(e.target.value)}
+                  onChange={(e) => setQuickSaleLitres(e.target.value)}
                   placeholder="Litres"
                   className="w-32 px-3 py-2 rounded-lg border dark:bg-gray-800 dark:border-gray-600"
                   step="0.1"
                 />
                 <span className="text-gray-500">
-                  = Ksh{" "}
+                  = {currencySymbol}{" "}
                   {formatNumber(
                     (parseFloat(quickSaleLitres) || 0) *
-                      (quickSaleType === "petrol"
-                        ? state.petrolPrice
-                        : state.dieselPrice)
+                      (fuelTypeApi.getPriceFor(quickSaleFuel) ??
+                        (fuelTypeApi.canonicalOf(quickSaleFuel) === "diesel"
+                          ? state.dieselPrice
+                          : state.petrolPrice) ??
+                        0),
                   )}
                 </span>
                 <button onClick={addFuelToCart} className="btn btn-primary">
@@ -750,15 +1170,15 @@ export default function PointOfSale() {
               <input
                 type="text"
                 value={customItemName}
-                onChange={e => setCustomItemName(e.target.value)}
+                onChange={(e) => setCustomItemName(e.target.value)}
                 placeholder="Item name"
                 className="flex-1 min-w-[150px] px-3 py-2 rounded-lg border dark:bg-gray-800 dark:border-gray-600"
               />
               <input
                 type="number"
                 value={customItemPrice}
-                onChange={e => setCustomItemPrice(e.target.value)}
-                placeholder="Price (Ksh)"
+                onChange={(e) => setCustomItemPrice(e.target.value)}
+                placeholder={`Price (${currencySymbol})`}
                 className="w-32 px-3 py-2 rounded-lg border dark:bg-gray-800 dark:border-gray-600"
               />
               <button onClick={addCustomItem} className="btn btn-outline">
@@ -788,7 +1208,7 @@ export default function PointOfSale() {
               </div>
             ) : (
               <div className="space-y-3">
-                {cart.map(item => (
+                {cart.map((item) => (
                   <div
                     key={item.id}
                     className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg"
@@ -826,7 +1246,7 @@ export default function PointOfSale() {
                         </div>
                       )}
                       <span className="font-semibold w-24 text-right">
-                        Ksh {formatNumber(item.total)}
+                        {currencySymbol} {formatNumber(item.total)}
                       </span>
                       <button
                         onClick={() => removeItem(item.id)}
@@ -909,7 +1329,7 @@ export default function PointOfSale() {
                   <input
                     type="text"
                     value={customerPhone}
-                    onChange={e => {
+                    onChange={(e) => {
                       setCustomerPhone(e.target.value);
                       if (e.target.value.length >= 7) {
                         lookupLoyaltyCustomer(e.target.value);
@@ -932,15 +1352,19 @@ export default function PointOfSale() {
               <input
                 type="text"
                 value={customerName}
-                onChange={e => setCustomerName(e.target.value)}
+                onChange={(e) => setCustomerName(e.target.value)}
                 placeholder="Customer Name"
                 className="w-full px-3 py-2 text-sm rounded-lg border dark:bg-gray-800 dark:border-gray-600"
               />
               <input
                 type="text"
                 value={customerPin}
-                onChange={e => setCustomerPin(e.target.value.toUpperCase())}
-                placeholder="Customer KRA PIN (for B2B)"
+                onChange={(e) => setCustomerPin(e.target.value.toUpperCase())}
+                placeholder={
+                  kenyaStation
+                    ? "Customer KRA PIN (for B2B)"
+                    : "Customer Tax ID (for B2B)"
+                }
                 className="w-full px-3 py-2 text-sm rounded-lg border dark:bg-gray-800 dark:border-gray-600"
               />
             </div>
@@ -952,28 +1376,38 @@ export default function PointOfSale() {
             {/* VAT Breakdown */}
             <div className="space-y-1 mb-4 text-sm">
               <div className="flex justify-between text-gray-600 dark:text-gray-400">
-                <span>Taxable (A-16%):</span>
-                <span>Ksh {formatNumber(taxableA)}</span>
+                <span>Taxable (A-{vatPercent}%):</span>
+                <span>
+                  {currencySymbol} {formatNumber(taxableA)}
+                </span>
               </div>
               <div className="flex justify-between text-gray-600 dark:text-gray-400">
-                <span>VAT (16%):</span>
-                <span>Ksh {formatNumber(vatA)}</span>
+                <span>VAT ({vatPercent}%):</span>
+                <span>
+                  {currencySymbol} {formatNumber(vatA)}
+                </span>
               </div>
               {taxableB > 0 && (
                 <div className="flex justify-between text-gray-600 dark:text-gray-400">
                   <span>Zero-rated (B-0%):</span>
-                  <span>Ksh {formatNumber(taxableB)}</span>
+                  <span>
+                    {currencySymbol} {formatNumber(taxableB)}
+                  </span>
                 </div>
               )}
               {exemptE > 0 && (
                 <div className="flex justify-between text-gray-600 dark:text-gray-400">
                   <span>Exempt (E):</span>
-                  <span>Ksh {formatNumber(exemptE)}</span>
+                  <span>
+                    {currencySymbol} {formatNumber(exemptE)}
+                  </span>
                 </div>
               )}
               <div className="flex justify-between text-xl font-bold border-t pt-2">
                 <span>Total:</span>
-                <span>Ksh {formatNumber(total)}</span>
+                <span>
+                  {currencySymbol} {formatNumber(total)}
+                </span>
               </div>
             </div>
 
@@ -1033,7 +1467,7 @@ export default function PointOfSale() {
                   <input
                     type="tel"
                     value={customerPhone}
-                    onChange={e => setCustomerPhone(e.target.value)}
+                    onChange={(e) => setCustomerPhone(e.target.value)}
                     placeholder="Phone (e.g. 0712345678)"
                     className="w-full px-3 py-2 rounded-lg border dark:bg-gray-800 dark:border-gray-600"
                   />
@@ -1080,7 +1514,7 @@ export default function PointOfSale() {
                   No transactions yet
                 </p>
               ) : (
-                transactions.slice(0, 5).map(txn => (
+                transactions.slice(0, 5).map((txn) => (
                   <div
                     key={txn.id}
                     className="p-2 bg-gray-50 dark:bg-gray-800 rounded cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
@@ -1094,7 +1528,7 @@ export default function PointOfSale() {
                         {txn.invoiceNumber}
                       </span>
                       <span className="font-semibold">
-                        Ksh {formatNumber(txn.total)}
+                        {currencySymbol} {formatNumber(txn.total)}
                       </span>
                     </div>
                     <div className="flex justify-between text-xs text-gray-500">
@@ -1109,12 +1543,16 @@ export default function PointOfSale() {
         </div>
       </div>
 
-      {/* KRA Settings Modal */}
+      {/* Tax/KRA Settings Modal */}
       {showSettings && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-900 rounded-lg max-w-lg w-full max-h-[90vh] overflow-y-auto">
             <div className="p-4 border-b dark:border-gray-700 flex justify-between items-center">
-              <h3 className="font-semibold">KRA eTIMS / ETR Configuration</h3>
+              <h3 className="font-semibold">
+                {kenyaStation
+                  ? "KRA eTIMS / ETR Configuration"
+                  : "Tax / VAT Configuration"}
+              </h3>
               <button
                 onClick={() => setShowSettings(false)}
                 className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded"
@@ -1123,21 +1561,32 @@ export default function PointOfSale() {
               </button>
             </div>
             <div className="p-4 space-y-2">
-              <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg text-sm text-blue-800 dark:text-blue-200">
-                <p>
-                  <strong>Note:</strong> To enable full KRA eTIMS compliance,
-                  you must register with KRA at{" "}
-                  <a
-                    href="https://itax.kra.go.ke"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="underline"
-                  >
-                    itax.kra.go.ke
-                  </a>{" "}
-                  and obtain your ETR device credentials.
-                </p>
-              </div>
+              {kenyaStation && (
+                <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg text-sm text-blue-800 dark:text-blue-200">
+                  <p>
+                    <strong>Note:</strong> To enable full KRA eTIMS compliance,
+                    you must register with KRA at{" "}
+                    <a
+                      href="https://itax.kra.go.ke"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline"
+                    >
+                      itax.kra.go.ke
+                    </a>{" "}
+                    and obtain your ETR device credentials.
+                  </p>
+                </div>
+              )}
+              {!kenyaStation && (
+                <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg text-sm text-blue-800 dark:text-blue-200">
+                  <p>
+                    <strong>Note:</strong> Configure your tax registration
+                    details for compliant receipts. The VAT rate is
+                    auto-detected from your station's country.
+                  </p>
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="col-span-2">
@@ -1147,21 +1596,21 @@ export default function PointOfSale() {
                   <input
                     type="text"
                     value={state.companyData.name}
-                    onChange={e => updateCompanyData("name", e.target.value)}
+                    onChange={(e) => updateCompanyData("name", e.target.value)}
                     className="w-full px-3 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600"
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1">
-                    KRA PIN *
+                    {kenyaStation ? "KRA PIN" : "Tax ID / VAT No"} *
                   </label>
                   <input
                     type="text"
                     value={state.companyData.kraPin}
-                    onChange={e =>
+                    onChange={(e) =>
                       updateCompanyData("kraPin", e.target.value.toUpperCase())
                     }
-                    placeholder="P000000000X"
+                    placeholder={kenyaStation ? "P000000000X" : "EIN / VAT No"}
                     className="w-full px-3 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600"
                   />
                 </div>
@@ -1172,7 +1621,7 @@ export default function PointOfSale() {
                   <input
                     type="text"
                     value={state.companyData.vatRegNo}
-                    onChange={e =>
+                    onChange={(e) =>
                       updateCompanyData("vatRegNo", e.target.value)
                     }
                     className="w-full px-3 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600"
@@ -1185,7 +1634,7 @@ export default function PointOfSale() {
                   <input
                     type="text"
                     value={state.companyData.physicalAddress}
-                    onChange={e =>
+                    onChange={(e) =>
                       updateCompanyData("physicalAddress", e.target.value)
                     }
                     className="w-full px-3 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600"
@@ -1196,49 +1645,55 @@ export default function PointOfSale() {
                   <input
                     type="text"
                     value={state.companyData.town}
-                    onChange={e => updateCompanyData("town", e.target.value)}
+                    onChange={(e) => updateCompanyData("town", e.target.value)}
                     className="w-full px-3 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600"
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1">
-                    County
+                    {kenyaStation ? "County" : "State / Province"}
                   </label>
                   <input
                     type="text"
                     value={state.companyData.county}
-                    onChange={e => updateCompanyData("county", e.target.value)}
-                    className="w-full px-3 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">
-                    ETR Serial No.
-                  </label>
-                  <input
-                    type="text"
-                    value={state.companyData.etrSerialNo}
-                    onChange={e =>
-                      updateCompanyData("etrSerialNo", e.target.value)
+                    onChange={(e) =>
+                      updateCompanyData("county", e.target.value)
                     }
-                    placeholder="ETR-00000000"
                     className="w-full px-3 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600"
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">
-                    CU Serial No.
-                  </label>
-                  <input
-                    type="text"
-                    value={state.companyData.cuSerialNo}
-                    onChange={e =>
-                      updateCompanyData("cuSerialNo", e.target.value)
-                    }
-                    placeholder="CU-00000000"
-                    className="w-full px-3 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600"
-                  />
-                </div>
+                {kenyaStation && (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">
+                        ETR Serial No.
+                      </label>
+                      <input
+                        type="text"
+                        value={state.companyData.etrSerialNo}
+                        onChange={(e) =>
+                          updateCompanyData("etrSerialNo", e.target.value)
+                        }
+                        placeholder="ETR-00000000"
+                        className="w-full px-3 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">
+                        CU Serial No.
+                      </label>
+                      <input
+                        type="text"
+                        value={state.companyData.cuSerialNo}
+                        onChange={(e) =>
+                          updateCompanyData("cuSerialNo", e.target.value)
+                        }
+                        placeholder="CU-00000000"
+                        className="w-full px-3 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600"
+                      />
+                    </div>
+                  </>
+                )}
                 <div>
                   <label className="block text-sm font-medium mb-1">
                     Invoice Prefix
@@ -1246,10 +1701,10 @@ export default function PointOfSale() {
                   <input
                     type="text"
                     value={state.companyData.etrInvoicePrefix}
-                    onChange={e =>
+                    onChange={(e) =>
                       updateCompanyData(
                         "etrInvoicePrefix",
-                        e.target.value.toUpperCase()
+                        e.target.value.toUpperCase(),
                       )
                     }
                     placeholder="INV"
@@ -1264,7 +1719,7 @@ export default function PointOfSale() {
                   <input
                     type="text"
                     value={state.companyData.contacts}
-                    onChange={e =>
+                    onChange={(e) =>
                       updateCompanyData("contacts", e.target.value)
                     }
                     className="w-full px-3 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600"
@@ -1311,6 +1766,14 @@ export default function PointOfSale() {
             >
               {/* Receipt Header */}
               <div className="receipt-header text-center mb-4 pb-4 border-b border-dashed border-gray-400">
+                {state.companyData?.logo && (
+                  <img
+                    src={state.companyData.logo}
+                    alt="Logo"
+                    className="mx-auto mb-2 max-h-16 max-w-[120px] object-contain"
+                    crossOrigin="anonymous"
+                  />
+                )}
                 <h2 className="text-lg font-bold">{etrConfig.businessName}</h2>
                 {etrConfig.address && (
                   <p className="text-xs">{etrConfig.address}</p>
@@ -1329,7 +1792,8 @@ export default function PointOfSale() {
                   <p className="text-xs">{etrConfig.email}</p>
                 )}
                 <p className="text-xs mt-1">
-                  <strong>PIN:</strong> {etrConfig.kraPin}
+                  <strong>{kenyaStation ? "PIN:" : "Tax ID:"}</strong>{" "}
+                  {etrConfig.kraPin}
                 </p>
                 {etrConfig.vatRegNo && (
                   <p className="text-xs">
@@ -1379,7 +1843,9 @@ export default function PointOfSale() {
                 {currentTransaction.customerPin && (
                   <div className="flex justify-between">
                     <span>
-                      <strong>Buyer PIN:</strong>
+                      <strong>
+                        {kenyaStation ? "Buyer PIN:" : "Customer Tax ID:"}
+                      </strong>
                     </span>
                     <span>{currentTransaction.customerPin}</span>
                   </div>
@@ -1400,12 +1866,14 @@ export default function PointOfSale() {
                   <div key={idx}>
                     <div className="flex justify-between text-xs">
                       <span className="font-medium">{item.name}</span>
-                      <span>Ksh {formatNumber(item.total)}</span>
+                      <span>
+                        {currencySymbol} {formatNumber(item.total)}
+                      </span>
                     </div>
                     <div className="text-[10px] text-gray-600 ml-2">
                       {item.litres
                         ? `${item.litres} L`
-                        : `${item.quantity} x Ksh ${formatNumber(item.unitPrice)}`}
+                        : `${item.quantity} x ${currencySymbol} ${formatNumber(item.unitPrice)}`}
                       {" | VAT-"}
                       {item.vatCategory}
                       {item.hsCode && ` | HS:${item.hsCode}`}
@@ -1420,11 +1888,11 @@ export default function PointOfSale() {
               <div className="vat-summary text-xs space-y-1 mb-3">
                 <div className="font-bold border-b pb-1">VAT SUMMARY</div>
                 <div className="flex justify-between">
-                  <span>A-16.00%:</span>
+                  <span>A-{vatPercent}%:</span>
                   <span>
                     Taxable:{" "}
                     {formatNumber(
-                      currentTransaction.subtotal - currentTransaction.vatE
+                      currentTransaction.subtotal - currentTransaction.vatE,
                     )}{" "}
                     | VAT: {formatNumber(currentTransaction.vatA)}
                   </span>
@@ -1453,39 +1921,60 @@ export default function PointOfSale() {
                 <div className="flex justify-between">
                   <span>Subtotal (Excl. VAT):</span>
                   <span>
-                    Ksh{" "}
+                    {currencySymbol}{" "}
                     {formatNumber(
-                      currentTransaction.subtotal - currentTransaction.totalVat
+                      currentTransaction.subtotal - currentTransaction.totalVat,
                     )}
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span>Total VAT:</span>
-                  <span>Ksh {formatNumber(currentTransaction.totalVat)}</span>
+                  <span>
+                    {currencySymbol} {formatNumber(currentTransaction.totalVat)}
+                  </span>
                 </div>
               </div>
 
               <div className="flex justify-between text-lg font-bold border-t-2 border-b-2 border-black py-2 my-3">
                 <span>TOTAL:</span>
-                <span>Ksh {formatNumber(currentTransaction.total)}</span>
+                <span>
+                  {currencySymbol} {formatNumber(currentTransaction.total)}
+                </span>
               </div>
 
               {/* ETR/KRA Section */}
               <div className="etr-section mt-4 pt-3 border-t border-dashed border-gray-400 text-center">
-                <p className="font-bold text-xs">ELECTRONIC TAX REGISTER</p>
-                <p className="text-[10px] mt-1">
-                  ETR S/N: {etrConfig.etrSerialNo}
-                </p>
-                <p className="text-[10px]">CU S/N: {etrConfig.cuSerialNo}</p>
-                <p className="text-[10px]">
-                  CU Invoice No: {currentTransaction.cuInvoiceNo}
-                </p>
-                <p className="text-[10px]">
-                  Fiscal Counter: #{currentTransaction.fiscalCounter}
-                </p>
-                <div className="mt-2 text-[9px] font-mono break-all bg-gray-100 p-1 rounded">
-                  <strong>Signature:</strong> {currentTransaction.cuSignature}
-                </div>
+                {kenyaStation ? (
+                  <>
+                    <p className="font-bold text-xs">ELECTRONIC TAX REGISTER</p>
+                    <p className="text-[10px] mt-1">
+                      ETR S/N: {etrConfig.etrSerialNo}
+                    </p>
+                    <p className="text-[10px]">
+                      CU S/N: {etrConfig.cuSerialNo}
+                    </p>
+                    <p className="text-[10px]">
+                      CU Invoice No: {currentTransaction.cuInvoiceNo}
+                    </p>
+                    <p className="text-[10px]">
+                      Fiscal Counter: #{currentTransaction.fiscalCounter}
+                    </p>
+                    <div className="mt-2 text-[9px] font-mono break-all bg-gray-100 p-1 rounded">
+                      <strong>Signature:</strong>{" "}
+                      {currentTransaction.cuSignature}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <p className="font-bold text-xs">RECEIPT</p>
+                    <p className="text-[10px] mt-1">
+                      Receipt No: {currentTransaction.invoiceNumber}
+                    </p>
+                    <p className="text-[10px]">
+                      Transaction ID: #{currentTransaction.fiscalCounter}
+                    </p>
+                  </>
+                )}
 
                 {/* QR Code */}
                 {qrCodeUrl && (
@@ -1497,15 +1986,21 @@ export default function PointOfSale() {
                       style={{ width: "100px", height: "100px" }}
                     />
                     <p className="text-[8px] mt-1">
-                      Scan to verify at KRA iTax
+                      {kenyaStation
+                        ? "Scan to verify at KRA iTax"
+                        : "Scan to verify this invoice"}
                     </p>
                   </div>
                 )}
 
                 <p className="mt-2 text-[9px] font-bold">
-                  *KRA eTIMS COMPLIANT INVOICE*
+                  {kenyaStation
+                    ? "*KRA eTIMS COMPLIANT INVOICE*"
+                    : "*TAX COMPLIANT INVOICE*"}
                 </p>
-                <p className="text-[8px]">Powered by TIMS</p>
+                <p className="text-[8px]">
+                  {kenyaStation ? "Powered by TIMS" : "Powered by FuelPro"}
+                </p>
               </div>
 
               {/* Footer */}

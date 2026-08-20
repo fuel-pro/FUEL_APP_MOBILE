@@ -5,7 +5,7 @@ This guide walks you through setting up Supabase for the FuelPro application.
 ## Prerequisites
 
 - Supabase account at https://supabase.com
-- Access to the FuelPro Supabase project: `ojjscjwatikixlpshmub`
+- Access to the FuelPro Supabase project: `ojsscjwatikixlpshmub`
 
 ---
 
@@ -31,7 +31,7 @@ npm install -g supabase
 supabase login
 
 # Link to your project
-supabase link --project-ref ojjscjwatikixlpshmub
+supabase link --project-ref ojsscjwatikixlpshmub
 
 # Push the schema
 supabase db push
@@ -58,11 +58,16 @@ supabase db push
 
 <p>Hi {{ .Data.Email }},</p>
 
-<p>Thanks for registering with FuelPro! Please confirm your email address by clicking the button below:</p>
+<p>
+  Thanks for registering with FuelPro! Please confirm your email address by
+  clicking the button below:
+</p>
 
 <p style="text-align: center; margin: 30px 0;">
-  <a href="{{ .ConfirmationURL }}" 
-     style="background-color: #f59e0b; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold;">
+  <a
+    href="{{ .ConfirmationURL }}"
+    style="background-color: #f59e0b; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold;"
+  >
     Confirm Email
   </a>
 </p>
@@ -71,7 +76,7 @@ supabase db push
 
 <p>If you didn't create this account, you can safely ignore this email.</p>
 
-<p>Best regards,<br>The FuelPro Team</p>
+<p>Best regards,<br />The FuelPro Team</p>
 ```
 
 #### Reset Password Template
@@ -81,20 +86,28 @@ supabase db push
 
 <p>Hi {{ .Data.Email }},</p>
 
-<p>We received a request to reset your password. Click the button below to set a new password:</p>
+<p>
+  We received a request to reset your password. Click the button below to set a
+  new password:
+</p>
 
 <p style="text-align: center; margin: 30px 0;">
-  <a href="{{ .ConfirmationURL }}" 
-     style="background-color: #3b82f6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold;">
+  <a
+    href="{{ .ConfirmationURL }}"
+    style="background-color: #3b82f6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold;"
+  >
     Reset Password
   </a>
 </p>
 
 <p>Or copy this link: {{ .ConfirmationURL }}</p>
 
-<p>This link will expire in 1 hour. If you didn't request a password reset, please ignore this email.</p>
+<p>
+  This link will expire in 1 hour. If you didn't request a password reset,
+  please ignore this email.
+</p>
 
-<p>Best regards,<br>The FuelPro Team</p>
+<p>Best regards,<br />The FuelPro Team</p>
 ```
 
 ### 2.3 Email Settings Configuration
@@ -128,10 +141,20 @@ supabase db push
 1. Go to **Credentials** → **Create Credentials** → **OAuth client ID**
 2. Application type: **Web application**
 3. Name: FuelPro Web
-4. Authorized redirect URIs:
+4. **Authorized JavaScript origins** (required for the GIS token/popup flow — the primary, zero-config-friendly path):
+   ```
+   https://fuel-app-mobile.pages.dev
+   https://fuel-app-mobile.vercel.app
+   ```
+5. **Authorized redirect URIs** (required for the OAuth redirect fallback flow):
    ```
    https://ojjscjwatikixlpshmub.supabase.co/auth/v1/callback
    ```
+
+> The app uses a hard-coded Google OAuth client ID
+> (`186024815542-fp0p5lrc6ensfg2i6o1vvf2jbnktan7f.apps.googleusercontent.com`)
+> by default, configurable via `VITE_GOOGLE_CLIENT_ID`. To use your own client,
+> create one above and set `VITE_GOOGLE_CLIENT_ID` in your environment.
 
 ### 3.3 Add to Supabase
 
@@ -149,6 +172,7 @@ supabase db push
 The schema.sql file already includes RLS policies, but here's what they do:
 
 ### Stations Table
+
 ```sql
 -- Users can only see/modify their own stations
 CREATE POLICY "Users can view their own stations"
@@ -157,20 +181,22 @@ CREATE POLICY "Users can view their own stations"
 ```
 
 ### Sales Table
+
 ```sql
 -- Users can only access sales for their stations
 CREATE POLICY "Users can view sales in their stations"
   ON sales FOR SELECT
   USING (
     EXISTS (
-      SELECT 1 FROM stations 
-      WHERE stations.id = sales.station_id 
+      SELECT 1 FROM stations
+      WHERE stations.id = sales.station_id
       AND stations.owner_id = auth.uid()
     )
   );
 ```
 
 ### Audit Log Table
+
 ```sql
 -- Users can view audit logs for their stations
 CREATE POLICY "Users can view audit in their stations"
@@ -187,12 +213,13 @@ CREATE POLICY "Users can view audit in their stations"
 
 Add these to your Vercel project settings:
 
-| Variable | Value |
-|----------|-------|
-| `VITE_SUPABASE_URL` | `https://ojjscjwatikixlpshmub.supabase.co` |
-| `VITE_SUPABASE_ANON_KEY` | Your Supabase anon key |
+| Variable                 | Value                                      |
+| ------------------------ | ------------------------------------------ |
+| `VITE_SUPABASE_URL`      | `https://ojsscjwatikixlpshmub.supabase.co` |
+| `VITE_SUPABASE_ANON_KEY` | Your Supabase anon key                     |
 
 To get your anon key:
+
 1. Go to **Project Settings** → **API**
 2. Copy the `anon public` key
 
@@ -201,16 +228,19 @@ To get your anon key:
 ## 6. Test the Setup
 
 ### Test Registration
+
 1. Go to https://fuel-app-mobile.vercel.app
 2. Click "Create one"
 3. Fill in details and submit
 4. Check email for confirmation link
 
 ### Test Login
+
 1. Confirm your email
 2. Log in with your credentials
 
 ### Test Google OAuth
+
 1. Click "Sign in with Google"
 2. Authorize the application
 
@@ -219,20 +249,24 @@ To get your anon key:
 ## 7. Troubleshooting
 
 ### "Invalid API key" error
-- Make sure you're using the correct project reference: `ojjscjwatikixlpshmub`
+
+- Make sure you're using the correct project reference: `ojsscjwatikixlpshmub`
 - Regenerate API keys in **Project Settings** → **API**
 
 ### Email not sending
+
 - Check **Authentication** → **Settings** → **Site URL** is correct
 - Verify email templates are configured
 - Check spam folder
 
 ### RLS Policy not working
+
 - Ensure users are authenticated
 - Check that `owner_id` matches `auth.uid()`
 - Test with service role key to isolate RLS issues
 
 ### Google OAuth not working
+
 - Verify redirect URI in Google Cloud Console
 - Ensure Google+ API is enabled
 - Add test users for development

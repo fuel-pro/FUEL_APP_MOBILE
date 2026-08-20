@@ -12,7 +12,7 @@ FuelPro uses Supabase as its backend, providing:
 
 | Environment | URL |
 |------------|-----|
-| Production | `https://ojjscjwatikixlpshmub.supabase.co` |
+| Production | `https://ojsscjwatikixlpshmub.supabase.co` |
 | API Key Header | `apikey: YOUR_ANON_KEY` |
 
 ## Authentication

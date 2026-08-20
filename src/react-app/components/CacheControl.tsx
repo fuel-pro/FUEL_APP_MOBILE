@@ -27,8 +27,8 @@ export default function CacheControl() {
   const getCacheStats = (): CacheStats => {
     const calculateSize = (storage: Storage) => {
       let size = 0;
-      for (let key in storage) {
-        if (storage.hasOwnProperty(key)) {
+      for (const key in storage) {
+        if (Object.prototype.hasOwnProperty.call(storage, key)) {
           size += storage[key].length + key.length;
         }
       }
@@ -56,17 +56,16 @@ export default function CacheControl() {
 
   const showNotification = (
     message: string,
-    type: "success" | "warning" = "success"
+    type: "success" | "warning" = "success",
   ) => {
     setNotification({ message, type });
     setTimeout(() => setNotification(null), 3000);
   };
 
   const clearStorage = async (
-    type: "localStorage" | "sessionStorage" | "all"
+    type: "localStorage" | "sessionStorage" | "all",
   ) => {
     setClearing(type);
-    await new Promise(resolve => setTimeout(resolve, 500));
 
     try {
       if (type === "localStorage" || type === "all") {
@@ -76,7 +75,7 @@ export default function CacheControl() {
         sessionStorage.clear();
       }
       showNotification(
-        `${type === "all" ? "All" : type} cache cleared successfully`
+        `${type === "all" ? "All" : type} cache cleared successfully`,
       );
     } catch (e) {
       showNotification("Failed to clear cache", "warning");
@@ -85,17 +84,24 @@ export default function CacheControl() {
   };
 
   const reloadPage = () => {
-    window.location.reload();
+    if (
+      typeof window !== "undefined" &&
+      typeof window.__fuelproSafeReload === "function"
+    ) {
+      window.__fuelproSafeReload("cache-cleared");
+    } else {
+      window.location.reload();
+    }
   };
 
   const stats = getCacheStats();
 
   const storageKeys = {
     localStorage: Array.from({ length: localStorage.length }, (_, i) =>
-      localStorage.key(i)
+      localStorage.key(i),
     ).filter(Boolean),
     sessionStorage: Array.from({ length: sessionStorage.length }, (_, i) =>
-      sessionStorage.key(i)
+      sessionStorage.key(i),
     ).filter(Boolean),
   };
 
@@ -266,7 +272,7 @@ export default function CacheControl() {
                 <p className="text-xs text-gray-400">Empty</p>
               ) : (
                 <div className="space-y-1">
-                  {storageKeys.localStorage.slice(0, 20).map(key => (
+                  {storageKeys.localStorage.slice(0, 20).map((key) => (
                     <div
                       key={key}
                       className="text-xs font-mono text-gray-600 dark:text-gray-400 truncate"
@@ -293,7 +299,7 @@ export default function CacheControl() {
                 <p className="text-xs text-gray-400">Empty</p>
               ) : (
                 <div className="space-y-1">
-                  {storageKeys.sessionStorage.slice(0, 20).map(key => (
+                  {storageKeys.sessionStorage.slice(0, 20).map((key) => (
                     <div
                       key={key}
                       className="text-xs font-mono text-gray-600 dark:text-gray-400 truncate"

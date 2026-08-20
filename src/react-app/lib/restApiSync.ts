@@ -1,94 +1,61 @@
 /**
- * REST API Sync - FuelPro
- * 
- * This module provides a complete cloud-synced database using Firebase Firestore.
- * When Firebase is available, it syncs data to Firestore.
- * Falls back to localStorage when offline.
- * 
- * Collections:
- * - users, stations, sales, audit_log, secrets, feature_flags, config, sales_analytics
+ * Cloud Sync Layer - FuelPro
+ *
+ * This module provides a cloud-synced data store backed by Supabase
+ * (PostgreSQL + Row Level Security), the app's primary backend.
+ * Falls back to localStorage when offline or when a request fails.
+ *
+ * NOTE: This file previously used Firebase Firestore, but the rest of the
+ * app (auth, station/sales data, etc. — see src/supabase/*) already runs on
+ * Supabase. That split caused a real bug: the Firestore health-check here
+ * failed silently and its error-path referenced an undefined `API_URL`
+ * variable, so `checkApiStatus()` always resolved to "No Cloud" even when
+ * the app was otherwise online (see BUG_REPORT.md, Bug #1). This rewrite
+ * fixes that by checking Supabase directly and removes the dead Firebase
+ * dependency here.
+ *
+ * Collections with a real dedicated Postgres table:
+ *   - stations   -> `stations`
+ *   - sales      -> `sales`
+ *   - users      -> `team_members`
+ *   - audit_log  -> `audit_log`
+ *
+ * Collections without a dedicated table (secrets, feature_flags, config,
+ * sales_analytics) are stored in a generic `app_kv` table.
+ * See supabase/migrations/002_app_kv.sql — run it once in the Supabase
+ * SQL editor if you haven't already (also included in supabase/schema.sql).
  */
 
-import { getApiPath, getBackendUrl } from "@/utils/apiConfig";
+import { supabase } from "@/supabase/client";
+import { compressJson, decompressJson } from "@/react-app/lib/compression";
 
 // ═══════════════════════════════════════════════════
-// FIREBASE CONFIGURATION
+// COLLECTIONS
 // ═══════════════════════════════════════════════════
 
-import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
-import { 
-  getFirestore, Firestore, collection, doc, setDoc, getDoc, 
-  getDocs, deleteDoc, serverTimestamp, query, where, orderBy, limit 
-} from 'firebase/firestore';
+export enum Collections {
+  USERS = "users",
+  STATIONS = "stations",
+  SALES = "sales",
+  AUDIT_LOG = "audit_log",
+  SECRETS = "secrets",
+  FEATURE_FLAGS = "feature_flags",
+  CONFIG = "config",
+  SALES_ANALYTICS = "sales_analytics",
+}
 
-const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaSyCgIOzDrLRpFVBVlABmgMJnX0iLa9c8J98',
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'fuel-pro-1.firebaseapp.com',
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || 'fuel-pro-1',
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || 'fuel-pro-1.firebasestorage.app',
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '434474929988',
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || '1:434474929988:web:f141473bd3acfba6d41111',
+// Collections backed by a dedicated Postgres table (name matches table name,
+// except USERS which maps to team_members)
+const DEDICATED_TABLE: Partial<Record<Collections, string>> = {
+  [Collections.STATIONS]: "stations",
+  [Collections.SALES]: "sales",
+  [Collections.USERS]: "team_members",
+  [Collections.AUDIT_LOG]: "audit_log",
 };
 
-// Initialize Firebase
-let firebaseApp: FirebaseApp | null = null;
-let firestoreDb: Firestore | null = null;
-
-function getFirebaseApp(): FirebaseApp {
-  if (firebaseApp) return firebaseApp;
-  const existingApps = getApps();
-  if (existingApps.length > 0) {
-    firebaseApp = existingApps[0];
-    return firebaseApp;
-  }
-  firebaseApp = initializeApp(firebaseConfig);
-  return firebaseApp;
+function tableFor(collection: string): string | null {
+  return (DEDICATED_TABLE as Record<string, string>)[collection] ?? null;
 }
-
-function getFirestoreDb(): Firestore {
-  if (firestoreDb) return firestoreDb;
-  firestoreDb = getFirestore(getFirebaseApp());
-  return firestoreDb;
-}
-
-// ═══════════════════════════════════════════════════
-// FIREBASE-FIRST SYNC (Primary Method)
-// ═══════════════════════════════════════════════════
-
-// Collections enum
-export enum Collections {
-  USERS = 'users',
-  STATIONS = 'stations',
-  SALES = 'sales',
-  AUDIT_LOG = 'audit_log',
-  SECRETS = 'secrets',
-  FEATURE_FLAGS = 'feature_flags',
-  CONFIG = 'config',
-  SALES_ANALYTICS = 'sales_analytics',
-}
-
-// Get user ID from localStorage
-function getCurrentUserId(): string | null {
-  try {
-    const authIdentity = localStorage.getItem("fuelpro_auth_identity");
-    if (authIdentity) {
-      const user = JSON.parse(authIdentity);
-      return user?.id || null;
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-// ═══════════════════════════════════════════════════
-// BACKEND CONFIGURATION (optional - for legacy support)
-// ═══════════════════════════════════════════════════
-
-
-// ═══════════════════════════════════════════════════
-// UNIFIED DATA STORE
-// ═══════════════════════════════════════════════════
 
 export interface DataRecord {
   id: string;
@@ -100,17 +67,15 @@ export interface DataRecord {
   stationId?: string;
 }
 
-
 // ═══════════════════════════════════════════════════
-// CRUD OPERATIONS - USING FIREBASE FIRESTORE
+// CRUD OPERATIONS - BACKED BY SUPABASE
 // ═══════════════════════════════════════════════════
 
-// Create
 export async function createRecord(
   collection: string,
   data: Record<string, any>,
   userId?: string,
-  stationId?: string
+  stationId?: string,
 ): Promise<{ success: boolean; id?: string; error?: string }> {
   const id = `${collection}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   const record: DataRecord = {
@@ -122,151 +87,163 @@ export async function createRecord(
     userId,
     stationId,
   };
-  
+
   try {
-    const db = getFirestoreDb();
-    await setDoc(
-      doc(db, collection, id),
-      {
-        ...record,
-        timestamp: serverTimestamp(),
-      },
-      { merge: true }
-    );
+    const table = tableFor(collection);
+    if (table) {
+      const { error } = await supabase.from(table).insert({ id, ...data });
+      if (error) throw error;
+    } else {
+      const { error } = await supabase.from("app_kv").upsert({
+        id,
+        collection,
+        owner_id: userId ?? null,
+        station_id: stationId ?? null,
+        data: compressJson(data) as any,
+      });
+      if (error) throw error;
+    }
     return { success: true, id };
   } catch (err: any) {
-    // Fallback to localStorage
+    // Fallback to localStorage so the UI keeps working offline
     localStorage.setItem(`fuelpro_${collection}_${id}`, JSON.stringify(record));
-    return { success: true, id, error: 'Saved locally' };
+    return {
+      success: true,
+      id,
+      error: `Saved locally: ${err?.message ?? "unknown error"}`,
+    };
   }
 }
 
-// Read
 export async function getRecord(
   collection: string,
-  id: string
+  id: string,
 ): Promise<{ success: boolean; data?: any; error?: string }> {
   try {
-    const db = getFirestoreDb();
-    const docSnap = await getDoc(doc(db, collection, id));
-    
-    if (docSnap.exists()) {
-      const firestoreData = docSnap.data();
-      return { 
-        success: true, 
-        data: firestoreData.data || firestoreData 
-      };
+    const table = tableFor(collection);
+    if (table) {
+      const { data, error } = await supabase
+        .from(table)
+        .select("*")
+        .eq("id", id)
+        .single();
+      if (error) throw error;
+      return { success: true, data };
+    } else {
+      const { data, error } = await supabase
+        .from("app_kv")
+        .select("*")
+        .eq("id", id)
+        .single();
+      if (error) throw error;
+      return { success: true, data: decompressJson(data?.data) ?? data?.data };
     }
-    
-    // Fallback to localStorage
-    const localData = localStorage.getItem(`fuelpro_${collection}_${id}`);
-    if (localData) {
-      return { success: true, data: JSON.parse(localData) };
-    }
-    
-    return { success: false, error: "Not found" };
   } catch (err: any) {
-    // Fallback to localStorage
     const localData = localStorage.getItem(`fuelpro_${collection}_${id}`);
     if (localData) {
       return { success: true, data: JSON.parse(localData) };
     }
-    return { success: false, error: err.message };
+    return { success: false, error: err?.message ?? "Not found" };
   }
 }
 
-// Update
 export async function updateRecord(
   collection: string,
   id: string,
-  data: Record<string, any>
+  data: Record<string, any>,
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const db = getFirestoreDb();
-    await setDoc(
-      doc(db, collection, id),
-      {
-        data,
-        updatedAt: new Date().toISOString(),
-        timestamp: serverTimestamp(),
-      },
-      { merge: true }
-    );
+    const table = tableFor(collection);
+    if (table) {
+      const { error } = await supabase.from(table).update(data).eq("id", id);
+      if (error) throw error;
+    } else {
+      const { error } = await supabase
+        .from("app_kv")
+        .update({ data: compressJson(data) as any })
+        .eq("id", id);
+      if (error) throw error;
+    }
     return { success: true };
   } catch (err: any) {
-    // Fallback to localStorage
     const existing = localStorage.getItem(`fuelpro_${collection}_${id}`);
     if (existing) {
       const record = JSON.parse(existing);
       record.data = { ...record.data, ...data };
       record.updatedAt = new Date().toISOString();
-      localStorage.setItem(`fuelpro_${collection}_${id}`, JSON.stringify(record));
+      localStorage.setItem(
+        `fuelpro_${collection}_${id}`,
+        JSON.stringify(record),
+      );
     }
-    return { success: true, error: 'Saved locally' };
+    return {
+      success: true,
+      error: `Saved locally: ${err?.message ?? "unknown error"}`,
+    };
   }
 }
 
-// Delete
 export async function deleteRecord(
   collection: string,
-  id: string
+  id: string,
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const db = getFirestoreDb();
-    await deleteDoc(doc(db, collection, id));
+    const table = tableFor(collection) ?? "app_kv";
+    const { error } = await supabase.from(table).delete().eq("id", id);
+    if (error) throw error;
     return { success: true };
   } catch (err: any) {
-    // Fallback to localStorage
     localStorage.removeItem(`fuelpro_${collection}_${id}`);
-    return { success: true, error: 'Deleted locally' };
+    return {
+      success: true,
+      error: `Deleted locally: ${err?.message ?? "unknown error"}`,
+    };
   }
 }
 
-// List
 export async function listRecords(
   collection: string,
-  options?: { userId?: string; stationId?: string; limit?: number }
+  options?: { userId?: string; stationId?: string; limit?: number },
 ): Promise<{ success: boolean; data?: any[]; error?: string }> {
   try {
-    const db = getFirestoreDb();
-    const collectionRef = collection(db, collection);
-    
-    let q = query(collectionRef);
-    
-    if (options?.userId) {
-      q = query(collectionRef, where("userId", "==", options.userId));
-    }
-    if (options?.stationId) {
-      q = query(collectionRef, where("stationId", "==", options.stationId));
-    }
-    if (options?.limit) {
-      q = query(collectionRef, limit(options.limit));
-    }
-    
-    const querySnapshot = await getDocs(q);
-    const records = querySnapshot.docs.map(doc => {
-      const data = doc.data();
+    const table = tableFor(collection);
+    if (table) {
+      let q = supabase.from(table).select("*");
+      if (options?.stationId) q = q.eq("station_id", options.stationId);
+      if (options?.limit) q = q.limit(options.limit);
+      const { data, error } = await q;
+      if (error) throw error;
+      return { success: true, data: data ?? [] };
+    } else {
+      let q = supabase.from("app_kv").select("*").eq("collection", collection);
+      if (options?.userId) q = q.eq("owner_id", options.userId);
+      if (options?.stationId) q = q.eq("station_id", options.stationId);
+      if (options?.limit) q = q.limit(options.limit);
+      const { data, error } = await q;
+      if (error) throw error;
       return {
-        id: doc.id,
-        ...data,
-        data: data.data || data,
+        success: true,
+        data: (data ?? []).map((row) => ({
+          id: row.id,
+          ...decompressJson(row.data),
+        })),
       };
-    });
-    
-    return { success: true, data: records };
+    }
   } catch (err: any) {
-    // Fallback to localStorage
+    // Fallback to localStorage cache
     const results: any[] = [];
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
       if (key?.startsWith(`fuelpro_${collection}_`)) {
         const data = localStorage.getItem(key);
-        if (data) {
-          results.push(JSON.parse(data));
-        }
+        if (data) results.push(JSON.parse(data));
       }
     }
-    return { success: true, data: results, error: 'Retrieved from local cache' };
+    return {
+      success: true,
+      data: results,
+      error: `Retrieved from local cache: ${err?.message ?? "unknown error"}`,
+    };
   }
 }
 
@@ -274,24 +251,27 @@ export async function listRecords(
 // SPECIALIZED STORES
 // ═══════════════════════════════════════════════════
 
-// Audit Log
 export const auditLogStore = {
-  async add(event: string, detail: string, user: string, severity: string = "info") {
+  async add(
+    event: string,
+    detail: string,
+    user: string,
+    severity: string = "info",
+  ) {
     return createRecord(Collections.AUDIT_LOG, {
       event,
       detail,
       user,
       severity,
+      action: event,
       timestamp: new Date().toISOString(),
     });
   },
   async list(limit = 100) {
-    const result = await listRecords(Collections.AUDIT_LOG, { limit });
-    return result;
+    return listRecords(Collections.AUDIT_LOG, { limit });
   },
 };
 
-// Users
 export const userStore = {
   async create(data: any) {
     return createRecord(Collections.USERS, data);
@@ -307,7 +287,6 @@ export const userStore = {
   },
 };
 
-// Stations
 export const stationStore = {
   async create(data: any, stationId?: string) {
     return createRecord(Collections.STATIONS, data, undefined, stationId);
@@ -323,7 +302,6 @@ export const stationStore = {
   },
 };
 
-// Secrets
 export const secretsStore = {
   async create(data: { key: string; value: string }) {
     return createRecord(Collections.SECRETS, data);
@@ -339,9 +317,13 @@ export const secretsStore = {
   },
 };
 
-// Feature Flags
 export const featureFlagsStore = {
-  async create(data: { id: string; name: string; description: string; enabled: boolean }) {
+  async create(data: {
+    id: string;
+    name: string;
+    description: string;
+    enabled: boolean;
+  }) {
     return createRecord(Collections.FEATURE_FLAGS, data);
   },
   async update(id: string, data: any) {
@@ -352,7 +334,6 @@ export const featureFlagsStore = {
   },
 };
 
-// Sales
 export const salesStore = {
   async create(data: any, stationId?: string) {
     return createRecord(Collections.SALES, data, undefined, stationId);
@@ -361,12 +342,10 @@ export const salesStore = {
     return listRecords(Collections.SALES, { stationId, limit });
   },
   async analytics(stationId?: string) {
-    const result = await listRecords(Collections.SALES_ANALYTICS, { stationId, limit: 1 });
-    return result;
+    return listRecords(Collections.SALES_ANALYTICS, { stationId, limit: 1 });
   },
 };
 
-// Config
 export const configStore = {
   async get(key: string) {
     return getRecord(Collections.CONFIG, key);
@@ -384,7 +363,8 @@ export const configStore = {
 };
 
 // ═══════════════════════════════════════════════════
-// STATUS CHECK
+// STATUS CHECK (fixed: was checking a nonexistent Firestore doc and had
+// an undefined `API_URL` fallback that threw silently — see header note)
 // ═══════════════════════════════════════════════════
 
 export async function checkApiStatus(): Promise<{
@@ -392,61 +372,59 @@ export async function checkApiStatus(): Promise<{
   url: string;
   error?: string;
 }> {
+  const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL || "Supabase";
   try {
-    // Check Firebase Firestore connectivity
-    const db = getFirestoreDb();
-    
-    // Try to read the _health/_check document
-    const healthDoc = doc(db, '_health', '_check');
-    await getDoc(healthDoc);
-    
-    return { 
-      connected: true, 
-      url: 'Firebase Firestore',
-      error: 'Firebase Connected' 
-    };
+    // Lightweight, real connectivity check against a table that always
+    // exists in the schema, regardless of whether the caller is signed in
+    // (RLS may return 0 rows but that's still a successful connection).
+    const { error } = await supabase.from("stations").select("id").limit(1);
+    if (error) throw error;
+    return { connected: true, url: supabaseUrl };
   } catch (err: any) {
-    // Firebase might not have data yet, but it's connected
-    // Check if it's a "missing document" error (which is OK) vs actual connection error
-    const errorStr = err.message || '';
-    if (errorStr.includes('permission') || errorStr.includes('PERMISSION')) {
-      return { 
-        connected: true, 
-        url: 'Firebase Firestore',
-        error: 'Firebase Connected (no data yet)' 
-      };
-    }
-    
-    // If we can't connect to Firebase, try the REST API as fallback
-    try {
-      const response = await fetch(`${API_URL}/`, {
-        method: "GET",
-        headers: { "Content-Type": "application/json" },
-      });
-      
-      if (response.ok) {
-        return { 
-          connected: true, 
-          url: API_URL, 
-          error: 'Backend connected' 
-        };
-      }
-    } catch {}
-    
-    return { 
-      connected: false, 
-      url: 'Firebase Firestore', 
-      error: err.message 
+    return {
+      connected: false,
+      url: supabaseUrl,
+      error: err?.message ?? "Unable to reach Supabase",
     };
   }
 }
 
+/**
+ * apiRequest - small compatibility shim for the couple of call sites
+ * (FounderAccess user management) that used to call a REST API that
+ * doesn't exist in this project. Backed by the real `team_members` table.
+ */
+export async function apiRequest<T = any>(
+  method: "GET" | "POST" | "PUT" | "DELETE",
+  path: string,
+  body?: Record<string, any>,
+): Promise<T> {
+  // /api/users
+  if (path === "/api/users" && method === "GET") {
+    const { data, error } = await supabase.from("team_members").select("*");
+    if (error) throw error;
+    return { users: data ?? [] } as unknown as T;
+  }
+  // /api/users/:id
+  const userMatch = path.match(/^\/api\/users\/(.+)$/);
+  if (userMatch && method === "PUT") {
+    const [, id] = userMatch;
+    const { data, error } = await supabase
+      .from("team_members")
+      .update(body ?? {})
+      .eq("id", id)
+      .select()
+      .single();
+    if (error) throw error;
+    return data as unknown as T;
+  }
+  throw new Error(`apiRequest: unsupported route "${method} ${path}"`);
+}
+
 // ═══════════════════════════════════════════════════
-// FALLBACK MODE
+// OFFLINE QUEUE
 // ═══════════════════════════════════════════════════
 
-// When API is not available, operations are queued locally
-const SYNC_QUEUE_KEY = "fuelpro_api_sync_queue";
 const PENDING_CHANGES_KEY = "fuelpro_pending_changes";
 
 interface PendingChange {
@@ -461,7 +439,7 @@ export function queuePendingChange(
   collection: string,
   operation: "create" | "update" | "delete",
   data?: any,
-  localId?: string
+  localId?: string,
 ): void {
   const queue = getPendingChanges();
   queue.push({

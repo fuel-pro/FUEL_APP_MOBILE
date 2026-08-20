@@ -14,6 +14,10 @@ import {
   Lightbulb,
 } from "lucide-react";
 import { getGeminiUrl } from "@/utils/apiConfig";
+import {
+  getCurrencySymbol,
+  getDetectedCurrency,
+} from "@/react-app/lib/currency";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -77,15 +81,17 @@ export default function AIAssistant() {
 
   const sendToAI = async (userMessage: string) => {
     setIsLoading(true);
-    const systemPrompt = `You are FuelPro AI, a specialized assistant for fuel station management in Africa. You help with sales analysis, fuel pricing, inventory management, tax compliance (KRA/URA/TRA), and operational efficiency. Be concise, practical, and data-driven. Use local currency (Ksh) where relevant.`;
+    const currencySymbol = getCurrencySymbol(getDetectedCurrency());
+    const systemPrompt = `You are FuelPro AI, a specialized assistant for fuel station management in Africa. You help with sales analysis, fuel pricing, inventory management, tax compliance (KRA/URA/TRA), and operational efficiency. Be concise, practical, and data-driven. Use local currency (${currencySymbol}) where relevant.`;
 
     const geminiUrl = getGeminiUrl();
     if (!geminiUrl) {
-      setMessages(prev => [
+      setMessages((prev) => [
         ...prev,
         {
           role: "assistant",
-          content: "AI Assistant is not configured. Please set the VITE_GEMINI_API_KEY environment variable to enable AI features.",
+          content:
+            "AI Assistant is not configured. Please set the VITE_GEMINI_API_KEY environment variable to enable AI features.",
           timestamp: new Date().toISOString(),
         },
       ]);
@@ -119,7 +125,7 @@ export default function AIAssistant() {
       const text =
         data.candidates?.[0]?.content?.parts?.[0]?.text ||
         "Sorry, I could not process that request.";
-      setMessages(prev => [
+      setMessages((prev) => [
         ...prev,
         {
           role: "assistant",
@@ -128,7 +134,7 @@ export default function AIAssistant() {
         },
       ]);
     } catch {
-      setMessages(prev => [
+      setMessages((prev) => [
         ...prev,
         {
           role: "assistant",
@@ -145,7 +151,7 @@ export default function AIAssistant() {
   const handleSend = () => {
     if (!input.trim() || isLoading) return;
     const userMsg = input.trim();
-    setMessages(prev => [
+    setMessages((prev) => [
       ...prev,
       { role: "user", content: userMsg, timestamp: new Date().toISOString() },
     ]);
@@ -154,7 +160,7 @@ export default function AIAssistant() {
   };
 
   const handleQuickPrompt = (prompt: string) => {
-    setMessages(prev => [
+    setMessages((prev) => [
       ...prev,
       { role: "user", content: prompt, timestamp: new Date().toISOString() },
     ]);
@@ -258,8 +264,8 @@ export default function AIAssistant() {
             <div className="flex gap-2">
               <input
                 value={input}
-                onChange={e => setInput(e.target.value)}
-                onKeyDown={e => e.key === "Enter" && handleSend()}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleSend()}
                 placeholder="Ask FuelPro AI..."
                 className="flex-1 px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-xs dark:text-white focus:ring-2 focus:ring-purple-500 outline-none"
               />

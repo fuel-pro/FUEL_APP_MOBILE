@@ -75,7 +75,7 @@ export const TIERS: SubscriptionTier[] = [
       "Audit trail access",
       "Debt management",
       "Invoice generation",
-      "KRA compliance tools",
+      "Tax compliance tools",
       "Priority support",
     ],
     maxUploads: 500,
@@ -92,7 +92,7 @@ export const TIERS: SubscriptionTier[] = [
     features: [
       "All Manager features",
       "Cross-station compliance reports",
-      "KRA tax reconciliation tools",
+      "Tax reconciliation tools",
       "Data export for ODPC audits",
       "API access",
       "Advanced analytics",
@@ -128,7 +128,7 @@ export function getSubscription(): SubscriptionState {
 
       if (elapsedHours < 168) {
         const expiresAt = new Date(
-          started.getTime() + 168 * 60 * 60 * 1000
+          started.getTime() + 168 * 60 * 60 * 1000,
         ).toISOString();
         const state: SubscriptionState = {
           tier: "free",
@@ -165,9 +165,9 @@ export function setSubscription(state: SubscriptionState): void {
 
 export function activateTier(
   tier: string,
-  opts?: { mpesaReceipt?: string; phone?: string }
+  opts?: { mpesaReceipt?: string; phone?: string },
 ): SubscriptionState {
-  const tierData = TIERS.find(t => t.key === tier);
+  const tierData = TIERS.find((t) => t.key === tier);
   if (!tierData) return getSubscription();
 
   const state: SubscriptionState = {
@@ -185,13 +185,13 @@ export function activateTier(
     if (trialRaw) {
       state.activatedAt = trialRaw;
       state.expiresAt = new Date(
-        new Date(trialRaw).getTime() + 168 * 60 * 60 * 1000
+        new Date(trialRaw).getTime() + 168 * 60 * 60 * 1000,
       ).toISOString();
     } else {
       const now = new Date().toISOString();
       state.activatedAt = now;
       state.expiresAt = new Date(
-        Date.now() + 168 * 60 * 60 * 1000
+        Date.now() + 168 * 60 * 60 * 1000,
       ).toISOString();
       localStorage.setItem("fuelpro_trial_start", now);
     }
@@ -218,7 +218,7 @@ export function checkAccess(requiredTier: string): boolean {
 
 export function getCurrentTier(): SubscriptionTier | undefined {
   const sub = getSubscription();
-  return TIERS.find(t => t.key === sub.tier);
+  return TIERS.find((t) => t.key === sub.tier);
 }
 
 export function getTimeRemaining(): {
@@ -262,7 +262,7 @@ export function getSubscriptionHistory(): Array<{
 export function logSubscriptionAction(
   action: string,
   tier: string,
-  details: string
+  details: string,
 ): void {
   const history = getSubscriptionHistory();
   history.push({ date: new Date().toISOString(), action, tier, details });
@@ -281,7 +281,7 @@ export function cancelSubscription(): SubscriptionState {
   logSubscriptionAction(
     "cancelled",
     sub.tier,
-    "Subscription cancelled by user"
+    "Subscription cancelled by user",
   );
   return cancelled;
 }

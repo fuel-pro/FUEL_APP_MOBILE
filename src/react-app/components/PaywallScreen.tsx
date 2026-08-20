@@ -29,7 +29,7 @@ import {
   createSubscription,
   recordPayment,
   applyCoupon,
-  useCoupon,
+  recordCouponUse,
   resolvePrice,
   resolveCountry,
   getAvailableGateways,
@@ -58,7 +58,7 @@ export default function PaywallScreen({
   } | null>(null);
   const [selectedGateway, setSelectedGateway] = useState("");
   const [step, setStep] = useState<"trial" | "plans" | "checkout" | "success">(
-    "trial"
+    "trial",
   );
   const [trialStatus, setTrialStatus] = useState(checkTrialStatus());
   const [trialMinutes, setTrialMinutes] = useState(60);
@@ -80,7 +80,7 @@ export default function PaywallScreen({
   const [trialStarted, setTrialStarted] = useState(false);
 
   const country = resolveCountry();
-  const tiers = loadTiers().filter(t => t.isActive);
+  const tiers = loadTiers().filter((t) => t.isActive);
   const prices = loadRegionalPrices();
 
   // Countdown timer
@@ -115,7 +115,7 @@ export default function PaywallScreen({
     if (!couponResult?.valid) return currentPrice.amount;
     if (couponResult.discount < 100) {
       return Math.round(
-        currentPrice.amount * (1 - couponResult.discount / 100)
+        currentPrice.amount * (1 - couponResult.discount / 100),
       );
     }
     return Math.max(0, currentPrice.amount - couponResult.discount);
@@ -150,7 +150,7 @@ export default function PaywallScreen({
     const result = applyCoupon(couponCode, selectedTier, country.code);
     setCouponResult(result);
     if (result.valid) {
-      useCoupon(couponCode);
+      recordCouponUse(couponCode);
     }
   };
 
@@ -163,13 +163,13 @@ export default function PaywallScreen({
         currentPrice.currency,
         discountedPrice,
         selectedGateway || "mpesa",
-        couponResult?.valid ? couponCode : undefined
+        couponResult?.valid ? couponCode : undefined,
       );
       recordPayment(
         sub.id,
         selectedGateway || "mpesa",
         discountedPrice,
-        currentPrice.currency
+        currentPrice.currency,
       );
       setIsProcessing(false);
       setStep("success");
@@ -187,7 +187,7 @@ export default function PaywallScreen({
         currentPrice.currency,
         0,
         "access-code",
-        undefined
+        undefined,
       );
       recordPayment(sub.id, "access-code", 0, currentPrice.currency);
       setIsProcessing(false);
@@ -196,7 +196,7 @@ export default function PaywallScreen({
     }, 1500);
   };
 
-  const selectedTierObj = tiers.find(t => t.id === selectedTier);
+  const selectedTierObj = tiers.find((t) => t.id === selectedTier);
 
   // ─── TRIAL STEP ───
   if (step === "trial") {
@@ -244,7 +244,7 @@ export default function PaywallScreen({
                     { icon: Fuel, label: "Full Access" },
                     { icon: CreditCard, label: "All Features" },
                     { icon: Shield, label: "Secure" },
-                  ].map(f => (
+                  ].map((f) => (
                     <div key={f.label} className="bg-white/5 rounded-lg p-3">
                       <f.icon
                         size={18}
@@ -288,7 +288,7 @@ export default function PaywallScreen({
                   <p className="text-sm text-gray-400">
                     {pwc(
                       "trialDescription",
-                      "Experience the full power of FuelPro before you subscribe"
+                      "Experience the full power of FuelPro before you subscribe",
                     )}
                   </p>
                 </div>
@@ -337,7 +337,7 @@ export default function PaywallScreen({
                     <Shield size={10} />{" "}
                     {pwc(
                       "footerNote",
-                      "No credit card required. One trial per device."
+                      "No credit card required. One trial per device.",
                     )}
                   </div>
                 )}
@@ -374,7 +374,7 @@ export default function PaywallScreen({
           </div>
 
           <div className="grid grid-cols-5 gap-3 mb-8">
-            {tiers.map(tier => {
+            {tiers.map((tier) => {
               const tp = getTierPrice(tier.id);
               const isSelected = selectedTier === tier.id;
               return (
@@ -413,7 +413,7 @@ export default function PaywallScreen({
                       : `Per ${tier.durationDays === 1 ? "day" : tier.durationDays === 7 ? "week" : tier.durationDays === 30 ? "month" : "year"}`}
                   </p>
                   <div className="space-y-1.5">
-                    {tier.features.slice(0, 4).map(f => (
+                    {tier.features.slice(0, 4).map((f) => (
                       <div
                         key={f}
                         className="flex items-center gap-2 text-[11px] text-gray-400"
@@ -447,11 +447,11 @@ export default function PaywallScreen({
                   />
                   <input
                     value={couponCode}
-                    onChange={e => {
+                    onChange={(e) => {
                       setCouponCode(e.target.value);
                       setCouponResult(null);
                     }}
-                    onKeyDown={e => e.key === "Enter" && handleApplyCoupon()}
+                    onKeyDown={(e) => e.key === "Enter" && handleApplyCoupon()}
                     placeholder="Enter coupon code"
                     className="w-full pl-9 pr-3 py-2.5 bg-white/[0.03] border border-white/[0.08] rounded-xl text-sm text-white placeholder-gray-600 focus:outline-none focus:border-purple-500/30"
                   />
@@ -553,7 +553,7 @@ export default function PaywallScreen({
                 Payment Method
               </label>
               <div className="grid grid-cols-2 gap-2">
-                {currentPrice.gateways.map(g => (
+                {currentPrice.gateways.map((g) => (
                   <button
                     key={g.id}
                     onClick={() => setSelectedGateway(g.id)}
@@ -575,7 +575,7 @@ export default function PaywallScreen({
                       <span className="text-sm text-white">{g.name}</span>
                     </div>
                     <div className="flex flex-wrap gap-1 mt-1">
-                      {g.methods.slice(0, 2).map(m => (
+                      {g.methods.slice(0, 2).map((m) => (
                         <span
                           key={m}
                           className="text-[9px] px-1.5 py-0.5 bg-white/5 rounded text-gray-500"
@@ -603,8 +603,10 @@ export default function PaywallScreen({
                   <input
                     type="password"
                     value={secretCode}
-                    onChange={e => setSecretCode(e.target.value)}
-                    onKeyDown={e => e.key === "Enter" && handleUnlockWithCode()}
+                    onChange={(e) => setSecretCode(e.target.value)}
+                    onKeyDown={(e) =>
+                      e.key === "Enter" && handleUnlockWithCode()
+                    }
                     placeholder="Enter activation code"
                     className="w-full pl-9 pr-3 py-2.5 bg-white/[0.03] border border-white/[0.08] rounded-xl text-sm text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/30"
                   />

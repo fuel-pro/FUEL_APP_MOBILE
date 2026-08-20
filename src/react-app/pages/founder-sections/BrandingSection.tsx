@@ -46,7 +46,7 @@ interface Props {
   logAudit: (
     e: string,
     d: string,
-    s: "success" | "warning" | "danger" | "info"
+    s: "success" | "warning" | "danger" | "info",
   ) => void;
 }
 
@@ -55,7 +55,7 @@ export default function BrandingSection({ logAudit }: Props) {
   const [saved, setSaved] = useState(false);
 
   const update = (k: keyof BrandConfig, v: string) => {
-    setBrand(p => ({ ...p, [k]: v }));
+    setBrand((p) => ({ ...p, [k]: v }));
     setSaved(false);
   };
 
@@ -124,7 +124,7 @@ export default function BrandingSection({ logAudit }: Props) {
               Primary Color
             </label>
             <div className="flex flex-wrap gap-2 mb-2">
-              {colors.map(c => (
+              {colors.map((c) => (
                 <button
                   key={c.hex}
                   onClick={() => update("primaryColor", c.hex)}
@@ -136,7 +136,7 @@ export default function BrandingSection({ logAudit }: Props) {
             </div>
             <input
               value={brand.primaryColor}
-              onChange={e => update("primaryColor", e.target.value)}
+              onChange={(e) => update("primaryColor", e.target.value)}
               className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.08] rounded-lg text-sm text-white font-mono"
             />
           </div>
@@ -145,7 +145,7 @@ export default function BrandingSection({ logAudit }: Props) {
               Accent Color
             </label>
             <div className="flex flex-wrap gap-2 mb-2">
-              {colors.map(c => (
+              {colors.map((c) => (
                 <button
                   key={c.hex}
                   onClick={() => update("accentColor", c.hex)}
@@ -157,7 +157,7 @@ export default function BrandingSection({ logAudit }: Props) {
             </div>
             <input
               value={brand.accentColor}
-              onChange={e => update("accentColor", e.target.value)}
+              onChange={(e) => update("accentColor", e.target.value)}
               className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.08] rounded-lg text-sm text-white font-mono"
             />
           </div>
@@ -201,7 +201,7 @@ export default function BrandingSection({ logAudit }: Props) {
             </label>
             <input
               value={brand.stationName}
-              onChange={e => update("stationName", e.target.value)}
+              onChange={(e) => update("stationName", e.target.value)}
               placeholder="Your Station Name"
               className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.08] rounded-lg text-sm text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/30"
             />
@@ -210,7 +210,7 @@ export default function BrandingSection({ logAudit }: Props) {
             <label className="text-xs text-gray-400 mb-1 block">Tagline</label>
             <input
               value={brand.tagline}
-              onChange={e => update("tagline", e.target.value)}
+              onChange={(e) => update("tagline", e.target.value)}
               placeholder="Your tagline..."
               className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.08] rounded-lg text-sm text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/30"
             />

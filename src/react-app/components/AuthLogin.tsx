@@ -1,6 +1,6 @@
 import { useAuth } from "@/react-app/context/AuthContext";
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useNavigate } from "react-router";
+import { useNavigate, useLocation } from "react-router";
 import {
   ShieldCheck,
   Lock,
@@ -21,6 +21,31 @@ import {
 type LoginMode = "email" | "username" | "register";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// Official Google "G" logo (multi-color) as inline SVG so we don't need an
+// external asset and it renders crisply on the auth screens.
+function GoogleLogo({ className = "w-5 h-5" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 48 48" aria-hidden="true">
+      <path
+        fill="#EA4335"
+        d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"
+      />
+      <path
+        fill="#4285F4"
+        d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"
+      />
+      <path
+        fill="#34A853"
+        d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"
+      />
+    </svg>
+  );
+}
 
 // Persistent storage keys for form data
 const PERSISTED_EMAIL_KEY = "fuelpro_login_email";
@@ -50,10 +75,13 @@ function savePersistedFormData(email: string, _password: string) {
 
 export default function AuthLogin() {
   const navigate = useNavigate();
+  const location = useLocation();
   const {
     loginWithEmail,
     registerWithEmail,
     loginWithUsername,
+    loginWithGoogleToken,
+    updateProfile,
     user,
     isPending,
     error,
@@ -63,7 +91,11 @@ export default function AuthLogin() {
   // Load persisted form data to prevent state loss on remount
   const persistedData = useRef(loadPersistedFormData());
 
-  const [mode, setMode] = useState<LoginMode>("email");
+  // Default to register mode when the user lands on /sign-up (new users);
+  // otherwise default to email sign-in (returning users).
+  const [mode, setMode] = useState<LoginMode>(
+    location.pathname === "/sign-up" ? "register" : "email",
+  );
   const [email, setEmail] = useState(persistedData.current.email);
   const [password, setPassword] = useState(persistedData.current.password);
   const [username, setUsername] = useState("");
@@ -71,6 +103,8 @@ export default function AuthLogin() {
   const [regEmail, setRegEmail] = useState("");
   const [regPassword, setRegPassword] = useState("");
   const [regConfirm, setRegConfirm] = useState("");
+  const [regPhone, setRegPhone] = useState("");
+  const [regUsername, setRegUsername] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [companyName, setCompanyName] = useState("");
   const [companyPhone, setCompanyPhone] = useState("");
@@ -81,18 +115,37 @@ export default function AuthLogin() {
   const [showCompanyFields, setShowCompanyFields] = useState(false);
   const [localError, setLocalError] = useState("");
   const [success, setSuccess] = useState("");
+  const [googleLoading, setGoogleLoading] = useState(false);
+
+  // Clear the Google spinner once auth completes (token-flow success path —
+  // the failure path clears it in handleGoogleLogin). Also add a safety
+  // timeout so a stuck GIS prompt never leaves the button spinning forever.
+  useEffect(() => {
+    if (user && googleLoading) setGoogleLoading(false);
+  }, [user, googleLoading]);
+  useEffect(() => {
+    if (!googleLoading) return;
+    const t = setTimeout(() => setGoogleLoading(false), 30_000);
+    return () => clearTimeout(t);
+  }, [googleLoading]);
 
   // Stable callback for email change with persistence
-  const handleEmailChange = useCallback((value: string) => {
-    setEmail(value);
-    savePersistedFormData(value, password);
-  }, [password]);
+  const handleEmailChange = useCallback(
+    (value: string) => {
+      setEmail(value);
+      savePersistedFormData(value, password);
+    },
+    [password],
+  );
 
   // Stable callback for password change with persistence
-  const handlePasswordChange = useCallback((value: string) => {
-    setPassword(value);
-    savePersistedFormData(email, value);
-  }, [email]);
+  const handlePasswordChange = useCallback(
+    (value: string) => {
+      setPassword(value);
+      savePersistedFormData(email, value);
+    },
+    [email],
+  );
 
   // Redirect if already logged in
   useEffect(() => {
@@ -125,18 +178,34 @@ export default function AuthLogin() {
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLocalError("");
-    if (!email.trim()) { setLocalError("Please enter your email"); return; }
-    if (!EMAIL_REGEX.test(email.trim())) { setLocalError("Please enter a valid email address"); return; }
-    if (!password) { setLocalError("Please enter your password"); return; }
+    if (!email.trim()) {
+      setLocalError("Please enter your email");
+      return;
+    }
+    if (!EMAIL_REGEX.test(email.trim())) {
+      setLocalError("Please enter a valid email address");
+      return;
+    }
+    if (!password) {
+      setLocalError("Please enter your password");
+      return;
+    }
     const result = await loginWithEmail(email.trim(), password);
-    if (!result.success) setLocalError(result.error || "Invalid email or password");
+    if (!result.success)
+      setLocalError(result.error || "Invalid email or password");
   };
 
   const handleUsernameLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLocalError("");
-    if (!username.trim()) { setLocalError("Please enter your username"); return; }
-    if (!password) { setLocalError("Please enter your password"); return; }
+    if (!username.trim()) {
+      setLocalError("Please enter your username");
+      return;
+    }
+    if (!password) {
+      setLocalError("Please enter your password");
+      return;
+    }
     const ok = await loginWithUsername(username.trim(), password);
     if (!ok) setLocalError(error || "Invalid username or password");
   };
@@ -145,18 +214,69 @@ export default function AuthLogin() {
     e.preventDefault();
     setLocalError("");
     setSuccess("");
-    if (!regName.trim()) { setLocalError("Please enter your name"); return; }
-    if (!regEmail.trim()) { setLocalError("Please enter your email"); return; }
-    if (!EMAIL_REGEX.test(regEmail.trim())) { setLocalError("Please enter a valid email address"); return; }
-    if (!regPassword || regPassword.length < 6) { setLocalError("Password must be at least 6 characters"); return; }
-    if (regPassword !== regConfirm) { setLocalError("Passwords do not match"); return; }
-    const ok = await registerWithEmail(regEmail.trim(), regPassword, regName.trim());
+    if (!regName.trim()) {
+      setLocalError("Please enter your name");
+      return;
+    }
+    if (!regEmail.trim()) {
+      setLocalError("Please enter your email");
+      return;
+    }
+    if (!EMAIL_REGEX.test(regEmail.trim())) {
+      setLocalError("Please enter a valid email address");
+      return;
+    }
+    if (!regPassword || regPassword.length < 6) {
+      setLocalError("Password must be at least 6 characters");
+      return;
+    }
+    if (regPassword !== regConfirm) {
+      setLocalError("Passwords do not match");
+      return;
+    }
+    const ok = await registerWithEmail(
+      regEmail.trim(),
+      regPassword,
+      regName.trim(),
+    );
     if (ok) {
+      // Save company profile to cloud (cross-device) + localStorage cache
       if (companyName || companyRegNo || taxId) {
-        localStorage.setItem("fuelpro_company_profile", JSON.stringify({
-          name: companyName || regName.trim(), phone: companyPhone, address: companyAddress,
-          industry: companyIndustry, regNo: companyRegNo, taxId, createdAt: new Date().toISOString(),
-        }));
+        const companyProfile = {
+          name: companyName || regName.trim(),
+          phone: companyPhone,
+          address: companyAddress,
+          industry: companyIndustry,
+          regNo: companyRegNo,
+          taxId,
+          createdAt: new Date().toISOString(),
+        };
+        localStorage.setItem(
+          "fuelpro_company_profile",
+          JSON.stringify(companyProfile),
+        );
+        // Also save to cloud KV store for cross-device access
+        try {
+          const { cloudStorageService } =
+            await import("@/react-app/lib/cloud-storage-service");
+          await cloudStorageService.set("company_profile", companyProfile);
+        } catch (err) {
+          console.warn("[AuthLogin] company_profile cloud save failed:", err);
+        }
+      }
+      // Update profile with username + phone if provided (saves to profiles table + auth metadata)
+      if (regUsername.trim() || regPhone.trim()) {
+        try {
+          await updateProfile({
+            username: regUsername.trim() || undefined,
+            phone: regPhone.trim() || undefined,
+          });
+        } catch (err) {
+          console.warn(
+            "[AuthLogin] profile update (username/phone) failed:",
+            err,
+          );
+        }
       }
       setSuccess("Account created! Logging you in...");
       setTimeout(() => setSuccess(""), 3000);
@@ -164,6 +284,31 @@ export default function AuthLogin() {
   };
 
   // Production mode - no demo credentials
+
+  const handleGoogleLogin = async () => {
+    setLocalError("");
+    setGoogleLoading(true);
+    // Primary: Google Identity Services client-side token flow (uses
+    // Authorized JavaScript origins). Falls back to the OAuth redirect flow
+    // (which uses Authorized redirect URIs) if GIS cannot display.
+    const result = await loginWithGoogleToken();
+    if (!result.success) {
+      setGoogleLoading(false);
+      const err = result.error || "Google sign-in failed. Please try again.";
+      // Surface a clear, actionable message when the Google OAuth client
+      // hasn't been configured yet (the most common cause of failure).
+      const actionable =
+        /redirect_uri_mismatch|redirect.*uri|doesn't comply|OAuth 2\.0 policy|origin|not enabled|provider not/i.test(
+          err,
+        )
+          ? "Google sign-in isn't fully configured yet. The app owner needs to add this site to the Google OAuth client's Authorized JavaScript origins and Authorized redirect URIs in the Google Cloud Console (a free, one-time setup). Email and Username sign-in still work."
+          : err;
+      setLocalError(actionable);
+    }
+    // On success via redirect fallback the browser navigates to Google; the
+    // spinner stays until that happens. On success via token flow the
+    // onAuthStateChange listener handles the transition.
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 flex overflow-hidden">
@@ -181,21 +326,49 @@ export default function AuthLogin() {
           </div>
           <div>
             <h1 className="text-3xl font-black text-white">FuelPro</h1>
-            <p className="text-indigo-300 text-sm">Professional Fuel Management</p>
+            <p className="text-indigo-300 text-sm">
+              Professional Fuel Management
+            </p>
           </div>
         </div>
         <h2 className="text-4xl font-bold text-white mb-4 leading-tight">
-          Manage your fuel stations<br />
+          Manage your fuel stations
+          <br />
           <span className="text-indigo-400">from anywhere</span>
         </h2>
         <div className="space-y-4 mt-8">
           {[
-            { icon: Cloud, title: "Cloud Sync", desc: "Real-time sync across all devices", color: "text-blue-400" },
-            { icon: Lock, title: "Secure Auth", desc: "Encrypted storage & session management", color: "text-green-400" },
-            { icon: Zap, title: "Real-Time Updates", desc: "Live sales, delivery & payment tracking", color: "text-amber-400" },
-            { icon: Server, title: "Multi-Station", desc: "Manage unlimited stations independently", color: "text-purple-400" },
-            { icon: ShieldCheck, title: "Admin Control", desc: "Full system management panel", color: "text-emerald-400" },
-          ].map(f => (
+            {
+              icon: Cloud,
+              title: "Cloud Sync",
+              desc: "Real-time sync across all devices",
+              color: "text-blue-400",
+            },
+            {
+              icon: Lock,
+              title: "Secure Auth",
+              desc: "Encrypted storage & session management",
+              color: "text-green-400",
+            },
+            {
+              icon: Zap,
+              title: "Real-Time Updates",
+              desc: "Live sales, delivery & payment tracking",
+              color: "text-amber-400",
+            },
+            {
+              icon: Server,
+              title: "Multi-Station",
+              desc: "Manage unlimited stations independently",
+              color: "text-purple-400",
+            },
+            {
+              icon: ShieldCheck,
+              title: "Admin Control",
+              desc: "Full system management panel",
+              color: "text-emerald-400",
+            },
+          ].map((f) => (
             <div key={f.title} className="flex items-start gap-3">
               <f.icon className={`w-5 h-5 mt-0.5 flex-shrink-0 ${f.color}`} />
               <div>
@@ -212,10 +385,14 @@ export default function AuthLogin() {
         <div className="w-full max-w-md bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-8 shadow-2xl">
           {/* Header */}
           <div className="flex items-center gap-3 mb-6 lg:hidden">
-            <div className="w-10 h-10 bg-gradient-to-br from-amber-400 to-orange-500 rounded-xl flex items-center justify-center text-xl">⛽</div>
+            <div className="w-10 h-10 bg-gradient-to-br from-amber-400 to-orange-500 rounded-xl flex items-center justify-center text-xl">
+              ⛽
+            </div>
             <div>
               <h1 className="text-xl font-black text-white">FuelPro</h1>
-              <p className="text-indigo-300 text-xs">Professional Fuel Management</p>
+              <p className="text-indigo-300 text-xs">
+                Professional Fuel Management
+              </p>
             </div>
           </div>
 
@@ -223,7 +400,9 @@ export default function AuthLogin() {
             {mode === "register" ? "Create Account" : "Sign In"}
           </h3>
           <p className="text-gray-400 text-sm mb-6">
-            {mode === "register" ? "Join FuelPro and manage your stations" : "Enter your credentials to continue"}
+            {mode === "register"
+              ? "Join FuelPro and manage your stations"
+              : "Enter your credentials to continue"}
           </p>
 
           {/* Error / Success Messages */}
@@ -239,6 +418,37 @@ export default function AuthLogin() {
               <span>{success}</span>
             </div>
           )}
+
+          {/* Sign in with Google (Google Identity Services / OAuth 2.0) */}
+          <button
+            type="button"
+            onClick={handleGoogleLogin}
+            disabled={isPending || googleLoading}
+            className="w-full py-3 mb-4 bg-white hover:bg-gray-50 disabled:opacity-60 disabled:cursor-not-allowed text-gray-700 font-semibold rounded-xl transition-all shadow-lg flex items-center justify-center gap-3"
+          >
+            {googleLoading ? (
+              <>
+                <span className="w-5 h-5 border-2 border-gray-300 border-t-gray-700 rounded-full animate-spin" />
+                Connecting to Google...
+              </>
+            ) : (
+              <>
+                <GoogleLogo className="w-5 h-5" />
+                {mode === "register"
+                  ? "Sign up with Google"
+                  : "Sign in with Google"}
+              </>
+            )}
+          </button>
+
+          {/* Divider */}
+          <div className="flex items-center gap-3 mb-5">
+            <div className="flex-1 h-px bg-white/10" />
+            <span className="text-[11px] text-gray-500 uppercase tracking-wide">
+              or
+            </span>
+            <div className="flex-1 h-px bg-white/10" />
+          </div>
 
           {/* Mode Tabs */}
           {mode !== "register" && (
@@ -264,13 +474,18 @@ export default function AuthLogin() {
           {mode === "email" && (
             <form onSubmit={handleEmailLogin} className="space-y-4" noValidate>
               <div>
-                <label className="text-xs font-medium text-gray-300 mb-1.5 block">Email Address</label>
+                <label className="text-xs font-medium text-gray-300 mb-1.5 block">
+                  Email Address
+                </label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                   <input
                     type="email"
                     value={email}
-                    onChange={e => { handleEmailChange(e.target.value); setLocalError(""); }}
+                    onChange={(e) => {
+                      handleEmailChange(e.target.value);
+                      setLocalError("");
+                    }}
                     placeholder="you@company.com"
                     className="w-full pl-9 pr-4 py-2.5 bg-white/5 border border-white/20 rounded-xl text-white text-sm placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
                     autoFocus
@@ -280,8 +495,14 @@ export default function AuthLogin() {
               </div>
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-xs font-medium text-gray-300">Password</label>
-                  <button type="button" onClick={() => navigate("/reset-password")} className="text-[11px] text-indigo-400 hover:text-indigo-300 transition-colors">
+                  <label className="text-xs font-medium text-gray-300">
+                    Password
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => navigate("/reset-password")}
+                    className="text-[11px] text-indigo-400 hover:text-indigo-300 transition-colors"
+                  >
                     Forgot Password?
                   </button>
                 </div>
@@ -290,13 +511,24 @@ export default function AuthLogin() {
                   <input
                     type={showPassword ? "text" : "password"}
                     value={password}
-                    onChange={e => { handlePasswordChange(e.target.value); setLocalError(""); }}
+                    onChange={(e) => {
+                      handlePasswordChange(e.target.value);
+                      setLocalError("");
+                    }}
                     placeholder="Enter your password"
                     className="w-full pl-9 pr-10 py-2.5 bg-white/5 border border-white/20 rounded-xl text-white text-sm placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
                     autoComplete="current-password"
                   />
-                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors">
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors"
+                  >
+                    {showPassword ? (
+                      <EyeOff className="w-4 h-4" />
+                    ) : (
+                      <Eye className="w-4 h-4" />
+                    )}
                   </button>
                 </div>
               </div>
@@ -321,15 +553,24 @@ export default function AuthLogin() {
 
           {/* USERNAME LOGIN FORM */}
           {mode === "username" && (
-            <form onSubmit={handleUsernameLogin} className="space-y-4" noValidate>
+            <form
+              onSubmit={handleUsernameLogin}
+              className="space-y-4"
+              noValidate
+            >
               <div>
-                <label className="text-xs font-medium text-gray-300 mb-1.5 block">Username</label>
+                <label className="text-xs font-medium text-gray-300 mb-1.5 block">
+                  Username
+                </label>
                 <div className="relative">
                   <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                   <input
                     type="text"
                     value={username}
-                    onChange={e => { setUsername(e.target.value); setLocalError(""); }}
+                    onChange={(e) => {
+                      setUsername(e.target.value);
+                      setLocalError("");
+                    }}
                     placeholder="Enter your username"
                     className="w-full pl-9 pr-4 py-2.5 bg-white/5 border border-white/20 rounded-xl text-white text-sm placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
                     autoFocus
@@ -338,19 +579,32 @@ export default function AuthLogin() {
                 </div>
               </div>
               <div>
-                <label className="text-xs font-medium text-gray-300 mb-1.5 block">Password</label>
+                <label className="text-xs font-medium text-gray-300 mb-1.5 block">
+                  Password
+                </label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                   <input
                     type={showPassword ? "text" : "password"}
                     value={password}
-                    onChange={e => { handlePasswordChange(e.target.value); setLocalError(""); }}
+                    onChange={(e) => {
+                      handlePasswordChange(e.target.value);
+                      setLocalError("");
+                    }}
                     placeholder="Enter your password"
                     className="w-full pl-9 pr-10 py-2.5 bg-white/5 border border-white/20 rounded-xl text-white text-sm placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
                     autoComplete="current-password"
                   />
-                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors">
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors"
+                  >
+                    {showPassword ? (
+                      <EyeOff className="w-4 h-4" />
+                    ) : (
+                      <Eye className="w-4 h-4" />
+                    )}
                   </button>
                 </div>
               </div>
@@ -360,9 +614,15 @@ export default function AuthLogin() {
                 className="w-full py-3 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-all shadow-lg shadow-indigo-500/20 flex items-center justify-center gap-2"
               >
                 {isPending ? (
-                  <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Signing in...</>
+                  <>
+                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Signing in...
+                  </>
                 ) : (
-                  <><LogIn className="w-4 h-4" />Sign In</>
+                  <>
+                    <LogIn className="w-4 h-4" />
+                    Sign In
+                  </>
                 )}
               </button>
             </form>
@@ -372,41 +632,138 @@ export default function AuthLogin() {
           {mode === "register" && (
             <form onSubmit={handleRegister} className="space-y-3" noValidate>
               <div>
-                <label className="text-xs font-medium text-gray-300 mb-1 block">Full Name *</label>
-                <input type="text" value={regName} onChange={e => setRegName(e.target.value)} placeholder="Your full name" autoComplete="name"
-                  className="w-full px-4 py-2.5 bg-white/5 border border-white/20 rounded-xl text-white text-sm placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 outline-none transition-all" />
+                <label className="text-xs font-medium text-gray-300 mb-1 block">
+                  Full Name *
+                </label>
+                <input
+                  type="text"
+                  value={regName}
+                  onChange={(e) => setRegName(e.target.value)}
+                  placeholder="Your full name"
+                  autoComplete="name"
+                  className="w-full px-4 py-2.5 bg-white/5 border border-white/20 rounded-xl text-white text-sm placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                />
               </div>
               <div>
-                <label className="text-xs font-medium text-gray-300 mb-1 block">Email Address *</label>
-                <input type="email" value={regEmail} onChange={e => setRegEmail(e.target.value)} placeholder="you@company.com" autoComplete="email"
-                  className="w-full px-4 py-2.5 bg-white/5 border border-white/20 rounded-xl text-white text-sm placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 outline-none transition-all" />
+                <label className="text-xs font-medium text-gray-300 mb-1 block">
+                  Email Address *
+                </label>
+                <input
+                  type="email"
+                  value={regEmail}
+                  onChange={(e) => setRegEmail(e.target.value)}
+                  placeholder="you@company.com"
+                  autoComplete="email"
+                  className="w-full px-4 py-2.5 bg-white/5 border border-white/20 rounded-xl text-white text-sm placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                />
               </div>
               <div>
-                <label className="text-xs font-medium text-gray-300 mb-1 block">Password *</label>
+                <label className="text-xs font-medium text-gray-300 mb-1 block">
+                  Password *
+                </label>
                 <div className="relative">
-                  <input type={showPassword ? "text" : "password"} value={regPassword} onChange={e => setRegPassword(e.target.value)} placeholder="Min 6 characters" autoComplete="new-password"
-                    className="w-full pl-4 pr-10 py-2.5 bg-white/5 border border-white/20 rounded-xl text-white text-sm placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 outline-none transition-all" />
-                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white">
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    value={regPassword}
+                    onChange={(e) => setRegPassword(e.target.value)}
+                    placeholder="Min 6 characters"
+                    autoComplete="new-password"
+                    className="w-full pl-4 pr-10 py-2.5 bg-white/5 border border-white/20 rounded-xl text-white text-sm placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white"
+                  >
+                    {showPassword ? (
+                      <EyeOff className="w-4 h-4" />
+                    ) : (
+                      <Eye className="w-4 h-4" />
+                    )}
                   </button>
                 </div>
               </div>
               <div>
-                <label className="text-xs font-medium text-gray-300 mb-1 block">Confirm Password *</label>
-                <input type={showPassword ? "text" : "password"} value={regConfirm} onChange={e => setRegConfirm(e.target.value)} placeholder="Repeat password" autoComplete="new-password"
-                  className="w-full px-4 py-2.5 bg-white/5 border border-white/20 rounded-xl text-white text-sm placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 outline-none transition-all" />
+                <label className="text-xs font-medium text-gray-300 mb-1 block">
+                  Confirm Password *
+                </label>
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={regConfirm}
+                  onChange={(e) => setRegConfirm(e.target.value)}
+                  placeholder="Repeat password"
+                  autoComplete="new-password"
+                  className="w-full px-4 py-2.5 bg-white/5 border border-white/20 rounded-xl text-white text-sm placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs font-medium text-gray-300 mb-1 block">
+                    Username
+                  </label>
+                  <input
+                    type="text"
+                    value={regUsername}
+                    onChange={(e) => setRegUsername(e.target.value)}
+                    placeholder="unique ID"
+                    autoComplete="username"
+                    className="w-full px-4 py-2.5 bg-white/5 border border-white/20 rounded-xl text-white text-sm placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-300 mb-1 block">
+                    Phone
+                  </label>
+                  <input
+                    type="tel"
+                    value={regPhone}
+                    onChange={(e) => setRegPhone(e.target.value)}
+                    placeholder="+1 555 000 0000"
+                    autoComplete="tel"
+                    className="w-full px-4 py-2.5 bg-white/5 border border-white/20 rounded-xl text-white text-sm placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                  />
+                </div>
               </div>
 
               {/* Optional company fields */}
-              <button type="button" onClick={() => setShowCompanyFields(!showCompanyFields)} className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors flex items-center gap-1">
-                <Fuel className="w-3 h-3" /> {showCompanyFields ? "Hide" : "Add"} company details (optional)
+              <button
+                type="button"
+                onClick={() => setShowCompanyFields(!showCompanyFields)}
+                className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors flex items-center gap-1"
+              >
+                <Fuel className="w-3 h-3" />{" "}
+                {showCompanyFields ? "Hide" : "Add"} company details (optional)
               </button>
               {showCompanyFields && (
                 <div className="space-y-2 pt-2 border-t border-white/10">
-                  <input type="text" value={companyName} onChange={e => setCompanyName(e.target.value)} placeholder="Company name" className="w-full px-4 py-2 bg-white/5 border border-white/20 rounded-xl text-white text-xs placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 outline-none" />
-                  <input type="text" value={companyPhone} onChange={e => setCompanyPhone(e.target.value)} placeholder="Phone number" className="w-full px-4 py-2 bg-white/5 border border-white/20 rounded-xl text-white text-xs placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 outline-none" />
-                  <input type="text" value={companyRegNo} onChange={e => setCompanyRegNo(e.target.value)} placeholder="Registration number" className="w-full px-4 py-2 bg-white/5 border border-white/20 rounded-xl text-white text-xs placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 outline-none" />
-                  <input type="text" value={taxId} onChange={e => setTaxId(e.target.value)} placeholder="Tax ID / KRA PIN" className="w-full px-4 py-2 bg-white/5 border border-white/20 rounded-xl text-white text-xs placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 outline-none" />
+                  <input
+                    type="text"
+                    value={companyName}
+                    onChange={(e) => setCompanyName(e.target.value)}
+                    placeholder="Company name"
+                    className="w-full px-4 py-2 bg-white/5 border border-white/20 rounded-xl text-white text-xs placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 outline-none"
+                  />
+                  <input
+                    type="text"
+                    value={companyPhone}
+                    onChange={(e) => setCompanyPhone(e.target.value)}
+                    placeholder="Phone number"
+                    className="w-full px-4 py-2 bg-white/5 border border-white/20 rounded-xl text-white text-xs placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 outline-none"
+                  />
+                  <input
+                    type="text"
+                    value={companyRegNo}
+                    onChange={(e) => setCompanyRegNo(e.target.value)}
+                    placeholder="Registration number"
+                    className="w-full px-4 py-2 bg-white/5 border border-white/20 rounded-xl text-white text-xs placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 outline-none"
+                  />
+                  <input
+                    type="text"
+                    value={taxId}
+                    onChange={(e) => setTaxId(e.target.value)}
+                    placeholder="Tax ID"
+                    className="w-full px-4 py-2 bg-white/5 border border-white/20 rounded-xl text-white text-xs placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 outline-none"
+                  />
                 </div>
               )}
 
@@ -416,9 +773,15 @@ export default function AuthLogin() {
                 className="w-full py-3 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-all shadow-lg flex items-center justify-center gap-2"
               >
                 {isPending ? (
-                  <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Creating account...</>
+                  <>
+                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Creating account...
+                  </>
                 ) : (
-                  <><UserPlus className="w-4 h-4" />Create Account</>
+                  <>
+                    <UserPlus className="w-4 h-4" />
+                    Create Account
+                  </>
                 )}
               </button>
             </form>
@@ -427,12 +790,32 @@ export default function AuthLogin() {
           {/* Toggle between login / register */}
           <div className="mt-5 text-center text-xs text-gray-400">
             {mode === "register" ? (
-              <>Already have an account?{" "}
-                <button type="button" onClick={() => setMode("email")} className="text-indigo-400 hover:text-indigo-300 font-semibold transition-colors">Sign In</button>
+              <>
+                Already have an account?{" "}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode("email");
+                    navigate("/sign-in", { replace: true });
+                  }}
+                  className="text-indigo-400 hover:text-indigo-300 font-semibold transition-colors"
+                >
+                  Sign In
+                </button>
               </>
             ) : (
-              <>Don't have an account?{" "}
-                <button type="button" onClick={() => setMode("register")} className="text-indigo-400 hover:text-indigo-300 font-semibold transition-colors">Create one</button>
+              <>
+                Don't have an account?{" "}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode("register");
+                    navigate("/sign-up", { replace: true });
+                  }}
+                  className="text-indigo-400 hover:text-indigo-300 font-semibold transition-colors"
+                >
+                  Create one
+                </button>
               </>
             )}
           </div>

@@ -1,6 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useAuth } from "@/react-app/context/AuthContext";
 import { useStations } from "@/react-app/context/StationContext";
+import cloudStorageService from "@/react-app/lib/cloud-storage-service";
+import { getCurrencySymbol } from "../lib/currency";
+import { useStationFuelTypes } from "@/react-app/hooks/useStationFuelTypes";
+import { getFuelLabel } from "@/react-app/config/pricing";
 import {
   Truck,
   Plus,
@@ -23,7 +27,9 @@ import {
   Search,
   CheckCircle2,
   AlertTriangle,
+  ShoppingCart,
 } from "lucide-react";
+import PurchasesSuppliers from "@/react-app/components/PurchasesSuppliers";
 
 interface Supplier {
   id: string;
@@ -61,12 +67,71 @@ interface PurchaseOrder {
 const STORAGE_KEY = "fuelpro_suppliers_v2";
 const ORDERS_KEY = "fuelpro_purchase_orders_v2";
 
-const FUEL_TYPES = ["Petrol", "Diesel", "Premium", "Kerosene", "LPG"];
+/**
+ * Normalize a supplier from cloud/localStorage so it always has every field
+ * the UI expects. Cloud data may be partial (from older app versions, API
+ * imports, or cross-device sync where the record was created with a subset of
+ * fields). Without this, rendering crashes with
+ * "Cannot read properties of undefined (reading 'map')" etc.
+ */
+function normalizeSupplier(s: Partial<Supplier> | null | undefined): Supplier {
+  const id =
+    s?.id || `sup_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  return {
+    id,
+    name: s?.name ?? "",
+    contactPerson: s?.contactPerson ?? "",
+    phone: s?.phone ?? "",
+    email: s?.email ?? "",
+    address: s?.address ?? "",
+    fuelTypes: Array.isArray(s?.fuelTypes) ? s.fuelTypes : [],
+    rating: typeof s?.rating === "number" ? s.rating : 3,
+    status: s?.status ?? "active",
+    creditLimit: typeof s?.creditLimit === "number" ? s.creditLimit : 0,
+    currentBalance:
+      typeof s?.currentBalance === "number" ? s.currentBalance : 0,
+    deliveryDays: s?.deliveryDays ?? "",
+    notes: s?.notes ?? "",
+    createdAt: s?.createdAt ?? new Date().toISOString(),
+    lastOrderAt: s?.lastOrderAt,
+  };
+}
+
+function normalizePurchaseOrder(
+  o: Partial<PurchaseOrder> | null | undefined,
+): PurchaseOrder {
+  const id =
+    o?.id || `po_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  return {
+    id,
+    supplierId: o?.supplierId ?? "",
+    supplierName: o?.supplierName ?? "",
+    fuelType: o?.fuelType ?? "",
+    liters: typeof o?.liters === "number" ? o.liters : 0,
+    pricePerLiter: typeof o?.pricePerLiter === "number" ? o.pricePerLiter : 0,
+    total: typeof o?.total === "number" ? o.total : 0,
+    status: o?.status ?? "pending",
+    orderDate: o?.orderDate ?? new Date().toISOString(),
+    expectedDate: o?.expectedDate ?? "",
+    actualDate: o?.actualDate,
+    notes: o?.notes ?? "",
+  };
+}
+
+function normalizeSuppliers(arr: unknown): Supplier[] {
+  if (!Array.isArray(arr)) return [];
+  return arr.map((s) => normalizeSupplier(s as Partial<Supplier>));
+}
+
+function normalizeOrders(arr: unknown): PurchaseOrder[] {
+  if (!Array.isArray(arr)) return [];
+  return arr.map((o) => normalizePurchaseOrder(o as Partial<PurchaseOrder>));
+}
 
 function loadSuppliers(): Supplier[] {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) return JSON.parse(saved);
+    if (saved) return normalizeSuppliers(JSON.parse(saved));
   } catch {
     /* ignore */
   }
@@ -76,7 +141,7 @@ function loadSuppliers(): Supplier[] {
 function loadOrders(): PurchaseOrder[] {
   try {
     const saved = localStorage.getItem(ORDERS_KEY);
-    if (saved) return JSON.parse(saved);
+    if (saved) return normalizeOrders(JSON.parse(saved));
   } catch {
     /* ignore */
   }
@@ -87,12 +152,58 @@ export default function SupplierManagement() {
   const { currentStation } = useStations();
   const stationId = currentStation?.id || "default";
   const { user } = useAuth();
-
-  const [suppliers, setSuppliers] = useState<Supplier[]>(loadSuppliers);
-  const [orders, setOrders] = useState<PurchaseOrder[]>(loadOrders);
-  const [activeView, setActiveView] = useState<"suppliers" | "orders">(
-    "suppliers"
+  // Resolve currency from React-context station (not synchronous localStorage)
+  // so it's correct on fresh devices / multi-currency stations.
+  const currencySymbol = useMemo(
+    () =>
+      getCurrencySymbol(
+        (currentStation as any)?.companyCurrency ||
+          (currentStation as any)?.currency,
+      ),
+    [currentStation],
   );
+  // Unified station fuel types — so supplier fuel-type checkboxes & the
+  // purchase-order fuel dropdown reflect the station's actual configured fuels
+  // (from Fuel Type Manager) instead of a hardcoded list.
+  const fuelTypeApi = useStationFuelTypes(stationId);
+  const fuelTypeOptions = useMemo(() => {
+    const fromConfig = fuelTypeApi.activeFuelTypes.map((ft) =>
+      getFuelLabel(ft.name),
+    );
+    // Merge with legacy fallbacks so a station with no fuel_types_config still
+    // has options; dedupe case-insensitively.
+    const legacy = ["Petrol", "Diesel", "Premium", "Kerosene", "LPG"];
+    const seen = new Set<string>();
+    const merged: string[] = [];
+    for (const f of [...fromConfig, ...legacy]) {
+      const key = f.toLowerCase();
+      if (!seen.has(key)) {
+        seen.add(key);
+        merged.push(f);
+      }
+    }
+    return merged;
+  }, [fuelTypeApi.activeFuelTypes]);
+
+  const [suppliers, setSuppliers] = useState<Supplier[]>(() => {
+    const cloudCached = cloudStorageService.getCached<unknown[]>(
+      "suppliers_data",
+      stationId,
+    );
+    if (Array.isArray(cloudCached)) return normalizeSuppliers(cloudCached);
+    return loadSuppliers();
+  });
+  const [orders, setOrders] = useState<PurchaseOrder[]>(() => {
+    const cloudCached = cloudStorageService.getCached<unknown[]>(
+      "purchase_orders",
+      stationId,
+    );
+    if (Array.isArray(cloudCached)) return normalizeOrders(cloudCached);
+    return loadOrders();
+  });
+  const [activeView, setActiveView] = useState<
+    "suppliers" | "orders" | "purchases"
+  >("suppliers");
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [showForm, setShowForm] = useState(false);
@@ -129,26 +240,110 @@ export default function SupplierManagement() {
     notes: "",
   });
 
+  // Prevents save effects from overwriting cloud data with default state
+  // before the initial cloud load completes (cross-device overwrite race).
+  const cloudLoadCompleteRef = useRef(false);
+  // Echo guard: prevents the real-time subscribe callback from overwriting
+  // uncommitted local edits (the cloud write echoes back and wipes state).
+  const localModifiedRef = useRef(false);
+  const suppliersRef = useRef(suppliers);
+  suppliersRef.current = suppliers;
+  const ordersRef = useRef(orders);
+  ordersRef.current = orders;
+
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(suppliers));
-  }, [suppliers]);
+    if (!cloudLoadCompleteRef.current) return; // skip until cloud load done
+    cloudStorageService
+      .set("suppliers_data", suppliers, stationId)
+      .catch(() => {});
+  }, [suppliers, stationId]);
   useEffect(() => {
     localStorage.setItem(ORDERS_KEY, JSON.stringify(orders));
-  }, [orders]);
+    if (!cloudLoadCompleteRef.current) return; // skip until cloud load done
+    cloudStorageService
+      .set("purchase_orders", orders, stationId)
+      .catch(() => {});
+  }, [orders, stationId]);
+
+  // Load from cloud on mount + real-time cross-device sync
+  useEffect(() => {
+    if (!user) return;
+    cloudLoadCompleteRef.current = false;
+    localModifiedRef.current = false;
+    let cancelled = false;
+    (async () => {
+      try {
+        const cloudSuppliers = await cloudStorageService.get<unknown>(
+          "suppliers_data",
+          stationId,
+        );
+        if (!cancelled && !localModifiedRef.current)
+          setSuppliers(normalizeSuppliers(cloudSuppliers));
+        const cloudOrders = await cloudStorageService.get<unknown>(
+          "purchase_orders",
+          stationId,
+        );
+        if (!cancelled && !localModifiedRef.current)
+          setOrders(normalizeOrders(cloudOrders));
+      } finally {
+        if (!cancelled) cloudLoadCompleteRef.current = true;
+      }
+    })();
+    // Real-time: when another device updates suppliers/orders, update instantly
+    const unsubs = [
+      cloudStorageService.subscribe<unknown>(
+        "suppliers_data",
+        stationId,
+        (val) => {
+          if (localModifiedRef.current) return;
+          setSuppliers(normalizeSuppliers(val));
+        },
+      ),
+      cloudStorageService.subscribe<unknown>(
+        "purchase_orders",
+        stationId,
+        (val) => {
+          if (localModifiedRef.current) return;
+          setOrders(normalizeOrders(val));
+        },
+      ),
+    ];
+    return () => {
+      cancelled = true;
+      unsubs.forEach((u) => u());
+    };
+  }, [user, stationId]);
+
+  // Post-load flush: if the user made changes before/during the cloud load,
+  // re-push the latest local state to cloud so it's not lost.
+  useEffect(() => {
+    if (cloudLoadCompleteRef.current && localModifiedRef.current) {
+      cloudStorageService
+        .set("suppliers_data", suppliersRef.current, stationId)
+        .catch(() => {});
+      cloudStorageService
+        .set("purchase_orders", ordersRef.current, stationId)
+        .catch(() => {});
+    }
+  }, [cloudLoadCompleteRef.current]);
 
   const showNotification = (
     message: string,
-    type: "success" | "warning" = "success"
+    type: "success" | "warning" = "success",
   ) => {
     setNotification({ message, type });
     setTimeout(() => setNotification(null), 3000);
   };
 
-  const filteredSuppliers = suppliers.filter(s => {
+  const filteredSuppliers = suppliers.filter((s) => {
+    const name = (s.name || "").toLowerCase();
+    const contact = (s.contactPerson || "").toLowerCase();
+    const phone = s.phone || "";
     const matchesSearch =
-      s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      s.contactPerson.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      s.phone.includes(searchTerm);
+      name.includes(searchTerm.toLowerCase()) ||
+      contact.includes(searchTerm.toLowerCase()) ||
+      phone.includes(searchTerm);
     const matchesStatus = statusFilter === "all" || s.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
@@ -158,11 +353,12 @@ export default function SupplierManagement() {
       showNotification("Name and phone are required", "warning");
       return;
     }
+    localModifiedRef.current = true;
     if (editingId) {
-      setSuppliers(prev =>
-        prev.map(s =>
-          s.id === editingId ? ({ ...s, ...formData } as Supplier) : s
-        )
+      setSuppliers((prev) =>
+        prev.map((s) =>
+          s.id === editingId ? ({ ...s, ...formData } as Supplier) : s,
+        ),
       );
       showNotification("Supplier updated");
     } else {
@@ -171,7 +367,7 @@ export default function SupplierManagement() {
         id: `sup_${Date.now()}`,
         createdAt: new Date().toISOString(),
       };
-      setSuppliers(prev => [...prev, newSupplier]);
+      setSuppliers((prev) => [...prev, newSupplier]);
       showNotification("Supplier added");
     }
     setShowForm(false);
@@ -194,7 +390,8 @@ export default function SupplierManagement() {
 
   const handleDelete = (id: string) => {
     if (confirm("Delete this supplier?")) {
-      setSuppliers(prev => prev.filter(s => s.id !== id));
+      localModifiedRef.current = true;
+      setSuppliers((prev) => prev.filter((s) => s.id !== id));
       showNotification("Supplier deleted");
     }
   };
@@ -204,8 +401,9 @@ export default function SupplierManagement() {
       showNotification("Please fill all required fields", "warning");
       return;
     }
-    const supplier = suppliers.find(s => s.id === selectedSupplierId);
+    const supplier = suppliers.find((s) => s.id === selectedSupplierId);
     if (!supplier) return;
+    localModifiedRef.current = true;
     const newOrder: PurchaseOrder = {
       id: `po_${Date.now()}`,
       supplierId: selectedSupplierId,
@@ -221,18 +419,18 @@ export default function SupplierManagement() {
         new Date(Date.now() + 3 * 86400000).toISOString(),
       notes: orderForm.notes,
     };
-    setOrders(prev => [newOrder, ...prev]);
+    setOrders((prev) => [newOrder, ...prev]);
     // Update supplier balance
-    setSuppliers(prev =>
-      prev.map(s =>
+    setSuppliers((prev) =>
+      prev.map((s) =>
         s.id === selectedSupplierId
           ? {
               ...s,
               currentBalance: s.currentBalance + newOrder.total,
               lastOrderAt: new Date().toISOString(),
             }
-          : s
-      )
+          : s,
+      ),
     );
     setShowOrderForm(false);
     setOrderForm({
@@ -248,10 +446,11 @@ export default function SupplierManagement() {
 
   const updateOrderStatus = (
     orderId: string,
-    newStatus: PurchaseOrder["status"]
+    newStatus: PurchaseOrder["status"],
   ) => {
-    setOrders(prev =>
-      prev.map(o =>
+    localModifiedRef.current = true;
+    setOrders((prev) =>
+      prev.map((o) =>
         o.id === orderId
           ? {
               ...o,
@@ -261,8 +460,8 @@ export default function SupplierManagement() {
                   ? new Date().toISOString()
                   : o.actualDate,
             }
-          : o
-      )
+          : o,
+      ),
     );
     showNotification(`Order ${newStatus}`);
   };
@@ -320,10 +519,21 @@ export default function SupplierManagement() {
           >
             Purchase Orders
           </button>
+          <button
+            onClick={() => {
+              setActiveView("purchases");
+            }}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5 ${activeView === "purchases" ? "bg-amber-500 text-white shadow-lg" : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200"}`}
+          >
+            <ShoppingCart size={14} />
+            Purchases
+          </button>
         </div>
       </div>
 
-      {activeView === "suppliers" ? (
+      {activeView === "purchases" ? (
+        <PurchasesSuppliers />
+      ) : activeView === "suppliers" ? (
         <>
           {/* Toolbar */}
           <div className="flex flex-col md:flex-row gap-3">
@@ -334,14 +544,14 @@ export default function SupplierManagement() {
               />
               <input
                 value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
+                onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="Search suppliers..."
                 className="w-full pl-9 pr-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500/30"
               />
             </div>
             <select
               value={statusFilter}
-              onChange={e => setStatusFilter(e.target.value)}
+              onChange={(e) => setStatusFilter(e.target.value)}
               className="px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-700 dark:text-gray-300 focus:outline-none"
             >
               <option value="all">All Status</option>
@@ -376,7 +586,7 @@ export default function SupplierManagement() {
 
           {/* Supplier Cards */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {filteredSuppliers.map(supplier => (
+            {filteredSuppliers.map((supplier) => (
               <div
                 key={supplier.id}
                 className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden hover:shadow-lg transition-all"
@@ -397,7 +607,7 @@ export default function SupplierManagement() {
                       </div>
                     </div>
                     <span
-                      className={`px-2 py-0.5 rounded-full text-[10px] font-medium border ${statusColors[supplier.status]}`}
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-medium border ${statusColors[supplier.status] || statusColors.inactive}`}
                     >
                       {supplier.status}
                     </span>
@@ -419,7 +629,7 @@ export default function SupplierManagement() {
                   </div>
 
                   <div className="mt-3 flex flex-wrap gap-1">
-                    {supplier.fuelTypes.map(ft => (
+                    {(supplier.fuelTypes || []).map((ft) => (
                       <span
                         key={ft}
                         className="px-2 py-0.5 bg-amber-500/10 text-amber-600 dark:text-amber-400 rounded-md text-[10px] font-medium flex items-center gap-1"
@@ -433,17 +643,19 @@ export default function SupplierManagement() {
                   <div className="mt-3 p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
                     <div className="flex justify-between text-xs">
                       <span className="text-gray-500">
-                        Credit: KES {supplier.creditLimit.toLocaleString()}
+                        Credit: {currencySymbol}{" "}
+                        {(supplier.creditLimit || 0).toLocaleString()}
                       </span>
                       <span className="text-gray-500">
-                        Balance: KES {supplier.currentBalance.toLocaleString()}
+                        Balance: {currencySymbol}{" "}
+                        {(supplier.currentBalance || 0).toLocaleString()}
                       </span>
                     </div>
                     <div className="mt-1 h-1.5 bg-gray-200 dark:bg-gray-600 rounded-full overflow-hidden">
                       <div
                         className="h-full bg-amber-500 rounded-full"
                         style={{
-                          width: `${Math.min((supplier.currentBalance / Math.max(supplier.creditLimit, 1)) * 100, 100)}%`,
+                          width: `${Math.min(((supplier.currentBalance || 0) / Math.max(supplier.creditLimit || 0, 1)) * 100, 100)}%`,
                         }}
                       />
                     </div>
@@ -454,7 +666,7 @@ export default function SupplierManagement() {
                     <button
                       onClick={() => {
                         setExpandedId(
-                          expandedId === supplier.id ? null : supplier.id
+                          expandedId === supplier.id ? null : supplier.id,
                         );
                       }}
                       className="flex-1 px-3 py-1.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg text-xs text-gray-600 dark:text-gray-300 transition-colors flex items-center justify-center gap-1"
@@ -504,14 +716,16 @@ export default function SupplierManagement() {
                       <div>
                         <span className="text-gray-500">Rating:</span>{" "}
                         <span className="text-amber-500">
-                          {"★".repeat(Math.round(supplier.rating))}
-                          {"☆".repeat(5 - Math.round(supplier.rating))}
+                          {"★".repeat(Math.round(supplier.rating || 0))}
+                          {"☆".repeat(5 - Math.round(supplier.rating || 0))}
                         </span>{" "}
-                        ({supplier.rating})
+                        ({supplier.rating || 0})
                       </div>
                       <div>
                         <span className="text-gray-500">Created:</span>{" "}
-                        {new Date(supplier.createdAt).toLocaleDateString()}
+                        {supplier.createdAt
+                          ? new Date(supplier.createdAt).toLocaleDateString()
+                          : "—"}
                       </div>
                       {supplier.lastOrderAt && (
                         <div>
@@ -521,7 +735,7 @@ export default function SupplierManagement() {
                       )}
                       <div>
                         <span className="text-gray-500">Available Credit:</span>{" "}
-                        KES{" "}
+                        {currencySymbol}{" "}
                         {(
                           supplier.creditLimit - supplier.currentBalance
                         ).toLocaleString()}
@@ -599,7 +813,7 @@ export default function SupplierManagement() {
                   </tr>
                 </thead>
                 <tbody>
-                  {orders.map(order => (
+                  {orders.map((order) => (
                     <tr
                       key={order.id}
                       className="border-b border-gray-100 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700/20"
@@ -619,11 +833,11 @@ export default function SupplierManagement() {
                         {order.liters.toLocaleString()}
                       </td>
                       <td className="px-4 py-3 text-right font-medium text-gray-900 dark:text-white">
-                        KES {order.total.toLocaleString()}
+                        {currencySymbol} {order.total.toLocaleString()}
                       </td>
                       <td className="px-4 py-3 text-center">
                         <span
-                          className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${statusColors[order.status]}`}
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${statusColors[order.status] || statusColors.pending}`}
                         >
                           {order.status}
                         </span>
@@ -703,7 +917,7 @@ export default function SupplierManagement() {
                   </label>
                   <input
                     value={formData.name}
-                    onChange={e =>
+                    onChange={(e) =>
                       setFormData({ ...formData, name: e.target.value })
                     }
                     className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
@@ -716,7 +930,7 @@ export default function SupplierManagement() {
                     </label>
                     <input
                       value={formData.contactPerson}
-                      onChange={e =>
+                      onChange={(e) =>
                         setFormData({
                           ...formData,
                           contactPerson: e.target.value,
@@ -731,7 +945,7 @@ export default function SupplierManagement() {
                     </label>
                     <input
                       value={formData.phone}
-                      onChange={e =>
+                      onChange={(e) =>
                         setFormData({ ...formData, phone: e.target.value })
                       }
                       className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
@@ -745,7 +959,7 @@ export default function SupplierManagement() {
                     </label>
                     <input
                       value={formData.email}
-                      onChange={e =>
+                      onChange={(e) =>
                         setFormData({ ...formData, email: e.target.value })
                       }
                       className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
@@ -757,7 +971,7 @@ export default function SupplierManagement() {
                     </label>
                     <input
                       value={formData.deliveryDays}
-                      onChange={e =>
+                      onChange={(e) =>
                         setFormData({
                           ...formData,
                           deliveryDays: e.target.value,
@@ -774,7 +988,7 @@ export default function SupplierManagement() {
                   </label>
                   <input
                     value={formData.address}
-                    onChange={e =>
+                    onChange={(e) =>
                       setFormData({ ...formData, address: e.target.value })
                     }
                     className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
@@ -785,14 +999,14 @@ export default function SupplierManagement() {
                     Fuel Types Supplied
                   </label>
                   <div className="flex flex-wrap gap-2">
-                    {FUEL_TYPES.map(ft => (
+                    {fuelTypeOptions.map((ft) => (
                       <button
                         key={ft}
                         onClick={() =>
                           setFormData({
                             ...formData,
                             fuelTypes: formData.fuelTypes?.includes(ft)
-                              ? formData.fuelTypes.filter(f => f !== ft)
+                              ? formData.fuelTypes.filter((f) => f !== ft)
                               : [...(formData.fuelTypes || []), ft],
                           })
                         }
@@ -811,7 +1025,7 @@ export default function SupplierManagement() {
                     <input
                       type="number"
                       value={formData.creditLimit}
-                      onChange={e =>
+                      onChange={(e) =>
                         setFormData({
                           ...formData,
                           creditLimit: Number(e.target.value),
@@ -830,7 +1044,7 @@ export default function SupplierManagement() {
                       max={5}
                       step={0.5}
                       value={formData.rating}
-                      onChange={e =>
+                      onChange={(e) =>
                         setFormData({
                           ...formData,
                           rating: Number(e.target.value),
@@ -846,7 +1060,7 @@ export default function SupplierManagement() {
                   </label>
                   <textarea
                     value={formData.notes}
-                    onChange={e =>
+                    onChange={(e) =>
                       setFormData({ ...formData, notes: e.target.value })
                     }
                     rows={2}
@@ -888,15 +1102,15 @@ export default function SupplierManagement() {
                   </label>
                   <select
                     value={selectedSupplierId}
-                    onChange={e => setSelectedSupplierId(e.target.value)}
+                    onChange={(e) => setSelectedSupplierId(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
                   >
                     <option value="">Select supplier...</option>
                     {suppliers
-                      .filter(s => s.status === "active")
-                      .map(s => (
+                      .filter((s) => s.status === "active")
+                      .map((s) => (
                         <option key={s.id} value={s.id}>
-                          {s.name} (Credit: KES{" "}
+                          {s.name} (Credit: {currencySymbol}{" "}
                           {(s.creditLimit - s.currentBalance).toLocaleString()})
                         </option>
                       ))}
@@ -908,12 +1122,12 @@ export default function SupplierManagement() {
                   </label>
                   <select
                     value={orderForm.fuelType}
-                    onChange={e =>
+                    onChange={(e) =>
                       setOrderForm({ ...orderForm, fuelType: e.target.value })
                     }
                     className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
                   >
-                    {FUEL_TYPES.map(ft => (
+                    {fuelTypeOptions.map((ft) => (
                       <option key={ft} value={ft}>
                         {ft}
                       </option>
@@ -928,7 +1142,7 @@ export default function SupplierManagement() {
                     <input
                       type="number"
                       value={orderForm.liters || ""}
-                      onChange={e =>
+                      onChange={(e) =>
                         setOrderForm({
                           ...orderForm,
                           liters: Number(e.target.value),
@@ -941,12 +1155,12 @@ export default function SupplierManagement() {
                   </div>
                   <div>
                     <label className="text-xs text-gray-500 mb-1 block">
-                      Price/Liter (KES)
+                      Price/Liter ({currencySymbol})
                     </label>
                     <input
                       type="number"
                       value={orderForm.pricePerLiter || ""}
-                      onChange={e =>
+                      onChange={(e) =>
                         setOrderForm({
                           ...orderForm,
                           pricePerLiter: Number(e.target.value),
@@ -961,7 +1175,7 @@ export default function SupplierManagement() {
                   <div className="p-3 bg-amber-500/10 rounded-lg text-center">
                     <span className="text-sm text-gray-500">Total: </span>
                     <span className="text-lg font-bold text-amber-600 dark:text-amber-400">
-                      KES {orderForm.total.toLocaleString()}
+                      {currencySymbol} {orderForm.total.toLocaleString()}
                     </span>
                   </div>
                 )}
@@ -972,7 +1186,7 @@ export default function SupplierManagement() {
                   <input
                     type="date"
                     value={orderForm.expectedDate}
-                    onChange={e =>
+                    onChange={(e) =>
                       setOrderForm({
                         ...orderForm,
                         expectedDate: e.target.value,
@@ -987,7 +1201,7 @@ export default function SupplierManagement() {
                   </label>
                   <textarea
                     value={orderForm.notes}
-                    onChange={e =>
+                    onChange={(e) =>
                       setOrderForm({ ...orderForm, notes: e.target.value })
                     }
                     rows={2}

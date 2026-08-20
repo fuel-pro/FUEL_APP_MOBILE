@@ -1,19 +1,19 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useLocation } from "@/react-app/context/LocationContext";
 import {
   Calendar,
   Clock,
   UserPlus,
-  CheckCircle2,
   AlertCircle,
   Sun,
   Moon,
   Sunrise,
-  Sunset,
   Download,
   Search,
-  ChevronDown,
 } from "lucide-react";
+import cloudStorageService from "@/react-app/lib/cloud-storage-service";
+import { useAuth } from "@/react-app/context/AuthContext";
+import { useStations } from "@/react-app/context/StationContext";
 
 interface Shift {
   id: string;
@@ -38,6 +38,83 @@ interface Employee {
   hourlyRate: number;
   status: "active" | "on_leave" | "suspended";
   joinDate: string;
+}
+
+/**
+ * Normalize a shift from cloud/localStorage so it always has every field the
+ * UI expects. Cloud data may be partial (older app versions, API imports, or
+ * cross-device sync where the record was created with a subset of fields).
+ * Without this, rendering crashes with
+ * "Cannot read properties of undefined (reading '...')" etc.
+ */
+const VALID_SHIFT_TYPES = ["morning", "afternoon", "night", "custom"] as const;
+const VALID_SHIFT_STATUSES = [
+  "scheduled",
+  "active",
+  "completed",
+  "absent",
+] as const;
+const VALID_EMP_STATUSES = ["active", "on_leave", "suspended"] as const;
+
+function normalizeShift(s: Partial<Shift> | null | undefined): Shift {
+  const id =
+    s?.id || `shift_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const rawType = s?.shiftType;
+  const shiftType = (VALID_SHIFT_TYPES as readonly string[]).includes(
+    rawType as string,
+  )
+    ? (rawType as Shift["shiftType"])
+    : "custom";
+  const rawStatus = s?.status;
+  const status = (VALID_SHIFT_STATUSES as readonly string[]).includes(
+    rawStatus as string,
+  )
+    ? (rawStatus as Shift["status"])
+    : "scheduled";
+  return {
+    id,
+    employeeName: s?.employeeName ?? "",
+    role: s?.role ?? "",
+    date: s?.date ?? "",
+    startTime: s?.startTime ?? "",
+    endTime: s?.endTime ?? "",
+    shiftType,
+    pumpAssigned: s?.pumpAssigned ?? "",
+    status,
+    notes: s?.notes ?? "",
+    checkIn: s?.checkIn,
+    checkOut: s?.checkOut,
+  };
+}
+
+function normalizeEmployee(e: Partial<Employee> | null | undefined): Employee {
+  const id =
+    e?.id || `emp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const rawStatus = e?.status;
+  const status = (VALID_EMP_STATUSES as readonly string[]).includes(
+    rawStatus as string,
+  )
+    ? (rawStatus as Employee["status"])
+    : "active";
+  return {
+    id,
+    name: e?.name ?? "",
+    phone: e?.phone ?? "",
+    role: e?.role ?? "",
+    hourlyRate: typeof e?.hourlyRate === "number" ? e.hourlyRate : 0,
+    status,
+    joinDate: e?.joinDate ?? new Date().toISOString().split("T")[0],
+  };
+}
+
+function normalizeShifts(arr: unknown): Shift[] {
+  if (!Array.isArray(arr)) return [];
+  return arr.map((s) => normalizeShift(s as Partial<Shift>));
+}
+
+function normalizeEmployees(arr: unknown): Employee[] {
+  if (!Array.isArray(arr)) return [];
+  return arr.map((e) => normalizeEmployee(e as Partial<Employee>));
 }
 
 const SHIFT_TEMPLATES = [
@@ -70,22 +147,40 @@ const SHIFT_TEMPLATES = [
 export default function ShiftManagement() {
   const location = useLocation();
   const currencySymbol = location.currencySymbol;
+  const { user } = useAuth();
+  const { currentStation } = useStations();
+  const stationId = currentStation?.id;
   const [employees, setEmployees] = useState<Employee[]>(() => {
+    // Cloud cache first (freshest cross-device data), then localStorage
+    const cloudCached = cloudStorageService.getCached<unknown[]>(
+      "shift_employees",
+      stationId,
+    );
+    if (Array.isArray(cloudCached)) return normalizeEmployees(cloudCached);
     try {
-      return JSON.parse(localStorage.getItem("fuelpro_employees") || "[]");
+      return normalizeEmployees(
+        JSON.parse(localStorage.getItem("fuelpro_employees") || "[]"),
+      );
     } catch {
       return defaultEmployees();
     }
   });
   const [shifts, setShifts] = useState<Shift[]>(() => {
+    const cloudCached = cloudStorageService.getCached<unknown[]>(
+      "shift_data",
+      stationId,
+    );
+    if (Array.isArray(cloudCached)) return normalizeShifts(cloudCached);
     try {
-      return JSON.parse(localStorage.getItem("fuelpro_shifts") || "[]");
+      return normalizeShifts(
+        JSON.parse(localStorage.getItem("fuelpro_shifts") || "[]"),
+      );
     } catch {
       return [];
     }
   });
   const [selectedDate, setSelectedDate] = useState(
-    new Date().toISOString().split("T")[0]
+    new Date().toISOString().split("T")[0],
   );
   const [showAddShift, setShowAddShift] = useState(false);
   const [showAddEmployee, setShowAddEmployee] = useState(false);
@@ -103,31 +198,104 @@ export default function ShiftManagement() {
   });
   const [searchEmp, setSearchEmp] = useState("");
 
+  // Race-condition guard: prevents the async cloud-load effect from
+  // overwriting local state that was modified (saveShifts/saveEmployees)
+  // before the load completed. Same pattern as PermissionContext.
+  const localModifiedRef = useRef(false);
+  const cloudLoadCompleteRef = useRef(false);
+
   const saveShifts = (s: Shift[]) => {
+    localModifiedRef.current = true;
     setShifts(s);
     localStorage.setItem("fuelpro_shifts", JSON.stringify(s));
+    if (cloudLoadCompleteRef.current)
+      cloudStorageService.set("shift_data", s, stationId).catch(() => {});
   };
   const saveEmployees = (e: Employee[]) => {
+    localModifiedRef.current = true;
     setEmployees(e);
     localStorage.setItem("fuelpro_employees", JSON.stringify(e));
+    if (cloudLoadCompleteRef.current)
+      cloudStorageService.set("shift_employees", e, stationId).catch(() => {});
   };
 
+  // Load from cloud on mount + real-time cross-device sync
+  const employeesRef = useRef(employees);
+  const shiftsRef = useRef(shifts);
+  employeesRef.current = employees;
+  shiftsRef.current = shifts;
+
+  useEffect(() => {
+    if (!user) return;
+    cloudLoadCompleteRef.current = false;
+    localModifiedRef.current = false;
+    let cancelled = false;
+    (async () => {
+      const cloudEmps = await cloudStorageService.get<unknown>(
+        "shift_employees",
+        stationId,
+      );
+      if (!cancelled && Array.isArray(cloudEmps) && !localModifiedRef.current)
+        setEmployees(normalizeEmployees(cloudEmps));
+      const cloudShifts = await cloudStorageService.get<unknown>(
+        "shift_data",
+        stationId,
+      );
+      if (!cancelled && Array.isArray(cloudShifts) && !localModifiedRef.current)
+        setShifts(normalizeShifts(cloudShifts));
+      if (!cancelled) {
+        cloudLoadCompleteRef.current = true;
+        // Post-load flush: if local edits were made during the load window,
+        // re-push them to cloud so they survive cross-device sync.
+        if (localModifiedRef.current) {
+          cloudStorageService
+            .set("shift_employees", employeesRef.current, stationId)
+            .catch(() => {});
+          cloudStorageService
+            .set("shift_data", shiftsRef.current, stationId)
+            .catch(() => {});
+        }
+      }
+    })();
+    // Real-time: when another device updates shifts/employees, update instantly.
+    // Guard with localModifiedRef so a push arriving mid-edit doesn't overwrite
+    // uncommitted local changes (R2/R4).
+    const unsubs = [
+      cloudStorageService.subscribe<unknown>(
+        "shift_employees",
+        stationId,
+        (val) => {
+          if (Array.isArray(val) && !localModifiedRef.current)
+            setEmployees(normalizeEmployees(val));
+        },
+      ),
+      cloudStorageService.subscribe<unknown>("shift_data", stationId, (val) => {
+        if (Array.isArray(val) && !localModifiedRef.current)
+          setShifts(normalizeShifts(val));
+      }),
+    ];
+    return () => {
+      cancelled = true;
+      unsubs.forEach((u) => u());
+    };
+  }, [user, stationId]);
+
   const dayShifts = useMemo(
-    () => shifts.filter(s => s.date === selectedDate),
-    [shifts, selectedDate]
+    () => (shifts || []).filter((s) => s.date === selectedDate),
+    [shifts, selectedDate],
   );
-  const activeNow = dayShifts.filter(s => s.status === "active").length;
-  const scheduled = dayShifts.filter(s => s.status === "scheduled").length;
+  const activeNow = dayShifts.filter((s) => s.status === "active").length;
+  const scheduled = dayShifts.filter((s) => s.status === "scheduled").length;
 
   const addShift = () => {
     if (!newShift.employeeId) return;
-    const emp = employees.find(e => e.id === newShift.employeeId);
+    const emp = employees.find((e) => e.id === newShift.employeeId);
     if (!emp) return;
     const tmpl =
-      SHIFT_TEMPLATES.find(t => t.type === newShift.shiftType) ||
+      SHIFT_TEMPLATES.find((t) => t.type === newShift.shiftType) ||
       SHIFT_TEMPLATES[0];
     const shift: Shift = {
-      id: `shift_${Date.now()}`,
+      id: `shift_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       employeeName: emp.name,
       role: emp.role,
       date: selectedDate,
@@ -137,8 +305,7 @@ export default function ShiftManagement() {
       pumpAssigned: newShift.pumpAssigned || "Any",
       status: "scheduled",
       notes: newShift.notes,
-      employeeId: emp.id,
-    } as any;
+    };
     saveShifts([shift, ...shifts]);
     setShowAddShift(false);
   };
@@ -146,7 +313,7 @@ export default function ShiftManagement() {
   const addEmployee = () => {
     if (!newEmployee.name) return;
     const emp: Employee = {
-      id: `emp_${Date.now()}`,
+      id: `emp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       ...newEmployee,
       status: "active",
       joinDate: new Date().toISOString().split("T")[0],
@@ -156,9 +323,26 @@ export default function ShiftManagement() {
     setShowAddEmployee(false);
   };
 
+  const deleteShift = (id: string) => {
+    saveShifts((shifts || []).filter((s) => s.id !== id));
+  };
+
+  const deleteEmployee = (id: string) => {
+    if (!confirm("Remove this employee from the roster?")) return;
+    saveEmployees((employees || []).filter((e) => e.id !== id));
+  };
+
+  const markAbsent = (id: string) => {
+    saveShifts(
+      (shifts || []).map((s) =>
+        s.id === id ? { ...s, status: "absent" as const } : s,
+      ),
+    );
+  };
+
   const toggleStatus = (id: string) => {
     saveShifts(
-      shifts.map(s => {
+      (shifts || []).map((s) => {
         if (s.id !== id) return s;
         if (s.status === "scheduled")
           return {
@@ -173,15 +357,39 @@ export default function ShiftManagement() {
             checkOut: new Date().toISOString(),
           };
         return s;
-      })
+      }),
     );
   };
 
-  const filteredEmp = employees.filter(
-    e =>
-      e.name.toLowerCase().includes(searchEmp.toLowerCase()) ||
-      e.role.toLowerCase().includes(searchEmp.toLowerCase())
+  const filteredEmp = (employees || []).filter(
+    (e) =>
+      (e.name || "").toLowerCase().includes(searchEmp.toLowerCase()) ||
+      (e.role || "").toLowerCase().includes(searchEmp.toLowerCase()),
   );
+
+  const exportCSV = () => {
+    const rows = [
+      ["Name", "Role", "Phone", "Rate/hr", "Status", "Join Date"],
+      ...(employees || []).map((e) => [
+        e.name,
+        e.role,
+        e.phone || "",
+        String(e.hourlyRate),
+        e.status,
+        e.joinDate,
+      ]),
+    ];
+    const csv = rows
+      .map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))
+      .join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `employees_${selectedDate}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="space-y-6">
@@ -231,7 +439,7 @@ export default function ShiftManagement() {
         <input
           type="date"
           value={selectedDate}
-          onChange={e => setSelectedDate(e.target.value)}
+          onChange={(e) => setSelectedDate(e.target.value)}
           className="px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-white"
         />
         <button
@@ -246,6 +454,13 @@ export default function ShiftManagement() {
         >
           <UserPlus size={16} /> Add Employee
         </button>
+        <button
+          onClick={exportCSV}
+          className="px-4 py-2.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-xl text-sm font-medium flex items-center gap-2 dark:text-white"
+          title="Export employee roster to CSV"
+        >
+          <Download size={16} /> Export
+        </button>
       </div>
 
       {/* Add Shift Form */}
@@ -257,15 +472,15 @@ export default function ShiftManagement() {
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
             <select
               value={newShift.employeeId}
-              onChange={e =>
+              onChange={(e) =>
                 setNewShift({ ...newShift, employeeId: e.target.value })
               }
               className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
             >
               <option value="">Select Employee</option>
-              {employees
-                .filter(e => e.status === "active")
-                .map(e => (
+              {(employees || [])
+                .filter((e) => e.status === "active")
+                .map((e) => (
                   <option key={e.id} value={e.id}>
                     {e.name} ({e.role})
                   </option>
@@ -273,12 +488,12 @@ export default function ShiftManagement() {
             </select>
             <select
               value={newShift.shiftType}
-              onChange={e =>
+              onChange={(e) =>
                 setNewShift({ ...newShift, shiftType: e.target.value as any })
               }
               className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
             >
-              {SHIFT_TEMPLATES.map(t => (
+              {SHIFT_TEMPLATES.map((t) => (
                 <option key={t.type} value={t.type}>
                   {t.label} ({t.start}-{t.end})
                 </option>
@@ -287,7 +502,7 @@ export default function ShiftManagement() {
             <input
               placeholder="Pump Assignment (e.g., Pump 1)"
               value={newShift.pumpAssigned}
-              onChange={e =>
+              onChange={(e) =>
                 setNewShift({ ...newShift, pumpAssigned: e.target.value })
               }
               className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
@@ -316,11 +531,11 @@ export default function ShiftManagement() {
           <h3 className="text-sm font-semibold dark:text-white mb-3">
             Add Employee
           </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
             <input
               placeholder="Full Name *"
               value={newEmployee.name}
-              onChange={e =>
+              onChange={(e) =>
                 setNewEmployee({ ...newEmployee, name: e.target.value })
               }
               className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
@@ -328,14 +543,14 @@ export default function ShiftManagement() {
             <input
               placeholder="Phone"
               value={newEmployee.phone}
-              onChange={e =>
+              onChange={(e) =>
                 setNewEmployee({ ...newEmployee, phone: e.target.value })
               }
               className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
             />
             <select
               value={newEmployee.role}
-              onChange={e =>
+              onChange={(e) =>
                 setNewEmployee({ ...newEmployee, role: e.target.value })
               }
               className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
@@ -347,6 +562,18 @@ export default function ShiftManagement() {
               <option>Security</option>
               <option>Driver</option>
             </select>
+            <input
+              type="number"
+              placeholder={`Rate/hr (${currencySymbol})`}
+              value={newEmployee.hourlyRate || ""}
+              onChange={(e) =>
+                setNewEmployee({
+                  ...newEmployee,
+                  hourlyRate: parseInt(e.target.value) || 0,
+                })
+              }
+              className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+            />
             <div className="flex gap-2">
               <button
                 onClick={addEmployee}
@@ -367,9 +594,10 @@ export default function ShiftManagement() {
 
       {/* Shift Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {dayShifts.map(shift => {
-          const tmpl = SHIFT_TEMPLATES.find(t => t.type === shift.shiftType);
+        {(dayShifts || []).map((shift) => {
+          const tmpl = SHIFT_TEMPLATES.find((t) => t.type === shift.shiftType);
           const Icon = tmpl?.icon || Clock;
+          const colorClass = (tmpl?.color || "text-gray-600").split(" ")[0];
           return (
             <div
               key={shift.id}
@@ -377,10 +605,7 @@ export default function ShiftManagement() {
             >
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
-                  <Icon
-                    size={16}
-                    className={tmpl?.color.split(" ")[0] || "text-gray-600"}
-                  />
+                  <Icon size={16} className={colorClass} />
                   <span className="text-sm font-semibold dark:text-white">
                     {shift.employeeName}
                   </span>
@@ -400,32 +625,54 @@ export default function ShiftManagement() {
               </p>
               {shift.checkIn && (
                 <p className="text-[10px] text-green-600">
-                  Checked in: {new Date(shift.checkIn).toLocaleTimeString()}
+                  Checked in: {safeLocaleTime(shift.checkIn)}
                 </p>
               )}
               {shift.checkOut && (
                 <p className="text-[10px] text-gray-500">
-                  Checked out: {new Date(shift.checkOut).toLocaleTimeString()}
+                  Checked out: {safeLocaleTime(shift.checkOut)}
                 </p>
               )}
-              <button
-                onClick={() => toggleStatus(shift.id)}
-                className={`mt-2 w-full py-1.5 rounded-lg text-xs font-medium transition-colors ${shift.status === "scheduled" ? "bg-green-600 hover:bg-green-700 text-white" : shift.status === "active" ? "bg-amber-600 hover:bg-amber-700 text-white" : "bg-gray-200 dark:bg-gray-700 text-gray-500 cursor-default"}`}
-              >
-                {shift.status === "scheduled"
-                  ? "Check In"
-                  : shift.status === "active"
-                    ? "Check Out"
-                    : "Done"}
-              </button>
+              {shift.notes && (
+                <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1 italic">
+                  &quot;{shift.notes}&quot;
+                </p>
+              )}
+              <div className="flex gap-1.5 mt-2">
+                <button
+                  onClick={() => toggleStatus(shift.id)}
+                  className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors ${shift.status === "scheduled" ? "bg-green-600 hover:bg-green-700 text-white" : shift.status === "active" ? "bg-amber-600 hover:bg-amber-700 text-white" : "bg-gray-200 dark:bg-gray-700 text-gray-500 cursor-default"}`}
+                >
+                  {shift.status === "scheduled"
+                    ? "Check In"
+                    : shift.status === "active"
+                      ? "Check Out"
+                      : "Done"}
+                </button>
+                {shift.status === "scheduled" && (
+                  <button
+                    onClick={() => markAbsent(shift.id)}
+                    className="px-2 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-xs font-medium"
+                    title="Mark as absent"
+                  >
+                    <AlertCircle size={12} />
+                  </button>
+                )}
+                <button
+                  onClick={() => deleteShift(shift.id)}
+                  className="px-2 py-1.5 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-500 rounded-lg text-xs font-medium"
+                  title="Delete shift"
+                >
+                  ✕
+                </button>
+              </div>
             </div>
           );
         })}
         {dayShifts.length === 0 && (
           <div className="col-span-full text-center py-8 text-gray-400 text-sm">
-            No shifts scheduled for{" "}
-            {new Date(selectedDate).toLocaleDateString()}. Click &quot;Schedule
-            Shift&quot; to add one.
+            No shifts scheduled for {safeLocaleDate(selectedDate)}. Click
+            &quot;Schedule Shift&quot; to add one.
           </div>
         )}
       </div>
@@ -444,7 +691,7 @@ export default function ShiftManagement() {
             <input
               placeholder="Search..."
               value={searchEmp}
-              onChange={e => setSearchEmp(e.target.value)}
+              onChange={(e) => setSearchEmp(e.target.value)}
               className="pl-8 pr-3 py-1.5 border rounded-lg text-xs dark:bg-gray-700 dark:border-gray-600 dark:text-white"
             />
           </div>
@@ -458,10 +705,11 @@ export default function ShiftManagement() {
                 <th className="text-left px-3 py-2">Phone</th>
                 <th className="text-right px-3 py-2">Rate/hr</th>
                 <th className="px-3 py-2">Status</th>
+                <th className="px-3 py-2"></th>
               </tr>
             </thead>
             <tbody>
-              {filteredEmp.map(e => (
+              {(filteredEmp || []).map((e) => (
                 <tr
                   key={e.id}
                   className="border-b border-gray-100 dark:border-gray-700/50"
@@ -482,6 +730,15 @@ export default function ShiftManagement() {
                       {e.status}
                     </span>
                   </td>
+                  <td className="px-3 py-2 text-right">
+                    <button
+                      onClick={() => deleteEmployee(e.id)}
+                      className="text-red-500 hover:text-red-700 text-xs"
+                      title="Remove employee"
+                    >
+                      ✕
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -494,4 +751,24 @@ export default function ShiftManagement() {
 
 function defaultEmployees(): Employee[] {
   return [];
+}
+
+function safeLocaleTime(value: string | undefined): string {
+  try {
+    const d = new Date(value || "");
+    if (isNaN(d.getTime())) return "";
+    return d.toLocaleTimeString();
+  } catch {
+    return "";
+  }
+}
+
+function safeLocaleDate(value: string | undefined): string {
+  try {
+    const d = new Date(value || "");
+    if (isNaN(d.getTime())) return value || "";
+    return d.toLocaleDateString();
+  } catch {
+    return value || "";
+  }
 }

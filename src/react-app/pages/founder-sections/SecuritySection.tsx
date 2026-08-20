@@ -15,10 +15,23 @@ import {
   Phone,
   User,
   Trash2,
+  UserPlus,
+  Edit3,
 } from "lucide-react";
 import { genSecret, verifyCode, formatSecret } from "@/react-app/lib/totp";
 import { trpc } from "@/providers/trpc";
-import { getFounderCredentials } from "@/react-app/lib/founder-auth";
+import {
+  getFounderCredentials,
+  changeFounderPassword,
+  saveFounder2FA,
+  loadFounder2FA,
+  listFounderCredentials,
+  upsertFounderCredential,
+  deleteFounderCredential,
+  grantFounderAccess,
+  type FounderCredential,
+} from "@/react-app/lib/founder-auth";
+import { getSupabaseClient } from "@/supabase/client";
 
 const FOUNDER_PASSWORD_KEY = "fuelpro_founder_password";
 const FOUNDER_2FA_KEY = "fuelpro_founder_2fa";
@@ -69,7 +82,7 @@ interface Props {
   logAudit: (
     event: string,
     detail: string,
-    severity: "success" | "warning" | "danger" | "info"
+    severity: "success" | "warning" | "danger" | "info",
   ) => void;
 }
 
@@ -81,7 +94,7 @@ export default function SecuritySection({ logAudit }: Props) {
     {
       staleTime: 1000 * 60 * 5,
       retry: 1,
-    }
+    },
   );
   const upsertSession = trpc.audit.upsertFounderSession.useMutation({
     onSuccess: () => utils.audit.getFounderSession.invalidate(),
@@ -98,7 +111,7 @@ export default function SecuritySection({ logAudit }: Props) {
   /* ─── 2FA ─── */
   const [faConfig, setFaConfig] = useState(load2FAConfig);
   const [faStep, setFaStep] = useState<"list" | "setup" | "verify" | "disable">(
-    "list"
+    "list",
   );
   const [faCode, setFaCode] = useState("");
   const [faError, setFaError] = useState("");
@@ -116,19 +129,180 @@ export default function SecuritySection({ logAudit }: Props) {
   /* ─── Session Management ─── */
   const [sessions, setSessions] = useState<Session[]>([]);
 
+  /* ─── Founder Credentials Manager (username → email mapping + grant access) ─── */
+  const [creds, setCreds] = useState<FounderCredential[]>([]);
+  const [credLoading, setCredLoading] = useState(false);
+  const [showCredForm, setShowCredForm] = useState(false);
+  const [editingUsername, setEditingUsername] = useState<string | null>(null);
+  const [credForm, setCredForm] = useState({
+    username: "",
+    authEmail: "",
+    uniqueId: "",
+    displayName: "",
+    password: "",
+  });
+  const [credError, setCredError] = useState("");
+  const [credSuccess, setCredSuccess] = useState("");
+  const [credSaving, setCredSaving] = useState(false);
+
+  const loadCreds = async () => {
+    setCredLoading(true);
+    try {
+      const list = await listFounderCredentials();
+      setCreds(list);
+    } catch {
+      /* ignore */
+    } finally {
+      setCredLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadCreds();
+  }, []);
+
+  const resetCredForm = () => {
+    setCredForm({
+      username: "",
+      authEmail: "",
+      uniqueId: "",
+      displayName: "",
+      password: "",
+    });
+    setEditingUsername(null);
+    setShowCredForm(false);
+    setCredError("");
+  };
+
+  const handleEditCred = (c: FounderCredential) => {
+    setEditingUsername(c.username);
+    setCredForm({
+      username: c.username,
+      authEmail: c.authEmail,
+      uniqueId: c.uniqueId ?? "",
+      displayName: c.displayName ?? "",
+      password: "",
+    });
+    setShowCredForm(true);
+    setCredError("");
+    setCredSuccess("");
+  };
+
+  const handleSaveCred = async () => {
+    setCredError("");
+    setCredSuccess("");
+    if (!credForm.username.trim() || !credForm.authEmail.trim()) {
+      setCredError("Username and email are required");
+      return;
+    }
+    if (!credForm.authEmail.includes("@")) {
+      setCredError("A valid email is required");
+      return;
+    }
+    setCredSaving(true);
+    try {
+      // If a password is provided (new entry or existing entry with a new
+      // password), grant/set founder access on the auth account server-side.
+      if (credForm.password) {
+        const grant = await grantFounderAccess({
+          email: credForm.authEmail.trim(),
+          password: credForm.password,
+          uniqueId: credForm.uniqueId.trim() || null,
+          username: credForm.username.trim(),
+        });
+        if (!grant.success) {
+          setCredError(grant.error || "Failed to grant access");
+          setCredSaving(false);
+          return;
+        }
+      }
+      // Save the credential mapping (username → email)
+      const upsert = await upsertFounderCredential({
+        username: credForm.username.trim(),
+        authEmail: credForm.authEmail.trim(),
+        uniqueId: credForm.uniqueId.trim() || null,
+        displayName: credForm.displayName.trim() || null,
+        isActive: true,
+      });
+      if (!upsert.success) {
+        setCredError(upsert.error || "Failed to save credential mapping");
+        setCredSaving(false);
+        return;
+      }
+      await loadCreds();
+      setCredSuccess(
+        credForm.password
+          ? "Founder access granted and credential saved"
+          : "Credential updated",
+      );
+      logAudit(
+        "Founder Credential Updated",
+        `Username "${credForm.username}" → ${credForm.authEmail}`,
+        "info",
+      );
+      resetCredForm();
+    } catch (err) {
+      setCredError(err instanceof Error ? err.message : "Save failed");
+    } finally {
+      setCredSaving(false);
+    }
+  };
+
+  const handleDeleteCred = async (username: string) => {
+    if (
+      !confirm(
+        `Remove the "${username}" login username? The underlying auth account is not deleted.`,
+      )
+    )
+      return;
+    const res = await deleteFounderCredential(username);
+    if (res.success) {
+      await loadCreds();
+      logAudit(
+        "Founder Credential Removed",
+        `Username "${username}" removed`,
+        "warning",
+      );
+    } else {
+      setCredError(res.error || "Delete failed");
+    }
+  };
+
   /* ─── Sync 2FA from backend ─── */
   useEffect(() => {
-    if (dbFounderSession?.twoFactorSecret) {
-      const config = {
-        enabled: dbFounderSession.twoFactorEnabled || false,
-        secret: dbFounderSession.twoFactorSecret,
-        verified: true,
-        createdAt: dbFounderSession.lastLoginAt || new Date().toISOString(),
-      };
-      setFaConfig(config);
-      // Also sync to localStorage for offline login
-      localStorage.setItem(FOUNDER_2FA_KEY, JSON.stringify(config));
-    }
+    // Load 2FA from cloud (profiles table) — the cross-device source of truth.
+    const loadCloud2FA = async () => {
+      const client = getSupabaseClient();
+      const {
+        data: { session: sess },
+      } = await client.auth.getSession();
+      if (sess?.user) {
+        const cloud2FA = await loadFounder2FA(sess.user.id);
+        if (cloud2FA.enabled && cloud2FA.secret) {
+          const config = {
+            enabled: true,
+            secret: cloud2FA.secret,
+            verified: true,
+            createdAt: new Date().toISOString(),
+          };
+          setFaConfig(config);
+          localStorage.setItem(FOUNDER_2FA_KEY, JSON.stringify(config));
+          return;
+        }
+      }
+      // Fall back to tRPC backend session, then localStorage.
+      if (dbFounderSession?.twoFactorSecret) {
+        const config = {
+          enabled: dbFounderSession.twoFactorEnabled || false,
+          secret: dbFounderSession.twoFactorSecret,
+          verified: true,
+          createdAt: dbFounderSession.lastLoginAt || new Date().toISOString(),
+        };
+        setFaConfig(config);
+        localStorage.setItem(FOUNDER_2FA_KEY, JSON.stringify(config));
+      }
+    };
+    loadCloud2FA();
     if (dbFounderSession?.contactEmail || dbFounderSession?.contactPhone) {
       const updated = {
         ...contact,
@@ -169,19 +343,9 @@ export default function SecuritySection({ logAudit }: Props) {
     upsertSession.mutate(updates);
   };
 
-  const handleChangePassword = () => {
+  const handleChangePassword = async () => {
     setPwError("");
     setPwSuccess("");
-    const stored = loadStoredPassword();
-    if (currentPw !== atob(stored.password)) {
-      setPwError("Current password is incorrect");
-      logAudit(
-        "Password Change Failed",
-        "Incorrect current password",
-        "danger"
-      );
-      return;
-    }
     if (newPw.length < 8) {
       setPwError("New password must be at least 8 characters");
       return;
@@ -190,17 +354,43 @@ export default function SecuritySection({ logAudit }: Props) {
       setPwError("New passwords do not match");
       return;
     }
-    const newHash = btoa(newPw);
-    localStorage.setItem(
-      FOUNDER_PASSWORD_KEY,
-      JSON.stringify({ ...stored, password: newHash })
+    // Use Supabase Auth — the cross-device source of truth for passwords.
+    // (currentPw is verified implicitly: updateUser with a valid session
+    // already proves the caller is authenticated; Supabase requires the
+    // session to be active. We additionally re-signIn to verify currentPw.)
+    const client = getSupabaseClient();
+    const {
+      data: { session: sess },
+    } = await client.auth.getSession();
+    if (!sess?.user?.email) {
+      setPwError("Not signed in — cannot change password");
+      return;
+    }
+    const { error: reAuthError } = await client.auth.signInWithPassword({
+      email: sess.user.email,
+      password: currentPw,
+    });
+    if (reAuthError) {
+      setPwError("Current password is incorrect");
+      logAudit(
+        "Password Change Failed",
+        "Incorrect current password",
+        "danger",
+      );
+      return;
+    }
+    const result = await changeFounderPassword(newPw);
+    if (!result.success) {
+      setPwError(result.error || "Failed to change password");
+      logAudit("Password Change Failed", result.error || "error", "danger");
+      return;
+    }
+    setPwSuccess("Password changed successfully (synced to all devices)");
+    logAudit(
+      "Password Changed",
+      "Founder password updated via Supabase",
+      "success",
     );
-
-    // Sync to backend
-    syncSessionToBackend({ passwordHash: newHash });
-
-    setPwSuccess("Password changed successfully");
-    logAudit("Password Changed", "Founder password updated", "success");
     setCurrentPw("");
     setNewPw("");
     setConfirmPw("");
@@ -229,24 +419,38 @@ export default function SecuritySection({ logAudit }: Props) {
         verified: true,
         createdAt: new Date().toISOString(),
       };
+      // Save to localStorage (offline cache) AND to the cloud (profiles
+      // table) so the 2FA secret is available on every device the founder
+      // signs in from.
       localStorage.setItem(FOUNDER_2FA_KEY, JSON.stringify(config));
       setFaConfig(config);
       setFaStep("list");
       setFaCode("");
 
-      // Sync to backend
+      // Sync to cloud (profiles table) + legacy tRPC backend
+      const client = getSupabaseClient();
+      const {
+        data: { session: sess },
+      } = await client.auth.getSession();
+      if (sess?.user) {
+        await saveFounder2FA(sess.user.id, true, config.secret);
+      }
       syncSessionToBackend({
         twoFactorEnabled: true,
         twoFactorSecret: config.secret,
       });
 
-      logAudit("2FA Enabled", "Two-factor authentication activated", "success");
+      logAudit(
+        "2FA Enabled",
+        "Two-factor authentication activated (cross-device)",
+        "success",
+      );
     } else {
       setFaError("Invalid code. Try again.");
       logAudit(
         "2FA Verification Failed",
         "Invalid TOTP code entered",
-        "warning"
+        "warning",
       );
     }
   };
@@ -270,7 +474,14 @@ export default function SecuritySection({ logAudit }: Props) {
       setFaStep("list");
       setFaCode("");
 
-      // Sync to backend
+      // Sync to cloud (profiles table) + legacy tRPC backend
+      const client = getSupabaseClient();
+      const {
+        data: { session: sess },
+      } = await client.auth.getSession();
+      if (sess?.user) {
+        await saveFounder2FA(sess.user.id, false, null);
+      }
       syncSessionToBackend({ twoFactorEnabled: false, twoFactorSecret: "" });
 
       logAudit("2FA Disabled", "Two-factor authentication removed", "warning");
@@ -290,7 +501,7 @@ export default function SecuritySection({ logAudit }: Props) {
       setEmailSent(false);
       const updated = { ...contact, email: newEmail, emailVerified: true };
       setContact(updated);
-      setContact(prev => ({ ...prev, email: newEmail, emailVerified: true }));
+      setContact((prev) => ({ ...prev, email: newEmail, emailVerified: true }));
       localStorage.setItem(FOUNDER_CONTACT_KEY, JSON.stringify(updated));
 
       // Sync to backend
@@ -313,7 +524,7 @@ export default function SecuritySection({ logAudit }: Props) {
       setPhoneSent(false);
       const updated = { ...contact, phone: newPhone, phoneVerified: true };
       setContact(updated);
-      setContact(prev => ({ ...prev, phone: newPhone, phoneVerified: true }));
+      setContact((prev) => ({ ...prev, phone: newPhone, phoneVerified: true }));
       localStorage.setItem(FOUNDER_CONTACT_KEY, JSON.stringify(updated));
 
       // Sync to backend
@@ -327,7 +538,7 @@ export default function SecuritySection({ logAudit }: Props) {
 
   const handleTerminateSession = (id: string) => {
     if (id === "current") return;
-    setSessions(prev => prev.filter(s => s.id !== id));
+    setSessions((prev) => prev.filter((s) => s.id !== id));
     logAudit("Session Terminated", `Session ${id} terminated`, "warning");
   };
 
@@ -382,7 +593,7 @@ export default function SecuritySection({ logAudit }: Props) {
             <div className="flex gap-2">
               <input
                 value={newEmail}
-                onChange={e => setNewEmail(e.target.value)}
+                onChange={(e) => setNewEmail(e.target.value)}
                 placeholder="recovery@email.com"
                 className="flex-1 px-3 py-2 bg-white/[0.03] border border-white/[0.08] rounded-lg text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500/30"
               />
@@ -409,7 +620,7 @@ export default function SecuritySection({ logAudit }: Props) {
             <div className="flex gap-2">
               <input
                 value={newPhone}
-                onChange={e => setNewPhone(e.target.value)}
+                onChange={(e) => setNewPhone(e.target.value)}
                 placeholder="+254700000000"
                 className="flex-1 px-3 py-2 bg-white/[0.03] border border-white/[0.08] rounded-lg text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500/30"
               />
@@ -457,7 +668,7 @@ export default function SecuritySection({ logAudit }: Props) {
             <input
               type="password"
               value={currentPw}
-              onChange={e => setCurrentPw(e.target.value)}
+              onChange={(e) => setCurrentPw(e.target.value)}
               placeholder="Enter current password"
               className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.08] rounded-lg text-sm text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/30"
             />
@@ -470,7 +681,7 @@ export default function SecuritySection({ logAudit }: Props) {
               <input
                 type={showNewPw ? "text" : "password"}
                 value={newPw}
-                onChange={e => setNewPw(e.target.value)}
+                onChange={(e) => setNewPw(e.target.value)}
                 placeholder="Min 8 chars, uppercase, number, symbol"
                 className="w-full px-3 py-2 pr-10 bg-white/[0.03] border border-white/[0.08] rounded-lg text-sm text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/30"
               />
@@ -506,7 +717,7 @@ export default function SecuritySection({ logAudit }: Props) {
             <input
               type="password"
               value={confirmPw}
-              onChange={e => setConfirmPw(e.target.value)}
+              onChange={(e) => setConfirmPw(e.target.value)}
               placeholder="Repeat new password"
               className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.08] rounded-lg text-sm text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/30"
             />
@@ -623,7 +834,7 @@ export default function SecuritySection({ logAudit }: Props) {
                   </label>
                   <input
                     value={faCode}
-                    onChange={e =>
+                    onChange={(e) =>
                       setFaCode(e.target.value.replace(/\D/g, "").slice(0, 6))
                     }
                     placeholder="000000"
@@ -658,7 +869,7 @@ export default function SecuritySection({ logAudit }: Props) {
             </p>
             <input
               value={faCode}
-              onChange={e =>
+              onChange={(e) =>
                 setFaCode(e.target.value.replace(/\D/g, "").slice(0, 6))
               }
               placeholder="6-digit code"
@@ -683,13 +894,170 @@ export default function SecuritySection({ logAudit }: Props) {
         )}
       </div>
 
+      {/* ─── Founder Access Credentials ─── */}
+      <div className="bg-[#161618] border border-white/[0.06] rounded-xl p-5">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-medium text-white flex items-center gap-2">
+            <Key size={14} className="text-amber-400" /> Founder Access
+            Credentials
+          </h3>
+          <button
+            onClick={() => {
+              resetCredForm();
+              setShowCredForm(true);
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 text-xs rounded-lg border border-amber-500/20 transition-colors"
+          >
+            <UserPlus size={12} /> Grant / Add
+          </button>
+        </div>
+        <p className="text-[11px] text-gray-500 mb-3">
+          Maps a login username to a Supabase auth email + Unique ID. Grant
+          Founder Access to another email, or change the login username /
+          password of an existing founder.
+        </p>
+
+        {credError && <p className="text-xs text-red-400 mb-2">{credError}</p>}
+        {credSuccess && (
+          <p className="text-xs text-green-400 mb-2">{credSuccess}</p>
+        )}
+
+        {showCredForm && (
+          <div className="mb-4 p-3 bg-white/[0.02] rounded-lg border border-white/[0.06] space-y-2">
+            <div className="grid grid-cols-2 gap-2">
+              <input
+                type="text"
+                placeholder="Login username (e.g. FOUNDER)"
+                value={credForm.username}
+                onChange={(e) =>
+                  setCredForm({ ...credForm, username: e.target.value })
+                }
+                className="px-3 py-2 bg-white/[0.03] border border-white/[0.06] rounded-lg text-sm text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/30"
+              />
+              <input
+                type="email"
+                placeholder="Auth email (e.g. user@gmail.com)"
+                value={credForm.authEmail}
+                onChange={(e) =>
+                  setCredForm({ ...credForm, authEmail: e.target.value })
+                }
+                className="px-3 py-2 bg-white/[0.03] border border-white/[0.06] rounded-lg text-sm text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/30"
+              />
+              <input
+                type="text"
+                placeholder="Unique ID (e.g. 22D838D0-FPR)"
+                value={credForm.uniqueId}
+                onChange={(e) =>
+                  setCredForm({ ...credForm, uniqueId: e.target.value })
+                }
+                className="px-3 py-2 bg-white/[0.03] border border-white/[0.06] rounded-lg text-sm text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/30"
+              />
+              <input
+                type="text"
+                placeholder="Display name (optional)"
+                value={credForm.displayName}
+                onChange={(e) =>
+                  setCredForm({ ...credForm, displayName: e.target.value })
+                }
+                className="px-3 py-2 bg-white/[0.03] border border-white/[0.06] rounded-lg text-sm text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/30"
+              />
+            </div>
+            <input
+              type="password"
+              placeholder={
+                editingUsername
+                  ? "New password (leave blank to keep current)"
+                  : "Password for the auth account (min 8 chars)"
+              }
+              value={credForm.password}
+              onChange={(e) =>
+                setCredForm({ ...credForm, password: e.target.value })
+              }
+              className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.06] rounded-lg text-sm text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/30"
+            />
+            <p className="text-[10px] text-gray-600">
+              {editingUsername
+                ? "Leave password blank to keep the existing password. Enter a new password to reset it."
+                : "Providing a password creates the Supabase auth account (if needed) and grants it the founder role."}
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={handleSaveCred}
+                disabled={credSaving}
+                className="px-4 py-2 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 text-xs rounded-lg border border-amber-500/20 transition-colors disabled:opacity-50"
+              >
+                {credSaving ? "Saving..." : "Save Credential"}
+              </button>
+              <button
+                onClick={resetCredForm}
+                className="px-4 py-2 bg-white/5 hover:bg-white/10 text-gray-400 text-xs rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div className="space-y-2">
+          {credLoading ? (
+            <p className="text-xs text-gray-600 text-center py-2">Loading...</p>
+          ) : creds.length === 0 ? (
+            <p className="text-xs text-gray-600 text-center py-2">
+              No credentials configured
+            </p>
+          ) : (
+            creds.map((c) => (
+              <div
+                key={c.username}
+                className="flex items-center justify-between p-3 bg-white/[0.02] rounded-lg"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-amber-500/10 rounded-lg flex items-center justify-center">
+                    <User size={14} className="text-amber-400" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-white">
+                      {c.username}
+                      {c.displayName ? (
+                        <span className="text-[10px] text-gray-500">
+                          {" "}
+                          ({c.displayName})
+                        </span>
+                      ) : null}
+                    </p>
+                    <p className="text-[10px] text-gray-500">
+                      {c.authEmail}
+                      {c.uniqueId ? ` · ${c.uniqueId}` : ""}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => handleEditCred(c)}
+                    className="text-xs text-blue-400 hover:text-blue-300 px-2 py-1 rounded transition-colors"
+                  >
+                    <Edit3 size={12} />
+                  </button>
+                  <button
+                    onClick={() => handleDeleteCred(c.username)}
+                    className="text-xs text-red-400 hover:text-red-300 px-2 py-1 rounded transition-colors"
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
       {/* ─── Active Sessions ─── */}
       <div className="bg-[#161618] border border-white/[0.06] rounded-xl p-5">
         <h3 className="text-sm font-medium text-white mb-4 flex items-center gap-2">
           <User size={14} className="text-purple-400" /> Active Sessions
         </h3>
         <div className="space-y-2">
-          {sessions.map(s => (
+          {sessions.map((s) => (
             <div
               key={s.id}
               className="flex items-center justify-between p-3 bg-white/[0.02] rounded-lg"

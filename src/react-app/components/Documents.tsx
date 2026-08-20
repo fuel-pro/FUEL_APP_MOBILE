@@ -5,7 +5,7 @@ import {
   FileText,
   Image,
   FileSpreadsheet,
-  File,
+  File as FileIcon,
   Download,
   Share2,
   Trash2,
@@ -24,6 +24,15 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/react-app/context/AuthContext";
 import { useFuel } from "../context/FuelContext";
+import cloudStorageService from "@/react-app/lib/cloud-storage-service";
+import { getCurrencySymbol } from "../lib/currency";
+import { getFuelLabel } from "@/react-app/config/pricing";
+import { getSupabaseClient } from "@/supabase/client";
+import {
+  compressBlob,
+  compressedFilePath,
+  isCompressibleMimeType,
+} from "@/react-app/lib/compression";
 
 interface DocumentFolder {
   id: number;
@@ -45,7 +54,221 @@ interface Document {
   ai_category: string | null;
   ai_description: string | null;
   created_at: string;
+  /** Public URL of the file in Supabase Storage (fuelpro-files bucket).
+   *  Files are stored as binary objects in Storage — NOT as base64 in the
+   *  app_kv JSON blob — so they sync cross-device without bloating localStorage
+   *  or hitting JSON size limits. */
+  public_url?: string;
+  /** Storage path within the fuelpro-files bucket: documents/<uid>/<file>. */
+  file_path?: string;
+  /** Stored file content as a data URL (base64). LEGACY only — documents
+   *  saved before the Storage migration. New uploads use public_url. */
+  file_data?: string;
 }
+
+// Cloud storage keys (Supabase app_kv). localStorage is used as a read-through
+// cache by cloudStorageService, so no manual caching is needed here.
+const DOCUMENTS_KEY = "documents_list";
+const FOLDERS_KEY = "documents_folders";
+
+// Default smart folders used until the cloud store provides an organizing
+// pass. Mirrors the folder shape the backend previously returned.
+const DEFAULT_FOLDERS: DocumentFolder[] = [
+  {
+    id: 1,
+    name: "Clients",
+    icon: "👥",
+    color: "blue",
+    document_count: 0,
+    parent_id: null,
+  },
+  {
+    id: 2,
+    name: "Invoices",
+    icon: "🧾",
+    color: "amber",
+    document_count: 0,
+    parent_id: null,
+  },
+  {
+    id: 3,
+    name: "Fuel Records",
+    icon: "⛽",
+    color: "green",
+    document_count: 0,
+    parent_id: null,
+  },
+  {
+    id: 4,
+    name: "Sales",
+    icon: "📊",
+    color: "purple",
+    document_count: 0,
+    parent_id: null,
+  },
+  {
+    id: 5,
+    name: "M-PESA",
+    icon: "📱",
+    color: "emerald",
+    document_count: 0,
+    parent_id: null,
+  },
+  {
+    id: 6,
+    name: "Payroll",
+    icon: "💼",
+    color: "indigo",
+    document_count: 0,
+    parent_id: null,
+  },
+  {
+    id: 7,
+    name: "Reports",
+    icon: "📄",
+    color: "cyan",
+    document_count: 0,
+    parent_id: null,
+  },
+  {
+    id: 8,
+    name: "Other",
+    icon: "📁",
+    color: "gray",
+    document_count: 0,
+    parent_id: null,
+  },
+];
+
+/** Next unique document id based on the current set. */
+const nextDocId = (docs: Document[]): number =>
+  docs.reduce((max, d) => Math.max(max, Number(d.id) || 0), 0) + 1;
+
+/** Categorize a file name into one of the default smart folder ids. */
+const categorizeByName = (name: string): number => {
+  const n = name.toLowerCase();
+  if (n.includes("client")) return 1;
+  if (n.includes("invoice")) return 2;
+  if (n.includes("offload") || n.includes("fuel")) return 3;
+  if (n.includes("sale")) return 4;
+  if (n.includes("mpesa") || n.includes("m-pesa")) return 5;
+  if (n.includes("payroll") || n.includes("employee")) return 6;
+  if (n.includes("report")) return 7;
+  return 8;
+};
+
+/** Persist the documents array to cloud storage (and localStorage cache). */
+const persistDocuments = async (docs: Document[]): Promise<void> => {
+  try {
+    await cloudStorageService.set<Document[]>(DOCUMENTS_KEY, docs);
+  } catch (err) {
+    console.error("[Documents] failed to persist documents:", err);
+    alert(
+      "Failed to save documents to cloud storage. Your changes may not be saved.",
+    );
+  }
+};
+
+/** Upload a file's BINARY content to Supabase Storage (fuelpro-files bucket)
+ *  and return its public URL + storage path. Files are stored as binary
+ *  objects — NOT base64 in JSON — so they sync cross-device without bloating
+ *  the app_kv blob or hitting localStorage/JSON size limits. */
+const uploadFileToStorage = async (
+  file: File,
+): Promise<{ publicUrl: string; filePath: string } | null> => {
+  const supabase = getSupabaseClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const baseFilePath = `documents/${user.id}/${Date.now()}-${safeName}`;
+
+  // Gzip text-based files to save Storage; binary formats stored as-is.
+  const shouldCompress = isCompressibleMimeType(file.type || "", file.name);
+  let uploadBlob: Blob = file;
+  let filePath = baseFilePath;
+  let storedContentType = file.type || undefined;
+  if (shouldCompress) {
+    try {
+      uploadBlob = await compressBlob(file);
+      filePath = compressedFilePath(baseFilePath);
+      storedContentType = "application/gzip";
+    } catch {
+      uploadBlob = file;
+    }
+  }
+
+  const { error } = await supabase.storage
+    .from("fuelpro-files")
+    .upload(filePath, uploadBlob, {
+      cacheControl: "3600",
+      upsert: false,
+      contentType: storedContentType,
+    });
+
+  if (error) {
+    console.error("[Documents] Storage upload error:", error.message);
+    return null;
+  }
+
+  const { data } = supabase.storage
+    .from("fuelpro-files")
+    .getPublicUrl(filePath);
+
+  return { publicUrl: data.publicUrl, filePath };
+};
+
+/** Build a Document record from a public URL + file metadata. */
+const buildDocument = (
+  docs: Document[],
+  file: { name: string; type: string; size: number },
+  publicUrl: string,
+  filePath: string,
+): Document => {
+  const id = nextDocId(docs);
+  const folderId = categorizeByName(file.name);
+  const folder = DEFAULT_FOLDERS.find((f) => f.id === folderId);
+  return {
+    id,
+    name: file.name.replace(/[^a-zA-Z0-9._-]/g, "_"),
+    original_name: file.name,
+    file_type: file.type || "application/octet-stream",
+    file_size: file.size,
+    r2_key: `documents/${id}/${file.name}`,
+    folder_id: folderId,
+    ai_category: folder?.name || null,
+    ai_description: null,
+    created_at: new Date().toISOString(),
+    public_url: publicUrl,
+    file_path: filePath,
+  };
+};
+
+/**
+ * Resolve a document's stored content to an object URL for preview/download.
+ * New documents use the Supabase Storage public_url (binary file). Legacy
+ * documents (saved before the Storage migration) fall back to inline file_data
+ * (base64 data URL).
+ */
+const docToObjectUrl = async (doc: Document): Promise<string> => {
+  if (doc.public_url) {
+    // Fetch the binary from Storage and create a revocable object URL so
+    // the preview/download flow is consistent with the legacy path.
+    const res = await fetch(doc.public_url);
+    if (!res.ok) throw new Error(`Failed to fetch file (HTTP ${res.status})`);
+    const blob = await res.blob();
+    return window.URL.createObjectURL(blob);
+  }
+  if (doc.file_data) {
+    const res = await fetch(doc.file_data);
+    const blob = await res.blob();
+    return window.URL.createObjectURL(blob);
+  }
+  // Legacy fallback: no inline data and no Storage URL.
+  throw new Error("Document content is unavailable (no stored file data).");
+};
 
 const folderColors: Record<string, string> = {
   blue: "from-blue-500 to-blue-600",
@@ -73,7 +296,7 @@ export default function Documents() {
   const [folders, setFolders] = useState<DocumentFolder[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedFolder, setSelectedFolder] = useState<DocumentFolder | null>(
-    null
+    null,
   );
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
@@ -88,7 +311,7 @@ export default function Documents() {
   const [imageRotation, setImageRotation] = useState(0);
   const [showUploadMenu, setShowUploadMenu] = useState(false);
   const [expandedFolders, setExpandedFolders] = useState<Set<number>>(
-    new Set()
+    new Set(),
   );
   const [quickPreviewDoc, setQuickPreviewDoc] = useState<Document | null>(null);
   const [quickPreviewUrl, setQuickPreviewUrl] = useState<string | null>(null);
@@ -109,59 +332,96 @@ export default function Documents() {
 
   const fetchDocuments = async () => {
     try {
-      const response = await fetch("/api/documents");
-      if (response.ok) {
-        const data = await response.json();
-        setDocuments(data.documents || []);
-      }
+      const data = await cloudStorageService.get<Document[]>(DOCUMENTS_KEY);
+      setDocuments(data || []);
     } catch (err) {
+      console.error("[Documents] failed to load documents:", err);
       setError("Failed to load documents");
     }
   };
 
   const fetchFolders = async () => {
     try {
-      const response = await fetch("/api/documents/folders");
-      if (response.ok) {
-        const data = await response.json();
-        setFolders(data.folders || []);
-      }
-    } catch {
-      // Non-critical error
+      const data = await cloudStorageService.get<DocumentFolder[]>(FOLDERS_KEY);
+      // document_count is recomputed live in render via getFolderDocCount,
+      // so we only need the folder definitions here.
+      setFolders(data && data.length > 0 ? data : DEFAULT_FOLDERS);
+    } catch (err) {
+      console.error("[Documents] failed to load folders:", err);
+      setFolders(DEFAULT_FOLDERS);
     }
   };
 
-  // Organize only NEW unorganized documents (default behavior)
+  // Organize only NEW unorganized documents (default behavior).
+  // With no backend, "organizing" means assigning unfiled documents
+  // (folder_id === null) to a smart folder based on their file name.
   const organizeNewDocuments = async () => {
     try {
-      const response = await fetch("/api/documents/organize-all", {
-        method: "POST",
-      });
-      if (response.ok) {
-        const data = await response.json();
-        // Always refresh after organization to get updated folder assignments
-        // Backend returns documents_organized count
-        if (data.documents_organized > 0 || data.folders_created > 0) {
-          await fetchData();
+      const current = await cloudStorageService.get<Document[]>(DOCUMENTS_KEY);
+      const docs = current || [];
+      let changed = false;
+      const organized = docs.map((doc) => {
+        if (doc.folder_id == null) {
+          changed = true;
+          const folderId = categorizeByName(doc.original_name || doc.name);
+          const folder = DEFAULT_FOLDERS.find((f) => f.id === folderId);
+          return {
+            ...doc,
+            folder_id: folderId,
+            ai_category: doc.ai_category || folder?.name || null,
+          };
         }
+        return doc;
+      });
+
+      if (changed) {
+        await persistDocuments(organized);
+        setDocuments(organized);
       }
-    } catch {
-      // Silent fail
+
+      // Ensure folders exist in cloud storage.
+      const storedFolders =
+        await cloudStorageService.get<DocumentFolder[]>(FOLDERS_KEY);
+      if (!storedFolders || storedFolders.length === 0) {
+        await cloudStorageService.set<DocumentFolder[]>(
+          FOLDERS_KEY,
+          DEFAULT_FOLDERS,
+        );
+        setFolders(DEFAULT_FOLDERS);
+      }
+    } catch (err) {
+      console.error("[Documents] failed to organize documents:", err);
+      alert("Failed to organize documents. Please try again.");
     }
   };
 
-  // Force reorganize ALL documents (manual action only)
+  // Force reorganize ALL documents (manual action only).
+  // Re-derives the folder for every document from its file name.
   const forceReorganizeAll = async () => {
     setOrganizingStatus("Reorganizing all documents...");
     try {
-      const response = await fetch("/api/documents/organize-all?force=true", {
-        method: "POST",
+      const current = await cloudStorageService.get<Document[]>(DOCUMENTS_KEY);
+      const docs = current || [];
+      const organized = docs.map((doc) => {
+        const folderId = categorizeByName(doc.original_name || doc.name);
+        const folder = DEFAULT_FOLDERS.find((f) => f.id === folderId);
+        return {
+          ...doc,
+          folder_id: folderId,
+          ai_category: folder?.name || doc.ai_category || null,
+        };
       });
-      if (response.ok) {
-        await fetchData();
-      }
-    } catch {
-      // Silent fail
+
+      await persistDocuments(organized);
+      await cloudStorageService.set<DocumentFolder[]>(
+        FOLDERS_KEY,
+        DEFAULT_FOLDERS,
+      );
+      setDocuments(organized);
+      setFolders(DEFAULT_FOLDERS);
+    } catch (err) {
+      console.error("[Documents] failed to reorganize documents:", err);
+      alert("Failed to reorganize documents. Please try again.");
     } finally {
       setOrganizingStatus(null);
     }
@@ -178,12 +438,12 @@ export default function Documents() {
   const generateHTMLDocument = (
     title: string,
     data: any,
-    type: string
+    type: string,
   ): string => {
     const formatDate = (d: string | Date) =>
       new Date(d).toLocaleDateString("en-GB");
     const formatCurrency = (n: number) =>
-      `Ksh ${(n || 0).toLocaleString("en-KE")}`;
+      `${getCurrencySymbol()} ${(n || 0).toLocaleString()}`;
 
     let content = "";
 
@@ -198,7 +458,7 @@ export default function Documents() {
           <p><strong>Balance:</strong> ${formatCurrency(c.balance || 0)}</p>
           ${c.notes ? `<p><strong>Notes:</strong> ${c.notes}</p>` : ""}
         </div>
-      `
+      `,
         )
         .join("");
     } else if (type === "offloading" && Array.isArray(data)) {
@@ -213,7 +473,7 @@ export default function Documents() {
           <p><strong>Quantity:</strong> ${r.quantity || 0} L</p>
           <p><strong>Total:</strong> ${formatCurrency(r.totalCost || 0)}</p>
         </div>
-      `
+      `,
         )
         .join("");
     } else if (type === "invoices") {
@@ -228,7 +488,7 @@ export default function Documents() {
           <p><strong>Total:</strong> ${formatCurrency(inv.total || 0)}</p>
           <p><strong>Status:</strong> ${inv.status || "Pending"}</p>
         </div>
-      `
+      `,
         )
         .join("");
     } else if (type === "debtHistory" && Array.isArray(data)) {
@@ -242,24 +502,63 @@ export default function Documents() {
           <p><strong>Amount:</strong> ${formatCurrency(h.amount || 0)}</p>
           <p><strong>Balance:</strong> ${formatCurrency(h.balance || 0)}</p>
         </div>
-      `
+      `,
         )
         .join("");
     } else if (type === "sales") {
       const sales = data.salesHistory || [];
       content = sales
-        .map(
-          (s: any) => `
+        .map((s: any) => {
+          // DYNAMIC: render ALL fuel types, not just PMS/AGO. Legacy
+          // entries have pmsPumps/agoPumps; newer entries have
+          // fuelPumpsByType with any canonical fuel type.
+          const fuelLines: string[] = [];
+          const addFuelLine = (label: string, revenue: number) => {
+            if (revenue > 0)
+              fuelLines.push(
+                `<p><strong>${label}:</strong> ${formatCurrency(revenue)}</p>`,
+              );
+          };
+          // Legacy PMS/AGO
+          const pmsRev = (s.pmsPumps || []).reduce(
+            (sum: number, p: any) => sum + (p.salesKsh || 0),
+            0,
+          );
+          const agoRev = (s.agoPumps || []).reduce(
+            (sum: number, p: any) => sum + (p.salesKsh || 0),
+            0,
+          );
+          addFuelLine(getFuelLabel("PMS"), pmsRev);
+          addFuelLine(getFuelLabel("AGO"), agoRev);
+          // Dynamic fuel types
+          if (s.fuelPumpsByType && typeof s.fuelPumpsByType === "object") {
+            for (const [ft, pumps] of Object.entries(s.fuelPumpsByType)) {
+              if (ft === "petrol" || ft === "diesel") continue;
+              const rev = (pumps as any[]).reduce(
+                (sum: number, p: any) => sum + (p.salesKsh || 0),
+                0,
+              );
+              addFuelLine(
+                getFuelLabel(ft) || ft.charAt(0).toUpperCase() + ft.slice(1),
+                rev,
+              );
+            }
+          }
+          // Fallback: if no per-type lines, show the grand total
+          const fuelHtml =
+            fuelLines.length > 0
+              ? fuelLines.join("")
+              : `<p><strong>Total:</strong> ${formatCurrency(s.grandTotalKsh || 0)}</p>`;
+          return `
         <div class="card">
           <h3>${formatDate(s.date)} - ${s.shift || "Day"}</h3>
-          <p><strong>PMS:</strong> ${formatCurrency(s.totalPMSSalesKsh || 0)}</p>
-          <p><strong>AGO:</strong> ${formatCurrency(s.totalAGOSalesKsh || 0)}</p>
-          <p><strong>Total:</strong> ${formatCurrency(s.grandTotalKsh || 0)}</p>
+          ${fuelHtml}
+          <p><strong>Grand Total:</strong> ${formatCurrency(s.grandTotalKsh || 0)}</p>
           <p><strong>Cash:</strong> ${formatCurrency(s.cashPayments || 0)}</p>
           <p><strong>M-Pesa:</strong> ${formatCurrency(s.mpesaPayments || 0)}</p>
         </div>
-      `
-        )
+      `;
+        })
         .join("");
     } else if (type === "mpesa" && Array.isArray(data)) {
       content = data
@@ -272,7 +571,7 @@ export default function Documents() {
           <p><strong>Details:</strong> ${t.details || "-"}</p>
           <p><strong>Amount:</strong> ${formatCurrency(t.paidIn || t.amount || 0)}</p>
         </div>
-      `
+      `,
         )
         .join("");
     } else if (type === "employees" && Array.isArray(data)) {
@@ -286,7 +585,7 @@ export default function Documents() {
           <p><strong>Position:</strong> ${e.position || "-"}</p>
           <p><strong>Salary:</strong> ${formatCurrency(e.basicSalary || 0)}</p>
         </div>
-      `
+      `,
         )
         .join("");
     } else if (type === "payroll" && Array.isArray(data)) {
@@ -300,7 +599,7 @@ export default function Documents() {
           <p><strong>Deductions:</strong> ${formatCurrency(p.totalDeductions || 0)}</p>
           <p><strong>Net:</strong> ${formatCurrency(p.netPay || 0)}</p>
         </div>
-      `
+      `,
         )
         .join("");
     } else if (type === "messages" && Array.isArray(data)) {
@@ -312,7 +611,7 @@ export default function Documents() {
           <p><strong>${m.role === "user" ? "You" : "AI Assistant"}:</strong></p>
           <p>${m.content || "-"}</p>
         </div>
-      `
+      `,
         )
         .join("");
     }
@@ -385,7 +684,11 @@ export default function Documents() {
         title: "Sales Tracking",
         data: {
           salesHistory: state.salesHistory,
-          pumps: { pms: state.pmsPumps, ago: state.agoPumps },
+          pumps: {
+            pms: state.pmsPumps,
+            ago: state.agoPumps,
+            fuelPumpsByType: state.fuelPumpsByType,
+          },
           expenses: state.expenses,
         },
         type: "sales",
@@ -428,32 +731,51 @@ export default function Documents() {
       },
     ];
 
+    // Load the latest documents from cloud storage so we don't clobber
+    // concurrent writes from other tabs/devices.
+    let currentDocs =
+      (await cloudStorageService.get<Document[]>(DOCUMENTS_KEY)) || [];
+    let modified = false;
+
     for (const doc of documentsToSave) {
       if (doc.check) {
         // Check if document already exists today
-        const existingDoc = documents.find(
-          d => d.name === doc.name || d.original_name === doc.name
+        const existingDoc = currentDocs.find(
+          (d) => d.name === doc.name || d.original_name === doc.name,
         );
         if (!existingDoc) {
           const htmlContent = generateHTMLDocument(
             doc.title,
             doc.data,
-            doc.type
+            doc.type,
           );
           const blob = new Blob([htmlContent], { type: "text/html" });
-          const formData = new FormData();
-          formData.append("file", blob, doc.name);
+          const fileObj = new File([blob], doc.name, { type: "text/html" });
 
           try {
-            await fetch("/api/documents/upload", {
-              method: "POST",
-              body: formData,
-            });
-          } catch {
-            // Silent fail for individual document
+            // Upload the generated HTML to Storage (consistent with manual uploads).
+            const uploaded = await uploadFileToStorage(fileObj);
+            if (!uploaded) {
+              throw new Error("Storage upload failed");
+            }
+            const newDoc = buildDocument(
+              currentDocs,
+              { name: doc.name, type: "text/html", size: blob.size },
+              uploaded.publicUrl,
+              uploaded.filePath,
+            );
+            currentDocs = [newDoc, ...currentDocs];
+            modified = true;
+          } catch (err) {
+            console.error(`[Documents] failed to save ${doc.name}:`, err);
+            alert(`Failed to save document "${doc.name}".`);
           }
         }
       }
+    }
+
+    if (modified) {
+      await persistDocuments(currentDocs);
     }
 
     await fetchData();
@@ -475,31 +797,46 @@ export default function Documents() {
     setUploadProgress(0);
     setError(null);
 
+    // Load the latest documents from cloud storage so new uploads append to
+    // the current set rather than overwriting it.
+    let currentDocs =
+      (await cloudStorageService.get<Document[]>(DOCUMENTS_KEY)) || [];
     const uploadedIds: number[] = [];
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
-      const formData = new FormData();
-      formData.append("file", file);
 
       try {
-        const response = await fetch("/api/documents/upload", {
-          method: "POST",
-          body: formData,
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          if (data.document?.id) {
-            uploadedIds.push(data.document.id);
-          }
-        } else {
-          throw new Error(`Failed to upload ${file.name}`);
+        // Upload the file BINARY to Supabase Storage — NOT base64 in JSON.
+        const uploaded = await uploadFileToStorage(file);
+        if (!uploaded) {
+          throw new Error("Storage upload failed");
         }
+        const newDoc = buildDocument(
+          currentDocs,
+          { name: file.name, type: file.type, size: file.size },
+          uploaded.publicUrl,
+          uploaded.filePath,
+        );
+        currentDocs = [newDoc, ...currentDocs];
+        uploadedIds.push(newDoc.id);
 
         setUploadProgress(((i + 1) / files.length) * 100);
-      } catch {
+      } catch (err) {
+        console.error(`[Documents] failed to upload ${file.name}:`, err);
         setError(`Error uploading ${file.name}`);
+        alert(
+          `Failed to upload "${file.name}": ${err instanceof Error ? err.message : "unknown error"}. Please try again.`,
+        );
+      }
+    }
+
+    if (uploadedIds.length > 0) {
+      try {
+        await cloudStorageService.set<Document[]>(DOCUMENTS_KEY, currentDocs);
+      } catch (err) {
+        console.error("[Documents] failed to persist uploaded documents:", err);
+        alert("Failed to save uploaded documents to cloud storage.");
       }
     }
 
@@ -525,15 +862,13 @@ export default function Documents() {
     setImageRotation(0);
 
     try {
-      const response = await fetch(`/api/documents/${doc.id}/download`);
-      if (!response.ok) throw new Error("Preview failed");
-
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
+      const url = await docToObjectUrl(doc);
       setPreviewUrl(url);
-    } catch {
+    } catch (err) {
+      console.error("[Documents] preview failed:", err);
       setError("Failed to load preview");
       setPreviewMode(false);
+      alert("Failed to load preview. The document content may be missing.");
     } finally {
       setPreviewLoading(false);
     }
@@ -566,15 +901,13 @@ export default function Documents() {
     setQuickPreviewUrl(null);
 
     try {
-      const response = await fetch(`/api/documents/${doc.id}/download`);
-      if (!response.ok) throw new Error("Preview failed");
-
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
+      const url = await docToObjectUrl(doc);
       setQuickPreviewUrl(url);
-    } catch {
+    } catch (err) {
+      console.error("[Documents] quick preview failed:", err);
       setError("Failed to load preview");
       setQuickPreviewDoc(null);
+      alert("Failed to load preview. The document content may be missing.");
     } finally {
       setQuickPreviewLoading(false);
     }
@@ -590,11 +923,7 @@ export default function Documents() {
 
   const handleDownload = async (doc: Document) => {
     try {
-      const response = await fetch(`/api/documents/${doc.id}/download`);
-      if (!response.ok) throw new Error("Download failed");
-
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
+      const url = await docToObjectUrl(doc);
       const a = document.createElement("a");
       a.href = url;
       a.download = doc.original_name;
@@ -602,25 +931,49 @@ export default function Documents() {
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
-    } catch {
+    } catch (err) {
+      console.error("[Documents] download failed:", err);
       setError("Failed to download document");
+      alert("Failed to download document. The file content may be missing.");
     }
   };
 
   const handleShare = async (doc: Document) => {
     try {
-      const shareUrl = `${window.location.origin}/api/documents/${doc.id}/download`;
-
-      if (navigator.share) {
+      // Prefer the Storage public URL for sharing (works cross-device).
+      const shareUrl = doc.public_url || doc.file_data;
+      if (shareUrl && navigator.share) {
+        // For image/file types, try sharing as a File object when supported.
+        const canShareFiles =
+          navigator.canShare && typeof navigator.canShare === "function";
+        if (canShareFiles && doc.public_url) {
+          const res = await fetch(doc.public_url);
+          const blob = await res.blob();
+          const file = new File([blob], doc.original_name, { type: blob.type });
+          if (navigator.canShare({ files: [file] })) {
+            await navigator.share({
+              title: doc.original_name,
+              text: `Check out this document: ${doc.original_name}`,
+              files: [file],
+            });
+            return;
+          }
+        }
         await navigator.share({
           title: doc.original_name,
           text: `Check out this document: ${doc.original_name}`,
           url: shareUrl,
         });
-      } else {
+      } else if (shareUrl) {
         await navigator.clipboard.writeText(shareUrl);
         import("@/react-app/lib/toast").then(({ toastSuccess }) =>
-          toastSuccess("Download link copied to clipboard!")
+          toastSuccess("Document link copied to clipboard!"),
+        );
+      } else {
+        const message = `Document: ${doc.original_name}`;
+        await navigator.clipboard.writeText(message);
+        import("@/react-app/lib/toast").then(({ toastSuccess }) =>
+          toastSuccess("Document name copied to clipboard!"),
         );
       }
     } catch {
@@ -632,22 +985,31 @@ export default function Documents() {
     if (!confirm(`Delete "${doc.original_name}"?`)) return;
 
     try {
-      const response = await fetch(`/api/documents/${doc.id}`, {
-        method: "DELETE",
-      });
-
-      if (response.ok) {
-        setDocuments(prev => prev.filter(d => d.id !== doc.id));
-        if (selectedDoc?.id === doc.id) {
-          setSelectedDoc(null);
-          closePreview();
+      // Delete the binary from Supabase Storage (if it exists there).
+      if (doc.file_path) {
+        try {
+          const supabase = getSupabaseClient();
+          await supabase.storage.from("fuelpro-files").remove([doc.file_path]);
+        } catch (storageErr) {
+          console.warn(
+            "[Documents] storage delete failed (non-fatal):",
+            storageErr,
+          );
         }
-        await fetchFolders();
-      } else {
-        throw new Error("Delete failed");
       }
-    } catch {
+      const current =
+        (await cloudStorageService.get<Document[]>(DOCUMENTS_KEY)) || [];
+      const updated = current.filter((d) => d.id !== doc.id);
+      await persistDocuments(updated);
+      setDocuments(updated);
+      if (selectedDoc?.id === doc.id) {
+        setSelectedDoc(null);
+        closePreview();
+      }
+    } catch (err) {
+      console.error("[Documents] delete failed:", err);
       setError("Failed to delete document");
+      alert("Failed to delete document. Please try again.");
     }
   };
 
@@ -665,7 +1027,7 @@ export default function Documents() {
       return <FileSpreadsheet className={`${sizeClass} text-emerald-500`} />;
     if (fileType.includes("word") || fileType.includes("document"))
       return <FileText className={`${sizeClass} text-blue-500`} />;
-    return <File className={`${sizeClass} text-gray-500`} />;
+    return <FileIcon className={`${sizeClass} text-gray-500`} />;
   };
 
   const canPreview = (fileType: string) => {
@@ -692,7 +1054,7 @@ export default function Documents() {
     });
   };
 
-  const filteredDocuments = documents.filter(doc => {
+  const filteredDocuments = documents.filter((doc) => {
     const matchesSearch =
       doc.original_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       doc.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -711,7 +1073,7 @@ export default function Documents() {
 
   // Calculate actual document counts per folder from loaded documents
   const getFolderDocCount = (folderId: number): number => {
-    return documents.filter(doc => Number(doc.folder_id) === Number(folderId))
+    return documents.filter((doc) => Number(doc.folder_id) === Number(folderId))
       .length;
   };
 
@@ -783,7 +1145,7 @@ export default function Documents() {
                 />
               ) : (
                 <div className="flex flex-col items-center justify-center h-full text-gray-500 dark:text-gray-400">
-                  <File className="w-16 h-16 mb-4 opacity-50" />
+                  <FileIcon className="w-16 h-16 mb-4 opacity-50" />
                   <p className="font-medium">Preview not available</p>
                   <button
                     onClick={() => handleDownload(quickPreviewDoc)}
@@ -983,17 +1345,17 @@ export default function Documents() {
           </h3>
           <div className="space-y-2">
             {folders
-              .filter(f => f.parent_id === null)
-              .map(mainFolder => {
+              .filter((f) => f.parent_id === null)
+              .map((mainFolder) => {
                 const subFolders = folders.filter(
-                  f => f.parent_id === mainFolder.id
+                  (f) => f.parent_id === mainFolder.id,
                 );
                 const isExpanded = expandedFolders.has(mainFolder.id);
                 // Calculate actual document counts from loaded documents
                 const mainFolderDocs = getFolderDocCount(mainFolder.id);
                 const subFolderDocs = subFolders.reduce(
                   (sum, sf) => sum + getFolderDocCount(sf.id),
-                  0
+                  0,
                 );
                 const totalDocs = mainFolderDocs + subFolderDocs;
 
@@ -1006,7 +1368,7 @@ export default function Documents() {
                     <button
                       onClick={() => {
                         if (subFolders.length > 0) {
-                          setExpandedFolders(prev => {
+                          setExpandedFolders((prev) => {
                             const next = new Set(prev);
                             if (next.has(mainFolder.id))
                               next.delete(mainFolder.id);
@@ -1046,9 +1408,9 @@ export default function Documents() {
                     {isExpanded && subFolders.length > 0 && (
                       <div className="border-t border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 p-3">
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                          {subFolders.map(subFolder => {
+                          {subFolders.map((subFolder) => {
                             const subFolderDocCount = getFolderDocCount(
-                              subFolder.id
+                              subFolder.id,
                             );
                             return (
                               <button
@@ -1090,7 +1452,7 @@ export default function Documents() {
           type="text"
           placeholder="Search documents by name..."
           value={searchQuery}
-          onChange={e => setSearchQuery(e.target.value)}
+          onChange={(e) => setSearchQuery(e.target.value)}
           className="w-full pl-12 pr-4 py-3 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all text-gray-900 dark:text-white"
         />
         {searchQuery && (
@@ -1154,7 +1516,7 @@ export default function Documents() {
           )}
           {(showAllDocuments || selectedFolder) && (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {filteredDocuments.map(doc => (
+              {filteredDocuments.map((doc) => (
                 <div
                   key={doc.id}
                   className="group bg-white dark:bg-gray-700 rounded-xl border border-gray-200 dark:border-gray-600 p-4 hover:shadow-lg hover:border-amber-300 dark:hover:border-amber-500 transition-all cursor-pointer relative"
@@ -1204,7 +1566,7 @@ export default function Documents() {
                   <div className="flex items-center gap-2 mt-3">
                     {canPreview(doc.file_type) && (
                       <button
-                        onClick={e => {
+                        onClick={(e) => {
                           e.stopPropagation();
                           handleQuickPreview(doc);
                         }}
@@ -1219,7 +1581,7 @@ export default function Documents() {
                       </button>
                     )}
                     <button
-                      onClick={e => {
+                      onClick={(e) => {
                         e.stopPropagation();
                         handleDownload(doc);
                       }}
@@ -1229,7 +1591,7 @@ export default function Documents() {
                       {!canPreview(doc.file_type) && "Download"}
                     </button>
                     <button
-                      onClick={e => {
+                      onClick={(e) => {
                         e.stopPropagation();
                         handleShare(doc);
                       }}
@@ -1238,7 +1600,7 @@ export default function Documents() {
                       <Share2 className="w-4 h-4" />
                     </button>
                     <button
-                      onClick={e => {
+                      onClick={(e) => {
                         e.stopPropagation();
                         handleDelete(doc);
                       }}
@@ -1263,7 +1625,7 @@ export default function Documents() {
           {/* Preview Header */}
           <div
             className="flex items-center justify-between p-4 bg-black/50"
-            onClick={e => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center gap-3 text-white">
               {getFileIcon(selectedDoc.file_type, "sm")}
@@ -1278,7 +1640,7 @@ export default function Documents() {
               {selectedDoc.file_type.includes("image") && (
                 <>
                   <button
-                    onClick={() => setImageZoom(z => Math.max(0.5, z - 0.25))}
+                    onClick={() => setImageZoom((z) => Math.max(0.5, z - 0.25))}
                     className="p-2 text-white/80 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
                     title="Zoom out"
                   >
@@ -1288,14 +1650,14 @@ export default function Documents() {
                     {Math.round(imageZoom * 100)}%
                   </span>
                   <button
-                    onClick={() => setImageZoom(z => Math.min(3, z + 0.25))}
+                    onClick={() => setImageZoom((z) => Math.min(3, z + 0.25))}
                     className="p-2 text-white/80 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
                     title="Zoom in"
                   >
                     <ZoomIn className="w-5 h-5" />
                   </button>
                   <button
-                    onClick={() => setImageRotation(r => r + 90)}
+                    onClick={() => setImageRotation((r) => r + 90)}
                     className="p-2 text-white/80 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
                     title="Rotate"
                   >
@@ -1305,7 +1667,7 @@ export default function Documents() {
                 </>
               )}
               <button
-                onClick={e => {
+                onClick={(e) => {
                   e.stopPropagation();
                   handleDownload(selectedDoc);
                 }}
@@ -1315,7 +1677,7 @@ export default function Documents() {
                 <Download className="w-5 h-5" />
               </button>
               <button
-                onClick={e => {
+                onClick={(e) => {
                   e.stopPropagation();
                   handleShare(selectedDoc);
                 }}
@@ -1337,7 +1699,7 @@ export default function Documents() {
           {/* Preview Content */}
           <div
             className="flex-1 flex items-center justify-center overflow-auto p-4"
-            onClick={e => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
           >
             {previewLoading ? (
               <Loader2 className="w-12 h-12 animate-spin text-white" />
@@ -1361,7 +1723,7 @@ export default function Documents() {
                 />
               ) : (
                 <div className="text-white text-center">
-                  <File className="w-16 h-16 mx-auto mb-4 opacity-50" />
+                  <FileIcon className="w-16 h-16 mx-auto mb-4 opacity-50" />
                   <p>Preview not available for this file type</p>
                   <button
                     onClick={() => handleDownload(selectedDoc)}
@@ -1388,7 +1750,7 @@ export default function Documents() {
         >
           <div
             className="bg-white dark:bg-gray-800 rounded-2xl max-w-lg w-full p-6 space-y-4"
-            onClick={e => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-3">

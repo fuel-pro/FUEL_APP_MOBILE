@@ -1,10 +1,5 @@
 export type PaymentMethodType =
-  | "bank"
-  | "card"
-  | "digital_wallet"
-  | "local_transfer"
-  | "cash"
-  | "other";
+  "bank" | "card" | "digital_wallet" | "local_transfer" | "cash" | "other";
 
 export interface PaymentMethod {
   id: string;

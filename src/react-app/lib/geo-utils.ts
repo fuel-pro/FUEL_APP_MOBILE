@@ -226,7 +226,7 @@ export function getWorldConfig(countryCode: string) {
 /** Build a best-effort locale string from country code */
 export function buildLocale(
   countryCode: string,
-  languageHint?: string
+  languageHint?: string,
 ): string {
   const lang = languageHint || navigator.language?.split("-")[0] || "en";
   try {

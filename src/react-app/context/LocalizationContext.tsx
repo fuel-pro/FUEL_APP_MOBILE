@@ -9,6 +9,7 @@ import {
   REGIONAL_CONFIGS,
   getRegionalConfig,
 } from "@/react-app/config/regions";
+import { resolveCountryCode } from "@/react-app/lib/geo-utils";
 
 // ============================================================
 // LOCALIZATION CONTEXT
@@ -44,18 +45,27 @@ const COUNTRY_KEY_MAP: Record<string, string> = {
   ethiopia: "ethiopia",
 };
 
+/**
+ * Resolve the active country for localization. World-wide: prefers the saved
+ * country, then the browser timezone (250+ mappings via geo-utils), then a
+ * neutral US default — never a Kenya assumption for non-Kenyan users.
+ */
 function resolveCountryKey(): string {
   try {
     const saved = localStorage.getItem("fuelpro_location_country");
     if (saved) {
       const parsed = JSON.parse(saved);
-      const key = (parsed.currentCountry || parsed.country || "kenya")
+      const raw = (parsed.currentCountry || parsed.country || "")
         .toLowerCase()
         .replace(/\s+/g, "");
-      if (COUNTRY_KEY_MAP[key]) return COUNTRY_KEY_MAP[key];
+      if (COUNTRY_KEY_MAP[raw]) return COUNTRY_KEY_MAP[raw];
+      // A saved ISO country code (e.g. "US", "DE", "IN") — pass it through;
+      // getRegionalConfig resolves every code in WORLD_PAYMENT_CONFIGS.
+      if (raw && raw.length === 2) return raw.toUpperCase();
     }
   } catch {}
-  return "kenya";
+  // Browser-timezone resolution covers 250+ countries; falls back to "US".
+  return resolveCountryCode("US");
 }
 
 function buildLocalization(countryKey: string): LocalizationConfig {
@@ -93,15 +103,16 @@ interface LocalizationContextType {
 }
 
 const LocalizationContext = createContext<LocalizationContextType>({
-  config: buildLocalization("kenya"),
-  countryKey: "kenya",
+  config: buildLocalization(resolveCountryKey()),
+  countryKey: resolveCountryKey(),
   refresh: () => {},
-  formatCurrency: a => `Ksh ${a.toFixed(2)}`,
-  formatNumber: n => n.toLocaleString(),
-  formatDate: d => String(d),
-  formatTime: d => String(d),
-  formatPhone: p => p,
-  formatVolume: v => `${v} L`,
+  formatCurrency: (a) =>
+    `${buildLocalization(resolveCountryKey()).currencySymbol}${a.toFixed(2)}`,
+  formatNumber: (n) => n.toLocaleString(),
+  formatDate: (d) => String(d),
+  formatTime: (d) => String(d),
+  formatPhone: (p) => p,
+  formatVolume: (v) => `${v} L`,
 });
 
 export function LocalizationProvider({
@@ -111,7 +122,7 @@ export function LocalizationProvider({
 }) {
   const [countryKey, setCountryKey] = useState<string>(resolveCountryKey);
   const [config, setConfig] = useState<LocalizationConfig>(
-    buildLocalization(resolveCountryKey())
+    buildLocalization(resolveCountryKey()),
   );
 
   const refresh = useCallback(() => {
@@ -137,7 +148,7 @@ export function LocalizationProvider({
         .replace(/,/g, ts);
       return `${config.currencySymbol}${ds === "," ? " " : ""}${formattedWhole}${fraction ? ds + fraction : ""}`;
     },
-    [config]
+    [config],
   );
 
   const formatNumber = useCallback(
@@ -152,7 +163,7 @@ export function LocalizationProvider({
         .replace(/,/g, ts);
       return fraction ? `${formattedWhole}${ds}${fraction}` : formattedWhole;
     },
-    [config]
+    [config],
   );
 
   const formatDate = useCallback(
@@ -167,7 +178,7 @@ export function LocalizationProvider({
         .replace("MM", month)
         .replace("YYYY", String(year));
     },
-    [config]
+    [config],
   );
 
   const formatTime = useCallback(
@@ -179,7 +190,7 @@ export function LocalizationProvider({
         timeZone: config.timeZone,
       });
     },
-    [config]
+    [config],
   );
 
   const formatPhone = useCallback(
@@ -188,14 +199,14 @@ export function LocalizationProvider({
       if (phone.startsWith("0")) return `${config.phoneCode} ${phone.slice(1)}`;
       return `${config.phoneCode} ${phone}`;
     },
-    [config]
+    [config],
   );
 
   const formatVolume = useCallback(
     (value: number) => {
       return `${formatNumber(value, 2)} ${config.unitVolume}`;
     },
-    [formatNumber, config]
+    [formatNumber, config],
   );
 
   return (

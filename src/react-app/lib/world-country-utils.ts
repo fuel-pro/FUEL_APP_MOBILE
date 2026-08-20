@@ -25,7 +25,7 @@ function getFlagEmoji(countryCode: string): string {
 
 // ─── All 250+ countries sorted alphabetically ───
 export const ALL_COUNTRIES: CountryInfo[] = Object.entries(
-  WORLD_PAYMENT_CONFIGS
+  WORLD_PAYMENT_CONFIGS,
 )
   .map(([code, config]) => ({
     code,
@@ -37,7 +37,218 @@ export const ALL_COUNTRIES: CountryInfo[] = Object.entries(
 
 // ─── Get country by code ───
 export function getCountryByCode(code: string): CountryInfo | undefined {
-  return ALL_COUNTRIES.find(c => c.code === code.toUpperCase());
+  return ALL_COUNTRIES.find((c) => c.code === code.toUpperCase());
+}
+
+// ─── Get country by name (case-insensitive, trimmed) ───
+// Used to resolve a country NAME embedded in a free-text location string
+// (e.g. "Nairobi, Kenya" → Kenya → KE → KES) when no country code is stored.
+export function getCountryByName(name: string): CountryInfo | undefined {
+  const n = name.trim().toLowerCase();
+  if (!n) return undefined;
+  return ALL_COUNTRIES.find((c) => c.name.toLowerCase() === n);
+}
+
+// ─── City → ISO country code map ───
+// Many station location strings contain only a city/neighborhood name
+// (e.g. "Kasarani, Nairobi") without the country name. Without this map,
+// getCountryFromLocation returns undefined and the app falls through to
+// CDN/IP-based geolocation (which often resolves to the server's country,
+// e.g. US), showing the wrong flag/currency in the header.
+const CITY_TO_COUNTRY: Record<string, string> = {
+  // Kenya
+  nairobi: "KE",
+  mombasa: "KE",
+  kisumu: "KE",
+  nakuru: "KE",
+  eldoret: "KE",
+  kakamega: "KE",
+  kitale: "KE",
+  bungoma: "KE",
+  lodwar: "KE",
+  garissa: "KE",
+  kericho: "KE",
+  kakuma: "KE",
+  malindi: "KE",
+  lamu: "KE",
+  nyeri: "KE",
+  meru: "KE",
+  machakos: "KE",
+  kiambu: "KE",
+  kasarani: "KE",
+  thika: "KE",
+  // Uganda
+  kampala: "UG",
+  entebbe: "UG",
+  gulu: "UG",
+  jinja: "UG",
+  mbarara: "UG",
+  // Tanzania
+  "dar es salaam": "TZ",
+  dodoma: "TZ",
+  arusha: "TZ",
+  mwanza: "TZ",
+  zanzibar: "TZ",
+  tanga: "TZ",
+  // Rwanda
+  kigali: "RW",
+  // Ethiopia
+  "addis ababa": "ET",
+  // Nigeria
+  lagos: "NG",
+  abuja: "NG",
+  kano: "NG",
+  ibadan: "NG",
+  // Ghana
+  accra: "GH",
+  kumasi: "GH",
+  // South Africa
+  johannesburg: "ZA",
+  cape_town: "ZA",
+  "cape town": "ZA",
+  durban: "ZA",
+  pretoria: "ZA",
+  // Germany
+  berlin: "DE",
+  munich: "DE",
+  hamburg: "DE",
+  frankfurt: "DE",
+  cologne: "DE",
+  // UK
+  london: "GB",
+  manchester: "GB",
+  birmingham: "GB",
+  // US
+  "new york": "US",
+  "los angeles": "US",
+  chicago: "US",
+  houston: "US",
+  // India
+  "new delhi": "IN",
+  mumbai: "IN",
+  bangalore: "IN",
+  chennai: "IN",
+};
+
+// ─── Currency → ISO country code map (for currencies with a unique country) ───
+// Used when a station has a currency code but no country code. EUR is
+// intentionally omitted (shared by multiple countries).
+export const CURRENCY_TO_COUNTRY: Record<string, string> = {
+  KES: "KE",
+  UGX: "UG",
+  TZS: "TZ",
+  RWF: "RW",
+  ETB: "ET",
+  NGN: "NG",
+  GHS: "GH",
+  ZAR: "ZA",
+  GBP: "GB",
+  USD: "US",
+  CHF: "CH",
+  CNY: "CN",
+  INR: "IN",
+  PKR: "PK",
+  JPY: "JP",
+  CAD: "CA",
+  AUD: "AU",
+  MAD: "MA",
+  DZD: "DZ",
+  TND: "TN",
+  SDG: "SD",
+  SOS: "SO",
+  SSP: "SS",
+  MGA: "MG",
+  MRU: "MR",
+  MZN: "MZ",
+  NAD: "NA",
+  SZL: "SZ",
+  GMD: "GM",
+  CVE: "CV",
+  XOF: "SN",
+  XAF: "CM",
+};
+
+/** Resolve a country from a currency code (e.g. "KES" → "KE"). */
+/** Reverse map of currency symbols → ISO currency codes */
+const CURRENCY_SYMBOL_TO_CODE: Record<string, string> = {
+  KSh: "KES",
+  USh: "UGX",
+  TSh: "TZS",
+  "\u20A6": "NGN", // Naira sign
+  R: "ZAR",
+  "GH\u20B5": "GHS",
+  RF: "RWF",
+  FBu: "BIF",
+  $: "USD",
+  "\u00A3": "GBP", // Pound sign
+  "\u20AC": "EUR", // Euro sign
+  "\u00A5": "JPY", // Yen sign
+  "\u20B9": "INR", // Rupee sign
+  A$: "AUD",
+  C$: "CAD",
+  CHF: "CHF",
+  R$: "BRL",
+  K: "ZMW",
+  P: "BWP",
+  MT: "MZN",
+};
+
+/** Normalize a currency string that may be a symbol (KSh, $) or code (KES, USD) */
+export function normalizeCurrencyCode(currency: string): string | undefined {
+  if (!currency) return undefined;
+  const upper = currency.toUpperCase();
+  // Already a code
+  if (CURRENCY_TO_COUNTRY[upper]) return upper;
+  // Try symbol → code (case-sensitive for symbols like "KSh")
+  const fromSymbol = CURRENCY_SYMBOL_TO_CODE[currency];
+  if (fromSymbol) return fromSymbol;
+  // Try uppercased symbol
+  const fromSymbolUpper = CURRENCY_SYMBOL_TO_CODE[upper];
+  if (fromSymbolUpper) return fromSymbolUpper;
+  return undefined;
+}
+
+export function getCountryByCurrency(currency: string): string | undefined {
+  if (!currency) return undefined;
+  // Accept both codes (KES) and symbols (KSh)
+  const code = normalizeCurrencyCode(currency);
+  if (code) return CURRENCY_TO_COUNTRY[code];
+  return CURRENCY_TO_COUNTRY[currency.toUpperCase()];
+}
+
+// ─── Extract a country from a free-text location string ───
+// Handles "City, Country", "Country", and common variants. Returns the
+// matched CountryInfo, or undefined if no known country is found.
+export function getCountryFromLocation(
+  location: string,
+): CountryInfo | undefined {
+  if (!location) return undefined;
+  const lower = location.toLowerCase();
+  // Fast path: check the city map first (handles "Kasarani, Nairobi" → KE).
+  for (const [city, cc] of Object.entries(CITY_TO_COUNTRY)) {
+    if (lower.includes(city)) {
+      const country = ALL_COUNTRIES.find((c) => c.code === cc);
+      if (country) return country;
+    }
+  }
+  // Split on commas / semicolons / pipes and try each segment, longest first
+  // so "Mombasa Road, Nairobi, Kenya" prefers the most specific match.
+  const segments = location
+    .split(/[,;|]/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .sort((a, b) => b.length - a.length);
+  for (const seg of segments) {
+    const direct = getCountryByName(seg);
+    if (direct) return direct;
+    // Also try matching a country name that appears as a substring
+    // (e.g. "Nairobi Kenya" without a separator, or "Mombasa Road Kenya").
+    const contained = ALL_COUNTRIES.find((c) =>
+      seg.toLowerCase().includes(c.name.toLowerCase()),
+    );
+    if (contained) return contained;
+  }
+  return undefined;
 }
 
 // ─── Get payment methods for a country ───
@@ -45,14 +256,14 @@ export function getCountryPaymentMethods(countryCode: string) {
   const config = WORLD_PAYMENT_CONFIGS[countryCode.toUpperCase()];
   if (!config) return { banks: [], digitalWallets: [], cards: [], methods: [] };
   const banks = config.paymentMethods
-    .filter(m => m.type === "bank")
-    .map(m => m.name);
+    .filter((m) => m.type === "bank")
+    .map((m) => m.name);
   const digitalWallets = config.paymentMethods
-    .filter(m => m.type === "digital_wallet")
-    .map(m => m.name);
+    .filter((m) => m.type === "digital_wallet")
+    .map((m) => m.name);
   const cards = config.paymentMethods
-    .filter(m => m.type === "card")
-    .map(m => m.name);
+    .filter((m) => m.type === "card")
+    .map((m) => m.name);
   return { banks, digitalWallets, cards, methods: config.paymentMethods };
 }
 
@@ -322,7 +533,7 @@ export function getCountryGateways(countryCode: string): string[] {
   // Southeast Asia
   if (
     ["TH", "MY", "VN", "ID", "PH", "BN", "KH", "LA", "MM", "TW", "MO"].includes(
-      cc
+      cc,
     )
   ) {
     return ["Stripe", "PayPal", "Alipay", "Card (Visa/Mastercard)"];
@@ -469,11 +680,11 @@ export function generateRegionalPricesForAllCountries(): {
     const rate = getExchangeRate(currency);
     const gateways = getCountryGateways(code);
 
-    (Object.keys(USD_BASE_PRICES) as TierSlug[]).forEach(tierId => {
+    (Object.keys(USD_BASE_PRICES) as TierSlug[]).forEach((tierId) => {
       const usdPrice = USD_BASE_PRICES[tierId];
       const mult = TIER_MULTIPLIERS[tierId] || 1;
       const localPrice = Math.round(
-        (usdPrice * rate * mult) / TIER_MULTIPLIERS.daily
+        (usdPrice * rate * mult) / TIER_MULTIPLIERS.daily,
       );
       const nicePrice =
         localPrice < 100
@@ -504,8 +715,8 @@ export function getDefaultStationForCountry(countryCode: string): string {
 // ─── Get all currencies used worldwide ───
 export function getAllCurrencies(): string[] {
   const currencies = new Set<string>();
-  Object.values(WORLD_PAYMENT_CONFIGS).forEach(c =>
-    currencies.add(c.defaultCurrency)
+  Object.values(WORLD_PAYMENT_CONFIGS).forEach((c) =>
+    currencies.add(c.defaultCurrency),
   );
   return Array.from(currencies).sort();
 }

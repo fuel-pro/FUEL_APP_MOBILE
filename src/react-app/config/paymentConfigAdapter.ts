@@ -15,7 +15,7 @@ function getFlagEmoji(countryCode: string): string {
   if (cp1 < 0x41 || cp1 > 0x5a || cp2 < 0x41 || cp2 > 0x5a) return "🏳️";
   return String.fromCodePoint(
     FLAG_OFFSET + (cp1 - A_CODE),
-    FLAG_OFFSET + (cp2 - A_CODE)
+    FLAG_OFFSET + (cp2 - A_CODE),
   );
 }
 
@@ -75,12 +75,12 @@ export const COUNTRY_CONFIGS: Record<string, LegacyCountryConfig> = (() => {
 
 // ─── Helper: get sorted country codes for selector display ───
 export const SORTED_COUNTRY_CODES = Object.keys(COUNTRY_CONFIGS).sort((a, b) =>
-  COUNTRY_CONFIGS[a].name.localeCompare(COUNTRY_CONFIGS[b].name)
+  COUNTRY_CONFIGS[a].name.localeCompare(COUNTRY_CONFIGS[b].name),
 );
 
 // ─── Get country config safely ───
 export function getCountryConfig(
-  code: string
+  code: string,
 ): LegacyCountryConfig | undefined {
   return COUNTRY_CONFIGS[code.toUpperCase()];
 }

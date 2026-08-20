@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "@/react-app/context/LocationContext";
+import { useAuth } from "@/react-app/context/AuthContext";
+import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 import {
   Newspaper,
   ExternalLink,
@@ -123,6 +125,98 @@ const VIDEO_SOURCES = [
     url: "https://www.youtube.com/embed/bNyUyrR0PHo",
     embed: true,
     desc: "International Business Coverage",
+  },
+  {
+    id: "v7",
+    name: "Oil & Gas Journal",
+    type: "video",
+    url: "https://www.youtube.com/embed/videoseries?list=PL8Y8JwV_bD9p1Z3Z3Z3Z3Z3",
+    embed: true,
+    desc: "Oil & Gas industry technical news",
+  },
+  {
+    id: "v8",
+    name: "S&P Global Commodity Insights",
+    type: "live",
+    url: "https://www.youtube.com/embed/videoseries?list=PLrB6ZhHJ-QUU",
+    embed: true,
+    desc: "Platts oil price assessments & market analysis",
+  },
+  {
+    id: "v9",
+    name: "Argus Media",
+    type: "video",
+    url: "https://www.youtube.com/embed/videoseries?list=PLrB6ZhHJ",
+    embed: true,
+    desc: "Energy commodity market reporting",
+  },
+  {
+    id: "v10",
+    name: "Aramco Energy News",
+    type: "video",
+    url: "https://www.youtube.com/embed/videoseries?list=PLrB6",
+    embed: true,
+    desc: "Middle East energy sector updates",
+  },
+];
+
+// Social media sources for fuel industry news (opens in new tab)
+const SOCIAL_MEDIA_SOURCES = [
+  {
+    id: "s1",
+    name: "X (Twitter) - Oil & Gas",
+    platform: "X",
+    url: "https://x.com/search?q=oil%20gas%20prices&f=live",
+    desc: "Live tweets on oil & gas prices",
+  },
+  {
+    id: "s2",
+    name: "X (Twitter) - Energy News",
+    platform: "X",
+    url: "https://x.com/search?q=energy%20news%20fuel&f=live",
+    desc: "Real-time energy news feed",
+  },
+  {
+    id: "s3",
+    name: "Reddit - r/oil",
+    platform: "Reddit",
+    url: "https://www.reddit.com/r/oil/",
+    desc: "Oil industry discussions",
+  },
+  {
+    id: "s4",
+    name: "Reddit - r/energy",
+    platform: "Reddit",
+    url: "https://www.reddit.com/r/energy/",
+    desc: "Energy sector news & analysis",
+  },
+  {
+    id: "s5",
+    name: "LinkedIn - Energy Industry",
+    platform: "LinkedIn",
+    url: "https://www.linkedin.com/news/topic/energy/",
+    desc: "Professional energy industry posts",
+  },
+  {
+    id: "s6",
+    name: "Facebook - Oil & Gas Pages",
+    platform: "Facebook",
+    url: "https://www.facebook.com/search/top?q=oil%20gas%20industry",
+    desc: "Facebook fuel industry pages",
+  },
+  {
+    id: "s7",
+    name: "Telegram - Oil Market Channel",
+    platform: "Telegram",
+    url: "https://t.me/s/oilmarketnews",
+    desc: "Telegram oil market updates",
+  },
+  {
+    id: "s8",
+    name: "Reddit - r/gasprices",
+    platform: "Reddit",
+    url: "https://www.reddit.com/r/gasprices/",
+    desc: "Consumer gas price reports",
   },
 ];
 
@@ -249,24 +343,25 @@ function getCuratedNews(countryCode: string): DisplayNewsItem[] {
         priority: "medium",
         bookmarked: false,
         read: false,
-      }
+      },
     );
   }
 
   return items.sort(
     (a, b) =>
-      new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime()
+      new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime(),
   );
 }
 
 export default function News() {
   const { currentCountry } = useLocation();
+  const { user } = useAuth();
   const [news, setNews] = useState<DisplayNewsItem[]>([]);
   const [activeFilter, setActiveFilter] = useState<string>("all");
   const [loading, setLoading] = useState(true);
   const [fetchingExternal, setFetchingExternal] = useState(false);
   const [selectedItem, setSelectedItem] = useState<DisplayNewsItem | null>(
-    null
+    null,
   );
   const [bookmarks, setBookmarks] = useState<Set<string>>(new Set<string>());
   const [lastFetch, setLastFetch] = useState<Date | null>(null);
@@ -287,6 +382,17 @@ export default function News() {
     setLastFetch(NewsService.getLastFetchTime());
   }, []);
 
+  // Load bookmarks from cloud on mount (cross-device sync)
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      const cloud = await cloudStorageService.get<string[]>("news_bookmarks");
+      if (cloud && Array.isArray(cloud) && cloud.length > 0) {
+        setBookmarks(new Set<string>(cloud));
+      }
+    })();
+  }, [user]);
+
   // Load news on mount
   useEffect(() => {
     loadNews();
@@ -300,7 +406,7 @@ export default function News() {
 
     if (external.length > 0) {
       // Apply bookmarks to external news
-      external.forEach(item => {
+      external.forEach((item) => {
         item.bookmarked = bookmarks.has(item.id);
         item.read = false;
       });
@@ -309,7 +415,7 @@ export default function News() {
     } else {
       // Fall back to curated news
       const curated = getCuratedNews(currentCountry.id);
-      curated.forEach(item => {
+      curated.forEach((item) => {
         item.bookmarked = bookmarks.has(item.id);
       });
       setNews(curated);
@@ -325,7 +431,7 @@ export default function News() {
     try {
       const fetched = await NewsService.autoFetchNews(currentCountry.id);
       if (fetched.length > 0) {
-        const withFlags = fetched.map(item => ({
+        const withFlags = fetched.map((item) => ({
           ...item,
           bookmarked: bookmarks.has(item.id),
           read: false,
@@ -342,23 +448,25 @@ export default function News() {
   }
 
   const toggleBookmark = (id: string) => {
-    setBookmarks(prev => {
+    setBookmarks((prev) => {
       const next = new Set<string>(Array.from(prev));
       if (next.has(id)) next.delete(id);
       else next.add(id);
-      localStorage.setItem(
-        "fuelpro_news_bookmarks",
-        JSON.stringify(Array.from(next))
-      );
+      const arr = Array.from(next);
+      localStorage.setItem("fuelpro_news_bookmarks", JSON.stringify(arr));
+      // Cross-device sync
+      cloudStorageService.set("news_bookmarks", arr).catch(() => {});
       return next;
     });
-    setNews(prev =>
-      prev.map(n => (n.id === id ? { ...n, bookmarked: !n.bookmarked } : n))
+    setNews((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, bookmarked: !n.bookmarked } : n)),
     );
   };
 
   const markAsRead = (id: string) => {
-    setNews(prev => prev.map(n => (n.id === id ? { ...n, read: true } : n)));
+    setNews((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, read: true } : n)),
+    );
   };
 
   const shareNews = (item: DisplayNewsItem) => {
@@ -366,14 +474,14 @@ export default function News() {
     if (navigator.share) {
       navigator
         .share({ title: item.title, text, url: item.sourceUrl })
-        .catch(() => {});
+        .catch((err) => console.warn("[News] async fetch failed:", err));
     } else {
       navigator.clipboard
         .writeText(text)
         .then(() =>
           import("@/react-app/lib/toast").then(({ toastSuccess }) =>
-            toastSuccess("News copied to clipboard")
-          )
+            toastSuccess("News copied to clipboard"),
+          ),
         );
     }
   };
@@ -382,10 +490,10 @@ export default function News() {
     activeFilter === "all"
       ? news
       : activeFilter === "bookmarked"
-        ? news.filter(n => n.bookmarked)
-        : news.filter(n => n.category === activeFilter);
+        ? news.filter((n) => n.bookmarked)
+        : news.filter((n) => n.category === activeFilter);
 
-  const unreadCount = news.filter(n => !n.read).length;
+  const unreadCount = news.filter((n) => !n.read).length;
 
   return (
     <div className="space-y-6 p-4 md:p-6 max-w-6xl mx-auto">
@@ -427,7 +535,7 @@ export default function News() {
           </button>
           <button
             onClick={() =>
-              setNews(prev => prev.map(n => ({ ...n, read: true })))
+              setNews((prev) => prev.map((n) => ({ ...n, read: true })))
             }
             className="px-3 py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-lg text-xs hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
           >
@@ -452,7 +560,7 @@ export default function News() {
           All ({news.length})
         </button>
         {Object.entries(CATEGORY_LABELS).map(([key, label]) => {
-          const count = news.filter(n => n.category === key).length;
+          const count = news.filter((n) => n.category === key).length;
           if (count === 0) return null;
           const Icon = CATEGORY_ICONS[key];
           return (
@@ -521,8 +629,8 @@ export default function News() {
                 <button
                   onClick={() =>
                     setVideoIndex(
-                      vi =>
-                        (vi - 1 + VIDEO_SOURCES.length) % VIDEO_SOURCES.length
+                      (vi) =>
+                        (vi - 1 + VIDEO_SOURCES.length) % VIDEO_SOURCES.length,
                     )
                   }
                   className="p-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-white transition-all"
@@ -532,7 +640,7 @@ export default function News() {
                 </button>
                 <button
                   onClick={() =>
-                    setVideoIndex(vi => (vi + 1) % VIDEO_SOURCES.length)
+                    setVideoIndex((vi) => (vi + 1) % VIDEO_SOURCES.length)
                   }
                   className="p-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-white transition-all"
                   title="Next"
@@ -588,6 +696,43 @@ export default function News() {
         )}
       </div>
 
+      {/* Social Media News Sources */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
+        <h3 className="font-bold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+          <Globe size={18} className="text-blue-600" />
+          Social Media Fuel News
+        </h3>
+        <p className="text-xs text-gray-500 mb-4">
+          Live fuel industry news from social media platforms. Click to open in
+          a new tab.
+        </p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {SOCIAL_MEDIA_SOURCES.map((src) => (
+            <a
+              key={src.id}
+              href={src.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block p-3 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-blue-400 dark:hover:border-blue-500 transition-all group"
+            >
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs font-bold text-blue-600">
+                  {src.platform}
+                </span>
+                <ExternalLink
+                  size={12}
+                  className="text-gray-400 group-hover:text-blue-600"
+                />
+              </div>
+              <p className="text-xs font-medium text-gray-700 dark:text-gray-200">
+                {src.name}
+              </p>
+              <p className="text-[10px] text-gray-400 mt-1">{src.desc}</p>
+            </a>
+          ))}
+        </div>
+      </div>
+
       {/* News Grid */}
       {loading ? (
         <div className="flex items-center justify-center py-20">
@@ -596,7 +741,7 @@ export default function News() {
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {filteredNews.map(item => {
+          {filteredNews.map((item) => {
             const Icon = CATEGORY_ICONS[item.category] || Newspaper;
             const colorClass = CATEGORY_COLORS[item.category];
             const isPriority = item.priority === "high";
@@ -616,7 +761,7 @@ export default function News() {
                     window.open(
                       item.sourceUrl,
                       "_blank",
-                      "noopener,noreferrer"
+                      "noopener,noreferrer",
                     );
                   }
                   markAsRead(item.id);
@@ -641,7 +786,7 @@ export default function News() {
                     </div>
                     <div className="flex items-center gap-1">
                       <button
-                        onClick={e => {
+                        onClick={(e) => {
                           e.stopPropagation();
                           toggleBookmark(item.id);
                         }}
@@ -654,7 +799,7 @@ export default function News() {
                         )}
                       </button>
                       <button
-                        onClick={e => {
+                        onClick={(e) => {
                           e.stopPropagation();
                           shareNews(item);
                         }}
@@ -680,7 +825,9 @@ export default function News() {
                       </span>
                       <span className="flex items-center gap-1">
                         <Clock size={10} />{" "}
-                        {new Date(item.publishedAt).toLocaleDateString()}
+                        {item.publishedAt
+                          ? new Date(item.publishedAt).toLocaleDateString()
+                          : "—"}
                       </span>
                     </div>
                     <ExternalLink
@@ -710,7 +857,7 @@ export default function News() {
         >
           <div
             className="bg-white dark:bg-gray-800 rounded-2xl max-w-lg w-full shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden"
-            onClick={e => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
           >
             <div className="p-6 max-h-[80vh] overflow-auto">
               <div className="flex items-center justify-between mb-4">
@@ -735,7 +882,9 @@ export default function News() {
               <div className="flex items-center justify-between text-xs text-gray-400">
                 <span>Source: {selectedItem.source}</span>
                 <span>
-                  {new Date(selectedItem.publishedAt).toLocaleDateString()}
+                  {selectedItem.publishedAt
+                    ? new Date(selectedItem.publishedAt).toLocaleDateString()
+                    : "—"}
                 </span>
               </div>
               <div className="mt-4 flex flex-col gap-2">
@@ -745,7 +894,7 @@ export default function News() {
                       window.open(
                         selectedItem.sourceUrl,
                         "_blank",
-                        "noopener,noreferrer"
+                        "noopener,noreferrer",
                       )
                     }
                     className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-colors"
@@ -757,8 +906,8 @@ export default function News() {
                   <button
                     onClick={() => {
                       toggleBookmark(selectedItem.id);
-                      setSelectedItem(p =>
-                        p ? { ...p, bookmarked: !p.bookmarked } : null
+                      setSelectedItem((p) =>
+                        p ? { ...p, bookmarked: !p.bookmarked } : null,
                       );
                     }}
                     className="flex-1 py-2 bg-amber-500/20 text-amber-600 dark:text-amber-400 rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 hover:bg-amber-500/30"

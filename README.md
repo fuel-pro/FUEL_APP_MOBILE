@@ -20,19 +20,19 @@ A comprehensive fuel station management system built with React, Supabase, and m
 
 ## 🛠️ Tech Stack
 
-| Category | Technology |
-|----------|-----------|
-| Frontend | React 18, TypeScript, Vite |
-| State Management | Zustand |
-| Styling | Tailwind CSS |
-| Charts | Chart.js, react-chartjs-2 |
-| Database | Supabase (PostgreSQL) |
-| Authentication | Supabase Auth |
-| API | tRPC, REST |
-| Mobile | Capacitor |
-| PWA | Workbox, Vite PWA Plugin |
-| Testing | Vitest, Playwright |
-| Error Tracking | Sentry |
+| Category         | Technology                 |
+| ---------------- | -------------------------- |
+| Frontend         | React 18, TypeScript, Vite |
+| State Management | Zustand                    |
+| Styling          | Tailwind CSS               |
+| Charts           | Chart.js, react-chartjs-2  |
+| Database         | Supabase (PostgreSQL)      |
+| Authentication   | Supabase Auth              |
+| API              | tRPC, REST                 |
+| Mobile           | Capacitor                  |
+| PWA              | Workbox, Vite PWA Plugin   |
+| Testing          | Vitest, Playwright         |
+| Error Tracking   | Sentry                     |
 
 ## 📦 Installation
 
@@ -98,6 +98,7 @@ vercel --prod
 ### GitHub Actions
 
 The repository includes CI/CD workflows:
+
 - `.github/workflows/ci.yml` - Lint, Type Check, Test, Build
 - `.github/workflows/deploy.yml` - Auto-deploy on push to main
 

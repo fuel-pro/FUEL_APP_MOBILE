@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import cloudStorageService from "@/react-app/lib/cloud-storage-service";
+import { useAuth } from "@/react-app/context/AuthContext";
 import {
   Webhook,
   Plus,
@@ -67,8 +69,10 @@ const AVAILABLE_EVENTS = [
 ];
 
 const STORAGE_KEY = "fuelpro_webhooks_v2";
+const CLOUD_KEY = "webhooks_data";
 
 export default function WebhookManager() {
+  const { user } = useAuth();
   const [webhooks, setWebhooks] = useState<WebhookEndpoint[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -97,18 +101,28 @@ export default function WebhookManager() {
   const save = (list: WebhookEndpoint[]) => {
     setWebhooks(list);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+    cloudStorageService.set(CLOUD_KEY, list).catch(() => {});
   };
+
+  // Load from cloud on mount (cross-device sync)
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      const cloud = await cloudStorageService.get<WebhookEndpoint[]>(CLOUD_KEY);
+      if (cloud && Array.isArray(cloud)) setWebhooks(cloud);
+    })();
+  }, [user]);
 
   const showNotification = (
     message: string,
-    type: "success" | "warning" = "success"
+    type: "success" | "warning" = "success",
   ) => {
     setNotification({ message, type });
     setTimeout(() => setNotification(null), 3000);
   };
 
   const toggleSecret = (id: string) =>
-    setShowSecrets(prev => ({ ...prev, [id]: !prev[id] }));
+    setShowSecrets((prev) => ({ ...prev, [id]: !prev[id] }));
 
   const copySecret = (secret: string, id: string) => {
     navigator.clipboard.writeText(secret);
@@ -117,8 +131,8 @@ export default function WebhookManager() {
   };
 
   const toggleActive = (id: string) => {
-    setWebhooks(prev =>
-      prev.map(w => (w.id === id ? { ...w, active: !w.active } : w))
+    setWebhooks((prev) =>
+      prev.map((w) => (w.id === id ? { ...w, active: !w.active } : w)),
     );
     showNotification("Webhook status updated");
   };
@@ -129,10 +143,10 @@ export default function WebhookManager() {
       return;
     }
     if (editingId) {
-      setWebhooks(prev =>
-        prev.map(w =>
-          w.id === editingId ? ({ ...w, ...formData } as WebhookEndpoint) : w
-        )
+      setWebhooks((prev) =>
+        prev.map((w) =>
+          w.id === editingId ? ({ ...w, ...formData } as WebhookEndpoint) : w,
+        ),
       );
       showNotification("Webhook updated");
     } else {
@@ -146,7 +160,7 @@ export default function WebhookManager() {
         triggerCount: 0,
         createdAt: new Date().toISOString(),
       };
-      setWebhooks(prev => [newWebhook, ...prev]);
+      setWebhooks((prev) => [newWebhook, ...prev]);
       showNotification("Webhook created");
     }
     setShowForm(false);
@@ -156,7 +170,7 @@ export default function WebhookManager() {
 
   const handleDelete = (id: string) => {
     if (confirm("Delete this webhook?")) {
-      setWebhooks(prev => prev.filter(w => w.id !== id));
+      setWebhooks((prev) => prev.filter((w) => w.id !== id));
       showNotification("Webhook deleted");
     }
   };
@@ -174,10 +188,10 @@ export default function WebhookManager() {
   };
 
   const toggleEvent = (eventId: string) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
       events: prev.events?.includes(eventId)
-        ? prev.events.filter(e => e !== eventId)
+        ? prev.events.filter((e) => e !== eventId)
         : [...(prev.events || []), eventId],
     }));
   };
@@ -192,7 +206,7 @@ export default function WebhookManager() {
   };
 
   const regenerateSecret = () =>
-    setFormData(prev => ({ ...prev, secret: generateSecret() }));
+    setFormData((prev) => ({ ...prev, secret: generateSecret() }));
 
   const testWebhook = async (webhook: WebhookEndpoint) => {
     try {
@@ -210,16 +224,16 @@ export default function WebhookManager() {
         }),
       });
       if (response.ok) {
-        setWebhooks(prev =>
-          prev.map(w =>
+        setWebhooks((prev) =>
+          prev.map((w) =>
             w.id === webhook.id
               ? {
                   ...w,
                   lastTriggered: new Date().toISOString(),
                   triggerCount: w.triggerCount + 1,
                 }
-              : w
-          )
+              : w,
+          ),
         );
         showNotification("Webhook test successful!");
       } else {
@@ -292,7 +306,7 @@ export default function WebhookManager() {
         <div className="bg-green-50 dark:bg-green-900/10 rounded-xl p-4 border border-green-200 dark:border-green-800">
           <p className="text-xs text-green-600">Active</p>
           <p className="text-2xl font-bold text-green-600 dark:text-green-400">
-            {webhooks.filter(w => w.active).length}
+            {webhooks.filter((w) => w.active).length}
           </p>
         </div>
         <div className="bg-amber-50 dark:bg-amber-900/10 rounded-xl p-4 border border-amber-200 dark:border-amber-800">
@@ -319,7 +333,7 @@ export default function WebhookManager() {
         </div>
       ) : (
         <div className="space-y-3">
-          {webhooks.map(webhook => (
+          {webhooks.map((webhook) => (
             <div
               key={webhook.id}
               className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700"
@@ -342,12 +356,12 @@ export default function WebhookManager() {
                   <div className="flex items-center gap-4 mt-2">
                     <div className="flex items-center gap-1">
                       <div className="flex gap-1">
-                        {webhook.events.slice(0, 3).map(event => (
+                        {webhook.events.slice(0, 3).map((event) => (
                           <span
                             key={event}
                             className="px-2 py-0.5 bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 rounded text-xs"
                           >
-                            {AVAILABLE_EVENTS.find(e => e.id === event)
+                            {AVAILABLE_EVENTS.find((e) => e.id === event)
                               ?.label || event}
                           </span>
                         ))}
@@ -434,7 +448,7 @@ export default function WebhookManager() {
       {showForm && (
         <div
           className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-          onClick={e => e.target === e.currentTarget && setShowForm(false)}
+          onClick={(e) => e.target === e.currentTarget && setShowForm(false)}
         >
           <div className="bg-white dark:bg-gray-900 rounded-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-6">
@@ -457,7 +471,7 @@ export default function WebhookManager() {
                 <input
                   type="text"
                   value={formData.name || ""}
-                  onChange={e =>
+                  onChange={(e) =>
                     setFormData({ ...formData, name: e.target.value })
                   }
                   placeholder="My Webhook"
@@ -472,7 +486,7 @@ export default function WebhookManager() {
                 <input
                   type="url"
                   value={formData.url || ""}
-                  onChange={e =>
+                  onChange={(e) =>
                     setFormData({ ...formData, url: e.target.value })
                   }
                   placeholder="https://api.example.com/webhook"
@@ -488,7 +502,7 @@ export default function WebhookManager() {
                   <input
                     type="text"
                     value={formData.secret || ""}
-                    onChange={e =>
+                    onChange={(e) =>
                       setFormData({ ...formData, secret: e.target.value })
                     }
                     placeholder="Auto-generated if empty"
@@ -508,7 +522,7 @@ export default function WebhookManager() {
                   Events
                 </label>
                 <div className="grid grid-cols-2 gap-2">
-                  {AVAILABLE_EVENTS.map(event => (
+                  {AVAILABLE_EVENTS.map((event) => (
                     <label
                       key={event.id}
                       className={`flex items-start gap-2 p-3 rounded-lg border cursor-pointer transition-all ${formData.events?.includes(event.id) ? "border-purple-500 bg-purple-50 dark:bg-purple-900/20" : "border-gray-200 dark:border-gray-700 hover:border-gray-300"}`}
@@ -536,7 +550,7 @@ export default function WebhookManager() {
                 <input
                   type="checkbox"
                   checked={formData.active ?? true}
-                  onChange={e =>
+                  onChange={(e) =>
                     setFormData({ ...formData, active: e.target.checked })
                   }
                   className="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500"

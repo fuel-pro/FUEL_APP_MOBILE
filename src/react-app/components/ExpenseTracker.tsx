@@ -1,4 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
+import cloudStorageService from "@/react-app/lib/cloud-storage-service";
+import { getCurrencySymbol } from "../lib/currency";
+import { useAuth } from "@/react-app/context/AuthContext";
+import { useStations } from "@/react-app/context/StationContext";
+import {
+  onTabPayload,
+  type ExpensePrefill,
+} from "@/react-app/lib/mpesa-integration-service";
+import { emit } from "@/react-app/lib/automation-engine";
 import {
   Receipt,
   Plus,
@@ -42,6 +51,7 @@ interface Expense {
 }
 
 const STORAGE_KEY = "fuelpro_expenses_v2";
+const CLOUD_KEY = "expenses_data";
 
 const EXPENSE_CATEGORIES = [
   { value: "fuel_purchase", label: "Fuel Purchase", icon: Zap },
@@ -56,10 +66,50 @@ const EXPENSE_CATEGORIES = [
 
 const PAYMENT_METHODS = ["Cash", "Bank Transfer", "M-PESA", "Card", "Cheque"];
 
+const VALID_STATUSES: Expense["status"][] = ["pending", "approved", "rejected"];
+const VALID_CATEGORIES = EXPENSE_CATEGORIES.map((c) => c.value);
+
+/**
+ * Normalize an expense from cloud/localStorage so it always has every field
+ * the UI expects. Cloud data may be partial (older app versions, API imports,
+ * or cross-device sync where the record was created with a subset of fields).
+ * Without this, rendering crashes with
+ * "Cannot read properties of undefined (reading 'toLowerCase'/'toLocaleString')".
+ */
+function normalizeExpense(e: Partial<Expense> | null | undefined): Expense {
+  const id =
+    e?.id || `exp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const status = VALID_STATUSES.includes(e?.status as Expense["status"])
+    ? (e!.status as Expense["status"])
+    : "pending";
+  const category = VALID_CATEGORIES.includes(e?.category)
+    ? e!.category
+    : "other";
+  return {
+    id,
+    date: e?.date ?? new Date().toISOString().slice(0, 10),
+    category,
+    description: e?.description ?? "",
+    amount: typeof e?.amount === "number" ? e.amount : 0,
+    paymentMethod: e?.paymentMethod ?? "Bank Transfer",
+    reference: e?.reference ?? "",
+    receiptUrl: e?.receiptUrl,
+    approvedBy: e?.approvedBy ?? "",
+    status,
+    stationId: e?.stationId ?? "default",
+    createdAt: e?.createdAt ?? new Date().toISOString(),
+  };
+}
+
+function normalizeExpenses(arr: unknown): Expense[] {
+  if (!Array.isArray(arr)) return [];
+  return arr.map((e) => normalizeExpense(e as Partial<Expense>));
+}
+
 function loadExpenses(): Expense[] {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) return JSON.parse(saved);
+    if (saved) return normalizeExpenses(JSON.parse(saved));
   } catch {
     /* ignore */
   }
@@ -67,7 +117,29 @@ function loadExpenses(): Expense[] {
 }
 
 export default function ExpenseTracker() {
-  const [expenses, setExpenses] = useState<Expense[]>(loadExpenses);
+  const { user } = useAuth();
+  const { currentStation } = useStations();
+  const stationId = currentStation?.id;
+  // Resolve the currency symbol from the React-context station (not the
+  // synchronous localStorage read) so it's correct on fresh devices before
+  // the station data is written to localStorage, and for multi-currency
+  // stations. Mirrors the SalesInvoices useCurrencySymbol pattern.
+  const currencySymbol = useMemo(
+    () =>
+      getCurrencySymbol(
+        (currentStation as any)?.companyCurrency ||
+          (currentStation as any)?.currency,
+      ),
+    [currentStation],
+  );
+  const [expenses, setExpenses] = useState<Expense[]>(() => {
+    const cloudCached = cloudStorageService.getCached<unknown[]>(
+      "expenses_data",
+      stationId,
+    );
+    if (Array.isArray(cloudCached)) return normalizeExpenses(cloudCached);
+    return loadExpenses();
+  });
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -80,6 +152,28 @@ export default function ExpenseTracker() {
   } | null>(null);
   const [activeView, setActiveView] = useState<"list" | "analytics">("list");
 
+  // Prevents the save effect from overwriting cloud data with default empty
+  // state before the initial cloud load completes (cross-device overwrite race).
+  const cloudLoadCompleteRef = useRef(false);
+
+  // Guards against the real-time subscribe callback overwriting uncommitted
+  // local changes. When the user adds/edits/deletes an expense, we set this
+  // ref so the echo from our own cloud write doesn't wipe local state.
+  const localModifiedRef = useRef(false);
+  const localModifiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const flagLocalModified = () => {
+    localModifiedRef.current = true;
+    if (localModifiedTimer.current) clearTimeout(localModifiedTimer.current);
+    localModifiedTimer.current = setTimeout(() => {
+      localModifiedRef.current = false;
+    }, 3000);
+  };
+
+  // Refs for post-load flush so the cloud write reads the latest state.
+  const expensesRef = useRef(expenses);
+  expensesRef.current = expenses;
+
   const [formData, setFormData] = useState<Partial<Expense>>({
     date: new Date().toISOString().slice(0, 10),
     category: "fuel_purchase",
@@ -91,27 +185,107 @@ export default function ExpenseTracker() {
     status: "pending",
   });
 
+  // Interlink receiver: PayrollSystem and MaintenanceTracker call
+  // navigateToTab("expenses", <ExpensePrefill>) to record a payroll/maintenance
+  // cost as an expense — open the form pre-filled with the category + amount.
+  useEffect(() => {
+    return onTabPayload("expenses", (raw) => {
+      const p = (raw || {}) as ExpensePrefill;
+      if (Object.keys(p).length === 0) return;
+      setActiveView("list");
+      setEditingId(null);
+      setFormData({
+        date: new Date().toISOString().slice(0, 10),
+        category: p.category || "other",
+        description: p.description || "",
+        amount: p.amount ?? 0,
+        paymentMethod: p.paymentMethod || "Bank Transfer",
+        reference: p.reference || "",
+        approvedBy: "",
+        status: "pending",
+      });
+      setShowForm(true);
+    });
+  }, []);
+
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(expenses));
-  }, [expenses]);
+    if (!cloudLoadCompleteRef.current) return; // skip until cloud load done
+    cloudStorageService.set(CLOUD_KEY, expenses, stationId).catch((err) => {
+      console.error("ExpenseTracker cloud save failed:", err);
+    });
+  }, [expenses, stationId]);
+
+  // Load from cloud on mount AND when the station changes (cross-device +
+  // per-station sync). Each station has its own isolated expense set.
+  useEffect(() => {
+    if (!user) return;
+    cloudLoadCompleteRef.current = false;
+    let cancelled = false;
+    (async () => {
+      try {
+        const cloud = await cloudStorageService.get<unknown>(
+          CLOUD_KEY,
+          stationId,
+        );
+        if (!cancelled) setExpenses(normalizeExpenses(cloud));
+      } finally {
+        if (!cancelled) cloudLoadCompleteRef.current = true;
+      }
+    })();
+    // Real-time cross-device sync: another device updates expenses_data.
+    // Guard against echo overwrites: skip if we just made a local change.
+    const unsub = cloudStorageService.subscribe<unknown>(
+      CLOUD_KEY,
+      stationId,
+      (val) => {
+        if (localModifiedRef.current) return;
+        setExpenses(normalizeExpenses(val));
+      },
+    );
+    return () => {
+      cancelled = true;
+      unsub();
+    };
+  }, [user, stationId]);
+
+  // Post-load flush: if the user made changes before/during the cloud load,
+  // re-push the latest local state to cloud so it's not lost.
+  useEffect(() => {
+    if (cloudLoadCompleteRef.current && localModifiedRef.current) {
+      cloudStorageService
+        .set(CLOUD_KEY, expensesRef.current, stationId)
+        .catch(() => {});
+    }
+  }, [cloudLoadCompleteRef.current]);
+
+  useEffect(() => {
+    return () => {
+      if (localModifiedTimer.current) clearTimeout(localModifiedTimer.current);
+    };
+  }, []);
 
   const showNotification = (
     message: string,
-    type: "success" | "warning" = "success"
+    type: "success" | "warning" = "success",
   ) => {
     setNotification({ message, type });
     setTimeout(() => setNotification(null), 3000);
   };
 
-  const filtered = expenses.filter(e => {
+  const filtered = (expenses || []).filter((e) => {
     const matchesSearch =
-      e.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      e.reference.toLowerCase().includes(searchTerm.toLowerCase());
+      (e.description || "")
+        .toLowerCase()
+        .includes((searchTerm || "").toLowerCase()) ||
+      (e.reference || "")
+        .toLowerCase()
+        .includes((searchTerm || "").toLowerCase());
     const matchesCategory =
       categoryFilter === "all" || e.category === categoryFilter;
     const matchesStatus = statusFilter === "all" || e.status === statusFilter;
-    const matchesFrom = !dateRange.from || e.date >= dateRange.from;
-    const matchesTo = !dateRange.to || e.date <= dateRange.to;
+    const matchesFrom = !dateRange.from || (e.date || "") >= dateRange.from;
+    const matchesTo = !dateRange.to || (e.date || "") <= dateRange.to;
     return (
       matchesSearch &&
       matchesCategory &&
@@ -121,22 +295,23 @@ export default function ExpenseTracker() {
     );
   });
 
-  const totalExpenses = filtered.reduce((s, e) => s + e.amount, 0);
+  const totalExpenses = filtered.reduce((s, e) => s + (e.amount || 0), 0);
   const approvedTotal = filtered
-    .filter(e => e.status === "approved")
-    .reduce((s, e) => s + e.amount, 0);
+    .filter((e) => e.status === "approved")
+    .reduce((s, e) => s + (e.amount || 0), 0);
   const pendingTotal = filtered
-    .filter(e => e.status === "pending")
-    .reduce((s, e) => s + e.amount, 0);
+    .filter((e) => e.status === "pending")
+    .reduce((s, e) => s + (e.amount || 0), 0);
 
-  const byCategory = EXPENSE_CATEGORIES.map(cat => ({
-    ...cat,
-    total: filtered
-      .filter(e => e.category === cat.value)
-      .reduce((s, e) => s + e.amount, 0),
-    count: filtered.filter(e => e.category === cat.value).length,
-  }))
-    .filter(c => c.total > 0)
+  const byCategory = (EXPENSE_CATEGORIES || [])
+    .map((cat) => ({
+      ...cat,
+      total: filtered
+        .filter((e) => e.category === cat.value)
+        .reduce((s, e) => s + (e.amount || 0), 0),
+      count: filtered.filter((e) => e.category === cat.value).length,
+    }))
+    .filter((c) => c.total > 0)
     .sort((a, b) => b.total - a.total);
 
   const handleSave = () => {
@@ -144,23 +319,38 @@ export default function ExpenseTracker() {
       showNotification("Description and amount are required", "warning");
       return;
     }
+    const realStationId = currentStation?.id || "default";
     if (editingId) {
-      setExpenses(prev =>
-        prev.map(e =>
-          e.id === editingId ? ({ ...e, ...formData } as Expense) : e
-        )
+      flagLocalModified();
+      setExpenses((prev) =>
+        prev.map((e) =>
+          e.id === editingId
+            ? ({ ...e, ...formData, stationId: realStationId } as Expense)
+            : e,
+        ),
       );
       showNotification("Expense updated");
     } else {
-      setExpenses(prev => [
+      flagLocalModified();
+      setExpenses((prev) => [
         {
           ...(formData as Expense),
-          id: `exp_${Date.now()}`,
-          stationId: "default",
+          id: `exp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          stationId: realStationId,
           createdAt: new Date().toISOString(),
         },
         ...prev,
       ]);
+      // Notify the automation engine that a new expense was recorded so it
+      // can react (e.g. refresh dashboards, log shift totals). Emitted here
+      // because the cloud sync below is fire-and-forget and we already have
+      // the values locally — no need to await the storage write.
+      emit({
+        type: "expense:created",
+        stationId: realStationId,
+        amount: Number(formData.amount) || 0,
+        category: formData.category || "",
+      });
       showNotification("Expense added");
     }
     setShowForm(false);
@@ -169,14 +359,16 @@ export default function ExpenseTracker() {
 
   const handleDelete = (id: string) => {
     if (confirm("Delete this expense?")) {
-      setExpenses(prev => prev.filter(e => e.id !== id));
+      flagLocalModified();
+      setExpenses((prev) => prev.filter((e) => e.id !== id));
       showNotification("Expense deleted");
     }
   };
 
   const updateStatus = (id: string, newStatus: Expense["status"]) => {
-    setExpenses(prev =>
-      prev.map(e => (e.id === id ? { ...e, status: newStatus } : e))
+    flagLocalModified();
+    setExpenses((prev) =>
+      prev.map((e) => (e.id === id ? { ...e, status: newStatus } : e)),
     );
     showNotification(`Expense ${newStatus}`);
   };
@@ -186,6 +378,8 @@ export default function ExpenseTracker() {
     approved: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
     rejected: "bg-red-500/10 text-red-600 dark:text-red-400",
   };
+  const DEFAULT_STATUS_COLOR =
+    "bg-gray-500/10 text-gray-600 dark:text-gray-400";
 
   const catColors: Record<string, string> = {
     fuel_purchase: "text-amber-500",
@@ -197,6 +391,7 @@ export default function ExpenseTracker() {
     taxes: "text-orange-500",
     other: "text-gray-400",
   };
+  const DEFAULT_CAT_COLOR = "text-gray-500";
 
   return (
     <div className="p-4 md:p-6 space-y-4">
@@ -247,7 +442,7 @@ export default function ExpenseTracker() {
             <span className="text-xs text-gray-500">Total Expenses</span>
           </div>
           <p className="text-xl font-bold text-gray-900 dark:text-white">
-            KES {totalExpenses.toLocaleString()}
+            {currencySymbol} {(totalExpenses || 0).toLocaleString()}
           </p>
         </div>
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
@@ -256,7 +451,7 @@ export default function ExpenseTracker() {
             <span className="text-xs text-gray-500">Approved</span>
           </div>
           <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400">
-            KES {approvedTotal.toLocaleString()}
+            {currencySymbol} {(approvedTotal || 0).toLocaleString()}
           </p>
         </div>
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
@@ -265,7 +460,7 @@ export default function ExpenseTracker() {
             <span className="text-xs text-gray-500">Pending</span>
           </div>
           <p className="text-xl font-bold text-amber-600 dark:text-amber-400">
-            KES {pendingTotal.toLocaleString()}
+            {currencySymbol} {(pendingTotal || 0).toLocaleString()}
           </p>
         </div>
       </div>
@@ -281,18 +476,18 @@ export default function ExpenseTracker() {
               />
               <input
                 value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
+                onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="Search expenses..."
                 className="w-full pl-9 pr-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500/30"
               />
             </div>
             <select
               value={categoryFilter}
-              onChange={e => setCategoryFilter(e.target.value)}
+              onChange={(e) => setCategoryFilter(e.target.value)}
               className="px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-gray-300 focus:outline-none"
             >
               <option value="all">All Categories</option>
-              {EXPENSE_CATEGORIES.map(c => (
+              {EXPENSE_CATEGORIES.map((c) => (
                 <option key={c.value} value={c.value}>
                   {c.label}
                 </option>
@@ -300,7 +495,7 @@ export default function ExpenseTracker() {
             </select>
             <select
               value={statusFilter}
-              onChange={e => setStatusFilter(e.target.value)}
+              onChange={(e) => setStatusFilter(e.target.value)}
               className="px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-gray-300 focus:outline-none"
             >
               <option value="all">All Status</option>
@@ -359,48 +554,53 @@ export default function ExpenseTracker() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map(exp => {
+                  {(filtered || []).map((exp) => {
                     const CatIcon =
-                      EXPENSE_CATEGORIES.find(c => c.value === exp.category)
-                        ?.icon || FileText;
+                      (EXPENSE_CATEGORIES || []).find(
+                        (c) => c.value === exp.category,
+                      )?.icon || FileText;
                     return (
                       <tr
-                        key={exp.id}
+                        key={exp.id || `exp_${Math.random()}`}
                         className="border-b border-gray-100 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700/20"
                       >
                         <td className="px-4 py-3 text-gray-600 dark:text-gray-400">
-                          {new Date(exp.date).toLocaleDateString()}
+                          {(exp.date &&
+                            new Date(exp.date).toLocaleDateString()) ||
+                            "—"}
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-1.5">
                             <CatIcon
                               size={12}
                               className={
-                                catColors[exp.category] || "text-gray-500"
+                                catColors[exp.category] || DEFAULT_CAT_COLOR
                               }
                             />
                             <span className="text-gray-700 dark:text-gray-300">
-                              {EXPENSE_CATEGORIES.find(
-                                c => c.value === exp.category
-                              )?.label || exp.category}
+                              {(EXPENSE_CATEGORIES || []).find(
+                                (c) => c.value === exp.category,
+                              )?.label ||
+                                exp.category ||
+                                "Other"}
                             </span>
                           </div>
                         </td>
                         <td className="px-4 py-3 text-gray-900 dark:text-white max-w-[200px] truncate">
-                          {exp.description}
+                          {exp.description || ""}
                         </td>
                         <td className="px-4 py-3 text-right font-medium text-gray-900 dark:text-white">
-                          KES {exp.amount.toLocaleString()}
+                          {currencySymbol} {(exp.amount || 0).toLocaleString()}
                         </td>
                         <td className="px-4 py-3 text-center">
                           <span
-                            className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${statusColors[exp.status]}`}
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${statusColors[exp.status] || DEFAULT_STATUS_COLOR}`}
                           >
-                            {exp.status}
+                            {exp.status || "pending"}
                           </span>
                         </td>
                         <td className="px-4 py-3 text-xs text-gray-500 font-mono">
-                          {exp.reference}
+                          {exp.reference || ""}
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex justify-center gap-1">
@@ -451,7 +651,7 @@ export default function ExpenseTracker() {
               <PieChart size={14} className="text-amber-500" /> By Category
             </h3>
             <div className="space-y-3">
-              {byCategory.map(cat => {
+              {(byCategory || []).map((cat) => {
                 const CatIcon = cat.icon;
                 const pct =
                   totalExpenses > 0 ? (cat.total / totalExpenses) * 100 : 0;
@@ -462,7 +662,8 @@ export default function ExpenseTracker() {
                         <CatIcon size={12} /> {cat.label}
                       </span>
                       <span className="text-gray-900 dark:text-white font-medium">
-                        KES {cat.total.toLocaleString()} ({pct.toFixed(1)}%)
+                        {currencySymbol} {(cat.total || 0).toLocaleString()} (
+                        {(pct || 0).toFixed(1)}%)
                       </span>
                     </div>
                     <div className="h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
@@ -495,22 +696,22 @@ export default function ExpenseTracker() {
               <div className="p-3 bg-emerald-50 dark:bg-emerald-500/10 rounded-lg">
                 <p className="text-xs text-gray-500">Approved</p>
                 <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
-                  KES {approvedTotal.toLocaleString()}
+                  {currencySymbol} {(approvedTotal || 0).toLocaleString()}
                 </p>
               </div>
               <div className="p-3 bg-amber-50 dark:bg-amber-500/10 rounded-lg">
                 <p className="text-xs text-gray-500">Pending Approval</p>
                 <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">
-                  KES {pendingTotal.toLocaleString()}
+                  {currencySymbol} {(pendingTotal || 0).toLocaleString()}
                 </p>
               </div>
               <div className="p-3 bg-red-50 dark:bg-red-500/10 rounded-lg">
                 <p className="text-xs text-gray-500">Average per Expense</p>
                 <p className="text-2xl font-bold text-red-600 dark:text-red-400">
-                  KES{" "}
+                  {currencySymbol}{" "}
                   {filtered.length > 0
                     ? Math.round(
-                        totalExpenses / filtered.length
+                        (totalExpenses || 0) / filtered.length,
                       ).toLocaleString()
                     : "0"}
                 </p>
@@ -545,7 +746,7 @@ export default function ExpenseTracker() {
                     <input
                       type="date"
                       value={formData.date}
-                      onChange={e =>
+                      onChange={(e) =>
                         setFormData({ ...formData, date: e.target.value })
                       }
                       className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
@@ -553,12 +754,12 @@ export default function ExpenseTracker() {
                   </div>
                   <div>
                     <label className="text-xs text-gray-500 mb-1 block">
-                      Amount (KES) *
+                      Amount ({currencySymbol}) *
                     </label>
                     <input
                       type="number"
                       value={formData.amount || ""}
-                      onChange={e =>
+                      onChange={(e) =>
                         setFormData({
                           ...formData,
                           amount: Number(e.target.value),
@@ -575,12 +776,12 @@ export default function ExpenseTracker() {
                     </label>
                     <select
                       value={formData.category}
-                      onChange={e =>
+                      onChange={(e) =>
                         setFormData({ ...formData, category: e.target.value })
                       }
                       className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
                     >
-                      {EXPENSE_CATEGORIES.map(c => (
+                      {EXPENSE_CATEGORIES.map((c) => (
                         <option key={c.value} value={c.value}>
                           {c.label}
                         </option>
@@ -593,7 +794,7 @@ export default function ExpenseTracker() {
                     </label>
                     <select
                       value={formData.paymentMethod}
-                      onChange={e =>
+                      onChange={(e) =>
                         setFormData({
                           ...formData,
                           paymentMethod: e.target.value,
@@ -601,7 +802,7 @@ export default function ExpenseTracker() {
                       }
                       className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
                     >
-                      {PAYMENT_METHODS.map(m => (
+                      {PAYMENT_METHODS.map((m) => (
                         <option key={m} value={m}>
                           {m}
                         </option>
@@ -615,7 +816,7 @@ export default function ExpenseTracker() {
                   </label>
                   <textarea
                     value={formData.description}
-                    onChange={e =>
+                    onChange={(e) =>
                       setFormData({ ...formData, description: e.target.value })
                     }
                     rows={2}
@@ -629,7 +830,7 @@ export default function ExpenseTracker() {
                     </label>
                     <input
                       value={formData.reference}
-                      onChange={e =>
+                      onChange={(e) =>
                         setFormData({ ...formData, reference: e.target.value })
                       }
                       className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
@@ -641,7 +842,7 @@ export default function ExpenseTracker() {
                     </label>
                     <input
                       value={formData.approvedBy}
-                      onChange={e =>
+                      onChange={(e) =>
                         setFormData({ ...formData, approvedBy: e.target.value })
                       }
                       className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"

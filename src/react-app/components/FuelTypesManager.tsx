@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { KENYA_BASE_PRICES, KENYA_SPECIALTY_PRICES } from "@/react-app/config/pricing";
+import { useState, useEffect, useRef } from "react";
+import { CANONICAL_FUEL_TYPES } from "@/react-app/config/pricing";
 import {
   Fuel,
   Plus,
@@ -12,13 +12,46 @@ import {
   Flame,
   Zap,
   Wind,
-  AlertTriangle,
-  CheckCircle2,
   Settings,
   ChevronDown,
   ChevronUp,
+  Monitor,
+  FlaskConical,
+  Gauge,
+  Minus,
 } from "lucide-react";
-import { useFuel } from "@/react-app/context/FuelContext";
+import { useFuel, type Pump } from "@/react-app/context/FuelContext";
+import { usePermissions } from "@/react-app/context/PermissionContext";
+import cloudStorageService from "@/react-app/lib/cloud-storage-service";
+import {
+  getCurrencySymbol,
+  resolveCurrencySymbol,
+} from "@/react-app/lib/currency";
+import { useAuth } from "@/react-app/context/AuthContext";
+import { useStations } from "@/react-app/context/StationContext";
+import SubTabBar from "@/react-app/components/SubTabBar";
+import PriceBoard from "@/react-app/components/PriceBoard";
+import FuelQualityTesting from "@/react-app/components/FuelQualityTesting";
+import {
+  emitFuelTypeChange,
+  emitFuelPriceChange,
+  type FuelPricePrefill,
+} from "@/react-app/lib/fuel-interlink-bus";
+import {
+  onTabPayload,
+  navigateToTab,
+} from "@/react-app/lib/mpesa-integration-service";
+import {
+  normalizeFuelType,
+  getFuelLabel,
+  getVATRate,
+} from "@/react-app/config/pricing";
+import type { CanonicalFuelType } from "@/react-app/config/pricing";
+import { useStationFuelTypes } from "@/react-app/hooks/useStationFuelTypes";
+import { getDetectedCountryCode } from "@/react-app/lib/currency";
+
+// Country-aware default tax rate for preset fuels (was hardcoded 16% Kenya VAT).
+const PRESET_TAX_RATE = Math.round(getVATRate(getDetectedCountryCode()) * 100);
 
 // ============================================================
 // CUSTOM FUEL TYPE MANAGER
@@ -41,48 +74,55 @@ export interface CustomFuelType {
   description: string;
 }
 
-const DEFAULT_FUEL_TYPES: CustomFuelType[] = [
-  {
-    id: "pms",
-    code: "PMS",
-    name: "Premium Motor Spirit",
-    localName: "Petrol",
-    price: KENYA_BASE_PRICES.petrol,
-    costPrice: 190.0,
-    taxRate: 16,
-    levyRate: 0,
-    color: "red",
-    icon: "flame",
-    pumpCount: 2,
-    active: true,
-    description: "Standard petrol for vehicles",
-  },
-  {
-    id: "ago",
-    code: "AGO",
-    name: "Automotive Gas Oil",
-    localName: "Diesel",
-    price: KENYA_BASE_PRICES.diesel,
-    costPrice: 189.5,
-    taxRate: 16,
-    levyRate: 0,
-    color: "blue",
-    icon: "droplet",
-    pumpCount: 2,
-    active: true,
-    description: "Standard diesel for vehicles",
-  },
-];
+// Cloud key under which the custom fuel-type catalog is persisted/synced.
+const FUEL_TYPES_CLOUD_KEY = "fuel_types_config";
+
+/**
+ * Hardens a single fuel-type record loaded from cloud/localStorage into a fully
+ * valid CustomFuelType so render-time access (.map, .toFixed, .toLowerCase...)
+ * can never throw "Cannot read properties of undefined". Mirrors the
+ * SupplierManagement.tsx normalize pattern.
+ */
+function normalizeCustomFuelType(
+  f: Partial<CustomFuelType> | null | undefined,
+): CustomFuelType {
+  const id =
+    f?.id || `fuel_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  return {
+    id,
+    code: f?.code ?? "",
+    name: f?.name ?? "",
+    localName: f?.localName ?? "",
+    price: typeof f?.price === "number" ? f.price : 0,
+    costPrice: typeof f?.costPrice === "number" ? f.costPrice : 0,
+    taxRate: typeof f?.taxRate === "number" ? f.taxRate : 0,
+    levyRate: typeof f?.levyRate === "number" ? f.levyRate : 0,
+    color: f?.color ?? "",
+    icon: f?.icon ?? "",
+    pumpCount: typeof f?.pumpCount === "number" ? f.pumpCount : 0,
+    active: typeof f?.active === "boolean" ? f.active : false,
+    description: f?.description ?? "",
+  };
+}
+
+/**
+ * Hardens an array of cloud/localStorage fuel-type records. Non-array input
+ * (null, undefined, partial object, etc.) collapses to [].
+ */
+function normalizeCustomFuelTypes(arr: unknown): CustomFuelType[] {
+  if (!Array.isArray(arr)) return [];
+  return arr.map((f) => normalizeCustomFuelType(f as Partial<CustomFuelType>));
+}
 
 const PRESET_FUELS: CustomFuelType[] = [
   {
     id: "iko",
-    code: "IK",
+    code: CANONICAL_FUEL_TYPES.kerosene.code,
     name: "Illuminating Kerosene",
-    localName: "Kerosene",
-    price: 164.9,
-    costPrice: 155.0,
-    taxRate: 16,
+    localName: CANONICAL_FUEL_TYPES.kerosene.label,
+    price: 0, // user enters station-specific price
+    costPrice: 0,
+    taxRate: PRESET_TAX_RATE,
     levyRate: 0,
     color: "amber",
     icon: "flame",
@@ -92,12 +132,12 @@ const PRESET_FUELS: CustomFuelType[] = [
   },
   {
     id: "vpower",
-    code: "V-PWR",
+    code: CANONICAL_FUEL_TYPES.vpower.code,
     name: "Shell V-Power",
-    localName: "V-Power",
-    price: 214.35,
-    costPrice: 200.0,
-    taxRate: 16,
+    localName: CANONICAL_FUEL_TYPES.vpower.label,
+    price: 0, // user enters station-specific price
+    costPrice: 0,
+    taxRate: PRESET_TAX_RATE,
     levyRate: 0,
     color: "purple",
     icon: "zap",
@@ -107,12 +147,12 @@ const PRESET_FUELS: CustomFuelType[] = [
   },
   {
     id: "diesel-premium",
-    code: "AGO-P",
+    code: CANONICAL_FUEL_TYPES.premium_diesel.code,
     name: "Premium Diesel",
-    localName: "Premium Diesel",
-    price: 213.72,
-    costPrice: 199.5,
-    taxRate: 16,
+    localName: CANONICAL_FUEL_TYPES.premium_diesel.label,
+    price: 0, // user enters station-specific price
+    costPrice: 0,
+    taxRate: PRESET_TAX_RATE,
     levyRate: 0,
     color: "indigo",
     icon: "droplet",
@@ -122,12 +162,12 @@ const PRESET_FUELS: CustomFuelType[] = [
   },
   {
     id: "lpg",
-    code: "LPG",
+    code: CANONICAL_FUEL_TYPES.lpg.code,
     name: "Liquefied Petroleum Gas",
-    localName: "Cooking Gas",
-    price: 120.0,
-    costPrice: 100.0,
-    taxRate: 8,
+    localName: CANONICAL_FUEL_TYPES.lpg.label,
+    price: 0, // user enters station-specific price
+    costPrice: 0,
+    taxRate: PRESET_TAX_RATE,
     levyRate: 0,
     color: "green",
     icon: "wind",
@@ -140,9 +180,9 @@ const PRESET_FUELS: CustomFuelType[] = [
     code: "CNG",
     name: "Compressed Natural Gas",
     localName: "CNG",
-    price: 80.0,
-    costPrice: 65.0,
-    taxRate: 16,
+    price: 0, // user enters station-specific price
+    costPrice: 0,
+    taxRate: PRESET_TAX_RATE,
     levyRate: 0,
     color: "cyan",
     icon: "wind",
@@ -155,9 +195,9 @@ const PRESET_FUELS: CustomFuelType[] = [
     code: "B20",
     name: "Biodiesel B20",
     localName: "Bio Diesel",
-    price: 195.0,
-    costPrice: 180.0,
-    taxRate: 16,
+    price: 0, // user enters station-specific price
+    costPrice: 0,
+    taxRate: PRESET_TAX_RATE,
     levyRate: 0,
     color: "emerald",
     icon: "leaf",
@@ -170,9 +210,9 @@ const PRESET_FUELS: CustomFuelType[] = [
     code: "E10",
     name: "Ethanol Blend E10",
     localName: "Ethanol Petrol",
-    price: 200.0,
-    costPrice: 185.0,
-    taxRate: 16,
+    price: 0, // user enters station-specific price
+    costPrice: 0,
+    taxRate: PRESET_TAX_RATE,
     levyRate: 0,
     color: "yellow",
     icon: "beaker",
@@ -185,9 +225,9 @@ const PRESET_FUELS: CustomFuelType[] = [
     code: "AVGAS",
     name: "Aviation Gasoline",
     localName: "Avgas",
-    price: 350.0,
-    costPrice: 320.0,
-    taxRate: 16,
+    price: 0, // user enters station-specific price
+    costPrice: 0,
+    taxRate: PRESET_TAX_RATE,
     levyRate: 0,
     color: "sky",
     icon: "plane",
@@ -200,9 +240,9 @@ const PRESET_FUELS: CustomFuelType[] = [
     code: "JET",
     name: "Jet A-1 Fuel",
     localName: "Jet Fuel",
-    price: 280.0,
-    costPrice: 260.0,
-    taxRate: 16,
+    price: 0, // user enters station-specific price
+    costPrice: 0,
+    taxRate: PRESET_TAX_RATE,
     levyRate: 0,
     color: "slate",
     icon: "plane",
@@ -215,9 +255,9 @@ const PRESET_FUELS: CustomFuelType[] = [
     code: "IFO",
     name: "Industrial Fuel Oil",
     localName: "Fuel Oil",
-    price: 150.0,
-    costPrice: 130.0,
-    taxRate: 16,
+    price: 0, // user enters station-specific price
+    costPrice: 0,
+    taxRate: PRESET_TAX_RATE,
     levyRate: 0,
     color: "orange",
     icon: "factory",
@@ -259,7 +299,7 @@ const ICON_OPTIONS = [
 function loadFuelTypes(): CustomFuelType[] {
   try {
     const saved = localStorage.getItem("fuelpro_custom_fuel_types");
-    if (saved) return JSON.parse(saved);
+    if (saved) return normalizeCustomFuelTypes(JSON.parse(saved));
   } catch {}
   return [];
 }
@@ -269,28 +309,167 @@ function saveFuelTypes(types: CustomFuelType[]) {
 }
 
 export default function FuelTypesManager() {
-  const [fuelTypes, setFuelTypes] = useState<CustomFuelType[]>(loadFuelTypes);
+  const { user } = useAuth();
+  const { currentStation } = useStations();
+  const { state, dispatch } = useFuel();
+  const { hasPermission } = usePermissions();
+  const currencySymbol = resolveCurrencySymbol(
+    state.companyData?.currency,
+    currentStation?.currency,
+  );
+  const stationId = currentStation?.id;
+  const [fuelTypes, setFuelTypes] = useState<CustomFuelType[]>(() => {
+    const cloudCached = cloudStorageService.getCached<unknown[]>(
+      "fuel_types_config",
+      stationId,
+    );
+    if (Array.isArray(cloudCached))
+      return normalizeCustomFuelTypes(cloudCached);
+    return loadFuelTypes();
+  });
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [renamingPumpsFor, setRenamingPumpsFor] = useState<string | null>(null);
   const [showPresets, setShowPresets] = useState(false);
+  // Inner sub-tab: hosts the formerly-standalone Price Board and Fuel
+  // Quality Testing tabs alongside the fuel-type catalog. Pump Settings is
+  // now merged INTO the Fuel Types sub-tab as a per-fuel-type "Number of
+  // Pumps" action (see the expanded fuel-type card).
+  const [activeView, setActiveView] = useState<
+    "fueltypes" | "priceboard" | "quality"
+  >("fueltypes");
 
   // Form state
   const [formCode, setFormCode] = useState("");
   const [formName, setFormName] = useState("");
   const [formLocalName, setFormLocalName] = useState("");
-  const [formPrice, setFormPrice] = useState(0);
-  const [formCostPrice, setFormCostPrice] = useState(0);
-  const [formTaxRate, setFormTaxRate] = useState(16);
+  const [formPrice, setFormPrice] = useState<number | "">(0);
+  const [formCostPrice, setFormCostPrice] = useState<number | "">(0);
+  const [formTaxRate, setFormTaxRate] = useState<number | "">(PRESET_TAX_RATE);
   const [formColor, setFormColor] = useState("red");
   const [formIcon, setFormIcon] = useState("flame");
-  const [formPumps, setFormPumps] = useState(1);
+  const [formPumps, setFormPumps] = useState<number | "">(1);
   const [formDesc, setFormDesc] = useState("");
 
+  // Race-condition guard: prevents the async cloud-load effect from
+  // overwriting local state (persist) before the load completes, and
+  // prevents the real-time echo from wiping uncommitted local edits.
+  // Without this, switching to the tab shows cached fuel types for a
+  // glimpse then the cloud load wipes them (the "flash then blank" bug).
+  const cloudLoadCompleteRef = useRef(false);
+  const localModifiedRef = useRef(false);
+  const fuelTypesRef = useRef(fuelTypes);
+  fuelTypesRef.current = fuelTypes;
+
   const persist = (types: CustomFuelType[]) => {
+    localModifiedRef.current = true;
     setFuelTypes(types);
     saveFuelTypes(types);
+    if (cloudLoadCompleteRef.current)
+      cloudStorageService
+        .set(FUEL_TYPES_CLOUD_KEY, types, stationId)
+        .catch(() => {});
+    // Broadcast each active fuel's price on the interlink bus so same-page
+    // consumers (Dashboard, PriceBoard, POS, Invoice, Reports) update
+    // instantly without waiting for the cloud real-time round-trip.
+    for (const ft of types) {
+      if (!ft.active) continue;
+      emitFuelTypeChange({
+        id: ft.id,
+        fuelType: ft.name,
+        canonical: normalizeFuelType(ft.name),
+        source: "FuelTypesManager.persist",
+      });
+      emitFuelPriceChange({
+        fuelType: ft.name,
+        canonical: normalizeFuelType(ft.name),
+        price: ft.price,
+        source: "FuelTypesManager.persist",
+      });
+    }
   };
+
+  // Load from cloud on mount + real-time cross-device sync
+  useEffect(() => {
+    if (!user) return;
+    cloudLoadCompleteRef.current = false;
+    localModifiedRef.current = false;
+    let cancelled = false;
+    (async () => {
+      const cloudData = await cloudStorageService.get<CustomFuelType[]>(
+        FUEL_TYPES_CLOUD_KEY,
+        stationId,
+      );
+      if (!cancelled && cloudData && !localModifiedRef.current)
+        setFuelTypes(normalizeCustomFuelTypes(cloudData));
+      if (!cancelled) cloudLoadCompleteRef.current = true;
+    })();
+    // Real-time: when another device updates fuel types, update instantly
+    const unsubs = [
+      cloudStorageService.subscribe<CustomFuelType[]>(
+        FUEL_TYPES_CLOUD_KEY,
+        stationId,
+        (val) => {
+          if (!val || localModifiedRef.current) return;
+          setFuelTypes(normalizeCustomFuelTypes(val));
+        },
+      ),
+    ];
+    return () => {
+      cancelled = true;
+      unsubs.forEach((u) => u());
+    };
+  }, [user, stationId]);
+
+  // Post-load flush: if the user made changes before/during the cloud load,
+  // re-push the latest local state to cloud so it's not lost.
+  useEffect(() => {
+    if (cloudLoadCompleteRef.current && localModifiedRef.current) {
+      cloudStorageService
+        .set(FUEL_TYPES_CLOUD_KEY, fuelTypesRef.current, stationId)
+        .catch(() => {});
+    }
+  }, [cloudLoadCompleteRef.current]);
+
+  // Interlink receiver: when another tab calls navigateToTab("fueltypes",
+  // <FuelPricePrefill>), open the add form pre-filled with the fuel type +
+  // price so the user can review and save (which then propagates everywhere
+  // via the bus + cloud real-time).
+  useEffect(() => {
+    return onTabPayload("fueltypes", (raw) => {
+      const p = (raw || {}) as FuelPricePrefill;
+      if (Object.keys(p).length === 0) return;
+      const validViews = ["fueltypes", "priceboard", "quality"] as const;
+      const target =
+        p.view && (validViews as readonly string[]).includes(p.view)
+          ? (p.view as (typeof validViews)[number])
+          : "fueltypes";
+      setActiveView(target);
+      // Only open the add form when a fuel type / price is actually being
+      // pre-filled — a pure "show price board" navigation has no fuelType.
+      if (p.fuelType) {
+        setFormName(p.fuelType);
+        setFormLocalName(p.fuelType);
+        const canonical = normalizeFuelType(p.fuelType);
+        if (canonical) {
+          // Use the canonical code as the form code (PMS/AGO/IK/...).
+          const codeMap: Record<string, string> = {
+            petrol: "PMS",
+            diesel: "AGO",
+            kerosene: "IK",
+            vpower: "VPW",
+            premium_diesel: "PDS",
+            lpg: "LPG",
+            cng: "CNG",
+          };
+          setFormCode(codeMap[canonical] || "");
+        }
+      }
+      if (typeof p.price === "number" && p.price > 0) setFormPrice(p.price);
+      setShowAddForm(true);
+    });
+  }, []);
 
   const resetForm = () => {
     setFormCode("");
@@ -298,7 +477,7 @@ export default function FuelTypesManager() {
     setFormLocalName("");
     setFormPrice(0);
     setFormCostPrice(0);
-    setFormTaxRate(16);
+    setFormTaxRate(PRESET_TAX_RATE);
     setFormColor("red");
     setFormIcon("flame");
     setFormPumps(1);
@@ -312,13 +491,13 @@ export default function FuelTypesManager() {
       code: formCode.toUpperCase(),
       name: formName,
       localName: formLocalName || formName,
-      price: formPrice,
-      costPrice: formCostPrice,
-      taxRate: formTaxRate,
+      price: typeof formPrice === "number" ? formPrice : 0,
+      costPrice: typeof formCostPrice === "number" ? formCostPrice : 0,
+      taxRate: typeof formTaxRate === "number" ? formTaxRate : 0,
       levyRate: 0,
       color: formColor,
       icon: formIcon,
-      pumpCount: formPumps,
+      pumpCount: typeof formPumps === "number" ? formPumps : 0,
       active: true,
       description: formDesc,
     };
@@ -329,17 +508,126 @@ export default function FuelTypesManager() {
 
   const handleDelete = (id: string) => {
     if (!confirm("Delete this fuel type?")) return;
-    persist(fuelTypes.filter(f => f.id !== id));
+    persist(fuelTypes.filter((f) => f.id !== id));
+  };
+
+  // ---- Per-fuel-type "Number of Pumps" action (merged Pump Settings) ----
+  // Changing the pump count for a fuel type updates the fuel_types_config
+  // catalog (pumpCount) AND the FuelContext pump store (pmsPumps /
+  // agoPumps / fuelPumpsByType) so every tab (Dashboard, POS, SalesTracking,
+  // PriceBoard, Reports) reflects the new pump count immediately.
+  const handlePumpCountChange = (ft: CustomFuelType, nextCount: number) => {
+    const count = Math.max(0, Math.min(99, nextCount));
+    const canonical = normalizeFuelType(ft.name);
+    // 1. Persist the pumpCount into the fuel_types_config catalog.
+    persist(
+      fuelTypes.map((f) => (f.id === ft.id ? { ...f, pumpCount: count } : f)),
+    );
+    // 2. Sync the FuelContext pump store so the whole site picks it up.
+    const makePump = (id: string, name: string): Pump => ({
+      id,
+      name,
+      openingKsh: 0,
+      closingKsh: 0,
+      openingL: 0,
+      closingL: 0,
+      salesL: 0,
+      salesKsh: 0,
+    });
+    const code =
+      ft.code ||
+      (canonical ? canonical.toUpperCase().slice(0, 3) : ft.id.slice(0, 3));
+    const label = getFuelLabel(ft.name);
+    if (canonical === "petrol") {
+      const newPmsPumps = Array.from(
+        { length: count },
+        (_, i) =>
+          state.pmsPumps?.[i] || makePump(`pms-${i + 1}`, `PMS Pump ${i + 1}`),
+      );
+      dispatch({ type: "SET_PMS_PUMPS", payload: newPmsPumps });
+    } else if (canonical === "diesel") {
+      const newAgoPumps = Array.from(
+        { length: count },
+        (_, i) =>
+          state.agoPumps?.[i] || makePump(`ago-${i + 1}`, `AGO Pump ${i + 1}`),
+      );
+      dispatch({ type: "SET_AGO_PUMPS", payload: newAgoPumps });
+    } else if (canonical) {
+      const existing = state.fuelPumpsByType?.[canonical] || [];
+      const newPumps = Array.from(
+        { length: count },
+        (_, i) =>
+          existing[i] || makePump(`${code}-${i + 1}`, `${label} Pump ${i + 1}`),
+      );
+      dispatch({
+        type: "SET_FUEL_PUMPS_BY_TYPE",
+        payload: { ...state.fuelPumpsByType, [canonical]: newPumps },
+      });
+    }
+    // 3. Broadcast the fuel-type change so same-page consumers refresh.
+    emitFuelTypeChange({
+      id: ft.id,
+      fuelType: ft.name,
+      canonical,
+      source: "FuelTypesManager.handlePumpCountChange",
+    });
+  };
+
+  // Rename a single pump's ID + display name for a fuel type. Updates the
+  // FuelContext pump store (pmsPumps / agoPumps / fuelPumpsByType) so the
+  // custom name appears in Sales Tracking, POS, Dashboard, Reports, etc.
+  const handleRenamePump = (
+    ft: CustomFuelType,
+    pumpIndex: number,
+    newName: string,
+  ) => {
+    const canonical = normalizeFuelType(ft.name);
+    const trimmed = newName.trim();
+    if (!trimmed) return; // don't allow empty names
+    const code =
+      ft.code ||
+      (canonical ? canonical.toUpperCase().slice(0, 3) : ft.id.slice(0, 3));
+    const updatePump = (pumps: Pump[], idx: number, name: string): Pump[] =>
+      pumps.map((p, i) =>
+        i === idx
+          ? {
+              ...p,
+              name,
+              id: `${code}-${idx + 1}-${name.replace(/\s+/g, "-").toLowerCase().slice(0, 8)}`,
+            }
+          : p,
+      );
+    if (canonical === "petrol" && state.pmsPumps) {
+      dispatch({
+        type: "SET_PMS_PUMPS",
+        payload: updatePump(state.pmsPumps, pumpIndex, trimmed),
+      });
+    } else if (canonical === "diesel" && state.agoPumps) {
+      dispatch({
+        type: "SET_AGO_PUMPS",
+        payload: updatePump(state.agoPumps, pumpIndex, trimmed),
+      });
+    } else if (canonical && state.fuelPumpsByType?.[canonical]) {
+      const updated = updatePump(
+        state.fuelPumpsByType[canonical],
+        pumpIndex,
+        trimmed,
+      );
+      dispatch({
+        type: "SET_FUEL_PUMPS_BY_TYPE",
+        payload: { ...state.fuelPumpsByType, [canonical]: updated },
+      });
+    }
   };
 
   const handleToggleActive = (id: string) => {
     persist(
-      fuelTypes.map(f => (f.id === id ? { ...f, active: !f.active } : f))
+      fuelTypes.map((f) => (f.id === id ? { ...f, active: !f.active } : f)),
     );
   };
 
   const handleAddPreset = (preset: CustomFuelType) => {
-    const exists = fuelTypes.some(f => f.code === preset.code);
+    const exists = fuelTypes.some((f) => f.code === preset.code);
     if (exists) {
       alert(`${preset.name} already exists!`);
       return;
@@ -367,315 +655,525 @@ export default function FuelTypesManager() {
         </div>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 text-center">
-          <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">
-            {fuelTypes.length}
-          </p>
-          <p className="text-[10px] text-gray-500">Fuel Types</p>
-        </div>
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 text-center">
-          <p className="text-2xl font-bold text-green-600 dark:text-green-400">
-            {fuelTypes.filter(f => f.active).length}
-          </p>
-          <p className="text-[10px] text-gray-500">Active</p>
-        </div>
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 text-center">
-          <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-            {fuelTypes.reduce((s, f) => s + f.pumpCount, 0)}
-          </p>
-          <p className="text-[10px] text-gray-500">Total Pumps</p>
-        </div>
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 text-center">
-          <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">
-            {marginPercent(
-              fuelTypes.find(f => f.id === "pms")?.price || 0,
-              fuelTypes.find(f => f.id === "pms")?.costPrice || 0
-            )}
-            %
-          </p>
-          <p className="text-[10px] text-gray-500">PMS Margin</p>
-        </div>
-      </div>
+      {/* Sub-tab switcher: Fuel Types (incl. pump settings) / Price Board / Quality */}
+      <SubTabBar
+        tabs={[
+          { id: "fueltypes", label: "Fuel Types", icon: Fuel },
+          { id: "priceboard", label: "Price Board", icon: Monitor },
+          { id: "quality", label: "Fuel Quality", icon: FlaskConical },
+        ]}
+        active={activeView}
+        onChange={(id) =>
+          setActiveView(id as "fueltypes" | "priceboard" | "quality")
+        }
+      />
 
-      {/* Action Buttons */}
-      <div className="flex gap-3">
-        <button
-          onClick={() => {
-            setShowAddForm(!showAddForm);
-            setShowPresets(false);
-          }}
-          className="flex-1 px-4 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-colors shadow-lg"
-        >
-          <Plus size={18} /> {showAddForm ? "Cancel" : "Add Custom Fuel Type"}
-        </button>
-        <button
-          onClick={() => {
-            setShowPresets(!showPresets);
-            setShowAddForm(false);
-          }}
-          className="flex-1 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-colors shadow-lg"
-        >
-          <Fuel size={18} /> {showPresets ? "Hide" : "Add from Presets"}
-        </button>
-      </div>
+      {activeView === "priceboard" ? (
+        <PriceBoard />
+      ) : activeView === "quality" ? (
+        <FuelQualityTesting />
+      ) : (
+        <>
+          {/* Summary Cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 text-center">
+              <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">
+                {(fuelTypes || []).length}
+              </p>
+              <p className="text-[10px] text-gray-500">Fuel Types</p>
+            </div>
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 text-center">
+              <p className="text-2xl font-bold text-green-600 dark:text-green-400">
+                {(fuelTypes || []).filter((f) => f.active).length}
+              </p>
+              <p className="text-[10px] text-gray-500">Active</p>
+            </div>
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 text-center">
+              <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                {(fuelTypes || []).reduce((s, f) => s + (f.pumpCount || 0), 0)}
+              </p>
+              <p className="text-[10px] text-gray-500">Total Pumps</p>
+            </div>
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 text-center">
+              <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">
+                {marginPercent(
+                  fuelTypes.find((f) => f.id === "pms")?.price || 0,
+                  fuelTypes.find((f) => f.id === "pms")?.costPrice || 0,
+                )}
+                %
+              </p>
+              <p className="text-[10px] text-gray-500">PMS Margin</p>
+            </div>
+          </div>
 
-      {/* Add Custom Form */}
-      {showAddForm && (
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-amber-200 dark:border-amber-700 p-6 space-y-4">
-          <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-            <Settings size={18} className="text-amber-500" /> Add New Fuel Type
-          </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">Code *</label>
-              <input
-                value={formCode}
-                onChange={e => setFormCode(e.target.value)}
-                placeholder="e.g. V-PWR"
-                className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">Name *</label>
-              <input
-                value={formName}
-                onChange={e => setFormName(e.target.value)}
-                placeholder="e.g. V-Power"
-                className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">
-                Local Name
-              </label>
-              <input
-                value={formLocalName}
-                onChange={e => setFormLocalName(e.target.value)}
-                placeholder="e.g. V-Power Premium"
-                className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">
-                Selling Price (Ksh/L)
-              </label>
-              <input
-                type="number"
-                step="0.01"
-                value={formPrice}
-                onChange={e => setFormPrice(parseFloat(e.target.value) || 0)}
-                className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">
-                Cost Price (Ksh/L)
-              </label>
-              <input
-                type="number"
-                step="0.01"
-                value={formCostPrice}
-                onChange={e =>
-                  setFormCostPrice(parseFloat(e.target.value) || 0)
-                }
-                className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">
-                VAT Rate (%)
-              </label>
-              <input
-                type="number"
-                value={formTaxRate}
-                onChange={e => setFormTaxRate(parseFloat(e.target.value) || 0)}
-                className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">
-                Number of Pumps
-              </label>
-              <input
-                type="number"
-                value={formPumps}
-                onChange={e => setFormPumps(parseInt(e.target.value) || 0)}
-                className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">Color</label>
-              <div className="flex flex-wrap gap-1">
-                {COLOR_OPTIONS.map(c => (
-                  <button
-                    key={c}
-                    onClick={() => setFormColor(c)}
-                    className={`w-6 h-6 rounded-full border-2 transition-all ${c === formColor ? "border-gray-900 scale-110" : "border-transparent"}`}
-                    style={{ backgroundColor: c }}
+          {/* Action Buttons */}
+          <div className="flex gap-3">
+            <button
+              onClick={() => {
+                setShowAddForm(!showAddForm);
+                setShowPresets(false);
+              }}
+              className="flex-1 px-4 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-colors shadow-lg"
+            >
+              <Plus size={18} />{" "}
+              {showAddForm ? "Cancel" : "Add Custom Fuel Type"}
+            </button>
+            <button
+              onClick={() => {
+                setShowPresets(!showPresets);
+                setShowAddForm(false);
+              }}
+              className="flex-1 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-colors shadow-lg"
+            >
+              <Fuel size={18} /> {showPresets ? "Hide" : "Add from Presets"}
+            </button>
+          </div>
+
+          {/* Add Custom Form */}
+          {showAddForm && (
+            <div className="bg-white dark:bg-gray-800 rounded-xl border border-amber-200 dark:border-amber-700 p-6 space-y-4">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                <Settings size={18} className="text-amber-500" /> Add New Fuel
+                Type
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">
+                    Code *
+                  </label>
+                  <input
+                    value={formCode}
+                    onChange={(e) => setFormCode(e.target.value)}
+                    placeholder="e.g. V-PWR"
+                    className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
                   />
-                ))}
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">
+                    Name *
+                  </label>
+                  <input
+                    value={formName}
+                    onChange={(e) => setFormName(e.target.value)}
+                    placeholder="e.g. V-Power"
+                    className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">
+                    Local Name
+                  </label>
+                  <input
+                    value={formLocalName}
+                    onChange={(e) => setFormLocalName(e.target.value)}
+                    placeholder="e.g. V-Power Premium"
+                    className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">
+                    Selling Price ({currencySymbol}/L)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={formPrice === "" ? "" : formPrice}
+                    onChange={(e) =>
+                      setFormPrice(
+                        e.target.value === ""
+                          ? ""
+                          : parseFloat(e.target.value) || 0,
+                      )
+                    }
+                    className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">
+                    Cost Price ({currencySymbol}/L)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={formCostPrice === "" ? "" : formCostPrice}
+                    onChange={(e) =>
+                      setFormCostPrice(
+                        e.target.value === ""
+                          ? ""
+                          : parseFloat(e.target.value) || 0,
+                      )
+                    }
+                    className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">
+                    VAT Rate (%)
+                  </label>
+                  <input
+                    type="number"
+                    value={formTaxRate === "" ? "" : formTaxRate}
+                    onChange={(e) =>
+                      setFormTaxRate(
+                        e.target.value === ""
+                          ? ""
+                          : parseFloat(e.target.value) || 0,
+                      )
+                    }
+                    className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">
+                    Number of Pumps
+                  </label>
+                  <input
+                    type="number"
+                    value={formPumps === "" ? "" : formPumps}
+                    onChange={(e) =>
+                      setFormPumps(
+                        e.target.value === ""
+                          ? ""
+                          : parseInt(e.target.value) || 0,
+                      )
+                    }
+                    className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">
+                    Color
+                  </label>
+                  <div className="flex flex-wrap gap-1">
+                    {COLOR_OPTIONS.map((c) => (
+                      <button
+                        key={c}
+                        onClick={() => setFormColor(c)}
+                        className={`w-6 h-6 rounded-full border-2 transition-all ${c === formColor ? "border-gray-900 scale-110" : "border-transparent"}`}
+                        style={{ backgroundColor: c }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">
+                  Description
+                </label>
+                <textarea
+                  value={formDesc}
+                  onChange={(e) => setFormDesc(e.target.value)}
+                  rows={2}
+                  className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+                />
+              </div>
+              <button
+                onClick={handleAdd}
+                className="w-full py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-sm font-semibold flex items-center justify-center gap-2"
+              >
+                <Save size={18} /> Save Fuel Type
+              </button>
+            </div>
+          )}
+
+          {/* Presets */}
+          {showPresets && (
+            <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800 p-4">
+              <h3 className="text-sm font-bold text-blue-900 dark:text-blue-300 mb-3">
+                Quick Add Preset Fuel Types
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {PRESET_FUELS.map((preset) => {
+                  const exists = fuelTypes.some((f) => f.code === preset.code);
+                  return (
+                    <div
+                      key={preset.id}
+                      className="flex items-center justify-between p-3 bg-white dark:bg-gray-800 rounded-lg"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Fuel size={14} className="text-blue-500" />
+                        <div>
+                          <p className="text-xs font-medium text-gray-900 dark:text-white">
+                            {preset.name}
+                          </p>
+                          <p className="text-[10px] text-gray-500">
+                            {preset.code} | {currencySymbol}{" "}
+                            {preset.price.toFixed(2)}/L
+                          </p>
+                        </div>
+                      </div>
+                      {exists ? (
+                        <span className="text-[10px] px-2 py-1 bg-green-100 text-green-700 rounded-full">
+                          Added
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => handleAddPreset(preset)}
+                          className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-medium rounded-lg flex items-center gap-1"
+                        >
+                          <Plus size={12} /> Add
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
-          </div>
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">
-              Description
-            </label>
-            <textarea
-              value={formDesc}
-              onChange={e => setFormDesc(e.target.value)}
-              rows={2}
-              className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
-            />
-          </div>
-          <button
-            onClick={handleAdd}
-            className="w-full py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-sm font-semibold flex items-center justify-center gap-2"
-          >
-            <Save size={18} /> Save Fuel Type
-          </button>
-        </div>
-      )}
+          )}
 
-      {/* Presets */}
-      {showPresets && (
-        <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800 p-4">
-          <h3 className="text-sm font-bold text-blue-900 dark:text-blue-300 mb-3">
-            Quick Add Preset Fuel Types
-          </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {PRESET_FUELS.map(preset => {
-              const exists = fuelTypes.some(f => f.code === preset.code);
+          {/* Fuel Types List */}
+          <div className="space-y-3">
+            {(fuelTypes || []).map((ft) => {
+              const isExpanded = expandedId === ft.id;
+              const colorClass = FUEL_COLORS[ft.color || ""] || FUEL_COLORS.red;
               return (
                 <div
-                  key={preset.id}
-                  className="flex items-center justify-between p-3 bg-white dark:bg-gray-800 rounded-lg"
+                  key={ft.id}
+                  className={`bg-white dark:bg-gray-800 rounded-xl border overflow-hidden transition-all ${ft.active ? "border-gray-200 dark:border-gray-700" : "border-gray-100 dark:border-gray-800 opacity-60"}`}
                 >
-                  <div className="flex items-center gap-2">
-                    <Fuel size={14} className="text-blue-500" />
-                    <div>
-                      <p className="text-xs font-medium text-gray-900 dark:text-white">
-                        {preset.name}
-                      </p>
-                      <p className="text-[10px] text-gray-500">
-                        {preset.code} | Ksh {preset.price.toFixed(2)}/L
+                  <div
+                    className="flex items-center gap-3 p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                    onClick={() => setExpandedId(isExpanded ? null : ft.id)}
+                  >
+                    <div className={`p-2 rounded-lg ${colorClass}`}>
+                      <Fuel size={18} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
+                          {ft.name || ""}
+                        </h3>
+                        <span className="text-[10px] px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-600 rounded-full">
+                          {ft.code || ""}
+                        </span>
+                        {!ft.active && (
+                          <span className="text-[10px] px-2 py-0.5 bg-gray-100 text-gray-400 rounded-full">
+                            Inactive
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        {ft.localName || ""} | {currencySymbol}{" "}
+                        {(ft.price || 0).toFixed(2)}/L | {ft.pumpCount || 0}{" "}
+                        pump{(ft.pumpCount || 0) !== 1 ? "s" : ""}
                       </p>
                     </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleToggleActive(ft.id);
+                        }}
+                        className={`text-[10px] px-2 py-1 rounded-lg ${ft.active ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}
+                      >
+                        {ft.active ? "Active" : "Inactive"}
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDelete(ft.id);
+                        }}
+                        className="p-1.5 text-gray-400 hover:text-red-500 rounded-lg hover:bg-red-50"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                      {isExpanded ? (
+                        <ChevronUp size={16} className="text-gray-400" />
+                      ) : (
+                        <ChevronDown size={16} className="text-gray-400" />
+                      )}
+                    </div>
                   </div>
-                  {exists ? (
-                    <span className="text-[10px] px-2 py-1 bg-green-100 text-green-700 rounded-full">
-                      Added
-                    </span>
-                  ) : (
-                    <button
-                      onClick={() => handleAddPreset(preset)}
-                      className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-medium rounded-lg flex items-center gap-1"
-                    >
-                      <Plus size={12} /> Add
-                    </button>
+
+                  {isExpanded && (
+                    <div className="border-t border-gray-100 dark:border-gray-700 p-4">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+                        <InfoBox
+                          label="Selling Price"
+                          value={`${currencySymbol} ${(ft.price || 0).toFixed(2)}`}
+                        />
+                        <InfoBox
+                          label="Cost Price"
+                          value={`${currencySymbol} ${(ft.costPrice || 0).toFixed(2)}`}
+                        />
+                        <InfoBox
+                          label="Margin"
+                          value={`${marginPercent(ft.price || 0, ft.costPrice || 0)}%`}
+                        />
+                        <InfoBox
+                          label="VAT Rate"
+                          value={`${ft.taxRate || 0}%`}
+                        />
+                        <InfoBox
+                          label="Levy Rate"
+                          value={`${ft.levyRate || 0}%`}
+                        />
+                      </div>
+
+                      {/* Number of Pumps — inline Pump Settings action */}
+                      <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 border border-blue-200 dark:border-blue-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          <Gauge size={16} className="text-blue-500" />
+                          <div>
+                            <p className="text-xs font-semibold text-blue-900 dark:text-blue-200">
+                              Number of Pumps
+                            </p>
+                            <p className="text-[10px] text-blue-700 dark:text-blue-400">
+                              Customize how many {ft.localName || ft.name} pumps
+                              are at your station
+                            </p>
+                          </div>
+                        </div>
+                        {hasPermission("canChangePumpCount") ? (
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handlePumpCountChange(
+                                  ft,
+                                  (ft.pumpCount || 0) - 1,
+                                );
+                              }}
+                              className="p-2 bg-white dark:bg-gray-700 border border-blue-300 dark:border-blue-700 rounded-lg hover:bg-blue-100 dark:hover:bg-gray-600 transition-colors"
+                              aria-label="Decrease pump count"
+                            >
+                              <Minus
+                                size={14}
+                                className="text-blue-600 dark:text-blue-300"
+                              />
+                            </button>
+                            <span className="text-2xl font-bold text-blue-700 dark:text-blue-200 w-10 text-center">
+                              {ft.pumpCount || 0}
+                            </span>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handlePumpCountChange(
+                                  ft,
+                                  (ft.pumpCount || 0) + 1,
+                                );
+                              }}
+                              className="p-2 bg-white dark:bg-gray-700 border border-blue-300 dark:border-blue-700 rounded-lg hover:bg-blue-100 dark:hover:bg-gray-600 transition-colors"
+                              aria-label="Increase pump count"
+                            >
+                              <Plus
+                                size={14}
+                                className="text-blue-600 dark:text-blue-300"
+                              />
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-[10px] px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-500 rounded-full">
+                            Restricted
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Rename Pump IDs — lets the user assign a custom
+                          name/label to each pump for this fuel type. The
+                          custom name propagates to Sales Tracking, POS,
+                          Dashboard, and Reports. */}
+                      {(ft.pumpCount || 0) > 0 &&
+                        hasPermission("canChangePumpCount") && (
+                          <div className="mt-2">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setRenamingPumpsFor(
+                                  renamingPumpsFor === ft.id ? null : ft.id,
+                                );
+                              }}
+                              className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
+                            >
+                              <Edit3 size={12} />
+                              {renamingPumpsFor === ft.id
+                                ? "Hide pump names"
+                                : "Rename / assign pump IDs"}
+                            </button>
+                            {renamingPumpsFor === ft.id && (
+                              <div className="mt-2 space-y-2 bg-gray-50 dark:bg-gray-900 rounded-lg p-3">
+                                {(() => {
+                                  const canonical = normalizeFuelType(ft.name);
+                                  let pumps: Pump[] = [];
+                                  if (canonical === "petrol")
+                                    pumps = state.pmsPumps || [];
+                                  else if (canonical === "diesel")
+                                    pumps = state.agoPumps || [];
+                                  else if (canonical)
+                                    pumps =
+                                      state.fuelPumpsByType?.[canonical] || [];
+                                  // If the pump store hasn't been seeded yet,
+                                  // synthesize display rows from the count.
+                                  if (pumps.length < (ft.pumpCount || 0)) {
+                                    const code =
+                                      ft.code ||
+                                      (canonical
+                                        ? canonical.toUpperCase().slice(0, 3)
+                                        : "PMP");
+                                    const label = getFuelLabel(ft.name);
+                                    pumps = Array.from(
+                                      { length: ft.pumpCount || 0 },
+                                      (_, i) =>
+                                        pumps[i] || {
+                                          id: `${code}-${i + 1}`,
+                                          name: `${label} Pump ${i + 1}`,
+                                          openingKsh: 0,
+                                          closingKsh: 0,
+                                          openingL: 0,
+                                          closingL: 0,
+                                          salesL: 0,
+                                          salesKsh: 0,
+                                        },
+                                    );
+                                  }
+                                  return pumps
+                                    .slice(0, ft.pumpCount || 0)
+                                    .map((pump, idx) => (
+                                      <div
+                                        key={pump.id || idx}
+                                        className="flex items-center gap-2"
+                                      >
+                                        <span className="text-[10px] text-gray-400 w-12">
+                                          #{idx + 1}
+                                        </span>
+                                        <input
+                                          type="text"
+                                          value={pump.name || ""}
+                                          placeholder={`Pump ${idx + 1}`}
+                                          onChange={(e) => {
+                                            e.stopPropagation();
+                                            handleRenamePump(
+                                              ft,
+                                              idx,
+                                              e.target.value,
+                                            );
+                                          }}
+                                          className="flex-1 px-2 py-1 text-xs bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-md dark:text-white"
+                                        />
+                                        <span className="text-[9px] text-gray-400 font-mono">
+                                          ID: {pump.id}
+                                        </span>
+                                      </div>
+                                    ));
+                                })()}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                      {ft.description && (
+                        <p className="text-xs text-gray-500 dark:text-gray-400 italic mt-3">
+                          {ft.description}
+                        </p>
+                      )}
+                    </div>
                   )}
                 </div>
               );
             })}
           </div>
-        </div>
+        </>
       )}
-
-      {/* Fuel Types List */}
-      <div className="space-y-3">
-        {fuelTypes.map(ft => {
-          const isExpanded = expandedId === ft.id;
-          const colorClass = FUEL_COLORS[ft.color] || FUEL_COLORS.red;
-          return (
-            <div
-              key={ft.id}
-              className={`bg-white dark:bg-gray-800 rounded-xl border overflow-hidden transition-all ${ft.active ? "border-gray-200 dark:border-gray-700" : "border-gray-100 dark:border-gray-800 opacity-60"}`}
-            >
-              <div
-                className="flex items-center gap-3 p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50"
-                onClick={() => setExpandedId(isExpanded ? null : ft.id)}
-              >
-                <div className={`p-2 rounded-lg ${colorClass}`}>
-                  <Fuel size={18} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
-                      {ft.name}
-                    </h3>
-                    <span className="text-[10px] px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-600 rounded-full">
-                      {ft.code}
-                    </span>
-                    {!ft.active && (
-                      <span className="text-[10px] px-2 py-0.5 bg-gray-100 text-gray-400 rounded-full">
-                        Inactive
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    {ft.localName} | Ksh {ft.price.toFixed(2)}/L |{" "}
-                    {ft.pumpCount} pump{ft.pumpCount !== 1 ? "s" : ""}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={e => {
-                      e.stopPropagation();
-                      handleToggleActive(ft.id);
-                    }}
-                    className={`text-[10px] px-2 py-1 rounded-lg ${ft.active ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}
-                  >
-                    {ft.active ? "Active" : "Inactive"}
-                  </button>
-                  <button
-                    onClick={e => {
-                      e.stopPropagation();
-                      handleDelete(ft.id);
-                    }}
-                    className="p-1.5 text-gray-400 hover:text-red-500 rounded-lg hover:bg-red-50"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                  {isExpanded ? (
-                    <ChevronUp size={16} className="text-gray-400" />
-                  ) : (
-                    <ChevronDown size={16} className="text-gray-400" />
-                  )}
-                </div>
-              </div>
-
-              {isExpanded && (
-                <div className="border-t border-gray-100 dark:border-gray-700 p-4">
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-                    <InfoBox
-                      label="Selling Price"
-                      value={`Ksh ${ft.price.toFixed(2)}`}
-                    />
-                    <InfoBox
-                      label="Cost Price"
-                      value={`Ksh ${ft.costPrice.toFixed(2)}`}
-                    />
-                    <InfoBox
-                      label="Margin"
-                      value={`${marginPercent(ft.price, ft.costPrice)}%`}
-                    />
-                    <InfoBox label="VAT Rate" value={`${ft.taxRate}%`} />
-                    <InfoBox label="Pumps" value={`${ft.pumpCount}`} />
-                    <InfoBox label="Levy Rate" value={`${ft.levyRate}%`} />
-                  </div>
-                  {ft.description && (
-                    <p className="text-xs text-gray-500 dark:text-gray-400 italic">
-                      {ft.description}
-                    </p>
-                  )}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
     </div>
   );
 }

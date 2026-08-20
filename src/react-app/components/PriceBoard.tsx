@@ -1,4 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import cloudStorageService from "@/react-app/lib/cloud-storage-service";
+import { useAuth } from "@/react-app/context/AuthContext";
+import {
+  CANONICAL_FUEL_TYPES,
+  isSameFuelType,
+} from "@/react-app/config/pricing";
+import { useStationFuelTypes } from "@/react-app/hooks/useStationFuelTypes";
 import {
   Monitor,
   Plus,
@@ -20,6 +27,20 @@ import {
 } from "lucide-react";
 import { useAutoSync } from "@/react-app/hooks/useAutoSync";
 import { useLocation } from "@/react-app/context/LocationContext";
+import { useStations } from "@/react-app/context/StationContext";
+import {
+  getCurrencySymbol,
+  getDetectedCountryCode,
+  isKenyaStation,
+} from "@/react-app/lib/currency";
+import { getCountryById } from "@/react-app/config/countries";
+import { useFuel } from "@/react-app/context/FuelContext";
+import {
+  emitFuelPriceChange,
+  onFuelPriceChange,
+} from "@/react-app/lib/fuel-interlink-bus";
+import { normalizeFuelType } from "@/react-app/config/pricing";
+import { emit } from "@/react-app/lib/automation-engine";
 
 interface PriceEntry {
   id: string;
@@ -33,6 +54,9 @@ interface PriceEntry {
   effectiveDate: string;
   updatedBy: string;
   updatedAt: string;
+  /** "user" = explicitly set by the owner/manager (never auto-overwritten);
+   *  "auto" = last set by the EPRA/regulator auto-sync (may be refreshed). */
+  source?: "user" | "auto";
 }
 
 interface PriceHistory {
@@ -47,18 +71,92 @@ interface PriceHistory {
 
 const STORAGE_KEY = "fuelpro_priceboard_v2";
 const HISTORY_KEY = "fuelpro_price_history_v2";
+const CLOUD_KEY = "priceboard_data";
+const CLOUD_HISTORY_KEY = "price_history_data";
 
+// Fuel-type labels are the CANONICAL labels from pricing.ts so that
+// PriceBoard prices line up with Dashboard/POS/FuelTracker pricing.
 const FUEL_GRADES: Record<string, string[]> = {
-  Petrol: ["Regular", "Premium", "V-Power"],
-  Diesel: ["Regular", "Premium", "Bio-Diesel"],
-  Kerosene: ["Standard", "Premium"],
-  LPG: ["3kg", "6kg", "13kg", "25kg"],
+  [CANONICAL_FUEL_TYPES.petrol.label]: ["Regular", "Premium", "V-Power"],
+  [CANONICAL_FUEL_TYPES.diesel.label]: ["Regular", "Premium", "Bio-Diesel"],
+  [CANONICAL_FUEL_TYPES.kerosene.label]: ["Standard", "Premium"],
+  [CANONICAL_FUEL_TYPES.lpg.label]: ["3kg", "6kg", "13kg", "25kg"],
 };
+
+/**
+ * Resolve the grade list for a fuel type. Falls back to the canonical
+ * petrol grades when the fuel type is unknown (e.g. a custom fuel like
+ * "Shell V-Power" not in FUEL_GRADES) so the grade dropdown is never empty.
+ */
+function gradesFor(fuelType: string | undefined): string[] {
+  if (fuelType && FUEL_GRADES[fuelType]) return FUEL_GRADES[fuelType];
+  return FUEL_GRADES[CANONICAL_FUEL_TYPES.petrol.label];
+}
+
+/**
+ * Normalize a price entry from cloud/localStorage so it always has every
+ * field the UI expects. Cloud data may be partial (from older app versions,
+ * API imports, or cross-device sync where the record was created with a
+ * subset of fields). Without this, rendering crashes with
+ * "Cannot read properties of undefined (reading 'toFixed')" etc.
+ */
+function normalizePriceEntry(
+  p: Partial<PriceEntry> | null | undefined,
+): PriceEntry {
+  const id =
+    p?.id || `pb_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  // Accept any non-empty fuel type (incl. custom fuels not in FUEL_GRADES);
+  // fall back to the canonical petrol label only when missing.
+  const fuelType = p?.fuelType || CANONICAL_FUEL_TYPES.petrol.label;
+  const grades = gradesFor(fuelType);
+  const grade =
+    p?.grade && grades.includes(p.grade) ? p.grade : grades[0] || "Regular";
+  return {
+    id,
+    fuelType,
+    grade,
+    price: typeof p?.price === "number" ? p.price : 0,
+    previousPrice: typeof p?.previousPrice === "number" ? p.previousPrice : 0,
+    currency: p?.currency ?? "",
+    displayOrder: typeof p?.displayOrder === "number" ? p.displayOrder : 0,
+    isActive: typeof p?.isActive === "boolean" ? p.isActive : false,
+    effectiveDate: p?.effectiveDate ?? "",
+    updatedBy: p?.updatedBy ?? "",
+    updatedAt: p?.updatedAt ?? "",
+    source: p?.source === "user" || p?.source === "auto" ? p.source : "auto",
+  };
+}
+
+function normalizePriceHistory(
+  h: Partial<PriceHistory> | null | undefined,
+): PriceHistory {
+  const id =
+    h?.id || `ph_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  return {
+    id,
+    priceEntryId: h?.priceEntryId ?? "",
+    oldPrice: typeof h?.oldPrice === "number" ? h.oldPrice : 0,
+    newPrice: typeof h?.newPrice === "number" ? h.newPrice : 0,
+    changedBy: h?.changedBy ?? "",
+    reason: h?.reason ?? "",
+    changedAt: h?.changedAt ?? "",
+  };
+}
+
+function normalizePriceEntries(arr: unknown): PriceEntry[] {
+  if (!Array.isArray(arr)) return [];
+  return arr.map((p) => normalizePriceEntry(p as Partial<PriceEntry>));
+}
+
+function normalizePriceHistoryList(arr: unknown): PriceHistory[] {
+  if (!Array.isArray(arr)) return [];
+  return arr.map((h) => normalizePriceHistory(h as Partial<PriceHistory>));
+}
 
 function loadPrices(): PriceEntry[] {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) return JSON.parse(saved);
+    if (saved) return normalizePriceEntries(JSON.parse(saved));
   } catch {
     /* ignore */
   }
@@ -68,7 +166,7 @@ function loadPrices(): PriceEntry[] {
 function loadHistory(): PriceHistory[] {
   try {
     const saved = localStorage.getItem(HISTORY_KEY);
-    if (saved) return JSON.parse(saved);
+    if (saved) return normalizePriceHistoryList(JSON.parse(saved));
   } catch {
     /* ignore */
   }
@@ -77,9 +175,42 @@ function loadHistory(): PriceHistory[] {
 
 export default function PriceBoard() {
   const location = useLocation();
-  const { fuelPrice, isSyncing, syncNow, refreshPrices, arePricesStale } = useAutoSync(location.currentCountry.id);
-  const [prices, setPrices] = useState<PriceEntry[]>(loadPrices);
-  const [history, setHistory] = useState<PriceHistory[]>(loadHistory);
+  const { fuelPrice, isSyncing, syncNow, refreshPrices, arePricesStale } =
+    useAutoSync(location.currentCountry.id);
+  const { user } = useAuth();
+  const { currentStation } = useStations();
+  const stationId = currentStation?.id;
+  const { syncPriceToFuelTypes } = useFuel();
+  // Derive the fuel-type options from the station's configured Fuel Types
+  // (fuel_types_config) so the Price Board is no longer limited to the
+  // hardcoded petrol/diesel/kerosene/LPG set. Any fuel the user added in
+  // Fuel Type Manager (V-Power, CNG, custom) appears here.
+  const fuelTypeApi = useStationFuelTypes(stationId);
+  const fuelTypeOptions = (() => {
+    const configured = fuelTypeApi.activeFuelTypes.map((ft) => ft.name);
+    if (configured.length > 0) return configured;
+    // Fallback to the canonical FUEL_GRADES keys when no fuel types are
+    // configured yet (legacy station / first run) so the dropdown is never
+    // empty.
+    return Object.keys(FUEL_GRADES);
+  })();
+  const [prices, setPrices] = useState<PriceEntry[]>(() => {
+    const cloudCached = cloudStorageService.getCached<unknown[]>(
+      "priceboard_data",
+      stationId,
+    );
+    if (Array.isArray(cloudCached)) return normalizePriceEntries(cloudCached);
+    return loadPrices();
+  });
+  const [history, setHistory] = useState<PriceHistory[]>(() => {
+    const cloudCached = cloudStorageService.getCached<unknown[]>(
+      "price_history_data",
+      stationId,
+    );
+    if (Array.isArray(cloudCached))
+      return normalizePriceHistoryList(cloudCached);
+    return loadHistory();
+  });
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showPreview, setShowPreview] = useState(false);
@@ -89,108 +220,155 @@ export default function PriceBoard() {
     type: "success" | "warning";
   } | null>(null);
   const [formData, setFormData] = useState<Partial<PriceEntry>>({
-    fuelType: "Petrol",
+    fuelType: CANONICAL_FUEL_TYPES.petrol.label,
     grade: "Regular",
     price: 0,
-    currency: "KES",
+    currency: getCurrencySymbol(),
     displayOrder: 0,
     isActive: true,
     effectiveDate: new Date().toISOString().slice(0, 10),
   });
   const [changeReason, setChangeReason] = useState("");
+
+  // Prevents save effects from overwriting cloud data with default state
+  // before the initial cloud load completes (cross-device overwrite race).
+  const cloudLoadCompleteRef = useRef(false);
+  // Echo guard: prevents the async cloud-load effect from overwriting
+  // uncommitted local edits (price changes the user just made).
+  const localModifiedRef = useRef(false);
+  const pricesRef = useRef(prices);
+  pricesRef.current = prices;
   const [showAutoUpdateNotice, setShowAutoUpdateNotice] = useState(false);
+
+  const isKenya = isKenyaStation();
+  const countryProfile = getCountryById(getDetectedCountryCode());
+  const regulatorName =
+    countryProfile?.fuelRegulations?.priceSettingBody ||
+    (isKenya ? "EPRA" : "fuel regulator");
 
   // Update prices when fuelPrice syncs (daily EPRA prices)
   useEffect(() => {
     if (!fuelPrice) return;
-    
+
     // Check if we should auto-update from synced prices
-    const autoUpdateEnabled = localStorage.getItem("fuelpro_price_auto_update") !== "disabled";
+    const autoUpdateEnabled =
+      localStorage.getItem("fuelpro_price_auto_update") !== "disabled";
     if (!autoUpdateEnabled) return;
-    
+
     // Get current local prices
     const currentPrices = loadPrices();
     const today = new Date().toISOString().slice(0, 10);
-    
+
     // Only auto-update if fuel price effective date is today or more recent
     if (fuelPrice.effectiveDate >= today) {
       // Check if prices need updating
       let needsUpdate = false;
       const newPrices = [...currentPrices];
-      
-      // Map EPRA prices to our entries
+
+      // Map EPRA prices to our entries (alias-aware so legacy "Petrol" and
+      // canonical "Super Petrol" labels both match)
       if (fuelPrice.petrolPrice > 0) {
-        const petrolEntry = newPrices.find(p => p.fuelType === "Petrol" && p.isActive);
-        if (petrolEntry && petrolEntry.price !== fuelPrice.petrolPrice) {
+        const petrolEntry = newPrices.find(
+          (p) =>
+            p.isActive &&
+            isSameFuelType(p.fuelType, CANONICAL_FUEL_TYPES.petrol.label),
+        );
+        // Don't auto-overwrite a price the owner/manager set explicitly.
+        if (
+          petrolEntry &&
+          petrolEntry.source !== "user" &&
+          petrolEntry.price !== fuelPrice.petrolPrice
+        ) {
           // Log history before updating
           const historyEntry: PriceHistory = {
             id: `ph_${Date.now()}_auto`,
             priceEntryId: petrolEntry.id,
             oldPrice: petrolEntry.price,
             newPrice: fuelPrice.petrolPrice,
-            changedBy: "System (EPRA Auto-Sync)",
-            reason: `Auto-updated from EPRA Kenya - ${fuelPrice.sourceName}`,
+            changedBy: `System (${regulatorName} Auto-Sync)`,
+            reason: `Auto-updated from ${regulatorName} - ${fuelPrice.sourceName}`,
             changedAt: new Date().toISOString(),
           };
-          setHistory(prev => [...prev, historyEntry]);
-          
+          setHistory((prev) => [...prev, historyEntry]);
+
           petrolEntry.previousPrice = petrolEntry.price;
           petrolEntry.price = fuelPrice.petrolPrice;
           petrolEntry.effectiveDate = fuelPrice.effectiveDate;
           petrolEntry.updatedAt = new Date().toISOString();
           petrolEntry.updatedBy = "System";
+          petrolEntry.source = "auto";
           needsUpdate = true;
         }
       }
-      
+
       if (fuelPrice.dieselPrice > 0) {
-        const dieselEntry = newPrices.find(p => p.fuelType === "Diesel" && p.isActive);
-        if (dieselEntry && dieselEntry.price !== fuelPrice.dieselPrice) {
+        const dieselEntry = newPrices.find(
+          (p) =>
+            p.isActive &&
+            isSameFuelType(p.fuelType, CANONICAL_FUEL_TYPES.diesel.label),
+        );
+        // Don't auto-overwrite a price the owner/manager set explicitly.
+        if (
+          dieselEntry &&
+          dieselEntry.source !== "user" &&
+          dieselEntry.price !== fuelPrice.dieselPrice
+        ) {
           // Log history
           const historyEntry: PriceHistory = {
             id: `ph_${Date.now()}_auto_d`,
             priceEntryId: dieselEntry.id,
             oldPrice: dieselEntry.price,
             newPrice: fuelPrice.dieselPrice,
-            changedBy: "System (EPRA Auto-Sync)",
-            reason: `Auto-updated from EPRA Kenya - ${fuelPrice.sourceName}`,
+            changedBy: `System (${regulatorName} Auto-Sync)`,
+            reason: `Auto-updated from ${regulatorName} - ${fuelPrice.sourceName}`,
             changedAt: new Date().toISOString(),
           };
-          setHistory(prev => [...prev, historyEntry]);
-          
+          setHistory((prev) => [...prev, historyEntry]);
+
           dieselEntry.previousPrice = dieselEntry.price;
           dieselEntry.price = fuelPrice.dieselPrice;
           dieselEntry.effectiveDate = fuelPrice.effectiveDate;
           dieselEntry.updatedAt = new Date().toISOString();
           dieselEntry.updatedBy = "System";
+          dieselEntry.source = "auto";
           needsUpdate = true;
         }
       }
-      
+
       if (fuelPrice.kerosenePrice && fuelPrice.kerosenePrice > 0) {
-        const keroseneEntry = newPrices.find(p => p.fuelType === "Kerosene" && p.isActive);
-        if (keroseneEntry && keroseneEntry.price !== fuelPrice.kerosenePrice) {
+        const keroseneEntry = newPrices.find(
+          (p) =>
+            p.isActive &&
+            isSameFuelType(p.fuelType, CANONICAL_FUEL_TYPES.kerosene.label),
+        );
+        // Don't auto-overwrite a price the owner/manager set explicitly.
+        if (
+          keroseneEntry &&
+          keroseneEntry.source !== "user" &&
+          keroseneEntry.price !== fuelPrice.kerosenePrice
+        ) {
           // Log history
           const historyEntry: PriceHistory = {
             id: `ph_${Date.now()}_auto_k`,
             priceEntryId: keroseneEntry.id,
             oldPrice: keroseneEntry.price,
             newPrice: fuelPrice.kerosenePrice!,
-            changedBy: "System (EPRA Auto-Sync)",
-            reason: `Auto-updated from EPRA Kenya - ${fuelPrice.sourceName}`,
+            changedBy: `System (${regulatorName} Auto-Sync)`,
+            reason: `Auto-updated from ${regulatorName} - ${fuelPrice.sourceName}`,
             changedAt: new Date().toISOString(),
           };
-          setHistory(prev => [...prev, historyEntry]);
-          
+          setHistory((prev) => [...prev, historyEntry]);
+
           keroseneEntry.previousPrice = keroseneEntry.price;
           keroseneEntry.price = fuelPrice.kerosenePrice!;
           keroseneEntry.effectiveDate = fuelPrice.effectiveDate;
           keroseneEntry.updatedAt = new Date().toISOString();
           keroseneEntry.updatedBy = "System";
+          keroseneEntry.source = "auto";
           needsUpdate = true;
         }
       }
-      
+
       if (needsUpdate) {
         setPrices(newPrices);
         setShowAutoUpdateNotice(true);
@@ -201,14 +379,98 @@ export default function PriceBoard() {
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(prices));
-  }, [prices]);
+    if (!cloudLoadCompleteRef.current) return; // skip until cloud load done
+    cloudStorageService.set(CLOUD_KEY, prices, stationId).catch(() => {});
+    // Broadcast each active price on the interlink bus so FuelTypesManager,
+    // Dashboard, POS, Invoice, Reports see PriceBoard edits instantly.
+    for (const p of prices) {
+      if (!p.isActive) continue;
+      emitFuelPriceChange({
+        fuelType: p.fuelType,
+        canonical: normalizeFuelType(p.fuelType),
+        price: p.price,
+        source: "PriceBoard.persist",
+      });
+    }
+  }, [prices, stationId]);
   useEffect(() => {
     localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
-  }, [history]);
+    if (!cloudLoadCompleteRef.current) return; // skip until cloud load done
+    cloudStorageService
+      .set(CLOUD_HISTORY_KEY, history, stationId)
+      .catch(() => {});
+  }, [history, stationId]);
+
+  // Interlink receiver: when a price changes elsewhere (FuelTypesManager,
+  // Dashboard, "Set as my price", FuelContext sync), mirror it into the
+  // matching PriceBoard entry so the board stays in sync.
+  useEffect(() => {
+    return onFuelPriceChange((p) => {
+      if (p.source === "PriceBoard.persist") return; // skip our own echo
+      const canonical = p.canonical ?? normalizeFuelType(p.fuelType);
+      if (!canonical) return;
+      setPrices((prev) => {
+        const idx = prev.findIndex(
+          (entry) => normalizeFuelType(entry.fuelType) === canonical,
+        );
+        if (idx < 0 || prev[idx].price === p.price) return prev;
+        const next = prev.slice();
+        next[idx] = {
+          ...next[idx],
+          price: p.price,
+          updatedAt: new Date().toISOString(),
+          // A price propagated from FuelTypesManager / "Set as my price" is
+          // an explicit user choice — mark it so the EPRA auto-sync won't
+          // overwrite it on the next refresh.
+          source: "user",
+        };
+        return next;
+      });
+    });
+  }, []);
+
+  // Load from cloud on mount (cross-device sync)
+  useEffect(() => {
+    if (!user) return;
+    cloudLoadCompleteRef.current = false;
+    localModifiedRef.current = false;
+    let cancelled = false;
+    (async () => {
+      try {
+        const cloudPrices = await cloudStorageService.get<PriceEntry[]>(
+          CLOUD_KEY,
+          stationId,
+        );
+        if (!cancelled && cloudPrices && !localModifiedRef.current)
+          setPrices(normalizePriceEntries(cloudPrices));
+        const cloudHistory = await cloudStorageService.get<PriceHistory[]>(
+          CLOUD_HISTORY_KEY,
+          stationId,
+        );
+        if (!cancelled && cloudHistory && !localModifiedRef.current)
+          setHistory(normalizePriceHistoryList(cloudHistory));
+      } finally {
+        if (!cancelled) cloudLoadCompleteRef.current = true;
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user, stationId]);
+
+  // Post-load flush: if the user made changes before/during the cloud load,
+  // re-push the latest local state to cloud so it's not lost.
+  useEffect(() => {
+    if (cloudLoadCompleteRef.current && localModifiedRef.current) {
+      cloudStorageService
+        .set(CLOUD_KEY, pricesRef.current, stationId)
+        .catch(() => {});
+    }
+  }, [cloudLoadCompleteRef.current]);
 
   const showNotification = (
     message: string,
-    type: "success" | "warning" = "success"
+    type: "success" | "warning" = "success",
   ) => {
     setNotification({ message, type });
     setTimeout(() => setNotification(null), 3000);
@@ -219,10 +481,11 @@ export default function PriceBoard() {
       showNotification("Fuel type, grade, and price are required", "warning");
       return;
     }
+    localModifiedRef.current = true;
     if (editingId) {
-      const old = prices.find(p => p.id === editingId);
-      setPrices(prev =>
-        prev.map(p =>
+      const old = prices.find((p) => p.id === editingId);
+      setPrices((prev) =>
+        prev.map((p) =>
           p.id === editingId
             ? {
                 ...p,
@@ -230,9 +493,12 @@ export default function PriceBoard() {
                 previousPrice: old?.price || p.price,
                 updatedAt: new Date().toISOString(),
                 updatedBy: "Manager",
+                // Mark as user-set so the EPRA/regulator auto-sync never
+                // overwrites a price the owner/manager explicitly chose.
+                source: "user",
               }
-            : p
-        )
+            : p,
+        ),
       );
       // Log history
       if (old && old.price !== formData.price) {
@@ -245,7 +511,25 @@ export default function PriceBoard() {
           reason: changeReason || "Price update",
           changedAt: new Date().toISOString(),
         };
-        setHistory(prev => [newHistory, ...prev]);
+        setHistory((prev) => [newHistory, ...prev]);
+
+        // Notify the automation engine that a fuel price was updated. Emitted
+        // after the new price is applied so downstream reactions (price sync
+        // across tabs, dashboard refresh) use the saved value.
+        emit({
+          type: "price:changed",
+          stationId: currentStation?.id || "",
+          fuelType: formData.fuelType,
+          newPrice: formData.price!,
+        });
+
+        // AUTOMATICALLY sync the price to Fuel Type Manager (fuel_types_config)
+        // so the two tabs stay fully consistent. Previously this was a manual
+        // "Set as station price" button — the user wants changes in Price Board
+        // to reflect in Fuel Types (and vice versa) automatically.
+        if (formData.price && formData.price > 0) {
+          syncPriceToFuelTypes(formData.fuelType, formData.price);
+        }
       }
       showNotification("Price updated");
     } else {
@@ -255,8 +539,22 @@ export default function PriceBoard() {
         previousPrice: formData.price!,
         updatedBy: "Manager",
         updatedAt: new Date().toISOString(),
+        source: "user",
       };
-      setPrices(prev => [...prev, newEntry]);
+      setPrices((prev) => [...prev, newEntry]);
+
+      // Notify the automation engine of the newly added fuel price.
+      emit({
+        type: "price:changed",
+        stationId: currentStation?.id || "",
+        fuelType: formData.fuelType,
+        newPrice: formData.price!,
+      });
+
+      // Auto-sync to Fuel Type Manager for consistency.
+      if (formData.price && formData.price > 0) {
+        syncPriceToFuelTypes(formData.fuelType, formData.price);
+      }
       showNotification("Price entry added");
     }
     setShowForm(false);
@@ -266,24 +564,28 @@ export default function PriceBoard() {
 
   const handleDelete = (id: string) => {
     if (confirm("Delete this price entry?")) {
-      setPrices(prev => prev.filter(p => p.id !== id));
+      localModifiedRef.current = true;
+      setPrices((prev) => prev.filter((p) => p.id !== id));
       showNotification("Price entry deleted");
     }
   };
 
   const toggleActive = (id: string) => {
-    setPrices(prev =>
-      prev.map(p => (p.id === id ? { ...p, isActive: !p.isActive } : p))
+    localModifiedRef.current = true;
+    setPrices((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, isActive: !p.isActive } : p)),
     );
   };
 
   const sortedPrices = [...prices].sort(
-    (a, b) => a.displayOrder - b.displayOrder
+    (a, b) => (a.displayOrder || 0) - (b.displayOrder || 0),
   );
 
   const priceChange = (current: number, previous: number) => {
-    const diff = current - previous;
-    const pct = previous > 0 ? (diff / previous) * 100 : 0;
+    const cur = typeof current === "number" ? current : 0;
+    const prev = typeof previous === "number" ? previous : 0;
+    const diff = cur - prev;
+    const pct = prev > 0 ? (diff / prev) * 100 : 0;
     return { diff, pct, up: diff >= 0 };
   };
 
@@ -307,11 +609,16 @@ export default function PriceBoard() {
         <div>
           <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
             <Monitor size={22} className="text-amber-500" /> Price Board
-            {isSyncing && <RefreshCw size={16} className="text-blue-500 animate-spin" />}
+            {isSyncing && (
+              <RefreshCw size={16} className="text-blue-500 animate-spin" />
+            )}
           </h2>
           <p className="text-sm text-gray-500 mt-1">
             {fuelPrice ? (
-              <>EPRA prices as of {fuelPrice.effectiveDate} • Auto-updates daily</>
+              <>
+                {regulatorName} prices as of {fuelPrice.effectiveDate} •
+                Auto-updates daily
+              </>
             ) : (
               <>Manage fuel prices displayed to customers</>
             )}
@@ -320,15 +627,20 @@ export default function PriceBoard() {
         <div className="flex gap-2 items-center">
           {/* Auto-update status indicator */}
           <div className="flex items-center gap-1.5 mr-2">
-            <div className={`w-2 h-2 rounded-full ${arePricesStale ? 'bg-amber-500' : 'bg-green-500'}`}></div>
-            <span className="text-xs text-gray-500">{arePricesStale ? 'Prices need update' : 'Prices current'}</span>
+            <div
+              className={`w-2 h-2 rounded-full ${arePricesStale ? "bg-amber-500" : "bg-green-500"}`}
+            ></div>
+            <span className="text-xs text-gray-500">
+              {arePricesStale ? "Prices need update" : "Prices current"}
+            </span>
           </div>
           <button
             onClick={() => refreshPrices()}
             disabled={isSyncing}
             className="px-3 py-2 bg-blue-100 dark:bg-blue-900/30 hover:bg-blue-200 dark:hover:bg-blue-900/50 text-blue-600 dark:text-blue-400 rounded-xl text-sm font-medium flex items-center gap-1.5 transition-all disabled:opacity-50"
           >
-            <RefreshCw size={14} className={isSyncing ? 'animate-spin' : ''} /> Refresh Prices
+            <RefreshCw size={14} className={isSyncing ? "animate-spin" : ""} />{" "}
+            Refresh Prices
           </button>
           <button
             onClick={() => setShowHistory(true)}
@@ -355,10 +667,10 @@ export default function PriceBoard() {
               setShowForm(true);
               setEditingId(null);
               setFormData({
-                fuelType: "Petrol",
+                fuelType: CANONICAL_FUEL_TYPES.petrol.label,
                 grade: "Regular",
                 price: 0,
-                currency: "KES",
+                currency: getCurrencySymbol(),
                 displayOrder: prices.length + 1,
                 isActive: true,
                 effectiveDate: new Date().toISOString().slice(0, 10),
@@ -370,14 +682,18 @@ export default function PriceBoard() {
           </button>
         </div>
       </div>
-      
+
       {/* Auto-update notification */}
       {showAutoUpdateNotice && (
         <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-3 flex items-center gap-3">
           <CheckCircle2 size={20} className="text-green-500" />
           <div>
-            <p className="text-sm font-medium text-green-400">Prices Auto-Updated from EPRA</p>
-            <p className="text-xs text-green-400/70">Fuel prices have been synced with the latest government rates</p>
+            <p className="text-sm font-medium text-green-400">
+              Prices Auto-Updated from {regulatorName}
+            </p>
+            <p className="text-xs text-green-400/70">
+              Fuel prices have been synced with the latest government rates
+            </p>
           </div>
         </div>
       )}
@@ -398,8 +714,8 @@ export default function PriceBoard() {
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {sortedPrices
-              .filter(p => p.isActive)
-              .map(price => {
+              .filter((p) => p.isActive)
+              .map((price) => {
                 const change = priceChange(price.price, price.previousPrice);
                 return (
                   <div
@@ -410,7 +726,7 @@ export default function PriceBoard() {
                       {price.fuelType} {price.grade}
                     </p>
                     <p className="text-2xl font-bold text-white mt-1">
-                      {price.currency} {price.price.toFixed(2)}
+                      {price.currency || ""} {(price.price || 0).toFixed(2)}
                     </p>
                     <div
                       className={`flex items-center justify-center gap-1 mt-1 text-xs ${change.up ? "text-red-400" : "text-emerald-400"}`}
@@ -468,7 +784,7 @@ export default function PriceBoard() {
               </tr>
             </thead>
             <tbody>
-              {sortedPrices.map(price => {
+              {sortedPrices.map((price) => {
                 const change = priceChange(price.price, price.previousPrice);
                 return (
                   <tr
@@ -485,10 +801,11 @@ export default function PriceBoard() {
                       {price.grade}
                     </td>
                     <td className="px-4 py-3 text-right font-bold text-gray-900 dark:text-white">
-                      {price.currency} {price.price.toFixed(2)}
+                      {price.currency || ""} {(price.price || 0).toFixed(2)}
                     </td>
                     <td className="px-4 py-3 text-right text-gray-500">
-                      {price.currency} {price.previousPrice.toFixed(2)}
+                      {price.currency || ""}{" "}
+                      {(price.previousPrice || 0).toFixed(2)}
                     </td>
                     <td className="px-4 py-3 text-center">
                       <span
@@ -522,6 +839,15 @@ export default function PriceBoard() {
                           className="p-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 rounded-lg transition-colors"
                         >
                           <Edit3 size={12} />
+                        </button>
+                        <button
+                          onClick={() =>
+                            syncPriceToFuelTypes(price.fuelType, price.price)
+                          }
+                          className="p-1.5 bg-green-500/10 hover:bg-green-500/20 text-green-600 rounded-lg transition-colors"
+                          title="Set as station price (syncs to FuelContext + Fuel Type Manager)"
+                        >
+                          <CheckCircle2 size={12} />
                         </button>
                         <button
                           onClick={() => handleDelete(price.id)}
@@ -568,12 +894,25 @@ export default function PriceBoard() {
                     </label>
                     <select
                       value={formData.fuelType}
-                      onChange={e =>
-                        setFormData({ ...formData, fuelType: e.target.value })
-                      }
+                      onChange={(e) => {
+                        const chosen = e.target.value;
+                        // Pre-fill the price from the station's configured
+                        // fuel type when the user hasn't entered one yet,
+                        // so Price Board stays in sync with Fuel Types.
+                        const configuredPrice = fuelTypeApi.getPriceFor(chosen);
+                        setFormData((prev) => ({
+                          ...prev,
+                          fuelType: chosen,
+                          grade: gradesFor(chosen)[0] || "Regular",
+                          price:
+                            !prev.price && configuredPrice
+                              ? configuredPrice
+                              : prev.price,
+                        }));
+                      }}
                       className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
                     >
-                      {Object.keys(FUEL_GRADES).map(t => (
+                      {fuelTypeOptions.map((t) => (
                         <option key={t} value={t}>
                           {t}
                         </option>
@@ -586,16 +925,12 @@ export default function PriceBoard() {
                     </label>
                     <select
                       value={formData.grade}
-                      onChange={e =>
+                      onChange={(e) =>
                         setFormData({ ...formData, grade: e.target.value })
                       }
                       className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
                     >
-                      {(
-                        FUEL_GRADES[
-                          formData.fuelType as keyof typeof FUEL_GRADES
-                        ] || []
-                      ).map(g => (
+                      {gradesFor(formData.fuelType).map((g) => (
                         <option key={g} value={g}>
                           {g}
                         </option>
@@ -612,10 +947,11 @@ export default function PriceBoard() {
                       type="number"
                       step="0.01"
                       value={formData.price || ""}
-                      onChange={e =>
+                      onChange={(e) =>
                         setFormData({
                           ...formData,
-                          price: Number(e.target.value),
+                          price:
+                            e.target.value === "" ? 0 : Number(e.target.value),
                         })
                       }
                       className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
@@ -627,30 +963,58 @@ export default function PriceBoard() {
                     </label>
                     <select
                       value={formData.currency}
-                      onChange={e =>
+                      onChange={(e) =>
                         setFormData({ ...formData, currency: e.target.value })
                       }
                       className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
                     >
                       {[
+                        "USD",
+                        "EUR",
+                        "GBP",
+                        "JPY",
+                        "CNY",
+                        "INR",
+                        "AUD",
+                        "CAD",
+                        "CHF",
+                        "SGD",
+                        "HKD",
+                        "NZD",
+                        "AED",
+                        "SAR",
+                        "ZAR",
+                        "BRL",
+                        "MXN",
+                        "RUB",
+                        "TRY",
+                        "KRW",
+                        "IDR",
+                        "MYR",
+                        "THB",
+                        "PHP",
+                        "VND",
+                        "EGP",
+                        "NGN",
                         "KES",
                         "UGX",
                         "TZS",
-                        "NGN",
-                        "ZAR",
                         "GHS",
                         "RWF",
                         "ETB",
-                        "USD",
-                        "GBP",
-                        "EUR",
-                        "INR",
-                        "BRL",
-                        "CNY",
-                        "JPY",
-                        "AUD",
-                        "CAD",
-                      ].map(c => (
+                        "MAD",
+                        "DZD",
+                        "TND",
+                        "PKR",
+                        "BDT",
+                        "LKR",
+                        "NPR",
+                        "ARS",
+                        "CLP",
+                        "COP",
+                        "PEN",
+                        "UYU",
+                      ].map((c) => (
                         <option key={c} value={c}>
                           {c}
                         </option>
@@ -665,7 +1029,7 @@ export default function PriceBoard() {
                     </label>
                     <input
                       value={changeReason}
-                      onChange={e => setChangeReason(e.target.value)}
+                      onChange={(e) => setChangeReason(e.target.value)}
                       placeholder="e.g. Monthly price review"
                       className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
                     />
@@ -678,7 +1042,7 @@ export default function PriceBoard() {
                   <input
                     type="date"
                     value={formData.effectiveDate}
-                    onChange={e =>
+                    onChange={(e) =>
                       setFormData({
                         ...formData,
                         effectiveDate: e.target.value,
@@ -694,7 +1058,7 @@ export default function PriceBoard() {
                   <input
                     type="number"
                     value={formData.displayOrder}
-                    onChange={e =>
+                    onChange={(e) =>
                       setFormData({
                         ...formData,
                         displayOrder: Number(e.target.value),
@@ -732,9 +1096,11 @@ export default function PriceBoard() {
                 </button>
               </div>
               <div className="space-y-2">
-                {history.map(h => {
-                  const entry = prices.find(p => p.id === h.priceEntryId);
-                  const diff = h.newPrice - h.oldPrice;
+                {history.map((h) => {
+                  const entry = prices.find((p) => p.id === h.priceEntryId);
+                  const oldPrice = h.oldPrice || 0;
+                  const newPrice = h.newPrice || 0;
+                  const diff = newPrice - oldPrice;
                   return (
                     <div
                       key={h.id}
@@ -751,11 +1117,11 @@ export default function PriceBoard() {
                       <div className="text-right">
                         <div className="flex items-center gap-2">
                           <span className="text-xs text-gray-500 line-through">
-                            {h.oldPrice.toFixed(2)}
+                            {oldPrice.toFixed(2)}
                           </span>
                           <ArrowUpRight size={12} className="text-gray-400" />
                           <span className="text-sm font-bold text-gray-900 dark:text-white">
-                            {h.newPrice.toFixed(2)}
+                            {newPrice.toFixed(2)}
                           </span>
                         </div>
                         <span
@@ -765,7 +1131,9 @@ export default function PriceBoard() {
                           {diff.toFixed(2)}
                         </span>
                         <p className="text-[10px] text-gray-400">
-                          {new Date(h.changedAt).toLocaleDateString()}
+                          {new Date(
+                            h.changedAt || Date.now(),
+                          ).toLocaleDateString()}
                         </p>
                       </div>
                     </div>

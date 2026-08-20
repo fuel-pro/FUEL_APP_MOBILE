@@ -27,7 +27,7 @@ class EventBus {
   private emitInternal(type: string, payload: any) {
     const handlers = this.handlers[type];
     if (handlers) {
-      handlers.forEach(h => {
+      handlers.forEach((h) => {
         try {
           h(payload);
         } catch (e) {
@@ -41,7 +41,7 @@ class EventBus {
     if (!this.handlers[type]) this.handlers[type] = [];
     this.handlers[type].push(handler);
     return () => {
-      this.handlers[type] = this.handlers[type].filter(h => h !== handler);
+      this.handlers[type] = this.handlers[type].filter((h) => h !== handler);
     };
   }
 
@@ -58,13 +58,13 @@ class EventBus {
     // Also dispatch DOM event for within-tab listeners
     if (typeof window !== "undefined") {
       window.dispatchEvent(
-        new CustomEvent(`fuelpro:${type}`, { detail: payload })
+        new CustomEvent(`fuelpro:${type}`, { detail: payload }),
       );
     }
   }
 
   once(type: string, handler: EventHandler) {
-    const off = this.on(type, payload => {
+    const off = this.on(type, (payload) => {
       off();
       handler(payload);
     });
@@ -72,7 +72,7 @@ class EventBus {
 
   off(type: string, handler: EventHandler) {
     if (this.handlers[type]) {
-      this.handlers[type] = this.handlers[type].filter(h => h !== handler);
+      this.handlers[type] = this.handlers[type].filter((h) => h !== handler);
     }
   }
 }

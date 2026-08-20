@@ -1,7 +1,7 @@
 /**
  * FuelPro API Configuration
  * Centralized API client for backend communication
- * 
+ *
  * Note: Primary cloud storage is now Supabase.
  * This API is optional for features not yet migrated to Supabase.
  */
@@ -19,7 +19,7 @@ function getApiBase(): string {
 async function getApiBaseAsync(): Promise<string> {
   if (_apiBase) return _apiBase;
   if (!_apiPromise) {
-    _apiPromise = import("@/utils/apiConfig").then(m => m.getBackendUrl());
+    _apiPromise = import("@/utils/apiConfig").then((m) => m.getBackendUrl());
   }
   _apiBase = await _apiPromise;
   return _apiBase;
@@ -41,14 +41,17 @@ export function getAuthToken(): string | null {
     // Try Supabase founder session token
     const token = localStorage.getItem("fuelpro_founder_token");
     if (token) return token;
-    
+
     // Try Supabase session token (Supabase auth)
     const sessionJson = localStorage.getItem("fuelpro_founder_session_meta");
     if (sessionJson) {
       const session = JSON.parse(sessionJson);
       if (session.token) {
         // Check if session is still valid (7 days)
-        if (session.loginTime && Date.now() - session.loginTime < 7 * 24 * 60 * 60 * 1000) {
+        if (
+          session.loginTime &&
+          Date.now() - session.loginTime < 7 * 24 * 60 * 60 * 1000
+        ) {
           return session.token;
         }
       }
@@ -62,24 +65,48 @@ export function getAuthToken(): string | null {
 // API Endpoints - using functions to ensure lazy evaluation
 export const API_ENDPOINTS = {
   // Dashboard
-  get DASHBOARD_STATS() { return `${getApiBase()}/api/dashboard/stats`; },
-  get SALES_TREND() { return `${getApiBase()}/api/dashboard/sales-trend`; },
-  get FUEL_DISTRIBUTION() { return `${getApiBase()}/api/dashboard/fuel-distribution`; },
-  get CURRENT_PRICES() { return `${getApiBase()}/api/dashboard/current-prices`; },
-  
+  get DASHBOARD_STATS() {
+    return `${getApiBase()}/api/dashboard/stats`;
+  },
+  get SALES_TREND() {
+    return `${getApiBase()}/api/dashboard/sales-trend`;
+  },
+  get FUEL_DISTRIBUTION() {
+    return `${getApiBase()}/api/dashboard/fuel-distribution`;
+  },
+  get CURRENT_PRICES() {
+    return `${getApiBase()}/api/dashboard/current-prices`;
+  },
+
   // Authentication
-  get LOGIN() { return `${getApiBase()}/api/auth/login`; },
-  get REGISTER() { return `${getApiBase()}/api/auth/register`; },
-  get ME() { return `${getApiBase()}/api/auth/me`; },
-  
+  get LOGIN() {
+    return `${getApiBase()}/api/auth/login`;
+  },
+  get REGISTER() {
+    return `${getApiBase()}/api/auth/register`;
+  },
+  get ME() {
+    return `${getApiBase()}/api/auth/me`;
+  },
+
   // M-PESA
-  get MPESA_STK() { return `${getApiBase()}/api/mpesa/stkpush`; },
-  get MPESA_STATUS() { return `${getApiBase()}/api/mpesa/stkstatus`; },
-  get MPESA_CONFIG() { return `${getApiBase()}/api/mpesa/config`; },
-  
+  get MPESA_STK() {
+    return `${getApiBase()}/api/mpesa/stkpush`;
+  },
+  get MPESA_STATUS() {
+    return `${getApiBase()}/api/mpesa/stkstatus`;
+  },
+  get MPESA_CONFIG() {
+    return `${getApiBase()}/api/mpesa/config`;
+  },
+
   // Cloud Sync
-  get CLOUD_DATA() { return `${getApiBase()}/api/data`; },
-  get USER_DATA() { return `${getApiBase()}/api/user-data`; },
+  get CLOUD_DATA() {
+    return `${getApiBase()}/api/data`;
+  },
+  get USER_DATA() {
+    return `${getApiBase()}/api/user-data`;
+  },
 };
 
 // API Request Helper
@@ -92,21 +119,21 @@ export interface ApiResponse<T = any> {
 
 export async function apiRequest<T>(
   endpoint: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
 ): Promise<ApiResponse<T>> {
   // If endpoint is empty, backend is not configured - use Supabase instead
   if (!endpoint) {
     return {
       success: false,
-      error: 'Backend not configured - using local storage only'
+      error: "Backend not configured - using local storage only",
     };
   }
 
   const token = getAuthToken();
-  
+
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    ...(token && { 'Authorization': `Bearer ${token}` }),
+    "Content-Type": "application/json",
+    ...(token && { Authorization: `Bearer ${token}` }),
     ...(options.headers as Record<string, string>),
   };
 
@@ -121,14 +148,14 @@ export async function apiRequest<T>(
     if (!response.ok) {
       if (response.status === 401) {
         // Handle unauthorized - clear session
-        localStorage.removeItem('fuelpro_founder_token');
-        localStorage.removeItem('fuelpro_founder_session_meta');
-        console.warn('Session expired - please login again');
+        localStorage.removeItem("fuelpro_founder_token");
+        localStorage.removeItem("fuelpro_founder_session_meta");
+        console.warn("Session expired - please login again");
       }
-      
+
       return {
         success: false,
-        error: data?.error || data?.message || `API Error: ${response.status}`
+        error: data?.error || data?.message || `API Error: ${response.status}`,
       };
     }
 
@@ -137,45 +164,55 @@ export async function apiRequest<T>(
     console.error(`API Request Failed: ${endpoint}`, error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Network error'
+      error: error instanceof Error ? error.message : "Network error",
     };
   }
 }
 
 // Dashboard API helpers
 export const dashboardApi = {
-  async getStats(): Promise<ApiResponse<{
-    totalRevenue: number;
-    netProfit: number;
-    fuelSold: number;
-    balanceDue: number;
-    todaySales: number;
-    timestamp: string;
-  }>> {
+  async getStats(): Promise<
+    ApiResponse<{
+      totalRevenue: number;
+      netProfit: number;
+      fuelSold: number;
+      balanceDue: number;
+      todaySales: number;
+      timestamp: string;
+    }>
+  > {
     return apiRequest(API_ENDPOINTS.DASHBOARD_STATS);
   },
 
-  async getSalesTrend(): Promise<ApiResponse<Array<{
-    date: string;
-    revenue: number;
-    fuelSold: number;
-  }>>> {
+  async getSalesTrend(): Promise<
+    ApiResponse<
+      Array<{
+        date: string;
+        revenue: number;
+        fuelSold: number;
+      }>
+    >
+  > {
     return apiRequest(API_ENDPOINTS.SALES_TREND);
   },
 
-  async getFuelDistribution(): Promise<ApiResponse<{
-    petrol: number;
-    diesel: number;
-    kerosene: number;
-  }>> {
+  async getFuelDistribution(): Promise<
+    ApiResponse<{
+      petrol: number;
+      diesel: number;
+      kerosene: number;
+    }>
+  > {
     return apiRequest(API_ENDPOINTS.FUEL_DISTRIBUTION);
   },
 
-  async getCurrentPrices(): Promise<ApiResponse<{
-    petrol: number;
-    diesel: number;
-    kerosene: number;
-  }>> {
+  async getCurrentPrices(): Promise<
+    ApiResponse<{
+      petrol: number;
+      diesel: number;
+      kerosene: number;
+    }>
+  > {
     return apiRequest(API_ENDPOINTS.CURRENT_PRICES);
   },
 };

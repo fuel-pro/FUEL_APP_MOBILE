@@ -2,6 +2,10 @@ import { useStations } from "@/react-app/context/StationContext";
 import { useFuel } from "@/react-app/context/FuelContext";
 import { formatNumber } from "@/react-app/utils/formatUtils";
 import {
+  getCurrencySymbol,
+  resolveCurrencySymbol,
+} from "@/react-app/lib/currency";
+import {
   Layers,
   TrendingUp,
   DollarSign,
@@ -19,6 +23,10 @@ import {
 export default function CombinedStationsView() {
   const { stations, combineStations, switchStation } = useStations();
   const { state } = useFuel();
+  const currencySymbol = resolveCurrencySymbol(
+    state.companyData?.currency,
+    undefined,
+  );
   const combined = combineStations();
 
   if (!combined) {
@@ -57,7 +65,7 @@ export default function CombinedStationsView() {
         <div className="bg-gradient-to-br from-green-500/10 to-green-600/10 rounded-xl p-5 border border-green-500/20">
           <DollarSign size={20} className="text-green-400 mb-3" />
           <p className="text-2xl font-bold text-gray-900 dark:text-white">
-            Ksh {formatNumber(totalRevenue)}
+            {currencySymbol} {formatNumber(totalRevenue)}
           </p>
           <p className="text-sm text-gray-500 dark:text-gray-400">
             Total Revenue
@@ -75,7 +83,7 @@ export default function CombinedStationsView() {
         <div className="bg-gradient-to-br from-red-500/10 to-red-600/10 rounded-xl p-5 border border-red-500/20">
           <AlertTriangle size={20} className="text-red-400 mb-3" />
           <p className="text-2xl font-bold text-gray-900 dark:text-white">
-            Ksh {formatNumber(totalDebt)}
+            {currencySymbol} {formatNumber(totalDebt)}
           </p>
           <p className="text-sm text-gray-500 dark:text-gray-400">
             Balance Due
@@ -105,7 +113,7 @@ export default function CombinedStationsView() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-              {stationList.map(station => {
+              {stationList.map((station) => {
                 const sData = station.data || {};
                 const sRevenue = sData.totalRevenue || 0;
                 const sFuel = sData.totalFuelSold || 0;
@@ -131,13 +139,13 @@ export default function CombinedStationsView() {
                       {station.location || "-"}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
-                      Ksh {formatNumber(sRevenue)}
+                      {currencySymbol} {formatNumber(sRevenue)}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">
                       {formatNumber(sFuel)}
                     </td>
                     <td className="px-6 py-4 text-sm text-red-600 dark:text-red-400">
-                      Ksh {formatNumber(sDebt)}
+                      {currencySymbol} {formatNumber(sDebt)}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">
                       {sClients}

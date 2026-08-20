@@ -15,7 +15,12 @@ import {
   UserPlus,
 } from "lucide-react";
 import { useAuth } from "@/react-app/context/AuthContext";
-import type { UserRole } from "@/react-app/context/PermissionContext";
+import { usePermissions } from "@/react-app/context/PermissionContext";
+import { getSupabaseClient } from "@/supabase/client";
+import type {
+  UserRole,
+  InvitePayload,
+} from "@/react-app/context/PermissionContext";
 
 interface InviteData {
   id: string;
@@ -23,8 +28,14 @@ interface InviteData {
   stationName: string;
   stationId: string;
   createdBy: string;
+  createdByName?: string;
+  createdByUniqueId?: string;
   expiresAt?: string;
   maxUses: number;
+  canCreateSubUsers?: boolean;
+  canGrantPermissions?: boolean;
+  permissionsSnapshot?: Record<string, unknown>;
+  tabGrants?: string[];
 }
 
 const ROLE_INFO: Record<
@@ -75,13 +86,14 @@ export default function InviteAccept() {
   const { inviteId: encodedData } = useParams<{ inviteId: string }>();
   const navigate = useNavigate();
   const { user, loginWithEmail, registerWithEmail, bindRole } = useAuth();
+  const { acceptInviteFromPayload } = usePermissions();
 
   const [username, setUsername] = useState("");
   const [invite, setInvite] = useState<InviteData | null>(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [step, setStep] = useState<"check" | "auth" | "username" | "done">(
-    "check"
+    "check",
   );
 
   // Auth form states
@@ -108,30 +120,30 @@ export default function InviteAccept() {
     // Validate the invite
     if (decoded.expiresAt && new Date(decoded.expiresAt) < new Date()) {
       setError(
-        `This invite expired on ${new Date(decoded.expiresAt).toLocaleDateString()}.`
+        `This invite expired on ${new Date(decoded.expiresAt).toLocaleDateString()}.`,
       );
       return;
     }
 
-    // Check if already used (stored in localStorage by invite ID)
+    // Check if already used by a DIFFERENT user on this browser.
+    // Same-user re-acceptance is allowed (idempotent — updates role/username).
+    // Cross-device "already used" is enforced by the station_members DB table
+    // (checked in handleAccept), NOT by localStorage.
     const usedInvites = JSON.parse(
-      localStorage.getItem("fuelpro_used_invites") || "{}"
+      localStorage.getItem("fuelpro_used_invites") || "{}",
     );
-    if (usedInvites[decoded.id]) {
-      setError(
-        `This invite has already been used by ${usedInvites[decoded.id]}.`
-      );
+    const usedBy = usedInvites[decoded.id];
+    if (usedBy && usedBy !== user?.email && usedBy !== user?.id) {
+      setError(`This invite was already used by ${usedBy} on this device.`);
       return;
     }
 
-    // Check max uses
-    const useCount = parseInt(
-      localStorage.getItem(`fuelpro_invite_uses_${decoded.id}`) || "0"
-    );
-    if (useCount >= (decoded.maxUses || 1)) {
-      setError("This invite has reached its maximum uses.");
-      return;
-    }
+    // NOTE: max-uses is NOT checked here. The localStorage use-count is
+    // browser-local and unreliable for cross-device max-uses enforcement.
+    // The authoritative check is the station_members DB table count, which
+    // is done in handleAccept (async, server-side). This allows the invitee
+    // to proceed to the username step and get a clear error if the DB
+    // rejects the upsert.
 
     setInvite(decoded);
 
@@ -182,7 +194,7 @@ export default function InviteAccept() {
       setError("Failed to create account. Email may already exist.");
   };
 
-  const handleAccept = () => {
+  const handleAccept = async () => {
     if (!username.trim() || !invite) {
       setError("Please enter your username");
       return;
@@ -192,94 +204,195 @@ export default function InviteAccept() {
       return;
     }
 
-    // Track usage in localStorage
-    const useCount =
-      parseInt(
-        localStorage.getItem(`fuelpro_invite_uses_${invite.id}`) || "0"
-      ) + 1;
-    localStorage.setItem(`fuelpro_invite_uses_${invite.id}`, String(useCount));
-
-    const usedInvites = JSON.parse(
-      localStorage.getItem("fuelpro_used_invites") || "{}"
-    );
-    usedInvites[invite.id] = username;
-    localStorage.setItem("fuelpro_used_invites", JSON.stringify(usedInvites));
-
-    // Add to team (store in localStorage for the station)
-    const teamMembers = JSON.parse(
-      localStorage.getItem("fuelpro_v2_team") || "[]"
-    );
-    teamMembers.push({
-      id: `mem_${Date.now()}`,
-      username,
+    // 1) Accept via PermissionContext using the DECODED URL payload directly.
+    //    The old code called acceptInvite(invite.id, ...) which looked up the
+    //    invite in the INVITEE's local invites array — but invites are created
+    //    by the station OWNER and stored under the owner's cloud key, so the
+    //    invitee's array is always empty → always returned false → the
+    //    "invite is invalid" error. Now we pass the full decoded payload.
+    const payload: InvitePayload = {
+      id: invite.id,
       role: invite.role,
-      assignedPumps: [],
-      assignedShifts: [],
-      invitedBy: invite.createdBy,
-      invitedAt: new Date().toISOString(),
+      stationName: invite.stationName,
+      stationId: invite.stationId,
+      createdBy: invite.createdBy,
+      createdByName: invite.createdByName,
+      createdByUniqueId: invite.createdByUniqueId,
       expiresAt: invite.expiresAt,
-      active: true,
-    });
-    localStorage.setItem("fuelpro_v2_team", JSON.stringify(teamMembers));
-
-    // Create the station locally if it doesn't exist
-    try {
-      const STORAGE_KEY = "fuelpro_stations_v3";
-      const stored = localStorage.getItem(STORAGE_KEY);
-      const parsed = stored
-        ? JSON.parse(stored)
-        : { stations: [], version: "3.0" };
-      const stations = parsed.stations || [];
-      if (
-        !stations.some((s: any) => s.id === (invite.stationId || "default"))
-      ) {
-        stations.push({
-          id: invite.stationId || "default",
-          name: invite.stationName || "Fuel Station",
-          location: "Unknown Location",
-          phone: "",
-          email: "",
-          kraPin: "",
-          etrSerial: "",
-          taxRate: 16,
-          theme: "default",
-          logo: "",
-          description: `Station joined via ${invite.role} invite`,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          data: {},
-          access: [],
-          sharedUsers: [],
-        });
-        localStorage.setItem(
-          STORAGE_KEY,
-          JSON.stringify({ stations, version: "3.0" })
-        );
-      }
-    } catch {
-      /* ignore station creation errors */
+      maxUses: invite.maxUses,
+      canCreateSubUsers: invite.canCreateSubUsers,
+      canGrantPermissions: invite.canGrantPermissions,
+      permissionsSnapshot: invite.permissionsSnapshot as any,
+      tabGrants: invite.tabGrants,
+    };
+    const ok = acceptInviteFromPayload(payload, username.trim());
+    if (!ok) {
+      setError(
+        "This invite is invalid or expired. Please ask the station owner for a new invite.",
+      );
+      return;
     }
 
-    // Bind role to auth identity
-    bindRole(
-      invite.stationId || "default",
-      invite.stationName || "Fuel Station",
-      invite.role,
-      invite.createdBy,
-      invite.expiresAt
-    );
-
-    // Store current station context
+    // 2) Store current station context FIRST (read-through cache only) so the
+    //    PermissionContext role-sync effect can find the stationId when
+    //    bindRole triggers the binding update.
     localStorage.setItem(
       "fuelpro_current_station",
       JSON.stringify({
         stationId: invite.stationId || "default",
         role: invite.role,
-      })
+      }),
+    );
+    try {
+      localStorage.setItem(
+        "fuelpro_current_station_v3",
+        JSON.stringify({
+          stationId: invite.stationId || "default",
+          stationName: invite.stationName || "Fuel Station",
+          role: invite.role,
+        }),
+      );
+    } catch {
+      /* ignore */
+    }
+
+    // 3) Upsert into the DB station_members table (server-side, cross-device,
+    //    RLS-validated). This is the authoritative membership record used by
+    //    AuthContext.syncBindingsFromCloud on every subsequent device login.
+    //    We ALSO store a cloud-KV backup so membership persists even when the
+    //    station_id is NOT a UUID (e.g. "default" or a legacy string id) — the
+    //    DB table requires a UUID station_id, but app_kv accepts any string.
+    try {
+      const sc = getSupabaseClient();
+      const stationId = invite.stationId || "default";
+      const isUuid =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+          stationId,
+        );
+      if (isUuid) {
+        const { error: dbErr } = await sc.from("station_members").upsert(
+          {
+            station_id: stationId,
+            user_id: user.id,
+            invited_email: user.email,
+            name: username.trim(),
+            role: invite.role,
+            status: "accepted",
+            invite_token: invite.id,
+            invited_by_name: invite.createdBy,
+            invited_by_unique_id: invite.createdByUniqueId || null,
+            expires_at: invite.expiresAt || null,
+            max_uses: invite.maxUses || 1,
+            can_create_subusers: invite.canCreateSubUsers || false,
+            can_grant_permissions: invite.canGrantPermissions || false,
+            member_email: user.email,
+            member_role: invite.role,
+          },
+          { onConflict: "station_id,user_id" },
+        );
+        if (dbErr) {
+          console.warn(
+            "[InviteAccept] station_members upsert failed:",
+            dbErr.message,
+          );
+        }
+      }
+      // ALWAYS also store in cloud KV (app_kv) so membership persists for
+      // non-UUID station ids AND so the binding survives across devices even
+      // if the DB table has RLS issues. This is the same store the
+      // PermissionContext uses for team_members.
+      try {
+        const { cloudStorageService } = await import(
+          "@/react-app/lib/cloud-storage-service"
+        );
+        const membershipKey = "station_memberships";
+        const existing =
+          (await cloudStorageService.get<
+            Array<{
+              stationId: string;
+              stationName: string;
+              role: string;
+              userId: string;
+              email: string;
+              username: string;
+              invitedBy: string;
+              acceptedAt: string;
+            }>
+          >(membershipKey, stationId)) || [];
+        const idx = existing.findIndex(
+          (m) => m.stationId === stationId && m.userId === user.id,
+        );
+        const record = {
+          stationId,
+          stationName: invite.stationName || "Fuel Station",
+          role: invite.role,
+          userId: user.id,
+          email: user.email,
+          username: username.trim(),
+          invitedBy: invite.createdBy || "owner",
+          acceptedAt: new Date().toISOString(),
+        };
+        if (idx >= 0) {
+          existing[idx] = record;
+        } else {
+          existing.push(record);
+        }
+        await cloudStorageService.set(membershipKey, existing, stationId);
+      } catch (kvErr) {
+        console.warn("[InviteAccept] cloud KV membership write failed:", kvErr);
+      }
+    } catch (e) {
+      console.warn("[InviteAccept] DB membership write failed:", e);
+    }
+
+    // 4) Bind role to auth identity (client-side binding, cross-device via
+    //    station_members sync above). This triggers the PermissionContext
+    //    role-sync effect which sets role = invite.role.
+    bindRole(
+      invite.stationId || "default",
+      invite.stationName || "Fuel Station",
+      invite.role,
+      invite.createdBy,
+      invite.expiresAt,
     );
 
+    // 4b) Persist the station context so Home.tsx picks the right station on
+    //     the next reload. Without this, the invitee lands on the owner's
+    //     station (or "create station" screen) instead of the shared one.
+    try {
+      localStorage.setItem(
+        "fuelpro_current_station",
+        JSON.stringify({
+          stationId: invite.stationId || "default",
+          role: invite.role,
+        }),
+      );
+      localStorage.setItem(
+        "fuelpro_current_station_v3",
+        JSON.stringify({
+          stationId: invite.stationId || "default",
+          stationName: invite.stationName || "Fuel Station",
+          role: invite.role,
+        }),
+      );
+    } catch {
+      /* ignore quota errors */
+    }
+
+    // 5) Record invite usage in localStorage (browser-local cache for the
+    //    "already used by a different user" check on this device).
+    try {
+      const used = JSON.parse(
+        localStorage.getItem("fuelpro_used_invites") || "{}",
+      );
+      used[invite.id] = user?.email || user?.id || username.trim();
+      localStorage.setItem("fuelpro_used_invites", JSON.stringify(used));
+    } catch {
+      /* ignore quota errors */
+    }
+
     setSuccess(
-      `Welcome ${username}! You are now ${invite.role} at ${invite.stationName || "the station"}.`
+      `Welcome ${username}! You are now ${invite.role} at ${invite.stationName || "the station"}.`,
     );
     setStep("done");
 
@@ -287,7 +400,7 @@ export default function InviteAccept() {
     setTimeout(() => {
       navigate("/");
       import("@/react-app/lib/app-reloader").then(({ broadcastReload }) =>
-        broadcastReload()
+        broadcastReload(),
       );
     }, 2500);
   };
@@ -409,7 +522,7 @@ export default function InviteAccept() {
                     <input
                       type="email"
                       value={email}
-                      onChange={e => setEmail(e.target.value)}
+                      onChange={(e) => setEmail(e.target.value)}
                       placeholder="you@company.com"
                       className="w-full pl-9 pr-4 py-2.5 bg-white/5 border border-white/20 rounded-xl text-white text-sm placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
                       autoFocus
@@ -428,7 +541,7 @@ export default function InviteAccept() {
                     <input
                       type={showPassword ? "text" : "password"}
                       value={password}
-                      onChange={e => setPassword(e.target.value)}
+                      onChange={(e) => setPassword(e.target.value)}
                       placeholder="Enter your password"
                       className="w-full pl-9 pr-10 py-2.5 bg-white/5 border border-white/20 rounded-xl text-white text-sm placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
                     />
@@ -473,7 +586,7 @@ export default function InviteAccept() {
                     <input
                       type="text"
                       value={regName}
-                      onChange={e => setRegName(e.target.value)}
+                      onChange={(e) => setRegName(e.target.value)}
                       placeholder="John Doe"
                       className="w-full pl-9 pr-4 py-2.5 bg-white/5 border border-white/20 rounded-xl text-white text-sm placeholder-gray-500 focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-all"
                       autoFocus
@@ -492,7 +605,7 @@ export default function InviteAccept() {
                     <input
                       type="email"
                       value={email}
-                      onChange={e => setEmail(e.target.value)}
+                      onChange={(e) => setEmail(e.target.value)}
                       placeholder="you@company.com"
                       className="w-full pl-9 pr-4 py-2.5 bg-white/5 border border-white/20 rounded-xl text-white text-sm placeholder-gray-500 focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-all"
                     />
@@ -510,7 +623,7 @@ export default function InviteAccept() {
                     <input
                       type={showPassword ? "text" : "password"}
                       value={password}
-                      onChange={e => setPassword(e.target.value)}
+                      onChange={(e) => setPassword(e.target.value)}
                       placeholder="Create a password"
                       className="w-full pl-9 pr-10 py-2.5 bg-white/5 border border-white/20 rounded-xl text-white text-sm placeholder-gray-500 focus:ring-2 focus:ring-green-500 focus:border-transparent outline-none transition-all"
                     />
@@ -585,11 +698,11 @@ export default function InviteAccept() {
               </label>
               <input
                 value={username}
-                onChange={e => {
+                onChange={(e) => {
                   setUsername(e.target.value);
                   setError("");
                 }}
-                onKeyDown={e => e.key === "Enter" && handleAccept()}
+                onKeyDown={(e) => e.key === "Enter" && handleAccept()}
                 placeholder="Enter a username..."
                 className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-xl text-white placeholder-gray-500 focus:ring-2 focus:ring-green-500 outline-none"
                 autoFocus

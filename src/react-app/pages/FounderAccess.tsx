@@ -1,4 +1,4 @@
-import React, { useCallback } from "react";
+import React, { useCallback, useRef, Suspense } from "react";
 import { useState, useEffect } from "react";
 import {
   Crown,
@@ -7,15 +7,10 @@ import {
   Shield,
   Activity,
   Server,
-  HardDrive,
-  Wifi,
-  WifiOff,
   Clock,
   Search,
   Eye,
   EyeOff,
-  Trash2,
-  Plus,
   Lock,
   CheckCircle2,
   AlertTriangle,
@@ -24,16 +19,12 @@ import {
   Settings,
   ToggleRight,
   RefreshCw,
-  Database,
   Radio,
   Zap,
-  Globe,
   ArrowLeft,
   Layers,
-  Save,
   X,
-  Copy,
-  Check,
+  Menu,
   Sparkles,
   Upload,
   Wand2,
@@ -54,8 +45,28 @@ import {
   CreditCard,
   Cloud,
   CloudOff,
+  Command,
+  Webhook,
+  KeyRound,
+  FlaskConical,
+  HeartPulse,
+  Megaphone,
+  ShieldBan,
+  Globe,
+  Languages,
+  Database,
+  Monitor,
+  ListChecks,
+  Rocket,
+  Send,
+  HardDrive,
+  Gauge,
+  ArrowRight,
+  Download,
 } from "lucide-react";
-import { validateFounderAuth } from "@/react-app/lib/founder-auth";
+import { loginFounder } from "@/react-app/lib/founder-auth";
+import { requestPasswordReset } from "@/react-app/lib/founder-auth";
+import { loadFounder2FA } from "@/react-app/lib/founder-auth";
 import {
   SecuritySection,
   BackupSection,
@@ -76,11 +87,46 @@ import {
   PerformanceSection,
   PaywallControlSection,
   PaymentMethodsSection,
-} from "./founder-sections";
+  SecretsManagerSection,
+  FeatureFlagsManagerSection,
+  AuditLogManagerSection,
+  ConsoleSettingsSection,
+  SystemHealthManagerSection,
+  WebhooksManagerSection,
+  ApiKeysManagerSection,
+  AnnouncementsSection,
+  MaintenanceWindowsSection,
+  BlocklistSection,
+  CorsConfigSection,
+  EnvVarsSection,
+  ScheduledJobsSection,
+  ExperimentsSection,
+  HealthChecksSection,
+  LocalizationSection,
+  CacheManagementSection,
+  CommandPaletteSection,
+  DatabaseQuerySection,
+  ErrorTrackerSection,
+  SessionInspectorSection,
+  TaskQueueSection,
+  LogStreamsSection,
+  RoleMatrixSection,
+  ReleaseCoordinatorSection,
+  MigrationsSection,
+  WebhookDeliveriesSection,
+  StorageExplorerSection,
+  ApiRateLimitsSection,
+  DeveloperControlCenterSection,
+} from "./founder-sections/lazy";
 import { useFounderBackend } from "@/react-app/hooks/useFounderBackend";
-import { useCloudSync, useCloudUsers, useCloudStations, useCloudAuditLog, useCloudSecrets, useCloudFeatureFlags } from "@/react-app/hooks/useCloudSync";
+import { useFounderConsoleStore } from "@/react-app/hooks/useFounderConsoleStore";
+import { useFounderAdvancedStore } from "@/react-app/hooks/useFounderAdvancedStore";
 import { checkApiStatus } from "@/react-app/lib/restApiSync";
 import { getBackendUrl } from "@/utils/apiConfig";
+import {
+  getDetectedCurrency,
+  getCurrencySymbol,
+} from "@/react-app/lib/currency";
 
 /* ─── Types ─── */
 interface AppUser {
@@ -104,36 +150,12 @@ interface StationRecord {
   createdAt: string;
   lastActive: string;
   revenue: number;
-}
-
-interface Secret {
-  key: string;
-  value: string;
-  createdAt: string;
-}
-
-interface AuditEntry {
-  id: string;
-  event: string;
-  detail: string;
-  user: string;
-  severity: "success" | "warning" | "danger" | "info";
-  timestamp: string;
-}
-
-interface FeatureFlag {
-  id: string;
-  name: string;
-  description: string;
-  enabled: boolean;
+  currency?: string;
+  country?: string;
+  code?: string;
 }
 
 /* ─── Founder Password Storage ─── */
-
-interface FAConfig {
-  enabled?: boolean;
-  secret?: string;
-}
 
 interface StationData {
   id: string;
@@ -146,129 +168,8 @@ interface StationData {
   updatedAt?: string;
 }
 
-const FOUNDER_PASSWORD_KEY = "fuelpro_founder_password";
 const FOUNDER_SESSION_KEY = "fuelpro_founder_session";
 const FOUNDER_2FA_KEY = "fuelpro_founder_2fa";
-
-function getDefaultPassword() {
-  return { username: "FOUNDER", password: "fuelpro2026" };
-}
-
-function loadSecrets(): Secret[] {
-  try {
-    const stored = localStorage.getItem("fuelpro_founder_secrets");
-    if (stored) return JSON.parse(stored);
-  } catch {
-    /* ignore */
-  }
-  return [
-    {
-      key: "ADMIN_SECRET_CODE",
-      value: "***CONFIGURED***",
-      createdAt: new Date().toISOString(),
-    },
-    {
-      key: "ADMIN_USERNAME",
-      value: "***CONFIGURED***",
-      createdAt: new Date().toISOString(),
-    },
-    {
-      key: "ADMIN_PASSWORD",
-      value: "***CONFIGURED***",
-      createdAt: new Date().toISOString(),
-    },
-  ];
-}
-
-function loadAuditLog(): AuditEntry[] {
-  try {
-    const stored = localStorage.getItem("fuelpro_founder_audit");
-    if (stored) return JSON.parse(stored);
-  } catch {
-    /* ignore */
-  }
-  return [
-    {
-      id: "1",
-      event: "System Initialized",
-      detail: "FuelPro admin panel created",
-      user: "SYSTEM",
-      severity: "info",
-      timestamp: new Date().toISOString(),
-    },
-  ];
-}
-
-function loadFeatureFlags(): FeatureFlag[] {
-  try {
-    const stored = localStorage.getItem("fuelpro_founder_flags");
-    if (stored) return JSON.parse(stored);
-  } catch {
-    /* ignore */
-  }
-  return [
-    {
-      id: "pos_system",
-      name: "POS System",
-      description: "Point of Sale module",
-      enabled: true,
-    },
-    {
-      id: "mpesa_live",
-      name: "M-PESA Live",
-      description: "Real-time M-PESA transactions",
-      enabled: true,
-    },
-    {
-      id: "ai_chatbot",
-      name: "AI Chatbot",
-      description: "AI assistant for fuel management",
-      enabled: true,
-    },
-    {
-      id: "cloud_sync",
-      name: "Cloud Sync",
-      description: "Cross-device data synchronization",
-      enabled: true,
-    },
-    {
-      id: "integration_hub",
-      name: "Integration Hub",
-      description: "KRA, ETR, POS, Payroll connectors",
-      enabled: true,
-    },
-    {
-      id: "regional_compliance",
-      name: "Regional Compliance",
-      description: "Multi-country compliance features",
-      enabled: true,
-    },
-    {
-      id: "advanced_analytics",
-      name: "Advanced Analytics",
-      description: "Deep analytics and forecasting",
-      enabled: true,
-    },
-    {
-      id: "customer_loyalty",
-      name: "Customer Loyalty",
-      description: "Loyalty program management",
-      enabled: true,
-    },
-    {
-      id: "fuel_quality",
-      name: "Fuel Quality Testing",
-      description: "Quality control and testing",
-      enabled: true,
-    },
-    {
-      id: "credit_management",
-      name: "Credit Management",
-      description: "Credit and debt tracking",
-      enabled: true,
-    },
-  ];
-}
 
 type SectionId =
   | "overview"
@@ -282,7 +183,6 @@ type SectionId =
   | "security"
   | "backup"
   | "config"
-  
   | "notifications"
   | "branding"
   | "api"
@@ -298,7 +198,78 @@ type SectionId =
   | "trialanalytics"
   | "performance"
   | "paywall"
-  | "paymentmethods";
+  | "paymentmethods"
+  | "consolesettings"
+  | "webhooks"
+  | "apikeys"
+  | "announcements"
+  | "maintwindows"
+  | "blocklist"
+  | "cors"
+  | "envvars"
+  | "jobs"
+  | "experiments"
+  | "healthchecks"
+  | "localization"
+  | "cachemgmt"
+  | "commandpalette"
+  | "dbquery"
+  | "errortracker"
+  | "sessions"
+  | "taskqueue"
+  | "logstreams"
+  | "rolematrix"
+  | "releasecoord"
+  | "migrations"
+  | "deliveries"
+  | "storage"
+  | "ratelimits"
+  | "devcontrol";
+
+// NavItem must be defined at MODULE scope (outside the component) so it is a
+// STABLE component type across re-renders. When it was defined inside the
+// FounderAccess body, every re-render created a new NavItem function → React
+// unmounted/remounted ALL nav buttons on every state change from the store
+// hooks (useFounderConsoleStore, useFounderAdvancedStore, useFounderBackend)
+// → click handlers were lost during the unmount/remount cycle → section
+// switching silently never worked.
+function NavItem({
+  id,
+  label,
+  icon: Icon,
+  count,
+  active,
+  onSelect,
+}: {
+  id: SectionId;
+  label: string;
+  icon: React.ElementType;
+  count?: number;
+  active: boolean;
+  onSelect: (id: SectionId) => void;
+}) {
+  return (
+    <button
+      data-section-id={id}
+      onClick={() => onSelect(id)}
+      className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-left transition-all ${
+        active
+          ? "bg-amber-500/15 text-amber-300 border-l-2 border-amber-400"
+          : "text-gray-400 hover:text-gray-200 hover:bg-white/[0.03]"
+      }`}
+    >
+      <Icon size={17} />
+      <span className="text-[13px]">{label}</span>
+      {count !== undefined && (
+        <span
+          className={`ml-auto text-[10px] px-1.5 py-0.5 rounded ${active ? "bg-amber-500/20 text-amber-300" : "bg-white/5 text-gray-500"}`}
+        >
+          {count}
+        </span>
+      )}
+    </button>
+  );
+}
 
 export default function FounderAccess() {
   /* ─── Cloud Sync State ─── */
@@ -314,14 +285,22 @@ export default function FounderAccess() {
   const {
     logAudit,
     auditLog: backendAuditLog,
-    auditLoading: auditBackendLoading,
     stationCount: backendStationCount,
     salesAnalytics,
     allBackendUsers,
     usersLoading,
     allBackendStations,
     allStationsLoading,
+    statsTotalRevenue,
   } = useFounderBackend();
+
+  /* ─── Founder Console Store (cloud-backed, real-time synced) ───
+   * Secrets, Feature Flags, Audit Log, and Console Settings are persisted to
+   * Supabase app_kv and synced in real time to every founder device via
+   * Supabase Realtime. This replaces the old localStorage-only arrays so a
+   * change made on one device reflects instantly on all others. */
+  const consoleStore = useFounderConsoleStore();
+  const advancedStore = useFounderAdvancedStore();
 
   /* ─── Auth State ─── */
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -333,19 +312,83 @@ export default function FounderAccess() {
   const [loginAttempts, setLoginAttempts] = useState(0);
   const [isLocked, setIsLocked] = useState(false);
   const [needs2FA, setNeeds2FA] = useState(false);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotStatus, setForgotStatus] = useState<{
+    sent: boolean;
+    error?: string;
+  }>({ sent: false });
+  const [forgotSending, setForgotSending] = useState(false);
+  const [founderUniqueId, setFounderUniqueId] = useState<string | null>(null);
+  const [founderUserId, setFounderUserId] = useState<string | null>(null);
 
   /* ─── Admin State ─── */
-  const [activeSection, setActiveSection] = useState<SectionId>("overview");
+  // activeSection is tracked via the URL hash query param (`#/founder?s=users`)
+  // instead of React state. React state/refs were unreliable here because the
+  // component has a massive render tree (useFounderConsoleStore +
+  // useFounderAdvancedStore + useFounderBackend) that causes concurrent-mode
+  // render cancellation — the state update from setActiveSection was being
+  // torn before it committed, falling back to "overview". The URL is outside
+  // React's reconciliation, so updating it always takes effect immediately.
+  // The `hashTick` state forces a re-render when the hash changes (since the
+  // hash is read inline during render, not via a router hook).
+  const [, setHashTick] = useState(0);
+  useEffect(() => {
+    const onHash = () => setHashTick((n) => n + 1);
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
+  const activeSection: SectionId = (() => {
+    try {
+      const hash = window.location.hash;
+      const qIdx = hash.indexOf("?");
+      if (qIdx >= 0) {
+        const params = new URLSearchParams(hash.slice(qIdx + 1));
+        const s = params.get("s");
+        if (s) return s as SectionId;
+      }
+    } catch {
+      /* */
+    }
+    return "overview";
+  })();
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [users, setUsers] = useState<AppUser[]>([]);
   const [stations, setStations] = useState<StationRecord[]>([]);
-  const [secrets, setSecrets] = useState<Secret[]>(loadSecrets);
-  const [featureFlags, setFeatureFlags] =
-    useState<FeatureFlag[]>(loadFeatureFlags);
-  // Use backend audit log if available, otherwise fallback to localStorage
+
+  // Navigate to a section by updating the URL hash query param. This is the
+  // ONLY mechanism for section switching — no React state involved, so it
+  // cannot be cancelled/teared by concurrent-mode re-renders. The hashchange
+  // event listener above triggers the re-render.
+  const handleSetActiveSection = useCallback((id: SectionId) => {
+    try {
+      const hash = window.location.hash;
+      const base = hash.split("?")[0];
+      const newHash = `${base}?s=${id}`;
+      if (hash !== newHash) {
+        window.location.hash = newHash;
+      } else {
+        // Same hash — manually trigger a re-render
+        setHashTick((n) => n + 1);
+      }
+    } catch {
+      /* */
+    }
+  }, []);
+
+  // Secrets, Feature Flags and the Audit Log are now sourced from the
+  // cloud-backed, real-time Founder Console store (useFounderConsoleStore).
+  // The legacy localStorage state is kept only as a fallback display shape
+  // for the (now-replaced) inline sections; the new section components read
+  // directly from consoleStore.
+  const secrets = consoleStore.secrets;
+  const featureFlags = consoleStore.flags;
+  // Audit log: prefer the backend (MySQL) audit log when it has entries,
+  // otherwise use the cloud-synced console store audit log.
   const auditLog =
-    backendAuditLog.length > 1 ? backendAuditLog : loadAuditLog();
+    backendAuditLog.length > 1 ? backendAuditLog : consoleStore.audit;
+  const consoleSettings = consoleStore.settings;
   const [searchQuery, setSearchQuery] = useState("");
-  const [showAddSecret, setShowAddSecret] = useState(false);
 
   // AI Website Editor state
   const [editorInstruction, setEditorInstruction] = useState("");
@@ -355,17 +398,11 @@ export default function FounderAccess() {
     { instruction: string; output: string; timestamp: string }[]
   >([]);
   const [editorTab, setEditorTab] = useState<"chat" | "files" | "preview">(
-    "chat"
+    "chat",
   );
   const [uploadedFiles, setUploadedFiles] = useState<
     { name: string; type: string; content: string; size: number }[]
   >([]);
-  const [newSecretKey, setNewSecretKey] = useState("");
-  const [newSecretValue, setNewSecretValue] = useState("");
-  const [visibleSecrets, setVisibleSecrets] = useState<Record<string, boolean>>(
-    {}
-  );
-  const [copiedSecret, setCopiedSecret] = useState("");
   const [loading, setLoading] = useState(true);
 
   /* ─── Cloud Status Check ─── */
@@ -386,6 +423,15 @@ export default function FounderAccess() {
   }, [checkCloudStatus]);
 
   /* ─── Password check on mount ─── */
+  // Runs ONCE on mount. `logAudit` is intentionally omitted from the deps
+  // because it is a useCallback whose identity changes whenever the tRPC
+  // mutation result object changes (idle→pending→success). Including it
+  // causes this effect to re-fire on every mutation, which re-logs
+  // "Session Resumed", which triggers another mutation → infinite render
+  // loop that breaks section navigation. The ref keeps the latest fn
+  // without re-subscribing.
+  const logAuditRef = useRef(logAudit);
+  logAuditRef.current = logAudit;
   useEffect(() => {
     try {
       const sessionStr = localStorage.getItem(FOUNDER_SESSION_KEY);
@@ -395,7 +441,11 @@ export default function FounderAccess() {
         if (session?.active && session.loginTime) {
           if (Date.now() - session.loginTime < 8 * 60 * 60 * 1000) {
             setIsAuthenticated(true);
-            logAudit("Session Resumed", "Founder session restored", "info");
+            logAuditRef.current(
+              "Session Resumed",
+              "Founder session restored",
+              "info",
+            );
           } else {
             localStorage.removeItem(FOUNDER_SESSION_KEY);
           }
@@ -405,42 +455,66 @@ export default function FounderAccess() {
       // Handle corrupted localStorage data gracefully
       localStorage.removeItem(FOUNDER_SESSION_KEY);
     }
-  }, [logAudit]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /* ─── Load real users and stations from backend when authenticated ─── */
   useEffect(() => {
     if (!isAuthenticated) return;
-    
+
     // If we have backend data, use it
     if (allBackendUsers && allBackendUsers.length > 0) {
+      // Build a station count map: userId -> number of stations owned
+      const stationCountByUser = new Map<string, number>();
+      if (allBackendStations) {
+        for (const s of allBackendStations) {
+          const oid = String(s.ownerId || s.owner_id || "");
+          if (oid) {
+            stationCountByUser.set(oid, (stationCountByUser.get(oid) || 0) + 1);
+          }
+        }
+      }
       const backendUsersMapped: AppUser[] = allBackendUsers.map((u: any) => ({
         authId: String(u.id),
-        authMethod: u.email?.includes('@') ? 'email' : 'unknown',
-        name: u.name || 'Unknown',
-        email: u.email || '',
-        role: u.role || 'user',
-        lastActive: u.lastSignInAt ? new Date(u.lastSignInAt).toLocaleString() : 'Never',
-        stations: 0,
-        createdAt: u.createdAt ? new Date(u.createdAt).toLocaleString() : 'Unknown',
+        authMethod: u.email?.includes("@") ? "email" : "unknown",
+        name: u.name || "Unknown",
+        email: u.email || "",
+        role: u.role || "user",
+        lastActive: u.lastSignInAt
+          ? new Date(u.lastSignInAt).toLocaleString()
+          : "Never",
+        stations: stationCountByUser.get(String(u.id)) || 0,
+        createdAt: u.createdAt
+          ? new Date(u.createdAt).toLocaleString()
+          : "Unknown",
       }));
       setUsers(backendUsersMapped);
     }
-    
+
     if (allBackendStations && allBackendStations.length > 0) {
-      const backendStationsMapped: StationRecord[] = allBackendStations.map((s: any) => ({
-        id: String(s.id),
-        name: s.name || 'Unnamed Station',
-        location: s.location || 'Unknown',
-        ownerId: String(s.ownerId || 0),
-        ownerName: 'Owner',
-        members: s.members || 0,
-        createdAt: s.createdAt ? new Date(s.createdAt).toLocaleString() : 'Unknown',
-        lastActive: s.updatedAt ? new Date(s.updatedAt).toLocaleString() : 'Unknown',
-        revenue: 0,
-      }));
+      const backendStationsMapped: StationRecord[] = allBackendStations.map(
+        (s: any) => ({
+          id: String(s.id),
+          name: s.name || "Unnamed Station",
+          location: s.location || "Unknown",
+          ownerId: String(s.ownerId || s.owner_id || 0),
+          ownerName: s.ownerName || "Owner",
+          members: s.members || 1,
+          createdAt: s.createdAt
+            ? new Date(s.createdAt).toLocaleString()
+            : "Unknown",
+          lastActive: s.updatedAt
+            ? new Date(s.updatedAt).toLocaleString()
+            : "Unknown",
+          revenue: Number(s.revenue) || 0,
+          currency: s.currency || "USD",
+          country: s.country || "",
+          code: s.code || "",
+        }),
+      );
       setStations(backendStationsMapped);
     }
-    
+
     // If no backend data, fall back to localStorage scan
     if ((!allBackendUsers || allBackendUsers.length === 0) && !usersLoading) {
       const discoveredUsers: AppUser[] = [];
@@ -481,7 +555,11 @@ export default function FounderAccess() {
             const stationsList =
               val.stations || (Array.isArray(val) ? val : val.id ? [val] : []);
             stationsList.forEach((s: StationData) => {
-              if (s && s.id && !discoveredStations.some(ds => ds.id === s.id)) {
+              if (
+                s &&
+                s.id &&
+                !discoveredStations.some((ds) => ds.id === s.id)
+              ) {
                 discoveredStations.push({
                   id: s.id,
                   name: s.name || "Unnamed Station",
@@ -502,64 +580,80 @@ export default function FounderAccess() {
         }
       }
 
-      discoveredUsers.forEach(u => {
+      discoveredUsers.forEach((u) => {
         u.stations = discoveredStations.filter(
-          s => s.ownerId === u.authId
+          (s) => s.ownerId === u.authId,
         ).length;
       });
-      
+
       if (users.length === 0) setUsers(discoveredUsers);
       if (stations.length === 0) setStations(discoveredStations);
     }
-    
+
     setLoading(false);
-  }, [isAuthenticated, allBackendUsers, allBackendStations, usersLoading, allStationsLoading]);
+  }, [
+    isAuthenticated,
+    allBackendUsers,
+    allBackendStations,
+    usersLoading,
+    allStationsLoading,
+  ]);
 
-  /* ─── Save secrets & flags ─── */
-  useEffect(() => {
-    localStorage.setItem("fuelpro_founder_secrets", JSON.stringify(secrets));
-  }, [secrets]);
-  useEffect(() => {
-    localStorage.setItem("fuelpro_founder_flags", JSON.stringify(featureFlags));
-  }, [featureFlags]);
-  // Audit log now persisted via backend (useFounderBackend.logAudit) — no localStorage sync needed
+  /* ─── Persistence ───
+   * Secrets & Feature Flags are now persisted by the cloud-backed
+   * useFounderConsoleStore (Supabase app_kv + realtime sync), so the old
+   * localStorage-only save effects are intentionally removed. The store
+   * handles cross-device real-time propagation. Audit log is persisted via
+   * the backend (useFounderBackend.logAudit) and/or the console store. */
 
-  /* ─── Login Handler ─── */
-  const handleLogin = () => {
+  /* ─── Login Handler ───
+   * SECURITY: This previously fell back to a hardcoded default credential
+   * (FOUNDER / fuelpro2026) and had a logic bug where the validity check's
+   * right-hand operand was an async IIFE — which returns a Promise object.
+   * Promise objects are truthy, so `isValid` evaluated to true almost
+   * unconditionally regardless of the password entered. Both issues meant
+   * founder/admin access could be obtained without real credentials.
+   * Fixed to authenticate exclusively via Supabase (loginFounder), which
+   * performs a real sign-in and checks the founder/admin role server-side. */
+  const handleLogin = async () => {
     if (isLocked) return;
     if (!loginUsername.trim() || !loginPassword) {
       setLoginError("Username and password are required");
       return;
     }
 
-    // Load stored credentials or use default
-    let stored = getDefaultPassword();
+    setLoginError("");
+    let result;
     try {
-      const saved = localStorage.getItem(FOUNDER_PASSWORD_KEY);
-      if (saved) stored = JSON.parse(saved);
-    } catch {
-      /* use default */
+      result = await loginFounder(loginUsername.trim(), loginPassword);
+    } catch (err) {
+      console.error("[LoginDebug] loginFounder threw:", err);
+      setLoginError(
+        "Login error: " + (err instanceof Error ? err.message : "unknown"),
+      );
+      return;
     }
 
-    // Use founder-auth for validation (supports configurable credentials)
-    // Also support legacy base64-encoded stored passwords
-    const legacyPwMatch = stored.password.startsWith("cHVibGljYW4")
-      ? loginPassword === atob(stored.password)
-      : loginPassword === stored.password;
-    const isValid =
-      (loginUsername.trim().toLowerCase() === stored.username.toLowerCase() && legacyPwMatch) ||
-      (async () => validateFounderAuth().then(r => r.valid))();
-    if (isValid) {
-      // Check if 2FA is enabled
-      let faConfig: FAConfig | null = null;
-      try {
-        const faSaved = localStorage.getItem(FOUNDER_2FA_KEY);
-        if (faSaved) faConfig = JSON.parse(faSaved);
-      } catch {
-        /* */
+    if (result.success) {
+      setFounderUserId(result.userId || null);
+      // Fetch the unique identifier for display.
+      if (result.userId) {
+        import("@/react-app/lib/founder-auth").then((m) => {
+          m.getFounderUniqueId(result.userId!).then(setFounderUniqueId);
+        });
       }
 
-      if (faConfig?.enabled && faConfig?.secret) {
+      // Check if 2FA is enabled — load from CLOUD (profiles table), not
+      // localStorage, so it is consistent across all devices.
+      let faEnabled = false;
+      let faSecret: string | null = null;
+      if (result.userId) {
+        const cloud2FA = await loadFounder2FA(result.userId);
+        faEnabled = cloud2FA.enabled;
+        faSecret = cloud2FA.secret;
+      }
+
+      if (faEnabled && faSecret) {
         setNeeds2FA(true);
         setLoginError("");
         return;
@@ -569,11 +663,13 @@ export default function FounderAccess() {
     } else {
       const nextAttempts = loginAttempts + 1;
       setLoginAttempts(nextAttempts);
-      setLoginError(`Invalid credentials. Attempt ${nextAttempts}/5`);
+      setLoginError(
+        result.error || `Invalid credentials. Attempt ${nextAttempts}/5`,
+      );
       logAudit(
         "Login Failed",
         `Invalid login attempt #${nextAttempts}`,
-        "danger"
+        "danger",
       );
       if (nextAttempts >= 5) {
         setIsLocked(true);
@@ -584,60 +680,64 @@ export default function FounderAccess() {
             setLoginAttempts(0);
             setLoginError("");
           },
-          15 * 60 * 1000
+          15 * 60 * 1000,
         );
       }
     }
   };
 
   const completeLogin = async () => {
+    console.log(
+      "[LoginDebug] completeLogin called, setting isAuthenticated=true",
+    );
     setIsAuthenticated(true);
-    
+
     // Get founder token from backend via REST API
     let token = null;
     const API_URL = getBackendUrl();
-    
-    try {
-      // Try the founder-login REST endpoint first
-      const res = await fetch(
-        `${API_URL}/api/auth/founder-login`,
-        {
+
+    // Only attempt the backend login when a backend is actually configured.
+    // On static hosts (Cloudflare Pages, local dev without VITE_BACKEND_URL)
+    // there are no /api/auth/* serverless functions, so the fetch would 405
+    // against the host on every login. Local Supabase auth handles the
+    // session in that case (token stays null, which is fine).
+    if (API_URL) {
+      try {
+        // Try the founder-login REST endpoint first
+        const res = await fetch(`${API_URL}/api/auth/founder-login`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             username: loginUsername.trim(),
             password: loginPassword,
           }),
-        }
-      );
-      
-      if (res.ok) {
-        const data = await res.json();
-        if (data?.token) {
-          token = data.token;
-        }
-      } else {
-        // Try tRPC endpoint as fallback
-        const trpcRes = await fetch(
-          `${API_URL}/api/trpc/founderAuth.login`,
-          {
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.token) {
+            token = data.token;
+          }
+        } else {
+          // Try tRPC endpoint as fallback
+          const trpcRes = await fetch(`${API_URL}/api/trpc/founderAuth.login`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               json: { username: loginUsername.trim(), password: loginPassword },
             }),
+          });
+          const trpcData = await trpcRes.json();
+          if (trpcData?.result?.data?.json?.token) {
+            token = trpcData.result.data.json.token;
           }
-        );
-        const trpcData = await trpcRes.json();
-        if (trpcData?.result?.data?.json?.token) {
-          token = trpcData.result.data.json.token;
         }
+      } catch (e) {
+        console.warn("Backend unavailable, using local auth");
+        // Backend might be unavailable - continue with local auth
       }
-    } catch (e) {
-      console.warn('Backend unavailable, using local auth');
-      // Backend might be unavailable - continue with local auth
     }
-    
+
     // Store session with timestamp for 8-hour expiry
     localStorage.setItem(
       FOUNDER_SESSION_KEY,
@@ -646,7 +746,7 @@ export default function FounderAccess() {
         loginTime: Date.now(),
         username: loginUsername.trim(),
         token: token, // Store backend token for API calls
-      })
+      }),
     );
     setLoginError("");
     setLoginAttempts(0);
@@ -662,22 +762,35 @@ export default function FounderAccess() {
       return;
     }
 
-    let faConfig: FAConfig | null = null;
-    try {
-      const faSaved = localStorage.getItem(FOUNDER_2FA_KEY);
-      if (faSaved) faConfig = JSON.parse(faSaved);
-    } catch {
-      /* */
+    // Load the 2FA secret from CLOUD (profiles table) — not localStorage —
+    // so it works on any device the founder signs in from.
+    let secret: string | null = null;
+    if (founderUserId) {
+      const cloud2FA = await loadFounder2FA(founderUserId);
+      secret = cloud2FA.secret;
+    }
+    if (!secret) {
+      // Fallback: legacy localStorage (for accounts set up before the cloud
+      // migration on this device).
+      try {
+        const faSaved = localStorage.getItem(FOUNDER_2FA_KEY);
+        if (faSaved) {
+          const cfg = JSON.parse(faSaved);
+          secret = cfg?.secret || null;
+        }
+      } catch {
+        /* */
+      }
     }
 
-    if (!faConfig?.secret) {
+    if (!secret) {
       setLoginError("2FA configuration error");
       return;
     }
 
     const { verifyCode: verify } = await import("@/react-app/lib/totp");
-    const secret = atob(faConfig.secret);
-    const valid = await verify(secret, login2FACode);
+    const decodedSecret = atob(secret);
+    const valid = await verify(decodedSecret, login2FACode);
 
     if (valid) {
       completeLogin();
@@ -685,6 +798,30 @@ export default function FounderAccess() {
       setLoginError("Invalid 2FA code");
       logAudit("2FA Login Failed", "Invalid TOTP code", "danger");
     }
+  };
+
+  /* ─── Forgot Password ─── */
+  const handleForgotPassword = async () => {
+    setForgotStatus({ sent: false });
+    setForgotSending(true);
+    const email = forgotEmail.trim() || loginUsername.trim();
+    if (!email) {
+      setForgotStatus({ sent: false, error: "Enter your username or email" });
+      setForgotSending(false);
+      return;
+    }
+    const result = await requestPasswordReset(email);
+    if (result.success) {
+      setForgotStatus({ sent: true });
+      logAudit(
+        "Password Reset Requested",
+        `Reset email sent for ${email}`,
+        "warning",
+      );
+    } else {
+      setForgotStatus({ sent: false, error: result.error });
+    }
+    setForgotSending(false);
   };
 
   /* ─── Logout ─── */
@@ -702,103 +839,65 @@ export default function FounderAccess() {
     window.location.reload();
   };
 
-  // logAudit now comes from useFounderBackend (syncs to MySQL + localStorage)
-
-  /* ─── Secret Management ─── */
-  const addSecret = () => {
-    if (!newSecretKey.trim() || !newSecretValue) return;
-    if (secrets.some(s => s.key === newSecretKey.trim())) {
-      setSecrets(prev =>
-        prev.map(s =>
-          s.key === newSecretKey.trim()
-            ? {
-                ...s,
-                value: btoa(newSecretValue),
-                createdAt: new Date().toISOString(),
-              }
-            : s
-        )
-      );
-      logAudit(
-        "Secret Updated",
-        `Secret "${newSecretKey.trim()}" updated`,
-        "success"
-      );
-    } else {
-      setSecrets(prev => [
-        ...prev,
-        {
-          key: newSecretKey.trim(),
-          value: btoa(newSecretValue),
-          createdAt: new Date().toISOString(),
-        },
-      ]);
-      logAudit(
-        "Secret Created",
-        `Secret "${newSecretKey.trim()}" added`,
-        "success"
-      );
-    }
-    setNewSecretKey("");
-    setNewSecretValue("");
-    setShowAddSecret(false);
-  };
-
-  const deleteSecret = (key: string) => {
-    if (!confirm(`Delete secret "${key}"?`)) return;
-    setSecrets(prev => prev.filter(s => s.key !== key));
-    logAudit("Secret Deleted", `Secret "${key}" removed`, "warning");
-  };
-
-  const copySecretValue = (key: string, encodedValue: string) => {
-    try {
-      navigator.clipboard?.writeText(atob(encodedValue));
-    } catch {
-      navigator.clipboard?.writeText(encodedValue);
-    }
-    setCopiedSecret(key);
-    setTimeout(() => setCopiedSecret(""), 2000);
-  };
-
-  const toggleSecretVisibility = (key: string) => {
-    setVisibleSecrets(prev => ({ ...prev, [key]: !prev[key] }));
-  };
-
-  /* ─── Feature Flag Toggle ─── */
-  const toggleFlag = (id: string) => {
-    setFeatureFlags(prev =>
-      prev.map(f => {
-        if (f.id === id) {
-          const updated = { ...f, enabled: !f.enabled };
-          logAudit(
-            "Feature Flag Toggled",
-            `"${f.name}" is now ${updated.enabled ? "enabled" : "disabled"}`,
-            updated.enabled ? "success" : "warning"
-          );
-          return updated;
-        }
-        return f;
-      })
-    );
-  };
+  // logAudit now comes from useFounderBackend (syncs to MySQL + localStorage).
+  // The new section components log directly to consoleStore.addAudit (the
+  // real-time cloud audit channel) so audit entries sync to all founder
+  // devices instantly.
 
   const filteredUsers = users.filter(
-    u =>
+    (u) =>
       u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      u.authMethod.toLowerCase().includes(searchQuery.toLowerCase())
+      u.authMethod.toLowerCase().includes(searchQuery.toLowerCase()),
   );
   const filteredStations = stations.filter(
-    s =>
+    (s) =>
       s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      s.location.toLowerCase().includes(searchQuery.toLowerCase())
+      s.location.toLowerCase().includes(searchQuery.toLowerCase()),
   );
-  const totalRevenue = stations.reduce((sum, s) => sum + s.revenue, 0);
+  const totalRevenue = stations.reduce((sum, s) => sum + (s.revenue || 0), 0);
+  // The Founder Console should show the REAL cross-owner counts from
+  // /api/founder-stats (allBackendStations), NOT the owner-scoped
+  // trpc.station.list count (backendStationCount) which only reflects the
+  // current founder's own stations. Fall back to the owner-scoped/local count
+  // only when the cross-owner fetch hasn't resolved yet.
   const effectiveStationCount =
-    backendStationCount > 0 ? backendStationCount : stations.length;
-  const effectiveRevenue = salesAnalytics?.totalRevenue
-    ? Number(salesAnalytics.totalRevenue)
-    : totalRevenue;
+    allBackendStations && allBackendStations.length > 0
+      ? allBackendStations.length
+      : backendStationCount > 0
+        ? backendStationCount
+        : stations.length;
+  // Prefer the cross-owner total revenue from /api/founder-stats, then
+  // salesAnalytics, then the sum of station revenues from the API.
+  const effectiveRevenue =
+    statsTotalRevenue > 0
+      ? statsTotalRevenue
+      : salesAnalytics?.totalRevenue
+        ? Number(salesAnalytics.totalRevenue)
+        : totalRevenue;
+  // Determine the display currency for the global revenue figure. Use the
+  // most common station currency if available, otherwise the detected
+  // currency. This avoids showing "KSh" for a US-founder global console.
+  const globalCurrency = (() => {
+    if (stations.length > 0) {
+      // Count currencies across stations; pick the most frequent
+      const curCounts = new Map<string, number>();
+      for (const s of stations) {
+        const c = s.currency || "USD";
+        curCounts.set(c, (curCounts.get(c) || 0) + 1);
+      }
+      let best = "USD";
+      let bestCount = 0;
+      for (const [c, n] of curCounts) {
+        if (n > bestCount) {
+          best = c;
+          bestCount = n;
+        }
+      }
+      return best;
+    }
+    return getDetectedCurrency();
+  })();
 
   /* ─── Login Screen ─── */
   if (!isAuthenticated) {
@@ -858,11 +957,11 @@ export default function FounderAccess() {
                     <input
                       type="text"
                       value={loginUsername}
-                      onChange={e => {
+                      onChange={(e) => {
                         setLoginUsername(e.target.value);
                         setLoginError("");
                       }}
-                      onKeyDown={e => e.key === "Enter" && handleLogin()}
+                      onKeyDown={(e) => e.key === "Enter" && handleLogin()}
                       placeholder="Enter username"
                       className="w-full pl-10 pr-4 py-3 bg-white/[0.05] border border-white/[0.1] rounded-xl text-white text-sm placeholder-gray-500 focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none transition-all"
                       autoFocus
@@ -881,11 +980,11 @@ export default function FounderAccess() {
                     <input
                       type={showPassword ? "text" : "password"}
                       value={loginPassword}
-                      onChange={e => {
+                      onChange={(e) => {
                         setLoginPassword(e.target.value);
                         setLoginError("");
                       }}
-                      onKeyDown={e => e.key === "Enter" && handleLogin()}
+                      onKeyDown={(e) => e.key === "Enter" && handleLogin()}
                       placeholder="Enter password"
                       className="w-full pl-10 pr-12 py-3 bg-white/[0.05] border border-white/[0.1] rounded-xl text-white text-sm placeholder-gray-500 focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none transition-all"
                     />
@@ -904,6 +1003,87 @@ export default function FounderAccess() {
                 >
                   <Shield size={18} /> {isLocked ? "Locked" : "Authenticate"}
                 </button>
+
+                {/* Forgot Password toggle */}
+                {!showForgotPassword ? (
+                  <button
+                    onClick={() => {
+                      setShowForgotPassword(true);
+                      setForgotStatus({ sent: false });
+                      setForgotEmail(loginUsername);
+                    }}
+                    className="w-full mt-3 text-xs text-gray-500 hover:text-amber-400 transition-colors flex items-center justify-center gap-1.5"
+                  >
+                    <Mail size={12} /> Forgot password? Reset via email
+                  </button>
+                ) : (
+                  <div className="mt-4 p-4 bg-white/[0.03] border border-white/[0.08] rounded-xl space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-medium text-amber-400 flex items-center gap-1.5">
+                        <Key size={14} /> Password Reset
+                      </span>
+                      <button
+                        onClick={() => {
+                          setShowForgotPassword(false);
+                          setForgotStatus({ sent: false });
+                        }}
+                        className="text-gray-500 hover:text-white"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                    {forgotStatus.sent ? (
+                      <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-lg flex items-start gap-2">
+                        <CheckCircle2
+                          size={14}
+                          className="mt-0.5 text-green-400 flex-shrink-0"
+                        />
+                        <p className="text-xs text-green-300">
+                          Reset link sent to your email. Click the link to set a
+                          new password, then return here to sign in.
+                        </p>
+                      </div>
+                    ) : (
+                      <>
+                        <p className="text-[11px] text-gray-500">
+                          Enter your username or email. A password-reset link
+                          will be emailed to you.
+                        </p>
+                        <input
+                          type="text"
+                          value={forgotEmail}
+                          onChange={(e) => setForgotEmail(e.target.value)}
+                          onKeyDown={(e) =>
+                            e.key === "Enter" && handleForgotPassword()
+                          }
+                          placeholder="Username or email"
+                          className="w-full px-4 py-2.5 bg-white/[0.05] border border-white/[0.1] rounded-lg text-white text-sm placeholder-gray-500 focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none"
+                        />
+                        {forgotStatus.error && (
+                          <p className="text-xs text-red-400">
+                            {forgotStatus.error}
+                          </p>
+                        )}
+                        <button
+                          onClick={handleForgotPassword}
+                          disabled={forgotSending}
+                          className="w-full py-2.5 bg-white/10 hover:bg-white/15 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                        >
+                          {forgotSending ? (
+                            <>
+                              <RefreshCw size={14} className="animate-spin" />{" "}
+                              Sending…
+                            </>
+                          ) : (
+                            <>
+                              <Mail size={14} /> Send Reset Link
+                            </>
+                          )}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
               </>
             ) : (
               <>
@@ -922,13 +1102,15 @@ export default function FounderAccess() {
                   <input
                     type="text"
                     value={login2FACode}
-                    onChange={e => {
+                    onChange={(e) => {
                       setLogin2FACode(
-                        e.target.value.replace(/\D/g, "").slice(0, 6)
+                        e.target.value.replace(/\D/g, "").slice(0, 6),
                       );
                       setLoginError("");
                     }}
-                    onKeyDown={e => e.key === "Enter" && handleVerify2FALogin()}
+                    onKeyDown={(e) =>
+                      e.key === "Enter" && handleVerify2FALogin()
+                    }
                     placeholder="000000"
                     className="w-full px-4 py-3 bg-white/[0.05] border border-white/[0.1] rounded-xl text-white text-sm placeholder-gray-500 focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none transition-all font-mono tracking-widest text-center"
                     autoFocus
@@ -955,13 +1137,20 @@ export default function FounderAccess() {
               </>
             )}
 
-            <div className="mt-4 flex items-center gap-2 justify-center">
+            <div className="mt-4 flex items-center gap-2 justify-center flex-wrap">
               <Lock size={10} className="text-gray-600" />
               <p className="text-[10px] text-gray-600">
-                Encrypted local storage. 5-attempt lockout.{" "}
-                {needs2FA ? "2FA protected." : ""}
+                Supabase Auth. 5-attempt lockout.{" "}
+                {needs2FA ? "2FA protected (cross-device)." : ""}
               </p>
             </div>
+            {founderUniqueId && (
+              <div className="mt-2 text-center">
+                <span className="text-[9px] text-gray-700 font-mono">
+                  ID: {founderUniqueId}
+                </span>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -981,7 +1170,12 @@ export default function FounderAccess() {
           id: "users" as SectionId,
           label: "All Users",
           icon: Users,
-          count: users.length,
+          // Prefer the cross-owner count from /api/founder-stats; fall back to
+          // the local-state (localStorage scan) count until it resolves.
+          count:
+            allBackendUsers && allBackendUsers.length > 0
+              ? allBackendUsers.length
+              : users.length,
         },
         {
           id: "stations" as SectionId,
@@ -1012,6 +1206,11 @@ export default function FounderAccess() {
           label: "Feature Flags",
           icon: ToggleRight,
           count: featureFlags.length,
+        },
+        {
+          id: "consolesettings" as SectionId,
+          label: "Console Settings",
+          icon: Settings,
         },
         { id: "system" as SectionId, label: "System Health", icon: Server },
       ],
@@ -1090,6 +1289,11 @@ export default function FounderAccess() {
         { id: "maintenance" as SectionId, label: "Maintenance", icon: Wrench },
         { id: "datamgmt" as SectionId, label: "Data Manager", icon: FolderCog },
         {
+          id: "devcontrol" as SectionId,
+          label: "Dev Control Center",
+          icon: Terminal,
+        },
+        {
           id: "editor" as SectionId,
           label: "AI Website Editor",
           icon: Sparkles,
@@ -1097,43 +1301,197 @@ export default function FounderAccess() {
         },
       ],
     },
+    {
+      label: "Developer Tools",
+      items: [
+        {
+          id: "commandpalette" as SectionId,
+          label: "Command Palette",
+          icon: Command,
+        },
+        {
+          id: "webhooks" as SectionId,
+          label: "Webhooks",
+          icon: Webhook,
+          count: advancedStore.webhooks.length,
+        },
+        {
+          id: "apikeys" as SectionId,
+          label: "API Keys",
+          icon: KeyRound,
+          count: advancedStore.apiKeys.length,
+        },
+        {
+          id: "jobs" as SectionId,
+          label: "Scheduled Jobs",
+          icon: Clock,
+          count: advancedStore.jobs.length,
+        },
+        {
+          id: "experiments" as SectionId,
+          label: "A/B Experiments",
+          icon: FlaskConical,
+          count: advancedStore.experiments.length,
+        },
+        {
+          id: "healthchecks" as SectionId,
+          label: "Health Checks",
+          icon: HeartPulse,
+          count: advancedStore.healthChecks.length,
+        },
+        {
+          id: "dbquery" as SectionId,
+          label: "Database Query",
+          icon: Database,
+        },
+        {
+          id: "cachemgmt" as SectionId,
+          label: "Cache Manager",
+          icon: DatabaseBackup,
+        },
+      ],
+    },
+    {
+      label: "Platform Control",
+      items: [
+        {
+          id: "announcements" as SectionId,
+          label: "Announcements",
+          icon: Megaphone,
+          count: advancedStore.announcements.length,
+        },
+        {
+          id: "maintwindows" as SectionId,
+          label: "Maint. Windows",
+          icon: Wrench,
+          count: advancedStore.maintenanceWindows.length,
+        },
+        {
+          id: "blocklist" as SectionId,
+          label: "IP Blocklist",
+          icon: ShieldBan,
+          count: advancedStore.blocklist.length,
+        },
+        {
+          id: "cors" as SectionId,
+          label: "CORS Config",
+          icon: Globe,
+          count: advancedStore.corsOrigins.length,
+        },
+        {
+          id: "envvars" as SectionId,
+          label: "Env Variables",
+          icon: Settings,
+          count: advancedStore.envVars.length,
+        },
+        {
+          id: "localization" as SectionId,
+          label: "Localization",
+          icon: Languages,
+          count: advancedStore.languages.length,
+        },
+      ],
+    },
+    {
+      label: "Observability",
+      items: [
+        {
+          id: "errortracker" as SectionId,
+          label: "Error Tracker",
+          icon: AlertTriangle,
+          count: advancedStore.errorLog.filter((e) => !e.resolved).length,
+        },
+        {
+          id: "sessions" as SectionId,
+          label: "Sessions",
+          icon: Monitor,
+          count: advancedStore.sessions.filter((s) => s.active).length,
+        },
+        {
+          id: "logstreams" as SectionId,
+          label: "Log Streams",
+          icon: Radio,
+          count: advancedStore.logStreams.length,
+        },
+        {
+          id: "deliveries" as SectionId,
+          label: "Webhook Logs",
+          icon: Send,
+          count: advancedStore.webhookDeliveries.length,
+        },
+      ],
+    },
+    {
+      label: "DevOps",
+      items: [
+        {
+          id: "taskqueue" as SectionId,
+          label: "Task Queue",
+          icon: ListChecks,
+          count: advancedStore.taskQueue.filter(
+            (t) => t.status === "queued" || t.status === "running",
+          ).length,
+        },
+        {
+          id: "rolematrix" as SectionId,
+          label: "Role Matrix",
+          icon: ShieldCheck,
+        },
+        {
+          id: "releasecoord" as SectionId,
+          label: "Release Coord.",
+          icon: Rocket,
+          count: advancedStore.releases.filter(
+            (r) => r.status === "rolling" || r.status === "canary",
+          ).length,
+        },
+        {
+          id: "migrations" as SectionId,
+          label: "Migrations",
+          icon: Database,
+          count: advancedStore.migrations.filter((m) => m.status === "pending")
+            .length,
+        },
+        {
+          id: "storage" as SectionId,
+          label: "Storage",
+          icon: HardDrive,
+          count: advancedStore.storageItems.filter((s) => !s.isFolder).length,
+        },
+        {
+          id: "ratelimits" as SectionId,
+          label: "API Rate Limits",
+          icon: Gauge,
+          count: advancedStore.apiRateLimits.filter((r) => r.enabled).length,
+        },
+      ],
+    },
   ];
 
-  const NavItem = ({
-    id,
-    label,
-    icon: Icon,
-    count,
-  }: {
-    id: SectionId;
-    label: string;
-    icon: React.ElementType;
-    count?: number;
-  }) => (
-    <button
-      onClick={() => setActiveSection(id)}
-      className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-left transition-all ${
-        activeSection === id
-          ? "bg-amber-500/15 text-amber-300 border-l-2 border-amber-400"
-          : "text-gray-400 hover:text-gray-200 hover:bg-white/[0.03]"
-      }`}
-    >
-      <Icon size={17} />
-      <span className="text-[13px]">{label}</span>
-      {count !== undefined && (
-        <span
-          className={`ml-auto text-[10px] px-1.5 py-0.5 rounded ${activeSection === id ? "bg-amber-500/20 text-amber-300" : "bg-white/5 text-gray-500"}`}
-        >
-          {count}
-        </span>
-      )}
-    </button>
-  );
+  // NavItem is now a module-level component (stable type across re-renders).
 
   return (
-    <div className="min-h-screen bg-[#0c0c0e] text-white flex">
-      {/* ─── Sidebar ─── */}
-      <aside className="w-60 min-h-screen border-r border-white/[0.06] bg-[#111113] flex flex-col">
+    <div className="min-h-screen min-h-screen-dvh bg-[#0c0c0e] text-white flex">
+      {/* ─── Sidebar ───
+          Desktop (lg+): fixed 240px rail alongside content.
+          Mobile/tablet (<lg): hidden by default, slides in as an overlay
+          drawer when mobileSidebarOpen. This prevents the 240px sidebar from
+          eating the viewport on phones (was leaving only 80-150px for content
+          and crushing the Overview 4-col stat grid to ~0-13px per card). */}
+      {mobileSidebarOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/60 lg:hidden"
+          onClick={() => setMobileSidebarOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+      <aside
+        className={`fixed lg:static z-50 inset-y-0 left-0 w-60 min-h-screen min-h-screen-dvh border-r border-white/[0.06] bg-[#111113] flex flex-col transition-transform duration-200 ease-out lg:translate-x-0 ${
+          mobileSidebarOpen
+            ? "translate-x-0"
+            : "-translate-x-full lg:translate-x-0"
+        }`}
+      >
         <div className="px-5 py-5 flex items-center gap-3">
           <div className="w-8 h-8 bg-gradient-to-br from-amber-400 to-amber-600 rounded-lg flex items-center justify-center">
             <Crown size={16} className="text-white" />
@@ -1147,18 +1505,23 @@ export default function FounderAccess() {
         </div>
 
         <nav className="flex-1 px-3 space-y-0.5 overflow-y-auto">
-          {navGroups.map(g => (
+          {navGroups.map((g) => (
             <div key={g.label} className="pb-2 pt-1">
               <p className="text-[9px] text-gray-600 uppercase tracking-wider px-4 mb-1">
                 {g.label}
               </p>
-              {g.items.map(item => (
+              {g.items.map((item) => (
                 <NavItem
                   key={item.id}
                   id={item.id}
                   label={item.label}
                   icon={item.icon}
                   count={item.count}
+                  active={activeSection === item.id}
+                  onSelect={(id) => {
+                    handleSetActiveSection(id);
+                    setMobileSidebarOpen(false);
+                  }}
                 />
               ))}
             </div>
@@ -1182,92 +1545,316 @@ export default function FounderAccess() {
       </aside>
 
       {/* ─── Main Content ─── */}
-      <main className="flex-1 flex flex-col min-h-screen overflow-hidden">
-        <header className="h-14 border-b border-white/[0.06] flex items-center justify-between px-6 bg-[#0c0c0e] flex-shrink-0">
-          <div className="flex items-center gap-3">
-            <Shield size={14} className="text-amber-500" />
-            <span className="text-xs text-gray-500">Super Admin</span>
-            <span className="text-gray-700">|</span>
-            <span className="text-xs text-gray-400">
-              {activeSection.charAt(0).toUpperCase() + activeSection.slice(1)}
+      <main className="flex-1 flex flex-col min-h-screen min-h-screen-dvh overflow-hidden w-0 lg:w-auto">
+        <header className="h-14 border-b border-white/[0.06] flex items-center justify-between px-3 sm:px-6 bg-[#0c0c0e] flex-shrink-0 gap-2">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            {/* Mobile hamburger — opens the slide-in sidebar drawer.
+                Hidden on lg+ where the sidebar is a persistent rail. */}
+            <button
+              onClick={() => setMobileSidebarOpen(true)}
+              className="lg:hidden flex items-center justify-center w-10 h-10 -ml-1 rounded-lg text-gray-300 hover:text-white hover:bg-white/[0.06] transition-colors flex-shrink-0"
+              aria-label="Open navigation menu"
+            >
+              <Menu size={20} />
+            </button>
+            <Shield size={14} className="text-amber-500 flex-shrink-0" />
+            <span className="text-xs text-gray-500 hidden sm:inline flex-shrink-0">
+              Super Admin
+            </span>
+            <span className="text-gray-700 hidden sm:inline">|</span>
+            <span className="text-xs text-gray-400 truncate min-w-0 capitalize">
+              {activeSection.replace(/([A-Z])/g, " $1").trim()}
             </span>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="relative">
+          <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+            <div className="relative hidden sm:block">
               <Search
                 size={13}
                 className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-600"
               />
               <input
                 value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
+                onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search..."
-                className="pl-8 pr-3 py-1.5 bg-white/[0.03] border border-white/[0.08] rounded-lg text-xs text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/30 w-48"
+                className="pl-8 pr-3 py-1.5 bg-white/[0.03] border border-white/[0.08] rounded-lg text-xs text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/30 w-28 sm:w-48"
               />
             </div>
-            {/* Cloud Sync Status */}
-            <div className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg ${cloudStatus.isOnline ? 'bg-emerald-500/10 border border-emerald-500/20' : 'bg-amber-500/10 border border-amber-500/20'}`}>
+            {/* Refresh button — reloads founder stats */}
+            <button
+              onClick={() => {
+                // Force a reload to refresh stats
+                window.location.reload();
+              }}
+              className="flex items-center justify-center w-8 h-8 rounded-lg text-gray-400 hover:text-white hover:bg-white/[0.06] transition-colors flex-shrink-0"
+              aria-label="Refresh data"
+              title="Refresh data"
+            >
+              <RefreshCw
+                size={13}
+                className={statsTotalRevenue > 0 ? "" : "animate-spin"}
+              />
+            </button>
+            {/* Cloud Sync Status — collapse to icon-only on very small screens */}
+            <div
+              className={`flex items-center gap-2 px-2 sm:px-2.5 py-1.5 rounded-lg ${cloudStatus.isOnline ? "bg-emerald-500/10 border border-emerald-500/20" : "bg-amber-500/10 border border-amber-500/20"}`}
+            >
               {cloudStatus.isOnline ? (
                 <>
-                  <Cloud size={10} className="text-emerald-400" />
-                  <span className="text-[10px] text-emerald-300">Cloud Synced</span>
+                  <Cloud size={12} className="text-emerald-400" />
+                  <span className="text-[10px] text-emerald-300 hidden md:inline">
+                    Cloud Synced
+                  </span>
                 </>
               ) : (
                 <>
-                  <CloudOff size={10} className="text-amber-400" />
-                  <span className="text-[10px] text-amber-300">No Cloud</span>
+                  <CloudOff size={12} className="text-amber-400" />
+                  <span className="text-[10px] text-amber-300 hidden md:inline">
+                    No Cloud
+                  </span>
                 </>
               )}
             </div>
           </div>
         </header>
 
-        <div className="flex-1 p-6 overflow-auto">
+        <div className="flex-1 p-3 sm:p-4 lg:p-6 overflow-auto">
           {/* ══════ OVERVIEW ══════ */}
           {activeSection === "overview" && (
             <div className="space-y-6">
-              <div className="grid grid-cols-4 gap-4">
+              {/* Extended stats grid — 8 cards with real-time data */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
                 {[
                   {
                     label: "Users",
-                    value: users.length,
+                    value:
+                      allBackendUsers && allBackendUsers.length > 0
+                        ? allBackendUsers.length
+                        : users.length,
                     icon: Users,
                     color: "text-blue-400",
+                    onClick: () => handleSetActiveSection("users"),
                   },
                   {
                     label: "Stations",
                     value: effectiveStationCount,
                     icon: Building2,
                     color: "text-green-400",
+                    onClick: () => handleSetActiveSection("stations"),
                   },
                   {
                     label: "Revenue",
-                    value: `KES ${effectiveRevenue.toLocaleString()}`,
+                    value: `${getCurrencySymbol(globalCurrency)} ${effectiveRevenue.toLocaleString()}`,
                     icon: DollarSign,
                     color: "text-amber-400",
+                    onClick: () => handleSetActiveSection("analytics"),
                   },
                   {
                     label: "Secrets",
                     value: secrets.length,
                     icon: Key,
                     color: "text-purple-400",
+                    onClick: () => handleSetActiveSection("secrets"),
                   },
-                ].map(s => (
+                  {
+                    label: "Feature Flags",
+                    value: featureFlags.length,
+                    icon: ToggleRight,
+                    color: "text-indigo-400",
+                    onClick: () => handleSetActiveSection("flags"),
+                  },
+                  {
+                    label: "Audit Events",
+                    value: auditLog.length,
+                    icon: Shield,
+                    color: "text-cyan-400",
+                    onClick: () => handleSetActiveSection("audit"),
+                  },
+                  {
+                    label: "Webhooks",
+                    value: advancedStore.webhooks.length,
+                    icon: Webhook,
+                    color: "text-pink-400",
+                    onClick: () => handleSetActiveSection("webhooks"),
+                  },
+                  {
+                    label: "API Keys",
+                    value: advancedStore.apiKeys.length,
+                    icon: KeyRound,
+                    color: "text-orange-400",
+                    onClick: () => handleSetActiveSection("apikeys"),
+                  },
+                ].map((s) => (
                   <div
                     key={s.label}
-                    className="bg-[#161618] border border-white/[0.06] rounded-xl p-5"
+                    onClick={s.onClick}
+                    className="bg-[#161618] border border-white/[0.06] rounded-xl p-5 hover:border-white/[0.12] cursor-pointer transition-colors group"
                   >
-                    <div className="flex items-center gap-2 mb-3">
-                      <s.icon size={14} className={s.color} />
-                      <span className="text-[11px] text-gray-500">
-                        {s.label}
-                      </span>
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <s.icon size={14} className={s.color} />
+                        <span className="text-[11px] text-gray-500">
+                          {s.label}
+                        </span>
+                      </div>
+                      <ArrowRight
+                        size={12}
+                        className="text-gray-700 group-hover:text-gray-400 transition-colors"
+                      />
                     </div>
                     <p className="text-xl font-bold text-white">{s.value}</p>
                   </div>
                 ))}
               </div>
-              
+
+              {/* Quick Actions panel */}
+              <div className="bg-[#161618] border border-white/[0.06] rounded-xl p-5">
+                <h3 className="text-sm font-medium text-gray-300 mb-4 flex items-center gap-2">
+                  <Zap size={14} className="text-amber-400" />
+                  Quick Actions
+                </h3>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+                  {[
+                    {
+                      label: "Add Secret",
+                      icon: Key,
+                      section: "secrets" as SectionId,
+                    },
+                    {
+                      label: "New Flag",
+                      icon: ToggleRight,
+                      section: "flags" as SectionId,
+                    },
+                    {
+                      label: "Add Webhook",
+                      icon: Webhook,
+                      section: "webhooks" as SectionId,
+                    },
+                    {
+                      label: "API Keys",
+                      icon: KeyRound,
+                      section: "apikeys" as SectionId,
+                    },
+                    {
+                      label: "Dev Center",
+                      icon: Terminal,
+                      section: "devcontrol" as SectionId,
+                    },
+                    {
+                      label: "Data Manager",
+                      icon: FolderCog,
+                      section: "datamgmt" as SectionId,
+                    },
+                    {
+                      label: "DB Query",
+                      icon: Database,
+                      section: "dbquery" as SectionId,
+                    },
+                    {
+                      label: "Schema",
+                      icon: HardDrive,
+                      section: "storage" as SectionId,
+                    },
+                    {
+                      label: "Migrations",
+                      icon: Database,
+                      section: "migrations" as SectionId,
+                    },
+                    {
+                      label: "Error Log",
+                      icon: AlertTriangle,
+                      section: "errortracker" as SectionId,
+                    },
+                    {
+                      label: "Sessions",
+                      icon: Monitor,
+                      section: "sessions" as SectionId,
+                    },
+                    {
+                      label: "Task Queue",
+                      icon: ListChecks,
+                      section: "taskqueue" as SectionId,
+                    },
+                  ].map((a) => (
+                    <button
+                      key={a.label}
+                      onClick={() => handleSetActiveSection(a.section)}
+                      className="flex flex-col items-center gap-1.5 p-3 bg-white/[0.02] hover:bg-white/[0.05] rounded-lg text-xs text-gray-400 hover:text-white transition-colors"
+                    >
+                      <a.icon size={16} className="text-gray-500" />
+                      <span className="text-[10px]">{a.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Advanced stats row — developer datasets */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
+                {[
+                  {
+                    label: "Errors",
+                    value: advancedStore.errorLog.filter((e) => !e.resolved)
+                      .length,
+                    icon: AlertTriangle,
+                    color: "text-red-400",
+                    section: "errortracker" as SectionId,
+                  },
+                  {
+                    label: "Sessions",
+                    value: advancedStore.sessions.filter((s) => s.active)
+                      .length,
+                    icon: Monitor,
+                    color: "text-amber-400",
+                    section: "sessions" as SectionId,
+                  },
+                  {
+                    label: "Jobs",
+                    value: advancedStore.jobs.filter((j) => j.enabled).length,
+                    icon: Clock,
+                    color: "text-purple-400",
+                    section: "jobs" as SectionId,
+                  },
+                  {
+                    label: "Experiments",
+                    value: advancedStore.experiments.filter(
+                      (e) => e.status === "running",
+                    ).length,
+                    icon: FlaskConical,
+                    color: "text-green-400",
+                    section: "experiments" as SectionId,
+                  },
+                  {
+                    label: "Announcements",
+                    value: advancedStore.announcements.filter((a) => a.active)
+                      .length,
+                    icon: Megaphone,
+                    color: "text-cyan-400",
+                    section: "announcements" as SectionId,
+                  },
+                  {
+                    label: "Blocklist",
+                    value: advancedStore.blocklist.filter((b) => b.active)
+                      .length,
+                    icon: ShieldBan,
+                    color: "text-pink-400",
+                    section: "blocklist" as SectionId,
+                  },
+                ].map((s) => (
+                  <div
+                    key={s.label}
+                    onClick={() => handleSetActiveSection(s.section)}
+                    className="bg-[#161618] border border-white/[0.06] rounded-xl p-3 hover:border-white/[0.12] cursor-pointer transition-colors"
+                  >
+                    <div className="flex items-center gap-2 mb-2">
+                      <s.icon size={12} className={s.color} />
+                      <span className="text-[10px] text-gray-500">
+                        {s.label}
+                      </span>
+                    </div>
+                    <p className="text-lg font-bold text-white">{s.value}</p>
+                  </div>
+                ))}
+              </div>
+
               {/* Cloud Sync Status */}
               {!cloudStatus.isOnline && (
                 <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-6">
@@ -1280,15 +1867,18 @@ export default function FounderAccess() {
                         Cloud Sync Status
                       </h3>
                       <p className="text-xs text-gray-400 mb-4">
-                        {cloudStatus.status?.includes("root only") 
+                        {cloudStatus.status?.includes("root only")
                           ? "Backend is online but cloud sync features require the REST API. Railway deployment may be updating."
                           : "This system is currently using local storage. Data is not synced across devices."}
                       </p>
                       {cloudStatus.status?.includes("root only") && (
                         <div className="mb-4">
-                          <p className="text-xs text-emerald-400 mb-2">✓ Backend Connected:</p>
+                          <p className="text-xs text-emerald-400 mb-2">
+                            ✓ Backend Connected:
+                          </p>
                           <p className="text-xs text-gray-500 font-mono">
-                            {import.meta.env.VITE_BACKEND_URL || "Railway Backend (deprecated)"}
+                            {import.meta.env.VITE_BACKEND_URL ||
+                              "Railway Backend (deprecated)"}
                           </p>
                         </div>
                       )}
@@ -1303,7 +1893,7 @@ export default function FounderAccess() {
                   </div>
                 </div>
               )}
-              
+
               <div className="bg-[#161618] border border-white/[0.06] rounded-xl p-6">
                 <h3 className="text-sm font-medium text-gray-300 mb-4">
                   Global Revenue Overview
@@ -1338,7 +1928,7 @@ export default function FounderAccess() {
                           }
                         </span>
                       </div>
-                    )
+                    ),
                   )}
                 </div>
               </div>
@@ -1348,7 +1938,7 @@ export default function FounderAccess() {
                     Recent Audit Events
                   </h3>
                   <div className="space-y-2">
-                    {auditLog.slice(0, 5).map(a => (
+                    {auditLog.slice(0, 5).map((a) => (
                       <div
                         key={a.id}
                         className="flex items-center gap-2 text-xs"
@@ -1380,7 +1970,7 @@ export default function FounderAccess() {
                     Active Feature Flags
                   </h3>
                   <div className="space-y-2">
-                    {featureFlags.slice(0, 5).map(f => (
+                    {featureFlags.slice(0, 5).map((f) => (
                       <div
                         key={f.id}
                         className="flex items-center gap-2 text-xs"
@@ -1407,32 +1997,153 @@ export default function FounderAccess() {
           {/* ══════ USERS ══════ */}
           {activeSection === "users" && (
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between flex-wrap gap-3">
                 <h2 className="text-lg font-medium text-white">
                   All Registered Users
                 </h2>
-                <span className="text-xs text-gray-500">
-                  {filteredUsers.length} total
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-500">
+                    {filteredUsers.length} of{" "}
+                    {users.length + (allBackendUsers?.length || 0)} total
+                  </span>
+                  <button
+                    onClick={() => {
+                      const data = filteredUsers;
+                      const csv = [
+                        [
+                          "Name",
+                          "Email",
+                          "Auth Method",
+                          "Role",
+                          "Stations",
+                          "Status",
+                          "Last Active",
+                          "Created At",
+                        ].join(","),
+                        ...data.map((u) =>
+                          [
+                            u.name,
+                            u.email,
+                            u.authMethod,
+                            u.role,
+                            u.stations,
+                            "Active",
+                            u.lastActive,
+                            u.createdAt,
+                          ]
+                            .map(
+                              (v) =>
+                                `"${(v || "").toString().replace(/"/g, '""')}"`,
+                            )
+                            .join(","),
+                        ),
+                      ].join("\n");
+                      const blob = new Blob([csv], { type: "text/csv" });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement("a");
+                      a.href = url;
+                      a.download = `users_${Date.now()}.csv`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                      logAudit(
+                        "Export Users",
+                        `${data.length} users exported to CSV`,
+                        "info",
+                      );
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-white/[0.04] hover:bg-white/[0.08] text-gray-400 hover:text-white rounded-lg text-xs font-medium transition-colors"
+                  >
+                    <Download size={13} />
+                    Export CSV
+                  </button>
+                  <button
+                    onClick={() => {
+                      const data = filteredUsers;
+                      const json = JSON.stringify(data, null, 2);
+                      const blob = new Blob([json], {
+                        type: "application/json",
+                      });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement("a");
+                      a.href = url;
+                      a.download = `users_${Date.now()}.json`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                      logAudit(
+                        "Export Users",
+                        `${data.length} users exported to JSON`,
+                        "info",
+                      );
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-white/[0.04] hover:bg-white/[0.08] text-gray-400 hover:text-white rounded-lg text-xs font-medium transition-colors"
+                  >
+                    <FileCode size={13} />
+                    Export JSON
+                  </button>
+                </div>
               </div>
-              <div className="bg-[#161618] border border-white/[0.06] rounded-xl overflow-hidden">
-                <table className="w-full">
+
+              {/* User stats summary */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {[
+                  {
+                    label: "Total Users",
+                    value: filteredUsers.length,
+                    color: "text-blue-400",
+                  },
+                  {
+                    label: "Owners",
+                    value: filteredUsers.filter((u) => u.role === "owner")
+                      .length,
+                    color: "text-purple-400",
+                  },
+                  {
+                    label: "Managers",
+                    value: filteredUsers.filter((u) => u.role === "manager")
+                      .length,
+                    color: "text-indigo-400",
+                  },
+                  {
+                    label: "Staff",
+                    value: filteredUsers.filter((u) => u.role === "staff")
+                      .length,
+                    color: "text-green-400",
+                  },
+                ].map((s) => (
+                  <div
+                    key={s.label}
+                    className="bg-[#161618] border border-white/[0.06] rounded-xl p-3"
+                  >
+                    <p className="text-[10px] text-gray-500 mb-1">{s.label}</p>
+                    <p className={`text-lg font-bold ${s.color}`}>{s.value}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="bg-[#161618] border border-white/[0.06] rounded-xl overflow-x-auto -mx-3 sm:mx-0">
+                <table className="w-full min-w-[640px]">
                   <thead>
                     <tr className="border-b border-white/[0.06]">
-                      {["User", "Auth", "Role", "Stations", "Status", ""].map(
-                        h => (
-                          <th
-                            key={h}
-                            className="text-left text-[11px] text-gray-500 font-medium px-4 py-3"
-                          >
-                            {h}
-                          </th>
-                        )
-                      )}
+                      {[
+                        "User",
+                        "Auth",
+                        "Role",
+                        "Stations",
+                        "Status",
+                        "Last Active",
+                        "Actions",
+                      ].map((h) => (
+                        <th
+                          key={h}
+                          className="text-left text-[11px] text-gray-500 font-medium px-4 py-3"
+                        >
+                          {h}
+                        </th>
+                      ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredUsers.map(u => (
+                    {filteredUsers.map((u) => (
                       <tr
                         key={u.authId}
                         className="border-b border-white/[0.04] hover:bg-white/[0.02]"
@@ -1459,7 +2170,9 @@ export default function FounderAccess() {
                                   ? "bg-blue-500/15 text-blue-300"
                                   : u.role === "staff"
                                     ? "bg-green-500/15 text-green-300"
-                                    : "bg-amber-500/15 text-amber-300"
+                                    : u.role === "founder" || u.role === "admin"
+                                      ? "bg-red-500/15 text-red-300"
+                                      : "bg-amber-500/15 text-amber-300"
                             }`}
                           >
                             {u.role}
@@ -1473,15 +2186,60 @@ export default function FounderAccess() {
                             <Radio size={10} /> Active
                           </span>
                         </td>
+                        <td className="px-4 py-3 text-[11px] text-gray-500">
+                          {(() => {
+                            const d = u.lastActive
+                              ? new Date(u.lastActive)
+                              : null;
+                            return d && !isNaN(d.getTime())
+                              ? d.toLocaleDateString()
+                              : u.lastActive === "Never"
+                                ? "Never"
+                                : "—";
+                          })()}
+                        </td>
                         <td className="px-4 py-3">
-                          <Eye size={14} className="text-gray-600" />
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => {
+                                const newRole = prompt(
+                                  `Change role for ${u.name || u.email}?\nCurrent: ${u.role}\nEnter new role (owner/manager/staff):`,
+                                  u.role,
+                                );
+                                if (newRole && newRole !== u.role) {
+                                  logAudit(
+                                    "Role Change",
+                                    `${u.email}: ${u.role} → ${newRole}`,
+                                    "warning",
+                                  );
+                                  alert(
+                                    `Role change for ${u.email} from ${u.role} to ${newRole} has been logged. Use the Supabase admin API to apply this change.`,
+                                  );
+                                }
+                              }}
+                              className="p-1 text-gray-500 hover:text-indigo-400 transition-colors"
+                              title="Change role"
+                            >
+                              <Settings size={13} />
+                            </button>
+                            <button
+                              onClick={() => {
+                                const info = `User Details:\n\nName: ${u.name || "Anonymous"}\nEmail: ${u.email}\nAuth Method: ${u.authMethod}\nRole: ${u.role}\nStations: ${u.stations}\nLast Active: ${u.lastActive}\nCreated: ${u.createdAt}\nAuth ID: ${u.authId}`;
+                                alert(info);
+                              }}
+                              className="p-1 text-gray-500 hover:text-blue-400 transition-colors"
+                              title="View details"
+                            >
+                              <Eye size={13} />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
                     {filteredUsers.length === 0 && (
                       <tr>
                         <td
-                          colSpan={6}
+                          colSpan={7}
                           className="text-center text-gray-600 py-12"
                         >
                           No users found
@@ -1497,30 +2255,119 @@ export default function FounderAccess() {
           {/* ══════ STATIONS ══════ */}
           {activeSection === "stations" && (
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between flex-wrap gap-3">
                 <h2 className="text-lg font-medium text-white">
                   All Stations Worldwide
                 </h2>
-                <span className="text-xs text-gray-500">
-                  {filteredStations.length} total
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-500">
+                    {filteredStations.length} total
+                  </span>
+                  <button
+                    onClick={() => {
+                      const csv = [
+                        [
+                          "Name",
+                          "Location",
+                          "Owner",
+                          "Members",
+                          "Revenue",
+                          "Status",
+                          "Created",
+                          "Last Active",
+                        ].join(","),
+                        ...filteredStations.map((s) =>
+                          [
+                            s.name,
+                            s.location,
+                            s.ownerName,
+                            s.members,
+                            s.revenue,
+                            "Active",
+                            s.createdAt,
+                            s.lastActive,
+                          ]
+                            .map(
+                              (v) =>
+                                `"${(v || "").toString().replace(/"/g, '""')}"`,
+                            )
+                            .join(","),
+                        ),
+                      ].join("\n");
+                      const blob = new Blob([csv], { type: "text/csv" });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement("a");
+                      a.href = url;
+                      a.download = `stations_${Date.now()}.csv`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                      logAudit(
+                        "Export Stations",
+                        `${filteredStations.length} stations exported`,
+                        "info",
+                      );
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-white/[0.04] hover:bg-white/[0.08] text-gray-400 hover:text-white rounded-lg text-xs font-medium transition-colors"
+                  >
+                    <Download size={13} />
+                    Export CSV
+                  </button>
+                </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                {filteredStations.map(s => (
+
+              {/* Station stats */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {[
+                  {
+                    label: "Total Stations",
+                    value: filteredStations.length,
+                    color: "text-green-400",
+                  },
+                  {
+                    label: "Total Members",
+                    value: filteredStations.reduce(
+                      (s, st) => s + st.members,
+                      0,
+                    ),
+                    color: "text-blue-400",
+                  },
+                  {
+                    label: "Total Revenue",
+                    value: `${getCurrencySymbol(getDetectedCurrency())} ${(filteredStations.reduce((s, st) => s + st.revenue, 0) / 1000).toFixed(0)}K`,
+                    color: "text-amber-400",
+                  },
+                  {
+                    label: "Avg Revenue",
+                    value: `${getCurrencySymbol(getDetectedCurrency())} ${filteredStations.length > 0 ? (filteredStations.reduce((s, st) => s + st.revenue, 0) / filteredStations.length / 1000).toFixed(1) : 0}K`,
+                    color: "text-purple-400",
+                  },
+                ].map((s) => (
+                  <div
+                    key={s.label}
+                    className="bg-[#161618] border border-white/[0.06] rounded-xl p-3"
+                  >
+                    <p className="text-[10px] text-gray-500 mb-1">{s.label}</p>
+                    <p className={`text-lg font-bold ${s.color}`}>{s.value}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {filteredStations.map((s) => (
                   <div
                     key={s.id}
-                    className="bg-[#161618] border border-white/[0.06] rounded-xl p-5"
+                    className="bg-[#161618] border border-white/[0.06] rounded-xl p-5 hover:border-white/[0.12] transition-colors"
                   >
                     <div className="flex items-start justify-between mb-3">
-                      <div>
-                        <h3 className="text-sm font-semibold text-white">
+                      <div className="min-w-0">
+                        <h3 className="text-sm font-semibold text-white truncate">
                           {s.name}
                         </h3>
-                        <p className="text-[11px] text-gray-500">
+                        <p className="text-[11px] text-gray-500 truncate">
                           {s.location}
                         </p>
                       </div>
-                      <div className="w-7 h-7 bg-green-500/10 rounded-lg flex items-center justify-center">
+                      <div className="w-7 h-7 bg-green-500/10 rounded-lg flex items-center justify-center shrink-0">
                         <Building2 size={13} className="text-green-400" />
                       </div>
                     </div>
@@ -1529,14 +2376,14 @@ export default function FounderAccess() {
                         { label: "Members", value: s.members },
                         {
                           label: "Revenue",
-                          value: `KES ${(s.revenue / 1000).toFixed(0)}K`,
+                          value: `${getCurrencySymbol(s.currency || globalCurrency)} ${s.revenue >= 1000 ? (s.revenue / 1000).toFixed(1) + "K" : s.revenue.toFixed(0)}`,
                         },
                         {
                           label: "Status",
                           value: "Active",
                           color: "text-emerald-400",
                         },
-                      ].map(m => (
+                      ].map((m) => (
                         <div
                           key={m.label}
                           className="bg-white/[0.02] rounded-lg p-2 text-center"
@@ -1550,9 +2397,34 @@ export default function FounderAccess() {
                         </div>
                       ))}
                     </div>
-                    <p className="text-[10px] text-gray-600 mt-2">
-                      Owner: {s.ownerName}
+                    <p className="text-[10px] text-gray-600 mt-2 flex items-center gap-2 flex-wrap">
+                      <span>Owner: {s.ownerName}</span>
+                      {s.currency && (
+                        <span className="px-1.5 py-0.5 bg-white/[0.06] rounded text-gray-400">
+                          {s.currency}
+                        </span>
+                      )}
+                      {s.country && (
+                        <span className="px-1.5 py-0.5 bg-white/[0.06] rounded text-gray-400">
+                          {s.country}
+                        </span>
+                      )}
+                      {s.code && (
+                        <span className="px-1.5 py-0.5 bg-white/[0.06] rounded text-gray-400">
+                          {s.code}
+                        </span>
+                      )}
                     </p>
+                    <button
+                      onClick={() => {
+                        const info = `Station Details:\n\nName: ${s.name}\nLocation: ${s.location}\nOwner: ${s.ownerName}\nMembers: ${s.members}\nRevenue: ${getCurrencySymbol(getDetectedCurrency())} ${s.revenue.toLocaleString()}\nID: ${s.id}\nOwner ID: ${s.ownerId}\nCreated: ${s.createdAt}\nLast Active: ${s.lastActive}`;
+                        alert(info);
+                      }}
+                      className="flex items-center gap-1 text-[10px] text-gray-500 hover:text-blue-400 transition-colors mt-2"
+                    >
+                      <Eye size={11} />
+                      Details
+                    </button>
                   </div>
                 ))}
                 {filteredStations.length === 0 && (
@@ -1566,356 +2438,54 @@ export default function FounderAccess() {
 
           {/* ══════ SECRETS ══════ */}
           {activeSection === "secrets" && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-lg font-medium text-white">Secrets</h2>
-                  <p className="text-xs text-gray-500 mt-0.5">
-                    Securely manage API keys and sensitive values
-                  </p>
-                </div>
-                <button
-                  onClick={() => setShowAddSecret(!showAddSecret)}
-                  className="flex items-center gap-2 px-3 py-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 text-xs rounded-lg transition-colors border border-amber-500/20"
-                >
-                  {showAddSecret ? <X size={14} /> : <Plus size={14} />}{" "}
-                  {showAddSecret ? "Cancel" : "Add Secret"}
-                </button>
-              </div>
-              {showAddSecret && (
-                <div className="bg-[#161618] border border-white/[0.06] rounded-xl p-5">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-[11px] text-gray-400 mb-1 block">
-                        Key
-                      </label>
-                      <input
-                        value={newSecretKey}
-                        onChange={e => setNewSecretKey(e.target.value)}
-                        placeholder="API_KEY"
-                        className="w-full px-3 py-2.5 bg-white/[0.03] border border-white/[0.08] rounded-lg text-sm text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/30"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[11px] text-gray-400 mb-1 block">
-                        Value
-                      </label>
-                      <input
-                        value={newSecretValue}
-                        onChange={e => setNewSecretValue(e.target.value)}
-                        placeholder="Enter value"
-                        className="w-full px-3 py-2.5 bg-white/[0.03] border border-white/[0.08] rounded-lg text-sm text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/30"
-                      />
-                    </div>
-                  </div>
-                  <button
-                    onClick={addSecret}
-                    className="mt-3 px-4 py-2 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 text-xs rounded-lg transition-colors border border-amber-500/20"
-                  >
-                    <Save size={13} className="inline mr-1.5" /> Save Secret
-                  </button>
-                </div>
-              )}
-              <div className="bg-[#161618] border border-white/[0.06] rounded-xl overflow-hidden">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-white/[0.06]">
-                      <th className="text-left text-[11px] text-gray-500 font-medium px-5 py-3 w-1/2">
-                        Key
-                      </th>
-                      <th className="text-left text-[11px] text-gray-500 font-medium px-5 py-3">
-                        Value
-                      </th>
-                      <th className="text-right text-[11px] text-gray-500 font-medium px-5 py-3 w-20"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {secrets.map(s => (
-                      <tr
-                        key={s.key}
-                        className="border-b border-white/[0.04] hover:bg-white/[0.02]"
-                      >
-                        <td className="px-5 py-3">
-                          <code className="text-sm text-gray-300 font-mono">
-                            {s.key}
-                          </code>
-                        </td>
-                        <td className="px-5 py-3">
-                          {visibleSecrets[s.key] ? (
-                            <span className="text-sm text-gray-300 font-mono">
-                              {atob(s.value)}
-                            </span>
-                          ) : (
-                            <span className="text-sm text-gray-600 font-mono tracking-widest">
-                              {".".repeat(32)}
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-5 py-3">
-                          <div className="flex items-center gap-1 justify-end">
-                            <button
-                              onClick={() => toggleSecretVisibility(s.key)}
-                              className="p-1.5 text-gray-500 hover:text-gray-300 transition-colors"
-                            >
-                              {visibleSecrets[s.key] ? (
-                                <EyeOff size={14} />
-                              ) : (
-                                <Eye size={14} />
-                              )}
-                            </button>
-                            <button
-                              onClick={() => copySecretValue(s.key, s.value)}
-                              className="p-1.5 text-gray-500 hover:text-gray-300 transition-colors"
-                            >
-                              {copiedSecret === s.key ? (
-                                <Check size={14} className="text-green-400" />
-                              ) : (
-                                <Copy size={14} />
-                              )}
-                            </button>
-                            <button
-                              onClick={() => deleteSecret(s.key)}
-                              className="p-1.5 text-gray-500 hover:text-red-400 transition-colors"
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                    {secrets.length === 0 && (
-                      <tr>
-                        <td
-                          colSpan={3}
-                          className="text-center text-gray-600 py-12"
-                        >
-                          No secrets configured
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            <SecretsManagerSection
+              secrets={consoleStore.secrets}
+              settings={consoleSettings}
+              onUpsert={consoleStore.upsertSecret}
+              onDelete={consoleStore.deleteSecret}
+              onRotate={consoleStore.rotateSecret}
+              logAudit={consoleStore.addAudit}
+            />
           )}
 
           {/* ══════ AUDIT LOG ══════ */}
           {activeSection === "audit" && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg font-medium text-white">
-                  Security Audit Log
-                </h2>
-                <div className="flex items-center gap-2">
-                  {auditBackendLoading && (
-                    <span className="text-[10px] text-amber-400 animate-pulse">
-                      Syncing from DB...
-                    </span>
-                  )}
-                  <span className="text-xs text-gray-500">
-                    {auditLog.length} events
-                  </span>
-                </div>
-              </div>
-              <div className="bg-[#161618] border border-white/[0.06] rounded-xl overflow-hidden">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-white/[0.06]">
-                      {["Status", "Event", "Detail", "User", "Time"].map(h => (
-                        <th
-                          key={h}
-                          className="text-left text-[11px] text-gray-500 font-medium px-4 py-3"
-                        >
-                          {h}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {auditLog.map(a => (
-                      <tr
-                        key={a.id}
-                        className="border-b border-white/[0.04] hover:bg-white/[0.02]"
-                      >
-                        <td className="px-4 py-3">
-                          {a.severity === "success" ? (
-                            <CheckCircle2
-                              size={13}
-                              className="text-emerald-400"
-                            />
-                          ) : a.severity === "warning" ? (
-                            <AlertTriangle
-                              size={13}
-                              className="text-amber-400"
-                            />
-                          ) : a.severity === "danger" ? (
-                            <XCircle size={13} className="text-red-400" />
-                          ) : (
-                            <Activity size={13} className="text-blue-400" />
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-white">
-                          {a.event}
-                        </td>
-                        <td className="px-4 py-3 text-xs text-gray-400">
-                          {a.detail}
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className="text-[10px] px-2 py-0.5 bg-white/5 rounded text-gray-400">
-                            {a.user}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-[11px] text-gray-500">
-                          {new Date(a.timestamp).toLocaleString()}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            <AuditLogManagerSection
+              audit={consoleStore.audit}
+              loading={consoleStore.loading}
+              lastSync={consoleStore.lastSync}
+              onClear={consoleStore.clearAudit}
+              onReload={consoleStore.reload}
+              logAudit={consoleStore.addAudit}
+              retentionLimit={consoleSettings.auditRetention}
+            />
           )}
 
           {/* ══════ FEATURE FLAGS ══════ */}
           {activeSection === "flags" && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg font-medium text-white">
-                  Feature Flags
-                </h2>
-                <span className="text-xs text-gray-500">
-                  {featureFlags.filter(f => f.enabled).length} of{" "}
-                  {featureFlags.length} enabled
-                </span>
-              </div>
-              <div className="space-y-2">
-                {featureFlags.map(f => (
-                  <div
-                    key={f.id}
-                    className="bg-[#161618] border border-white/[0.06] rounded-xl p-4 flex items-center justify-between"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div
-                        className={`w-2 h-2 rounded-full ${f.enabled ? "bg-green-400" : "bg-gray-600"}`}
-                      />
-                      <div>
-                        <p className="text-sm text-white">{f.name}</p>
-                        <p className="text-[11px] text-gray-500">
-                          {f.description}
-                        </p>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => toggleFlag(f.id)}
-                      className={`relative w-11 h-6 rounded-full transition-colors ${f.enabled ? "bg-green-500" : "bg-gray-600"}`}
-                    >
-                      <div
-                        className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${f.enabled ? "translate-x-5" : "translate-x-0.5"}`}
-                      />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <FeatureFlagsManagerSection
+              flags={consoleStore.flags}
+              settings={consoleSettings}
+              onUpsert={consoleStore.upsertFlag}
+              onToggle={consoleStore.toggleFlag}
+              onDelete={consoleStore.deleteFlag}
+              onBulkSet={consoleStore.bulkSetFlags}
+              logAudit={consoleStore.addAudit}
+            />
           )}
 
           {/* ══════ SYSTEM HEALTH ══════ */}
           {activeSection === "system" && (
-            <div className="space-y-4">
-              <h2 className="text-lg font-medium text-white">System Health</h2>
-              <div className="grid grid-cols-3 gap-4">
-                {[
-                  {
-                    label: "Storage Used",
-                    value: `${(JSON.stringify(localStorage).length / 1024).toFixed(1)} KB`,
-                    icon: HardDrive,
-                    status: "healthy" as const,
-                  },
-                  {
-                    label: "Local Storage Keys",
-                    value: `${localStorage.length}`,
-                    icon: Database,
-                    status: "healthy" as const,
-                  },
-                  {
-                    label: "Network",
-                    value: navigator.onLine ? "Online" : "Offline",
-                    icon: Wifi,
-                    status: navigator.onLine
-                      ? ("healthy" as const)
-                      : ("warning" as const),
-                  },
-                  {
-                    label: "App Version",
-                    value: "v3.0.0",
-                    icon: Layers,
-                    status: "healthy" as const,
-                  },
-                  {
-                    label: "Platform",
-                    value: navigator.platform,
-                    icon: Zap,
-                    status: "healthy" as const,
-                  },
-                  {
-                    label: "Language",
-                    value: navigator.language,
-                    icon: Globe,
-                    status: "healthy" as const,
-                  },
-                ].map(m => (
-                  <div
-                    key={m.label}
-                    className="bg-[#161618] border border-white/[0.06] rounded-xl p-5"
-                  >
-                    <div className="flex items-center gap-2 mb-2">
-                      <m.icon
-                        size={14}
-                        className={
-                          m.status === "healthy"
-                            ? "text-emerald-400"
-                            : "text-amber-400"
-                        }
-                      />
-                      <span className="text-[11px] text-gray-500">
-                        {m.label}
-                      </span>
-                    </div>
-                    <p className="text-lg font-semibold text-white">
-                      {m.value}
-                    </p>
-                  </div>
-                ))}
-              </div>
-              <div className="bg-[#161618] border border-white/[0.06] rounded-xl p-5">
-                <h3 className="text-sm font-medium text-gray-300 mb-3">
-                  Storage Breakdown
-                </h3>
-                <div className="space-y-2 max-h-48 overflow-y-auto">
-                  {Array.from({ length: localStorage.length }, (_, i) =>
-                    localStorage.key(i)
-                  )
-                    .filter(Boolean)
-                    .sort()
-                    .map(key => {
-                      const val = localStorage.getItem(key!) || "";
-                      return (
-                        <div
-                          key={key}
-                          className="flex items-center justify-between text-xs"
-                        >
-                          <span className="text-gray-400 font-mono truncate max-w-[60%]">
-                            {key}
-                          </span>
-                          <span className="text-gray-600">
-                            {(val.length / 1024).toFixed(2)} KB
-                          </span>
-                        </div>
-                      );
-                    })}
-                </div>
-              </div>
-            </div>
+            <SystemHealthManagerSection
+              logAudit={(event, detail, severity) =>
+                consoleStore.addAudit(
+                  event,
+                  detail,
+                  severity ?? "info",
+                  "FOUNDER",
+                )
+              }
+            />
           )}
 
           {/* ══════ AI WEBSITE EDITOR ══════ */}
@@ -1940,7 +2510,7 @@ export default function FounderAccess() {
                     },
                     { id: "files" as const, label: "Files", icon: Upload },
                     { id: "preview" as const, label: "History", icon: Clock },
-                  ].map(tab => (
+                  ].map((tab) => (
                     <button
                       key={tab.id}
                       onClick={() => setEditorTab(tab.id)}
@@ -2022,7 +2592,7 @@ export default function FounderAccess() {
                       <div className="flex-1">
                         <textarea
                           value={editorInstruction}
-                          onChange={e => setEditorInstruction(e.target.value)}
+                          onChange={(e) => setEditorInstruction(e.target.value)}
                           placeholder="Describe the changes you want to make..."
                           className="w-full h-20 px-3 py-2 bg-white/[0.03] border border-white/[0.08] rounded-lg text-sm text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/30 resize-none"
                         />
@@ -2101,8 +2671,8 @@ export default function FounderAccess() {
                             </div>
                             <button
                               onClick={() =>
-                                setUploadedFiles(prev =>
-                                  prev.filter((_, idx) => idx !== i)
+                                setUploadedFiles((prev) =>
+                                  prev.filter((_, idx) => idx !== i),
                                 )
                               }
                               className="text-gray-500 hover:text-red-400"
@@ -2166,55 +2736,246 @@ export default function FounderAccess() {
           )}
 
           {/* ══════ NEW SECTIONS ══════ */}
-          {activeSection === "security" && (
-            <SecuritySection logAudit={logAudit} />
-          )}
-          {activeSection === "backup" && <BackupSection logAudit={logAudit} />}
-          {activeSection === "config" && <ConfigSection logAudit={logAudit} />}
-          {activeSection === "notifications" && (
-            <NotificationsSection logAudit={logAudit} />
-          )}
-          {activeSection === "branding" && (
-            <BrandingSection logAudit={logAudit} />
-          )}
-          {activeSection === "api" && <ApiSection logAudit={logAudit} />}
-          {activeSection === "analytics" && (
-            <AnalyticsSection logAudit={logAudit} />
-          )}
-          {activeSection === "maintenance" && (
-            <MaintenanceSection logAudit={logAudit} />
-          )}
-          {activeSection === "email" && (
-            <EmailTemplatesSection logAudit={logAudit} />
-          )}
-          {activeSection === "ratelimit" && (
-            <RateLimitSection logAudit={logAudit} />
-          )}
-          {activeSection === "datamgmt" && (
-            <DataManagementSection logAudit={logAudit} />
-          )}
+          {/* Lazy-loaded: each founder section is a separate chunk so the
+              founder bundle isn't 1+ MB on first paint. Only the active
+              section's chunk is fetched on demand. */}
+          <Suspense
+            fallback={
+              <div className="flex items-center justify-center py-20">
+                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-amber-400" />
+              </div>
+            }
+          >
+            {activeSection === "security" && (
+              <SecuritySection logAudit={logAudit} />
+            )}
+            {activeSection === "backup" && (
+              <BackupSection logAudit={logAudit} />
+            )}
+            {activeSection === "config" && (
+              <ConfigSection logAudit={logAudit} />
+            )}
+            {activeSection === "notifications" && (
+              <NotificationsSection logAudit={logAudit} />
+            )}
+            {activeSection === "branding" && (
+              <BrandingSection logAudit={logAudit} />
+            )}
+            {activeSection === "api" && <ApiSection logAudit={logAudit} />}
+            {activeSection === "analytics" && (
+              <AnalyticsSection
+                logAudit={logAudit}
+                backendRevenue={statsTotalRevenue}
+                backendStationCount={allBackendStations?.length}
+                backendUserCount={allBackendUsers?.length}
+              />
+            )}
+            {activeSection === "maintenance" && (
+              <MaintenanceSection logAudit={logAudit} />
+            )}
+            {activeSection === "email" && (
+              <EmailTemplatesSection logAudit={logAudit} />
+            )}
+            {activeSection === "ratelimit" && (
+              <RateLimitSection logAudit={logAudit} />
+            )}
+            {activeSection === "datamgmt" && (
+              <DataManagementSection logAudit={logAudit} />
+            )}
 
-          {/* ══════ MONETIZATION ══════ */}
-          {activeSection === "pricing" && (
-            <PricingManagerSection logAudit={logAudit} />
-          )}
-          {activeSection === "subdash" && (
-            <SubscriptionDashboardSection logAudit={logAudit} />
-          )}
-          {activeSection === "coupons" && <CouponSection logAudit={logAudit} />}
-          {activeSection === "payouts" && <PayoutSection logAudit={logAudit} />}
-          {activeSection === "trialanalytics" && (
-            <TrialAnalyticsSection logAudit={logAudit} />
-          )}
-          {activeSection === "performance" && (
-            <PerformanceSection logAudit={logAudit} />
-          )}
-          {activeSection === "paywall" && (
-            <PaywallControlSection logAudit={logAudit} />
-          )}
-          {activeSection === "paymentmethods" && (
-            <PaymentMethodsSection logAudit={logAudit} />
-          )}
+            {/* ══════ CONSOLE SETTINGS ══════ */}
+            {activeSection === "consolesettings" && (
+              <ConsoleSettingsSection
+                settings={consoleSettings}
+                lastSync={consoleStore.lastSync}
+                onUpdate={consoleStore.updateSettings}
+                logAudit={consoleStore.addAudit}
+              />
+            )}
+
+            {/* ══════ MONETIZATION ══════ */}
+            {activeSection === "pricing" && (
+              <PricingManagerSection logAudit={logAudit} />
+            )}
+            {activeSection === "subdash" && (
+              <SubscriptionDashboardSection logAudit={logAudit} />
+            )}
+            {activeSection === "coupons" && (
+              <CouponSection logAudit={logAudit} />
+            )}
+            {activeSection === "payouts" && (
+              <PayoutSection logAudit={logAudit} />
+            )}
+            {activeSection === "trialanalytics" && (
+              <TrialAnalyticsSection logAudit={logAudit} />
+            )}
+            {activeSection === "performance" && (
+              <PerformanceSection logAudit={logAudit} />
+            )}
+            {activeSection === "paywall" && (
+              <PaywallControlSection logAudit={logAudit} />
+            )}
+            {activeSection === "paymentmethods" && (
+              <PaymentMethodsSection logAudit={logAudit} />
+            )}
+
+            {/* ══════ DEVELOPER TOOLS ══════ */}
+            {activeSection === "commandpalette" && (
+              <CommandPaletteSection
+                commands={navGroups.flatMap((g) =>
+                  g.items.map((it) => ({
+                    id: it.id,
+                    label: it.label,
+                    group: g.label,
+                    keywords: it.label.toLowerCase(),
+                    icon: it.icon,
+                  })),
+                )}
+                onRun={(id) => handleSetActiveSection(id as SectionId)}
+              />
+            )}
+            {activeSection === "webhooks" && (
+              <WebhooksManagerSection
+                store={advancedStore}
+                logAudit={consoleStore.addAudit}
+              />
+            )}
+            {activeSection === "apikeys" && (
+              <ApiKeysManagerSection
+                store={advancedStore}
+                logAudit={consoleStore.addAudit}
+              />
+            )}
+            {activeSection === "jobs" && (
+              <ScheduledJobsSection
+                store={advancedStore}
+                logAudit={consoleStore.addAudit}
+              />
+            )}
+            {activeSection === "experiments" && (
+              <ExperimentsSection
+                store={advancedStore}
+                logAudit={consoleStore.addAudit}
+              />
+            )}
+            {activeSection === "healthchecks" && (
+              <HealthChecksSection
+                store={advancedStore}
+                logAudit={consoleStore.addAudit}
+              />
+            )}
+            {activeSection === "dbquery" && (
+              <DatabaseQuerySection logAudit={consoleStore.addAudit} />
+            )}
+            {activeSection === "cachemgmt" && (
+              <CacheManagementSection logAudit={consoleStore.addAudit} />
+            )}
+
+            {/* ══════ PLATFORM CONTROL ══════ */}
+            {activeSection === "announcements" && (
+              <AnnouncementsSection
+                store={advancedStore}
+                logAudit={consoleStore.addAudit}
+              />
+            )}
+            {activeSection === "maintwindows" && (
+              <MaintenanceWindowsSection
+                store={advancedStore}
+                logAudit={consoleStore.addAudit}
+              />
+            )}
+            {activeSection === "blocklist" && (
+              <BlocklistSection
+                store={advancedStore}
+                logAudit={consoleStore.addAudit}
+              />
+            )}
+            {activeSection === "cors" && (
+              <CorsConfigSection
+                store={advancedStore}
+                logAudit={consoleStore.addAudit}
+              />
+            )}
+            {activeSection === "envvars" && (
+              <EnvVarsSection
+                store={advancedStore}
+                logAudit={consoleStore.addAudit}
+              />
+            )}
+            {activeSection === "localization" && (
+              <LocalizationSection
+                store={advancedStore}
+                logAudit={consoleStore.addAudit}
+              />
+            )}
+            {activeSection === "errortracker" && (
+              <ErrorTrackerSection
+                store={advancedStore}
+                logAudit={consoleStore.addAudit}
+              />
+            )}
+            {activeSection === "sessions" && (
+              <SessionInspectorSection
+                store={advancedStore}
+                logAudit={consoleStore.addAudit}
+              />
+            )}
+            {activeSection === "taskqueue" && (
+              <TaskQueueSection
+                store={advancedStore}
+                logAudit={consoleStore.addAudit}
+              />
+            )}
+            {activeSection === "logstreams" && (
+              <LogStreamsSection
+                store={advancedStore}
+                logAudit={consoleStore.addAudit}
+              />
+            )}
+            {activeSection === "rolematrix" && (
+              <RoleMatrixSection
+                store={advancedStore}
+                logAudit={consoleStore.addAudit}
+              />
+            )}
+            {activeSection === "releasecoord" && (
+              <ReleaseCoordinatorSection
+                store={advancedStore}
+                logAudit={consoleStore.addAudit}
+              />
+            )}
+            {activeSection === "migrations" && (
+              <MigrationsSection
+                store={advancedStore}
+                logAudit={consoleStore.addAudit}
+              />
+            )}
+            {activeSection === "deliveries" && (
+              <WebhookDeliveriesSection
+                store={advancedStore}
+                logAudit={consoleStore.addAudit}
+              />
+            )}
+            {activeSection === "storage" && (
+              <StorageExplorerSection
+                store={advancedStore}
+                logAudit={consoleStore.addAudit}
+              />
+            )}
+            {activeSection === "ratelimits" && (
+              <ApiRateLimitsSection
+                store={advancedStore}
+                logAudit={consoleStore.addAudit}
+              />
+            )}
+
+            {activeSection === "devcontrol" && (
+              <DeveloperControlCenterSection
+                store={advancedStore}
+                logAudit={consoleStore.addAudit}
+              />
+            )}
+          </Suspense>
         </div>
       </main>
     </div>
@@ -2226,33 +2987,32 @@ export default function FounderAccess() {
     if (!instruction || editorExecuting) return;
     setEditorExecuting(true);
     setEditorOutput("");
-    setTimeout(() => {
-      const output = generateAIResponse(instruction);
-      setEditorOutput(output);
-      setEditorHistory(prev =>
-        [
-          { instruction, output, timestamp: new Date().toISOString() },
-          ...prev,
-        ].slice(0, 50)
-      );
-      setEditorExecuting(false);
-      setEditorInstruction("");
-      logAudit(
-        "AI Editor Used",
-        `Instruction: ${instruction.slice(0, 100)}`,
-        "info"
-      );
-    }, 1500);
+    // Generate AI response immediately — no artificial delay
+    const output = generateAIResponse(instruction);
+    setEditorOutput(output);
+    setEditorHistory((prev) =>
+      [
+        { instruction, output, timestamp: new Date().toISOString() },
+        ...prev,
+      ].slice(0, 50),
+    );
+    setEditorExecuting(false);
+    setEditorInstruction("");
+    logAudit(
+      "AI Editor Used",
+      `Instruction: ${instruction.slice(0, 100)}`,
+      "info",
+    );
   }
 
   /* ─── File upload handler ─── */
   function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const files = e.target.files;
     if (!files) return;
-    Array.from(files).forEach(file => {
+    Array.from(files).forEach((file) => {
       const reader = new FileReader();
       reader.onload = () => {
-        setUploadedFiles(prev => [
+        setUploadedFiles((prev) => [
           ...prev,
           {
             name: file.name,
@@ -2267,7 +3027,7 @@ export default function FounderAccess() {
     logAudit(
       "File Uploaded",
       `${files.length} file(s) uploaded to AI Editor`,
-      "info"
+      "info",
     );
   }
 
@@ -2286,7 +3046,7 @@ export default function FounderAccess() {
       lower.includes("table") ||
       lower.includes("date")
     ) {
-      return `// Date Range Filter for Tables\n// Based on: "${instruction}"\n\nfunction DateRangeFilter({ onFilter }: { onFilter: (s: Date, e: Date) => void }) {\n  const [start, setStart] = useState<Date | null>(null);\n  const [end, setEnd] = useState<Date | null>(null);\n  return (\n    <div className=\"flex items-center gap-2\">\n      <input type=\"date\" onChange={e => setStart(e.target.valueAsDate)} />\n      <span>to</span>\n      <input type=\"date\" onChange={e => setEnd(e.target.valueAsDate)} />\n      <button onClick={() => start && end && onFilter(start, end)}>Apply</button>\n    </div>\n  );\n}`;
+      return `// Date Range Filter for Tables\n// Based on: "${instruction}"\n\nfunction DateRangeFilter({ onFilter }: { onFilter: (s: Date, e: Date) => void }) {\n  const [start, setStart] = useState<Date | null>(null);\n  const [end, setEnd] = useState<Date | null>(null);\n  return (\n    <div className="flex items-center gap-2">\n      <input type="date" onChange={e => setStart(e.target.valueAsDate)} />\n      <span>to</span>\n      <input type="date" onChange={e => setEnd(e.target.valueAsDate)} />\n      <button onClick={() => start && end && onFilter(start, end)}>Apply</button>\n    </div>\n  );\n}`;
     }
     if (
       lower.includes("tab") ||

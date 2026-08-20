@@ -40,7 +40,7 @@ async function openSyncDB(): Promise<IDBDatabase> {
     const req = indexedDB.open(SYNC_DB, 1);
     req.onerror = () => reject(req.error);
     req.onsuccess = () => resolve(req.result);
-    req.onupgradeneeded = e => {
+    req.onupgradeneeded = (e) => {
       const db = (e.target as IDBOpenDBRequest).result;
       if (!db.objectStoreNames.contains(SYNC_STORE)) {
         db.createObjectStore(SYNC_STORE, { keyPath: "id" });
@@ -56,7 +56,7 @@ async function openSyncDB(): Promise<IDBDatabase> {
 export async function queueMutation(
   collection: string,
   operation: "create" | "update" | "delete",
-  data: any
+  data: any,
 ): Promise<string> {
   const db = await openSyncDB();
   const id = `sync_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
@@ -91,7 +91,7 @@ export async function getPendingQueue(): Promise<SyncItem[]> {
     const store = tx.objectStore(SYNC_STORE);
     const req = store.openCursor();
     const items: SyncItem[] = [];
-    req.onsuccess = e => {
+    req.onsuccess = (e) => {
       const cursor = (e.target as IDBRequest).result;
       if (cursor) {
         if (!cursor.value.synced) items.push(cursor.value);
@@ -126,7 +126,7 @@ export async function markSynced(id: string): Promise<void> {
 
 // Clear old synced items
 export async function cleanupSynced(
-  olderThanMs: number = 7 * 24 * 60 * 60 * 1000
+  olderThanMs: number = 7 * 24 * 60 * 60 * 1000,
 ): Promise<number> {
   const db = await openSyncDB();
   const cutoff = Date.now() - olderThanMs;
@@ -135,7 +135,7 @@ export async function cleanupSynced(
     const store = tx.objectStore(SYNC_STORE);
     const req = store.openCursor();
     let cleared = 0;
-    req.onsuccess = e => {
+    req.onsuccess = (e) => {
       const cursor = (e.target as IDBRequest).result;
       if (cursor) {
         if (cursor.value.synced && cursor.value.timestamp < cutoff) {
@@ -167,7 +167,7 @@ function broadcastMutation(item: SyncItem): void {
   try {
     localStorage.setItem(
       "fuelpro_sync_ping",
-      JSON.stringify({ ts: Date.now(), id: item.id })
+      JSON.stringify({ ts: Date.now(), id: item.id }),
     );
   } catch {
     /* */
@@ -190,12 +190,12 @@ export function onMutation(callback: (item: SyncItem) => void): () => void {
     if (e.key === "fuelpro_sync_ping") {
       // Trigger a refresh from IndexedDB
       getPendingQueue()
-        .then(queue => {
-          queue.forEach(item => {
+        .then((queue) => {
+          queue.forEach((item) => {
             if (item.deviceId !== getDeviceId()) callback(item);
           });
         })
-        .catch(() => {});
+        .catch((err) => console.warn("[syncEngine] async op failed:", err));
     }
   };
 
@@ -244,7 +244,7 @@ export async function exportAllData(): Promise<string> {
 
 // Import data from another device
 export async function importAllData(
-  jsonString: string
+  jsonString: string,
 ): Promise<{ imported: number; errors: number }> {
   let imported = 0;
   let errors = 0;
@@ -293,7 +293,7 @@ export class SyncMonitor {
     this.stop();
     this.interval = setInterval(async () => {
       const state = await getSyncState();
-      this.listeners.forEach(cb => cb(state));
+      this.listeners.forEach((cb) => cb(state));
     }, intervalMs);
   }
 
@@ -308,8 +308,8 @@ export class SyncMonitor {
     this.listeners.add(callback);
     // Initial call
     getSyncState()
-      .then(state => callback(state))
-      .catch(() => {});
+      .then((state) => callback(state))
+      .catch((err) => console.warn("[syncEngine] async op failed:", err));
     return () => this.listeners.delete(callback);
   }
 }

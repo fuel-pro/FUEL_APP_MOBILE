@@ -1,6 +1,6 @@
 /**
  * Silent Print Service - Background printing without user interaction
- * 
+ *
  * Features:
  * - Queue-based print management
  * - Error recovery and retry logic
@@ -8,22 +8,27 @@
  * - Support for receipts, reports, and documents
  * - Offline-first with local queuing
  * - IndexedDB persistence for print queue
- * 
+ *
  * Uses unified currency symbols from config/pricing.ts
  */
 
-import { cloudStorage } from './cloudStorage';
-import type { ReceiptData, getReceiptCurrency } from './pos/printer-service';
-import { printerService, getReceiptCurrency as getCurrencyInfo } from './pos/printer-service';
-import { getCurrencySymbol } from './currency';
+import { cloudStorage } from "./cloudStorage";
+import type { ReceiptData, getReceiptCurrency } from "./pos/printer-service";
+import {
+  printerService,
+  getReceiptCurrency as getCurrencyInfo,
+} from "./pos/printer-service";
+import { getCurrencySymbol } from "./currency";
+import { getFuelLabel } from "@/react-app/config/pricing";
 
 const CloudStorage = cloudStorage;
 
 export interface SilentPrintJob {
   id: string;
-  type: 'receipt' | 'report' | 'document' | 'label' | 'invoice' | 'sales-report';
+  type:
+    "receipt" | "report" | "document" | "label" | "invoice" | "sales-report";
   content: any;
-  status: 'pending' | 'processing' | 'completed' | 'failed';
+  status: "pending" | "processing" | "completed" | "failed";
   retries: number;
   maxRetries: number;
   createdAt: string;
@@ -40,10 +45,11 @@ export interface SilentPrintJob {
 }
 
 export interface PrintSettings {
+  printerId?: string;
   paperWidth?: number;
   copies?: number;
-  layout?: 'portrait' | 'landscape';
-  quality?: 'draft' | 'normal' | 'high';
+  layout?: "portrait" | "landscape";
+  quality?: "draft" | "normal" | "high";
   silent?: boolean;
   timeout?: number;
   autoRetry?: boolean;
@@ -53,22 +59,22 @@ export interface PrintSettings {
 const DEFAULT_SETTINGS: PrintSettings = {
   paperWidth: 80,
   copies: 1,
-  layout: 'portrait',
-  quality: 'normal',
+  layout: "portrait",
+  quality: "normal",
   silent: true,
   timeout: 30000,
   autoRetry: true,
   fallbackToBrowser: true,
 };
 
-const QUEUE_KEY = 'fuelpro_print_queue';
-const HISTORY_KEY = 'fuelpro_print_history';
+const QUEUE_KEY = "fuelpro_print_queue";
+const HISTORY_KEY = "fuelpro_print_history";
 const MAX_QUEUE_SIZE = 100;
 
 // IndexedDB for robust offline storage
-const DB_NAME = 'fuelpro_print_db';
+const DB_NAME = "fuelpro_print_db";
 const DB_VERSION = 1;
-const STORE_NAME = 'print_jobs';
+const STORE_NAME = "print_jobs";
 
 class IndexedDBPrintStore {
   private db: IDBDatabase | null = null;
@@ -76,20 +82,20 @@ class IndexedDBPrintStore {
   async init(): Promise<void> {
     return new Promise((resolve, reject) => {
       const request = indexedDB.open(DB_NAME, DB_VERSION);
-      
+
       request.onerror = () => reject(request.error);
       request.onsuccess = () => {
         this.db = request.result;
         resolve();
       };
-      
+
       request.onupgradeneeded = (event) => {
         const db = (event.target as IDBOpenDBRequest).result;
         if (!db.objectStoreNames.contains(STORE_NAME)) {
-          const store = db.createObjectStore(STORE_NAME, { keyPath: 'id' });
-          store.createIndex('status', 'status', { unique: false });
-          store.createIndex('createdAt', 'createdAt', { unique: false });
-          store.createIndex('type', 'type', { unique: false });
+          const store = db.createObjectStore(STORE_NAME, { keyPath: "id" });
+          store.createIndex("status", "status", { unique: false });
+          store.createIndex("createdAt", "createdAt", { unique: false });
+          store.createIndex("type", "type", { unique: false });
         }
       };
     });
@@ -98,7 +104,7 @@ class IndexedDBPrintStore {
   async saveJob(job: SilentPrintJob): Promise<void> {
     if (!this.db) await this.init();
     return new Promise((resolve, reject) => {
-      const tx = this.db!.transaction(STORE_NAME, 'readwrite');
+      const tx = this.db!.transaction(STORE_NAME, "readwrite");
       const store = tx.objectStore(STORE_NAME);
       const request = store.put(job);
       request.onerror = () => reject(request.error);
@@ -109,7 +115,7 @@ class IndexedDBPrintStore {
   async getJob(id: string): Promise<SilentPrintJob | undefined> {
     if (!this.db) await this.init();
     return new Promise((resolve, reject) => {
-      const tx = this.db!.transaction(STORE_NAME, 'readonly');
+      const tx = this.db!.transaction(STORE_NAME, "readonly");
       const store = tx.objectStore(STORE_NAME);
       const request = store.get(id);
       request.onerror = () => reject(request.error);
@@ -120,7 +126,7 @@ class IndexedDBPrintStore {
   async getAllJobs(): Promise<SilentPrintJob[]> {
     if (!this.db) await this.init();
     return new Promise((resolve, reject) => {
-      const tx = this.db!.transaction(STORE_NAME, 'readonly');
+      const tx = this.db!.transaction(STORE_NAME, "readonly");
       const store = tx.objectStore(STORE_NAME);
       const request = store.getAll();
       request.onerror = () => reject(request.error);
@@ -131,7 +137,7 @@ class IndexedDBPrintStore {
   async deleteJob(id: string): Promise<void> {
     if (!this.db) await this.init();
     return new Promise((resolve, reject) => {
-      const tx = this.db!.transaction(STORE_NAME, 'readwrite');
+      const tx = this.db!.transaction(STORE_NAME, "readwrite");
       const store = tx.objectStore(STORE_NAME);
       const request = store.delete(id);
       request.onerror = () => reject(request.error);
@@ -142,7 +148,7 @@ class IndexedDBPrintStore {
   async clear(): Promise<void> {
     if (!this.db) await this.init();
     return new Promise((resolve, reject) => {
-      const tx = this.db!.transaction(STORE_NAME, 'readwrite');
+      const tx = this.db!.transaction(STORE_NAME, "readwrite");
       const store = tx.objectStore(STORE_NAME);
       const request = store.clear();
       request.onerror = () => reject(request.error);
@@ -150,12 +156,14 @@ class IndexedDBPrintStore {
     });
   }
 
-  async getJobsByStatus(status: SilentPrintJob['status']): Promise<SilentPrintJob[]> {
+  async getJobsByStatus(
+    status: SilentPrintJob["status"],
+  ): Promise<SilentPrintJob[]> {
     if (!this.db) await this.init();
     return new Promise((resolve, reject) => {
-      const tx = this.db!.transaction(STORE_NAME, 'readonly');
+      const tx = this.db!.transaction(STORE_NAME, "readonly");
       const store = tx.objectStore(STORE_NAME);
-      const index = store.index('status');
+      const index = store.index("status");
       const request = index.getAll(status);
       request.onerror = () => reject(request.error);
       request.onsuccess = () => resolve(request.result || []);
@@ -168,7 +176,7 @@ class SilentPrintService {
   private isProcessing = false;
   private processTimer: ReturnType<typeof setInterval> | null = null;
   private dbStore: IndexedDBPrintStore;
-  private isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+  private isOnline = typeof navigator !== "undefined" ? navigator.onLine : true;
   private listeners: Set<(status: PrintServiceStatus) => void> = new Set();
 
   constructor() {
@@ -183,32 +191,32 @@ class SilentPrintService {
       this.startAutoProcessing();
       this.setupOnlineListener();
     } catch (e) {
-      console.error('Failed to initialize print service:', e);
+      console.error("Failed to initialize print service:", e);
       // Fallback to localStorage-based queue
       this.loadQueueFromLocalStorage();
     }
   }
 
   private setupOnlineListener(): void {
-    if (typeof window === 'undefined') return;
-    
-    window.addEventListener('online', () => {
+    if (typeof window === "undefined") return;
+
+    window.addEventListener("online", () => {
       this.isOnline = true;
       this.notifyListeners();
       // Retry failed jobs when back online
       this.processOfflineQueue();
     });
-    
-    window.addEventListener('offline', () => {
+
+    window.addEventListener("offline", () => {
       this.isOnline = false;
       this.notifyListeners();
     });
   }
 
   private async processOfflineQueue(): Promise<void> {
-    const failedJobs = await this.dbStore.getJobsByStatus('failed');
+    const failedJobs = await this.dbStore.getJobsByStatus("failed");
     for (const job of failedJobs) {
-      job.status = 'pending';
+      job.status = "pending";
       job.retries = 0;
       await this.dbStore.saveJob(job);
     }
@@ -226,7 +234,7 @@ class SilentPrintService {
 
   private notifyListeners(): void {
     const status = this.getStatus();
-    this.listeners.forEach(cb => cb(status));
+    this.listeners.forEach((cb) => cb(status));
   }
 
   /**
@@ -234,15 +242,15 @@ class SilentPrintService {
    */
   async queuePrint(
     content: any,
-    type: SilentPrintJob['type'] = 'document',
-    settings?: PrintSettings
+    type: SilentPrintJob["type"] = "document",
+    settings?: PrintSettings,
   ): Promise<string> {
     const jobId = `print-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
     const job: SilentPrintJob = {
       id: jobId,
       type,
       content,
-      status: 'pending',
+      status: "pending",
       retries: 0,
       maxRetries: settings?.autoRetry !== false ? 3 : 0,
       createdAt: new Date().toISOString(),
@@ -258,7 +266,10 @@ class SilentPrintService {
     try {
       await this.dbStore.saveJob(job);
     } catch (e) {
-      console.warn('Failed to save to IndexedDB, using localStorage fallback:', e);
+      console.warn(
+        "Failed to save to IndexedDB, using localStorage fallback:",
+        e,
+      );
     }
 
     this.queue.push(job);
@@ -266,15 +277,15 @@ class SilentPrintService {
 
     // Log to audit if available
     try {
-      const { logAudit } = await import('./cloudStorage');
-      await logAudit({
+      const cloudStorage = (await import("./cloudStorage")) as any;
+      await cloudStorage.logAudit({
         stationId: this.getStationId(),
-        action: 'print_queued',
-        category: 'data',
+        action: "print_queued",
+        category: "data",
         details: `Queued ${type} print job (offline: ${!this.isOnline})`,
       });
     } catch (e) {
-      console.debug('Audit log unavailable for print job');
+      console.debug("Audit log unavailable for print job");
     }
 
     // Process immediately if not already processing
@@ -288,32 +299,32 @@ class SilentPrintService {
   /**
    * Queue a receipt for silent printing
    */
-  async queueReceipt(receipt: ReceiptData, printerId?: string): Promise<string> {
-    return this.queuePrint(receipt, 'receipt', { printerId });
+  async queueReceipt(
+    receipt: ReceiptData,
+    printerId?: string,
+  ): Promise<string> {
+    return this.queuePrint(receipt, "receipt", { printerId });
   }
 
   /**
    * Queue an invoice for printing
    */
   async queueInvoice(invoiceData: any, printerId?: string): Promise<string> {
-    return this.queuePrint(invoiceData, 'invoice', { printerId });
+    return this.queuePrint(invoiceData, "invoice", { printerId });
   }
 
   /**
    * Queue a sales report for printing
    */
   async queueSalesReport(reportData: any, printerId?: string): Promise<string> {
-    return this.queuePrint(reportData, 'sales-report', { printerId });
+    return this.queuePrint(reportData, "sales-report", { printerId });
   }
 
   /**
    * Queue a report for printing
    */
   async queueReport(reportHtml: string, reportName: string): Promise<string> {
-    return this.queuePrint(
-      { html: reportHtml, name: reportName },
-      'report'
-    );
+    return this.queuePrint({ html: reportHtml, name: reportName }, "report");
   }
 
   /**
@@ -329,14 +340,14 @@ class SilentPrintService {
       const job = this.queue[0];
 
       try {
-        job.status = 'processing';
+        job.status = "processing";
         await this.saveJobStatus(job);
         this.saveQueueToLocalStorage();
         this.notifyListeners();
 
         await this.executePrintJob(job);
 
-        job.status = 'completed';
+        job.status = "completed";
         job.completedAt = new Date().toISOString();
         this.queue.shift();
         await this.dbStore.deleteJob(job.id);
@@ -345,19 +356,23 @@ class SilentPrintService {
         job.retries++;
 
         if (job.retries < job.maxRetries) {
-          job.status = 'pending';
-          job.error = error instanceof Error ? error.message : 'Unknown error';
+          job.status = "pending";
+          job.error = error instanceof Error ? error.message : "Unknown error";
           await this.saveJobStatus(job);
           this.saveQueueToLocalStorage();
           // Wait before retry
-          await new Promise(resolve => setTimeout(resolve, 2000));
+          await new Promise((resolve) => setTimeout(resolve, 2000));
         } else {
-          job.status = 'failed';
-          job.error = error instanceof Error ? error.message : 'Max retries exceeded';
+          job.status = "failed";
+          job.error =
+            error instanceof Error ? error.message : "Max retries exceeded";
           this.queue.shift();
           await this.dbStore.deleteJob(job.id);
           await this.addToHistory(job);
-          console.error(`Print job ${job.id} failed after ${job.retries} retries:`, job.error);
+          console.error(
+            `Print job ${job.id} failed after ${job.retries} retries:`,
+            job.error,
+          );
         }
       }
     }
@@ -370,7 +385,7 @@ class SilentPrintService {
     try {
       await this.dbStore.saveJob(job);
     } catch (e) {
-      console.warn('Failed to update job in IndexedDB:', e);
+      console.warn("Failed to update job in IndexedDB:", e);
     }
   }
 
@@ -381,22 +396,22 @@ class SilentPrintService {
     const settings = job.settings || DEFAULT_SETTINGS;
 
     switch (job.type) {
-      case 'receipt':
+      case "receipt":
         await this.printReceipt(job.content, settings);
         break;
-      case 'invoice':
+      case "invoice":
         await this.printInvoice(job.content, settings);
         break;
-      case 'sales-report':
+      case "sales-report":
         await this.printSalesReport(job.content, settings);
         break;
-      case 'report':
+      case "report":
         await this.printReport(job.content, settings);
         break;
-      case 'document':
+      case "document":
         await this.printDocument(job.content, settings);
         break;
-      case 'label':
+      case "label":
         await this.printLabel(job.content, settings);
         break;
       default:
@@ -409,7 +424,7 @@ class SilentPrintService {
    */
   private async printReceipt(
     receipt: ReceiptData,
-    settings: PrintSettings
+    settings: PrintSettings,
   ): Promise<void> {
     try {
       const printerId = settings.printerId || undefined;
@@ -418,8 +433,8 @@ class SilentPrintService {
       // Wait for print to complete with timeout
       return new Promise((resolve, reject) => {
         const timeoutId = setTimeout(
-          () => reject(new Error('Print timeout')),
-          settings.timeout || 30000
+          () => reject(new Error("Print timeout")),
+          settings.timeout || 30000,
         );
 
         const checkStatus = setInterval(() => {
@@ -433,7 +448,10 @@ class SilentPrintService {
       });
     } catch (error) {
       if (settings.fallbackToBrowser !== false) {
-        console.warn('Printer service failed, using browser print fallback:', error);
+        console.warn(
+          "Printer service failed, using browser print fallback:",
+          error,
+        );
         return this.printReceiptBrowser(receipt, settings);
       }
       throw new Error(`Receipt print failed: ${error}`);
@@ -443,7 +461,10 @@ class SilentPrintService {
   /**
    * Browser fallback for receipt printing
    */
-  private printReceiptBrowser(receipt: ReceiptData, settings: PrintSettings): void {
+  private printReceiptBrowser(
+    receipt: ReceiptData,
+    settings: PrintSettings,
+  ): void {
     const receiptHTML = this.generateReceiptHTML(receipt);
     this.printHTML(receiptHTML, settings);
   }
@@ -452,46 +473,54 @@ class SilentPrintService {
    * Generate receipt HTML
    */
   private generateReceiptHTML(receipt: ReceiptData): string {
+    const logoHTML = receipt.logoUrl
+      ? `<img src="${receipt.logoUrl}" alt="Logo" style="max-width: 150px; max-height: 60px; margin-bottom: 3mm; object-fit: contain;" crossorigin="anonymous"/><br/>`
+      : "";
     return `
       <div style="font-family: 'Courier New', monospace; width: ${receipt.settings?.paperWidth || 80}mm; padding: 2mm; margin: 0 auto;">
         <div style="text-align: center; margin-bottom: 5mm;">
+          ${logoHTML}
           <strong style="font-size: 14pt;">${receipt.stationName}</strong><br/>
-          ${receipt.stationLocation}<br/>
-          Tel: +254-700-000-000
+          ${receipt.stationLocation}${receipt.stationPhone ? `<br/>Tel: ${receipt.stationPhone}` : ""}
+          ${receipt.stationEmail ? `<br/>Email: ${receipt.stationEmail}` : ""}
         </div>
         <div style="border-top: 1px dashed #000; border-bottom: 1px dashed #000; padding: 3mm 0; margin: 3mm 0;">
           Receipt #: ${receipt.receiptNumber}<br/>
           Date: ${receipt.date} Time: ${receipt.time}<br/>
-          ${receipt.transactionRef ? `Ref: ${receipt.transactionRef}<br/>` : ''}
-          ${receipt.customerName ? `Customer: ${receipt.customerName}<br/>` : ''}
+          ${receipt.transactionRef ? `Ref: ${receipt.transactionRef}<br/>` : ""}
+          ${receipt.customerName ? `Customer: ${receipt.customerName}<br/>` : ""}
           Attendant: ${receipt.attendantName}
         </div>
         <div style="padding: 2mm 0;">
           <div style="display: flex; justify-content: space-between; font-weight: bold; border-bottom: 1px solid #000; padding-bottom: 2mm; margin-bottom: 2mm;">
             <span>ITEM</span><span>TOTAL</span>
           </div>
-          ${receipt.items.map(item => `
+          ${receipt.items
+            .map(
+              (item) => `
             <div style="display: flex; justify-content: space-between; padding: 1mm 0;">
               <span>${item.name} x${item.quantity}</span>
-              <span>${getCurrencySymbol(receipt.currencyCode) || 'KSh'} ${item.total.toLocaleString()}</span>
+              <span>${getCurrencySymbol(receipt.currencyCode) || getCurrencySymbol()} ${item.total.toLocaleString()}</span>
             </div>
-          `).join('')}
+          `,
+            )
+            .join("")}
         </div>
         <div style="border-top: 1px dashed #000; padding-top: 3mm; margin-top: 3mm;">
-          <div style="display: flex; justify-content: space-between;">Subtotal: <span>${getCurrencySymbol(receipt.currencyCode) || 'KSh'} ${receipt.subtotal.toLocaleString()}</span></div>
-          ${receipt.discount > 0 ? `<div style="display: flex; justify-content: space-between;">Discount: <span>-${getCurrencySymbol(receipt.currencyCode) || 'KSh'} ${receipt.discount.toLocaleString()}</span></div>` : ''}
-          ${receipt.tax > 0 ? `<div style="display: flex; justify-content: space-between;">Tax (VAT): <span>${getCurrencySymbol(receipt.currencyCode) || 'KSh'} ${receipt.tax.toLocaleString()}</span></div>` : ''}
+          <div style="display: flex; justify-content: space-between;">Subtotal: <span>${getCurrencySymbol(receipt.currencyCode) || getCurrencySymbol()} ${receipt.subtotal.toLocaleString()}</span></div>
+          ${receipt.discount > 0 ? `<div style="display: flex; justify-content: space-between;">Discount: <span>-${getCurrencySymbol(receipt.currencyCode) || getCurrencySymbol()} ${receipt.discount.toLocaleString()}</span></div>` : ""}
+          ${receipt.tax > 0 ? `<div style="display: flex; justify-content: space-between;">Tax (VAT): <span>${getCurrencySymbol(receipt.currencyCode) || getCurrencySymbol()} ${receipt.tax.toLocaleString()}</span></div>` : ""}
           <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: 12pt; margin-top: 2mm;">
-            <span>TOTAL:</span><span>${getCurrencySymbol(receipt.currencyCode) || 'KSh'} ${receipt.total.toLocaleString()}</span>
+            <span>TOTAL:</span><span>${getCurrencySymbol(receipt.currencyCode) || getCurrencySymbol()} ${receipt.total.toLocaleString()}</span>
           </div>
         </div>
         <div style="border-top: 1px dashed #000; padding-top: 3mm; margin-top: 3mm;">
           <div style="display: flex; justify-content: space-between;">Payment: <span>${receipt.paymentMethod?.toUpperCase()}</span></div>
-          <div style="display: flex; justify-content: space-between;">Paid: <span>${getCurrencySymbol(receipt.currencyCode) || 'KSh'} ${receipt.amountPaid.toLocaleString()}</span></div>
-          ${receipt.change > 0 ? `<div style="display: flex; justify-content: space-between; font-weight: bold;">CHANGE: <span>${getCurrencySymbol(receipt.currencyCode) || 'KSh'} ${receipt.change.toLocaleString()}</span></div>` : ''}
+          <div style="display: flex; justify-content: space-between;">Paid: <span>${getCurrencySymbol(receipt.currencyCode) || getCurrencySymbol()} ${receipt.amountPaid.toLocaleString()}</span></div>
+          ${receipt.change > 0 ? `<div style="display: flex; justify-content: space-between; font-weight: bold;">CHANGE: <span>${getCurrencySymbol(receipt.currencyCode) || getCurrencySymbol()} ${receipt.change.toLocaleString()}</span></div>` : ""}
         </div>
         <div style="text-align: center; margin-top: 5mm; font-size: 8pt;">
-          ${receipt.footerMessage || 'E&OE. Prices include VAT where applicable.'}<br/>
+          ${receipt.footerMessage || "E&OE. Prices include VAT where applicable."}<br/>
           Thank you for your business!
         </div>
       </div>
@@ -501,13 +530,18 @@ class SilentPrintService {
   /**
    * Print invoice silently
    */
-  private async printInvoice(invoiceData: any, settings: PrintSettings): Promise<void> {
+  private async printInvoice(
+    invoiceData: any,
+    settings: PrintSettings,
+  ): Promise<void> {
     try {
       // Try hardware printer first
       const printerId = settings.printerId || undefined;
       const receipt: ReceiptData = {
-        stationName: invoiceData.stationName || invoiceData.companyName || 'FuelPro',
-        stationLocation: invoiceData.stationLocation || invoiceData.address || '',
+        stationName:
+          invoiceData.stationName || invoiceData.companyName || "FuelPro",
+        stationLocation:
+          invoiceData.stationLocation || invoiceData.address || "",
         receiptNumber: invoiceData.invoiceNumber || `INV-${Date.now()}`,
         date: invoiceData.date || new Date().toLocaleDateString(),
         time: invoiceData.time || new Date().toLocaleTimeString(),
@@ -516,12 +550,12 @@ class SilentPrintService {
         tax: invoiceData.tax || 0,
         discount: invoiceData.discount || 0,
         total: invoiceData.total || invoiceData.totalDue || 0,
-        paymentMethod: invoiceData.paymentMethod || 'INVOICE',
+        paymentMethod: invoiceData.paymentMethod || "INVOICE",
         amountPaid: invoiceData.amountPaid || 0,
         change: 0,
         customerName: invoiceData.customerName,
-        attendantName: invoiceData.attendantName || 'System',
-        footerMessage: 'Thank you for your business',
+        attendantName: invoiceData.attendantName || "System",
+        footerMessage: "Thank you for your business",
       };
       await printerService.printReceipt(receipt, printerId);
     } catch (error) {
@@ -541,14 +575,14 @@ class SilentPrintService {
     return `
       <div style="font-family: Arial, sans-serif; width: 210mm; padding: 20px; margin: 0 auto;">
         <div style="text-align: center; margin-bottom: 30px;">
-          <h1 style="margin: 0;">${invoiceData.stationName || invoiceData.companyName || 'INVOICE'}</h1>
-          <p>${invoiceData.stationLocation || invoiceData.address || ''}</p>
+          <h1 style="margin: 0;">${invoiceData.stationName || invoiceData.companyName || "INVOICE"}</h1>
+          <p>${invoiceData.stationLocation || invoiceData.address || ""}</p>
         </div>
         <div style="margin-bottom: 20px;">
-          <strong>Invoice #:</strong> ${invoiceData.invoiceNumber || 'N/A'}<br/>
+          <strong>Invoice #:</strong> ${invoiceData.invoiceNumber || "N/A"}<br/>
           <strong>Date:</strong> ${invoiceData.date || new Date().toLocaleDateString()}<br/>
-          ${invoiceData.customerName ? `<strong>Customer:</strong> ${invoiceData.customerName}<br/>` : ''}
-          ${invoiceData.customerAddress ? `<strong>Address:</strong> ${invoiceData.customerAddress}<br/>` : ''}
+          ${invoiceData.customerName ? `<strong>Customer:</strong> ${invoiceData.customerName}<br/>` : ""}
+          ${invoiceData.customerAddress ? `<strong>Address:</strong> ${invoiceData.customerAddress}<br/>` : ""}
         </div>
         <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
           <thead>
@@ -560,20 +594,24 @@ class SilentPrintService {
             </tr>
           </thead>
           <tbody>
-            ${(invoiceData.items || []).map((item: any) => `
+            ${(invoiceData.items || [])
+              .map(
+                (item: any) => `
               <tr>
-                <td style="border: 1px solid #ddd; padding: 8px;">${item.desc || item.name || ''}</td>
+                <td style="border: 1px solid #ddd; padding: 8px;">${item.desc || item.name || ""}</td>
                 <td style="border: 1px solid #ddd; padding: 8px;">${item.qty || 1}</td>
-                <td style="border: 1px solid #ddd; padding: 8px;">${getCurrencySymbol(invoiceData.currencyCode || invoiceData.currency) || 'KSh'} ${(item.price || 0).toLocaleString()}</td>
-                <td style="border: 1px solid #ddd; padding: 8px;">${getCurrencySymbol(invoiceData.currencyCode || invoiceData.currency) || 'KSh'} ${(item.total || item.qty * item.price || 0).toLocaleString()}</td>
+                <td style="border: 1px solid #ddd; padding: 8px;">${getCurrencySymbol(invoiceData.currencyCode || invoiceData.currency) || getCurrencySymbol()} ${(item.price || 0).toLocaleString()}</td>
+                <td style="border: 1px solid #ddd; padding: 8px;">${getCurrencySymbol(invoiceData.currencyCode || invoiceData.currency) || getCurrencySymbol()} ${(item.total || item.qty * item.price || 0).toLocaleString()}</td>
               </tr>
-            `).join('')}
+            `,
+              )
+              .join("")}
           </tbody>
         </table>
         <div style="text-align: right;">
-          <p><strong>Subtotal:</strong> ${getCurrencySymbol(invoiceData.currencyCode || invoiceData.currency) || 'KSh'} ${(invoiceData.subtotal || 0).toLocaleString()}</p>
-          ${invoiceData.tax > 0 ? `<p><strong>Tax:</strong> ${getCurrencySymbol(invoiceData.currencyCode || invoiceData.currency) || 'KSh'} ${invoiceData.tax.toLocaleString()}</p>` : ''}
-          <p style="font-size: 16pt;"><strong>Total Due:</strong> ${getCurrencySymbol(invoiceData.currencyCode || invoiceData.currency) || 'KSh'} ${(invoiceData.total || invoiceData.totalDue || 0).toLocaleString()}</p>
+          <p><strong>Subtotal:</strong> ${getCurrencySymbol(invoiceData.currencyCode || invoiceData.currency) || getCurrencySymbol()} ${(invoiceData.subtotal || 0).toLocaleString()}</p>
+          ${invoiceData.tax > 0 ? `<p><strong>Tax:</strong> ${getCurrencySymbol(invoiceData.currencyCode || invoiceData.currency) || getCurrencySymbol()} ${invoiceData.tax.toLocaleString()}</p>` : ""}
+          <p style="font-size: 16pt;"><strong>Total Due:</strong> ${getCurrencySymbol(invoiceData.currencyCode || invoiceData.currency) || getCurrencySymbol()} ${(invoiceData.total || invoiceData.totalDue || 0).toLocaleString()}</p>
         </div>
       </div>
     `;
@@ -582,46 +620,79 @@ class SilentPrintService {
   /**
    * Print sales report silently
    */
-  private async printSalesReport(reportData: any, settings: PrintSettings): Promise<void> {
+  private async printSalesReport(
+    reportData: any,
+    settings: PrintSettings,
+  ): Promise<void> {
     const reportHTML = this.generateSalesReportHTML(reportData);
     this.printHTML(reportHTML, settings);
   }
 
   /**
-   * Generate sales report HTML
+   * Generate sales report HTML — DYNAMIC fuel-type columns (was hardcoded
+   * Petrol Sales + Diesel Sales). Iterates reportData.fuelTypes if provided;
+   * otherwise falls back to reading entry.fuelSales keys from the first entry.
    */
   private generateSalesReportHTML(reportData: any): string {
+    const cur = reportData.currency || getCurrencySymbol();
+    // Derive the list of fuel types from the report data (dynamic).
+    const fuelTypes: string[] =
+      Array.isArray(reportData.fuelTypes) && reportData.fuelTypes.length > 0
+        ? reportData.fuelTypes
+        : (() => {
+            const first = (reportData.entries || []).find(
+              (e: any) => e.fuelSales && typeof e.fuelSales === "object",
+            );
+            return first ? Object.keys(first.fuelSales) : ["petrol", "diesel"];
+          })();
+    const fuelHeaders = fuelTypes
+      .map(
+        (ft) =>
+          `<th style="border: 1px solid #ddd; padding: 8px;">${getFuelLabel(ft)} Sales</th>`,
+      )
+      .join("");
     return `
       <div style="font-family: Arial, sans-serif; width: 210mm; padding: 20px; margin: 0 auto;">
         <div style="text-align: center; margin-bottom: 30px;">
-          <h1>${reportData.stationName || 'FUELPRO'}</h1>
-          <h2>Sales Report - ${reportData.monthYear || reportData.period || ''}</h2>
+          <h1>${reportData.stationName || ""}</h1>
+          <h2>Sales Report - ${reportData.monthYear || reportData.period || ""}</h2>
         </div>
         <table style="width: 100%; border-collapse: collapse;">
           <thead>
             <tr style="background: #f0f0f0;">
               <th style="border: 1px solid #ddd; padding: 8px;">Date</th>
-              <th style="border: 1px solid #ddd; padding: 8px;">Petrol Sales</th>
-              <th style="border: 1px solid #ddd; padding: 8px;">Diesel Sales</th>
+              ${fuelHeaders}
               <th style="border: 1px solid #ddd; padding: 8px;">Total</th>
             </tr>
           </thead>
           <tbody>
-            ${(reportData.entries || []).map((entry: any) => `
+            ${(reportData.entries || [])
+              .map(
+                (entry: any) => `
               <tr>
                 <td style="border: 1px solid #ddd; padding: 8px;">${entry.date}</td>
-                <td style="border: 1px solid #ddd; padding: 8px;">${reportData.currency || 'Ksh'} ${(entry.petrolSales || 0).toLocaleString()}</td>
-                <td style="border: 1px solid #ddd; padding: 8px;">${reportData.currency || 'Ksh'} ${(entry.dieselSales || 0).toLocaleString()}</td>
-                <td style="border: 1px solid #ddd; padding: 8px;">${reportData.currency || 'Ksh'} ${(entry.totalSales || 0).toLocaleString()}</td>
+                ${fuelTypes
+                  .map(
+                    (ft) =>
+                      `<td style="border: 1px solid #ddd; padding: 8px;">${cur} ${((entry.fuelSales && entry.fuelSales[ft]) || 0).toLocaleString()}</td>`,
+                  )
+                  .join("")}
+                <td style="border: 1px solid #ddd; padding: 8px;">${cur} ${(entry.totalSales || 0).toLocaleString()}</td>
               </tr>
-            `).join('')}
+            `,
+              )
+              .join("")}
           </tbody>
           <tfoot>
             <tr style="font-weight: bold; background: #e0e0e0;">
               <td style="border: 1px solid #ddd; padding: 8px;">TOTAL</td>
-              <td style="border: 1px solid #ddd; padding: 8px;">${reportData.currency || 'Ksh'} ${(reportData.totals?.petrol || 0).toLocaleString()}</td>
-              <td style="border: 1px solid #ddd; padding: 8px;">${reportData.currency || 'Ksh'} ${(reportData.totals?.diesel || 0).toLocaleString()}</td>
-              <td style="border: 1px solid #ddd; padding: 8px;">${reportData.currency || 'Ksh'} ${(reportData.totals?.total || 0).toLocaleString()}</td>
+              ${fuelTypes
+                .map(
+                  (ft) =>
+                    `<td style="border: 1px solid #ddd; padding: 8px;">${cur} ${((reportData.totals && (reportData.totals[ft] || reportData.totals.fuelTotals?.[ft])) || 0).toLocaleString()}</td>`,
+                )
+                .join("")}
+              <td style="border: 1px solid #ddd; padding: 8px;">${cur} ${(reportData.totals?.total || 0).toLocaleString()}</td>
             </tr>
           </tfoot>
         </table>
@@ -635,15 +706,17 @@ class SilentPrintService {
   private printHTML(html: string, settings: PrintSettings): Promise<void> {
     return new Promise((resolve, reject) => {
       try {
-        const iframe = document.createElement('iframe');
-        iframe.id = 'fuelpro-print-frame';
-        iframe.style.cssText = 'position: absolute; width: 0; height: 0; left: -9999px; top: -9999px;';
+        const iframe = document.createElement("iframe");
+        iframe.id = "fuelpro-print-frame";
+        iframe.style.cssText =
+          "position: absolute; width: 0; height: 0; left: -9999px; top: -9999px;";
         document.body.appendChild(iframe);
 
-        const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+        const iframeDoc =
+          iframe.contentDocument || iframe.contentWindow?.document;
         if (!iframeDoc) {
           document.body.removeChild(iframe);
-          reject(new Error('Cannot access iframe document'));
+          reject(new Error("Cannot access iframe document"));
           return;
         }
 
@@ -676,9 +749,9 @@ class SilentPrintService {
 
           try {
             iframe.contentWindow?.print();
-            
+
             // Listen for print completion
-            iframe.contentWindow?.addEventListener('afterprint', () => {
+            iframe.contentWindow?.addEventListener("afterprint", () => {
               clearTimeout(timer);
               document.body.removeChild(iframe);
               resolve();
@@ -701,7 +774,7 @@ class SilentPrintService {
 
         iframe.onerror = () => {
           document.body.removeChild(iframe);
-          reject(new Error('Failed to load print frame'));
+          reject(new Error("Failed to load print frame"));
         };
       } catch (error) {
         reject(new Error(`Print failed: ${error}`));
@@ -714,7 +787,7 @@ class SilentPrintService {
    */
   private async printReport(
     report: { html: string; name: string },
-    settings: PrintSettings
+    settings: PrintSettings,
   ): Promise<void> {
     return this.printHTML(report.html, settings);
   }
@@ -724,10 +797,11 @@ class SilentPrintService {
    */
   private async printDocument(
     content: any,
-    settings: PrintSettings
+    settings: PrintSettings,
   ): Promise<void> {
-    const html = typeof content === 'string' ? content : JSON.stringify(content);
-    return this.printReport({ html, name: 'Document' }, settings);
+    const html =
+      typeof content === "string" ? content : JSON.stringify(content);
+    return this.printReport({ html, name: "Document" }, settings);
   }
 
   /**
@@ -735,7 +809,7 @@ class SilentPrintService {
    */
   private async printLabel(
     labelData: any,
-    settings: PrintSettings
+    settings: PrintSettings,
   ): Promise<void> {
     const labelSettings = { ...settings, paperWidth: 100 };
     const html = this.generateLabelHTML(labelData);
@@ -757,7 +831,7 @@ class SilentPrintService {
       ">
         ${Object.entries(data)
           .map(([key, value]) => `<p><strong>${key}:</strong> ${value}</p>`)
-          .join('')}
+          .join("")}
       </div>
     `;
   }
@@ -790,7 +864,7 @@ class SilentPrintService {
     try {
       localStorage.setItem(QUEUE_KEY, JSON.stringify(this.queue));
     } catch (e) {
-      console.error('Failed to save print queue to localStorage:', e);
+      console.error("Failed to save print queue to localStorage:", e);
     }
   }
 
@@ -804,7 +878,7 @@ class SilentPrintService {
         this.queue = JSON.parse(saved);
       }
     } catch (e) {
-      console.error('Failed to load print queue from localStorage:', e);
+      console.error("Failed to load print queue from localStorage:", e);
     }
   }
 
@@ -814,13 +888,15 @@ class SilentPrintService {
   private async loadQueue(): Promise<void> {
     try {
       const jobs = await this.dbStore.getAllJobs();
-      const pendingJobs = jobs.filter(j => j.status === 'pending' || j.status === 'processing');
+      const pendingJobs = jobs.filter(
+        (j) => j.status === "pending" || j.status === "processing",
+      );
       this.queue = pendingJobs;
-      
+
       // Also check localStorage for any jobs not in IndexedDB
       this.loadQueueFromLocalStorage();
     } catch (e) {
-      console.error('Failed to load print queue from IndexedDB:', e);
+      console.error("Failed to load print queue from IndexedDB:", e);
       this.loadQueueFromLocalStorage();
     }
   }
@@ -831,7 +907,7 @@ class SilentPrintService {
   private async addToHistory(job: SilentPrintJob): Promise<void> {
     try {
       const historyKey = `fuelpro_print_history_${this.getStationId()}`;
-      const history = JSON.parse(localStorage.getItem(historyKey) || '[]');
+      const history = JSON.parse(localStorage.getItem(historyKey) || "[]");
       history.unshift(job);
       // Keep only last 500 jobs
       if (history.length > 500) {
@@ -839,7 +915,7 @@ class SilentPrintService {
       }
       localStorage.setItem(historyKey, JSON.stringify(history));
     } catch (e) {
-      console.error('Failed to save print history:', e);
+      console.error("Failed to save print history:", e);
     }
   }
 
@@ -863,7 +939,7 @@ class SilentPrintService {
    */
   getStatus(): PrintServiceStatus {
     return {
-      pending: this.queue.filter(j => j.status === 'pending').length,
+      pending: this.queue.filter((j) => j.status === "pending").length,
       processing: this.isProcessing,
       isOnline: this.isOnline,
       queue: [...this.queue],
@@ -877,7 +953,7 @@ class SilentPrintService {
   private getHistorySync(): SilentPrintJob[] {
     try {
       const historyKey = `fuelpro_print_history_${this.getStationId()}`;
-      return JSON.parse(localStorage.getItem(historyKey) || '[]');
+      return JSON.parse(localStorage.getItem(historyKey) || "[]");
     } catch {
       return [];
     }
@@ -889,10 +965,10 @@ class SilentPrintService {
   async getHistory(limit: number = 50): Promise<SilentPrintJob[]> {
     try {
       const historyKey = `fuelpro_print_history_${this.getStationId()}`;
-      const history = JSON.parse(localStorage.getItem(historyKey) || '[]');
+      const history = JSON.parse(localStorage.getItem(historyKey) || "[]");
       return Array.isArray(history) ? history.slice(0, limit) : [];
     } catch (e) {
-      console.error('Failed to load print history:', e);
+      console.error("Failed to load print history:", e);
       return [];
     }
   }
@@ -901,8 +977,8 @@ class SilentPrintService {
    * Get failed jobs
    */
   async getFailedJobs(): Promise<SilentPrintJob[]> {
-    return this.getHistory(100).then(history => 
-      history.filter(j => j.status === 'failed')
+    return this.getHistory(100).then((history) =>
+      history.filter((j) => j.status === "failed"),
     );
   }
 
@@ -922,7 +998,7 @@ class SilentPrintService {
     const failed = await this.getFailedJobs();
     for (const job of failed) {
       job.retries = 0;
-      job.status = 'pending';
+      job.status = "pending";
       job.error = undefined;
       this.queue.push(job);
       await this.dbStore.saveJob(job);
@@ -936,9 +1012,9 @@ class SilentPrintService {
    */
   async retryJob(jobId: string): Promise<boolean> {
     const job = await this.dbStore.getJob(jobId);
-    if (job && job.status === 'failed') {
+    if (job && job.status === "failed") {
       job.retries = 0;
-      job.status = 'pending';
+      job.status = "pending";
       job.error = undefined;
       this.queue.push(job);
       await this.dbStore.saveJob(job);
@@ -954,10 +1030,12 @@ class SilentPrintService {
    */
   private getStationId(): string {
     try {
-      const station = JSON.parse(localStorage.getItem('fuelpro_station') || '{}');
-      return station.id || 'default';
+      const station = JSON.parse(
+        localStorage.getItem("fuelpro_station") || "{}",
+      );
+      return station.id || "default";
     } catch {
-      return 'default';
+      return "default";
     }
   }
 
@@ -966,10 +1044,10 @@ class SilentPrintService {
    */
   private getUserId(): string {
     try {
-      const user = JSON.parse(localStorage.getItem('fuelpro_user') || '{}');
-      return user.id || 'anonymous';
+      const user = JSON.parse(localStorage.getItem("fuelpro_user") || "{}");
+      return user.id || "anonymous";
     } catch {
-      return 'anonymous';
+      return "anonymous";
     }
   }
 
@@ -977,7 +1055,7 @@ class SilentPrintService {
    * Cancel a pending job
    */
   async cancelJob(jobId: string): Promise<boolean> {
-    const index = this.queue.findIndex(j => j.id === jobId);
+    const index = this.queue.findIndex((j) => j.id === jobId);
     if (index !== -1) {
       this.queue.splice(index, 1);
       this.saveQueueToLocalStorage();

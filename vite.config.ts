@@ -1,16 +1,42 @@
 import path from "path";
 import { fileURLToPath } from "url";
+import fs from "fs";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 
+// Plugin to replace __BUILD_VERSION__ in index.html during build.
+function buildVersionPlugin() {
+  return {
+    name: "build-version-stamp",
+    transformIndexHtml(html) {
+      try {
+        const versionPath = path.resolve(__dirname, ".build-version");
+        if (!fs.existsSync(versionPath)) return html;
+        const version = fs.readFileSync(versionPath, "utf-8").trim();
+        return html.replace(
+          /(__BUILD_VERSION__\s*=\s*)"__BUILD_VERSION__"/g,
+          '$1"' + version + '"',
+        );
+      } catch (e) {
+        return html;
+      }
+    },
+  };
+}
+
 export default defineConfig({
   plugins: [
+    buildVersionPlugin(),
     react(),
     VitePWA({
       registerType: "autoUpdate",
+      // SW registration + update handling is in index.html (inline script).
+      // Disabling the plugin's auto-inject avoids a duplicate minimal
+      // registration that doesn't handle updates.
+      injectRegister: false,
       includeAssets: ["favicon.ico", "logo-main.jpg", "logo-small.jpg", "*.svg"],
       manifest: {
         name: "FuelPro - Fuel Management System",
@@ -53,8 +79,35 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ["**/*.{js,css,html,ico,png,svg,jpg,jpeg,woff,woff2}"],
+        globPatterns: ["**/*.{js,css,ico,png,svg,jpg,jpeg,woff,woff2}"],
+        // Do NOT precache index.html — always fetch from network so new
+        // deploys are visible immediately (the fresh index.html references
+        // new chunk filenames which the SW then fetches from network).
+        globIgnores: ["**/index.html"],
+        cleanupOutdatedCaches: true,
+        skipWaiting: true,
+        clientsClaim: true,
+        // Never serve a cached fallback for navigations. This ensures the
+        // browser always hits the network for the HTML shell.
+        navigateFallback: null,
         runtimeCaching: [
+          {
+            // Always fetch HTML/navigations from network first (5s timeout
+            // then falls back to cache for offline support).
+            urlPattern: ({ url }) => url.pathname === "/" || url.pathname.endsWith(".html") || url.pathname.startsWith("/#"),
+            handler: "NetworkFirst",
+            options: {
+              cacheName: "html-cache",
+              networkTimeoutSeconds: 5,
+              expiration: {
+                maxEntries: 10,
+                maxAgeSeconds: 0, // Always revalidate
+              },
+              cacheableResponse: {
+                statuses: [0, 200],
+              },
+            },
+          },
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
             handler: "CacheFirst",
@@ -84,7 +137,7 @@ export default defineConfig({
             },
           },
           {
-            urlPattern: /^https:\/\/ojjscjwatikixlpshmub\.supabase\.co\/.*/i,
+            urlPattern: /^https:\/\/ojsscjwatikixlpshmub\.supabase\.co\/.*/i,
             handler: "NetworkFirst",
             options: {
               cacheName: "supabase-cache",

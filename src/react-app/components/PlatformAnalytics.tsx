@@ -116,8 +116,8 @@ function RevenueChart({
     return date.toISOString().split("T")[0];
   });
 
-  const dailyData = last7Days.map(date => {
-    const daySales = sales.filter(s => s.date?.startsWith(date));
+  const dailyData = last7Days.map((date) => {
+    const daySales = sales.filter((s) => s.date?.startsWith(date));
     return daySales.reduce((sum, s) => sum + (s.total || 0), 0);
   });
 
@@ -198,7 +198,7 @@ function FuelTypeChart({
       acc[type] = (acc[type] || 0) + (s.total || 0);
       return acc;
     },
-    {} as Record<string, number>
+    {} as Record<string, number>,
   );
 
   const total =
@@ -277,9 +277,7 @@ function FuelTypeChart({
 function RecentActivity({
   getRecentActivity,
 }: {
-  getRecentActivity: (
-    limit?: number
-  ) => Array<{
+  getRecentActivity: (limit?: number) => Array<{
     id: string;
     action: string;
     details: string;

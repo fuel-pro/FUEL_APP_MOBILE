@@ -18,7 +18,7 @@ let toasts: ToastMessage[] = [];
 let listeners: ((toasts: ToastMessage[]) => void)[] = [];
 
 function notifyListeners() {
-  listeners.forEach(l => l([...toasts]));
+  listeners.forEach((l) => l([...toasts]));
 }
 
 function getContainer(): HTMLDivElement {
@@ -52,7 +52,26 @@ function renderToast(t: ToastMessage): HTMLDivElement {
     warning: "&#9888;",
     info: "&#9432;",
   };
-  el.innerHTML = `<span style="font-size:16px;flex-shrink:0">${icons[t.type]}</span><span style="flex:1">${t.message}</span><button onclick="this.parentElement.remove()" style="background:none;border:none;color:inherit;cursor:pointer;font-size:14px;padding:0;margin-left:4px;opacity:0.6">&times;</button>`;
+  
+  // ⚠️ SECURITY FIX: Prevent XSS by using textContent instead of innerHTML
+  // for user-controllable message content
+  const iconSpan = document.createElement("span");
+  iconSpan.style.cssText = "font-size:16px;flex-shrink:0";
+  iconSpan.innerHTML = icons[t.type]; // Icons are safe (hardcoded)
+  
+  const messageSpan = document.createElement("span");
+  messageSpan.style.cssText = "flex:1";
+  messageSpan.textContent = t.message; // Use textContent to prevent XSS
+  
+  const closeBtn = document.createElement("button");
+  closeBtn.textContent = "×";
+  closeBtn.style.cssText = "background:none;border:none;color:inherit;cursor:pointer;font-size:14px;padding:0;margin-left:4px;opacity:0.6";
+  closeBtn.onclick = () => { el.remove(); };
+  
+  el.appendChild(iconSpan);
+  el.appendChild(messageSpan);
+  el.appendChild(closeBtn);
+  
   return el;
 }
 
@@ -68,7 +87,7 @@ document.head.appendChild(style);
 export function toast(
   message: string,
   type: ToastType = "info",
-  duration = 3000
+  duration = 3000,
 ): void {
   const container = getContainer();
   const id = `${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
@@ -90,7 +109,7 @@ export function toast(
     el.style.animation = "toastSlideOut 0.3s ease forwards";
     setTimeout(() => {
       el.remove();
-      toasts = toasts.filter(x => x.id !== id);
+      toasts = toasts.filter((x) => x.id !== id);
       notifyListeners();
     }, 300);
   }, duration);
@@ -107,10 +126,10 @@ export const toastInfo = (msg: string, dur?: number) => toast(msg, "info", dur);
 
 /** Subscribe to toast changes (for React components) */
 export function subscribeToToasts(
-  cb: (toasts: ToastMessage[]) => void
+  cb: (toasts: ToastMessage[]) => void,
 ): () => void {
   listeners.push(cb);
   return () => {
-    listeners = listeners.filter(l => l !== cb);
+    listeners = listeners.filter((l) => l !== cb);
   };
 }

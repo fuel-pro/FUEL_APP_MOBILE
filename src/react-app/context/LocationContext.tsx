@@ -4,6 +4,8 @@ import React, {
   useState,
   useCallback,
   useEffect,
+  useRef,
+  useMemo,
 } from "react";
 import {
   CountryProfile,
@@ -14,7 +16,12 @@ import {
   getFuelTaxBreakdown,
   COUNTRY_LIST,
 } from "@/react-app/config/countries";
-import { getCountryByCode } from "@/react-app/lib/world-country-utils";
+import {
+  getCountryByCode,
+  getCountryFromLocation,
+  getCountryByCurrency,
+} from "@/react-app/lib/world-country-utils";
+import { getDetectedCurrency } from "@/react-app/lib/currency";
 
 /** Get the first available country profile as universal fallback */
 function getUniversalFallback(): CountryProfile {
@@ -240,7 +247,7 @@ function detectCountryFromCoords(lat: number, lng: number): string | null {
       return "SN";
     }
   }
-  
+
   // Europe
   if (lng >= -25 && lng <= 40 && lat >= 35 && lat <= 72) {
     // UK
@@ -260,7 +267,7 @@ function detectCountryFromCoords(lat: number, lng: number): string | null {
       return "ES";
     }
   }
-  
+
   // Asia
   if (lat >= -10 && lat <= 55 && lng >= 60 && lng <= 180) {
     // India
@@ -272,7 +279,7 @@ function detectCountryFromCoords(lat: number, lng: number): string | null {
       return "CN";
     }
   }
-  
+
   // Americas
   if (lat >= -55 && lat <= 72 && lng >= -170 && lng <= -30) {
     // USA
@@ -288,7 +295,7 @@ function detectCountryFromCoords(lat: number, lng: number): string | null {
       return "MX";
     }
   }
-  
+
   // Oceania
   if (lat >= -50 && lat <= -10 && lng >= 110 && lng <= 180) {
     // Australia
@@ -296,7 +303,7 @@ function detectCountryFromCoords(lat: number, lng: number): string | null {
       return "AU";
     }
   }
-  
+
   return null;
 }
 
@@ -377,7 +384,7 @@ interface LocationContextType {
   // Mobile money
   getActiveMobileMoney: () => CountryProfile["mobileMoney"];
   getMobileMoneyById: (
-    id: string
+    id: string,
   ) => CountryProfile["mobileMoney"][0] | undefined;
 
   // Payment methods
@@ -404,7 +411,7 @@ function loadStationCountries(): Record<string, StationLocation> {
     if (!raw) return {};
     const data = JSON.parse(raw) as Record<string, StationLocation>;
     // Migrate old data: add missing precise fields
-    Object.values(data).forEach(loc => {
+    Object.values(data).forEach((loc) => {
       (loc as any).preciseCoords ??= null;
       (loc as any).preciseAddress ??= "";
       (loc as any).preciseTimestamp ??= "";
@@ -422,9 +429,22 @@ function saveStationCountries(data: Record<string, StationLocation>) {
 export function LocationProvider({
   children,
   stationId,
+  stationLocation,
+  stationCountry,
+  stationCurrency,
+  companyCurrency,
 }: {
   children: React.ReactNode;
   stationId?: string;
+  stationLocation?: string;
+  stationCountry?: string;
+  stationCurrency?: string;
+  // The FuelContext companyData.currency (e.g. "KSh" or "KES"). This is the
+  // most reliable currency signal — it's set via Edit Info and loaded from
+  // cloud sync. Passed as a prop so the useMemo re-evaluates when companyData
+  // arrives (the station record may have empty currency, but companyData
+  // always has one after cloud load).
+  companyCurrency?: string;
 }) {
   const [stationCountries, setStationCountries] =
     useState<Record<string, StationLocation>>(loadStationCountries);
@@ -441,6 +461,57 @@ export function LocationProvider({
   const currentLocation = stationId ? stationCountries[stationId] : null;
 
   const currentCountry = React.useMemo(() => {
+    // The station's explicitly selected country (from the SetupWizard, persisted
+    // on the Station record + Supabase) is the authoritative source. It must
+    // take precedence over GPS/timezone so a German station stays German on
+    // every device, a US station stays US, etc.
+    if (stationCountry) {
+      return getCountryById(stationCountry) || getUniversalFallback();
+    }
+    // Derive the country from the station's configured location string. The
+    // station's own data (location, currency) is authoritative — it was set
+    // by the user and synced via cloud — so it takes precedence over the
+    // browser-local GPS cache, which frequently resolves to the CDN edge
+    // country (e.g. US) rather than the user's real country.
+    if (stationLocation) {
+      const derived = getCountryFromLocation(stationLocation)?.code;
+      if (derived) {
+        return getCountryById(derived) || getUniversalFallback();
+      }
+    }
+    // Derive the country from the station's currency code (e.g. "KES" → KE).
+    if (stationCurrency) {
+      const cc = getCountryByCurrency(stationCurrency);
+      if (cc) {
+        return getCountryById(cc) || getUniversalFallback();
+      }
+    }
+    // Derive the country from the FuelContext companyData.currency. This is
+    // passed as a prop from Home.tsx and updates reactively when companyData
+    // loads from cloud sync. Handles both codes ("KES") and symbols ("KSh")
+    // via normalizeCurrencyCode.
+    if (companyCurrency) {
+      const cc = getCountryByCurrency(companyCurrency);
+      if (cc) {
+        return getCountryById(cc) || getUniversalFallback();
+      }
+    }
+    // Derive the country from the globally-detected currency BEFORE consulting
+    // the browser-local GPS cache. getDetectedCurrency inspects station data,
+    // location localStorage, and timezone — all more reliable than the
+    // stationCountries cache, which frequently defaults to "US" (the CDN edge
+    // country). E.g. Africa/Nairobi timezone → KES → Kenya, even when the
+    // station record has empty location/currency/country fields.
+    const detectedCurrency = getDetectedCurrency();
+    if (detectedCurrency && detectedCurrency !== "USD") {
+      const cc = getCountryByCurrency(detectedCurrency);
+      if (cc) {
+        return getCountryById(cc) || getUniversalFallback();
+      }
+    }
+    // Fall back to the browser-local GPS-detected country code (stored in
+    // localStorage). This is a browser-local cache and may be stale or
+    // resolve to the CDN edge country, so it's a low-priority fallback.
     if (currentLocation?.countryCode) {
       return (
         getCountryById(currentLocation.countryCode) || getUniversalFallback()
@@ -449,7 +520,13 @@ export function LocationProvider({
     // Auto-detect from browser timezone or resolved country
     const resolved = resolveUserCountry();
     return getCountryById(resolved) || getUniversalFallback();
-  }, [currentLocation]);
+  }, [
+    stationCountry,
+    currentLocation,
+    stationLocation,
+    stationCurrency,
+    companyCurrency,
+  ]);
 
   // Persist changes
   useEffect(() => {
@@ -468,32 +545,70 @@ export function LocationProvider({
     (sid: string) => {
       return stationCountries[sid] || null;
     },
-    [stationCountries]
+    [stationCountries],
   );
 
   const getStationCountry = useCallback(
     (sid: string) => {
+      // The station's explicitly selected country (persisted on the Station
+      // record) is authoritative for the ACTIVE station — prefer it over the
+      // localStorage stationCountries map so cross-device sync reflects the
+      // user's wizard choice, not a stale browser-local entry.
+      if (stationCountry && sid === stationId) {
+        return getCountryById(stationCountry) || getUniversalFallback();
+      }
+      // Derive the country from the station's own data (location, currency)
+      // BEFORE consulting the browser-local stationCountries cache. The
+      // station's data is authoritative — the cache frequently defaults to
+      // "US" (the CDN edge country) and would override the real country.
+      if (sid === stationId) {
+        if (stationLocation) {
+          const derived = getCountryFromLocation(stationLocation)?.code;
+          if (derived) {
+            return getCountryById(derived) || getUniversalFallback();
+          }
+        }
+        if (stationCurrency) {
+          const cc = getCountryByCurrency(stationCurrency);
+          if (cc) {
+            return getCountryById(cc) || getUniversalFallback();
+          }
+        }
+        // Station has no country/location/currency data. Fall through to
+        // currentCountry (which checks getDetectedCurrency → timezone →
+        // localStorage cache) INSTEAD of the stale stationCountries cache.
+        // The latter frequently defaults to "US" (CDN edge country) and
+        // would mask the correct country derived from timezone/currency.
+        return currentCountry;
+      }
       const loc = stationCountries[sid];
       if (loc?.countryCode)
         return getCountryById(loc.countryCode) || getUniversalFallback();
-      const resolved = resolveUserCountry();
-      return getCountryById(resolved) || getUniversalFallback();
+      return currentCountry;
     },
-    [stationCountries]
+    [
+      stationCountry,
+      stationId,
+      stationCountries,
+      currentCountry,
+      stationLocation,
+      stationCurrency,
+      companyCurrency,
+    ],
   );
 
   const fmtCurrency = useCallback(
     (amount: number) => {
       return formatCurrency(amount, currentCountry.id);
     },
-    [currentCountry]
+    [currentCountry],
   );
 
   const fmtPhone = useCallback(
     (phone: string) => {
       return formatPhoneForCountry(phone, currentCountry.id);
     },
-    [currentCountry]
+    [currentCountry],
   );
 
   const fmtDate = useCallback(
@@ -517,7 +632,7 @@ export function LocationProvider({
         });
       }
     },
-    [currentCountry]
+    [currentCountry],
   );
 
   const fmtNumber = useCallback((num: number) => {
@@ -531,13 +646,13 @@ export function LocationProvider({
     (pricePerLiter: number) => {
       return getFuelTaxBreakdown(pricePerLiter, currentCountry.id);
     },
-    [currentCountry]
+    [currentCountry],
   );
 
   const setStationCountry = useCallback((sid: string, countryCode: string) => {
     const upperCode = countryCode.toUpperCase();
     const country = getCountryById(upperCode) as CountryProfile | undefined;
-    setStationCountries(prev => ({
+    setStationCountries((prev) => ({
       ...prev,
       [sid]: {
         ...(prev[sid] || {
@@ -563,7 +678,7 @@ export function LocationProvider({
 
   const setStationCity = useCallback((sid: string, city: string) => {
     const resolved = resolveUserCountry();
-    setStationCountries(prev => ({
+    setStationCountries((prev) => ({
       ...prev,
       [sid]: {
         ...(prev[sid] || {
@@ -587,16 +702,20 @@ export function LocationProvider({
 
   const detectLocation = useCallback(
     async (sid: string): Promise<StationLocation> => {
-      return new Promise(resolve => {
+      return new Promise((resolve) => {
         // Try geolocation API
         if ("geolocation" in navigator) {
           navigator.geolocation.getCurrentPosition(
-            position => {
-              const detected = detectCountryFromTimezone();
+            (position) => {
+              const coordCountry = detectCountryFromCoords(
+                position.coords.latitude,
+                position.coords.longitude,
+              );
+              const detected = coordCountry || detectCountryFromTimezone();
               const loc: StationLocation = {
                 stationId: sid,
                 countryCode: detected,
-                city: "Auto-detected",
+                city: "GPS-detected",
                 timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
                 coordinates: {
                   lat: position.coords.latitude,
@@ -609,10 +728,10 @@ export function LocationProvider({
                   lng: position.coords.longitude,
                   accuracy: position.coords.accuracy,
                 },
-                preciseAddress: "Auto-detected",
+                preciseAddress: "GPS-detected",
                 preciseTimestamp: new Date().toISOString(),
               };
-              setStationCountries(prev => ({ ...prev, [sid]: loc }));
+              setStationCountries((prev) => ({ ...prev, [sid]: loc }));
               resolve(loc);
             },
             () => {
@@ -630,10 +749,10 @@ export function LocationProvider({
                 preciseAddress: "",
                 preciseTimestamp: "",
               };
-              setStationCountries(prev => ({ ...prev, [sid]: loc }));
+              setStationCountries((prev) => ({ ...prev, [sid]: loc }));
               resolve(loc);
             },
-            { timeout: 10000, enableHighAccuracy: false }
+            { timeout: 10000, enableHighAccuracy: false },
           );
         } else {
           const detected = detectCountryFromTimezone();
@@ -649,25 +768,25 @@ export function LocationProvider({
             preciseAddress: "",
             preciseTimestamp: "",
           };
-          setStationCountries(prev => ({ ...prev, [sid]: loc }));
+          setStationCountries((prev) => ({ ...prev, [sid]: loc }));
           resolve(loc);
         }
       });
     },
-    []
+    [],
   );
 
   const getActiveMobileMoney = useCallback(
     () => currentCountry.mobileMoney,
-    [currentCountry]
+    [currentCountry],
   );
   const getMobileMoneyById = useCallback(
-    (id: string) => currentCountry.mobileMoney.find(m => m.id === id),
-    [currentCountry]
+    (id: string) => currentCountry.mobileMoney.find((m) => m.id === id),
+    [currentCountry],
   );
   const getActivePaymentMethods = useCallback(
     () => currentCountry.paymentMethods,
-    [currentCountry]
+    [currentCountry],
   );
 
   // Precise GPS location detection with improved accuracy
@@ -688,26 +807,35 @@ export function LocationProvider({
 
       // First: Use coordinate-based country detection for accuracy
       const detectedCountry = detectCountryFromCoords(lat, lng);
-      
+
       // Reverse geocode using OpenStreetMap Nominatim
       let address = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
       let city = "";
       try {
         const res = await fetch(
           `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&zoom=18&addressdetails=1`,
-          { headers: { "User-Agent": "FuelPro/1.0 (contact@fuelpro.app)" } }
+          { headers: { "User-Agent": "FuelPro/1.0 (contact@fuelpro.app)" } },
         );
         if (res.ok) {
           const data = await res.json();
           const a = data.address || {};
-          city = a.city || a.town || a.village || a.suburb || a.district || a.county || "";
+          city =
+            a.city ||
+            a.town ||
+            a.village ||
+            a.suburb ||
+            a.district ||
+            a.county ||
+            "";
           address = city || a.state || `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
-          
+
           // If no country detected from coords, try from reverse geocode
           if (!detectedCountry && a.country_code) {
             // Update country based on actual location
             const countryCode = a.country_code.toUpperCase();
-            console.log(`[Location] Detected country from geocode: ${countryCode}`);
+            console.log(
+              `[Location] Detected country from geocode: ${countryCode}`,
+            );
           }
         }
       } catch {
@@ -717,12 +845,15 @@ export function LocationProvider({
       // If location is imprecise (>1000m accuracy) and we detected Nairobi/Kenya incorrectly
       // it's likely a VPN or proxy issue - show warning
       const isImprecise = accuracy > 1000;
-      
+
       setPreciseLocation({ lat, lng, accuracy, address, city, isImprecise });
-      
+
       // Store coordinates for fuel price lookup
       if (lat && lng) {
-        localStorage.setItem("fuelpro_user_coords", JSON.stringify({ lat, lng }));
+        localStorage.setItem(
+          "fuelpro_user_coords",
+          JSON.stringify({ lat, lng }),
+        );
       }
     } catch {
       // Fallback: try country detection with timezone only
@@ -745,46 +876,77 @@ export function LocationProvider({
     }
   }, []);
 
-  // Auto-detect precise location on mount
+  // Auto-detect precise location on mount — once only.
+  // A ref guard prevents re-detection storms caused by provider re-mounts
+  // (e.g. when StationContext syncs and currentStation gets a new identity).
+  const hasAutoDetectedRef = useRef(false);
   useEffect(() => {
+    if (hasAutoDetectedRef.current) return;
+    hasAutoDetectedRef.current = true;
     detectPreciseLocation();
   }, [detectPreciseLocation]);
 
+  // Memoize the context value so consumers don't re-render on every
+  // LocationProvider render (which previously cascaded into infinite
+  // re-render / max-update-depth crashes that triggered page reloads).
+  const value = useMemo(
+    () => ({
+      currentCountry,
+      currentLocation,
+      allCountries: COUNTRY_LIST,
+      getCountry,
+      getStationLocation,
+      getStationCountry,
+      fmtCurrency,
+      fmtPhone,
+      fmtDate,
+      fmtNumber,
+      getFuelTax,
+      setStationCountry,
+      setStationCity,
+      detectLocation,
+      preciseLocation,
+      preciseLocationLoading,
+      detectPreciseLocation,
+      getActiveMobileMoney,
+      getMobileMoneyById,
+      getActivePaymentMethods,
+      currencySymbol: currentCountry.currency.symbol,
+      currencyCode: currentCountry.currency.code,
+      language: currentCountry.defaultLanguage,
+      revenueAuthority: currentCountry.revenueAuthority,
+      payrollConfig: currentCountry.payroll,
+      communication: currentCountry.communication,
+      units: currentCountry.units,
+      complianceDocs: currentCountry.complianceDocuments,
+      fuelRegulations: currentCountry.fuelRegulations,
+      newsSources: currentCountry.newsSources,
+    }),
+    [
+      currentCountry,
+      currentLocation,
+      getCountry,
+      getStationLocation,
+      getStationCountry,
+      fmtCurrency,
+      fmtPhone,
+      fmtDate,
+      fmtNumber,
+      getFuelTax,
+      setStationCountry,
+      setStationCity,
+      detectLocation,
+      preciseLocation,
+      preciseLocationLoading,
+      detectPreciseLocation,
+      getActiveMobileMoney,
+      getMobileMoneyById,
+      getActivePaymentMethods,
+    ],
+  );
+
   return (
-    <LocationContext.Provider
-      value={{
-        currentCountry,
-        currentLocation,
-        allCountries: COUNTRY_LIST,
-        getCountry,
-        getStationLocation,
-        getStationCountry,
-        fmtCurrency,
-        fmtPhone,
-        fmtDate,
-        fmtNumber,
-        getFuelTax,
-        setStationCountry,
-        setStationCity,
-        detectLocation,
-        preciseLocation,
-        preciseLocationLoading,
-        detectPreciseLocation,
-        getActiveMobileMoney,
-        getMobileMoneyById,
-        getActivePaymentMethods,
-        currencySymbol: currentCountry.currency.symbol,
-        currencyCode: currentCountry.currency.code,
-        language: currentCountry.defaultLanguage,
-        revenueAuthority: currentCountry.revenueAuthority,
-        payrollConfig: currentCountry.payroll,
-        communication: currentCountry.communication,
-        units: currentCountry.units,
-        complianceDocs: currentCountry.complianceDocuments,
-        fuelRegulations: currentCountry.fuelRegulations,
-        newsSources: currentCountry.newsSources,
-      }}
-    >
+    <LocationContext.Provider value={value}>
       {children}
     </LocationContext.Provider>
   );

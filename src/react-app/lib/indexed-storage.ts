@@ -1,6 +1,6 @@
 /**
  * Indexed Storage Service - Offline-First Data Persistence
- * 
+ *
  * Features:
  * - Multi-tier storage (IndexedDB > localStorage fallback)
  * - Automatic sync when online
@@ -11,7 +11,7 @@
  * - Full offline capability with IndexedDB
  */
 
-import { cloudStorage } from './cloudStorage';
+import { cloudStorage } from "./cloudStorage";
 const CloudStorage = cloudStorage;
 
 export interface StorageEntry<T = any> {
@@ -27,7 +27,7 @@ export interface StorageEntry<T = any> {
 export interface SyncQueue {
   key: string;
   value: any;
-  operation: 'create' | 'update' | 'delete';
+  operation: "create" | "update" | "delete";
   timestamp: number;
   synced: boolean;
 }
@@ -41,9 +41,9 @@ export interface IndexedStorageStats {
 }
 
 // IndexedDB Configuration
-const DB_NAME = 'fuelpro_storage_db';
+const DB_NAME = "fuelpro_storage_db";
 const DB_VERSION = 2;
-const STORE_NAME = 'storage_entries';
+const STORE_NAME = "storage_entries";
 
 // Storage limits
 const MAX_INDEXED_DB_SIZE = 100 * 1024 * 1024; // 100MB
@@ -52,9 +52,9 @@ const STORAGE_CLEANUP_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours
 const DEFAULT_EXPIRY = 30 * 24 * 60 * 60 * 1000; // 30 days
 const SYNC_INTERVAL = 60 * 1000; // 1 minute
 
-const STORAGE_PREFIX = 'fuelpro_';
-const SYNC_QUEUE_KEY = 'fuelpro_sync_queue';
-const STORAGE_INDEX_KEY = 'fuelpro_storage_index';
+const STORAGE_PREFIX = "fuelpro_";
+const SYNC_QUEUE_KEY = "fuelpro_sync_queue";
+const STORAGE_INDEX_KEY = "fuelpro_storage_index";
 
 /**
  * IndexedDB Store for robust offline storage
@@ -68,15 +68,15 @@ class IndexedDBStore {
     if (this.initPromise) return this.initPromise;
 
     this.initPromise = new Promise((resolve, reject) => {
-      if (typeof indexedDB === 'undefined') {
-        reject(new Error('IndexedDB not available'));
+      if (typeof indexedDB === "undefined") {
+        reject(new Error("IndexedDB not available"));
         return;
       }
 
       const request = indexedDB.open(DB_NAME, DB_VERSION);
 
       request.onerror = () => {
-        console.error('Failed to open IndexedDB:', request.error);
+        console.error("Failed to open IndexedDB:", request.error);
         reject(request.error);
       };
 
@@ -87,13 +87,13 @@ class IndexedDBStore {
 
       request.onupgradeneeded = (event) => {
         const db = (event.target as IDBOpenDBRequest).result;
-        
+
         // Create main store for entries
         if (!db.objectStoreNames.contains(STORE_NAME)) {
-          const store = db.createObjectStore(STORE_NAME, { keyPath: 'key' });
-          store.createIndex('timestamp', 'timestamp', { unique: false });
-          store.createIndex('expiresAt', 'expiresAt', { unique: false });
-          store.createIndex('synced', 'synced', { unique: false });
+          const store = db.createObjectStore(STORE_NAME, { keyPath: "key" });
+          store.createIndex("timestamp", "timestamp", { unique: false });
+          store.createIndex("expiresAt", "expiresAt", { unique: false });
+          store.createIndex("synced", "synced", { unique: false });
         }
       };
     });
@@ -103,9 +103,9 @@ class IndexedDBStore {
 
   async save(key: string, entry: StorageEntry): Promise<void> {
     if (!this.db) await this.init();
-    
+
     return new Promise((resolve, reject) => {
-      const tx = this.db!.transaction(STORE_NAME, 'readwrite');
+      const tx = this.db!.transaction(STORE_NAME, "readwrite");
       const store = tx.objectStore(STORE_NAME);
       const request = store.put(entry);
       request.onerror = () => reject(request.error);
@@ -115,9 +115,9 @@ class IndexedDBStore {
 
   async get(key: string): Promise<StorageEntry | null> {
     if (!this.db) await this.init();
-    
+
     return new Promise((resolve, reject) => {
-      const tx = this.db!.transaction(STORE_NAME, 'readonly');
+      const tx = this.db!.transaction(STORE_NAME, "readonly");
       const store = tx.objectStore(STORE_NAME);
       const request = store.get(key);
       request.onerror = () => reject(request.error);
@@ -127,9 +127,9 @@ class IndexedDBStore {
 
   async remove(key: string): Promise<void> {
     if (!this.db) await this.init();
-    
+
     return new Promise((resolve, reject) => {
-      const tx = this.db!.transaction(STORE_NAME, 'readwrite');
+      const tx = this.db!.transaction(STORE_NAME, "readwrite");
       const store = tx.objectStore(STORE_NAME);
       const request = store.delete(key);
       request.onerror = () => reject(request.error);
@@ -139,9 +139,9 @@ class IndexedDBStore {
 
   async getAll(): Promise<Record<string, StorageEntry>> {
     if (!this.db) await this.init();
-    
+
     return new Promise((resolve, reject) => {
-      const tx = this.db!.transaction(STORE_NAME, 'readonly');
+      const tx = this.db!.transaction(STORE_NAME, "readonly");
       const store = tx.objectStore(STORE_NAME);
       const request = store.getAll();
       request.onerror = () => reject(request.error);
@@ -157,9 +157,9 @@ class IndexedDBStore {
 
   async clear(): Promise<void> {
     if (!this.db) await this.init();
-    
+
     return new Promise((resolve, reject) => {
-      const tx = this.db!.transaction(STORE_NAME, 'readwrite');
+      const tx = this.db!.transaction(STORE_NAME, "readwrite");
       const store = tx.objectStore(STORE_NAME);
       const request = store.clear();
       request.onerror = () => reject(request.error);
@@ -170,25 +170,25 @@ class IndexedDBStore {
   async getExpired(): Promise<string[]> {
     if (!this.db) await this.init();
     const now = Date.now();
-    
+
     return new Promise((resolve, reject) => {
-      const tx = this.db!.transaction(STORE_NAME, 'readonly');
+      const tx = this.db!.transaction(STORE_NAME, "readonly");
       const store = tx.objectStore(STORE_NAME);
-      const index = store.index('expiresAt');
+      const index = store.index("expiresAt");
       const range = IDBKeyRange.upperBound(now);
       const request = index.getAllKeys(range);
       request.onerror = () => reject(request.error);
-      request.onsuccess = () => resolve(request.result || []);
+      request.onsuccess = () => resolve((request.result || []) as string[]);
     });
   }
 
   async getUnsynced(): Promise<StorageEntry[]> {
     if (!this.db) await this.init();
-    
+
     return new Promise((resolve, reject) => {
-      const tx = this.db!.transaction(STORE_NAME, 'readonly');
+      const tx = this.db!.transaction(STORE_NAME, "readonly");
       const store = tx.objectStore(STORE_NAME);
-      const index = store.index('synced');
+      const index = store.index("synced");
       const request = index.getAll(IDBKeyRange.only(false));
       request.onerror = () => reject(request.error);
       request.onsuccess = () => resolve(request.result || []);
@@ -197,9 +197,9 @@ class IndexedDBStore {
 
   async getSize(): Promise<number> {
     if (!this.db) await this.init();
-    
+
     return new Promise((resolve, reject) => {
-      const tx = this.db!.transaction(STORE_NAME, 'readonly');
+      const tx = this.db!.transaction(STORE_NAME, "readonly");
       const store = tx.objectStore(STORE_NAME);
       const request = store.getAll();
       request.onerror = () => reject(request.error);
@@ -213,7 +213,7 @@ class IndexedDBStore {
 
 class IndexedStorageService {
   private syncQueue: SyncQueue[] = [];
-  private isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+  private isOnline = typeof navigator !== "undefined" ? navigator.onLine : true;
   private syncTimer: ReturnType<typeof setInterval> | null = null;
   private cleanupTimer: ReturnType<typeof setInterval> | null = null;
   private listeners: Set<(status: StorageStatus) => void> = new Set();
@@ -227,7 +227,7 @@ class IndexedStorageService {
 
   private async init(): Promise<void> {
     if (this.initPromise) return this.initPromise;
-    
+
     this.initPromise = (async () => {
       try {
         await this.idbStore.init();
@@ -237,10 +237,10 @@ class IndexedStorageService {
         this.startAutoCleanup();
         this.notifyListeners();
       } catch (e) {
-        console.error('Failed to initialize IndexedStorageService:', e);
+        console.error("Failed to initialize IndexedStorageService:", e);
       }
     })();
-    
+
     return this.initPromise;
   }
 
@@ -255,7 +255,7 @@ class IndexedStorageService {
 
   private notifyListeners(): void {
     const status = this.getStatus();
-    this.listeners.forEach(cb => cb(status));
+    this.listeners.forEach((cb) => cb(status));
   }
 
   /**
@@ -268,10 +268,10 @@ class IndexedStorageService {
       expiresAt?: number;
       metadata?: Record<string, any>;
       syncImmediately?: boolean;
-    }
+    },
   ): Promise<void> {
     await this.init();
-    
+
     try {
       const storageKey = this.formatKey(key);
       const entry: StorageEntry<T> = {
@@ -288,12 +288,12 @@ class IndexedStorageService {
       try {
         await this.idbStore.save(storageKey, entry);
       } catch (e) {
-        console.warn('IndexedDB save failed, using localStorage fallback:', e);
+        console.warn("IndexedDB save failed, using localStorage fallback:", e);
         localStorage.setItem(storageKey, JSON.stringify(entry));
       }
 
       // Queue for sync
-      this.queueSync(storageKey, value, 'update');
+      this.queueSync(storageKey, value, "update");
 
       // Sync immediately if requested and online
       if (options?.syncImmediately && this.isOnline) {
@@ -310,7 +310,7 @@ class IndexedStorageService {
    */
   async get<T = any>(key: string): Promise<T | null> {
     await this.init();
-    
+
     try {
       const storageKey = this.formatKey(key);
 
@@ -327,7 +327,7 @@ class IndexedStorageService {
         }
       } catch (e) {
         // Fallback to localStorage
-        console.warn('IndexedDB read failed, trying localStorage:', e);
+        console.warn("IndexedDB read failed, trying localStorage:", e);
       }
 
       // Try localStorage
@@ -342,7 +342,7 @@ class IndexedStorageService {
           return entry.value as T;
         }
       } catch (e) {
-        console.warn('localStorage read failed:', e);
+        console.warn("localStorage read failed:", e);
       }
 
       return null;
@@ -358,20 +358,23 @@ class IndexedStorageService {
   async getMany<T = any>(keys: string[]): Promise<Record<string, T | null>> {
     await this.init();
     const result: Record<string, T | null> = {};
-    
+
     for (const key of keys) {
       result[key] = await this.get<T>(key);
     }
-    
+
     return result;
   }
 
   /**
    * Set multiple values at once (batch operation)
    */
-  async setMany(entries: Record<string, any>, options?: { syncImmediately?: boolean }): Promise<void> {
+  async setMany(
+    entries: Record<string, any>,
+    options?: { syncImmediately?: boolean },
+  ): Promise<void> {
     await this.init();
-    
+
     for (const [key, value] of Object.entries(entries)) {
       await this.set(key, value, options);
     }
@@ -382,7 +385,7 @@ class IndexedStorageService {
    */
   async delete(key: string): Promise<void> {
     await this.init();
-    
+
     try {
       const storageKey = this.formatKey(key);
 
@@ -394,7 +397,7 @@ class IndexedStorageService {
       }
 
       // Queue for sync
-      this.queueSync(storageKey, null, 'delete');
+      this.queueSync(storageKey, null, "delete");
     } catch (e) {
       console.error(`Failed to delete storage key ${key}:`, e);
     }
@@ -405,7 +408,7 @@ class IndexedStorageService {
    */
   async getAll(prefix: string): Promise<Record<string, any>> {
     await this.init();
-    
+
     try {
       const result: Record<string, any> = {};
       const formattedPrefix = this.formatKey(prefix);
@@ -418,7 +421,7 @@ class IndexedStorageService {
             if (entry.expiresAt && Date.now() > entry.expiresAt) {
               await this.delete(key);
             } else {
-              result[key.replace(STORAGE_PREFIX, '')] = entry.value;
+              result[key.replace(STORAGE_PREFIX, "")] = entry.value;
             }
           }
         }
@@ -432,7 +435,7 @@ class IndexedStorageService {
               try {
                 const entry = JSON.parse(stored) as StorageEntry;
                 if (!entry.expiresAt || Date.now() <= entry.expiresAt) {
-                  result[key.replace(STORAGE_PREFIX, '')] = entry.value;
+                  result[key.replace(STORAGE_PREFIX, "")] = entry.value;
                 }
               } catch (parseError) {
                 // Skip invalid entries
@@ -444,7 +447,7 @@ class IndexedStorageService {
 
       return result;
     } catch (e) {
-      console.error('Failed to get all storage keys:', e);
+      console.error("Failed to get all storage keys:", e);
       return {};
     }
   }
@@ -454,7 +457,7 @@ class IndexedStorageService {
    */
   async clear(): Promise<void> {
     await this.init();
-    
+
     try {
       // Clear IndexedDB
       try {
@@ -472,7 +475,7 @@ class IndexedStorageService {
       this.syncQueue = [];
       this.saveSyncQueue();
     } catch (e) {
-      console.error('Failed to clear storage:', e);
+      console.error("Failed to clear storage:", e);
     }
   }
 
@@ -480,15 +483,15 @@ class IndexedStorageService {
    * Setup event listeners for online/offline
    */
   private setupEventListeners(): void {
-    if (typeof window === 'undefined') return;
-    
-    window.addEventListener('online', () => {
+    if (typeof window === "undefined") return;
+
+    window.addEventListener("online", () => {
       this.isOnline = true;
       this.notifyListeners();
       this.syncPendingChanges();
     });
 
-    window.addEventListener('offline', () => {
+    window.addEventListener("offline", () => {
       this.isOnline = false;
       this.notifyListeners();
     });
@@ -500,10 +503,10 @@ class IndexedStorageService {
   private queueSync(
     key: string,
     value: any,
-    operation: 'create' | 'update' | 'delete'
+    operation: "create" | "update" | "delete",
   ): void {
     // Remove existing entry for this key
-    this.syncQueue = this.syncQueue.filter(item => item.key !== key);
+    this.syncQueue = this.syncQueue.filter((item) => item.key !== key);
 
     // Add new entry
     this.syncQueue.push({
@@ -527,13 +530,17 @@ class IndexedStorageService {
     }
 
     try {
-      const toSync = this.syncQueue.filter(item => !item.synced);
+      const toSync = this.syncQueue.filter((item) => !item.synced);
 
       for (const item of toSync) {
         try {
           // Try to sync to cloud
-          const { cloudSync } = await import('./cloudStorage');
-          if (cloudSync && typeof cloudSync.isEnabled === 'function' && cloudSync.isEnabled()) {
+          const cloudSync = (await import("./cloudStorage")) as any;
+          if (
+            cloudSync &&
+            typeof cloudSync.isEnabled === "function" &&
+            cloudSync.isEnabled()
+          ) {
             await cloudSync.queueSync(item.key, item.value);
           }
 
@@ -544,13 +551,13 @@ class IndexedStorageService {
       }
 
       // Remove synced items
-      this.syncQueue = this.syncQueue.filter(item => !item.synced);
+      this.syncQueue = this.syncQueue.filter((item) => !item.synced);
       this.saveSyncQueue();
       this.notifyListeners();
 
       return true;
     } catch (e) {
-      console.error('Failed to sync pending changes:', e);
+      console.error("Failed to sync pending changes:", e);
       return false;
     }
   }
@@ -597,7 +604,7 @@ class IndexedStorageService {
           await this.idbStore.remove(key);
         }
       } catch (e) {
-        console.warn('IndexedDB cleanup failed:', e);
+        console.warn("IndexedDB cleanup failed:", e);
       }
 
       // Clean localStorage
@@ -618,7 +625,7 @@ class IndexedStorageService {
         }
       }
     } catch (e) {
-      console.error('Failed to cleanup expired entries:', e);
+      console.error("Failed to cleanup expired entries:", e);
     }
   }
 
@@ -627,7 +634,7 @@ class IndexedStorageService {
    */
   async getStats(): Promise<IndexedStorageStats> {
     await this.init();
-    
+
     try {
       let indexedDBSize = 0;
       let localStorageSize = 0;
@@ -643,7 +650,7 @@ class IndexedStorageService {
           const key = localStorage.key(i);
           if (key?.startsWith(STORAGE_PREFIX)) {
             totalKeys++;
-            localStorageSize += (localStorage.getItem(key)?.length || 0);
+            localStorageSize += localStorage.getItem(key)?.length || 0;
           }
         }
       }
@@ -652,11 +659,12 @@ class IndexedStorageService {
         totalKeys,
         indexedDBSize,
         localStorageSize,
-        pendingSyncs: this.syncQueue.filter(item => !item.synced).length,
-        lastSync: parseInt(localStorage.getItem('fuelpro_last_sync') || '0') || null,
+        pendingSyncs: this.syncQueue.filter((item) => !item.synced).length,
+        lastSync:
+          parseInt(localStorage.getItem("fuelpro_last_sync") || "0") || null,
       };
     } catch (e) {
-      console.error('Failed to get storage stats:', e);
+      console.error("Failed to get storage stats:", e);
       return {
         totalKeys: 0,
         indexedDBSize: 0,
@@ -673,8 +681,9 @@ class IndexedStorageService {
   getStatus(): StorageStatus {
     return {
       isOnline: this.isOnline,
-      pendingChanges: this.syncQueue.filter(item => !item.synced).length,
-      lastSync: parseInt(localStorage.getItem('fuelpro_last_sync') || '0') || null,
+      pendingChanges: this.syncQueue.filter((item) => !item.synced).length,
+      lastSync:
+        parseInt(localStorage.getItem("fuelpro_last_sync") || "0") || null,
     };
   }
 
@@ -685,7 +694,7 @@ class IndexedStorageService {
     try {
       localStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify(this.syncQueue));
     } catch (e) {
-      console.error('Failed to save sync queue:', e);
+      console.error("Failed to save sync queue:", e);
     }
   }
 
@@ -699,7 +708,7 @@ class IndexedStorageService {
         this.syncQueue = JSON.parse(saved);
       }
     } catch (e) {
-      console.error('Failed to load sync queue:', e);
+      console.error("Failed to load sync queue:", e);
     }
   }
 

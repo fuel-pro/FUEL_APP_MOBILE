@@ -50,12 +50,12 @@ export default function RegulatoryAlerts({
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
 
   const visibleUpdates = regulatoryUpdates
-    .filter(u => !dismissedIds.has(u.id))
-    .filter(u => (expanded ? true : !u.read))
+    .filter((u) => !dismissedIds.has(u.id))
+    .filter((u) => (expanded ? true : !u.read))
     .slice(0, expanded ? undefined : 3);
 
   const handleDismiss = (id: string) => {
-    setDismissedIds(prev => new Set([...prev, id]));
+    setDismissedIds((prev) => new Set([...prev, id]));
     dismissUpdate(id);
   };
 
@@ -104,7 +104,7 @@ export default function RegulatoryAlerts({
       </div>
 
       <div className="space-y-2">
-        {visibleUpdates.map(update => {
+        {visibleUpdates.map((update) => {
           const Icon = categoryIcons[update.category] || Info;
           return (
             <div
