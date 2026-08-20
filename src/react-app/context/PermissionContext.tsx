@@ -1230,6 +1230,36 @@ export function PermissionProvider({
       }
     }
 
+    // OWNERSHIP PRECEDENCE: if the user owns the current station, no
+    // membership binding may downgrade them (a stale/test binding that lists
+    // the owner as "manager" on their own station must not strip owner
+    // privileges). Check the user-scoped stations cache.
+    if (currentStationId) {
+      try {
+        const stationsRaw = localStorage.getItem(
+          `fuelpro_stations_v3_${user.id}`,
+        );
+        const stations = stationsRaw ? JSON.parse(stationsRaw) : [];
+        if (Array.isArray(stations)) {
+          const owned = stations.find(
+            (s: any) =>
+              (s?.id === currentStationId ||
+                s?.stationId === currentStationId) &&
+              (!s?.ownerId || s?.ownerId === user.id),
+          );
+          if (owned && role === "owner") return;
+          if (owned && role !== "owner") {
+            setRoleState("owner");
+            localStorage.setItem("fuelpro_v2_role", "owner");
+            localStorage.removeItem("fuelpro_user_invited");
+            return;
+          }
+        }
+      } catch {
+        /* ignore malformed cache */
+      }
+    }
+
     // Try the binding for the current station first; if no current station
     // is set yet (fresh login, sync in progress), fall back to ANY active
     // binding — an invited user with exactly one binding should get that
