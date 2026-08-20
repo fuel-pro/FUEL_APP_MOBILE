@@ -13,6 +13,13 @@
       http-equiv="Content-Security-Policy"
       content="default-src 'self'; script-src 'self' 'unsafe-inline' https://accounts.google.com https://apis.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https: blob:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.open-meteo.com https://nominatim.openstreetmap.org https://api.allorigins.win https://accounts.google.com https://apis.google.com https://api.safaricom.co.ke https://sandbox.safaricom.co.ke https://api.safaricom.co https://sandbox.safaricom.co https://fuel-app-mobile.vercel.app https://*.vercel.app; frame-src 'self' https://accounts.google.com https://www.youtube.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self';"
     />
+    <meta http-equiv="X-Content-Type-Options" content="nosniff" />
+    <meta http-equiv="X-Frame-Options" content="DENY" />
+    <meta http-equiv="X-XSS-Protection" content="1; mode=block" />
+    <meta
+      http-equiv="Referrer-Policy"
+      content="strict-origin-when-cross-origin"
+    />
     <!-- Preload critical assets for faster rendering -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -120,8 +127,8 @@
       // instead of looping forever. The counter is cleared after a
       // successful load settles (see the "load" + setTimeout below).
       (function () {
-        var MAX_RELOADS = 2;        // max reloads allowed per window
-        var RELOAD_WINDOW = 15000;  // 15-second rolling window
+        var MAX_RELOADS = 2; // max reloads allowed per window
+        var RELOAD_WINDOW = 15000; // 15-second rolling window
         var KEY = "fuelpro_reload_count";
         var TS_KEY = "fuelpro_reload_first_ts";
 
@@ -137,12 +144,29 @@
             }
             var count = parseInt(sessionStorage.getItem(KEY) || "0", 10);
             if (count >= MAX_RELOADS) {
-              console.warn("[reload-guard] Suppressing reload (" + reason + ") — limit reached (" + count + "/" + MAX_RELOADS + " in " + RELOAD_WINDOW / 1000 + "s). User stays on page.");
+              console.warn(
+                "[reload-guard] Suppressing reload (" +
+                  reason +
+                  ") — limit reached (" +
+                  count +
+                  "/" +
+                  MAX_RELOADS +
+                  " in " +
+                  RELOAD_WINDOW / 1000 +
+                  "s). User stays on page.",
+              );
               return false;
             }
             if (!firstTs) sessionStorage.setItem(TS_KEY, String(now));
             sessionStorage.setItem(KEY, String(count + 1));
-            console.log("[reload-guard] Reloading (" + reason + ") — attempt " + (count + 1) + "/" + MAX_RELOADS);
+            console.log(
+              "[reload-guard] Reloading (" +
+                reason +
+                ") — attempt " +
+                (count + 1) +
+                "/" +
+                MAX_RELOADS,
+            );
             window.location.reload();
             return true;
           } catch (e) {
@@ -171,27 +195,58 @@
       // only if the reload guard allows it.
       window.__BUILD_VERSION__ = "__BUILD_VERSION__";
       (function () {
-        if (!window.__BUILD_VERSION__ || window.__BUILD_VERSION__ === "__BUILD_VERSION__") return;
+        if (
+          !window.__BUILD_VERSION__ ||
+          window.__BUILD_VERSION__ === "__BUILD_VERSION__"
+        )
+          return;
         try {
           fetch("/version.json?t=" + Date.now(), { cache: "no-store" })
-            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (r) {
+              return r.ok ? r.json() : null;
+            })
             .then(function (data) {
-              if (data && data.version && data.version !== window.__BUILD_VERSION__) {
+              if (
+                data &&
+                data.version &&
+                data.version !== window.__BUILD_VERSION__
+              ) {
                 // Only reload if the server version is NEWER. If the server
                 // has an OLDER version (CDN cache lag during deploy), do NOT
                 // reload — that would cause a loop (old version.json served
                 // alongside new index.html).
                 if (data.version > window.__BUILD_VERSION__) {
-                  console.warn("[version-check] Server version " + data.version + " > client " + window.__BUILD_VERSION__ + " — updating");
+                  console.warn(
+                    "[version-check] Server version " +
+                      data.version +
+                      " > client " +
+                      window.__BUILD_VERSION__ +
+                      " — updating",
+                  );
                   if ("serviceWorker" in navigator) {
-                    navigator.serviceWorker.getRegistrations().then(function (regs) {
-                      return Promise.all(regs.map(function (r) { return r.unregister(); }));
-                    }).then(function () { window.__fuelproSafeReload("version-check-newer"); });
+                    navigator.serviceWorker
+                      .getRegistrations()
+                      .then(function (regs) {
+                        return Promise.all(
+                          regs.map(function (r) {
+                            return r.unregister();
+                          }),
+                        );
+                      })
+                      .then(function () {
+                        window.__fuelproSafeReload("version-check-newer");
+                      });
                   } else {
                     window.__fuelproSafeReload("version-check-newer");
                   }
                 } else {
-                  console.log("[version-check] Server version " + data.version + " <= client " + window.__BUILD_VERSION__ + " (CDN lag) — no reload");
+                  console.log(
+                    "[version-check] Server version " +
+                      data.version +
+                      " <= client " +
+                      window.__BUILD_VERSION__ +
+                      " (CDN lag) — no reload",
+                  );
                 }
               }
             })

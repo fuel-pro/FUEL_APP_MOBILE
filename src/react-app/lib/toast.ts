@@ -47,16 +47,16 @@ function renderToast(t: ToastMessage): HTMLDivElement {
   el.style.cssText += colors[t.type];
 
   const icons: Record<ToastType, string> = {
-    success: "&#10003;",
-    error: "&#10007;",
-    warning: "&#9888;",
-    info: "&#9432;",
+    success: "✓",
+    error: "✗",
+    warning: "⚠",
+    info: "ℹ",
   };
   // Build DOM nodes explicitly so user-controllable message text is never
   // injected as HTML (prevents XSS via toast messages).
   const iconSpan = document.createElement("span");
   iconSpan.style.cssText = "font-size:16px;flex-shrink:0";
-  iconSpan.innerHTML = icons[t.type]; // hardcoded entity, safe
+  iconSpan.textContent = icons[t.type]; // hardcoded symbol, textContent is safe
 
   const messageSpan = document.createElement("span");
   messageSpan.style.cssText = "flex:1";
