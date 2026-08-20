@@ -137,7 +137,7 @@ export default defineConfig({
             },
           },
           {
-            urlPattern: /^https:\/\/ojsscjwatikixlpshmub\.supabase\.co\/.*/i,
+            urlPattern: /^https:\/\/ojjscjwatikixlpshmub\.supabase\.co\/.*/i,
             handler: "NetworkFirst",
             options: {
               cacheName: "supabase-cache",

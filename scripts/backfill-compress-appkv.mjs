@@ -16,7 +16,7 @@
  */
 import pako from "pako";
 
-const SUPABASE_URL = "https://ojsscjwatikixlpshmub.supabase.co";
+const SUPABASE_URL = "https://ojjscjwatikixlpshmub.supabase.co";
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 if (!SERVICE_KEY) {
   console.error("Missing SUPABASE_SERVICE_ROLE_KEY env var");
