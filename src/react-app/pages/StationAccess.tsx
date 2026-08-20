@@ -29,6 +29,7 @@ import {
   getStationSnapshot,
   type StationSnapshot,
 } from "@/react-app/lib/station-snapshot-service";
+import { getCurrencySymbol } from "@/react-app/lib/currency";
 
 /**
  * Station Access page — lets a team member log in with a username + password
@@ -146,9 +147,12 @@ export default function StationAccess() {
 
   if (session) {
     const currency = snapshot?.currency || "USD";
+    // Country-aware symbol (was hardcoded `currency === "KES" ? "KSh" : "$"`,
+    // which showed "$" for every non-Kenya station — wrong for EUR/GBP/NGN…).
+    const currencySymbol = getCurrencySymbol(currency);
     const fmt = (n: number | undefined | null) =>
       Number.isFinite(n as number)
-        ? `${currency === "KES" ? "KSh" : "$"}${(n as number).toLocaleString(undefined, { maximumFractionDigits: 2 })}`
+        ? `${currencySymbol}${(n as number).toLocaleString(undefined, { maximumFractionDigits: 2 })}`
         : "—";
 
     return (

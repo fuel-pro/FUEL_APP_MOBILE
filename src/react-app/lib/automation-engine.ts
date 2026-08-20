@@ -322,17 +322,27 @@ async function recordInventoryTxn(
     const { data: userData } = await supabase.auth.getUser();
     const ownerId = userData.user?.id;
     const delta = newQty - prevQty;
-    await supabase.from("inventory_transactions").insert({
-      station_id: stationId,
-      product_id: productId,
-      owner_id: ownerId,
-      previous_quantity: prevQty,
-      new_quantity: newQty,
-      quantity_change: delta,
-      reason,
-      transaction_type: delta >= 0 ? "adjustment_in" : "adjustment_out",
-      created_at: new Date().toISOString(),
-    });
+    const { error: txnErr } = await supabase
+      .from("inventory_transactions")
+      .insert({
+        station_id: stationId,
+        product_id: productId,
+        owner_id: ownerId,
+        previous_quantity: prevQty,
+        new_quantity: newQty,
+        quantity_change: delta,
+        reason,
+        transaction_type: delta >= 0 ? "adjustment_in" : "adjustment_out",
+        created_at: new Date().toISOString(),
+      });
+    if (txnErr) {
+      // supabase-js does NOT throw on RLS/constraint failures — it returns
+      // { error }. Without this check the audit-trail row is silently lost.
+      console.warn(
+        "[automation] inventory_transactions insert failed (audited adjustment lost):",
+        txnErr.message,
+      );
+    }
   } catch (err) {
     // Non-fatal — the primary mutation already succeeded
     console.warn("[automation] failed to record inventory transaction:", err);
@@ -470,19 +480,30 @@ export async function fulfillReorder(
     // the reorder id in the human-readable notes.
     const { data: userData } = await supabase.auth.getUser();
     const ownerId = userData.user?.id;
-    await supabase.from("inventory_transactions").insert({
-      station_id: reorder.stationId,
-      product_id: reorder.productId,
-      transaction_type: "restock",
-      quantity_change: receivedQty,
-      previous_quantity: product.stock_quantity || 0,
-      new_quantity: newQty,
-      unit_cost: product.cost_price || 0,
-      reference_type: "reorder",
-      reference_id: reorder.productId, // valid UUID (the product id)
-      notes: `Auto-reorder fulfilled (${reorderId})`,
-      owner_id: ownerId,
-    });
+    const { error: restockErr } = await supabase
+      .from("inventory_transactions")
+      .insert({
+        station_id: reorder.stationId,
+        product_id: reorder.productId,
+        transaction_type: "restock",
+        quantity_change: receivedQty,
+        previous_quantity: product.stock_quantity || 0,
+        new_quantity: newQty,
+        unit_cost: product.cost_price || 0,
+        reference_type: "reorder",
+        reference_id: reorder.productId, // valid UUID (the product id)
+        notes: `Auto-reorder fulfilled (${reorderId})`,
+        owner_id: ownerId,
+      });
+    if (restockErr) {
+      // supabase-js does NOT throw on RLS/constraint failures — without this
+      // check the restock audit-trail row is silently lost while the stock
+      // update above already succeeded.
+      console.warn(
+        "[automation] restock inventory_transactions insert failed (audit trail lost):",
+        restockErr.message,
+      );
+    }
     // 3) Emit a stock event so listeners (dashboard, reorder check) refresh.
     emit({
       type: "stock:adjusted",

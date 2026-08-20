@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Lock,
   Eye,
@@ -36,8 +36,12 @@ import {
   type GatewayInfo,
 } from "@/react-app/lib/subscription";
 import SearchableCountryDropdown from "@/react-app/components/SearchableCountryDropdown";
+import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 
 const PAYWALL_CONTENT_KEY = "fuelpro_paywall_content";
+// Cloud key (app_kv, owner-scoped) so paywall content edits sync across every
+// founder device. localStorage is kept ONLY as a read-through cache.
+const PAYWALL_CONTENT_CLOUD_KEY = "founder_paywall_content";
 
 interface PaywallContent {
   title: string;
@@ -84,6 +88,11 @@ const DEFAULT_CONTENT: PaywallContent = {
 };
 
 function loadContent(): PaywallContent {
+  // Instant first render: prefer the in-memory cache, then localStorage.
+  const cached = cloudStorageService.getCached<PaywallContent>(
+    PAYWALL_CONTENT_CLOUD_KEY,
+  );
+  if (cached && typeof cached === "object" && cached.title) return cached;
   try {
     const s = localStorage.getItem(PAYWALL_CONTENT_KEY);
     if (s) return JSON.parse(s);
@@ -94,7 +103,17 @@ function loadContent(): PaywallContent {
 }
 
 function saveContent(c: PaywallContent) {
-  localStorage.setItem(PAYWALL_CONTENT_KEY, JSON.stringify(c));
+  // localStorage is a read-through cache; cloud (app_kv) is the source of truth.
+  try {
+    localStorage.setItem(PAYWALL_CONTENT_KEY, JSON.stringify(c));
+  } catch {
+    /* quota — non-fatal, cloud save is the durable copy */
+  }
+  cloudStorageService
+    .set(PAYWALL_CONTENT_CLOUD_KEY, c)
+    .catch((e) =>
+      console.warn("[PaywallControl] cloud save failed:", e?.message || e),
+    );
 }
 
 const COUNTRIES = [
@@ -131,6 +150,44 @@ export default function PaywallControlSection({ logAudit }: Props) {
   const [editPrices, setEditPrices] = useState<Record<string, number>>({});
   const [newFeature, setNewFeature] = useState("");
 
+  // Cloud-first hydration + real-time sync so a paywall edit made on one
+  // founder device reflects instantly on every other founder device.
+  // Echo-guarded: skip the remote push when THIS device just saved it.
+  const skipRemoteContentRef = useRef(false);
+  useEffect(() => {
+    let cancelled = false;
+    cloudStorageService
+      .get<PaywallContent>(PAYWALL_CONTENT_CLOUD_KEY)
+      .then((cloud) => {
+        if (cancelled) return;
+        if (cloud && typeof cloud === "object" && cloud.title) {
+          setContent((prev) =>
+            prev.title === cloud.title && prev.active === cloud.active
+              ? prev
+              : { ...DEFAULT_CONTENT, ...cloud },
+          );
+        }
+      })
+      .catch(() => {});
+    const unsub = cloudStorageService.subscribe<PaywallContent>(
+      PAYWALL_CONTENT_CLOUD_KEY,
+      undefined,
+      (next) => {
+        if (skipRemoteContentRef.current) {
+          skipRemoteContentRef.current = false;
+          return;
+        }
+        if (next && typeof next === "object" && next.title) {
+          setContent({ ...DEFAULT_CONTENT, ...next });
+        }
+      },
+    );
+    return () => {
+      cancelled = true;
+      unsub?.();
+    };
+  }, []);
+
   useEffect(() => {
     const ep: Record<string, number> = {};
     regionalPrices.forEach((p) => {
@@ -140,6 +197,7 @@ export default function PaywallControlSection({ logAudit }: Props) {
   }, [regionalPrices]);
 
   const updateContent = (k: keyof PaywallContent, v: any) => {
+    skipRemoteContentRef.current = true; // echo guard: skip the realtime echo
     setContent((p) => {
       const n = { ...p, [k]: v };
       saveContent(n);
@@ -149,6 +207,7 @@ export default function PaywallControlSection({ logAudit }: Props) {
   };
 
   const toggleContent = (k: keyof PaywallContent) => {
+    skipRemoteContentRef.current = true; // echo guard: skip the realtime echo
     setContent((p) => {
       const n = { ...p, [k]: !p[k] };
       saveContent(n);
@@ -158,6 +217,7 @@ export default function PaywallControlSection({ logAudit }: Props) {
   };
 
   const handleSave = () => {
+    skipRemoteContentRef.current = true; // echo guard: skip the realtime echo
     saveContent(content);
     saveTiers(tiers);
     saveCoupons(coupons);
