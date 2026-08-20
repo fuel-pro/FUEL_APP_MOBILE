@@ -5494,3 +5494,107 @@ p_password)` RPC. 5 failed attempts in 15min -> 15min lockout. Per
 4. Latency optimization (commit 74d9cb7, already deployed): sync userId from
    localStorage + in-memory cache eliminates an auth.getUser() round-trip on
    every cloud op (was 200-500ms x 10+ components on every load).
+
+## Access Another Station feature (DEPLOYED LIVE 2026-08-20, commit 8aca0cb)
+
+Added the "Access Another Station" feature to StationManager — the modern
+invite-based station sharing flow that lets a user switch to a station
+shared with them by another owner. Builds on the `station_members` DB table
+(migration 015/016), NOT the legacy password-based sharedUsers model.
+
+### What was built
+
+- **StationManager.tsx**: new "Access Another Station" button in the toolbar
+  (sky-blue, with a badge showing pending+shared count). Opens a new
+  `AccessSharedStationModal` with 3 tabs:
+  - **Shared With You**: stations the user is an accepted member of (from
+    `station_members` DB + AuthContext `bindings`). Each shows station name,
+    role badge (Owner/Manager/Staff/Auditor), invited-by, and an "Access"
+    button that calls `switchStation()`.
+  - **Pending Invites**: invites awaiting acceptance (invited_email =
+    user.email, status = pending). Each has an "Accept" button that calls
+    `acceptInvite(invite_token)`.
+  - **Join by Invite**: paste an invite link or token to join a station.
+    Extracts the token from a URL (`?invite=TOKEN`) or accepts a raw token.
+    Calls `acceptInvite(token)` with error handling ("Invalid or expired
+    invite link").
+
+- **Main view split**: the station grid now shows "Your Stations" (owned)
+  and "Shared With You" (member) as separate sections. Shared station cards
+  show role + invited-by + Access + Leave buttons. The "Leave" button calls
+  `revokeMember()` to remove the user's membership.
+
+- **Stat cards**: "Your Stations" (owned count) and "Shared With You"
+  (shared count) replace the old "Stations" + "Shared Users" cards.
+
+- **Wired previously-unwired functions**: `getSharedStations()`,
+  `acceptInvite()`, `revokeMember()` from `station-share-service.ts` are
+  now called from StationManager (they existed but were never used in the
+  UI before this commit).
+
+### StationContext changes
+
+- `Station` interface: added `ownerId`, `userRole`, `invitedBy`,
+  `memberRole` fields so the UI can distinguish owned vs shared stations.
+- `stationRowToStation()`: preserves `owner_id` from the Supabase row +
+  flattens membership metadata (role, invited_by_name,
+  invited_by_unique_id) onto the station object.
+- `syncStationsWithSupabase()` member-station query: now selects membership
+  metadata via `station_members!inner(user_id, status, role,
+  invited_by_name, invited_by_unique_id, member_role)` join, so shared
+  stations load with their role/invited-by info.
+
+### Migration 023 (station_members_self_delete RLS)
+
+`supabase/migrations/023_station_members_self_delete.sql`: adds a
+`station_members_self_delete` RLS policy so members can DELETE their own
+membership rows (leave a station). Previously only the station owner could
+delete (the `station_members_owner_manage` policy). The self_delete policy
+mirrors the existing self_read/self_update pattern (user_id match OR
+invited_email match). NOTE: this migration is committed but NOT yet applied
+to the live DB (the Supabase Management API `database/query` endpoint
+returns 404 with the current PAT scope, and the REST hostname doesn't
+resolve from this environment). The "Leave" button will fail gracefully
+(shows an error notice) until the policy is applied via the Supabase
+Dashboard SQL Editor.
+
+### Live verification (2026-08-20, Cloudflare + Vercel)
+
+- **Station Manager**: "Access Another Station" button renders in toolbar.
+  Modal opens with 3 tabs. "Shared With You" shows correct empty state ("No
+  stations shared with you yet"). "Join by Invite" accepts a token, shows
+  "Invalid or expired invite link" for invalid tokens. Header shows "1
+  owned · 0 shared". Footer shows "1 owned · 0 shared · 0 pending".
+- **POS**: 10L Super Petrol @ $1.10/L = $11.00 cash sale completed
+  (INV202608200000019X6L). Receipt is country-aware: "Tax ID:" (not "PIN:"),
+  "RECEIPT" (not "ELECTRONIC TAX REGISTER"), "TAX COMPLIANT INVOICE" (not
+  "KRA eTIMS COMPLIANT"), "Powered by FuelPro" (not "Powered by TIMS"),
+  "Scan to verify this invoice" (not "Scan to verify at KRA iTax"), 0% VAT,
+  US locale date (08/20/2026, 01:07:12 PM), cashier="Founder QA Test" (not
+  "Cashier 1").
+- **Credit tab**: loads with "Credit Accounts" + "Debt Payment Reminders"
+  sub-tabs + "New Account" button.
+- **Invoice tab**: loads with "Invoice" + "Sales Invoices" sub-tabs + all
+  form fields + export options (PDF/Excel/Text/WhatsApp/Email) + "Collect
+  via M-PESA" interlink.
+
+### Deploy state 2026-08-20
+
+- GitHub main: `8aca0cb` (pushed, synced with origin/main).
+- Cloudflare Pages: LIVE (main alias https://fuel-app-mobile.pages.dev,
+  chunk `index-w-ZPzUT1.js` with "Access Another Station" marker).
+- Vercel production: LIVE (prebuilt deploy, aliased to
+  fuel-app-mobile.vercel.app, chunk `index-BtU74fLU.js` with marker).
+- Supabase: migration 023 committed but NOT yet applied to live DB (DNS
+  unreachable from this environment; apply via Dashboard SQL Editor).
+- `npx tsc --noEmit` 0 errors, `npm run build` 105 precache success.
+
+### Lost commit audit (2026-08-20)
+
+Audited all remote branches. The `origin/team-manager-access-codes-merge`
+branch (1 commit) contains work that is ALREADY on main in a MORE COMPLETE
+form (main has `decompressAny` for compressed KV, unified access-code/invite
+UI, `setup_complete` key standardization). Merging would regress main. All
+other unmerged branches are either old divergent snapshots (200+ commits
+behind) or single-commit fixes already superseded. No lost work needs
+merging.
