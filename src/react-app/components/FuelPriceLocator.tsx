@@ -5,10 +5,9 @@ import { useLocation } from "@/react-app/context/LocationContext";
 import { useStations } from "@/react-app/context/StationContext";
 import { useFuel } from "@/react-app/context/FuelContext";
 import { useFuelPrices } from "@/react-app/hooks/useFuelPrices";
+import { switchToTab } from "@/react-app/lib/mpesa-integration-service";
 import {
   getClosestKenyaCityPrice,
-  KENYA_BASE_PRICES,
-  REGIONAL_PRICES,
   CANONICAL_FUEL_TYPES,
   getWorldFuelPrices,
 } from "@/react-app/config/pricing";
@@ -22,6 +21,9 @@ import {
   AlertTriangle,
   Loader2,
   Droplet,
+  LayoutDashboard,
+  Settings,
+  ClipboardList,
 } from "lucide-react";
 import {
   getCurrencySymbol,
@@ -324,12 +326,12 @@ export default function FuelPriceLocator() {
               unit: data.unit || "litre",
               source: data.source || "Live API",
               location:
-                data.distance_km !== undefined
-                  ? `${data.locationName || locName} (${data.distance_km.toFixed(1)} km away)`
+                data.distance_km != null && data.distance_km !== undefined
+                  ? `${data.locationName || locName} (${(data.distance_km ?? 0).toFixed(1)} km away)`
                   : data.locationName ||
                     data.location ||
                     locName ||
-                    `${lat.toFixed(4)}, ${lng.toFixed(4)}`,
+                    `${(lat ?? 0).toFixed(4)}, ${(lng ?? 0).toFixed(4)}`,
             };
             setNearbyResult(result);
             setLastFetchAt(new Date().toISOString());
@@ -371,12 +373,10 @@ export default function FuelPriceLocator() {
       kerosene = cityPrice.kerosenePrice;
       stationName = gpsTownName;
       location = gpsTownName;
-    } else if (!REGIONAL_PRICES[countryCode] && countryCode !== "KE") {
-      // Unknown country — use Kenya defaults as universal fallback
-      petrol = KENYA_BASE_PRICES.petrol;
-      diesel = KENYA_BASE_PRICES.diesel;
-      kerosene = KENYA_BASE_PRICES.kerosene;
     }
+    // For unknown countries NOT in REGIONAL_PRICES, keep unifiedPrices (already
+    // country-aware from useFuelPrices). Do NOT force Kenya KSh prices on a
+    // US/EU station — that was the old broken behaviour.
 
     const result: StationPriceInfo = {
       stationName,
@@ -482,6 +482,31 @@ export default function FuelPriceLocator() {
             Find real-time fuel prices near your location using GPS coordinates
           </p>
         </div>
+      </div>
+
+      {/* Cross-tab interlinks — quick navigation to related tabs */}
+      <div className="flex flex-wrap gap-2">
+        <button
+          onClick={() => switchToTab("dashboard")}
+          className="bg-slate-800/60 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs border border-slate-700"
+        >
+          <LayoutDashboard size={14} />
+          Dashboard
+        </button>
+        <button
+          onClick={() => switchToTab("fueltypes")}
+          className="bg-slate-800/60 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs border border-slate-700"
+        >
+          <Settings size={14} />
+          Edit Fuel Prices
+        </button>
+        <button
+          onClick={() => switchToTab("sales")}
+          className="bg-slate-800/60 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs border border-slate-700"
+        >
+          <ClipboardList size={14} />
+          Sales Tracking
+        </button>
       </div>
 
       {/* Sub-tab switcher: Price Finder vs Auto Fuel Price engine */}

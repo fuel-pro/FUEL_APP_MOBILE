@@ -1701,7 +1701,9 @@ const PumpMappingV1: React.FC = () => {
                         return (
                           Object.keys(CURRENCY_MAP).find(
                             (c) => CURRENCY_MAP[c]?.code === cur,
-                          ) || "KES"
+                          ) ||
+                          cur ||
+                          "USD"
                         );
                       })()}
                       onChange={(e) => {

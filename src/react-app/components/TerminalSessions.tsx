@@ -9,12 +9,15 @@ import {
   Loader2,
   CheckCircle,
   Clock,
-  DollarSign,
   AlertTriangle,
+  ShoppingCart,
+  ClipboardList,
+  BarChart3,
 } from "lucide-react";
 import { useStations } from "@/react-app/context/StationContext";
 import { supabase } from "@/supabase/client";
 import { formatMoney as fmtMoney } from "../lib/currency";
+import { switchToTab } from "@/react-app/lib/mpesa-integration-service";
 import {
   openTerminalSession,
   closeTerminalSession,
@@ -130,6 +133,31 @@ export default function TerminalSessions() {
             <Plus size={20} /> Open Session
           </button>
         )}
+      </div>
+
+      {/* Cross-tab interlinks — quick navigation to related tabs */}
+      <div className="flex flex-wrap gap-2 mb-6">
+        <button
+          onClick={() => switchToTab("pos")}
+          className="bg-slate-700/60 hover:bg-slate-600 text-slate-200 px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs border border-slate-600"
+        >
+          <ShoppingCart size={14} />
+          Point of Sale
+        </button>
+        <button
+          onClick={() => switchToTab("sales")}
+          className="bg-slate-700/60 hover:bg-slate-600 text-slate-200 px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs border border-slate-600"
+        >
+          <ClipboardList size={14} />
+          Sales Tracking
+        </button>
+        <button
+          onClick={() => switchToTab("reports")}
+          className="bg-slate-700/60 hover:bg-slate-600 text-slate-200 px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs border border-slate-600"
+        >
+          <BarChart3 size={14} />
+          Reports Center
+        </button>
       </div>
 
       {/* Active Session */}
@@ -289,7 +317,9 @@ export default function TerminalSessions() {
                   value={openingCash ?? ""}
                   onChange={(e) =>
                     setOpeningCash(
-                      e.target.value === "" ? 0 : parseFloat(e.target.value) || 0,
+                      e.target.value === ""
+                        ? 0
+                        : parseFloat(e.target.value) || 0,
                     )
                   }
                   className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white"
@@ -362,7 +392,9 @@ export default function TerminalSessions() {
                   value={countedCash ?? ""}
                   onChange={(e) =>
                     setCountedCash(
-                      e.target.value === "" ? 0 : parseFloat(e.target.value) || 0,
+                      e.target.value === ""
+                        ? 0
+                        : parseFloat(e.target.value) || 0,
                     )
                   }
                   className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white"

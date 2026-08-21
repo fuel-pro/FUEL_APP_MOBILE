@@ -1,5 +1,14 @@
 import { useState, useEffect, useMemo } from "react";
-import { FileText, Printer, TrendingUp, Download, Loader2 } from "lucide-react";
+import {
+  FileText,
+  Printer,
+  TrendingUp,
+  Download,
+  Loader2,
+  ShoppingCart,
+  ClipboardList,
+  BarChart3,
+} from "lucide-react";
 import { useFuel } from "@/react-app/context/FuelContext";
 import { useStationFuelTypes } from "@/react-app/hooks/useStationFuelTypes";
 import { resolveCurrencySymbol } from "@/react-app/lib/currency";
@@ -7,6 +16,7 @@ import {
   getFuelLabel,
   type CanonicalFuelType,
 } from "@/react-app/config/pricing";
+import { switchToTab } from "@/react-app/lib/mpesa-integration-service";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import { silentPrintService } from "@/react-app/lib/silent-print-service";
@@ -555,6 +565,31 @@ export default function FuelSalesReport() {
             </button>
           </div>
         </div>
+      </div>
+
+      {/* Cross-tab interlinks — quick navigation to related tabs */}
+      <div className="flex flex-wrap gap-2">
+        <button
+          onClick={() => switchToTab("sales")}
+          className="bg-slate-700/60 hover:bg-slate-600 text-slate-200 px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs border border-slate-600"
+        >
+          <ClipboardList size={14} />
+          Sales Tracking
+        </button>
+        <button
+          onClick={() => switchToTab("pos")}
+          className="bg-slate-700/60 hover:bg-slate-600 text-slate-200 px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs border border-slate-600"
+        >
+          <ShoppingCart size={14} />
+          Point of Sale
+        </button>
+        <button
+          onClick={() => switchToTab("reports")}
+          className="bg-slate-700/60 hover:bg-slate-600 text-slate-200 px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs border border-slate-600"
+        >
+          <BarChart3 size={14} />
+          Reports Center
+        </button>
       </div>
 
       {/* Quick Stats — DYNAMIC per configured fuel type */}
