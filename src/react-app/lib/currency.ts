@@ -12,6 +12,7 @@ import {
   getCountryByCurrency,
 } from "./world-country-utils";
 import { REGIONAL_PRICES } from "@/react-app/config/pricing";
+import { getCountryById } from "@/react-app/config/countries";
 
 // Build currency symbols from unified pricing config
 const UNIFIED_SYMBOLS: Record<string, string> = {};
@@ -395,4 +396,41 @@ export function formatMoney(amount: number, currency?: string): string {
 export function getCurrencyByCountry(countryCode: string): string {
   const country = getCountryByCode(countryCode);
   return country?.currency || "USD";
+}
+
+/**
+ * Resolve a BCP-47 locale string (e.g. "en-KE", "en-US", "sw-KE") from the
+ * detected country code. Uses the country's primary language + country code.
+ * Falls back to the browser default locale, then "en-US".
+ */
+export function getLocaleForCountry(countryCode?: string): string {
+  const cc = (countryCode || getDetectedCountryCode()).toUpperCase();
+  const country = getCountryById(cc);
+  const lang = country?.languages?.[0] || "en";
+  return `${lang}-${cc}`;
+}
+
+/**
+ * Country-aware money formatter. Replaces hardcoded `new Intl.NumberFormat("en-KE", ...)`.
+ * Resolves the locale from the station's country so a US station shows
+ * "$1,234.56" (en-US) while a Kenya station shows "KSh 1,234.56" (en-KE).
+ */
+export function formatCurrency(
+  amount: number,
+  currency?: string,
+  opts?: Intl.NumberFormatOptions,
+): string {
+  const c = currency || getDetectedCurrency();
+  const locale = getLocaleForCountry();
+  try {
+    return new Intl.NumberFormat(locale, {
+      style: "currency",
+      currency: c,
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+      ...opts,
+    }).format(amount);
+  } catch {
+    return `${getCurrencySymbol(c)} ${amount.toLocaleString()}`;
+  }
 }

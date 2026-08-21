@@ -22,10 +22,11 @@ import {
   getCurrencySymbol,
   getDetectedCurrency,
   isKenyaStation,
+  getLocaleForCountry,
 } from "@/react-app/lib/currency";
 
 const formatMoney = (amount: number) =>
-  new Intl.NumberFormat("en-KE", {
+  new Intl.NumberFormat(getLocaleForCountry(), {
     style: "currency",
     currency: getDetectedCurrency(),
     minimumFractionDigits: 0,

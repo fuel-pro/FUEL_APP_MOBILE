@@ -26,11 +26,12 @@ import { supabase } from "@/supabase/client";
 import {
   getCurrencySymbol,
   getDetectedCurrency,
+  getLocaleForCountry,
 } from "@/react-app/lib/currency";
 
 // Format currency
 const formatMoney = (amount: number, currency = getDetectedCurrency()) => {
-  return new Intl.NumberFormat("en-KE", {
+  return new Intl.NumberFormat(getLocaleForCountry(), {
     style: "currency",
     currency,
     minimumFractionDigits: 0,

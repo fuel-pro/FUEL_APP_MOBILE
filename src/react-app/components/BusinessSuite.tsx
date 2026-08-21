@@ -268,10 +268,13 @@ const renderModule = (view: ActiveView) => {
             </div>
           ) : (
             <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-6 text-amber-200">
-              <p className="font-semibold">M-PESA is available in Kenya only</p>
+              <p className="font-semibold">
+                Mobile money integrations are region-specific
+              </p>
               <p className="text-sm text-amber-300/80 mt-1">
                 Safaricom M-PESA and Kopo Kopo are Kenya-specific mobile money
-                integrations. Switch your station to Kenya to configure them.
+                integrations. Configure payment integrations for your region in
+                the Integration Hub (Settings &rarr; Integration Hub).
               </p>
             </div>
           )}

@@ -1588,7 +1588,7 @@ function CommSettingsTab({ stationId }: { stationId?: string }) {
               value={config.senderPhone}
               onChange={(e) => update("senderPhone", e.target.value)}
               className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
-              placeholder="e.g. +254700000000"
+              placeholder="e.g. +1 555 000 1234"
             />
           </div>
           <div>
@@ -1754,7 +1754,7 @@ function CommSettingsTab({ stationId }: { stationId?: string }) {
               value={config.whatsappPhone}
               onChange={(e) => update("whatsappPhone", e.target.value)}
               className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
-              placeholder="e.g. 254700000000"
+              placeholder="e.g. 15550001234"
             />
           </div>
           <div>
