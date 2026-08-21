@@ -11,6 +11,8 @@ import {
   Printer,
   Download,
   CheckCircle2,
+  ShoppingCart,
+  Package,
 } from "lucide-react";
 import { useFuel } from "@/react-app/context/FuelContext";
 import { useAuth } from "@/react-app/context/AuthContext";
@@ -2022,8 +2024,8 @@ export default function ReportsCenter() {
           </div>
         </div>
 
-        {/* Quick Actions */}
-        <div className="flex gap-3">
+        {/* Quick Actions + Cross-Tab Navigation */}
+        <div className="flex flex-wrap gap-3">
           <button
             onClick={exportToPDF}
             className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
@@ -2035,6 +2037,24 @@ export default function ReportsCenter() {
             className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
           >
             <FileText size={16} /> Export to Excel
+          </button>
+          <button
+            onClick={() => navigateToTab("pos")}
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+          >
+            <ShoppingCart size={16} /> New Sale
+          </button>
+          <button
+            onClick={() => navigateToTab("expenses")}
+            className="flex items-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700"
+          >
+            <Receipt size={16} /> Record Expense
+          </button>
+          <button
+            onClick={() => navigateToTab("analytics")}
+            className="flex items-center gap-2 px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700"
+          >
+            <BarChart3 size={16} /> Analytics
           </button>
         </div>
       </div>
@@ -2184,13 +2204,43 @@ export default function ReportsCenter() {
           ))
         )}
 
-        {/* Export Button */}
-        <div className="flex gap-3">
+        {/* Export Button + Cross-Tab Navigation */}
+        <div className="flex flex-wrap gap-3">
           <button
             onClick={exportToPDF}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
           >
             <Printer size={16} /> Print Daily Register
+          </button>
+          <button
+            onClick={() => navigateToTab("pos")}
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+          >
+            <ShoppingCart size={16} /> New Sale
+          </button>
+          <button
+            onClick={() => navigateToTab("sales")}
+            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
+          >
+            <TrendingUp size={16} /> Sales Tracking
+          </button>
+          <button
+            onClick={() => navigateToTab("invoice")}
+            className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+          >
+            <FileText size={16} /> Create Invoice
+          </button>
+          <button
+            onClick={() => navigateToTab("inventory")}
+            className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700"
+          >
+            <Package size={16} /> Stock Management
+          </button>
+          <button
+            onClick={() => navigateToTab("analytics")}
+            className="flex items-center gap-2 px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700"
+          >
+            <BarChart3 size={16} /> Analytics
           </button>
         </div>
       </div>
