@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 import { useAuth } from "@/react-app/context/AuthContext";
 import {
@@ -73,7 +73,11 @@ const CLOUD_KEY = "webhooks_data";
 
 export default function WebhookManager() {
   const { user } = useAuth();
+  const cloudLoadCompleteRef = useRef(false);
+  const localModifiedRef = useRef(false);
   const [webhooks, setWebhooks] = useState<WebhookEndpoint[]>(() => {
+    const cached = cloudStorageService.getCached<WebhookEndpoint[]>(CLOUD_KEY);
+    if (cached && Array.isArray(cached)) return cached;
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) return JSON.parse(saved);
@@ -82,6 +86,8 @@ export default function WebhookManager() {
     }
     return [];
   });
+  const webhooksRef = useRef(webhooks);
+  webhooksRef.current = webhooks;
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showSecrets, setShowSecrets] = useState<Record<string, boolean>>({});
@@ -99,18 +105,70 @@ export default function WebhookManager() {
   });
 
   const save = (list: WebhookEndpoint[]) => {
+    if (!cloudLoadCompleteRef.current) {
+      showNotification(
+        "Still loading from cloud. Please try again in a moment.",
+        "warning",
+      );
+      return;
+    }
+    localModifiedRef.current = true;
     setWebhooks(list);
+    webhooksRef.current = list;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
-    cloudStorageService.set(CLOUD_KEY, list).catch(() => {});
+    cloudStorageService
+      .set(CLOUD_KEY, list)
+      .then(() => {
+        localModifiedRef.current = false;
+      })
+      .catch(() => {});
   };
 
-  // Load from cloud on mount (cross-device sync)
+  // Load from cloud on mount (cross-device sync) + realtime
   useEffect(() => {
     if (!user) return;
+    cloudLoadCompleteRef.current = false;
+    let cancelled = false;
     (async () => {
-      const cloud = await cloudStorageService.get<WebhookEndpoint[]>(CLOUD_KEY);
-      if (cloud && Array.isArray(cloud)) setWebhooks(cloud);
+      try {
+        const cloud =
+          await cloudStorageService.get<WebhookEndpoint[]>(CLOUD_KEY);
+        if (
+          !cancelled &&
+          cloud &&
+          Array.isArray(cloud) &&
+          !localModifiedRef.current
+        ) {
+          setWebhooks(cloud);
+          webhooksRef.current = cloud;
+        }
+      } catch {
+        /* ignore */
+      } finally {
+        if (!cancelled) {
+          cloudLoadCompleteRef.current = true;
+          if (localModifiedRef.current) {
+            cloudStorageService
+              .set(CLOUD_KEY, webhooksRef.current)
+              .catch(() => {});
+          }
+        }
+      }
     })();
+    const unsub = cloudStorageService.subscribe<WebhookEndpoint[]>(
+      CLOUD_KEY,
+      undefined,
+      (cloud) => {
+        if (cloud && Array.isArray(cloud) && !localModifiedRef.current) {
+          setWebhooks(cloud);
+          webhooksRef.current = cloud;
+        }
+      },
+    );
+    return () => {
+      cancelled = true;
+      unsub();
+    };
   }, [user]);
 
   const showNotification = (

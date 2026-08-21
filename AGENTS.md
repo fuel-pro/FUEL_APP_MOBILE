@@ -107,9 +107,40 @@ snapshots (200+ commits) and are not lost work.
   `get`s the typed array/object and `setState`s it Г”Г‡Г¶ for arrays guard with
   `Array.isArray`, for objects use `if (cloud)`. For components whose save is a
   `useEffect` (e.g. ExpenseTracker/PriceBoard) put the `cloudStorageService.set`
-  inside that same effect. MIGRATED 2026-08-09: the 8 above (ExpenseTracker,
+  inside that same effect.
+  MIGRATED 2026-08-09: the 8 above (ExpenseTracker,
   PriceBoard, APIKeyManager, MPesaConfig, SMSGatewayConfig, WebhookManager,
   PointOfSale, News); `npx tsc --noEmit` clean (0 errors).
+- **3-ref guard pattern (anti flash-then-blank cloud-sync bug)**: components
+  that call `cloudStorageService.set/get` MUST also implement the 3-ref guard
+  to prevent data loss on fresh devices (the save effect/`save()` fn racing
+  ahead of the initial cloud `get` and overwriting remote with default empty
+  state, then the UI flashing the cached value and going blank). Reference
+  implementations: `APIKeyManager.tsx` (array) and `ExpenseTracker.tsx`
+  (lines ~136-223, array + save-effect variant). The 5 parts:
+  1. `useRef` in the React import.
+  2. `const cloudLoadCompleteRef = useRef(false);` + `const localModifiedRef =
+     useRef(false);` + a `dataRef` mirroring the main state (`dataRef.current =
+     data;`) for post-load flush.
+  3. `useState` initializer checks `cloudStorageService.getCached<T>(CLOUD_KEY
+     [, stationId])` FIRST (before localStorage) — arrays guard with
+     `Array.isArray(cached)`, objects with `if (cached)`.
+  4. `save()`/save-effect guards at top: `if (!cloudLoadCompleteRef.current)
+     return;` (+ optional user-facing message), then sets
+     `localModifiedRef.current = true;`. After `cloudStorageService.set(...)`
+     resolves, reset `.then(() => { localModifiedRef.current = false; })`.
+  5. The cloud `useEffect([user, ...])`: set `cloudLoadCompleteRef.current =
+     false;` at start, guard the cloud->state set with `!localModifiedRef.current`,
+     in `finally` set `cloudLoadCompleteRef.current = true;` and flush local
+     edits via `cloudStorageService.set(CLOUD_KEY, dataRef.current, ...)`,
+     and add `cloudStorageService.subscribe(CLOUD_KEY, stationId, cb)` with
+     `!localModifiedRef.current` guard + cleanup `unsub()`.
+  APPLIED 2026-08-21 to the 3 components that were still missing it:
+  MPesaConfig (`mpesa_config`, object, station-scoped),
+  SMSGatewayConfig (`sms_config`, object, user-scoped),
+  WebhookManager (`webhooks_data`, array, user-scoped). `npx tsc --noEmit`
+  clean (0 errors), prettier applied. Pattern now consistent across all
+  cloud-syncing components.
 - **Document Center Г”Г‡Г¶ Supabase Storage migration (FIXED 2026-08-09)**: The
   Document Center tab (`DocumentCenter.tsx`) used `documentStore.ts` which
   stored files in **IndexedDB** (browser-local, NO cross-device sync Г”Г‡Г¶ files

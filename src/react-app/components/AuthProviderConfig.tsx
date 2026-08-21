@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Users,
   Shield,
@@ -13,6 +13,9 @@ import {
   Mail,
   Lock,
 } from "lucide-react";
+import { cloudStorageService } from "@/react-app/lib/cloud-storage-service";
+import { useAuth } from "@/react-app/context/AuthContext";
+import { useStations } from "@/react-app/context/StationContext";
 
 interface AuthProvider {
   type: "email" | "google" | "phone" | "custom";
@@ -45,45 +48,137 @@ interface AuthConfig {
 }
 
 const STORAGE_KEY = "fuelpro_auth_config";
+const CLOUD_KEY = "auth_config";
+
+const DEFAULT_CONFIG: AuthConfig = {
+  emailPassword: {
+    enabled: true,
+    requireVerification: true,
+    minPasswordLength: 8,
+  },
+  google: { enabled: false, clientId: "", clientSecret: "" },
+  phone: { enabled: true, provider: "none" },
+  custom: { enabled: false, endpoint: "", apiKey: "" },
+  session: { timeoutMinutes: 60, rememberMe: true, maxLoginAttempts: 5 },
+  security: {
+    twoFactorEnabled: false,
+    lockoutDuration: 30,
+    passwordHistory: 5,
+  },
+};
 
 export default function AuthProviderConfig() {
+  const { user } = useAuth();
+  const { currentStation } = useStations();
+  const stationId = currentStation?.id;
+
   const [config, setConfig] = useState<AuthConfig>(() => {
+    const cached = cloudStorageService.getCached<AuthConfig>(
+      CLOUD_KEY,
+      stationId,
+    );
+    if (cached) return { ...DEFAULT_CONFIG, ...cached };
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) return JSON.parse(saved);
+      if (saved) return { ...DEFAULT_CONFIG, ...JSON.parse(saved) };
     } catch {
       /* */
     }
-    return {
-      emailPassword: {
-        enabled: true,
-        requireVerification: true,
-        minPasswordLength: 8,
-      },
-      google: { enabled: false, clientId: "", clientSecret: "" },
-      phone: { enabled: true, provider: "none" },
-      custom: { enabled: false, endpoint: "", apiKey: "" },
-      session: { timeoutMinutes: 60, rememberMe: true, maxLoginAttempts: 5 },
-      security: {
-        twoFactorEnabled: false,
-        lockoutDuration: 30,
-        passwordHistory: 5,
-      },
-    };
+    return DEFAULT_CONFIG;
   });
   const [showSecrets, setShowSecrets] = useState<Record<string, boolean>>({});
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
+  const [synced, setSynced] = useState(false);
+
+  // Cloud-first load guard (prevents overwriting cloud data with defaults on fresh device)
+  const cloudLoadCompleteRef = useRef(false);
+  const localModifiedRef = useRef(false);
+
+  // Load from cloud on mount/user/station change
+  useEffect(() => {
+    if (!user) return;
+    cloudLoadCompleteRef.current = false;
+    let cancelled = false;
+    (async () => {
+      try {
+        const cloud = await cloudStorageService.get<AuthConfig>(
+          CLOUD_KEY,
+          stationId,
+        );
+        if (!cancelled && cloud) {
+          setConfig({ ...DEFAULT_CONFIG, ...cloud });
+        }
+      } catch {
+        /* ignore - localStorage cache is fallback */
+      } finally {
+        if (!cancelled) {
+          cloudLoadCompleteRef.current = true;
+          setSynced(true);
+          // Flush any local edits made during load
+          if (localModifiedRef.current) {
+            cloudStorageService
+              .set(CLOUD_KEY, configRef.current, stationId)
+              .catch(() => {});
+          }
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user, stationId]);
+
+  // Keep a ref of latest config for post-load flush
+  const configRef = useRef(config);
+  configRef.current = config;
+
+  // Real-time subscription
+  useEffect(() => {
+    if (!user) return;
+    const unsub = cloudStorageService.subscribe<AuthConfig>(
+      CLOUD_KEY,
+      stationId,
+      (cloud) => {
+        if (cloud && !localModifiedRef.current) {
+          setConfig({ ...DEFAULT_CONFIG, ...cloud });
+          setSynced(true);
+        }
+      },
+    );
+    return () => unsub();
+  }, [user, stationId]);
 
   const toggleSecret = (key: string) =>
     setShowSecrets((prev) => ({ ...prev, [key]: !prev[key] }));
 
   const save = () => {
+    if (!cloudLoadCompleteRef.current) {
+      setError(
+        "Still loading your configuration from cloud. Please try again in a moment.",
+      );
+      return;
+    }
     setSaving(true);
     setError("");
+    localModifiedRef.current = true;
     try {
+      // localStorage as read-through cache
       localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+      // Cloud as source of truth
+      cloudStorageService
+        .set(CLOUD_KEY, config, stationId)
+        .then(() => {
+          localModifiedRef.current = false;
+          setSynced(true);
+        })
+        .catch((e) => {
+          setError(
+            "Saved locally but failed to sync to cloud: " +
+              (e?.message || "unknown error"),
+          );
+        });
       setTimeout(() => {
         setSaving(false);
         setSaved(true);
@@ -97,22 +192,12 @@ export default function AuthProviderConfig() {
 
   const reset = () => {
     if (confirm("Reset authentication configuration to defaults?")) {
-      setConfig({
-        emailPassword: {
-          enabled: true,
-          requireVerification: true,
-          minPasswordLength: 8,
-        },
-        google: { enabled: false, clientId: "", clientSecret: "" },
-        phone: { enabled: true, provider: "none" },
-        custom: { enabled: false, endpoint: "", apiKey: "" },
-        session: { timeoutMinutes: 60, rememberMe: true, maxLoginAttempts: 5 },
-        security: {
-          twoFactorEnabled: false,
-          lockoutDuration: 30,
-          passwordHistory: 5,
-        },
-      });
+      localModifiedRef.current = true;
+      setConfig(DEFAULT_CONFIG);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_CONFIG));
+      cloudStorageService
+        .set(CLOUD_KEY, DEFAULT_CONFIG, stationId)
+        .catch(() => {});
     }
   };
 
@@ -506,6 +591,11 @@ export default function AuthProviderConfig() {
             "Save Configuration"
           )}
         </button>
+        {synced && (
+          <span className="text-xs text-green-600 dark:text-green-400 flex items-center gap-1">
+            <CheckCircle2 size={12} /> Cloud-synced
+          </span>
+        )}
       </div>
     </div>
   );

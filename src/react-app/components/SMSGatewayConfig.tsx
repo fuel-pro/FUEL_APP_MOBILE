@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 import { useAuth } from "@/react-app/context/AuthContext";
 import {
@@ -29,7 +29,11 @@ const CLOUD_KEY = "sms_config";
 
 export default function SMSGatewayConfig() {
   const { user } = useAuth();
+  const cloudLoadCompleteRef = useRef(false);
+  const localModifiedRef = useRef(false);
   const [config, setConfig] = useState<SMSConfig>(() => {
+    const cached = cloudStorageService.getCached<SMSConfig>(CLOUD_KEY);
+    if (cached) return cached;
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) return JSON.parse(saved);
@@ -47,6 +51,8 @@ export default function SMSGatewayConfig() {
       enabled: true,
     };
   });
+  const configRef = useRef(config);
+  configRef.current = config;
   const [showToken, setShowToken] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -55,11 +61,21 @@ export default function SMSGatewayConfig() {
   const [testing, setTesting] = useState(false);
 
   const save = () => {
+    if (!cloudLoadCompleteRef.current) {
+      setError("Still loading from cloud. Please try again in a moment.");
+      return;
+    }
+    localModifiedRef.current = true;
     setSaving(true);
     setError("");
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
-      cloudStorageService.set(CLOUD_KEY, config).catch(() => {});
+      cloudStorageService
+        .set(CLOUD_KEY, config)
+        .then(() => {
+          localModifiedRef.current = false;
+        })
+        .catch(() => {});
       setSaving(false);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000); // auto-dismiss "Saved" badge
@@ -69,13 +85,45 @@ export default function SMSGatewayConfig() {
     }
   };
 
-  // Load from cloud on mount (cross-device sync)
+  // Load from cloud on mount (cross-device sync) + realtime
   useEffect(() => {
     if (!user) return;
+    cloudLoadCompleteRef.current = false;
+    let cancelled = false;
     (async () => {
-      const cloud = await cloudStorageService.get<SMSConfig>(CLOUD_KEY);
-      if (cloud) setConfig(cloud);
+      try {
+        const cloud = await cloudStorageService.get<SMSConfig>(CLOUD_KEY);
+        if (!cancelled && cloud && !localModifiedRef.current) {
+          setConfig(cloud);
+          configRef.current = cloud;
+        }
+      } catch {
+        /* ignore */
+      } finally {
+        if (!cancelled) {
+          cloudLoadCompleteRef.current = true;
+          if (localModifiedRef.current) {
+            cloudStorageService
+              .set(CLOUD_KEY, configRef.current)
+              .catch(() => {});
+          }
+        }
+      }
     })();
+    const unsub = cloudStorageService.subscribe<SMSConfig>(
+      CLOUD_KEY,
+      undefined,
+      (cloud) => {
+        if (cloud && !localModifiedRef.current) {
+          setConfig(cloud);
+          configRef.current = cloud;
+        }
+      },
+    );
+    return () => {
+      cancelled = true;
+      unsub();
+    };
   }, [user]);
 
   const reset = () => {

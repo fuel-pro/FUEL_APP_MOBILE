@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 import { useAuth } from "@/react-app/context/AuthContext";
 import { useStations } from "@/react-app/context/StationContext";
@@ -37,7 +37,14 @@ export default function MPesaConfig() {
   const { currentStation } = useStations();
   const stationId = currentStation?.id;
   const isKenya = isKenyaStation();
+  const cloudLoadCompleteRef = useRef(false);
+  const localModifiedRef = useRef(false);
   const [config, setConfig] = useState<MpesaConfig>(() => {
+    const cached = cloudStorageService.getCached<MpesaConfig>(
+      CLOUD_KEY,
+      stationId,
+    );
+    if (cached) return cached;
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) return JSON.parse(saved);
@@ -55,6 +62,8 @@ export default function MPesaConfig() {
       callbackUrl: "",
     };
   });
+  const configRef = useRef(config);
+  configRef.current = config;
   const [showSecret, setShowSecret] = useState(false);
   const [showCredential, setShowCredential] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -62,11 +71,21 @@ export default function MPesaConfig() {
   const [error, setError] = useState("");
 
   const save = () => {
+    if (!cloudLoadCompleteRef.current) {
+      setError("Still loading from cloud. Please try again in a moment.");
+      return;
+    }
+    localModifiedRef.current = true;
     setSaving(true);
     setError("");
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
-      cloudStorageService.set(CLOUD_KEY, config, stationId).catch(() => {});
+      cloudStorageService
+        .set(CLOUD_KEY, config, stationId)
+        .then(() => {
+          localModifiedRef.current = false;
+        })
+        .catch(() => {});
       setTimeout(() => {
         setSaving(false);
         setSaved(true);
@@ -78,16 +97,48 @@ export default function MPesaConfig() {
     }
   };
 
-  // Load from cloud on mount (cross-device sync)
+  // Load from cloud on mount (cross-device sync) + realtime
   useEffect(() => {
     if (!user) return;
+    cloudLoadCompleteRef.current = false;
+    let cancelled = false;
     (async () => {
-      const cloud = await cloudStorageService.get<MpesaConfig>(
-        CLOUD_KEY,
-        stationId,
-      );
-      if (cloud) setConfig(cloud);
+      try {
+        const cloud = await cloudStorageService.get<MpesaConfig>(
+          CLOUD_KEY,
+          stationId,
+        );
+        if (!cancelled && cloud && !localModifiedRef.current) {
+          setConfig(cloud);
+          configRef.current = cloud;
+        }
+      } catch {
+        /* ignore */
+      } finally {
+        if (!cancelled) {
+          cloudLoadCompleteRef.current = true;
+          if (localModifiedRef.current) {
+            cloudStorageService
+              .set(CLOUD_KEY, configRef.current, stationId)
+              .catch(() => {});
+          }
+        }
+      }
     })();
+    const unsub = cloudStorageService.subscribe<MpesaConfig>(
+      CLOUD_KEY,
+      stationId,
+      (cloud) => {
+        if (cloud && !localModifiedRef.current) {
+          setConfig(cloud);
+          configRef.current = cloud;
+        }
+      },
+    );
+    return () => {
+      cancelled = true;
+      unsub();
+    };
   }, [user, stationId]);
 
   const reset = () => {
