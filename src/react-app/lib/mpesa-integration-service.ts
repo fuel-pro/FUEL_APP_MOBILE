@@ -319,6 +319,16 @@ export function switchToTab(tabId: string): void {
 }
 
 /**
+ * Pending-payload store: when navigateToTab is called with a payload, the
+ * payload is stored here keyed by tabId. When the target component mounts and
+ * calls onTabPayload, it immediately checks this store for a pending payload
+ * and applies it — this eliminates the lazy-load race where the 50ms
+ * tabPayload event fires before the component has mounted. The pending
+ * payload is consumed (deleted) on first read so it's only applied once.
+ */
+const pendingPayloads = new Map<string, unknown>();
+
+/**
  * Cross-tab navigation with an optional prefill payload. Switches the active
  * top-level tab AND dispatches a `tabPayload` event carrying data the target
  * component can use to pre-fill its form (e.g. opening the STK Push modal
@@ -328,15 +338,19 @@ export function switchToTab(tabId: string): void {
  * once on activation. This is the backbone of the inter-tab linking layer
  * connecting Credit ↔ Live Transaction ↔ Invoice ↔ Dashboard quick actions.
  *
- * The payload is dispatched multiple times to handle the lazy-load race: the
- * target tab's component may not be mounted yet when early dispatches fire
- * (React.lazy + Suspense). Later dispatches ensure the listener catches the
- * payload once the component renders. The receiver's onTabPayload callback is
+ * The payload is stored in a pending-payload store AND dispatched multiple
+ * times via events to handle the lazy-load race: the target tab's component
+ * may not be mounted yet when early dispatches fire (React.lazy + Suspense).
+ * On mount, onTabPayload checks the pending store first (instant), then
+ * listens for subsequent events. The receiver's onTabPayload callback is
  * idempotent (it uses functional setState, so duplicate applications are safe).
  */
 export function navigateToTab(tabId: string, payload?: unknown): void {
   window.dispatchEvent(new CustomEvent("changeTab", { detail: tabId }));
   if (payload !== undefined) {
+    // Store the pending payload so the target component can consume it on
+    // mount (eliminates the lazy-load race condition).
+    pendingPayloads.set(tabId, payload);
     const dispatch = () => {
       window.dispatchEvent(
         new CustomEvent("tabPayload", { detail: { tab: tabId, payload } }),
@@ -346,17 +360,34 @@ export function navigateToTab(tabId: string, payload?: unknown): void {
     setTimeout(dispatch, 200);
     setTimeout(dispatch, 500);
     setTimeout(dispatch, 1000);
+    // Clean up the pending payload after 3 seconds (it should have been
+    // consumed by then; if not, it's stale and shouldn't persist).
+    setTimeout(() => pendingPayloads.delete(tabId), 3000);
   }
 }
 
 /**
  * Subscribe to cross-tab prefill payloads for a given tab id. Returns an
  * unsubscribe function. The callback receives the payload once per dispatch.
+ *
+ * On registration, immediately checks the pending-payload store for a
+ * pending payload (set by navigateToTab) and applies it — this eliminates
+ * the lazy-load race where the component mounts after the tabPayload events
+ * have already fired.
  */
 export function onTabPayload(
   tabId: string,
   callback: (payload: unknown) => void,
 ): () => void {
+  // Check for a pending payload that was set by navigateToTab before this
+  // component mounted. Consume it immediately so it's only applied once.
+  const pending = pendingPayloads.get(tabId);
+  if (pending !== undefined) {
+    pendingPayloads.delete(tabId);
+    // Defer the callback to the next microtask so the component is fully
+    // mounted (refs + state are initialized) before the callback runs.
+    setTimeout(() => callback(pending), 0);
+  }
   const handler = (event: Event) => {
     const detail = (event as CustomEvent).detail as
       { tab: string; payload: unknown } | undefined;
