@@ -55,6 +55,13 @@ import {
 import { switchToTab } from "@/react-app/lib/mpesa-integration-service";
 import { cloudStorageService } from "@/react-app/lib/cloud-storage-service";
 import { getVATRate } from "@/react-app/config/pricing";
+import { lazy, Suspense } from "react";
+
+const EnhancedInventoryManagement = lazy(() =>
+  import("@/react-app/features/inventory-pro/EnhancedInventory").then((m) => ({
+    default: m.default,
+  })),
+);
 
 // Format currency — country-aware (uses the detected/station currency symbol).
 // Previously hardcoded en-US with no symbol; getCurrencySymbol/getDetectedCurrency
@@ -104,7 +111,8 @@ type InventoryTab =
   | "counts"
   | "wastage"
   | "history"
-  | "reorders";
+  | "reorders"
+  | "enhanced";
 
 const TABS = [
   { id: "products", label: "Products" },
@@ -114,6 +122,7 @@ const TABS = [
   { id: "wastage", label: "Wastage" },
   { id: "reorders", label: "Auto-Reorders" },
   { id: "history", label: "History" },
+  { id: "enhanced", label: "Pro Inventory" },
 ] as const;
 
 // Module-scoped subcomponents (UPDATE-4 rule)
@@ -2068,6 +2077,20 @@ export default function InventoryManagement() {
           <ReordersPanel refreshKey={reorderRefresh} onFulfilled={loadData} />
         )}
         {activeTab === "history" && <HistoryTable />}
+        {activeTab === "enhanced" && (
+          <Suspense
+            fallback={
+              <div className="flex items-center justify-center h-64">
+                <Loader2 className="w-8 h-8 animate-spin text-amber-500" />
+                <span className="ml-2 text-gray-500">
+                  Loading Pro Inventory...
+                </span>
+              </div>
+            }
+          >
+            <EnhancedInventoryManagement />
+          </Suspense>
+        )}
       </div>
 
       {/* Product Modal */}

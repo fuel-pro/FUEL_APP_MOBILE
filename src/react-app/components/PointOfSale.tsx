@@ -47,6 +47,14 @@ import {
   addTransaction,
   type UnifiedTransaction,
 } from "@/react-app/lib/mpesa-integration-service";
+import SubTabBar from "@/react-app/components/SubTabBar";
+import { lazy, Suspense } from "react";
+
+const EnhancedPOSView = lazy(() =>
+  import("@/react-app/features/pos-enhanced/EnhancedPOS").then((m) => ({
+    default: m.default,
+  })),
+);
 
 interface CartItem {
   id: string;
@@ -90,6 +98,7 @@ export default function PointOfSale() {
   const { state, dispatch } = useFuel();
   const { user } = useAuth();
   const { currentStation } = useStations();
+  const [posView, setPosView] = useState<"standard" | "enhanced">("standard");
   const stationId = currentStation?.id;
   // Resolve currency symbol from companyData first, then the station record,
   // then the detected currency. This ensures a US station shows "$" even if
@@ -240,7 +249,12 @@ export default function PointOfSale() {
         "pos_transactions",
         stationId,
       );
-      if (!cancelled && cloud && Array.isArray(cloud) && !localModifiedRef.current) {
+      if (
+        !cancelled &&
+        cloud &&
+        Array.isArray(cloud) &&
+        !localModifiedRef.current
+      ) {
         setTransactions(cloud);
         // Seed the fiscal counter from the persisted sale history so invoice
         // numbers never collide across sessions/devices (a fresh device would
@@ -961,1038 +975,1102 @@ export default function PointOfSale() {
 
   return (
     <div className="p-4 md:p-6 space-y-3">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-blue-900 dark:text-blue-200 flex items-center gap-2">
-          <ShoppingCart size={24} />
-          Point of Sale
-        </h2>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => setShowSettings(true)}
-            className="btn btn-outline btn-sm flex items-center gap-1"
-          >
-            <Settings size={16} />
-            {kenyaStation ? "KRA Settings" : "Tax Settings"}
-          </button>
-          <div className="text-sm text-gray-500 dark:text-gray-400">
-            Fiscal #{fiscalCounter} | Today: {transactions.length}
-          </div>
-        </div>
-      </div>
-
-      {/* KRA / Tax Compliance Banner */}
-      {kenyaStation ? (
-        !etrConfig.kraPin || etrConfig.kraPin === "P000000000X" ? (
-          <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-300 dark:border-yellow-700 rounded-lg p-3">
-            <p className="text-sm text-yellow-800 dark:text-yellow-200 flex items-center gap-2">
-              <QrCode size={16} />
-              <span>
-                <strong>KRA eTIMS Setup Required:</strong> Configure your KRA
-                PIN and ETR details in Settings for tax-compliant receipts.
+      <SubTabBar
+        tabs={[
+          { id: "standard", label: "Standard POS" },
+          { id: "enhanced", label: "Enhanced POS" },
+        ]}
+        activeTab={posView}
+        onTabChange={(id) => setPosView(id as "standard" | "enhanced")}
+      />
+      {posView === "enhanced" ? (
+        <Suspense
+          fallback={
+            <div className="flex items-center justify-center h-64">
+              <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+              <span className="ml-2 text-gray-500">
+                Loading Enhanced POS...
               </span>
-            </p>
-          </div>
-        ) : (
-          <div className="bg-green-50 dark:bg-green-900/20 border border-green-300 dark:border-green-700 rounded-lg p-2">
-            <p className="text-sm text-green-800 dark:text-green-200 flex items-center gap-2">
-              <Check size={16} />
-              <span>
-                <strong>KRA eTIMS Ready:</strong> PIN: {etrConfig.kraPin} | ETR:{" "}
-                {etrConfig.etrSerialNo}
-              </span>
-            </p>
-          </div>
-        )
+            </div>
+          }
+        >
+          <EnhancedPOSView />
+        </Suspense>
       ) : (
-        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-300 dark:border-blue-700 rounded-lg p-3">
-          <p className="text-sm text-blue-800 dark:text-blue-200 flex items-center gap-2">
-            <Settings size={16} />
-            <span>
-              <strong>Tax Settings:</strong> Configure your VAT/tax registration
-              in Settings for compliant receipts.
-            </span>
-          </p>
-        </div>
-      )}
+        <>
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <h2 className="text-2xl font-bold text-blue-900 dark:text-blue-200 flex items-center gap-2">
+              <ShoppingCart size={24} />
+              Point of Sale
+            </h2>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setShowSettings(true)}
+                className="btn btn-outline btn-sm flex items-center gap-1"
+              >
+                <Settings size={16} />
+                {kenyaStation ? "KRA Settings" : "Tax Settings"}
+              </button>
+              <div className="text-sm text-gray-500 dark:text-gray-400">
+                Fiscal #{fiscalCounter} | Today: {transactions.length}
+              </div>
+            </div>
+          </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Quick Sale Panel */}
-        <div className="lg:col-span-2 space-y-2">
-          {/* Fuel Quick Sale */}
-          <div className="card">
-            <h3 className="text-lg font-semibold mb-4">Quick Fuel Sale</h3>
-            <div className="flex flex-wrap gap-4 items-end">
-              <div className="flex flex-wrap gap-2">
-                {/* Render one button per ACTIVE fuel type configured for this
+          {/* KRA / Tax Compliance Banner */}
+          {kenyaStation ? (
+            !etrConfig.kraPin || etrConfig.kraPin === "P000000000X" ? (
+              <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-300 dark:border-yellow-700 rounded-lg p-3">
+                <p className="text-sm text-yellow-800 dark:text-yellow-200 flex items-center gap-2">
+                  <QrCode size={16} />
+                  <span>
+                    <strong>KRA eTIMS Setup Required:</strong> Configure your
+                    KRA PIN and ETR details in Settings for tax-compliant
+                    receipts.
+                  </span>
+                </p>
+              </div>
+            ) : (
+              <div className="bg-green-50 dark:bg-green-900/20 border border-green-300 dark:border-green-700 rounded-lg p-2">
+                <p className="text-sm text-green-800 dark:text-green-200 flex items-center gap-2">
+                  <Check size={16} />
+                  <span>
+                    <strong>KRA eTIMS Ready:</strong> PIN: {etrConfig.kraPin} |
+                    ETR: {etrConfig.etrSerialNo}
+                  </span>
+                </p>
+              </div>
+            )
+          ) : (
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-300 dark:border-blue-700 rounded-lg p-3">
+              <p className="text-sm text-blue-800 dark:text-blue-200 flex items-center gap-2">
+                <Settings size={16} />
+                <span>
+                  <strong>Tax Settings:</strong> Configure your VAT/tax
+                  registration in Settings for compliant receipts.
+                </span>
+              </p>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            {/* Quick Sale Panel */}
+            <div className="lg:col-span-2 space-y-2">
+              {/* Fuel Quick Sale */}
+              <div className="card">
+                <h3 className="text-lg font-semibold mb-4">Quick Fuel Sale</h3>
+                <div className="flex flex-wrap gap-4 items-end">
+                  <div className="flex flex-wrap gap-2">
+                    {/* Render one button per ACTIVE fuel type configured for this
                     station (from fuel_types_config, via useStationFuelTypes).
                     Falls back to the canonical Petrol + Diesel buttons when
                     the station has no configured fuel types yet (first run /
                     before cloud hydration) so POS is never empty. */}
-                {(() => {
-                  const active = fuelTypeApi.activeFuelTypes;
-                  if (active.length > 0) {
-                    return active.map((ft) => {
-                      const selected =
-                        fuelTypeApi.labelOf(ft.name) === quickSaleFuel;
+                    {(() => {
+                      const active = fuelTypeApi.activeFuelTypes;
+                      if (active.length > 0) {
+                        return active.map((ft) => {
+                          const selected =
+                            fuelTypeApi.labelOf(ft.name) === quickSaleFuel;
+                          return (
+                            <button
+                              key={ft.id || ft.name}
+                              onClick={() =>
+                                setQuickSaleFuel(fuelTypeApi.labelOf(ft.name))
+                              }
+                              className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                                selected
+                                  ? "bg-green-500 text-white"
+                                  : "bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
+                              }`}
+                            >
+                              {fuelTypeApi.labelOf(ft.name)} ({currencySymbol}{" "}
+                              {(fuelTypeApi.getPriceFor(ft.name) ?? 0).toFixed(
+                                2,
+                              )}
+                              /L)
+                            </button>
+                          );
+                        });
+                      }
+                      // Fallback: no configured fuel types — show canonical
+                      // Petrol + Diesel so the cashier can still make a sale.
                       return (
-                        <button
-                          key={ft.id || ft.name}
-                          onClick={() =>
-                            setQuickSaleFuel(fuelTypeApi.labelOf(ft.name))
-                          }
-                          className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                            selected
-                              ? "bg-green-500 text-white"
-                              : "bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
-                          }`}
-                        >
-                          {fuelTypeApi.labelOf(ft.name)} ({currencySymbol}{" "}
-                          {(fuelTypeApi.getPriceFor(ft.name) ?? 0).toFixed(2)}
-                          /L)
-                        </button>
-                      );
-                    });
-                  }
-                  // Fallback: no configured fuel types — show canonical
-                  // Petrol + Diesel so the cashier can still make a sale.
-                  return (
-                    <>
-                      <button
-                        onClick={() =>
-                          setQuickSaleFuel(CANONICAL_FUEL_TYPES.petrol.label)
-                        }
-                        className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                          quickSaleFuel === CANONICAL_FUEL_TYPES.petrol.label
-                            ? "bg-green-500 text-white"
-                            : "bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
-                        }`}
-                      >
-                        {CANONICAL_FUEL_TYPES.petrol.label} ({currencySymbol}{" "}
-                        {(
-                          fuelTypeApi.getPriceFor(
-                            CANONICAL_FUEL_TYPES.petrol.label,
-                          ) ??
-                          state.petrolPrice ??
-                          0
-                        ).toFixed(2)}
-                        /L)
-                      </button>
-                      <button
-                        onClick={() =>
-                          setQuickSaleFuel(CANONICAL_FUEL_TYPES.diesel.label)
-                        }
-                        className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                          quickSaleFuel === CANONICAL_FUEL_TYPES.diesel.label
-                            ? "bg-yellow-500 text-white"
-                            : "bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
-                        }`}
-                      >
-                        {CANONICAL_FUEL_TYPES.diesel.label} ({currencySymbol}{" "}
-                        {(
-                          fuelTypeApi.getPriceFor(
-                            CANONICAL_FUEL_TYPES.diesel.label,
-                          ) ??
-                          state.dieselPrice ??
-                          0
-                        ).toFixed(2)}
-                        /L)
-                      </button>
-                    </>
-                  );
-                })()}
-                <button
-                  onClick={() =>
-                    navigateToTab("fueltypes", {
-                      view: "fueltypes",
-                    } as FuelPricePrefill)
-                  }
-                  className="px-3 py-2 rounded-lg font-medium bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-200 text-sm"
-                  title="Edit fuel types & prices in Fuel Type Manager"
-                >
-                  Edit Fuels
-                </button>
-              </div>
-              <div className="flex gap-2 items-center">
-                <input
-                  type="number"
-                  value={quickSaleLitres}
-                  onChange={(e) => setQuickSaleLitres(e.target.value)}
-                  placeholder="Litres"
-                  className="w-32 px-3 py-2 rounded-lg border dark:bg-gray-800 dark:border-gray-600"
-                  step="0.1"
-                />
-                <span className="text-gray-500">
-                  = {currencySymbol}{" "}
-                  {formatNumber(
-                    (parseFloat(quickSaleLitres) || 0) *
-                      (fuelTypeApi.getPriceFor(quickSaleFuel) ??
-                        (fuelTypeApi.canonicalOf(quickSaleFuel) === "diesel"
-                          ? state.dieselPrice
-                          : state.petrolPrice) ??
-                        0),
-                  )}
-                </span>
-                <button onClick={addFuelToCart} className="btn btn-primary">
-                  <Plus size={16} /> Add
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Custom Item */}
-          <div className="card">
-            <h3 className="text-lg font-semibold mb-4">Add Custom Item</h3>
-            <div className="flex flex-wrap gap-4 items-end">
-              <input
-                type="text"
-                value={customItemName}
-                onChange={(e) => setCustomItemName(e.target.value)}
-                placeholder="Item name"
-                className="flex-1 min-w-[150px] px-3 py-2 rounded-lg border dark:bg-gray-800 dark:border-gray-600"
-              />
-              <input
-                type="number"
-                value={customItemPrice}
-                onChange={(e) => setCustomItemPrice(e.target.value)}
-                placeholder={`Price (${currencySymbol})`}
-                className="w-32 px-3 py-2 rounded-lg border dark:bg-gray-800 dark:border-gray-600"
-              />
-              <button onClick={addCustomItem} className="btn btn-outline">
-                <Plus size={16} /> Add Item
-              </button>
-            </div>
-          </div>
-
-          {/* Cart */}
-          <div className="card">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold">Current Sale</h3>
-              {cart.length > 0 && (
-                <button
-                  onClick={clearCart}
-                  className="text-red-500 hover:text-red-700 text-sm"
-                >
-                  Clear All
-                </button>
-              )}
-            </div>
-
-            {cart.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
-                <ShoppingCart size={48} className="mx-auto mb-2 opacity-30" />
-                <p>No items in cart</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {cart.map((item) => (
-                  <div
-                    key={item.id}
-                    className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg"
-                  >
-                    <div className="flex-1">
-                      <p className="font-medium">{item.name}</p>
-                      <div className="flex items-center gap-2 text-sm text-gray-500">
-                        {item.litres && <span>{item.litres} Litres</span>}
-                        <span className="px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded text-xs">
-                          VAT-{item.vatCategory}
-                        </span>
-                        {item.hsCode && (
-                          <span className="text-xs">HS: {item.hsCode}</span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      {!item.litres && (
-                        <div className="flex items-center gap-2">
+                        <>
                           <button
-                            onClick={() => updateQuantity(item.id, -1)}
-                            className="p-1 rounded bg-gray-200 dark:bg-gray-700"
+                            onClick={() =>
+                              setQuickSaleFuel(
+                                CANONICAL_FUEL_TYPES.petrol.label,
+                              )
+                            }
+                            className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                              quickSaleFuel ===
+                              CANONICAL_FUEL_TYPES.petrol.label
+                                ? "bg-green-500 text-white"
+                                : "bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
+                            }`}
                           >
-                            <Minus size={14} />
+                            {CANONICAL_FUEL_TYPES.petrol.label} (
+                            {currencySymbol}{" "}
+                            {(
+                              fuelTypeApi.getPriceFor(
+                                CANONICAL_FUEL_TYPES.petrol.label,
+                              ) ??
+                              state.petrolPrice ??
+                              0
+                            ).toFixed(2)}
+                            /L)
                           </button>
-                          <span className="w-8 text-center">
-                            {item.quantity}
+                          <button
+                            onClick={() =>
+                              setQuickSaleFuel(
+                                CANONICAL_FUEL_TYPES.diesel.label,
+                              )
+                            }
+                            className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                              quickSaleFuel ===
+                              CANONICAL_FUEL_TYPES.diesel.label
+                                ? "bg-yellow-500 text-white"
+                                : "bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
+                            }`}
+                          >
+                            {CANONICAL_FUEL_TYPES.diesel.label} (
+                            {currencySymbol}{" "}
+                            {(
+                              fuelTypeApi.getPriceFor(
+                                CANONICAL_FUEL_TYPES.diesel.label,
+                              ) ??
+                              state.dieselPrice ??
+                              0
+                            ).toFixed(2)}
+                            /L)
+                          </button>
+                        </>
+                      );
+                    })()}
+                    <button
+                      onClick={() =>
+                        navigateToTab("fueltypes", {
+                          view: "fueltypes",
+                        } as FuelPricePrefill)
+                      }
+                      className="px-3 py-2 rounded-lg font-medium bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-200 text-sm"
+                      title="Edit fuel types & prices in Fuel Type Manager"
+                    >
+                      Edit Fuels
+                    </button>
+                  </div>
+                  <div className="flex gap-2 items-center">
+                    <input
+                      type="number"
+                      value={quickSaleLitres}
+                      onChange={(e) => setQuickSaleLitres(e.target.value)}
+                      placeholder="Litres"
+                      className="w-32 px-3 py-2 rounded-lg border dark:bg-gray-800 dark:border-gray-600"
+                      step="0.1"
+                    />
+                    <span className="text-gray-500">
+                      = {currencySymbol}{" "}
+                      {formatNumber(
+                        (parseFloat(quickSaleLitres) || 0) *
+                          (fuelTypeApi.getPriceFor(quickSaleFuel) ??
+                            (fuelTypeApi.canonicalOf(quickSaleFuel) === "diesel"
+                              ? state.dieselPrice
+                              : state.petrolPrice) ??
+                            0),
+                      )}
+                    </span>
+                    <button onClick={addFuelToCart} className="btn btn-primary">
+                      <Plus size={16} /> Add
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Custom Item */}
+              <div className="card">
+                <h3 className="text-lg font-semibold mb-4">Add Custom Item</h3>
+                <div className="flex flex-wrap gap-4 items-end">
+                  <input
+                    type="text"
+                    value={customItemName}
+                    onChange={(e) => setCustomItemName(e.target.value)}
+                    placeholder="Item name"
+                    className="flex-1 min-w-[150px] px-3 py-2 rounded-lg border dark:bg-gray-800 dark:border-gray-600"
+                  />
+                  <input
+                    type="number"
+                    value={customItemPrice}
+                    onChange={(e) => setCustomItemPrice(e.target.value)}
+                    placeholder={`Price (${currencySymbol})`}
+                    className="w-32 px-3 py-2 rounded-lg border dark:bg-gray-800 dark:border-gray-600"
+                  />
+                  <button onClick={addCustomItem} className="btn btn-outline">
+                    <Plus size={16} /> Add Item
+                  </button>
+                </div>
+              </div>
+
+              {/* Cart */}
+              <div className="card">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-lg font-semibold">Current Sale</h3>
+                  {cart.length > 0 && (
+                    <button
+                      onClick={clearCart}
+                      className="text-red-500 hover:text-red-700 text-sm"
+                    >
+                      Clear All
+                    </button>
+                  )}
+                </div>
+
+                {cart.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    <ShoppingCart
+                      size={48}
+                      className="mx-auto mb-2 opacity-30"
+                    />
+                    <p>No items in cart</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {cart.map((item) => (
+                      <div
+                        key={item.id}
+                        className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg"
+                      >
+                        <div className="flex-1">
+                          <p className="font-medium">{item.name}</p>
+                          <div className="flex items-center gap-2 text-sm text-gray-500">
+                            {item.litres && <span>{item.litres} Litres</span>}
+                            <span className="px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded text-xs">
+                              VAT-{item.vatCategory}
+                            </span>
+                            {item.hsCode && (
+                              <span className="text-xs">HS: {item.hsCode}</span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-4">
+                          {!item.litres && (
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => updateQuantity(item.id, -1)}
+                                className="p-1 rounded bg-gray-200 dark:bg-gray-700"
+                              >
+                                <Minus size={14} />
+                              </button>
+                              <span className="w-8 text-center">
+                                {item.quantity}
+                              </span>
+                              <button
+                                onClick={() => updateQuantity(item.id, 1)}
+                                className="p-1 rounded bg-gray-200 dark:bg-gray-700"
+                              >
+                                <Plus size={14} />
+                              </button>
+                            </div>
+                          )}
+                          <span className="font-semibold w-24 text-right">
+                            {currencySymbol} {formatNumber(item.total)}
                           </span>
                           <button
-                            onClick={() => updateQuantity(item.id, 1)}
-                            className="p-1 rounded bg-gray-200 dark:bg-gray-700"
+                            onClick={() => removeItem(item.id)}
+                            className="p-1 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/30 rounded"
                           >
-                            <Plus size={14} />
+                            <Trash2 size={16} />
                           </button>
                         </div>
-                      )}
-                      <span className="font-semibold w-24 text-right">
-                        {currencySymbol} {formatNumber(item.total)}
-                      </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Payment Panel */}
+            <div className="space-y-2">
+              {/* Customer Info (Optional) */}
+              <div className="card">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-semibold text-gray-600 dark:text-gray-400">
+                    Customer Info (Optional)
+                  </h3>
+                  {loyaltyConfig?.isEnabled && (
+                    <button
+                      onClick={() => setShowLoyaltyScanner(!showLoyaltyScanner)}
+                      className="flex items-center gap-1 text-xs px-2 py-1 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded-lg"
+                    >
+                      <Award size={12} />
+                      {loyaltyCustomer ? "Loyalty Active" : "Add Loyalty"}
+                    </button>
+                  )}
+                </div>
+
+                {/* Loyalty Customer Status */}
+                {loyaltyCustomer && (
+                  <div
+                    className={`mb-3 p-3 rounded-lg ${TIER_COLORS[loyaltyCustomer.tier].bg}`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Star
+                          size={16}
+                          className={TIER_COLORS[loyaltyCustomer.tier].text}
+                        />
+                        <div>
+                          <p
+                            className={`text-sm font-semibold ${TIER_COLORS[loyaltyCustomer.tier].text}`}
+                          >
+                            {loyaltyCustomer.name}
+                          </p>
+                          <p
+                            className={`text-xs ${TIER_COLORS[loyaltyCustomer.tier].text}`}
+                          >
+                            {loyaltyCustomer.tier} Member •{" "}
+                            {loyaltyCustomer.points.toLocaleString()} pts
+                          </p>
+                        </div>
+                      </div>
                       <button
-                        onClick={() => removeItem(item.id)}
-                        className="p-1 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/30 rounded"
+                        onClick={() => {
+                          setLoyaltyCustomer(null);
+                          setCustomerPhone("");
+                        }}
+                        className="text-gray-500 hover:text-gray-700"
                       >
-                        <Trash2 size={16} />
+                        <X size={14} />
                       </button>
                     </div>
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
+                )}
 
-        {/* Payment Panel */}
-        <div className="space-y-2">
-          {/* Customer Info (Optional) */}
-          <div className="card">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-gray-600 dark:text-gray-400">
-                Customer Info (Optional)
-              </h3>
-              {loyaltyConfig?.isEnabled && (
-                <button
-                  onClick={() => setShowLoyaltyScanner(!showLoyaltyScanner)}
-                  className="flex items-center gap-1 text-xs px-2 py-1 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded-lg"
-                >
-                  <Award size={12} />
-                  {loyaltyCustomer ? "Loyalty Active" : "Add Loyalty"}
-                </button>
-              )}
-            </div>
-
-            {/* Loyalty Customer Status */}
-            {loyaltyCustomer && (
-              <div
-                className={`mb-3 p-3 rounded-lg ${TIER_COLORS[loyaltyCustomer.tier].bg}`}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Star
-                      size={16}
-                      className={TIER_COLORS[loyaltyCustomer.tier].text}
-                    />
-                    <div>
-                      <p
-                        className={`text-sm font-semibold ${TIER_COLORS[loyaltyCustomer.tier].text}`}
+                {/* Loyalty Scanner Modal */}
+                {showLoyaltyScanner && (
+                  <div className="mb-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                    <p className="text-xs text-gray-500 mb-2">
+                      Enter phone number or card number
+                    </p>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={customerPhone}
+                        onChange={(e) => {
+                          setCustomerPhone(e.target.value);
+                          if (e.target.value.length >= 7) {
+                            lookupLoyaltyCustomer(e.target.value);
+                          }
+                        }}
+                        placeholder="Phone or Card Number"
+                        className="flex-1 px-3 py-2 text-sm rounded-lg border dark:bg-gray-700 dark:border-gray-600"
+                      />
+                      <button
+                        onClick={() => setShowLoyaltyScanner(false)}
+                        className="px-3 py-2 text-sm text-gray-500"
                       >
-                        {loyaltyCustomer.name}
-                      </p>
-                      <p
-                        className={`text-xs ${TIER_COLORS[loyaltyCustomer.tier].text}`}
-                      >
-                        {loyaltyCustomer.tier} Member •{" "}
-                        {loyaltyCustomer.points.toLocaleString()} pts
-                      </p>
+                        Done
+                      </button>
                     </div>
                   </div>
-                  <button
-                    onClick={() => {
-                      setLoyaltyCustomer(null);
-                      setCustomerPhone("");
-                    }}
-                    className="text-gray-500 hover:text-gray-700"
-                  >
-                    <X size={14} />
-                  </button>
-                </div>
-              </div>
-            )}
+                )}
 
-            {/* Loyalty Scanner Modal */}
-            {showLoyaltyScanner && (
-              <div className="mb-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                <p className="text-xs text-gray-500 mb-2">
-                  Enter phone number or card number
-                </p>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={customerPhone}
-                    onChange={(e) => {
-                      setCustomerPhone(e.target.value);
-                      if (e.target.value.length >= 7) {
-                        lookupLoyaltyCustomer(e.target.value);
-                      }
-                    }}
-                    placeholder="Phone or Card Number"
-                    className="flex-1 px-3 py-2 text-sm rounded-lg border dark:bg-gray-700 dark:border-gray-600"
-                  />
-                  <button
-                    onClick={() => setShowLoyaltyScanner(false)}
-                    className="px-3 py-2 text-sm text-gray-500"
-                  >
-                    Done
-                  </button>
-                </div>
-              </div>
-            )}
-
-            <div className="space-y-2">
-              <input
-                type="text"
-                value={customerName}
-                onChange={(e) => setCustomerName(e.target.value)}
-                placeholder="Customer Name"
-                className="w-full px-3 py-2 text-sm rounded-lg border dark:bg-gray-800 dark:border-gray-600"
-              />
-              <input
-                type="text"
-                value={customerPin}
-                onChange={(e) => setCustomerPin(e.target.value.toUpperCase())}
-                placeholder={
-                  kenyaStation
-                    ? "Customer KRA PIN (for B2B)"
-                    : "Customer Tax ID (for B2B)"
-                }
-                className="w-full px-3 py-2 text-sm rounded-lg border dark:bg-gray-800 dark:border-gray-600"
-              />
-            </div>
-          </div>
-
-          <div className="card">
-            <h3 className="text-lg font-semibold mb-4">Payment Summary</h3>
-
-            {/* VAT Breakdown */}
-            <div className="space-y-1 mb-4 text-sm">
-              <div className="flex justify-between text-gray-600 dark:text-gray-400">
-                <span>Taxable (A-{vatPercent}%):</span>
-                <span>
-                  {currencySymbol} {formatNumber(taxableA)}
-                </span>
-              </div>
-              <div className="flex justify-between text-gray-600 dark:text-gray-400">
-                <span>VAT ({vatPercent}%):</span>
-                <span>
-                  {currencySymbol} {formatNumber(vatA)}
-                </span>
-              </div>
-              {taxableB > 0 && (
-                <div className="flex justify-between text-gray-600 dark:text-gray-400">
-                  <span>Zero-rated (B-0%):</span>
-                  <span>
-                    {currencySymbol} {formatNumber(taxableB)}
-                  </span>
-                </div>
-              )}
-              {exemptE > 0 && (
-                <div className="flex justify-between text-gray-600 dark:text-gray-400">
-                  <span>Exempt (E):</span>
-                  <span>
-                    {currencySymbol} {formatNumber(exemptE)}
-                  </span>
-                </div>
-              )}
-              <div className="flex justify-between text-xl font-bold border-t pt-2">
-                <span>Total:</span>
-                <span>
-                  {currencySymbol} {formatNumber(total)}
-                </span>
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              <label className="block text-sm font-medium">
-                Payment Method
-              </label>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  onClick={() => setPaymentMethod("cash")}
-                  className={`p-3 rounded-lg border flex flex-col items-center gap-1 transition-all ${
-                    paymentMethod === "cash"
-                      ? "border-blue-500 bg-blue-50 dark:bg-blue-900/30"
-                      : "border-gray-200 dark:border-gray-700"
-                  }`}
-                >
-                  <Banknote size={20} />
-                  <span className="text-sm">Cash</span>
-                </button>
-                <button
-                  onClick={() => setPaymentMethod("mpesa")}
-                  className={`p-3 rounded-lg border flex flex-col items-center gap-1 transition-all ${
-                    paymentMethod === "mpesa"
-                      ? "border-green-500 bg-green-50 dark:bg-green-900/30"
-                      : "border-gray-200 dark:border-gray-700"
-                  }`}
-                >
-                  <Smartphone size={20} />
-                  <span className="text-sm">M-Pesa</span>
-                </button>
-                <button
-                  onClick={() => setPaymentMethod("card")}
-                  className={`p-3 rounded-lg border flex flex-col items-center gap-1 transition-all ${
-                    paymentMethod === "card"
-                      ? "border-purple-500 bg-purple-50 dark:bg-purple-900/30"
-                      : "border-gray-200 dark:border-gray-700"
-                  }`}
-                >
-                  <CreditCard size={20} />
-                  <span className="text-sm">Card</span>
-                </button>
-                <button
-                  onClick={() => setPaymentMethod("bank")}
-                  className={`p-3 rounded-lg border flex flex-col items-center gap-1 transition-all ${
-                    paymentMethod === "bank"
-                      ? "border-orange-500 bg-orange-50 dark:bg-orange-900/30"
-                      : "border-gray-200 dark:border-gray-700"
-                  }`}
-                >
-                  <Receipt size={20} />
-                  <span className="text-sm">Bank</span>
-                </button>
-              </div>
-
-              {paymentMethod === "mpesa" && (
                 <div className="space-y-2">
                   <input
-                    type="tel"
-                    value={customerPhone}
-                    onChange={(e) => setCustomerPhone(e.target.value)}
-                    placeholder="Phone (e.g. 0712345678)"
-                    className="w-full px-3 py-2 rounded-lg border dark:bg-gray-800 dark:border-gray-600"
+                    type="text"
+                    value={customerName}
+                    onChange={(e) => setCustomerName(e.target.value)}
+                    placeholder="Customer Name"
+                    className="w-full px-3 py-2 text-sm rounded-lg border dark:bg-gray-800 dark:border-gray-600"
                   />
-                  <button
-                    onClick={initiateSTKPush}
-                    disabled={
-                      stkPushStatus === "pending" ||
-                      !customerPhone ||
-                      cart.length === 0
+                  <input
+                    type="text"
+                    value={customerPin}
+                    onChange={(e) =>
+                      setCustomerPin(e.target.value.toUpperCase())
                     }
-                    className="w-full btn bg-green-600 hover:bg-green-700 text-white disabled:opacity-50"
+                    placeholder={
+                      kenyaStation
+                        ? "Customer KRA PIN (for B2B)"
+                        : "Customer Tax ID (for B2B)"
+                    }
+                    className="w-full px-3 py-2 text-sm rounded-lg border dark:bg-gray-800 dark:border-gray-600"
+                  />
+                </div>
+              </div>
+
+              <div className="card">
+                <h3 className="text-lg font-semibold mb-4">Payment Summary</h3>
+
+                {/* VAT Breakdown */}
+                <div className="space-y-1 mb-4 text-sm">
+                  <div className="flex justify-between text-gray-600 dark:text-gray-400">
+                    <span>Taxable (A-{vatPercent}%):</span>
+                    <span>
+                      {currencySymbol} {formatNumber(taxableA)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-gray-600 dark:text-gray-400">
+                    <span>VAT ({vatPercent}%):</span>
+                    <span>
+                      {currencySymbol} {formatNumber(vatA)}
+                    </span>
+                  </div>
+                  {taxableB > 0 && (
+                    <div className="flex justify-between text-gray-600 dark:text-gray-400">
+                      <span>Zero-rated (B-0%):</span>
+                      <span>
+                        {currencySymbol} {formatNumber(taxableB)}
+                      </span>
+                    </div>
+                  )}
+                  {exemptE > 0 && (
+                    <div className="flex justify-between text-gray-600 dark:text-gray-400">
+                      <span>Exempt (E):</span>
+                      <span>
+                        {currencySymbol} {formatNumber(exemptE)}
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex justify-between text-xl font-bold border-t pt-2">
+                    <span>Total:</span>
+                    <span>
+                      {currencySymbol} {formatNumber(total)}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <label className="block text-sm font-medium">
+                    Payment Method
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => setPaymentMethod("cash")}
+                      className={`p-3 rounded-lg border flex flex-col items-center gap-1 transition-all ${
+                        paymentMethod === "cash"
+                          ? "border-blue-500 bg-blue-50 dark:bg-blue-900/30"
+                          : "border-gray-200 dark:border-gray-700"
+                      }`}
+                    >
+                      <Banknote size={20} />
+                      <span className="text-sm">Cash</span>
+                    </button>
+                    <button
+                      onClick={() => setPaymentMethod("mpesa")}
+                      className={`p-3 rounded-lg border flex flex-col items-center gap-1 transition-all ${
+                        paymentMethod === "mpesa"
+                          ? "border-green-500 bg-green-50 dark:bg-green-900/30"
+                          : "border-gray-200 dark:border-gray-700"
+                      }`}
+                    >
+                      <Smartphone size={20} />
+                      <span className="text-sm">M-Pesa</span>
+                    </button>
+                    <button
+                      onClick={() => setPaymentMethod("card")}
+                      className={`p-3 rounded-lg border flex flex-col items-center gap-1 transition-all ${
+                        paymentMethod === "card"
+                          ? "border-purple-500 bg-purple-50 dark:bg-purple-900/30"
+                          : "border-gray-200 dark:border-gray-700"
+                      }`}
+                    >
+                      <CreditCard size={20} />
+                      <span className="text-sm">Card</span>
+                    </button>
+                    <button
+                      onClick={() => setPaymentMethod("bank")}
+                      className={`p-3 rounded-lg border flex flex-col items-center gap-1 transition-all ${
+                        paymentMethod === "bank"
+                          ? "border-orange-500 bg-orange-50 dark:bg-orange-900/30"
+                          : "border-gray-200 dark:border-gray-700"
+                      }`}
+                    >
+                      <Receipt size={20} />
+                      <span className="text-sm">Bank</span>
+                    </button>
+                  </div>
+
+                  {paymentMethod === "mpesa" && (
+                    <div className="space-y-2">
+                      <input
+                        type="tel"
+                        value={customerPhone}
+                        onChange={(e) => setCustomerPhone(e.target.value)}
+                        placeholder="Phone (e.g. 0712345678)"
+                        className="w-full px-3 py-2 rounded-lg border dark:bg-gray-800 dark:border-gray-600"
+                      />
+                      <button
+                        onClick={initiateSTKPush}
+                        disabled={
+                          stkPushStatus === "pending" ||
+                          !customerPhone ||
+                          cart.length === 0
+                        }
+                        className="w-full btn bg-green-600 hover:bg-green-700 text-white disabled:opacity-50"
+                      >
+                        {stkPushStatus === "pending" ? (
+                          <>Processing STK Push...</>
+                        ) : stkPushStatus === "success" ? (
+                          <>
+                            <Check size={16} /> Payment Received
+                          </>
+                        ) : (
+                          <>Send STK Push</>
+                        )}
+                      </button>
+                    </div>
+                  )}
+
+                  {paymentMethod !== "mpesa" && (
+                    <button
+                      onClick={processPayment}
+                      disabled={cart.length === 0}
+                      className="w-full btn btn-primary text-lg py-3 disabled:opacity-50"
+                    >
+                      Complete Sale
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Recent Transactions */}
+              <div className="card">
+                <h3 className="text-lg font-semibold mb-4">
+                  Recent Transactions
+                </h3>
+                <div className="space-y-2 max-h-60 overflow-y-auto">
+                  {transactions.length === 0 ? (
+                    <p className="text-sm text-gray-500 text-center py-4">
+                      No transactions yet
+                    </p>
+                  ) : (
+                    transactions.slice(0, 5).map((txn) => (
+                      <div
+                        key={txn.id}
+                        className="p-2 bg-gray-50 dark:bg-gray-800 rounded cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
+                        onClick={() => {
+                          setCurrentTransaction(txn);
+                          setShowReceipt(true);
+                        }}
+                      >
+                        <div className="flex justify-between text-sm">
+                          <span className="font-mono text-xs">
+                            {txn.invoiceNumber}
+                          </span>
+                          <span className="font-semibold">
+                            {currencySymbol} {formatNumber(txn.total)}
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-xs text-gray-500">
+                          <span>{txn.paymentMethod.toUpperCase()}</span>
+                          <span>{formatDate(txn.timestamp)}</span>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Tax/KRA Settings Modal */}
+          {showSettings && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white dark:bg-gray-900 rounded-lg max-w-lg w-full max-h-[90vh] overflow-y-auto">
+                <div className="p-4 border-b dark:border-gray-700 flex justify-between items-center">
+                  <h3 className="font-semibold">
+                    {kenyaStation
+                      ? "KRA eTIMS / ETR Configuration"
+                      : "Tax / VAT Configuration"}
+                  </h3>
+                  <button
+                    onClick={() => setShowSettings(false)}
+                    className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded"
                   >
-                    {stkPushStatus === "pending" ? (
-                      <>Processing STK Push...</>
-                    ) : stkPushStatus === "success" ? (
-                      <>
-                        <Check size={16} /> Payment Received
-                      </>
-                    ) : (
-                      <>Send STK Push</>
-                    )}
+                    <X size={20} />
                   </button>
                 </div>
-              )}
-
-              {paymentMethod !== "mpesa" && (
-                <button
-                  onClick={processPayment}
-                  disabled={cart.length === 0}
-                  className="w-full btn btn-primary text-lg py-3 disabled:opacity-50"
-                >
-                  Complete Sale
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Recent Transactions */}
-          <div className="card">
-            <h3 className="text-lg font-semibold mb-4">Recent Transactions</h3>
-            <div className="space-y-2 max-h-60 overflow-y-auto">
-              {transactions.length === 0 ? (
-                <p className="text-sm text-gray-500 text-center py-4">
-                  No transactions yet
-                </p>
-              ) : (
-                transactions.slice(0, 5).map((txn) => (
-                  <div
-                    key={txn.id}
-                    className="p-2 bg-gray-50 dark:bg-gray-800 rounded cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
-                    onClick={() => {
-                      setCurrentTransaction(txn);
-                      setShowReceipt(true);
-                    }}
-                  >
-                    <div className="flex justify-between text-sm">
-                      <span className="font-mono text-xs">
-                        {txn.invoiceNumber}
-                      </span>
-                      <span className="font-semibold">
-                        {currencySymbol} {formatNumber(txn.total)}
-                      </span>
+                <div className="p-4 space-y-2">
+                  {kenyaStation && (
+                    <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg text-sm text-blue-800 dark:text-blue-200">
+                      <p>
+                        <strong>Note:</strong> To enable full KRA eTIMS
+                        compliance, you must register with KRA at{" "}
+                        <a
+                          href="https://itax.kra.go.ke"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="underline"
+                        >
+                          itax.kra.go.ke
+                        </a>{" "}
+                        and obtain your ETR device credentials.
+                      </p>
                     </div>
-                    <div className="flex justify-between text-xs text-gray-500">
-                      <span>{txn.paymentMethod.toUpperCase()}</span>
-                      <span>{formatDate(txn.timestamp)}</span>
+                  )}
+                  {!kenyaStation && (
+                    <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg text-sm text-blue-800 dark:text-blue-200">
+                      <p>
+                        <strong>Note:</strong> Configure your tax registration
+                        details for compliant receipts. The VAT rate is
+                        auto-detected from your station's country.
+                      </p>
                     </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
+                  )}
 
-      {/* Tax/KRA Settings Modal */}
-      {showSettings && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-900 rounded-lg max-w-lg w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-4 border-b dark:border-gray-700 flex justify-between items-center">
-              <h3 className="font-semibold">
-                {kenyaStation
-                  ? "KRA eTIMS / ETR Configuration"
-                  : "Tax / VAT Configuration"}
-              </h3>
-              <button
-                onClick={() => setShowSettings(false)}
-                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded"
-              >
-                <X size={20} />
-              </button>
-            </div>
-            <div className="p-4 space-y-2">
-              {kenyaStation && (
-                <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg text-sm text-blue-800 dark:text-blue-200">
-                  <p>
-                    <strong>Note:</strong> To enable full KRA eTIMS compliance,
-                    you must register with KRA at{" "}
-                    <a
-                      href="https://itax.kra.go.ke"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="underline"
-                    >
-                      itax.kra.go.ke
-                    </a>{" "}
-                    and obtain your ETR device credentials.
-                  </p>
-                </div>
-              )}
-              {!kenyaStation && (
-                <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg text-sm text-blue-800 dark:text-blue-200">
-                  <p>
-                    <strong>Note:</strong> Configure your tax registration
-                    details for compliant receipts. The VAT rate is
-                    auto-detected from your station's country.
-                  </p>
-                </div>
-              )}
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="col-span-2">
-                  <label className="block text-sm font-medium mb-1">
-                    Business Name
-                  </label>
-                  <input
-                    type="text"
-                    value={state.companyData.name}
-                    onChange={(e) => updateCompanyData("name", e.target.value)}
-                    className="w-full px-3 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">
-                    {kenyaStation ? "KRA PIN" : "Tax ID / VAT No"} *
-                  </label>
-                  <input
-                    type="text"
-                    value={state.companyData.kraPin}
-                    onChange={(e) =>
-                      updateCompanyData("kraPin", e.target.value.toUpperCase())
-                    }
-                    placeholder={kenyaStation ? "P000000000X" : "EIN / VAT No"}
-                    className="w-full px-3 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">
-                    VAT Reg. No.
-                  </label>
-                  <input
-                    type="text"
-                    value={state.companyData.vatRegNo}
-                    onChange={(e) =>
-                      updateCompanyData("vatRegNo", e.target.value)
-                    }
-                    className="w-full px-3 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600"
-                  />
-                </div>
-                <div className="col-span-2">
-                  <label className="block text-sm font-medium mb-1">
-                    Physical Address
-                  </label>
-                  <input
-                    type="text"
-                    value={state.companyData.physicalAddress}
-                    onChange={(e) =>
-                      updateCompanyData("physicalAddress", e.target.value)
-                    }
-                    className="w-full px-3 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Town</label>
-                  <input
-                    type="text"
-                    value={state.companyData.town}
-                    onChange={(e) => updateCompanyData("town", e.target.value)}
-                    className="w-full px-3 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">
-                    {kenyaStation ? "County" : "State / Province"}
-                  </label>
-                  <input
-                    type="text"
-                    value={state.companyData.county}
-                    onChange={(e) =>
-                      updateCompanyData("county", e.target.value)
-                    }
-                    className="w-full px-3 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600"
-                  />
-                </div>
-                {kenyaStation && (
-                  <>
-                    <div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="col-span-2">
                       <label className="block text-sm font-medium mb-1">
-                        ETR Serial No.
+                        Business Name
                       </label>
                       <input
                         type="text"
-                        value={state.companyData.etrSerialNo}
+                        value={state.companyData.name}
                         onChange={(e) =>
-                          updateCompanyData("etrSerialNo", e.target.value)
+                          updateCompanyData("name", e.target.value)
                         }
-                        placeholder="ETR-00000000"
                         className="w-full px-3 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600"
                       />
                     </div>
                     <div>
                       <label className="block text-sm font-medium mb-1">
-                        CU Serial No.
+                        {kenyaStation ? "KRA PIN" : "Tax ID / VAT No"} *
                       </label>
                       <input
                         type="text"
-                        value={state.companyData.cuSerialNo}
+                        value={state.companyData.kraPin}
                         onChange={(e) =>
-                          updateCompanyData("cuSerialNo", e.target.value)
+                          updateCompanyData(
+                            "kraPin",
+                            e.target.value.toUpperCase(),
+                          )
                         }
-                        placeholder="CU-00000000"
+                        placeholder={
+                          kenyaStation ? "P000000000X" : "EIN / VAT No"
+                        }
                         className="w-full px-3 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600"
                       />
                     </div>
-                  </>
-                )}
-                <div>
-                  <label className="block text-sm font-medium mb-1">
-                    Invoice Prefix
-                  </label>
-                  <input
-                    type="text"
-                    value={state.companyData.etrInvoicePrefix}
-                    onChange={(e) =>
-                      updateCompanyData(
-                        "etrInvoicePrefix",
-                        e.target.value.toUpperCase(),
-                      )
-                    }
-                    placeholder="INV"
-                    maxLength={5}
-                    className="w-full px-3 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">
-                    Phone
-                  </label>
-                  <input
-                    type="text"
-                    value={state.companyData.contacts}
-                    onChange={(e) =>
-                      updateCompanyData("contacts", e.target.value)
-                    }
-                    className="w-full px-3 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600"
-                  />
-                </div>
-              </div>
-
-              <button
-                onClick={() => setShowSettings(false)}
-                className="w-full btn btn-primary"
-              >
-                Save Settings
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Receipt Modal - KRA Compliant */}
-      {showReceipt && currentTransaction && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-900 rounded-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-4 border-b dark:border-gray-700 flex justify-between items-center">
-              <h3 className="font-semibold">Tax Invoice / Receipt</h3>
-              <div className="flex gap-2">
-                <button
-                  onClick={printReceipt}
-                  className="btn btn-primary btn-sm"
-                >
-                  <Printer size={14} /> Print
-                </button>
-                <button
-                  onClick={() => setShowReceipt(false)}
-                  className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded"
-                >
-                  <X size={20} />
-                </button>
-              </div>
-            </div>
-
-            <div
-              ref={receiptRef}
-              className="p-6 font-mono text-sm bg-white text-black"
-            >
-              {/* Receipt Header */}
-              <div className="receipt-header text-center mb-4 pb-4 border-b border-dashed border-gray-400">
-                {state.companyData?.logo && (
-                  <img
-                    src={state.companyData.logo}
-                    alt="Logo"
-                    className="mx-auto mb-2 max-h-16 max-w-[120px] object-contain"
-                    crossOrigin="anonymous"
-                  />
-                )}
-                <h2 className="text-lg font-bold">{etrConfig.businessName}</h2>
-                {etrConfig.address && (
-                  <p className="text-xs">{etrConfig.address}</p>
-                )}
-                {(etrConfig.town || etrConfig.county) && (
-                  <p className="text-xs">
-                    {[etrConfig.town, etrConfig.county]
-                      .filter(Boolean)
-                      .join(", ")}
-                  </p>
-                )}
-                {etrConfig.phone && (
-                  <p className="text-xs">Tel: {etrConfig.phone}</p>
-                )}
-                {etrConfig.email && (
-                  <p className="text-xs">{etrConfig.email}</p>
-                )}
-                <p className="text-xs mt-1">
-                  <strong>{kenyaStation ? "PIN:" : "Tax ID:"}</strong>{" "}
-                  {etrConfig.kraPin}
-                </p>
-                {etrConfig.vatRegNo && (
-                  <p className="text-xs">
-                    <strong>VAT:</strong> {etrConfig.vatRegNo}
-                  </p>
-                )}
-              </div>
-
-              <div className="tax-invoice-title bg-black text-white text-center py-1 font-bold text-sm mb-3">
-                TAX INVOICE
-              </div>
-
-              {/* Invoice Details */}
-              <div className="space-y-1 text-xs mb-3">
-                <div className="flex justify-between">
-                  <span>
-                    <strong>Invoice No:</strong>
-                  </span>
-                  <span>{currentTransaction.invoiceNumber}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>
-                    <strong>Date/Time:</strong>
-                  </span>
-                  <span>{formatDate(currentTransaction.timestamp)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>
-                    <strong>Cashier:</strong>
-                  </span>
-                  <span>{currentTransaction.cashier}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>
-                    <strong>Payment:</strong>
-                  </span>
-                  <span>{currentTransaction.paymentMethod.toUpperCase()}</span>
-                </div>
-                {currentTransaction.customerName && (
-                  <div className="flex justify-between">
-                    <span>
-                      <strong>Customer:</strong>
-                    </span>
-                    <span>{currentTransaction.customerName}</span>
-                  </div>
-                )}
-                {currentTransaction.customerPin && (
-                  <div className="flex justify-between">
-                    <span>
-                      <strong>
-                        {kenyaStation ? "Buyer PIN:" : "Customer Tax ID:"}
-                      </strong>
-                    </span>
-                    <span>{currentTransaction.customerPin}</span>
-                  </div>
-                )}
-              </div>
-
-              <div className="border-t border-dashed border-gray-400 my-3"></div>
-
-              {/* Items Header */}
-              <div className="flex justify-between text-xs font-bold border-b border-gray-400 pb-1 mb-2">
-                <span>ITEM</span>
-                <span>AMOUNT</span>
-              </div>
-
-              {/* Items */}
-              <div className="space-y-2 mb-3">
-                {currentTransaction.items.map((item, idx) => (
-                  <div key={idx}>
-                    <div className="flex justify-between text-xs">
-                      <span className="font-medium">{item.name}</span>
-                      <span>
-                        {currencySymbol} {formatNumber(item.total)}
-                      </span>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">
+                        VAT Reg. No.
+                      </label>
+                      <input
+                        type="text"
+                        value={state.companyData.vatRegNo}
+                        onChange={(e) =>
+                          updateCompanyData("vatRegNo", e.target.value)
+                        }
+                        className="w-full px-3 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600"
+                      />
                     </div>
-                    <div className="text-[10px] text-gray-600 ml-2">
-                      {item.litres
-                        ? `${item.litres} L`
-                        : `${item.quantity} x ${currencySymbol} ${formatNumber(item.unitPrice)}`}
-                      {" | VAT-"}
-                      {item.vatCategory}
-                      {item.hsCode && ` | HS:${item.hsCode}`}
+                    <div className="col-span-2">
+                      <label className="block text-sm font-medium mb-1">
+                        Physical Address
+                      </label>
+                      <input
+                        type="text"
+                        value={state.companyData.physicalAddress}
+                        onChange={(e) =>
+                          updateCompanyData("physicalAddress", e.target.value)
+                        }
+                        className="w-full px-3 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600"
+                      />
                     </div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="border-t border-dashed border-gray-400 my-3"></div>
-
-              {/* VAT Summary */}
-              <div className="vat-summary text-xs space-y-1 mb-3">
-                <div className="font-bold border-b pb-1">VAT SUMMARY</div>
-                <div className="flex justify-between">
-                  <span>A-{vatPercent}%:</span>
-                  <span>
-                    Taxable:{" "}
-                    {formatNumber(
-                      currentTransaction.subtotal - currentTransaction.vatE,
-                    )}{" "}
-                    | VAT: {formatNumber(currentTransaction.vatA)}
-                  </span>
-                </div>
-                {currentTransaction.vatB > 0 && (
-                  <div className="flex justify-between">
-                    <span>B-0.00%:</span>
-                    <span>
-                      Taxable: {formatNumber(currentTransaction.vatB)} | VAT:
-                      0.00
-                    </span>
-                  </div>
-                )}
-                {currentTransaction.vatE > 0 && (
-                  <div className="flex justify-between">
-                    <span>E-Exempt:</span>
-                    <span>{formatNumber(currentTransaction.vatE)}</span>
-                  </div>
-                )}
-              </div>
-
-              <div className="border-t border-gray-400 my-3"></div>
-
-              {/* Totals */}
-              <div className="space-y-1 text-xs">
-                <div className="flex justify-between">
-                  <span>Subtotal (Excl. VAT):</span>
-                  <span>
-                    {currencySymbol}{" "}
-                    {formatNumber(
-                      currentTransaction.subtotal - currentTransaction.totalVat,
+                    <div>
+                      <label className="block text-sm font-medium mb-1">
+                        Town
+                      </label>
+                      <input
+                        type="text"
+                        value={state.companyData.town}
+                        onChange={(e) =>
+                          updateCompanyData("town", e.target.value)
+                        }
+                        className="w-full px-3 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">
+                        {kenyaStation ? "County" : "State / Province"}
+                      </label>
+                      <input
+                        type="text"
+                        value={state.companyData.county}
+                        onChange={(e) =>
+                          updateCompanyData("county", e.target.value)
+                        }
+                        className="w-full px-3 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600"
+                      />
+                    </div>
+                    {kenyaStation && (
+                      <>
+                        <div>
+                          <label className="block text-sm font-medium mb-1">
+                            ETR Serial No.
+                          </label>
+                          <input
+                            type="text"
+                            value={state.companyData.etrSerialNo}
+                            onChange={(e) =>
+                              updateCompanyData("etrSerialNo", e.target.value)
+                            }
+                            placeholder="ETR-00000000"
+                            className="w-full px-3 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium mb-1">
+                            CU Serial No.
+                          </label>
+                          <input
+                            type="text"
+                            value={state.companyData.cuSerialNo}
+                            onChange={(e) =>
+                              updateCompanyData("cuSerialNo", e.target.value)
+                            }
+                            placeholder="CU-00000000"
+                            className="w-full px-3 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600"
+                          />
+                        </div>
+                      </>
                     )}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Total VAT:</span>
-                  <span>
-                    {currencySymbol} {formatNumber(currentTransaction.totalVat)}
-                  </span>
-                </div>
-              </div>
-
-              <div className="flex justify-between text-lg font-bold border-t-2 border-b-2 border-black py-2 my-3">
-                <span>TOTAL:</span>
-                <span>
-                  {currencySymbol} {formatNumber(currentTransaction.total)}
-                </span>
-              </div>
-
-              {/* ETR/KRA Section */}
-              <div className="etr-section mt-4 pt-3 border-t border-dashed border-gray-400 text-center">
-                {kenyaStation ? (
-                  <>
-                    <p className="font-bold text-xs">ELECTRONIC TAX REGISTER</p>
-                    <p className="text-[10px] mt-1">
-                      ETR S/N: {etrConfig.etrSerialNo}
-                    </p>
-                    <p className="text-[10px]">
-                      CU S/N: {etrConfig.cuSerialNo}
-                    </p>
-                    <p className="text-[10px]">
-                      CU Invoice No: {currentTransaction.cuInvoiceNo}
-                    </p>
-                    <p className="text-[10px]">
-                      Fiscal Counter: #{currentTransaction.fiscalCounter}
-                    </p>
-                    <div className="mt-2 text-[9px] font-mono break-all bg-gray-100 p-1 rounded">
-                      <strong>Signature:</strong>{" "}
-                      {currentTransaction.cuSignature}
+                    <div>
+                      <label className="block text-sm font-medium mb-1">
+                        Invoice Prefix
+                      </label>
+                      <input
+                        type="text"
+                        value={state.companyData.etrInvoicePrefix}
+                        onChange={(e) =>
+                          updateCompanyData(
+                            "etrInvoicePrefix",
+                            e.target.value.toUpperCase(),
+                          )
+                        }
+                        placeholder="INV"
+                        maxLength={5}
+                        className="w-full px-3 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600"
+                      />
                     </div>
-                  </>
-                ) : (
-                  <>
-                    <p className="font-bold text-xs">RECEIPT</p>
-                    <p className="text-[10px] mt-1">
-                      Receipt No: {currentTransaction.invoiceNumber}
-                    </p>
-                    <p className="text-[10px]">
-                      Transaction ID: #{currentTransaction.fiscalCounter}
-                    </p>
-                  </>
-                )}
-
-                {/* QR Code */}
-                {qrCodeUrl && (
-                  <div className="qr-code mt-3">
-                    <img
-                      src={qrCodeUrl}
-                      alt="Verification QR"
-                      className="mx-auto"
-                      style={{ width: "100px", height: "100px" }}
-                    />
-                    <p className="text-[8px] mt-1">
-                      {kenyaStation
-                        ? "Scan to verify at KRA iTax"
-                        : "Scan to verify this invoice"}
-                    </p>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">
+                        Phone
+                      </label>
+                      <input
+                        type="text"
+                        value={state.companyData.contacts}
+                        onChange={(e) =>
+                          updateCompanyData("contacts", e.target.value)
+                        }
+                        className="w-full px-3 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-600"
+                      />
+                    </div>
                   </div>
-                )}
 
-                <p className="mt-2 text-[9px] font-bold">
-                  {kenyaStation
-                    ? "*KRA eTIMS COMPLIANT INVOICE*"
-                    : "*TAX COMPLIANT INVOICE*"}
-                </p>
-                <p className="text-[8px]">
-                  {kenyaStation ? "Powered by TIMS" : "Powered by FuelPro"}
-                </p>
-              </div>
-
-              {/* Footer */}
-              <div className="footer mt-4 text-center text-xs border-t border-dashed border-gray-400 pt-3">
-                <p className="font-semibold">Thank you for your business!</p>
-                <p className="text-[10px]">
-                  Goods once sold are not returnable
-                </p>
-                <p className="text-[10px] mt-2 opacity-60">
-                  {window.location.hostname}
-                </p>
+                  <button
+                    onClick={() => setShowSettings(false)}
+                    className="w-full btn btn-primary"
+                  >
+                    Save Settings
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        </div>
+          )}
+
+          {/* Receipt Modal - KRA Compliant */}
+          {showReceipt && currentTransaction && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white dark:bg-gray-900 rounded-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
+                <div className="p-4 border-b dark:border-gray-700 flex justify-between items-center">
+                  <h3 className="font-semibold">Tax Invoice / Receipt</h3>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={printReceipt}
+                      className="btn btn-primary btn-sm"
+                    >
+                      <Printer size={14} /> Print
+                    </button>
+                    <button
+                      onClick={() => setShowReceipt(false)}
+                      className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded"
+                    >
+                      <X size={20} />
+                    </button>
+                  </div>
+                </div>
+
+                <div
+                  ref={receiptRef}
+                  className="p-6 font-mono text-sm bg-white text-black"
+                >
+                  {/* Receipt Header */}
+                  <div className="receipt-header text-center mb-4 pb-4 border-b border-dashed border-gray-400">
+                    {state.companyData?.logo && (
+                      <img
+                        src={state.companyData.logo}
+                        alt="Logo"
+                        className="mx-auto mb-2 max-h-16 max-w-[120px] object-contain"
+                        crossOrigin="anonymous"
+                      />
+                    )}
+                    <h2 className="text-lg font-bold">
+                      {etrConfig.businessName}
+                    </h2>
+                    {etrConfig.address && (
+                      <p className="text-xs">{etrConfig.address}</p>
+                    )}
+                    {(etrConfig.town || etrConfig.county) && (
+                      <p className="text-xs">
+                        {[etrConfig.town, etrConfig.county]
+                          .filter(Boolean)
+                          .join(", ")}
+                      </p>
+                    )}
+                    {etrConfig.phone && (
+                      <p className="text-xs">Tel: {etrConfig.phone}</p>
+                    )}
+                    {etrConfig.email && (
+                      <p className="text-xs">{etrConfig.email}</p>
+                    )}
+                    <p className="text-xs mt-1">
+                      <strong>{kenyaStation ? "PIN:" : "Tax ID:"}</strong>{" "}
+                      {etrConfig.kraPin}
+                    </p>
+                    {etrConfig.vatRegNo && (
+                      <p className="text-xs">
+                        <strong>VAT:</strong> {etrConfig.vatRegNo}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="tax-invoice-title bg-black text-white text-center py-1 font-bold text-sm mb-3">
+                    TAX INVOICE
+                  </div>
+
+                  {/* Invoice Details */}
+                  <div className="space-y-1 text-xs mb-3">
+                    <div className="flex justify-between">
+                      <span>
+                        <strong>Invoice No:</strong>
+                      </span>
+                      <span>{currentTransaction.invoiceNumber}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>
+                        <strong>Date/Time:</strong>
+                      </span>
+                      <span>{formatDate(currentTransaction.timestamp)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>
+                        <strong>Cashier:</strong>
+                      </span>
+                      <span>{currentTransaction.cashier}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>
+                        <strong>Payment:</strong>
+                      </span>
+                      <span>
+                        {currentTransaction.paymentMethod.toUpperCase()}
+                      </span>
+                    </div>
+                    {currentTransaction.customerName && (
+                      <div className="flex justify-between">
+                        <span>
+                          <strong>Customer:</strong>
+                        </span>
+                        <span>{currentTransaction.customerName}</span>
+                      </div>
+                    )}
+                    {currentTransaction.customerPin && (
+                      <div className="flex justify-between">
+                        <span>
+                          <strong>
+                            {kenyaStation ? "Buyer PIN:" : "Customer Tax ID:"}
+                          </strong>
+                        </span>
+                        <span>{currentTransaction.customerPin}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="border-t border-dashed border-gray-400 my-3"></div>
+
+                  {/* Items Header */}
+                  <div className="flex justify-between text-xs font-bold border-b border-gray-400 pb-1 mb-2">
+                    <span>ITEM</span>
+                    <span>AMOUNT</span>
+                  </div>
+
+                  {/* Items */}
+                  <div className="space-y-2 mb-3">
+                    {currentTransaction.items.map((item, idx) => (
+                      <div key={idx}>
+                        <div className="flex justify-between text-xs">
+                          <span className="font-medium">{item.name}</span>
+                          <span>
+                            {currencySymbol} {formatNumber(item.total)}
+                          </span>
+                        </div>
+                        <div className="text-[10px] text-gray-600 ml-2">
+                          {item.litres
+                            ? `${item.litres} L`
+                            : `${item.quantity} x ${currencySymbol} ${formatNumber(item.unitPrice)}`}
+                          {" | VAT-"}
+                          {item.vatCategory}
+                          {item.hsCode && ` | HS:${item.hsCode}`}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="border-t border-dashed border-gray-400 my-3"></div>
+
+                  {/* VAT Summary */}
+                  <div className="vat-summary text-xs space-y-1 mb-3">
+                    <div className="font-bold border-b pb-1">VAT SUMMARY</div>
+                    <div className="flex justify-between">
+                      <span>A-{vatPercent}%:</span>
+                      <span>
+                        Taxable:{" "}
+                        {formatNumber(
+                          currentTransaction.subtotal - currentTransaction.vatE,
+                        )}{" "}
+                        | VAT: {formatNumber(currentTransaction.vatA)}
+                      </span>
+                    </div>
+                    {currentTransaction.vatB > 0 && (
+                      <div className="flex justify-between">
+                        <span>B-0.00%:</span>
+                        <span>
+                          Taxable: {formatNumber(currentTransaction.vatB)} |
+                          VAT: 0.00
+                        </span>
+                      </div>
+                    )}
+                    {currentTransaction.vatE > 0 && (
+                      <div className="flex justify-between">
+                        <span>E-Exempt:</span>
+                        <span>{formatNumber(currentTransaction.vatE)}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="border-t border-gray-400 my-3"></div>
+
+                  {/* Totals */}
+                  <div className="space-y-1 text-xs">
+                    <div className="flex justify-between">
+                      <span>Subtotal (Excl. VAT):</span>
+                      <span>
+                        {currencySymbol}{" "}
+                        {formatNumber(
+                          currentTransaction.subtotal -
+                            currentTransaction.totalVat,
+                        )}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Total VAT:</span>
+                      <span>
+                        {currencySymbol}{" "}
+                        {formatNumber(currentTransaction.totalVat)}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-between text-lg font-bold border-t-2 border-b-2 border-black py-2 my-3">
+                    <span>TOTAL:</span>
+                    <span>
+                      {currencySymbol} {formatNumber(currentTransaction.total)}
+                    </span>
+                  </div>
+
+                  {/* ETR/KRA Section */}
+                  <div className="etr-section mt-4 pt-3 border-t border-dashed border-gray-400 text-center">
+                    {kenyaStation ? (
+                      <>
+                        <p className="font-bold text-xs">
+                          ELECTRONIC TAX REGISTER
+                        </p>
+                        <p className="text-[10px] mt-1">
+                          ETR S/N: {etrConfig.etrSerialNo}
+                        </p>
+                        <p className="text-[10px]">
+                          CU S/N: {etrConfig.cuSerialNo}
+                        </p>
+                        <p className="text-[10px]">
+                          CU Invoice No: {currentTransaction.cuInvoiceNo}
+                        </p>
+                        <p className="text-[10px]">
+                          Fiscal Counter: #{currentTransaction.fiscalCounter}
+                        </p>
+                        <div className="mt-2 text-[9px] font-mono break-all bg-gray-100 p-1 rounded">
+                          <strong>Signature:</strong>{" "}
+                          {currentTransaction.cuSignature}
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <p className="font-bold text-xs">RECEIPT</p>
+                        <p className="text-[10px] mt-1">
+                          Receipt No: {currentTransaction.invoiceNumber}
+                        </p>
+                        <p className="text-[10px]">
+                          Transaction ID: #{currentTransaction.fiscalCounter}
+                        </p>
+                      </>
+                    )}
+
+                    {/* QR Code */}
+                    {qrCodeUrl && (
+                      <div className="qr-code mt-3">
+                        <img
+                          src={qrCodeUrl}
+                          alt="Verification QR"
+                          className="mx-auto"
+                          style={{ width: "100px", height: "100px" }}
+                        />
+                        <p className="text-[8px] mt-1">
+                          {kenyaStation
+                            ? "Scan to verify at KRA iTax"
+                            : "Scan to verify this invoice"}
+                        </p>
+                      </div>
+                    )}
+
+                    <p className="mt-2 text-[9px] font-bold">
+                      {kenyaStation
+                        ? "*KRA eTIMS COMPLIANT INVOICE*"
+                        : "*TAX COMPLIANT INVOICE*"}
+                    </p>
+                    <p className="text-[8px]">
+                      {kenyaStation ? "Powered by TIMS" : "Powered by FuelPro"}
+                    </p>
+                  </div>
+
+                  {/* Footer */}
+                  <div className="footer mt-4 text-center text-xs border-t border-dashed border-gray-400 pt-3">
+                    <p className="font-semibold">
+                      Thank you for your business!
+                    </p>
+                    <p className="text-[10px]">
+                      Goods once sold are not returnable
+                    </p>
+                    <p className="text-[10px] mt-2 opacity-60">
+                      {window.location.hostname}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

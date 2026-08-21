@@ -3,6 +3,8 @@ import { createRoot } from "react-dom/client";
 import "@/react-app/index.css";
 import App from "@/react-app/App.tsx";
 import { initErrorMonitoring } from "@/react-app/lib/errorMonitoring";
+import "@/react-app/services/enhanced/SyncService";
+import "@/react-app/lib/enhanced/performance";
 
 // Activate error monitoring (Sentry when VITE_SENTRY_DSN is set; otherwise
 // the listeners below still surface uncaught errors to the console + a

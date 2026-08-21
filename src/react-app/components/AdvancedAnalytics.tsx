@@ -1,4 +1,11 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import {
+  useState,
+  useEffect,
+  useMemo,
+  useCallback,
+  lazy,
+  Suspense,
+} from "react";
 import { useFuel } from "@/react-app/context/FuelContext";
 import { useStationFuelTypes } from "@/react-app/hooks/useStationFuelTypes";
 import { useLocation } from "@/react-app/context/LocationContext";
@@ -18,10 +25,18 @@ import {
   RefreshCw,
   ShoppingCart,
   Plus,
+  Sparkles,
 } from "lucide-react";
 import { formatNumber } from "@/react-app/utils/formatUtils";
 import { switchToTab } from "@/react-app/lib/mpesa-integration-service";
 import { getDetectedCurrency } from "@/react-app/lib/currency";
+import SubTabBar from "@/react-app/components/SubTabBar";
+
+const EnhancedAnalyticsDashboard = lazy(() =>
+  import("@/react-app/features/analytics/EnhancedAnalyticsDashboard").then(
+    (m) => ({ default: m.default }),
+  ),
+);
 
 interface PredictionPoint {
   date: string;
@@ -49,6 +64,9 @@ export default function AdvancedAnalytics() {
   const location = useLocation();
   const { currentStation } = useStations();
   const fuelTypeApi = useStationFuelTypes(currentStation?.id);
+  const [activeSubTab, setActiveSubTab] = useState<"analytics" | "enhanced">(
+    "analytics",
+  );
   // Use the station's currency (reactive to station/company changes) rather
   // than the device-detected location currency, which was wrong for
   // multi-country setups (a Kenyan station viewed from a US browser showed $).
@@ -503,384 +521,414 @@ export default function AdvancedAnalytics() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 bg-violet-100 dark:bg-violet-900/30 rounded-xl">
-            <BarChart3
-              size={24}
-              className="text-violet-600 dark:text-violet-400"
-            />
-          </div>
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-              Advanced Analytics
-            </h2>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              Real data from your sales records
-              {dataSource === "supabase" && (
-                <span className="ml-2 text-green-600 dark:text-green-400">
-                  • Live (Supabase)
-                </span>
-              )}
-              {dataSource === "local" && (
-                <span className="ml-2 text-amber-600 dark:text-amber-400">
-                  • Local records
-                </span>
-              )}
-              {dataSource === "none" && (
-                <span className="ml-2 text-gray-400">• No data yet</span>
-              )}
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => fetchAnalytics()}
-            className="p-2 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-            title="Refresh data"
-            aria-label="Refresh analytics data"
-          >
-            <RefreshCw size={16} />
-          </button>
-          <button
-            onClick={exportCSV}
-            disabled={salesData.length === 0}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-violet-600 text-white text-sm font-medium hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            title="Export data as CSV"
-          >
-            <Download size={16} />
-            <span className="hidden sm:inline">Export CSV</span>
-          </button>
-        </div>
-      </div>
-
-      {error && (
-        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4 flex items-start gap-3">
-          <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
-          <div className="flex-1">
-            <p className="text-sm text-amber-800 dark:text-amber-200">
-              {error}
-            </p>
-            <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
-              {dataSource === "local"
-                ? "Showing data from local records."
-                : "No data available. Try refreshing or recording a sale."}
-            </p>
-            <button
-              onClick={() => fetchAnalytics()}
-              className="mt-2 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-600 text-white text-xs font-medium hover:bg-amber-700 transition-colors"
-            >
-              <RefreshCw size={12} /> Retry
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Empty State — new stations with no sales see a helpful CTA instead of
-          a confusing zero-filled dashboard. */}
-      {dataSource === "none" && !error && (
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-8 border border-gray-200 dark:border-gray-700 text-center">
-          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center">
-            <BarChart3
-              size={32}
-              className="text-violet-600 dark:text-violet-400"
-            />
-          </div>
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-            No sales data yet
-          </h3>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mb-4 max-w-md mx-auto">
-            Your analytics dashboard will populate automatically once you start
-            recording sales. Create your first sale or check your station
-            inventory to get started.
-          </p>
-          <div className="flex flex-wrap gap-2 justify-center">
-            <button
-              onClick={() => switchToTab("pos")}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-violet-600 text-white text-sm font-medium hover:bg-violet-700 transition-colors"
-            >
-              <Plus size={16} /> Record a Sale
-            </button>
-            <button
-              onClick={() => switchToTab("inventory")}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-sm font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-            >
-              <ShoppingCart size={16} /> View Inventory
-            </button>
-            <button
-              onClick={() => switchToTab("sales")}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-sm font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-            >
-              <Activity size={16} /> Sales Tracking
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Time Range */}
-      <div className="flex gap-2 flex-wrap">
-        {(["7d", "30d", "90d", "1y"] as const).map((r) => (
-          <button
-            key={r}
-            onClick={() => setTimeRange(r)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${timeRange === r ? "bg-violet-600 text-white" : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600"}`}
-            aria-pressed={timeRange === r}
-          >
-            {r === "7d"
-              ? "7 Days"
-              : r === "30d"
-                ? "30 Days"
-                : r === "90d"
-                  ? "90 Days"
-                  : "1 Year"}
-          </button>
-        ))}
-      </div>
-
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
-          <p className="text-xs text-gray-500">Total Revenue</p>
-          <p className="text-2xl font-bold text-gray-900 dark:text-white">
-            {currencySymbol}
-            {formatNumber(totals.totalRevenue, 0)}
-          </p>
-        </div>
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
-          <p className="text-xs text-gray-500">Avg Daily Sales</p>
-          <p className="text-2xl font-bold text-green-600 dark:text-green-400">
-            {currencySymbol}
-            {formatNumber(totals.avgDaily, 0)}
-          </p>
-        </div>
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
-          <p className="text-xs text-gray-500">7-Day Growth</p>
-          <p
-            className={`text-2xl font-bold flex items-center gap-1 ${growthData.growth7d >= 0 ? "text-green-600" : "text-red-600"}`}
-          >
-            {growthData.growth7d >= 0 ? (
-              <TrendingUp size={20} />
-            ) : (
-              <TrendingDown size={20} />
-            )}
-            {Math.abs(growthData.growth7d).toFixed(1)}%
-          </p>
-        </div>
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
-          <p className="text-xs text-gray-500">Transactions</p>
-          <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-            {formatNumber(totals.totalTransactions)}
-          </p>
-        </div>
-      </div>
-
-      {/* Sales Trend Chart */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700 shadow-sm">
-        <h3 className="text-sm font-semibold dark:text-white mb-4">
-          Daily Revenue Trend ({currencySymbol})
-        </h3>
-        {salesData.length === 0 ? (
-          <div className="h-48 flex items-center justify-center text-gray-400">
-            <p>No sales data available for this period</p>
-          </div>
-        ) : (
-          <div className="h-48 flex items-end gap-0.5">
-            {salesData.map((d, i) => {
-              const height = (d.total / maxVol) * 100;
-              return (
-                <div
-                  key={d.date}
-                  className="flex-1 flex flex-col justify-end group relative"
-                  title={`${d.date}: ${currencySymbol}${formatNumber(d.total)} (${d.count} txns)`}
-                >
-                  <div
-                    className="w-full bg-gradient-to-t from-violet-600 to-violet-400 rounded-t-sm"
-                    style={{
-                      height: `${height * 0.4}px`,
-                      minHeight: d.total > 0 ? "4px" : "0",
-                    }}
-                  />
-                  {i % Math.max(1, Math.floor(salesData.length / 10)) === 0 && (
-                    <span className="text-[8px] text-gray-400 mt-1 -rotate-45 origin-top-left whitespace-nowrap">
-                      {d.date.slice(5)}
+      <SubTabBar
+        tabs={[
+          { id: "analytics", label: "Analytics" },
+          { id: "enhanced", label: "Enhanced Dashboard" },
+        ]}
+        activeTab={activeSubTab}
+        onTabChange={(id) => setActiveSubTab(id as "analytics" | "enhanced")}
+      />
+      {activeSubTab === "enhanced" ? (
+        <Suspense
+          fallback={
+            <div className="flex items-center justify-center h-64">
+              <Loader2 className="w-8 h-8 animate-spin text-violet-600" />
+              <span className="ml-2 text-gray-500">
+                Loading enhanced dashboard...
+              </span>
+            </div>
+          }
+        >
+          <EnhancedAnalyticsDashboard />
+        </Suspense>
+      ) : (
+        <>
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-violet-100 dark:bg-violet-900/30 rounded-xl">
+                <BarChart3
+                  size={24}
+                  className="text-violet-600 dark:text-violet-400"
+                />
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+                  Advanced Analytics
+                </h2>
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  Real data from your sales records
+                  {dataSource === "supabase" && (
+                    <span className="ml-2 text-green-600 dark:text-green-400">
+                      • Live (Supabase)
                     </span>
                   )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-        <div className="flex gap-4 mt-4 text-xs text-gray-500">
-          <span>
-            Peak Day: <strong className="text-violet-600">{peakDay}</strong>
-          </span>
-          <span>
-            Data Points: <strong>{salesData.length}</strong>
-          </span>
-        </div>
-      </div>
-
-      {/* 14-Day Prediction */}
-      <div className="bg-gradient-to-br from-violet-50 to-purple-50 dark:from-violet-900/10 dark:to-purple-900/10 rounded-xl p-5 border border-violet-200 dark:border-violet-800 shadow-sm">
-        <h3 className="text-sm font-semibold text-violet-900 dark:text-violet-200 mb-1 flex items-center gap-2">
-          <Target size={16} /> 14-Day Revenue Forecast
-        </h3>
-        <p className="text-[11px] text-violet-600 dark:text-violet-400 mb-4">
-          Based on your historical sales patterns
-        </p>
-        <div className="h-40 flex items-end gap-1">
-          {predictions.map((p) => {
-            const predH = (p.predicted / predMax) * 100;
-            const rangeH = ((p.upper - p.lower) / predMax) * 100;
-            return (
-              <div
-                key={p.date}
-                className="flex-1 flex flex-col justify-end group relative"
-                title={`${p.date}: ${currencySymbol}${formatNumber(p.predicted)}`}
-              >
-                <div className="w-full flex flex-col items-center">
-                  <div
-                    className="w-full bg-violet-200/50 dark:bg-violet-800/20 rounded-t-sm relative"
-                    style={{ height: `${rangeH * 0.3}px` }}
-                  >
-                    <div
-                      className="absolute bottom-0 w-full bg-violet-500 rounded-sm"
-                      style={{ height: `${predH * 0.3}px`, minHeight: "4px" }}
-                    />
-                  </div>
-                </div>
-                <span className="text-[8px] text-gray-400 mt-1 text-center">
-                  {p.date.slice(5)}
-                </span>
+                  {dataSource === "local" && (
+                    <span className="ml-2 text-amber-600 dark:text-amber-400">
+                      • Local records
+                    </span>
+                  )}
+                  {dataSource === "none" && (
+                    <span className="ml-2 text-gray-400">• No data yet</span>
+                  )}
+                </p>
               </div>
-            );
-          })}
-        </div>
-        <div className="flex gap-4 mt-3 text-xs">
-          <span className="flex items-center gap-1">
-            <div className="w-3 h-3 bg-violet-500 rounded-sm" /> Predicted
-          </span>
-          <span className="flex items-center gap-1">
-            <div className="w-3 h-3 bg-violet-200 rounded-sm" /> Confidence
-            Range
-          </span>
-        </div>
-      </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => fetchAnalytics()}
+                className="p-2 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                title="Refresh data"
+                aria-label="Refresh analytics data"
+              >
+                <RefreshCw size={16} />
+              </button>
+              <button
+                onClick={exportCSV}
+                disabled={salesData.length === 0}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-violet-600 text-white text-sm font-medium hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                title="Export data as CSV"
+              >
+                <Download size={16} />
+                <span className="hidden sm:inline">Export CSV</span>
+              </button>
+            </div>
+          </div>
 
-      {/* Insights */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700">
-          <h3 className="text-sm font-semibold dark:text-white mb-3 flex items-center gap-2">
-            <Activity size={16} className="text-green-500" /> Key Insights
-          </h3>
-          <div className="space-y-2 text-xs">
-            <div className="flex items-start gap-2 p-2 bg-green-50 dark:bg-green-900/10 rounded-lg">
-              <TrendingUp size={12} className="text-green-500 mt-0.5" />
-              <p className="text-green-700 dark:text-green-400">
-                Peak sales day: <strong>{peakDay}</strong>
+          {error && (
+            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4 flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
+              <div className="flex-1">
+                <p className="text-sm text-amber-800 dark:text-amber-200">
+                  {error}
+                </p>
+                <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                  {dataSource === "local"
+                    ? "Showing data from local records."
+                    : "No data available. Try refreshing or recording a sale."}
+                </p>
+                <button
+                  onClick={() => fetchAnalytics()}
+                  className="mt-2 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-600 text-white text-xs font-medium hover:bg-amber-700 transition-colors"
+                >
+                  <RefreshCw size={12} /> Retry
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Empty State — new stations with no sales see a helpful CTA instead of
+          a confusing zero-filled dashboard. */}
+          {dataSource === "none" && !error && (
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-8 border border-gray-200 dark:border-gray-700 text-center">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center">
+                <BarChart3
+                  size={32}
+                  className="text-violet-600 dark:text-violet-400"
+                />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                No sales data yet
+              </h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-4 max-w-md mx-auto">
+                Your analytics dashboard will populate automatically once you
+                start recording sales. Create your first sale or check your
+                station inventory to get started.
+              </p>
+              <div className="flex flex-wrap gap-2 justify-center">
+                <button
+                  onClick={() => switchToTab("pos")}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-violet-600 text-white text-sm font-medium hover:bg-violet-700 transition-colors"
+                >
+                  <Plus size={16} /> Record a Sale
+                </button>
+                <button
+                  onClick={() => switchToTab("inventory")}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-sm font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                >
+                  <ShoppingCart size={16} /> View Inventory
+                </button>
+                <button
+                  onClick={() => switchToTab("sales")}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-sm font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                >
+                  <Activity size={16} /> Sales Tracking
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Time Range */}
+          <div className="flex gap-2 flex-wrap">
+            {(["7d", "30d", "90d", "1y"] as const).map((r) => (
+              <button
+                key={r}
+                onClick={() => setTimeRange(r)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${timeRange === r ? "bg-violet-600 text-white" : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600"}`}
+                aria-pressed={timeRange === r}
+              >
+                {r === "7d"
+                  ? "7 Days"
+                  : r === "30d"
+                    ? "30 Days"
+                    : r === "90d"
+                      ? "90 Days"
+                      : "1 Year"}
+              </button>
+            ))}
+          </div>
+
+          {/* KPI Cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+              <p className="text-xs text-gray-500">Total Revenue</p>
+              <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                {currencySymbol}
+                {formatNumber(totals.totalRevenue, 0)}
               </p>
             </div>
-            <div className="flex items-start gap-2 p-2 bg-blue-50 dark:bg-blue-900/10 rounded-lg">
-              <Target size={12} className="text-blue-500 mt-0.5" />
-              <p className="text-blue-700 dark:text-blue-400">
-                14-day forecast: {currencySymbol}
-                {formatNumber(
-                  predictions.reduce((s, p) => s + p.predicted, 0),
-                  0,
-                )}
-              </p>
-            </div>
-            <div className="flex items-start gap-2 p-2 bg-amber-50 dark:bg-amber-900/10 rounded-lg">
-              <Layers size={12} className="text-amber-500 mt-0.5" />
-              <p className="text-amber-700 dark:text-amber-400">
-                Avg daily: {currencySymbol}
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+              <p className="text-xs text-gray-500">Avg Daily Sales</p>
+              <p className="text-2xl font-bold text-green-600 dark:text-green-400">
+                {currencySymbol}
                 {formatNumber(totals.avgDaily, 0)}
               </p>
             </div>
-          </div>
-        </div>
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700">
-          <h3 className="text-sm font-semibold dark:text-white mb-3 flex items-center gap-2">
-            <PieChart size={16} className="text-purple-500" /> Period Growth
-          </h3>
-          <div className="space-y-3">
-            <div>
-              <div className="flex justify-between text-xs mb-1">
-                <span className="text-gray-600 dark:text-gray-400">
-                  7-Day Change
-                </span>
-                <span
-                  className={`font-semibold ${growthData.growth7d >= 0 ? "text-green-600" : "text-red-600"}`}
-                >
-                  {growthData.growth7d >= 0 ? "+" : ""}
-                  {growthData.growth7d.toFixed(1)}%
-                </span>
-              </div>
-              <div className="w-full h-3 bg-gray-200 dark:bg-gray-700 rounded-full">
-                <div
-                  className={`h-full rounded-full transition-all ${growthData.growth7d >= 0 ? "bg-green-500" : "bg-red-500"}`}
-                  style={{
-                    width: `${Math.min(100, Math.abs(growthData.growth7d) * 2)}%`,
-                  }}
-                />
-              </div>
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+              <p className="text-xs text-gray-500">7-Day Growth</p>
+              <p
+                className={`text-2xl font-bold flex items-center gap-1 ${growthData.growth7d >= 0 ? "text-green-600" : "text-red-600"}`}
+              >
+                {growthData.growth7d >= 0 ? (
+                  <TrendingUp size={20} />
+                ) : (
+                  <TrendingDown size={20} />
+                )}
+                {Math.abs(growthData.growth7d).toFixed(1)}%
+              </p>
             </div>
-            <div>
-              <div className="flex justify-between text-xs mb-1">
-                <span className="text-gray-600 dark:text-gray-400">
-                  30-Day Trend
-                </span>
-                <span
-                  className={`font-semibold ${growthData.growth30d >= 0 ? "text-green-600" : "text-red-600"}`}
-                >
-                  {growthData.growth30d >= 0 ? "+" : ""}
-                  {growthData.growth30d.toFixed(1)}%
-                </span>
-              </div>
-              <div className="w-full h-3 bg-gray-200 dark:bg-gray-700 rounded-full">
-                <div
-                  className={`h-full rounded-full transition-all ${growthData.growth30d >= 0 ? "bg-blue-500" : "bg-red-500"}`}
-                  style={{
-                    width: `${Math.min(100, Math.abs(growthData.growth30d) * 2)}%`,
-                  }}
-                />
-              </div>
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+              <p className="text-xs text-gray-500">Transactions</p>
+              <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                {formatNumber(totals.totalTransactions)}
+              </p>
             </div>
           </div>
-        </div>
-      </div>
 
-      {/* Tank Levels */}
-      {inventoryLevels.length > 0 && (
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700">
-          <h3 className="text-sm font-semibold dark:text-white mb-4 flex items-center gap-2">
-            <Activity size={16} className="text-cyan-500" /> Current Tank Levels
-          </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {inventoryLevels.map((inv, idx) => (
-              <div key={idx} className="space-y-2">
-                <div className="flex justify-between text-xs">
-                  <span className="text-gray-600 dark:text-gray-400">
-                    {inv.fuel_type}
-                  </span>
-                  <span className="font-semibold dark:text-white">
-                    {inv.percentage.toFixed(1)}%
-                  </span>
-                </div>
-                <div className="w-full h-4 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                  <div
-                    className={`h-full rounded-full transition-all ${inv.percentage > 50 ? "bg-green-500" : inv.percentage > 25 ? "bg-amber-500" : "bg-red-500"}`}
-                    style={{ width: `${inv.percentage}%` }}
-                  />
-                </div>
-                <p className="text-[10px] text-gray-400">
-                  {formatNumber(inv.current_level)} /{" "}
-                  {formatNumber(inv.tank_capacity)} L
-                </p>
+          {/* Sales Trend Chart */}
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700 shadow-sm">
+            <h3 className="text-sm font-semibold dark:text-white mb-4">
+              Daily Revenue Trend ({currencySymbol})
+            </h3>
+            {salesData.length === 0 ? (
+              <div className="h-48 flex items-center justify-center text-gray-400">
+                <p>No sales data available for this period</p>
               </div>
-            ))}
+            ) : (
+              <div className="h-48 flex items-end gap-0.5">
+                {salesData.map((d, i) => {
+                  const height = (d.total / maxVol) * 100;
+                  return (
+                    <div
+                      key={d.date}
+                      className="flex-1 flex flex-col justify-end group relative"
+                      title={`${d.date}: ${currencySymbol}${formatNumber(d.total)} (${d.count} txns)`}
+                    >
+                      <div
+                        className="w-full bg-gradient-to-t from-violet-600 to-violet-400 rounded-t-sm"
+                        style={{
+                          height: `${height * 0.4}px`,
+                          minHeight: d.total > 0 ? "4px" : "0",
+                        }}
+                      />
+                      {i % Math.max(1, Math.floor(salesData.length / 10)) ===
+                        0 && (
+                        <span className="text-[8px] text-gray-400 mt-1 -rotate-45 origin-top-left whitespace-nowrap">
+                          {d.date.slice(5)}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            <div className="flex gap-4 mt-4 text-xs text-gray-500">
+              <span>
+                Peak Day: <strong className="text-violet-600">{peakDay}</strong>
+              </span>
+              <span>
+                Data Points: <strong>{salesData.length}</strong>
+              </span>
+            </div>
           </div>
-        </div>
+
+          {/* 14-Day Prediction */}
+          <div className="bg-gradient-to-br from-violet-50 to-purple-50 dark:from-violet-900/10 dark:to-purple-900/10 rounded-xl p-5 border border-violet-200 dark:border-violet-800 shadow-sm">
+            <h3 className="text-sm font-semibold text-violet-900 dark:text-violet-200 mb-1 flex items-center gap-2">
+              <Target size={16} /> 14-Day Revenue Forecast
+            </h3>
+            <p className="text-[11px] text-violet-600 dark:text-violet-400 mb-4">
+              Based on your historical sales patterns
+            </p>
+            <div className="h-40 flex items-end gap-1">
+              {predictions.map((p) => {
+                const predH = (p.predicted / predMax) * 100;
+                const rangeH = ((p.upper - p.lower) / predMax) * 100;
+                return (
+                  <div
+                    key={p.date}
+                    className="flex-1 flex flex-col justify-end group relative"
+                    title={`${p.date}: ${currencySymbol}${formatNumber(p.predicted)}`}
+                  >
+                    <div className="w-full flex flex-col items-center">
+                      <div
+                        className="w-full bg-violet-200/50 dark:bg-violet-800/20 rounded-t-sm relative"
+                        style={{ height: `${rangeH * 0.3}px` }}
+                      >
+                        <div
+                          className="absolute bottom-0 w-full bg-violet-500 rounded-sm"
+                          style={{
+                            height: `${predH * 0.3}px`,
+                            minHeight: "4px",
+                          }}
+                        />
+                      </div>
+                    </div>
+                    <span className="text-[8px] text-gray-400 mt-1 text-center">
+                      {p.date.slice(5)}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="flex gap-4 mt-3 text-xs">
+              <span className="flex items-center gap-1">
+                <div className="w-3 h-3 bg-violet-500 rounded-sm" /> Predicted
+              </span>
+              <span className="flex items-center gap-1">
+                <div className="w-3 h-3 bg-violet-200 rounded-sm" /> Confidence
+                Range
+              </span>
+            </div>
+          </div>
+
+          {/* Insights */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700">
+              <h3 className="text-sm font-semibold dark:text-white mb-3 flex items-center gap-2">
+                <Activity size={16} className="text-green-500" /> Key Insights
+              </h3>
+              <div className="space-y-2 text-xs">
+                <div className="flex items-start gap-2 p-2 bg-green-50 dark:bg-green-900/10 rounded-lg">
+                  <TrendingUp size={12} className="text-green-500 mt-0.5" />
+                  <p className="text-green-700 dark:text-green-400">
+                    Peak sales day: <strong>{peakDay}</strong>
+                  </p>
+                </div>
+                <div className="flex items-start gap-2 p-2 bg-blue-50 dark:bg-blue-900/10 rounded-lg">
+                  <Target size={12} className="text-blue-500 mt-0.5" />
+                  <p className="text-blue-700 dark:text-blue-400">
+                    14-day forecast: {currencySymbol}
+                    {formatNumber(
+                      predictions.reduce((s, p) => s + p.predicted, 0),
+                      0,
+                    )}
+                  </p>
+                </div>
+                <div className="flex items-start gap-2 p-2 bg-amber-50 dark:bg-amber-900/10 rounded-lg">
+                  <Layers size={12} className="text-amber-500 mt-0.5" />
+                  <p className="text-amber-700 dark:text-amber-400">
+                    Avg daily: {currencySymbol}
+                    {formatNumber(totals.avgDaily, 0)}
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700">
+              <h3 className="text-sm font-semibold dark:text-white mb-3 flex items-center gap-2">
+                <PieChart size={16} className="text-purple-500" /> Period Growth
+              </h3>
+              <div className="space-y-3">
+                <div>
+                  <div className="flex justify-between text-xs mb-1">
+                    <span className="text-gray-600 dark:text-gray-400">
+                      7-Day Change
+                    </span>
+                    <span
+                      className={`font-semibold ${growthData.growth7d >= 0 ? "text-green-600" : "text-red-600"}`}
+                    >
+                      {growthData.growth7d >= 0 ? "+" : ""}
+                      {growthData.growth7d.toFixed(1)}%
+                    </span>
+                  </div>
+                  <div className="w-full h-3 bg-gray-200 dark:bg-gray-700 rounded-full">
+                    <div
+                      className={`h-full rounded-full transition-all ${growthData.growth7d >= 0 ? "bg-green-500" : "bg-red-500"}`}
+                      style={{
+                        width: `${Math.min(100, Math.abs(growthData.growth7d) * 2)}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <div className="flex justify-between text-xs mb-1">
+                    <span className="text-gray-600 dark:text-gray-400">
+                      30-Day Trend
+                    </span>
+                    <span
+                      className={`font-semibold ${growthData.growth30d >= 0 ? "text-green-600" : "text-red-600"}`}
+                    >
+                      {growthData.growth30d >= 0 ? "+" : ""}
+                      {growthData.growth30d.toFixed(1)}%
+                    </span>
+                  </div>
+                  <div className="w-full h-3 bg-gray-200 dark:bg-gray-700 rounded-full">
+                    <div
+                      className={`h-full rounded-full transition-all ${growthData.growth30d >= 0 ? "bg-blue-500" : "bg-red-500"}`}
+                      style={{
+                        width: `${Math.min(100, Math.abs(growthData.growth30d) * 2)}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Tank Levels */}
+          {inventoryLevels.length > 0 && (
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700">
+              <h3 className="text-sm font-semibold dark:text-white mb-4 flex items-center gap-2">
+                <Activity size={16} className="text-cyan-500" /> Current Tank
+                Levels
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {inventoryLevels.map((inv, idx) => (
+                  <div key={idx} className="space-y-2">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-gray-600 dark:text-gray-400">
+                        {inv.fuel_type}
+                      </span>
+                      <span className="font-semibold dark:text-white">
+                        {inv.percentage.toFixed(1)}%
+                      </span>
+                    </div>
+                    <div className="w-full h-4 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all ${inv.percentage > 50 ? "bg-green-500" : inv.percentage > 25 ? "bg-amber-500" : "bg-red-500"}`}
+                        style={{ width: `${inv.percentage}%` }}
+                      />
+                    </div>
+                    <p className="text-[10px] text-gray-400">
+                      {formatNumber(inv.current_level)} /{" "}
+                      {formatNumber(inv.tank_capacity)} L
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
