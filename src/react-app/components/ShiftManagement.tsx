@@ -10,10 +10,13 @@ import {
   Sunrise,
   Download,
   Search,
+  DollarSign,
+  Users,
 } from "lucide-react";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 import { useAuth } from "@/react-app/context/AuthContext";
 import { useStations } from "@/react-app/context/StationContext";
+import { switchToTab } from "@/react-app/lib/mpesa-integration-service";
 
 interface Shift {
   id: string;
@@ -460,6 +463,20 @@ export default function ShiftManagement() {
           title="Export employee roster to CSV"
         >
           <Download size={16} /> Export
+        </button>
+        <button
+          onClick={() => switchToTab("payroll")}
+          className="px-4 py-2.5 bg-emerald-100 dark:bg-emerald-900/30 hover:bg-emerald-200 dark:hover:bg-emerald-900/50 rounded-xl text-sm font-medium flex items-center gap-2 text-emerald-700 dark:text-emerald-400"
+          title="Manage employee payroll"
+        >
+          <DollarSign size={16} /> Payroll
+        </button>
+        <button
+          onClick={() => switchToTab("team")}
+          className="px-4 py-2.5 bg-indigo-100 dark:bg-indigo-900/30 hover:bg-indigo-200 dark:hover:bg-indigo-900/50 rounded-xl text-sm font-medium flex items-center gap-2 text-indigo-700 dark:text-indigo-400"
+          title="Manage team access & roles"
+        >
+          <Users size={16} /> Team
         </button>
       </div>
 

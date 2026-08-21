@@ -33,7 +33,9 @@ import {
   Truck,
   Building2,
   ShoppingCart,
+  BarChart3,
 } from "lucide-react";
+import { switchToTab } from "@/react-app/lib/mpesa-integration-service";
 
 interface Expense {
   id: string;
@@ -608,6 +610,20 @@ export default function ExpenseTracker() {
               className="px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-sm font-medium flex items-center gap-2 transition-all shadow-lg shadow-amber-500/20"
             >
               <Plus size={16} /> Add Expense
+            </button>
+            <button
+              onClick={() => switchToTab("reports")}
+              className="px-4 py-2.5 bg-blue-500 hover:bg-blue-600 text-white rounded-xl text-sm font-medium flex items-center gap-2 transition-all"
+              title="View expense breakdown in Reports"
+            >
+              <PieChart size={16} /> Reports
+            </button>
+            <button
+              onClick={() => switchToTab("analytics")}
+              className="px-4 py-2.5 bg-cyan-500 hover:bg-cyan-600 text-white rounded-xl text-sm font-medium flex items-center gap-2 transition-all"
+              title="View analytics dashboard"
+            >
+              <BarChart3 size={16} /> Analytics
             </button>
           </div>
 

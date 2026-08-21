@@ -18,8 +18,11 @@ import {
   Edit2,
   Trash2,
   Download,
+  FileText,
+  CreditCard,
 } from "lucide-react";
 import { formatNumber } from "@/react-app/utils/formatUtils";
+import { navigateToTab } from "@/react-app/lib/mpesa-integration-service";
 
 interface Customer {
   id: string;
@@ -918,6 +921,36 @@ export default function CustomerLoyalty() {
                           title="Rewards"
                         >
                           <Gift size={14} />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigateToTab("invoice", {
+                              customerName: c.name || "",
+                              description: c.preferredFuel
+                                ? `${c.preferredFuel} fuel`
+                                : "",
+                            });
+                          }}
+                          className="p-1.5 bg-purple-50 hover:bg-purple-100 dark:bg-purple-900/20 rounded-lg text-purple-600"
+                          title="Create Invoice"
+                        >
+                          <FileText size={14} />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigateToTab("livetransaction", {
+                              phone: c.phone || "",
+                              account_reference: c.vehicleReg || c.name || "",
+                              transaction_desc: `Loyalty: ${c.name || ""}`,
+                              openStkPush: true,
+                            });
+                          }}
+                          className="p-1.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/20 rounded-lg text-emerald-600"
+                          title="Collect via M-PESA"
+                        >
+                          <CreditCard size={14} />
                         </button>
                         <button
                           onClick={(e) => {
