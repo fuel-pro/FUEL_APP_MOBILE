@@ -301,10 +301,11 @@
                 handleUpdateFound(reg);
               });
               checkForUpdate(reg);
-              // Poll for updates every 5 minutes while the tab is open.
+              // Poll for updates every 60 seconds while the tab is open so a
+              // new deploy is picked up within a minute (was 5 minutes).
               setInterval(function () {
                 checkForUpdate(reg);
-              }, 300000);
+              }, 60000);
             })
             .catch(function () {});
         }

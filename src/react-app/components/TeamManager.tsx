@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   Users,
   Link2,
@@ -40,6 +40,15 @@ import {
   CheckSquare,
   Square,
   UserX,
+  ClipboardList,
+  Target,
+  Radio,
+  Wifi,
+  WifiOff,
+  Layers,
+  GitBranch,
+  Phone,
+  IdCard,
 } from "lucide-react";
 import { useAuth } from "@/react-app/context/AuthContext";
 import {
@@ -434,6 +443,19 @@ export default function TeamManager() {
   // "code" (no-signup access code). Blend the two access methods into one
   // entry point.
   const [addMode, setAddMode] = useState<"invite" | "code">("invite");
+
+  // ── Member detail drawer (replaces the inline expand for richer detail).
+  //    Binds the 6 areas: clicking a member opens a slide-over panel showing
+  //    their role, access method, assigned pumps/shifts, audit log, and the
+  //    quick actions (extend, revoke, enable/disable) in one place.
+  const [drawerMemberId, setDrawerMemberId] = useState<string | null>(null);
+
+  // ── Live sync status — shows whether the access-code store is synced to
+  //    the cloud (green) or stale/offline (amber). Bind to the cloudStorage
+  //    service realtime subscription so the badge reflects the real state.
+  const [syncOnline, setSyncOnline] = useState(true);
+
+  // ── Onboarding checklist — defined later (after combinedMembers/invites)
 
   // Tab ID to human-readable label mapping
   const tabIdToLabel: Record<string, string> = {
@@ -922,6 +944,96 @@ export default function TeamManager() {
     [inviteMembers, codeMembers],
   );
 
+  // ── Onboarding checklist — guides the owner through the 6 areas in a
+  //    professional "setup progress" banner. Each item links to its area.
+  //    Persisted to localStorage so it survives reloads (per-station).
+  const checklistKey = `fuelpro_team_checklist_${currentStation?.id || "default"}`;
+  const [checklist, setChecklist] = useState<Record<string, boolean>>(() => {
+    try {
+      const raw = localStorage.getItem(
+        `fuelpro_team_checklist_${currentStation?.id || "default"}`,
+      );
+      return raw ? JSON.parse(raw) : {};
+    } catch {
+      return {};
+    }
+  });
+  const checklistItems = useMemo(
+    () => [
+      {
+        id: "add-member",
+        label: "Add a team member",
+        desc: "Invite via link or create an access code",
+        done: combinedMembers.length > 0,
+        action: () => {
+          setActiveView("team");
+          setShowCreate(true);
+        },
+      },
+      {
+        id: "share-invite",
+        label: "Share an invite link",
+        desc: "Copy/WhatsApp/email an active invite",
+        done: activeInvites.length > 0,
+        action: () => setActiveView("team"),
+      },
+      {
+        id: "publish-snapshot",
+        label: "Publish shared snapshot",
+        desc: "So access-code members see real data",
+        done: lastPublished !== null,
+        action: () => publishSnapshot(),
+      },
+      {
+        id: "configure-roles",
+        label: "Configure role permissions",
+        desc: "Grant/revoke tab access per role",
+        done: Object.keys(roleTabGrants).length > 0,
+        action: () => setActiveView("roles"),
+      },
+      {
+        id: "assign-pumps",
+        label: "Assign pumps/shifts to members",
+        desc: "Map members to station pumps + shifts",
+        done: combinedMembers.some(
+          (m: any) =>
+            (m.assignedPumps && m.assignedPumps.length > 0) ||
+            (m.assignedShifts && m.assignedShifts.length > 0),
+        ),
+        action: () => setActiveView("team"),
+      },
+      {
+        id: "review-health",
+        label: "Review team health",
+        desc: "Check activity metrics + recommendations",
+        done: false,
+        action: () => setActiveView("activity"),
+      },
+    ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [
+      combinedMembers,
+      activeInvites,
+      lastPublished,
+      roleTabGrants,
+      currentStation?.id,
+    ],
+  );
+  const checklistDone = checklistItems.filter((i) => i.done).length;
+  useEffect(() => {
+    try {
+      localStorage.setItem(checklistKey, JSON.stringify(checklist));
+    } catch {
+      /* ignore */
+    }
+  }, [checklist, checklistKey]);
+
+  // ── Member detail drawer content (computed from the selected member). ──
+  const drawerMember = useMemo(
+    () => combinedMembers.find((m) => m.id === drawerMemberId) || null,
+    [combinedMembers, drawerMemberId],
+  );
+
   // ── Filtered members (search + filter) ──
   const filteredMembers = useMemo(() => {
     return combinedMembers.filter((m) => {
@@ -1162,7 +1274,98 @@ export default function TeamManager() {
             </div>
           </div>
         </div>
+        {/* ── Live sync status + quick-action toolbar ── */}
+        <div className="mt-3 flex items-center justify-between flex-wrap gap-2 pt-3 border-t border-white/20">
+          <div className="flex items-center gap-2 text-xs text-white/80">
+            {syncOnline ? (
+              <span className="flex items-center gap-1 bg-green-400/20 px-2 py-1 rounded-full">
+                <Wifi size={12} /> Cloud synced
+              </span>
+            ) : (
+              <span className="flex items-center gap-1 bg-amber-400/20 px-2 py-1 rounded-full">
+                <WifiOff size={12} /> Offline — changes save locally
+              </span>
+            )}
+            {lastPublished && (
+              <span className="flex items-center gap-1 bg-white/10 px-2 py-1 rounded-full">
+                <Radio size={12} /> Snapshot {new Date(lastPublished).toLocaleTimeString()}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => publishSnapshot()}
+              disabled={publishing || !currentStation?.id}
+              className="px-3 py-1.5 bg-white/15 hover:bg-white/25 disabled:opacity-40 text-white rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors"
+              title="Publish a read-only snapshot for access-code members"
+            >
+              <Share2 size={13} className={publishing ? "animate-spin" : ""} />
+              {publishing ? "Publishing…" : "Publish Snapshot"}
+            </button>
+            <button
+              onClick={() => setActiveView("activity")}
+              className="px-3 py-1.5 bg-white/15 hover:bg-white/25 text-white rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors"
+            >
+              <Activity size={13} /> Health
+            </button>
+            <button
+              onClick={() => exportMembersCSV()}
+              disabled={combinedMembers.length === 0}
+              className="px-3 py-1.5 bg-white/15 hover:bg-white/25 disabled:opacity-40 text-white rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors"
+            >
+              <Download size={13} /> Export
+            </button>
+          </div>
+        </div>
       </div>
+
+      {/* ── Onboarding checklist (only for owner, only when incomplete) ── */}
+      {isOwner && checklistDone < checklistItems.length && (
+        <div className="bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 rounded-xl border border-amber-200 dark:border-amber-800 p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <ClipboardList size={18} className="text-amber-600" />
+              <h3 className="text-sm font-bold text-gray-900 dark:text-white">
+                Team Setup Checklist
+              </h3>
+              <span className="text-xs text-gray-500">
+                {checklistDone}/{checklistItems.length} done
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-32 h-2 bg-amber-100 dark:bg-amber-900/40 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-amber-500 transition-all"
+                  style={{
+                    width: `${(checklistDone / checklistItems.length) * 100}%`,
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {checklistItems.map((item) => (
+              <button
+                key={item.id}
+                onClick={item.action}
+                className={`flex items-start gap-2.5 p-2.5 rounded-lg text-left transition-colors ${item.done ? "bg-green-50 dark:bg-green-900/20" : "bg-white dark:bg-gray-800 hover:bg-amber-50 dark:hover:bg-amber-900/10"} border border-gray-200 dark:border-gray-700`}
+              >
+                {item.done ? (
+                  <CheckCircle2 size={16} className="text-green-500 flex-shrink-0 mt-0.5" />
+                ) : (
+                  <div className="w-4 h-4 rounded-full border-2 border-amber-300 flex-shrink-0 mt-0.5" />
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className={`text-xs font-semibold ${item.done ? "text-green-700 dark:text-green-300 line-through" : "text-gray-900 dark:text-white"}`}>
+                    {item.label}
+                  </p>
+                  <p className="text-[10px] text-gray-500">{item.desc}</p>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ── Sub-tab switcher ── */}
       <SubTabBar
@@ -2057,6 +2260,16 @@ export default function TeamManager() {
                                 ).toLocaleDateString()}
                               </span>
                             )}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDrawerMemberId(member.id);
+                              }}
+                              className="px-2 py-1 bg-indigo-50 dark:bg-indigo-900/20 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 rounded-lg text-[10px] font-medium flex items-center gap-1 transition-colors"
+                              title="Open member detail panel"
+                            >
+                              <Eye size={11} /> Details
+                            </button>
                             {isExpanded ? (
                               <ChevronUp size={16} className="text-gray-400" />
                             ) : (
@@ -2338,6 +2551,255 @@ export default function TeamManager() {
               tabIdToLabel={tabIdToLabel}
               onRefresh={loadAccessCodes}
             />
+          </div>
+        </>
+      )}
+      {/* ── Member Detail Drawer (slide-over) ── */}
+      {drawerMember && (
+        <>
+          <div
+            className="fixed inset-0 bg-black/40 z-40"
+            onClick={() => setDrawerMemberId(null)}
+          />
+          <div className="fixed right-0 top-0 bottom-0 w-full max-w-md bg-white dark:bg-gray-900 shadow-2xl z-50 overflow-y-auto">
+            <div className="sticky top-0 bg-gradient-to-r from-purple-600 to-indigo-600 text-white p-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-white/20 rounded-lg">
+                  {(() => {
+                    const Icon = getRoleIcon(drawerMember.role);
+                    return <Icon size={20} />;
+                  })()}
+                </div>
+                <div>
+                  <h3 className="font-bold text-lg leading-tight">
+                    {drawerMember.accessMethod === "code"
+                      ? drawerMember.memberName
+                      : drawerMember.username}
+                  </h3>
+                  <p className="text-xs text-white/80">
+                    {getRoleLabel(drawerMember.role).label} ·{" "}
+                    {drawerMember.accessMethod === "code"
+                      ? "Access Code"
+                      : "Invite Link"}
+                    {drawerMember.readOnly && " · Read-Only"}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setDrawerMemberId(null)}
+                className="p-2 hover:bg-white/20 rounded-lg"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-4 space-y-4">
+              {/* Identity */}
+              <div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-3 space-y-2">
+                <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide flex items-center gap-1">
+                  <IdCard size={12} /> Identity
+                </h4>
+                {drawerMember.email && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <Mail size={14} className="text-gray-400" />
+                    <span className="text-gray-700 dark:text-gray-300 truncate">
+                      {drawerMember.email}
+                    </span>
+                  </div>
+                )}
+                {drawerMember.uniqueId && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <IdCard size={14} className="text-gray-400" />
+                    <span className="text-gray-700 dark:text-gray-300 font-mono text-xs">
+                      {drawerMember.uniqueId}
+                    </span>
+                  </div>
+                )}
+                <div className="flex items-center gap-2 text-sm">
+                  <Clock size={14} className="text-gray-400" />
+                  <span className="text-gray-700 dark:text-gray-300">
+                    Joined {new Date(drawerMember.invitedAt).toLocaleDateString()}
+                  </span>
+                </div>
+                {drawerMember.invitedBy && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <GitBranch size={14} className="text-gray-400" />
+                    <span className="text-gray-700 dark:text-gray-300">
+                      Invited by {drawerMember.invitedBy}
+                      {drawerMember.invitedByUniqueId &&
+                        ` (${drawerMember.invitedByUniqueId})`}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Access activity (code members) */}
+              {drawerMember.accessMethod === "code" && (
+                <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-3 space-y-2">
+                  <h4 className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wide flex items-center gap-1">
+                    <Activity size={12} /> Access Activity
+                  </h4>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="bg-white dark:bg-gray-800 rounded-lg p-2 text-center">
+                      <p className="text-xl font-bold text-blue-600">
+                        {drawerMember.accessCount ?? 0}
+                      </p>
+                      <p className="text-[10px] text-gray-500">Logins</p>
+                    </div>
+                    <div className="bg-white dark:bg-gray-800 rounded-lg p-2 text-center">
+                      <p className="text-xs font-semibold text-gray-700 dark:text-gray-300">
+                        {drawerMember.lastAccessedAt
+                          ? new Date(drawerMember.lastAccessedAt).toLocaleDateString()
+                          : "Never"}
+                      </p>
+                      <p className="text-[10px] text-gray-500">Last Access</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Assigned pumps/shifts (invite members) */}
+              {drawerMember.accessMethod === "invite" && canAssign && (
+                <div className="bg-purple-50 dark:bg-purple-900/20 rounded-xl p-3 space-y-3">
+                  <h4 className="text-xs font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wide flex items-center gap-1">
+                    <Fuel size={12} /> Assignments
+                  </h4>
+                  <div>
+                    <label className="text-xs text-gray-500 mb-1 block">
+                      Assigned Pumps
+                    </label>
+                    <div className="flex flex-wrap gap-1">
+                      {pumpOptions.length === 0 && (
+                        <span className="text-[10px] text-gray-400">
+                          No pumps configured.
+                        </span>
+                      )}
+                      {pumpOptions.map((p) => {
+                        const selected = drawerMember.assignedPumps.includes(p.id);
+                        return (
+                          <button
+                            key={p.id}
+                            onClick={() => {
+                              const next = selected
+                                ? drawerMember.assignedPumps.filter((x: string) => x !== p.id)
+                                : [...drawerMember.assignedPumps, p.id];
+                              assignPumps(drawerMember.id, next);
+                            }}
+                            className={`text-[10px] px-2 py-1 rounded-full border transition-all ${selected ? "bg-green-100 text-green-700 border-green-300" : "bg-white dark:bg-gray-800 text-gray-500 border-gray-200 dark:border-gray-600"}`}
+                          >
+                            {p.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 mb-1 block">
+                      Assigned Shifts
+                    </label>
+                    <div className="flex flex-wrap gap-1">
+                      {shiftOptions.map((s) => (
+                        <button
+                          key={s}
+                          onClick={() => {
+                            const next = drawerMember.assignedShifts.includes(s)
+                              ? drawerMember.assignedShifts.filter((x: string) => x !== s)
+                              : [...drawerMember.assignedShifts, s];
+                            assignShifts(drawerMember.id, next);
+                          }}
+                          className={`text-[10px] px-2 py-1 rounded-full border transition-all ${drawerMember.assignedShifts.includes(s) ? "bg-blue-100 text-blue-700 border-blue-300" : "bg-white dark:bg-gray-800 text-gray-500 border-gray-200 dark:border-gray-600"}`}
+                        >
+                          {s}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Quick actions */}
+              <div className="space-y-2">
+                <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide">
+                  Quick Actions
+                </h4>
+                {drawerMember.accessMethod === "code" ? (
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={async () => {
+                        await toggleAccessCode(drawerMember.id, currentStation?.id);
+                        loadAccessCodes();
+                      }}
+                      className="px-3 py-2 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 text-xs font-medium rounded-lg flex items-center justify-center gap-1.5"
+                    >
+                      <KeyRound size={12} /> {drawerMember.active ? "Disable" : "Enable"}
+                    </button>
+                    <button
+                      onClick={async () => {
+                        if (confirm(`Delete the access code for ${drawerMember.memberName}?`)) {
+                          await deleteAccessCode(drawerMember.id, currentStation?.id);
+                          loadAccessCodes();
+                          setDrawerMemberId(null);
+                        }
+                      }}
+                      className="px-3 py-2 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 text-xs font-medium rounded-lg flex items-center justify-center gap-1.5"
+                    >
+                      <Trash2 size={12} /> Delete
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {canSetLimits && (
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          value={extendDaysByMember[drawerMember.id] ?? "30"}
+                          onChange={(e) =>
+                            setExtendDaysByMember((prev) => ({
+                              ...prev,
+                              [drawerMember.id]: e.target.value,
+                            }))
+                          }
+                          className="w-20 px-2 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded text-xs dark:text-white"
+                          placeholder="Days"
+                        />
+                        <button
+                          onClick={() =>
+                            extendAccess(
+                              drawerMember.id,
+                              parseInt(extendDaysByMember[drawerMember.id] ?? "30") || 30,
+                            )
+                          }
+                          className="flex-1 px-3 py-2 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 text-xs font-medium rounded-lg flex items-center justify-center gap-1.5"
+                        >
+                          <RefreshCw size={12} /> Extend Access
+                        </button>
+                      </div>
+                    )}
+                    {canRevoke && drawerMember.role !== "owner" && (
+                      <button
+                        onClick={() => {
+                          if (confirm(`Remove ${drawerMember.username}'s access?`)) {
+                            revokeMember(drawerMember.id);
+                            setDrawerMemberId(null);
+                          }
+                        }}
+                        className="w-full px-3 py-2 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 text-xs font-medium rounded-lg flex items-center justify-center gap-1.5"
+                      >
+                        <Ban size={12} /> Revoke Access
+                      </button>
+                    )}
+                  </div>
+                )}
+                {drawerMember.expiresAt && (
+                  <div className={`text-[10px] text-center p-2 rounded-lg ${new Date(drawerMember.expiresAt) < new Date() ? "bg-red-50 dark:bg-red-900/20 text-red-600" : "bg-gray-50 dark:bg-gray-800 text-gray-500"}`}>
+                    {new Date(drawerMember.expiresAt) < new Date()
+                      ? "Expired"
+                      : "Expires"}{" "}
+                    on {new Date(drawerMember.expiresAt).toLocaleDateString()}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </>
       )}

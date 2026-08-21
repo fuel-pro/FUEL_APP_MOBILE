@@ -9,7 +9,11 @@
  * CACHE_VERSION is bumped automatically by a build-time stamp. On activate,
  * all caches from previous versions are purged so stale entries never leak.
  */
-const CACHE_VERSION = "fuelpro-v3-20260813c-noloop";
+// CACHE_VERSION is bumped by the build postbuild-version.mjs script so every
+// deploy ships a fresh cache namespace. Combined with the network-first
+// navigation strategy + the in-page update polling, this guarantees users
+// see a new deploy within seconds of the next page load.
+const CACHE_VERSION = "fuelpro-v3-20260821a";
 const ASSET_CACHE = CACHE_VERSION + "-assets";
 const NAV_CACHE = CACHE_VERSION + "-nav";
 

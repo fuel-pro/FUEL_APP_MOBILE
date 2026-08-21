@@ -34,12 +34,21 @@ fs.writeFileSync(
 console.log(`[version-postbuild] dist/version.json written: ${version}`);
 
 // Overwrite the workbox-generated SW with our custom network-first SW.
+// ALSO bump the CACHE_VERSION in the SW copy so every deploy ships a fresh
+// cache namespace — old caches are purged on activate so users never see
+// stale assets. This is what guarantees deploys are visible immediately.
 const customSwPath = path.join(root, "public", "sw.js");
 const distSwPath = path.join(dist, "sw.js");
 if (fs.existsSync(customSwPath)) {
-  const customSw = fs.readFileSync(customSwPath, "utf-8");
+  let customSw = fs.readFileSync(customSwPath, "utf-8", "utf-8");
+  // Inject the build version as the cache namespace so each deploy is unique.
+  const cacheNs = version.replace(/[^a-zA-Z0-9]/g, "");
+  customSw = customSw.replace(
+    /const CACHE_VERSION = "fuelpro-v3-[^"]*";/,
+    `const CACHE_VERSION = "fuelpro-v3-${cacheNs}";`,
+  );
   fs.writeFileSync(distSwPath, customSw);
-  console.log("[version-postbuild] dist/sw.js overwritten with custom public/sw.js (network-first, loop-guarded)");
+  console.log("[version-postbuild] dist/sw.js overwritten with custom public/sw.js (network-first, loop-guarded, CACHE_VERSION=" + cacheNs + ")");
   // Remove ALL workbox runtime files (hashed name changes per build) — our
   // custom SW doesn't import them, and leaving them in dist wastes bandwidth.
   const files = fs.readdirSync(dist);
