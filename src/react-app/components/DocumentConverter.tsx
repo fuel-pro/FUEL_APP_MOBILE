@@ -24,6 +24,7 @@ import {
 } from "@/react-app/lib/currency";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
+import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 
 export type SupportedFormat =
   "pdf" | "docx" | "xlsx" | "pptx" | "txt" | "csv" | "jpg" | "png";
@@ -415,17 +416,99 @@ export default function DocumentConverter() {
   const [showCamera, setShowCamera] = useState(false);
   const [cameraError, setCameraError] = useState("");
   const [videoStream, setVideoStream] = useState<MediaStream | null>(null);
+  const [previewJob, setPreviewJob] = useState<ConversionJob | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cloudLoadCompleteRef = useRef(false);
+  const localModifiedRef = useRef(false);
+  const skipRemoteRef = useRef(false);
 
-  // Persist jobs
+  // Persist jobs to localStorage (read-through cache)
   useEffect(() => {
-    localStorage.setItem("fuelpro_converter_jobs", JSON.stringify(jobs));
+    try {
+      localStorage.setItem("fuelpro_converter_jobs", JSON.stringify(jobs));
+    } catch {
+      /* quota */
+    }
+    if (cloudLoadCompleteRef.current) {
+      // Only persist lightweight metadata cross-device (resultData can be large)
+      const lite = jobs.slice(0, 50).map(({ resultData, ...rest }) => rest);
+      skipRemoteRef.current = true;
+      cloudStorageService.set("converter_jobs", lite).catch(() => {});
+    }
   }, [jobs]);
+
+  // Load jobs from cloud on mount (cross-device sync) + realtime
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const cloud =
+        await cloudStorageService.get<ConversionJob[]>("converter_jobs");
+      if (cancelled) return;
+      if (
+        Array.isArray(cloud) &&
+        cloud.length > 0 &&
+        !localModifiedRef.current
+      ) {
+        // Merge: cloud has metadata only (no resultData); keep local resultData
+        setJobs((prev) => {
+          const byId = new Map(prev.map((j) => [j.id, j]));
+          const merged = cloud.map((c) => {
+            const local = byId.get(c.id);
+            return local?.resultData
+              ? {
+                  ...c,
+                  resultData: local.resultData,
+                  resultMime: local.resultMime,
+                }
+              : c;
+          });
+          // Append any local jobs not in cloud
+          const cloudIds = new Set(cloud.map((c) => c.id));
+          const localOnly = prev.filter((j) => !cloudIds.has(j.id));
+          return [...merged, ...localOnly];
+        });
+      }
+      cloudLoadCompleteRef.current = true;
+      const unsub = cloudStorageService.subscribe<ConversionJob[]>(
+        "converter_jobs",
+        undefined,
+        (cloudArr) => {
+          if (skipRemoteRef.current) {
+            skipRemoteRef.current = false;
+            return;
+          }
+          if (Array.isArray(cloudArr) && !localModifiedRef.current) {
+            setJobs((prev) => {
+              const byId = new Map(prev.map((j) => [j.id, j]));
+              return cloudArr.map((c) => {
+                const local = byId.get(c.id);
+                return local?.resultData
+                  ? {
+                      ...c,
+                      resultData: local.resultData,
+                      resultMime: local.resultMime,
+                    }
+                  : c;
+              });
+            });
+          }
+        },
+      );
+      return () => {
+        cancelled = true;
+        unsub?.();
+      };
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const processConversion = useCallback(
     async (file: File) => {
+      localModifiedRef.current = true;
       const jobId = `conv_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
       const ext = file.name.split(".").pop()?.toUpperCase() || "FILE";
 
@@ -511,10 +594,38 @@ export default function DocumentConverter() {
     setIsDragging(true);
   }, []);
   const onDragLeave = useCallback(() => setIsDragging(false), []);
-  const removeJob = (id: string) =>
+  const removeJob = (id: string) => {
+    localModifiedRef.current = true;
     setJobs((prev) => prev.filter((j) => j.id !== id));
+  };
   const clearAll = () => {
-    if (confirm("Clear all conversion history?")) setJobs([]);
+    if (confirm("Clear all conversion history?")) {
+      localModifiedRef.current = true;
+      setJobs([]);
+    }
+  };
+  const downloadAll = () => {
+    const done = jobs.filter((j) => j.status === "done" && j.resultData);
+    if (done.length === 0) return;
+    done.forEach((job, i) => {
+      setTimeout(() => {
+        try {
+          const byteString = atob(job.resultData!.split(",")[1]);
+          const ab = new ArrayBuffer(byteString.length);
+          const ia = new Uint8Array(ab);
+          for (let k = 0; k < byteString.length; k++)
+            ia[k] = byteString.charCodeAt(k);
+          triggerDownload(
+            new Blob([ab], {
+              type: job.resultMime || "application/octet-stream",
+            }),
+            job.result!,
+          );
+        } catch {
+          /* */
+        }
+      }, i * 250);
+    });
   };
 
   // Camera functions
@@ -727,12 +838,22 @@ export default function DocumentConverter() {
       {/* Jobs List */}
       {jobs.length > 0 && (
         <div className="space-y-3">
-          <h3 className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-            Conversions ({jobs.length}){" "}
-            {doneCount > 0 && (
-              <span className="text-green-500">{doneCount} done</span>
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+              Conversions ({jobs.length}){" "}
+              {doneCount > 0 && (
+                <span className="text-green-500">{doneCount} done</span>
+              )}
+            </h3>
+            {doneCount > 1 && (
+              <button
+                onClick={downloadAll}
+                className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all"
+              >
+                <Download size={12} /> Download All ({doneCount})
+              </button>
             )}
-          </h3>
+          </div>
           {jobs.map((job) => (
             <div
               key={job.id}
@@ -765,6 +886,15 @@ export default function DocumentConverter() {
                   )}
                   {job.status === "error" && (
                     <AlertCircle size={16} className="text-red-500" />
+                  )}
+                  {job.status === "done" && job.resultData && (
+                    <button
+                      onClick={() => setPreviewJob(job)}
+                      className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 transition-all"
+                      title="Preview"
+                    >
+                      <Eye size={14} />
+                    </button>
                   )}
                   {job.status === "done" && job.resultData && (
                     <button
@@ -818,6 +948,82 @@ export default function DocumentConverter() {
               )}
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Preview Modal */}
+      {previewJob && previewJob.resultData && (
+        <div
+          className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"
+          onClick={() => setPreviewJob(null)}
+        >
+          <div
+            className="bg-white dark:bg-gray-800 rounded-xl max-w-3xl w-full max-h-[85vh] overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between p-3 border-b border-gray-200 dark:border-gray-700">
+              <h4 className="text-sm font-semibold text-gray-900 dark:text-white truncate">
+                Preview: {previewJob.result || previewJob.fileName}
+              </h4>
+              <button
+                onClick={() => setPreviewJob(null)}
+                className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="flex-1 overflow-auto p-4 bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+              {previewJob.resultMime?.startsWith("image/") ? (
+                <img
+                  src={previewJob.resultData}
+                  alt={previewJob.fileName}
+                  className="max-w-full max-h-[60vh] object-contain"
+                />
+              ) : previewJob.resultMime === "application/pdf" ? (
+                <iframe
+                  src={previewJob.resultData}
+                  title="preview"
+                  className="w-full h-[60vh] border-0"
+                />
+              ) : previewJob.resultMime?.startsWith("text/") ||
+                previewJob.resultMime?.includes("html") ||
+                previewJob.resultMime?.includes("xml") ||
+                previewJob.resultMime?.includes("svg") ? (
+                <iframe
+                  src={previewJob.resultData}
+                  title="preview"
+                  className="w-full h-[60vh] border-0 bg-white"
+                />
+              ) : (
+                <div className="text-center text-gray-500 text-sm">
+                  <FileText size={40} className="mx-auto mb-2 text-gray-300" />
+                  Preview not available for this format.
+                  <br />
+                  <button
+                    onClick={() => {
+                      const byteString = atob(
+                        previewJob.resultData!.split(",")[1],
+                      );
+                      const ab = new ArrayBuffer(byteString.length);
+                      const ia = new Uint8Array(ab);
+                      for (let i = 0; i < byteString.length; i++)
+                        ia[i] = byteString.charCodeAt(i);
+                      triggerDownload(
+                        new Blob([ab], {
+                          type:
+                            previewJob.resultMime || "application/octet-stream",
+                        }),
+                        previewJob.result!,
+                      );
+                    }}
+                    className="mt-3 text-blue-600 hover:underline"
+                  >
+                    Download instead
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
 

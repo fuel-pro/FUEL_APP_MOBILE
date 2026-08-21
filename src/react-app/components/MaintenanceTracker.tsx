@@ -24,6 +24,7 @@ import {
   Zap,
   Cog,
   Receipt,
+  Download,
 } from "lucide-react";
 import {
   navigateToTab,
@@ -347,6 +348,82 @@ export default function MaintenanceTracker() {
     ).length,
   };
 
+  // Cost analytics (defended against NaN/undefined on corrupt cloud records)
+  const totalCost = records.reduce(
+    (sum, r) =>
+      sum +
+      (typeof r.cost === "number" && Number.isFinite(r.cost) ? r.cost : 0),
+    0,
+  );
+  const completedCost = records
+    .filter((r) => r.status === "completed")
+    .reduce(
+      (sum, r) =>
+        sum +
+        (typeof r.cost === "number" && Number.isFinite(r.cost) ? r.cost : 0),
+      0,
+    );
+  const costByType = records.reduce<Record<string, number>>((acc, r) => {
+    const c =
+      typeof r.cost === "number" && Number.isFinite(r.cost) ? r.cost : 0;
+    acc[r.equipmentType] = (acc[r.equipmentType] || 0) + c;
+    return acc;
+  }, {});
+  const fmtCost = (n: number) =>
+    `${currencySymbol}${(Number.isFinite(n) ? n : 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+
+  const exportCSV = () => {
+    const header = [
+      "ID",
+      "Equipment Name",
+      "Equipment Type",
+      "Description",
+      "Priority",
+      "Status",
+      "Assigned To",
+      "Cost",
+      "Scheduled Date",
+      "Completed Date",
+      "Next Due Date",
+      "Notes",
+      "Created At",
+    ];
+    const esc = (s: unknown) => {
+      const str = String(s ?? "");
+      return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
+    };
+    const rows = filtered.map((r) =>
+      [
+        r.id,
+        r.equipmentName,
+        r.equipmentType,
+        r.description,
+        r.priority,
+        r.status,
+        r.assignedTo,
+        r.cost,
+        r.scheduledDate,
+        r.completedDate || "",
+        r.nextDueDate,
+        r.notes,
+        r.createdAt,
+      ]
+        .map(esc)
+        .join(","),
+    );
+    const csv = [header.map(esc).join(","), ...rows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `maintenance_records_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showNotification("Exported CSV");
+  };
+
   return (
     <div className="p-4 md:p-6 space-y-4">
       {notification && (
@@ -394,6 +471,70 @@ export default function MaintenanceTracker() {
           <Plus size={16} /> New Task
         </button>
       </div>
+
+      {/* Cost Analytics */}
+      {records.length > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="bg-amber-50 dark:bg-amber-500/10 rounded-xl p-3">
+            <p className="text-[10px] text-gray-500">Total Maintenance Cost</p>
+            <p className="text-lg font-bold text-amber-600 dark:text-amber-400">
+              {fmtCost(totalCost)}
+            </p>
+          </div>
+          <div className="bg-emerald-50 dark:bg-emerald-500/10 rounded-xl p-3">
+            <p className="text-[10px] text-gray-500">Completed Spend</p>
+            <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
+              {fmtCost(completedCost)}
+            </p>
+          </div>
+          <div className="bg-blue-50 dark:bg-blue-500/10 rounded-xl p-3">
+            <p className="text-[10px] text-gray-500">Pending Spend</p>
+            <p className="text-lg font-bold text-blue-600 dark:text-blue-400">
+              {fmtCost(totalCost - completedCost)}
+            </p>
+          </div>
+          <div className="bg-gray-100 dark:bg-gray-700/50 rounded-xl p-3">
+            <p className="text-[10px] text-gray-500">Avg Cost / Task</p>
+            <p className="text-lg font-bold text-gray-700 dark:text-gray-300">
+              {fmtCost(stats.total > 0 ? totalCost / stats.total : 0)}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {Object.keys(costByType).length > 0 && (
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+          <h4 className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2">
+            Spend by Equipment Type
+          </h4>
+          <div className="space-y-2">
+            {Object.entries(costByType)
+              .sort((a, b) => b[1] - a[1])
+              .map(([type, cost]) => {
+                const pct =
+                  totalCost > 0 ? Math.round((cost / totalCost) * 100) : 0;
+                const label =
+                  EQUIPMENT_TYPES.find((t) => t.value === type)?.label || type;
+                return (
+                  <div key={type} className="flex items-center gap-2">
+                    <span className="text-xs text-gray-600 dark:text-gray-400 w-28 truncate">
+                      {label}
+                    </span>
+                    <div className="flex-1 h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-amber-500 rounded-full"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                    <span className="text-xs font-medium text-gray-700 dark:text-gray-300 w-24 text-right">
+                      {fmtCost(cost)} ({pct}%)
+                    </span>
+                  </div>
+                );
+              })}
+          </div>
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
@@ -478,6 +619,14 @@ export default function MaintenanceTracker() {
           <option value="medium">Medium</option>
           <option value="low">Low</option>
         </select>
+        <button
+          onClick={exportCSV}
+          disabled={filtered.length === 0}
+          className="px-4 py-2.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-xl text-sm font-medium flex items-center gap-2 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+          title="Export filtered records to CSV"
+        >
+          <Download size={16} /> Export CSV
+        </button>
       </div>
 
       {/* Records */}
