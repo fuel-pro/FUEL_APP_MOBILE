@@ -5,6 +5,7 @@ import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 import { getCurrencySymbol } from "../lib/currency";
 import { useStationFuelTypes } from "@/react-app/hooks/useStationFuelTypes";
 import { getFuelLabel } from "@/react-app/config/pricing";
+import { switchToTab } from "@/react-app/lib/mpesa-integration-service";
 import {
   Truck,
   Plus,
@@ -527,6 +528,20 @@ export default function SupplierManagement() {
           >
             <ShoppingCart size={14} />
             Purchases
+          </button>
+          <button
+            onClick={() => switchToTab("delivery")}
+            className="px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200"
+          >
+            <Truck size={14} />
+            Deliveries
+          </button>
+          <button
+            onClick={() => switchToTab("offloading")}
+            className="px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200"
+          >
+            <Truck size={14} />
+            Offloading
           </button>
         </div>
       </div>

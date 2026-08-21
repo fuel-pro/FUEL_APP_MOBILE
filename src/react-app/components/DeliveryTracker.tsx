@@ -22,6 +22,7 @@ import {
   exportDeliveryTXT,
 } from "@/react-app/utils/exportUtils";
 import { formatNumber } from "@/react-app/utils/formatUtils";
+import { switchToTab } from "@/react-app/lib/mpesa-integration-service";
 import {
   getCurrencySymbol,
   resolveCurrencySymbol,
@@ -636,6 +637,26 @@ export default function DeliveryTracker() {
           <h2 className="text-2xl font-bold text-blue-900 dark:text-blue-200">
             Fuel Statement Report
           </h2>
+          <div className="flex gap-2">
+            <button
+              onClick={() => switchToTab("suppliers")}
+              className="px-3 py-1.5 rounded-lg text-sm font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200"
+            >
+              Suppliers
+            </button>
+            <button
+              onClick={() => switchToTab("offloading")}
+              className="px-3 py-1.5 rounded-lg text-sm font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200"
+            >
+              Offloading
+            </button>
+            <button
+              onClick={() => switchToTab("pos")}
+              className="px-3 py-1.5 rounded-lg text-sm font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200"
+            >
+              POS
+            </button>
+          </div>
         </div>
 
         {/* Form Fields */}

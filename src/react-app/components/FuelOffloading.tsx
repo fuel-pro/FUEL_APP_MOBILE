@@ -15,7 +15,11 @@ import {
 import ExportDropdown from "@/react-app/components/ExportDropdown";
 import { useFuel } from "@/react-app/context/FuelContext";
 import { useStationFuelTypes } from "@/react-app/hooks/useStationFuelTypes";
-import { getFuelLabel, getFuelCode } from "@/react-app/config/pricing";
+import {
+  getFuelLabel,
+  getFuelCode,
+  normalizeFuelType,
+} from "@/react-app/config/pricing";
 import { switchToTab } from "@/react-app/lib/mpesa-integration-service";
 import { cloudStorageService } from "@/react-app/lib/cloud-storage-service";
 import { useStations } from "@/react-app/context/StationContext";
@@ -669,14 +673,14 @@ export default function FuelOffloading() {
                     <td>
                       <span
                         className={`px-2 py-1 rounded text-xs font-medium ${
-                          record.fuelType === "PMS"
+                          normalizeFuelType(record.fuelType) === "petrol"
                             ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300"
-                            : record.fuelType === "AGO"
+                            : normalizeFuelType(record.fuelType) === "diesel"
                               ? "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300"
                               : "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
                         }`}
                       >
-                        {record.fuelType}
+                        {getFuelLabel(record.fuelType)}
                       </span>
                     </td>
                     <td className="font-mono">
@@ -762,7 +766,7 @@ export default function FuelOffloading() {
                   onChange={(e) =>
                     handleInputChange("truckReg", e.target.value.toUpperCase())
                   }
-                  placeholder="e.g. KCA 123A"
+                  placeholder="Truck registration number"
                   required
                 />
               </div>
