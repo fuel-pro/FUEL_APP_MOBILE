@@ -432,6 +432,8 @@ export default function News() {
   useEffect(() => {
     if (!user) return;
     let cancelled = false;
+    let unsubBookmarks: (() => void) | undefined;
+    let unsubRead: (() => void) | undefined;
     (async () => {
       const [cloud, cloudRead] = await Promise.all([
         cloudStorageService.get<string[]>("news_bookmarks"),
@@ -448,7 +450,7 @@ export default function News() {
       }
       cloudLoadCompleteRef.current = true;
       // Real-time: another device's bookmark change reflects instantly
-      const unsubBookmarks = cloudStorageService.subscribe<string[]>(
+      unsubBookmarks = cloudStorageService.subscribe<string[]>(
         "news_bookmarks",
         undefined,
         (cloudArr) => {
@@ -469,7 +471,7 @@ export default function News() {
           }
         },
       );
-      const unsubRead = cloudStorageService.subscribe<string[]>(
+      unsubRead = cloudStorageService.subscribe<string[]>(
         "news_read",
         undefined,
         (cloudArr) => {
@@ -486,14 +488,11 @@ export default function News() {
           }
         },
       );
-      return () => {
-        cancelled = true;
-        unsubBookmarks?.();
-        unsubRead?.();
-      };
     })();
     return () => {
       cancelled = true;
+      unsubBookmarks?.();
+      unsubRead?.();
     };
   }, [user]);
 

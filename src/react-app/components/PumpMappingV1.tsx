@@ -735,7 +735,9 @@ const PumpMappingV1: React.FC = () => {
           /"currencyDetection": "auto"/,
           `"currencyDetection": "${getCurrencySymbol()}"`,
         );
-        response = "✅ Currency detection set to Kenyan Shilling (KSh).";
+        const curCode = getDetectedCurrency();
+        const curSym = getCurrencySymbol();
+        response = `✅ Currency detection set to ${curCode} (${curSym}).`;
       } else if (
         input.includes("pump") &&
         (input.includes("label") ||

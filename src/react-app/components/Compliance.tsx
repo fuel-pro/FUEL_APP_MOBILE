@@ -508,26 +508,24 @@ function PermitsSection({ config }: { config: ComplianceConfig }) {
   // Load from cloud (cross-device) + realtime
   useEffect(() => {
     let cancelled = false;
+    let unsub: (() => void) | undefined;
     (async () => {
       const cloud = await cloudStorageService.get<string[]>(storageKey);
       if (!cancelled && Array.isArray(cloud)) {
         setObtained(new Set<string>(cloud));
       }
       setLoaded(true);
-      const unsub = cloudStorageService.subscribe<string[]>(
+      unsub = cloudStorageService.subscribe<string[]>(
         storageKey,
         undefined,
         (val) => {
           if (Array.isArray(val)) setObtained(new Set<string>(val));
         },
       );
-      return () => {
-        cancelled = true;
-        unsub?.();
-      };
     })();
     return () => {
       cancelled = true;
+      unsub?.();
     };
   }, [storageKey]);
 
