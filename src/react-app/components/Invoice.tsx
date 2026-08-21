@@ -62,6 +62,17 @@ export default function Invoice() {
   // Tracks the last value *this component* wrote, so the sync-from-global
   // effect below never fights the user's own typing.
   const lastDispatchedLabel = useRef(state.invoiceSettings.quantityLabel);
+  // Refs for the onTabPayload callback so it always reads the LATEST state
+  // (the effect has stable deps, so without refs the callback closure would
+  // capture stale customerName/invoiceItems from the first render).
+  const customerNameRef = useRef(customerName);
+  customerNameRef.current = customerName;
+  const invoiceItemsRef = useRef(state.invoiceItems);
+  invoiceItemsRef.current = state.invoiceItems;
+  // Idempotency: track which prefill payloads have already been applied so
+  // the multi-dispatch (50/200/500/1000ms) from navigateToTab doesn't add
+  // duplicate line items.
+  const appliedPrefillRef = useRef<Set<string>>(new Set());
   const [isPrinting, setIsPrinting] = useState(false);
   const [printError, setPrintError] = useState<string | null>(null);
   // Search across saved invoices (was missing — a flat grid of every saved
@@ -83,20 +94,27 @@ export default function Invoice() {
       if (Object.keys(p).length === 0) return;
       setActiveView("invoice");
 
-      // Prevent draft-overwrite data loss: only replace the items array if the
-      // current draft is empty/all-blank. If the user was mid-edit on another
-      // invoice, we preserve their items and just append the prefill as a new
-      // line (or only set customer fields that are empty). Previously this
-      // REPLACED the entire items array + customer fields, destroying an
-      // in-progress draft the user had not yet saved.
-      const draftHasContent = state.invoiceItems.some(
+      // Idempotency: build a signature from the payload so the multi-dispatch
+      // (50/200/500/1000ms) from navigateToTab doesn't add duplicate items.
+      const sig = `${p.customerName || ""}|${p.amount || 0}|${p.description || ""}`;
+      const alreadyApplied = appliedPrefillRef.current.has(sig);
+      if (!alreadyApplied) {
+        appliedPrefillRef.current.add(sig);
+      }
+
+      // Read latest values from refs (not stale closure captures).
+      const currentName = customerNameRef.current;
+      const currentItems = invoiceItemsRef.current;
+      const draftHasContent = currentItems.some(
         (it) => (it.desc && it.desc.trim()) || it.qty > 0 || it.price > 0,
       );
 
-      if (p.customerName && (!customerName || !draftHasContent)) {
+      // Set customer name if empty or draft is empty (no content to preserve).
+      if (p.customerName && (!currentName || !draftHasContent)) {
         setCustomerName(p.customerName);
       }
-      if (p.amount || p.description) {
+      // Only add the prefill item on the FIRST dispatch (idempotency guard).
+      if (!alreadyApplied && (p.amount || p.description)) {
         const prefillItem = {
           desc: p.description || "Outstanding balance",
           qty: 1,
@@ -107,7 +125,7 @@ export default function Invoice() {
           // Append to the existing draft instead of clobbering it.
           dispatch({
             type: "SET_INVOICE_ITEMS",
-            payload: [...state.invoiceItems, prefillItem],
+            payload: [...currentItems, prefillItem],
           });
         } else {
           dispatch({
@@ -244,6 +262,9 @@ export default function Invoice() {
       type: "SET_INVOICE_COUNTER",
       payload: state.invoiceCounter + 1,
     });
+
+    // Reset the idempotency tracker so the next prefill can apply cleanly.
+    appliedPrefillRef.current.clear();
 
     alert(`Invoice ${invNum} saved successfully!`);
   };
