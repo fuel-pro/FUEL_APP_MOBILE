@@ -1498,7 +1498,7 @@ export default function PointOfSale() {
                         type="tel"
                         value={customerPhone}
                         onChange={(e) => setCustomerPhone(e.target.value)}
-                        placeholder="Phone (e.g. 0712345678)"
+                        placeholder="Customer phone number"
                         className="w-full px-3 py-2 rounded-lg border dark:bg-gray-800 dark:border-gray-600"
                       />
                       <button

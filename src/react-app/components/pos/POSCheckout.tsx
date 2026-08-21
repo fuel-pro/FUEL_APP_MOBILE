@@ -9,6 +9,7 @@ import { silentPrintService } from "@/react-app/lib/silent-print-service";
 import {
   getCurrencySymbol,
   getDetectedCurrency,
+  getLocaleForCountry,
 } from "@/react-app/lib/currency";
 import {
   CreditCard,
@@ -92,8 +93,8 @@ export default function POSCheckout({
       stationEmail,
       logoUrl,
       receiptNumber: generateReceiptNumber(),
-      date: now.toLocaleDateString("en-KE"),
-      time: now.toLocaleTimeString("en-KE"),
+      date: now.toLocaleDateString(getLocaleForCountry()),
+      time: now.toLocaleTimeString(getLocaleForCountry()),
       items: sale.items.map((item) => ({
         name: item.name,
         quantity: item.quantity,

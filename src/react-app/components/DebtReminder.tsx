@@ -643,7 +643,7 @@ export default function DebtReminder() {
                   value={schedContact}
                   onChange={(e) => setSchedContact(e.target.value)}
                   className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
-                  placeholder={`e.g. ${getDetectedCountryCode() === "KE" ? "254712345678" : getDetectedCountryCode() === "US" ? "15551234567" : "254712345678"} or john@email.com`}
+                  placeholder={`e.g. ${getDetectedCountryCode() === "US" ? "15551234567" : getDetectedCountryCode() === "KE" ? "254712345678" : "1000000000"} or john@email.com`}
                 />
               </div>
               <div>

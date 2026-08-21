@@ -22,11 +22,12 @@ import { supabase } from "@/supabase/client";
 import {
   getCurrencySymbol,
   getDetectedCurrency,
+  getLocaleForCountry,
 } from "@/react-app/lib/currency";
 
 // Format currency
 const formatMoney = (amount: number) => {
-  return new Intl.NumberFormat("en-KE", {
+  return new Intl.NumberFormat(getLocaleForCountry(), {
     style: "currency",
     currency: getDetectedCurrency(),
     minimumFractionDigits: 0,
@@ -347,7 +348,9 @@ const ProductModal = ({
                   setFormData({
                     ...formData,
                     cost_price:
-                      e.target.value === "" ? 0 : parseFloat(e.target.value) || 0,
+                      e.target.value === ""
+                        ? 0
+                        : parseFloat(e.target.value) || 0,
                   })
                 }
                 className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white"
@@ -368,7 +371,9 @@ const ProductModal = ({
                   setFormData({
                     ...formData,
                     selling_price:
-                      e.target.value === "" ? 0 : parseFloat(e.target.value) || 0,
+                      e.target.value === ""
+                        ? 0
+                        : parseFloat(e.target.value) || 0,
                   })
                 }
                 className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white"
@@ -393,7 +398,9 @@ const ProductModal = ({
                   setFormData({
                     ...formData,
                     stock_quantity:
-                      e.target.value === "" ? 0 : parseFloat(e.target.value) || 0,
+                      e.target.value === ""
+                        ? 0
+                        : parseFloat(e.target.value) || 0,
                   })
                 }
                 className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white"
@@ -413,7 +420,9 @@ const ProductModal = ({
                   setFormData({
                     ...formData,
                     reorder_level:
-                      e.target.value === "" ? 0 : parseFloat(e.target.value) || 0,
+                      e.target.value === ""
+                        ? 0
+                        : parseFloat(e.target.value) || 0,
                   })
                 }
                 className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white"
@@ -436,7 +445,9 @@ const ProductModal = ({
                   setFormData({
                     ...formData,
                     tax_rate:
-                      e.target.value === "" ? 0 : parseFloat(e.target.value) || 0,
+                      e.target.value === ""
+                        ? 0
+                        : parseFloat(e.target.value) || 0,
                   })
                 }
                 className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white"

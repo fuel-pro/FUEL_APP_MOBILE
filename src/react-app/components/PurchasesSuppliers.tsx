@@ -15,7 +15,11 @@ import {
 } from "lucide-react";
 import { useStations } from "@/react-app/context/StationContext";
 import { supabase } from "@/supabase/client";
-import { getCurrencySymbol, getDetectedCurrency } from "../lib/currency";
+import {
+  getCurrencySymbol,
+  getDetectedCurrency,
+  getLocaleForCountry,
+} from "../lib/currency";
 import {
   createPurchaseOrder,
   receivePurchaseOrder,
@@ -25,7 +29,7 @@ import {
 } from "@/react-app/lib/pos-service";
 
 const formatMoney = (amount: number) =>
-  new Intl.NumberFormat("en-KE", {
+  new Intl.NumberFormat(getLocaleForCountry(), {
     style: "currency",
     currency: getDetectedCurrency(),
     minimumFractionDigits: 0,
