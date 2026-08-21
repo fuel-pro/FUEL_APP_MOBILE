@@ -25,7 +25,7 @@ import {
 import { useAuth } from "@/react-app/context/AuthContext";
 import { useFuel } from "../context/FuelContext";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
-import { getCurrencySymbol } from "../lib/currency";
+import { getCurrencySymbol, getLocaleForCountry } from "../lib/currency";
 import { getFuelLabel } from "@/react-app/config/pricing";
 import { getSupabaseClient } from "@/supabase/client";
 import {
@@ -441,7 +441,7 @@ export default function Documents() {
     type: string,
   ): string => {
     const formatDate = (d: string | Date) =>
-      new Date(d).toLocaleDateString("en-GB");
+      new Date(d).toLocaleDateString(getLocaleForCountry());
     const formatCurrency = (n: number) =>
       `${getCurrencySymbol()} ${(n || 0).toLocaleString()}`;
 
@@ -636,7 +636,7 @@ export default function Documents() {
 </head>
 <body>
   <h1>${title}</h1>
-  <p class="meta">Generated: ${new Date().toLocaleString("en-GB")}</p>
+  <p class="meta">Generated: ${new Date().toLocaleString(getLocaleForCountry())}</p>
   ${content || "<p>No data available</p>"}
 </body>
 </html>`;
@@ -1045,7 +1045,7 @@ export default function Documents() {
   };
 
   const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString("en-GB", {
+    return new Date(dateStr).toLocaleDateString(getLocaleForCountry(), {
       day: "2-digit",
       month: "short",
       year: "numeric",

@@ -30,12 +30,13 @@ import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
 import { loadLogoAsDataURL } from "@/react-app/utils/exportUtils";
+import { getLocaleForCountry } from "@/react-app/lib/currency";
 
 const formatNumber = (num: number): string => {
-  return new Intl.NumberFormat("en-US", {
+  return new Intl.NumberFormat(getLocaleForCountry(), {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
-  }).format(num || 0);
+  }).format(Number.isFinite(num) ? num : 0);
 };
 
 export default function FuelOffloading() {

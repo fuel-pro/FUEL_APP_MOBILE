@@ -40,6 +40,7 @@ import {
   currencySymbolFor,
 } from "@/react-app/config/pricing";
 import { getCountryById } from "@/react-app/config/countries";
+import { getLocaleForCountry } from "@/react-app/lib/currency";
 import {
   navigateToTab,
   type StkPushPrefill,
@@ -805,7 +806,7 @@ export default function Dashboard() {
       const d = new Date();
       d.setDate(d.getDate() - i);
       const dateStr = d.toISOString().split("T")[0];
-      days.push(d.toLocaleDateString("en-US", { weekday: "short" }));
+      days.push(d.toLocaleDateString(getLocaleForCountry(), { weekday: "short" }));
 
       const dayTotals: Record<string, number> = {};
       allFuelTypes.forEach((t) => (dayTotals[t] = 0));

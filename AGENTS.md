@@ -5994,3 +5994,53 @@ Re-audited all remote branches. ONE branch contains genuinely lost work:
 
 All other unmerged branches are old divergent snapshots (200+ commits
 behind) whose work is already on main in more complete form.
+
+
+## Session 2026-08-21 — Country-aware locale + cross-tab interlinks + formatUtils fixes (DEPLOYED LIVE)
+
+Continued the massive upgrades across all tabs/functions/features/settings.
+
+### Lost commit audit (2026-08-21)
+Audited all unmerged remote branches. No lost work found:
+- wire-components-cross-relate (2 commits): fuel-interlink-bus work already on main (PR #101).
+- feature/pos-hardware-integration: hardware-manager.ts + printer-service.ts already on main.
+- feat/document-center-folders: folder management already on DocumentCenter.tsx + documentStore.ts.
+- feature/firebase-firestore-real-time-sync: Firebase alternative, not adopted (project uses Supabase).
+All unmerged branches are old divergent snapshots whose work is already on main.
+
+### Country-aware locale fixes (batch 6, commit 4bc3dc4)
+- ProductsManagement.tsx, PurchasesSuppliers.tsx, ReportsAnalytics.tsx: hardcoded en-KE locale -> getLocaleForCountry().
+- pos/POSCheckout.tsx: en-KE date/time -> getLocaleForCountry() for receipt timestamps.
+- PointOfSale.tsx: hardcoded 0712345678 phone placeholder -> generic.
+- DebtReminder.tsx: phone placeholder else-branch no longer defaults to Kenya format.
+
+### formatUtils.ts country-aware + NaN guards (batch 7, commit 665a7dd)
+- formatNumber: en-US -> getLocaleForCountry(); Number.isFinite guard.
+- formatDate: en-US -> getLocaleForCountry().
+- formatAmountWithCommas: Number.isFinite guard for numeric input.
+- parseNumberFromFormatted: returns 0 for non-finite parsed values.
+HIGH-IMPACT fix since formatNumber is used across the entire site.
+
+### Cross-tab interlinks added (batch 7, commit 665a7dd)
+- SupplierManagement.tsx: Deliveries + Offloading cross-tab nav buttons.
+- DeliveryTracker.tsx: Suppliers + Offloading + POS cross-tab nav buttons.
+
+### FuelOffloading badge fix (batch 7, commit 665a7dd)
+- Hardcoded truck plate placeholder KCA 123A -> generic.
+- PMS/AGO badge colors now use normalizeFuelType() for all fuel types.
+- Badge displays canonical fuel label via getFuelLabel().
+
+### Live verification (2026-08-21, Cloudflare preview 5e6b7550)
+- Dashboard: country-aware US locale, 0% VAT, 3 fuel types.
+- POS sale: 10L Super Petrol @ 1.10 = 11.00 cash (INV20260821000001U9JX), country-aware receipt.
+- Dashboard revenue sync: Total Revenue 11, Fuel Sold 10L reflected instantly.
+- Supplier Management: Deliveries + Offloading cross-tab buttons work.
+- Delivery Tracker: Suppliers + Offloading + POS cross-tab buttons work.
+- Enhanced POS sub-tab renders alongside Standard POS.
+
+### Deploy state 2026-08-21
+- GitHub main: 665a7dd (pushed, synced with origin/main).
+- Cloudflare Pages: LIVE (preview 5e6b7550 + main alias).
+- Vercel: BLOCKED by api-deployments-free-per-day (auto-deploys on reset).
+- Supabase: no schema changes (frontend-only).
+- tsc 0 errors, build success, prettier pass.

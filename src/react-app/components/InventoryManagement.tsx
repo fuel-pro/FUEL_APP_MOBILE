@@ -44,6 +44,7 @@ import {
   getCurrencySymbol,
   getDetectedCurrency,
   getDetectedCountryCode,
+  getLocaleForCountry,
 } from "@/react-app/lib/currency";
 import {
   automation,
@@ -68,10 +69,10 @@ const EnhancedInventoryManagement = lazy(() =>
 // were imported but never used (dead imports).
 const formatMoney = (amount: number) => {
   const symbol = getCurrencySymbol(getDetectedCurrency());
-  return `${symbol} ${new Intl.NumberFormat("en-US", {
+  return `${symbol} ${new Intl.NumberFormat(getLocaleForCountry(), {
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
-  }).format(amount || 0)}`;
+  }).format(Number.isFinite(amount) ? amount : 0)}`;
 };
 
 // Default categories (adjustable via user preferences, but kept here as fallback)
