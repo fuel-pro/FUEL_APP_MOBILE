@@ -314,6 +314,59 @@ export default function ExpenseTracker() {
     .filter((c) => c.total > 0)
     .sort((a, b) => b.total - a.total);
 
+  // Monthly budget (cloud-backed, cross-device)
+  const [monthlyBudget, setMonthlyBudget] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem("fuelpro_expense_budget");
+      if (saved) return Number(JSON.parse(saved)) || 0;
+    } catch {
+      /* */
+    }
+    return 0;
+  });
+  const [budgetInput, setBudgetInput] = useState<string>(
+    monthlyBudget > 0 ? String(monthlyBudget) : "",
+  );
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const cloud = await cloudStorageService.get<number>(
+        "expense_budget",
+        stationId,
+      );
+      if (!cancelled && typeof cloud === "number" && cloud > 0) {
+        setMonthlyBudget(cloud);
+        setBudgetInput(String(cloud));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [stationId]);
+
+  const saveBudget = () => {
+    const val = Number(budgetInput) || 0;
+    setMonthlyBudget(val);
+    try {
+      localStorage.setItem("fuelpro_expense_budget", JSON.stringify(val));
+    } catch {
+      /* */
+    }
+    cloudStorageService.set("expense_budget", val, stationId).catch(() => {});
+    showNotification(val > 0 ? "Monthly budget saved" : "Budget cleared");
+  };
+
+  // Current-month spend
+  const now = new Date();
+  const monthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const monthSpend = expenses
+    .filter((e) => (e.date || "").startsWith(monthStr))
+    .reduce((s, e) => s + (e.amount || 0), 0);
+  const budgetPct =
+    monthlyBudget > 0 ? Math.min(100, (monthSpend / monthlyBudget) * 100) : 0;
+  const budgetRemaining = monthlyBudget - monthSpend;
+  const overBudget = monthlyBudget > 0 && monthSpend > monthlyBudget;
+
   const handleSave = () => {
     if (!formData.description || !formData.amount) {
       showNotification("Description and amount are required", "warning");
@@ -464,6 +517,40 @@ export default function ExpenseTracker() {
           </p>
         </div>
       </div>
+
+      {/* Monthly Budget Alert */}
+      {monthlyBudget > 0 && (
+        <div
+          className={`rounded-xl border p-4 ${overBudget ? "bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-800" : budgetPct >= 80 ? "bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-800" : "bg-emerald-50 dark:bg-emerald-900/10 border-emerald-200 dark:border-emerald-800"}`}
+        >
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              {overBudget ? (
+                <AlertTriangle size={16} className="text-red-500" />
+              ) : (
+                <TrendingUp size={16} className="text-emerald-500" />
+              )}
+              <span
+                className={`text-sm font-medium ${overBudget ? "text-red-700 dark:text-red-400" : budgetPct >= 80 ? "text-amber-700 dark:text-amber-400" : "text-emerald-700 dark:text-emerald-400"}`}
+              >
+                {overBudget
+                  ? `Over budget by ${currencySymbol} ${Math.abs(budgetRemaining).toLocaleString()}`
+                  : `${currencySymbol} ${budgetRemaining.toLocaleString()} remaining this month`}
+              </span>
+            </div>
+            <span className="text-xs text-gray-500">
+              {currencySymbol} {monthSpend.toLocaleString()} / {currencySymbol}{" "}
+              {monthlyBudget.toLocaleString()} ({budgetPct.toFixed(0)}%)
+            </span>
+          </div>
+          <div className="h-2 bg-white/50 dark:bg-gray-700/50 rounded-full overflow-hidden mt-2">
+            <div
+              className={`h-full rounded-full transition-all ${overBudget ? "bg-red-500" : budgetPct >= 80 ? "bg-amber-500" : "bg-emerald-500"}`}
+              style={{ width: `${Math.min(budgetPct, 100)}%` }}
+            />
+          </div>
+        </div>
+      )}
 
       {activeView === "list" ? (
         <>
@@ -646,6 +733,43 @@ export default function ExpenseTracker() {
       ) : (
         /* Analytics View */
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Monthly Budget Setter */}
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 md:col-span-2">
+            <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+              <DollarSign size={14} className="text-emerald-500" /> Monthly
+              Budget
+            </h3>
+            <div className="flex items-center gap-2 flex-wrap">
+              <input
+                type="number"
+                min={0}
+                value={budgetInput}
+                onChange={(e) => setBudgetInput(e.target.value)}
+                placeholder="Set monthly expense budget (0 = none)"
+                className="flex-1 min-w-[200px] px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500/30"
+              />
+              <button
+                onClick={saveBudget}
+                className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-sm font-medium flex items-center gap-2 transition-all"
+              >
+                <Save size={14} /> Save Budget
+              </button>
+            </div>
+            {monthlyBudget > 0 && (
+              <p className="text-xs text-gray-500 mt-2">
+                Current month spend:{" "}
+                <span
+                  className={`font-medium ${overBudget ? "text-red-500" : "text-emerald-500"}`}
+                >
+                  {currencySymbol} {monthSpend.toLocaleString()}
+                </span>{" "}
+                of {currencySymbol} {monthlyBudget.toLocaleString()} budget.{" "}
+                {overBudget
+                  ? "Over budget — review expenses."
+                  : `${currencySymbol} ${budgetRemaining.toLocaleString()} remaining.`}
+              </p>
+            )}
+          </div>
           <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
             <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-4 flex items-center gap-2">
               <PieChart size={14} className="text-amber-500" /> By Category

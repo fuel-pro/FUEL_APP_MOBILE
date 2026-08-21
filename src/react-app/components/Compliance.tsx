@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   Globe,
   Shield,
@@ -29,6 +29,7 @@ import { useFuel } from "@/react-app/context/FuelContext";
 import { useStations } from "@/react-app/context/StationContext";
 import { getDetectedCountryCode } from "@/react-app/lib/currency";
 import { switchToTab } from "@/react-app/lib/mpesa-integration-service";
+import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 
 export default function Compliance() {
   const { state } = useFuel();
@@ -152,6 +153,22 @@ export default function Compliance() {
           >
             <FileText size={16} className="inline mr-1" />
             Reports
+          </button>
+          <button
+            onClick={() => switchToTab("integration")}
+            className="px-3 py-2 rounded-lg bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/30 dark:hover:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400 text-sm font-medium transition-all"
+            title="Open Integration Hub (ETR / tax devices)"
+          >
+            <Landmark size={16} className="inline mr-1" />
+            Integrations
+          </button>
+          <button
+            onClick={() => switchToTab("pos")}
+            className="px-3 py-2 rounded-lg bg-amber-50 hover:bg-amber-100 dark:bg-amber-900/30 dark:hover:bg-amber-900/50 text-amber-600 dark:text-amber-400 text-sm font-medium transition-all"
+            title="Open Point of Sale"
+          >
+            <Receipt size={16} className="inline mr-1" />
+            POS
           </button>
         </div>
       </div>
@@ -476,28 +493,109 @@ function FuelSection({ config }: { config: ComplianceConfig }) {
 }
 
 function PermitsSection({ config }: { config: ComplianceConfig }) {
+  const storageKey = `compliance_permits_${config.countryCode}`;
+  const [obtained, setObtained] = useState<Set<string>>(() => {
+    try {
+      const saved = localStorage.getItem(storageKey);
+      if (saved) return new Set<string>(JSON.parse(saved));
+    } catch {
+      /* */
+    }
+    return new Set<string>();
+  });
+  const [loaded, setLoaded] = useState(false);
+
+  // Load from cloud (cross-device) + realtime
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const cloud = await cloudStorageService.get<string[]>(storageKey);
+      if (!cancelled && Array.isArray(cloud)) {
+        setObtained(new Set<string>(cloud));
+      }
+      setLoaded(true);
+      const unsub = cloudStorageService.subscribe<string[]>(
+        storageKey,
+        undefined,
+        (val) => {
+          if (Array.isArray(val)) setObtained(new Set<string>(val));
+        },
+      );
+      return () => {
+        cancelled = true;
+        unsub?.();
+      };
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [storageKey]);
+
+  const toggle = (permit: string) => {
+    const next = new Set<string>(obtained);
+    if (next.has(permit)) next.delete(permit);
+    else next.add(permit);
+    setObtained(next);
+    const arr = Array.from(next);
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(arr));
+    } catch {
+      /* */
+    }
+    cloudStorageService.set(storageKey, arr).catch(() => {});
+  };
+
+  const obtainedCount = obtained.size;
+  const total = config.requiredPermits.length;
+  const pct = total > 0 ? Math.round((obtainedCount / total) * 100) : 0;
+
   return (
     <div className="space-y-2">
-      <p className="text-xs text-gray-500 mb-2">
-        {config.requiredPermits.length} permits/licenses required to operate a
-        fuel station:
-      </p>
-      {config.requiredPermits.map((permit, i) => (
-        <div
-          key={i}
-          className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-900 rounded-lg"
-        >
-          <CheckCircle2 size={14} className="text-green-500 flex-shrink-0" />
-          <span className="text-xs text-gray-700 dark:text-gray-300">
-            {permit}
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-xs text-gray-500">
+          {total} permits/licenses required to operate a fuel station:
+        </p>
+        {loaded && (
+          <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
+            {obtainedCount}/{total} obtained ({pct}%)
           </span>
+        )}
+      </div>
+      {total > 0 && (
+        <div className="h-1.5 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden mb-2">
+          <div
+            className="h-full bg-green-500 rounded-full transition-all"
+            style={{ width: `${pct}%` }}
+          />
         </div>
-      ))}
+      )}
+      {config.requiredPermits.map((permit, i) => {
+        const isObtained = obtained.has(permit);
+        return (
+          <button
+            key={i}
+            onClick={() => toggle(permit)}
+            className="w-full flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-900 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-all text-left"
+          >
+            <div
+              className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${isObtained ? "bg-green-500 border-green-500" : "border-gray-300 dark:border-gray-600"}`}
+            >
+              {isObtained && <CheckCircle2 size={12} className="text-white" />}
+            </div>
+            <span
+              className={`text-xs ${isObtained ? "text-gray-500 line-through" : "text-gray-700 dark:text-gray-300"}`}
+            >
+              {permit}
+            </span>
+          </button>
+        );
+      })}
       <div className="mt-3 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
         <p className="text-xs text-amber-700 dark:text-amber-400">
           <AlertTriangle size={12} className="inline mr-1" />
           Operating without these permits may result in fines, license
-          revocation, or legal action by {config.fuelRegulatorShort}.
+          revocation, or legal action by {config.fuelRegulatorShort}. Tick each
+          permit as you obtain it — your checklist syncs across devices.
         </p>
       </div>
     </div>

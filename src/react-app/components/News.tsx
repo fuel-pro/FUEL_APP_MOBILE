@@ -1,7 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation } from "@/react-app/context/LocationContext";
 import { useAuth } from "@/react-app/context/AuthContext";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
+import { Search } from "lucide-react";
 import {
   Newspaper,
   ExternalLink,
@@ -364,38 +365,142 @@ export default function News() {
     null,
   );
   const [bookmarks, setBookmarks] = useState<Set<string>>(new Set<string>());
+  const [readIds, setReadIds] = useState<Set<string>>(new Set<string>());
   const [lastFetch, setLastFetch] = useState<Date | null>(null);
   const [source, setSource] = useState<"curated" | "external">("curated");
+  const [searchQuery, setSearchQuery] = useState("");
   // Video feed state
   const [videoIndex, setVideoIndex] = useState(0);
   const [showVideos, setShowVideos] = useState(false);
   const [videoDropdown, setVideoDropdown] = useState(false);
   const currentVideo = VIDEO_SOURCES[videoIndex];
 
-  // Load bookmarks and initial news
+  // Cross-device cloud-sync guards (prevent realtime echo from wiping local edits)
+  const cloudLoadCompleteRef = useRef(false);
+  const localModifiedRef = useRef(false);
+  const skipRemoteRef = useRef(false);
+
+  const persistBookmarks = useCallback((next: Set<string>) => {
+    const arr = Array.from(next);
+    try {
+      localStorage.setItem("fuelpro_news_bookmarks", JSON.stringify(arr));
+    } catch {
+      /* */
+    }
+    if (cloudLoadCompleteRef.current) {
+      skipRemoteRef.current = true;
+      cloudStorageService.set("news_bookmarks", arr).catch(() => {});
+    }
+  }, []);
+
+  const persistReadIds = useCallback((next: Set<string>) => {
+    const arr = Array.from(next);
+    try {
+      localStorage.setItem("fuelpro_news_read", JSON.stringify(arr));
+    } catch {
+      /* */
+    }
+    if (cloudLoadCompleteRef.current) {
+      cloudStorageService.set("news_read", arr).catch(() => {});
+    }
+  }, []);
+
+  // Load bookmarks + read state from local cache for instant first render
   useEffect(() => {
     const saved = localStorage.getItem("fuelpro_news_bookmarks");
     if (saved) {
-      const parsed: string[] = JSON.parse(saved);
-      setBookmarks(new Set<string>(parsed));
+      try {
+        const parsed: string[] = JSON.parse(saved);
+        setBookmarks(new Set<string>(parsed));
+      } catch {
+        /* */
+      }
+    }
+    const savedRead = localStorage.getItem("fuelpro_news_read");
+    if (savedRead) {
+      try {
+        const parsed: string[] = JSON.parse(savedRead);
+        setReadIds(new Set<string>(parsed));
+      } catch {
+        /* */
+      }
     }
     setLastFetch(NewsService.getLastFetchTime());
   }, []);
 
-  // Load bookmarks from cloud on mount (cross-device sync)
+  // Load bookmarks + read state from cloud on mount (cross-device sync)
   useEffect(() => {
     if (!user) return;
+    let cancelled = false;
     (async () => {
-      const cloud = await cloudStorageService.get<string[]>("news_bookmarks");
-      if (cloud && Array.isArray(cloud) && cloud.length > 0) {
-        setBookmarks(new Set<string>(cloud));
+      const [cloud, cloudRead] = await Promise.all([
+        cloudStorageService.get<string[]>("news_bookmarks"),
+        cloudStorageService.get<string[]>("news_read"),
+      ]);
+      if (cancelled) return;
+      if (!localModifiedRef.current) {
+        if (cloud && Array.isArray(cloud) && cloud.length > 0) {
+          setBookmarks(new Set<string>(cloud));
+        }
+        if (cloudRead && Array.isArray(cloudRead)) {
+          setReadIds(new Set<string>(cloudRead));
+        }
       }
+      cloudLoadCompleteRef.current = true;
+      // Real-time: another device's bookmark change reflects instantly
+      const unsubBookmarks = cloudStorageService.subscribe<string[]>(
+        "news_bookmarks",
+        undefined,
+        (cloudArr) => {
+          if (skipRemoteRef.current) {
+            skipRemoteRef.current = false;
+            return;
+          }
+          if (Array.isArray(cloudArr)) {
+            setBookmarks(new Set<string>(cloudArr));
+            try {
+              localStorage.setItem(
+                "fuelpro_news_bookmarks",
+                JSON.stringify(cloudArr),
+              );
+            } catch {
+              /* */
+            }
+          }
+        },
+      );
+      const unsubRead = cloudStorageService.subscribe<string[]>(
+        "news_read",
+        undefined,
+        (cloudArr) => {
+          if (Array.isArray(cloudArr)) {
+            setReadIds(new Set<string>(cloudArr));
+            try {
+              localStorage.setItem(
+                "fuelpro_news_read",
+                JSON.stringify(cloudArr),
+              );
+            } catch {
+              /* */
+            }
+          }
+        },
+      );
+      return () => {
+        cancelled = true;
+        unsubBookmarks?.();
+        unsubRead?.();
+      };
     })();
+    return () => {
+      cancelled = true;
+    };
   }, [user]);
 
   // Load news on mount
   useEffect(() => {
     loadNews();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentCountry.id]);
 
   async function loadNews() {
@@ -448,14 +553,12 @@ export default function News() {
   }
 
   const toggleBookmark = (id: string) => {
+    localModifiedRef.current = true;
     setBookmarks((prev) => {
       const next = new Set<string>(Array.from(prev));
       if (next.has(id)) next.delete(id);
       else next.add(id);
-      const arr = Array.from(next);
-      localStorage.setItem("fuelpro_news_bookmarks", JSON.stringify(arr));
-      // Cross-device sync
-      cloudStorageService.set("news_bookmarks", arr).catch(() => {});
+      persistBookmarks(next);
       return next;
     });
     setNews((prev) =>
@@ -464,6 +567,13 @@ export default function News() {
   };
 
   const markAsRead = (id: string) => {
+    localModifiedRef.current = true;
+    setReadIds((prev) => {
+      const next = new Set<string>(Array.from(prev));
+      next.add(id);
+      persistReadIds(next);
+      return next;
+    });
     setNews((prev) =>
       prev.map((n) => (n.id === id ? { ...n, read: true } : n)),
     );
@@ -486,14 +596,27 @@ export default function News() {
     }
   };
 
+  const q = searchQuery.trim().toLowerCase();
   const filteredNews =
     activeFilter === "all"
       ? news
       : activeFilter === "bookmarked"
         ? news.filter((n) => n.bookmarked)
-        : news.filter((n) => n.category === activeFilter);
+        : activeFilter === "unread"
+          ? news.filter((n) => !readIds.has(n.id))
+          : news.filter((n) => n.category === activeFilter);
+  const searchedNews =
+    q.length === 0
+      ? filteredNews
+      : filteredNews.filter(
+          (n) =>
+            n.title.toLowerCase().includes(q) ||
+            n.summary.toLowerCase().includes(q) ||
+            n.source.toLowerCase().includes(q) ||
+            (n.category || "").toLowerCase().includes(q),
+        );
 
-  const unreadCount = news.filter((n) => !n.read).length;
+  const unreadCount = news.filter((n) => !readIds.has(n.id)).length;
 
   return (
     <div className="space-y-6 p-4 md:p-6 max-w-6xl mx-auto">
@@ -534,14 +657,33 @@ export default function News() {
             {fetchingExternal ? "Fetching..." : "Fetch Live News"}
           </button>
           <button
-            onClick={() =>
-              setNews((prev) => prev.map((n) => ({ ...n, read: true })))
-            }
+            onClick={() => {
+              localModifiedRef.current = true;
+              const next = new Set<string>(news.map((n) => n.id));
+              setReadIds(next);
+              persistReadIds(next);
+              setNews((prev) => prev.map((n) => ({ ...n, read: true })));
+            }}
             className="px-3 py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-lg text-xs hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
           >
             Mark all read
           </button>
         </div>
+      </div>
+
+      {/* Search bar */}
+      <div className="relative">
+        <Search
+          size={14}
+          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+        />
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Search news by title, summary, source, or category..."
+          className="w-full pl-9 pr-4 py-2 text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-800 dark:text-gray-200 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
       </div>
 
       {/* Last fetch time */}
@@ -558,6 +700,12 @@ export default function News() {
           className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${activeFilter === "all" ? "bg-blue-500 text-white" : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"}`}
         >
           All ({news.length})
+        </button>
+        <button
+          onClick={() => setActiveFilter("unread")}
+          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 ${activeFilter === "unread" ? "bg-blue-500 text-white" : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"}`}
+        >
+          <Clock size={12} /> Unread ({unreadCount})
         </button>
         {Object.entries(CATEGORY_LABELS).map(([key, label]) => {
           const count = news.filter((n) => n.category === key).length;
@@ -741,16 +889,17 @@ export default function News() {
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {filteredNews.map((item) => {
+          {searchedNews.map((item) => {
             const Icon = CATEGORY_ICONS[item.category] || Newspaper;
             const colorClass = CATEGORY_COLORS[item.category];
             const isPriority = item.priority === "high";
+            const isRead = readIds.has(item.id) || item.read;
 
             return (
               <div
                 key={item.id}
                 className={`group bg-white dark:bg-gray-800 rounded-xl border transition-all hover:shadow-lg cursor-pointer ${
-                  item.read
+                  isRead
                     ? "border-gray-200 dark:border-gray-700 opacity-70"
                     : isPriority
                       ? "border-red-300 dark:border-red-700"
@@ -780,7 +929,7 @@ export default function News() {
                           <AlertTriangle size={10} /> High Priority
                         </span>
                       )}
-                      {!item.read && (
+                      {!isRead && (
                         <span className="w-2 h-2 bg-blue-500 rounded-full" />
                       )}
                     </div>
@@ -811,7 +960,7 @@ export default function News() {
                   </div>
 
                   <h3
-                    className={`font-semibold mb-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors ${item.read ? "text-gray-600 dark:text-gray-400" : "text-gray-900 dark:text-white"}`}
+                    className={`font-semibold mb-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors ${isRead ? "text-gray-600 dark:text-gray-400" : "text-gray-900 dark:text-white"}`}
                   >
                     {item.title}
                   </h3>
@@ -842,10 +991,14 @@ export default function News() {
         </div>
       )}
 
-      {filteredNews.length === 0 && !loading && (
+      {searchedNews.length === 0 && !loading && (
         <div className="text-center py-16">
           <Newspaper size={48} className="mx-auto text-gray-300 mb-4" />
-          <p className="text-gray-500">No news items in this category</p>
+          <p className="text-gray-500">
+            {searchQuery
+              ? `No news matching "${searchQuery}"`
+              : "No news items in this category"}
+          </p>
         </div>
       )}
 
