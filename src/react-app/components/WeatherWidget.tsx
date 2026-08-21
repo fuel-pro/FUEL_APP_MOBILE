@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { useLocation } from "@/react-app/context/LocationContext";
 import { useStations } from "@/react-app/context/StationContext";
-import { getCountryById } from "@/react-app/config/countries";
+import { getCountryById, CAPITAL_COORDS } from "@/react-app/config/countries";
 import { getDetectedCountryCode } from "@/react-app/lib/currency";
 
 interface WeatherData {
@@ -121,11 +121,20 @@ export default function WeatherWidget() {
       lastFetchedKeyRef.current = key;
       fetchWeather(lat, lng, addr);
     } else if (!preciseLocationLoading) {
-      const detectedCountry = getCountryById(getDetectedCountryCode());
+      const cc = getDetectedCountryCode();
+      const detectedCountry = getCountryById(cc);
       const fallbackCity = detectedCountry?.capital || "Your location";
+      const capitalCoords = CAPITAL_COORDS[cc.toUpperCase()] || {
+        lat: -1.2921,
+        lng: 36.8219,
+      };
       const fallback = stationLoc
-        ? { lat: -1.2921, lng: 36.8219, name: stationLoc }
-        : { lat: -1.2921, lng: 36.8219, name: fallbackCity };
+        ? { lat: capitalCoords.lat, lng: capitalCoords.lng, name: stationLoc }
+        : {
+            lat: capitalCoords.lat,
+            lng: capitalCoords.lng,
+            name: fallbackCity,
+          };
       const key = `f:${fallback.lat},${fallback.lng}`;
       if (key === lastFetchedKeyRef.current) return;
       lastFetchedKeyRef.current = key;

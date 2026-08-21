@@ -405,56 +405,60 @@ export default function FuelQualityTesting() {
               </tr>
             </thead>
             <tbody>
-              {tests.map((t) => (
-                <tr
-                  key={t.id}
-                  className="border-b border-gray-100 dark:border-gray-700/50"
-                >
-                  <td className="px-3 py-2 text-gray-500">{t.date}</td>
-                  <td className="px-3 py-2 dark:text-white font-medium">
-                    {t.batchNumber}
-                  </td>
-                  <td className="px-3 py-2">
-                    <span
-                      className={`text-[10px] px-1.5 py-0.5 rounded ${
-                        t.fuelType === "PMS"
-                          ? "bg-green-100 text-green-700"
-                          : t.fuelType === "AGO"
-                            ? "bg-amber-100 text-amber-700"
-                            : "bg-blue-100 text-blue-700"
-                      }`}
-                    >
-                      {getFuelLabel(t.fuelType) || t.fuelType}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2 text-right dark:text-white">
-                    {t.density}
-                  </td>
-                  <td className="px-3 py-2 text-right dark:text-white">
-                    {t.sulfurContent}
-                  </td>
-                  <td className="px-3 py-2 text-right dark:text-white">
-                    {t.flashPoint}
-                  </td>
-                  <td className="px-3 py-2 text-center">
-                    <span
-                      className={`text-[10px] px-1.5 py-0.5 rounded ${t.appearance === "clear" ? "bg-green-100 text-green-700" : t.appearance === "hazy" ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-700"}`}
-                    >
-                      {t.appearance}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2 text-center">
-                    {t.passed ? (
-                      <CheckCircle2
-                        size={14}
-                        className="text-green-500 inline"
-                      />
-                    ) : (
-                      <XCircle size={14} className="text-red-500 inline" />
-                    )}
+              {tests.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="text-center py-8 text-gray-400">
+                    <Beaker className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                    <p>No quality tests recorded yet</p>
+                    <p className="text-xs mt-1">
+                      Fill the form above to record your first fuel quality test
+                    </p>
                   </td>
                 </tr>
-              ))}
+              ) : (
+                tests.map((t) => (
+                  <tr
+                    key={t.id}
+                    className="border-b border-gray-100 dark:border-gray-700/50"
+                  >
+                    <td className="px-3 py-2 text-gray-500">{t.date}</td>
+                    <td className="px-3 py-2 dark:text-white font-medium">
+                      {t.batchNumber}
+                    </td>
+                    <td className="px-3 py-2">
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">
+                        {getFuelLabel(t.fuelType) || t.fuelType}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 text-right dark:text-white">
+                      {t.density}
+                    </td>
+                    <td className="px-3 py-2 text-right dark:text-white">
+                      {t.sulfurContent}
+                    </td>
+                    <td className="px-3 py-2 text-right dark:text-white">
+                      {t.flashPoint}
+                    </td>
+                    <td className="px-3 py-2 text-center">
+                      <span
+                        className={`text-[10px] px-1.5 py-0.5 rounded ${t.appearance === "clear" ? "bg-green-100 text-green-700" : t.appearance === "hazy" ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-700"}`}
+                      >
+                        {t.appearance}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 text-center">
+                      {t.passed ? (
+                        <CheckCircle2
+                          size={14}
+                          className="text-green-500 inline"
+                        />
+                      ) : (
+                        <XCircle size={14} className="text-red-500 inline" />
+                      )}
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>

@@ -682,7 +682,9 @@ export default function DeliveryTracker() {
             />
           </div>
           <div className="form-group">
-            <label>Petrol Price ({currencySymbol}/L)</label>
+            <label>
+              {fuelTypeApi.labelOf("Petrol")} Price ({currencySymbol}/L)
+            </label>
             <input
               type="number"
               value={state.petrolPrice ?? ""}
@@ -697,7 +699,9 @@ export default function DeliveryTracker() {
             />
           </div>
           <div className="form-group">
-            <label>Diesel Price ({currencySymbol}/L)</label>
+            <label>
+              {fuelTypeApi.labelOf("Diesel")} Price ({currencySymbol}/L)
+            </label>
             <input
               type="number"
               value={state.dieselPrice ?? ""}

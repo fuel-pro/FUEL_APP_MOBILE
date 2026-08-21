@@ -156,7 +156,7 @@ export default function Header({
     const data = JSON.stringify({
       company: state.companyData.name,
       vat: state.companyData.vatRegNo,
-      pin: state.companyData.kraPin,
+      taxId: state.companyData.kraPin || state.companyData.vatRegNo || "",
       phone: state.companyData.contacts,
     });
     const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(data)}`;
