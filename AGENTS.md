@@ -5651,3 +5651,87 @@ branch is redundant (all its work is already on main in more complete form
 via the compression + access-code-login merges). All other unmerged
 branches are old divergent snapshots (200+ commits behind) or
 single-commit fixes already superseded.
+
+## Session 2026-08-21 — Robust upgrades across News, Document Converter, Maintenance, Compliance, Expenses (DEPLOYED LIVE, commit a77434d)
+
+Continued the systematic multi-tab improvement sweep. Added real cloud-backed
+features + analytics + cross-tab interlinks to 5 more components. All verified
+live on Cloudflare Pages + Vercel production + GitHub main. No Supabase schema
+changes (frontend-only; uses existing `app_kv` + scoped row ids).
+
+### News.tsx (tab "news")
+- **Real-time cloud sync** for bookmarks + read state (cloud key `news_bookmarks`,
+  `news_read`; cross-device, echo-guarded via `localModifiedRef`). Previously
+  localStorage-only.
+- **Search bar** (title/summary/source/category).
+- **Unread filter** button + **Mark all read** (persists read state to cloud).
+
+### DocumentConverter.tsx (Document Center "Document Converter" sub-tab)
+- **Cross-device cloud sync** for conversion history (metadata only, cloud key
+  `converter_jobs`; `cloudLoadCompleteRef` + `localModifiedRef` guards).
+- **Preview modal** (image/PDF/text/html/svg via iframe rendering).
+- **Download All** batch button.
+
+### MaintenanceTracker.tsx (tab "maintenance")
+- **Cost analytics**: Total Maintenance Cost / Completed / Pending / Avg Cost
+  stat cards + Spend-by-Equipment-Type breakdown bar chart.
+- **CSV export** (RFC 4180 escaping) of filtered maintenance records.
+
+### Compliance.tsx (tab "compliance")
+- **Cloud-backed interactive permit checklist** (PermitsSection): tick which
+  permits are obtained, progress bar, syncs cross-device via `app_kv`
+  (key `compliance_permits_<countryCode>`). Replaced the static bullet list.
+- **Cross-tab links** in header: Reports, Integration Hub (ETR/tax devices),
+  POS.
+
+### ExpenseTracker.tsx (tab "expenses")
+- **Monthly budget setter** (cloud-backed, cross-device via key
+  `expense_budget`; persists to `app_kv` + localStorage cache).
+- **Budget alert banner** (color-coded: green <80%, amber >=80%, red over
+  budget) shown in BOTH records + analytics views, with progress bar.
+- **Budget progress card** in the Analytics view (current month spend /
+  budget / remaining).
+
+### Verification (live, 2026-08-21)
+- Logged in as founder QA (`founder.qa.fuelpro@gmail.com`, US station, USD)
+  on https://fuel-app-mobile.pages.dev.
+- Expense Tracker: navigated to Analytics -> Monthly Budget card rendered,
+  input 5000, clicked Save Budget -> persisted (cloud sync). Budget alert
+  banner shows "$0 / $5,000 (0%)" with "$5,000 remaining this month".
+- All 5 components' feature markers confirmed live in deployed Cloudflare
+  chunks:
+  - News-C36kXp4P.js: "Search news by title", "Unread", "news_read",
+    "Mark all read".
+  - DocumentCenter-DvPM2U3N.js: "Download All", "converter_jobs",
+    "Preview:", "Preview not available".
+  - MaintenanceTracker-D5ya_WlI.js: "Total Maintenance Cost",
+    "Spend by Equipment Type", "Avg Cost", "Export CSV".
+  - Compliance-DxcQ7mER.js: "compliance_permits_", "obtained",
+    "Open Integration Hub".
+  - ExpenseTracker-Xc3TbVvi.js: "expense_budget", "Monthly Budget",
+    "Over budget by", "Save Budget".
+
+### Deploy state 2026-08-21 (commit a77434d)
+- **GitHub main**: a77434d (pushed, synced with origin/main).
+- **Cloudflare Pages**: LIVE (preview https://b30b5f32.fuel-app-mobile.pages.dev
+  + main alias https://fuel-app-mobile.pages.dev).
+- **Vercel production**: LIVE (prebuilt deploy, aliased to
+  fuel-app-mobile.vercel.app, build output regenerated with correct chunks).
+- **Supabase**: no schema changes (frontend-only).
+- `npx tsc --noEmit` (0 errors), `npm run build` (105 precache, success),
+  prettier all pass.
+
+### Post-task lost-commit re-audit (2026-08-21)
+Re-audited all remote branches. No unmerged work found that needs merging:
+- `wire-components-cross-relate` (2 commits): cross-tab interlink framework
+  already on main in more complete form (PR #101/103, fuel-interlink-bus).
+- `team-manager-access-codes-merge` (1 commit): InviteAccept.tsx +
+  access-code service already on main (more complete via compression +
+  access-code-login merges).
+- `feat/village-level-real-fuel-prices` (1 commit): already merged (PR #100,
+  commit ea0bb41).
+- `founder-username-login` (7 commits): diverges from c1e907a, conflicts with
+  main's AuthContext.tsx changes — documented as awaiting user authorization
+  for manual rebase (NOT auto-merged).
+- All other unmerged branches are old divergent snapshots (200+ commits
+  behind) or single-commit fixes already superseded.
