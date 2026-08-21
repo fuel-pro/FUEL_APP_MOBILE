@@ -5869,3 +5869,97 @@ Re-audited all remote branches. No unmerged work found that needs merging:
   identifying-security-vulnerabilities): all are old divergent snapshots
   (200+ commits behind main) whose fixes are ALREADY on main in more
   complete form via the incremental PRs. No lost work needs merging.
+
+## Session 2026-08-21 (cont.) — Country-aware fuel prices + cross-tab interlinks (DEPLOYED LIVE, commit 625bac5)
+
+### Fixes
+
+1. **FuelPriceLocator.tsx** — Removed `KENYA_BASE_PRICES` (214/222/191 KSh)
+   as a universal fallback for unknown countries. These Kenya-specific KSh
+   prices were shown to US/EU stations when no GPS/API data was available,
+   producing absurd results ($229.95/L diesel on a US station). Now keeps
+   `unifiedPrices` (country-aware) as the only fallback. Added null guards
+   on `.toFixed()` for `distance_km`, `lat`, `lng` (was crashing on
+   undefined). Added cross-tab interlinks: "Dashboard", "Edit Fuel Prices",
+   "Sales Tracking" buttons via `switchToTab`.
+
+2. **PumpMappingV1.tsx** — Currency `<select>` had a hardcoded `"KES"`
+   fallback. Now uses country-aware currency from `getCurrencySymbol()` /
+   `getDetectedCurrency()`. A US station now shows "$" instead of "KSh".
+
+3. **FuelSalesReport.tsx** — Added cross-tab interlinks in the header:
+   "Point of Sale", "Sales Tracking", "Reports Center" buttons (with
+   ShoppingCart, ClipboardList, BarChart3 icons). A user viewing a sales
+   report can now jump directly to POS/Sales Tracking/Reports without
+   scrolling the tab bar.
+
+4. **TerminalSessions.tsx** — Added cross-tab interlinks: "Point of Sale",
+   "Sales Tracking", "Reports Center" buttons. Removed unused `DollarSign`
+   import.
+
+### Vite cache issue (FIXED)
+
+Discovered that `node_modules/.vite/` cache was causing Vite to produce
+the SAME content hash for DIFFERENT chunk content (e.g.
+`TerminalSessions-DGkqNuMK.js` had the same hash before and after edits).
+This meant Cloudflare Pages skipped uploading the new chunk (dedup by
+filename), serving the OLD cached chunk to users — "I can't see the
+updates". Fix: always `rm -rf node_modules/.vite dist` before building.
+After clearing the cache, Vite produced new hashes (`TerminalSessions-CJrPIfsp.js`)
+and Cloudflare uploaded the new chunks.
+
+### Deploy state 2026-08-21
+
+- **GitHub main**: commit `625bac5` (pushed, synced with origin/main).
+- **Cloudflare Pages**: LIVE (preview https://2ba69431.fuel-app-mobile.pages.dev
+  + main alias https://fuel-app-mobile.pages.dev). All 4 fixed chunks
+  verified live with correct md5 + markers.
+- **Vercel production**: LIVE (prebuilt deploy, aliased to
+  fuel-app-mobile.vercel.app). All chunks verified.
+- **Supabase**: no schema changes (frontend-only fixes).
+- `npx tsc --noEmit` (0 errors), `npm run build` (105 precache, success),
+  prettier clean, eslint 0 errors.
+
+### Live browser verification (2026-08-21, Cloudflare preview 2ba69431)
+
+Logged in as founder QA (`founder.qa.fuelpro@gmail.com`, US station, USD):
+- **Dashboard**: country-aware — "🇺🇸 United States USD", "$1,500" min wage,
+  "0%" VAT, "United States Revenue Authority", "$" currency. All correct.
+- **Fuel Price Finder**: renders with NEW cross-tab interlinks ("Dashboard",
+  "Edit Fuel Prices", "Sales Tracking") — all 3 buttons visible + functional.
+- **Fuel Sales Report**: renders with NEW cross-tab interlinks ("Point of
+  Sale", "Sales Tracking", "Reports Center") — all 3 buttons visible.
+- **Terminal Sessions**: renders with NEW cross-tab interlinks ("Point of
+  Sale", "Sales Tracking", "Reports Center") — all 3 buttons visible.
+  "Open Session" button + session table (Session/Opened/Closed/Sales/
+  Variance/Status columns) + "No session history" empty state.
+
+### Post-task lost-commit audit (2026-08-21, after this batch)
+
+Re-audited all remote branches. ONE branch contains genuinely lost work:
+
+- **`identifying-security-vulnerabilities-8d289`** (3 commits, only 20
+  behind main — recent, NOT 200+ behind as previously reported):
+  - Removes exposed R2 secret access key (`VITE_R2_SECRET_ACCESS_KEY`) and
+    Upstash Redis token (`VITE_UPSTASH_REDIS_REST_TOKEN`) from client-side
+    `cloudStorage.ts`, routing through `/api/r2/upload-url` and
+    `/api/cache/*` serverless endpoints instead.
+  - XSS hardening across toast/printer/POS/FuelSalesReport components.
+  - CSP/security headers in index.html.
+  - `SECURITY_REMEDIATION_REPORT.md`.
+  - **Verified**: main still has `src/react-app/lib/cloudStorage.ts` which
+    references `import.meta.env.VITE_R2_SECRET_ACCESS_KEY` and
+    `VITE_UPSTASH_REDIS_REST_TOKEN`. These VITE_-prefixed env vars WOULD be
+    embedded in the client bundle if set. Currently the env vars are NOT set
+    (empty string at build time), so there's no active secret leak — but
+    the POTENTIAL for a leak exists if someone sets them. The file IS
+    imported by `silent-print-service.ts`, `print-storage-integration.ts`,
+    `indexed-storage.ts`, and `cloudSync.ts`.
+  - **STATUS**: Not auto-merged. The /api/r2/* and /api/cache/* endpoints
+    don't exist on main, so a blind merge would break functionality. A
+    proper fix requires creating the serverless endpoints first, then
+    updating cloudStorage.ts to route through them. Noted for a future
+    security-hardening batch.
+
+All other unmerged branches are old divergent snapshots (200+ commits
+behind) whose work is already on main in more complete form.
