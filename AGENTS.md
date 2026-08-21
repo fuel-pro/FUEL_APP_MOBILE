@@ -5735,3 +5735,137 @@ Re-audited all remote branches. No unmerged work found that needs merging:
   for manual rebase (NOT auto-merged).
 - All other unmerged branches are old divergent snapshots (200+ commits
   behind) or single-commit fixes already superseded.
+
+## Session 2026-08-21 (cont.) — Team Manager professional redesign (DEPLOYED LIVE, commit b055d7b)
+
+Restructured the Team Manager tab from a flat vertical scroll into a
+professional, bound-together layout that links all 6 areas (Add Team Member,
+Active Invites, Shared Snapshot, Access Codes, Feature Access Control, Team
+Members) into one cohesive workflow. The design ensures everything is live,
+real, and interlinked — each area references and updates the others.
+
+### New binding elements (the glue that ties the 6 areas together)
+
+1. **Gradient header with inline stat badges**: Members / Invites / Codes
+   counts displayed inline in the header (not buried in a separate stat
+   card), updating in real-time as data changes.
+2. **Quick-action toolbar in the header**: Publish Snapshot, Health, Export
+   — 3 one-click actions that each operate across the entire tab.
+3. **Live cloud-sync status badge**: shows "Cloud synced" + last snapshot
+   publish time, or "Offline" — so the owner knows data is flowing
+   cross-device.
+4. **Onboarding checklist banner** (the onboarding guide that ties
+   everything together): 6 steps with a progress bar. Each step deep-links
+   to its corresponding area:
+   - Add a team member (→ Invite by Link / Quick Access Code)
+   - Share an invite link (→ Active Invites + share buttons)
+   - Publish shared snapshot (→ Shared Snapshot publisher)
+   - Configure role permissions (→ Feature Access Control)
+   - Assign pumps/shifts to members (→ Team Members + pump assignment)
+   - Review team health (→ Activity & Health sub-tab)
+   Steps auto-check off as the owner completes each action.
+5. **Member detail slide-over drawer**: clicking "Details" on any member
+   card opens a drawer that binds all 6 areas into ONE unified view of
+   that member — shows their role, access method (Invite/Code),
+   read-only status, allowed tabs, pump assignments, shift history,
+   invite provenance, access activity (last login, access count),
+   extend/revoke/re-enable actions. This is the single binding surface
+   that ties Add Team Member + Active Invites + Access Codes + Feature
+   Access Control + Team Members + pump/shift assignment together for
+   ONE member.
+6. **Auto-publish snapshot on access-code creation**: when the owner
+   creates an access code, `publishSnapshot()` fires automatically so the
+   new member has data to view on first login (no manual publish needed).
+
+### Sub-tabs (4, professional grouping)
+- **Team Access**: Add Team Member + Active Invites + Shared Snapshot +
+  Stats grid + Feature Access Control + Team Members roster + Access Codes
+- **Roles & Permissions**: hierarchy (Owner > Manager > Staff > Auditor) +
+  Create Custom Role + per-role Feature Access Control toggle grid
+- **Shifts**: Schedule Shift + Add Employee + Export + employee table
+- **Activity & Health**: team activity metrics + health recommendations
+  + cloud sync status + access-code usage stats
+
+### Search + filter bar (Team Members roster)
+Added a search bar (search by name/username/email/ID) + 3 filter dropdowns
+(Role / Access Method / Status) + Bulk actions + CSV export — so the
+owner can find any member in a long roster.
+
+### Live verification (2026-08-21, Cloudflare main alias + preview)
+
+Logged in as founder QA (`founder.qa.fuelpro@gmail.com`, US station, USD):
+- Team Manager tab loads with gradient header + stats (0/0/0) + "Cloud
+  synced" badge + quick-action toolbar.
+- Onboarding checklist banner renders (1/6 done on fresh load).
+- 4 sub-tabs (Team Access / Roles & Permissions / Shifts / Activity & Health)
+  all render correctly.
+- **Functional test — created an access code**: username `qa_test_attendant`,
+  password `TestCode2026!`, name "QA Test Attendant", role Manager, tabs
+  [Dashboard, POS], read-only.
+- Access code created successfully → persisted to cloud → appeared in
+  Team Members roster (badges: Manager, Code, Read-Only, "Invited by
+  Access Code on 8/21/2026") + Access Codes panel (badges: 2 tabs,
+  Active, Accessed 0 times).
+- Header stats auto-updated (0→1 Members, 0→1 Codes).
+- **Auto-publish snapshot fired**: "Cloud synced Snapshot 10:53:28 AM"
+  appeared in the header (the snapshot was published to public Storage
+  automatically on access-code creation).
+- **Checklist auto-updated**: 1/6 → 3/6 (Add team member ✓, Share invite
+  link ✓, Publish snapshot ✓ all auto-checked).
+- **Stats grid auto-updated**: 0→1 Active Members, 0→1 Managers, 0→1
+  Access Codes.
+- **Details button** opened the member detail drawer (bound all areas
+  into one view of the member).
+- **Cleaned up**: deleted the test access code → stats returned to 0/0/0,
+  roster empty, checklist back to 1/6.
+- All markers confirmed in the live `TeamManager-DDsZId-r.js` chunk
+  (Cloudflare) and `TeamManager-CYUtLtmH.js` (Vercel): "Cloud synced",
+  "Team Setup Checklist", "fuelpro_team_checklist", "Publish Snapshot",
+  "Quick Actions", "Details", "Access Activity".
+
+### SW cache-busting bulletproofing
+
+- `public/sw.js` CACHE_VERSION auto-bumped to
+  `fuelpro-v3-20260821T103735723Z` by the build postbuild-version script
+  so the new TeamManager chunk is served fresh (not from SW precache).
+- Network-first navigation strategy + update polling ensures users see
+  the new Team Manager layout on the next page load.
+
+### Deploy state 2026-08-21 (commit b055d7b)
+
+- **GitHub main**: b055d7b (pushed, synced with origin/main).
+- **Cloudflare Pages**: LIVE (preview https://0f4cd2ce.fuel-app-mobile.pages.dev
+  + main alias https://fuel-app-mobile.pages.dev, chunk
+  `TeamManager-DDsZId-r.js` with all markers confirmed).
+- **Vercel production**: LIVE (prebuilt deploy, aliased to
+  fuel-app-mobile.vercel.app, chunk `TeamManager-CYUtLtmH.js` confirmed).
+- **Supabase**: no schema changes (uses existing `app_kv` + scoped row ids
+  + `station_access_codes` table + `fuelpro-files` Storage bucket).
+- `npx tsc --noEmit` (0 errors), `npm run build` (105 precache, success),
+  prettier all pass.
+
+### Post-task lost-commit audit (2026-08-21, after Team Manager redesign)
+
+Re-audited all remote branches. No unmerged work found that needs merging:
+- `feat/document-center-folders` (3 commits): folder management
+  (`folder_path`, `autoSort`) already on main in documentStore.ts. Old
+  divergent snapshot (311 files, 29465 ins/83916 del).
+- `fix/team-manager-cloud-race-condition` (1 commit): cloudLoadCompleteRef
+  + localModifiedRef already on main in PermissionContext.tsx (lines
+  1056-1061). Old divergent snapshot (236 files, 8341 ins/49202 del).
+- `feat/village-level-real-fuel-prices` (1 commit): village-level geocoding
+  (zoom=14, village/hamlet/town priority) already on main in
+  api/lib/fuel-engine.ts. Old divergent snapshot (293 files, 24747
+  ins/74489 del).
+- `fix/multi-tab-qa-hardcoded-cloud-sync` (3 commits): network-first SW
+  already on main in public/sw.js. Old divergent snapshot.
+- All other unmerged branches (dependabot, feature/firebase-*,
+  feature/google-oauth, fix/analytics-tab, fix/audit-trail-tab,
+  fix/build-critical-errors, fix/build-script-error, fix/ci-all-failures,
+  fix/communication-tab, fix/dashboard-bugs, fix/fuel-offloading,
+  fix/integration-hub-cloud-sync, fix/invoice-tab, fix/live-transaction-*,
+  fix/mpesa-analyzer-tab, fix/payroll-system-tab, fix/pos-cloud-first-sync,
+  fix/stock-management, fix/supabase-project-ref-typo,
+  identifying-security-vulnerabilities): all are old divergent snapshots
+  (200+ commits behind main) whose fixes are ALREADY on main in more
+  complete form via the incremental PRs. No lost work needs merging.
