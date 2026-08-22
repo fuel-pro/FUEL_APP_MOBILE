@@ -114,6 +114,7 @@ export default function LiveFeedEmbed({
   const [playbackError, setPlaybackError] = useState(false);
   const [reconnecting, setReconnecting] = useState(false);
   const [muted, setMuted] = useState(true);
+  const [showPlayOverlay, setShowPlayOverlay] = useState(false);
 
   // Cloud load guard
   const cloudLoadCompleteRef = useRef(false);
@@ -124,6 +125,15 @@ export default function LiveFeedEmbed({
   const hlsRecoveryRef = useRef(0);
   // Auto-advance guard: prevents infinite skip loops when every channel fails
   const autoAdvanceTriedRef = useRef<Set<string>>(new Set());
+
+  // Sync the video element's muted DOM property with React state.
+  // React has a known bug where the `muted` JSX attribute does not reliably
+  // update the DOM property — we must set it imperatively.
+  useEffect(() => {
+    if (videoRef.current) {
+      videoRef.current.muted = muted;
+    }
+  }, [muted, activeChannel]);
 
   useEffect(() => {
     setCountry(defaultCountry);
@@ -328,6 +338,7 @@ export default function LiveFeedEmbed({
     }
     setPlaybackError(false);
     setReconnecting(false);
+    setShowPlayOverlay(false);
     hlsRecoveryRef.current = 0;
 
     const video = videoRef.current;
@@ -354,6 +365,30 @@ export default function LiveFeedEmbed({
 
     const MAX_RECOVERY_ATTEMPTS = 3;
 
+    // Called when hls.js parsed the manifest — attempt autoplay (muted first
+    // to satisfy browser autoplay policies), then show a play overlay if the
+    // browser blocks it.
+    const attemptAutoplay = () => {
+      setReconnecting(false);
+      hlsRecoveryRef.current = 0;
+      // Start muted to satisfy autoplay policies, then attempt play.
+      video.muted = true;
+      setMuted(true);
+      const playPromise = video.play();
+      if (playPromise) {
+        playPromise
+          .then(() => {
+            // Muted autoplay succeeded — video is playing.
+            setShowPlayOverlay(false);
+          })
+          .catch(() => {
+            // Autoplay blocked even when muted — show a click-to-play overlay.
+            // The user must click to start playback (browser policy).
+            setShowPlayOverlay(true);
+          });
+      }
+    };
+
     // HLS playback — accept any URL (not just .m3u8) since some HLS
     // endpoints use smil/playlist paths or query strings. hls.js will
     // reject non-HLS content gracefully via the error handler.
@@ -369,13 +404,7 @@ export default function LiveFeedEmbed({
       hlsRef.current = hls;
       hls.loadSource(streamUrl);
       hls.attachMedia(video);
-      hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        setReconnecting(false);
-        hlsRecoveryRef.current = 0;
-        video.play().catch(() => {
-          /* autoplay may be blocked; user can press play */
-        });
-      });
+      hls.on(Hls.Events.MANIFEST_PARSED, attemptAutoplay);
       hls.on(Hls.Events.ERROR, (_event, data) => {
         if (!data.fatal) return;
 
@@ -423,16 +452,21 @@ export default function LiveFeedEmbed({
     } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
       // Native HLS (Safari)
       video.src = streamUrl;
+      video.muted = true;
+      setMuted(true);
       video.play().catch(() => {
-        const advanced = autoAdvanceToNextChannel(activeChannel.nanoid);
-        if (!advanced) setPlaybackError(true);
+        setShowPlayOverlay(true);
       });
     } else {
       // Non-HLS stream URL — try direct video
       video.src = streamUrl;
+      video.muted = true;
+      setMuted(true);
       video.play().catch(() => {
         const advanced = autoAdvanceToNextChannel(activeChannel.nanoid);
-        if (!advanced) setPlaybackError(true);
+        if (!advanced) {
+          setShowPlayOverlay(true);
+        }
       });
     }
 
@@ -900,10 +934,20 @@ export default function LiveFeedEmbed({
               /* TV: video element with HLS.js */
               <video
                 ref={videoRef}
-                className="w-full h-full object-contain"
+                className="w-full h-full object-contain bg-black"
                 playsInline
+                autoPlay
                 muted={muted}
-                controls={!muted}
+                controls
+                onClick={() => {
+                  // If paused (autoplay blocked), clicking the video starts it.
+                  if (videoRef.current && videoRef.current.paused) {
+                    videoRef.current.muted = false;
+                    setMuted(false);
+                    setShowPlayOverlay(false);
+                    videoRef.current.play().catch(() => {});
+                  }
+                }}
                 onError={() => {
                   // The HLS error handler manages recovery + auto-advance;
                   // this native onError is a fallback for direct-src playback.
@@ -916,6 +960,45 @@ export default function LiveFeedEmbed({
                 }}
               />
             )}
+
+            {/* Click-to-play overlay (shown when autoplay is blocked) */}
+            {showPlayOverlay &&
+              !activeYouTubeId &&
+              !isRadio &&
+              !playbackError &&
+              !reconnecting &&
+              activeChannel && (
+                <button
+                  onClick={() => {
+                    const video = videoRef.current;
+                    if (video) {
+                      video.muted = false;
+                      setMuted(false);
+                      setShowPlayOverlay(false);
+                      video.play().catch(() => {
+                        // If unmuted play fails, try muted play
+                        video.muted = true;
+                        setMuted(true);
+                        video.play().catch(() => {});
+                      });
+                    }
+                  }}
+                  className="absolute inset-0 flex items-center justify-center bg-black/60 hover:bg-black/50 transition-colors z-10"
+                  title="Click to play"
+                >
+                  <div className="text-center">
+                    <div className="w-16 h-16 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center mx-auto mb-3 border-2 border-white/40">
+                      <Play size={28} className="text-white ml-1" fill="white" />
+                    </div>
+                    <p className="text-sm font-semibold text-white">
+                      Click to play
+                    </p>
+                    <p className="text-[10px] text-gray-300 mt-1">
+                      {activeChannel.name}
+                    </p>
+                  </div>
+                </button>
+              )}
 
             {/* Reconnecting overlay (auto-retry in progress) */}
             {reconnecting && !playbackError && (
@@ -949,6 +1032,9 @@ export default function LiveFeedEmbed({
                       onClick={() => {
                         autoAdvanceTriedRef.current = new Set();
                         setPlaybackError(false);
+                        setShowPlayOverlay(false);
+                        setMuted(true);
+                        if (videoRef.current) videoRef.current.muted = true;
                         // Re-trigger the HLS effect by toggling activeChannel
                         setActiveChannel({ ...activeChannel });
                       }}
@@ -993,10 +1079,21 @@ export default function LiveFeedEmbed({
             {!activeYouTubeId &&
               !isRadio &&
               !playbackError &&
-              !reconnecting && (
+              !reconnecting &&
+              !showPlayOverlay && (
                 <button
-                  onClick={() => setMuted((m) => !m)}
-                  className="absolute bottom-2 right-2 p-2 rounded-lg bg-black/60 text-white hover:bg-black/80 transition-colors"
+                  onClick={() => {
+                    const video = videoRef.current;
+                    if (video) {
+                      video.muted = !video.muted;
+                      setMuted(video.muted);
+                      // If unmuting and the video is paused, play it
+                      if (!video.muted && video.paused) {
+                        video.play().catch(() => {});
+                      }
+                    }
+                  }}
+                  className="absolute bottom-2 right-2 p-2 rounded-lg bg-black/60 text-white hover:bg-black/80 transition-colors z-20"
                   title={muted ? "Unmute" : "Mute"}
                 >
                   {muted ? <VolumeX size={14} /> : <Volume2 size={14} />}
@@ -1070,7 +1167,11 @@ export default function LiveFeedEmbed({
                   onClick={() => {
                     selectChannel(ch);
                     setPlaybackError(false);
-                    setMuted(false);
+                    setShowPlayOverlay(false);
+                    // When the user manually selects a channel, start muted
+                    // (autoplay policy) — they can unmute via the toggle.
+                    setMuted(true);
+                    if (videoRef.current) videoRef.current.muted = true;
                   }}
                   className={`flex items-center gap-2 p-2 rounded-lg text-left transition-all ${
                     isActive
