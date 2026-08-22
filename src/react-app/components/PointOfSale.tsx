@@ -1018,6 +1018,50 @@ export default function PointOfSale() {
             </div>
           </div>
 
+          {/* Today's Sales Summary — quick stats bar */}
+          {(() => {
+            const today = new Date().toDateString();
+            const todayTxns = transactions.filter(
+              (t) => t.timestamp && new Date(t.timestamp).toDateString() === today,
+            );
+                          const todayTotal = todayTxns.reduce(
+              (sum, t) => sum + (Number(t.total) || 0),
+              0,
+            );
+            const avgSale = todayTxns.length > 0 ? todayTotal / todayTxns.length : 0;
+            if (todayTxns.length === 0) return null;
+            return (
+              <div className="grid grid-cols-3 gap-2 mb-3">
+                <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-2 border border-green-200 dark:border-green-800">
+                  <div className="text-[10px] uppercase text-green-600 dark:text-green-400 font-semibold">
+                    Today's Revenue
+                  </div>
+                  <div className="text-lg font-bold text-green-700 dark:text-green-300">
+                    {currencySymbol}
+                    {formatNumber(todayTotal)}
+                  </div>
+                </div>
+                <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-2 border border-blue-200 dark:border-blue-800">
+                  <div className="text-[10px] uppercase text-blue-600 dark:text-blue-400 font-semibold">
+                    Transactions
+                  </div>
+                  <div className="text-lg font-bold text-blue-700 dark:text-blue-300">
+                    {todayTxns.length}
+                  </div>
+                </div>
+                <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-2 border border-purple-200 dark:border-purple-800">
+                  <div className="text-[10px] uppercase text-purple-600 dark:text-purple-400 font-semibold">
+                    Avg Sale
+                  </div>
+                  <div className="text-lg font-bold text-purple-700 dark:text-purple-300">
+                    {currencySymbol}
+                    {formatNumber(avgSale)}
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
           {/* KRA / Tax Compliance Banner */}
           {kenyaStation ? (
             !etrConfig.kraPin || etrConfig.kraPin === "P000000000X" ? (
