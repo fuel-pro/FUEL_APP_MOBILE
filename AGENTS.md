@@ -6165,3 +6165,40 @@ Re-audited all unmerged remote branches. No lost work found:
   future security-hardening batch. NOT auto-merged.
 - All other unmerged branches are old divergent snapshots (200+ commits
   behind) whose work is already on main in more complete form.
+
+## News tab — silent live-feed integration (DEPLOYED LIVE 2026-08-22, commit c3bd540)
+
+**Requirement**: integrate everything from a global live-feed provider
+(tvgarden.world) but don\’t show any trace that the feeds come from there —
+silently run it to provide all and more feeds.
+
+### Architecture
+
+- **LiveStreamService.ts**: LIVE_FEED_CATEGORIES registry covering ALL 12
+  content verticals (Live TV, News, Movies, Sports, Entertainment, Music
+  TV, Kids, Business, Documentaries, Religious, Education, Live Radio).
+  getLiveFeedEmbedUrl(country, category) builds the iframe URL.
+- **LiveFeedEmbed.tsx** (NEW): reusable silent embed. Overlay masking
+  (iframe translateY -56px crops the upstream 3.5rem header; FuelPro
+  gradient overlay bar at z-10 covers the residual). NO source attribution
+  (no Powered-by text, no Open-full link, no TVGarden mention). Multi-
+  category switcher pill grid. Country selector (195 countries) + Show All.
+- **News.tsx**: 4 sub-tabs now (News Articles | Live Channels | Live TV |
+  Live Radio). Live Channels is the new multi-category grid.
+
+### Verification (live, Cloudflare fc3f47c5 + main alias)
+
+- Built JS chunks: ZERO Powered-by-tvgarden, ZERO Open-full, ZERO visible
+  TVGarden text. Only tvgarden string is in the iframe src URL (invisible).
+- Live Channels sub-tab: 5 verified YouTube streams + 12-category
+  switcher + interactive feed iframe.
+- Live TV + Live Radio sub-tabs: silent single-category embeds.
+- Only live, available channels ever appear.
+
+### Deploy state 2026-08-22
+
+- GitHub main: c3bd540 (pushed).
+- Cloudflare Pages: LIVE (main alias + preview fc3f47c5).
+- Vercel: BLOCKED by api-deployments-free-per-day (auto-deploys on reset).
+- Supabase: no schema changes (frontend-only).
+- tsc 0 errors, build 107 precache, prettier pass.
