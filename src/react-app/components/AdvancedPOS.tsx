@@ -30,6 +30,7 @@ import {
   openTerminalSession,
 } from "@/react-app/lib/pos-service";
 import type { POSItem, POSCart } from "@/react-app/lib/pos-service";
+import { toastSuccess, toastError } from "@/react-app/lib/toast";
 import {
   getCurrencySymbol,
   getDetectedCurrency,
@@ -583,11 +584,11 @@ export default function AdvancedPOS() {
         clearCart();
         await loadData();
       } else {
-        alert(result.error || "Checkout failed");
+        toastError(result.error || "Checkout failed");
       }
     } catch (error) {
       console.error("Checkout error:", error);
-      alert("An error occurred during checkout");
+      toastError("An error occurred during checkout");
     }
   };
 
@@ -603,7 +604,7 @@ export default function AdvancedPOS() {
         });
         setShowCheckout(false);
       } else {
-        alert(result.error || "Failed to open session");
+        toastError(result.error || "Failed to open session");
       }
     } catch (error) {
       console.error("Session error:", error);

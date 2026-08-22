@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { useStations } from "@/react-app/context/StationContext";
 import { supabase } from "@/supabase/client";
+import { toastSuccess, toastError } from "@/react-app/lib/toast";
 import {
   getCurrencySymbol,
   getDetectedCurrency,
@@ -672,7 +673,7 @@ export default function ProductsManagement() {
       loadProducts();
     } catch (error) {
       console.error("Failed to save product:", error);
-      alert("Failed to save product");
+      toastError("Failed to save product");
     } finally {
       setSaving(false);
     }
@@ -695,7 +696,7 @@ export default function ProductsManagement() {
       showNotice("Product deleted successfully");
     } catch (error) {
       console.error("Failed to delete product:", error);
-      alert("Failed to delete product");
+      toastError("Failed to delete product");
     } finally {
       setSaving(false);
     }

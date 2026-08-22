@@ -33,6 +33,7 @@ import {
   compressedFilePath,
   isCompressibleMimeType,
 } from "@/react-app/lib/compression";
+import { toastSuccess, toastError } from "@/react-app/lib/toast";
 
 interface DocumentFolder {
   id: number;
@@ -163,7 +164,7 @@ const persistDocuments = async (docs: Document[]): Promise<void> => {
     await cloudStorageService.set<Document[]>(DOCUMENTS_KEY, docs);
   } catch (err) {
     console.error("[Documents] failed to persist documents:", err);
-    alert(
+    toastError(
       "Failed to save documents to cloud storage. Your changes may not be saved.",
     );
   }
@@ -391,7 +392,7 @@ export default function Documents() {
       }
     } catch (err) {
       console.error("[Documents] failed to organize documents:", err);
-      alert("Failed to organize documents. Please try again.");
+      toastError("Failed to organize documents. Please try again.");
     }
   };
 
@@ -421,7 +422,7 @@ export default function Documents() {
       setFolders(DEFAULT_FOLDERS);
     } catch (err) {
       console.error("[Documents] failed to reorganize documents:", err);
-      alert("Failed to reorganize documents. Please try again.");
+      toastError("Failed to reorganize documents. Please try again.");
     } finally {
       setOrganizingStatus(null);
     }
@@ -768,7 +769,7 @@ export default function Documents() {
             modified = true;
           } catch (err) {
             console.error(`[Documents] failed to save ${doc.name}:`, err);
-            alert(`Failed to save document "${doc.name}".`);
+            toastError(`Failed to save document "${doc.name}".`);
           }
         }
       }
@@ -825,8 +826,8 @@ export default function Documents() {
       } catch (err) {
         console.error(`[Documents] failed to upload ${file.name}:`, err);
         setError(`Error uploading ${file.name}`);
-        alert(
-          `Failed to upload "${file.name}": ${err instanceof Error ? err.message : "unknown error"}. Please try again.`,
+        toastError(
+          `Failed to upload "${file.name}": ${err instanceof Error ? err.message : "unknown error"}.`,
         );
       }
     }
@@ -836,7 +837,7 @@ export default function Documents() {
         await cloudStorageService.set<Document[]>(DOCUMENTS_KEY, currentDocs);
       } catch (err) {
         console.error("[Documents] failed to persist uploaded documents:", err);
-        alert("Failed to save uploaded documents to cloud storage.");
+        toastError("Failed to save uploaded documents to cloud storage.");
       }
     }
 
@@ -868,7 +869,7 @@ export default function Documents() {
       console.error("[Documents] preview failed:", err);
       setError("Failed to load preview");
       setPreviewMode(false);
-      alert("Failed to load preview. The document content may be missing.");
+      toastError("Failed to load preview. The document content may be missing.");
     } finally {
       setPreviewLoading(false);
     }
@@ -907,7 +908,7 @@ export default function Documents() {
       console.error("[Documents] quick preview failed:", err);
       setError("Failed to load preview");
       setQuickPreviewDoc(null);
-      alert("Failed to load preview. The document content may be missing.");
+      toastError("Failed to load preview. The document content may be missing.");
     } finally {
       setQuickPreviewLoading(false);
     }
@@ -934,7 +935,7 @@ export default function Documents() {
     } catch (err) {
       console.error("[Documents] download failed:", err);
       setError("Failed to download document");
-      alert("Failed to download document. The file content may be missing.");
+      toastError("Failed to download document. The file content may be missing.");
     }
   };
 
@@ -1009,7 +1010,7 @@ export default function Documents() {
     } catch (err) {
       console.error("[Documents] delete failed:", err);
       setError("Failed to delete document");
-      alert("Failed to delete document. Please try again.");
+      toastError("Failed to delete document. Please try again.");
     }
   };
 

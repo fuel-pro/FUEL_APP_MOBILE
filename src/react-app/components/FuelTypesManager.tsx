@@ -49,6 +49,7 @@ import {
 import type { CanonicalFuelType } from "@/react-app/config/pricing";
 import { useStationFuelTypes } from "@/react-app/hooks/useStationFuelTypes";
 import { getDetectedCountryCode } from "@/react-app/lib/currency";
+import { toastSuccess, toastError } from "@/react-app/lib/toast";
 
 // Country-aware default tax rate for preset fuels (was hardcoded 16% Kenya VAT).
 const PRESET_TAX_RATE = Math.round(getVATRate(getDetectedCountryCode()) * 100);
@@ -629,7 +630,7 @@ export default function FuelTypesManager() {
   const handleAddPreset = (preset: CustomFuelType) => {
     const exists = fuelTypes.some((f) => f.code === preset.code);
     if (exists) {
-      alert(`${preset.name} already exists!`);
+      toastError(`${preset.name} already exists!`);
       return;
     }
     persist([...fuelTypes, { ...preset, id: `fuel_${Date.now()}` }]);

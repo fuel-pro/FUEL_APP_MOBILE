@@ -7,6 +7,7 @@ import {
   type AuditEntry,
 } from "@/react-app/services/CloudStorageService";
 import { cloudStorageService } from "@/react-app/lib/cloud-storage-service";
+import { toastSuccess, toastError } from "@/react-app/lib/toast";
 import {
   ClipboardList,
   Search,
@@ -138,7 +139,7 @@ export default function AuditTrail({ stationId }: AuditTrailProps) {
   // CSV export with proper escaping (quotes/commas/newlines in details).
   const exportCSV = () => {
     if (filtered.length === 0) {
-      alert("No audit entries to export.");
+      toastError("No audit entries to export.");
       return;
     }
     const escape = (val: string) => `"${String(val).replace(/"/g, '""')}"`;

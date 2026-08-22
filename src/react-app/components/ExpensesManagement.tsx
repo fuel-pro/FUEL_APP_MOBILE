@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useStations } from "@/react-app/context/StationContext";
 import { supabase } from "@/supabase/client";
+import { toastSuccess, toastError } from "@/react-app/lib/toast";
 import {
   fetchExpenses,
   fetchExpenseCategories,
@@ -97,7 +98,7 @@ export default function ExpensesManagement() {
       setShowModal(false);
     } catch (error: any) {
       console.error("Failed:", error);
-      alert("Failed to save expense: " + (error?.message || error));
+      toastError("Failed to save expense: " + (error?.message || error));
     }
   };
 
@@ -105,7 +106,7 @@ export default function ExpensesManagement() {
     if (!confirm("Delete this expense?")) return;
     const { error } = await supabase.from("expenses").delete().eq("id", id);
     if (error) {
-      alert("Failed to delete expense: " + error.message);
+      toastError("Failed to delete expense: " + error.message);
       return;
     }
     loadData();

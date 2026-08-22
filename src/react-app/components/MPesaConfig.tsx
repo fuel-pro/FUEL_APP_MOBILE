@@ -15,6 +15,7 @@ import {
   Shield,
 } from "lucide-react";
 import { isKenyaStation } from "@/react-app/lib/currency";
+import { toastSuccess, toastError } from "@/react-app/lib/toast";
 
 interface MpesaConfig {
   mode: "production" | "sandbox";
@@ -168,7 +169,7 @@ export default function MPesaConfig() {
           headers: { Authorization: `Basic ${auth}` },
         },
       );
-      if (response.ok) alert("Connection successful!");
+      if (response.ok) toastSuccess("Connection successful!");
       else throw new Error("Invalid credentials");
     } catch (e) {
       setError("Connection test failed. Check your credentials.");

@@ -4,6 +4,7 @@ import { useAuth } from "@/react-app/context/AuthContext";
 import { useNavigate } from "react-router";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 import { isKenyaStation } from "@/react-app/lib/currency";
+import { toastSuccess, toastError } from "@/react-app/lib/toast";
 import {
   Shield,
   Settings,
@@ -878,7 +879,7 @@ export default function AdminPanel() {
       description: "Updated API keys configuration",
       changes: Object.keys(apiKeys),
     });
-    alert("API Keys saved");
+    toastSuccess("API Keys saved");
   }
 
   function handleSaveTabs() {
@@ -888,7 +889,7 @@ export default function AdminPanel() {
       description: "Updated tab configuration",
       changes: tabConfigs,
     });
-    alert("Tab configuration saved");
+    toastSuccess("Tab configuration saved");
   }
 
   function handleSaveSystem() {
@@ -898,7 +899,7 @@ export default function AdminPanel() {
       description: "Updated system configuration",
       changes: systemCfg,
     });
-    alert("System settings saved");
+    toastSuccess("System settings saved");
   }
 
   function handleCreateStation() {
@@ -910,7 +911,7 @@ export default function AdminPanel() {
       changes: { stationId: station.id },
     });
     setNewStation({ name: "", location: "", phone: "", email: "" });
-    alert(`Station "${station.name}" created`);
+    toastSuccess(`Station "${station.name}" created`);
   }
 
   function handleExport() {
@@ -935,7 +936,7 @@ export default function AdminPanel() {
     importAllData(importText);
     setImportText("");
     setShowImport(false);
-    alert("Data imported successfully");
+    toastSuccess("Data imported successfully");
   }
 
   // Render module icon

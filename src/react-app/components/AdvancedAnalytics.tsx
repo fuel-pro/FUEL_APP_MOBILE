@@ -31,6 +31,7 @@ import { formatNumber } from "@/react-app/utils/formatUtils";
 import { switchToTab } from "@/react-app/lib/mpesa-integration-service";
 import { getDetectedCurrency } from "@/react-app/lib/currency";
 import SubTabBar from "@/react-app/components/SubTabBar";
+import { toastSuccess, toastError } from "@/react-app/lib/toast";
 
 const EnhancedAnalyticsDashboard = lazy(() =>
   import("@/react-app/features/analytics/EnhancedAnalyticsDashboard").then(
@@ -487,7 +488,7 @@ export default function AdvancedAnalytics() {
   // download their analytics data for external reporting (was missing).
   const exportCSV = () => {
     if (salesData.length === 0) {
-      alert("No sales data to export for this period.");
+      toastError("No sales data to export for this period.");
       return;
     }
     const rows = [

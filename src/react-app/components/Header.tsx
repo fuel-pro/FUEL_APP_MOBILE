@@ -12,6 +12,7 @@ import QuickSearch from "@/react-app/components/QuickSearch";
 import { useNavigate } from "react-router";
 import { useState, useEffect, useRef } from "react";
 import { uploadStationLogo } from "@/react-app/lib/logo-storage-service";
+import { toastSuccess, toastError } from "@/react-app/lib/toast";
 import {
   getDetectedCurrency,
   getCurrencySymbol,
@@ -143,7 +144,7 @@ export default function Header({
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error("Logo upload failed:", msg);
-      alert(`Could not upload logo: ${msg}`);
+      toastError(`Could not upload logo: ${msg}`);
       // Revert preview to whatever was previously persisted.
       setLogoPreview(state.companyData.logo || "");
     } finally {

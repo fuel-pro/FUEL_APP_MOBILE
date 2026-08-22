@@ -15,6 +15,7 @@ import {
 import { cloudStorageService } from "@/react-app/lib/cloud-storage-service";
 import { useAuth } from "@/react-app/context/AuthContext";
 import { useStations } from "@/react-app/context/StationContext";
+import { toastSuccess, toastError } from "@/react-app/lib/toast";
 
 interface CloudRow {
   id: string;
@@ -213,7 +214,7 @@ export default function CloudDiagnosticsPanel() {
         await cloudStorageService.delete(key, stationId);
         await loadAllRows();
       } catch (err) {
-        alert(`Failed to delete: ${(err as Error).message}`);
+        toastError(`Failed to delete: ${(err as Error).message}`);
       }
     },
     [stationId, loadAllRows],
