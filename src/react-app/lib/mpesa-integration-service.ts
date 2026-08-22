@@ -325,8 +325,35 @@ export function switchToTab(tabId: string): void {
  * and applies it — this eliminates the lazy-load race where the 50ms
  * tabPayload event fires before the component has mounted. The pending
  * payload is consumed (deleted) on first read so it's only applied once.
+ *
+ * CRITICAL: This Map is stored on `window` (not module scope) because Vite
+ * code-splits mpesa-integration-service.ts into MULTIPLE chunks (index +
+ * reports). A module-level `const pendingPayloads = new Map()` would create
+ * a SEPARATE Map instance per chunk — navigateToTab (in the index chunk)
+ * would set the payload in one Map, while onTabPayload (in the reports chunk)
+ * would check a different Map and find nothing. Using `window` guarantees a
+ * single shared instance across all chunks.
  */
-const pendingPayloads = new Map<string, unknown>();
+const PENDING_PAYLOADS_KEY = "__fuelpro_pendingPayloads";
+function getPendingPayloads(): Map<string, unknown> {
+  if (typeof window === "undefined") return new Map();
+  if (!(window as any)[PENDING_PAYLOADS_KEY]) {
+    (window as any)[PENDING_PAYLOADS_KEY] = new Map();
+  }
+  return (window as any)[PENDING_PAYLOADS_KEY];
+}
+
+/**
+ * Consume (read + delete) a pending payload for the given tabId. Returns
+ * the payload if one exists, otherwise undefined. This is called by
+ * onTabPayload on registration AND can be called directly by target
+ * components on mount as a belt-and-suspenders approach.
+ */
+export function consumePendingPayload(tabId: string): unknown | undefined {
+  const val = getPendingPayloads().get(tabId);
+  if (val !== undefined) getPendingPayloads().delete(tabId);
+  return val;
+}
 
 /**
  * Cross-tab navigation with an optional prefill payload. Switches the active
@@ -350,7 +377,7 @@ export function navigateToTab(tabId: string, payload?: unknown): void {
   if (payload !== undefined) {
     // Store the pending payload so the target component can consume it on
     // mount (eliminates the lazy-load race condition).
-    pendingPayloads.set(tabId, payload);
+    getPendingPayloads().set(tabId, payload);
     const dispatch = () => {
       window.dispatchEvent(
         new CustomEvent("tabPayload", { detail: { tab: tabId, payload } }),
@@ -362,7 +389,7 @@ export function navigateToTab(tabId: string, payload?: unknown): void {
     setTimeout(dispatch, 1000);
     // Clean up the pending payload after 3 seconds (it should have been
     // consumed by then; if not, it's stale and shouldn't persist).
-    setTimeout(() => pendingPayloads.delete(tabId), 3000);
+    setTimeout(() => getPendingPayloads().delete(tabId), 3000);
   }
 }
 
@@ -381,9 +408,9 @@ export function onTabPayload(
 ): () => void {
   // Check for a pending payload that was set by navigateToTab before this
   // component mounted. Consume it immediately so it's only applied once.
-  const pending = pendingPayloads.get(tabId);
+  const pending = getPendingPayloads().get(tabId);
   if (pending !== undefined) {
-    pendingPayloads.delete(tabId);
+    getPendingPayloads().delete(tabId);
     // Defer the callback to the next microtask so the component is fully
     // mounted (refs + state are initialized) before the callback runs.
     setTimeout(() => callback(pending), 0);

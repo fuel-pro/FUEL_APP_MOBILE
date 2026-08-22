@@ -221,7 +221,14 @@ export default function CustomerLoyalty() {
     setCustomers(c);
     localStorage.setItem("fuelpro_customers", JSON.stringify(c));
     if (cloudLoadCompleteRef.current)
-      cloudStorageService.set("loyalty_customers", c, stationId).catch(() => {});
+      cloudStorageService
+        .set("loyalty_customers", c, stationId)
+        .then(() => {
+          console.log("[CustomerLoyalty] cloud save OK:", c.length, "customers");
+        })
+        .catch((e) => {
+          console.error("[CustomerLoyalty] cloud save FAILED:", e);
+        });
   };
 
   // Load from cloud on mount + real-time cross-device sync
@@ -925,12 +932,14 @@ export default function CustomerLoyalty() {
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            navigateToTab("invoice", {
+                            const prefillPayload = {
                               customerName: c.name || "",
                               description: c.preferredFuel
                                 ? `${c.preferredFuel} fuel`
                                 : "",
-                            });
+                            };
+                            console.log("[CustomerLoyalty] Create Invoice clicked, prefill:", JSON.stringify(prefillPayload));
+                            navigateToTab("invoice", prefillPayload);
                           }}
                           className="p-1.5 bg-purple-50 hover:bg-purple-100 dark:bg-purple-900/20 rounded-lg text-purple-600"
                           title="Create Invoice"

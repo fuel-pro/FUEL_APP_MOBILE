@@ -635,6 +635,14 @@ class CloudStorageService {
     return this.getCached(key, stationId) != null;
   }
 
+  /** Clear the in-memory + localStorage cache for a key (forces next get() to
+   *  re-fetch from cloud). Used by the Cloud Diagnostics panel. */
+  clearCache(key: string, stationId?: string): void {
+    const ck = stationId ? `${key}__${stationId}` : key;
+    this.memoryCache.delete(ck);
+    clearCache(ck);
+  }
+
   /**
    * Get a value from cloud (app_kv). Falls back to the local cache when the
    * network or auth is unavailable so reads never block the UI.

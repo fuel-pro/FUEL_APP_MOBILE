@@ -23,6 +23,7 @@ import DataRecovery from "@/react-app/components/DataRecovery";
 import CloudSyncPanel from "@/react-app/components/CloudSyncPanel";
 import SyncDashboard from "@/react-app/components/SyncDashboard";
 import StorageEgressPanel from "@/react-app/components/StorageEgressPanel";
+import CloudDiagnosticsPanel from "@/react-app/components/CloudDiagnosticsPanel";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 
 export default function DataManager() {
@@ -661,6 +662,7 @@ export default function DataManager() {
             {[
               { id: "overview", label: "Overview", icon: HardDrive },
               { id: "storage", label: "Storage & Egress", icon: Gauge },
+              { id: "diagnostics", label: "Cloud Diagnostics", icon: Cloud },
               hasPermission("canManageCloud")
                 ? { id: "recovery", label: "Recovery", icon: RefreshCw }
                 : null,
@@ -1104,6 +1106,7 @@ export default function DataManager() {
 
         {activeTab === "sync" && <SyncDashboard />}
         {activeTab === "storage" && <StorageEgressPanel />}
+        {activeTab === "diagnostics" && <CloudDiagnosticsPanel />}
       </div>
     </div>
   );

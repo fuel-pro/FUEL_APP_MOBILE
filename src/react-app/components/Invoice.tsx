@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import {
   Plus,
   Save,
@@ -32,6 +32,7 @@ import SalesInvoices from "@/react-app/components/SalesInvoices";
 import {
   onTabPayload,
   navigateToTab,
+  consumePendingPayload,
   type InvoicePrefill,
   type StkPushPrefill,
   type FuelPricePrefill,
@@ -73,6 +74,43 @@ export default function Invoice() {
   // the multi-dispatch (50/200/500/1000ms) from navigateToTab doesn't add
   // duplicate line items.
   const appliedPrefillRef = useRef<Set<string>>(new Set());
+
+  // Centralized prefill application logic — called from BOTH the
+  // onTabPayload effect (for event-driven prefills) AND the synchronous
+  // mount check (for pending payloads stored before mount).
+  const applyPrefill = useCallback(
+    (raw: unknown) => {
+      const p = (raw || {}) as InvoicePrefill;
+      if (Object.keys(p).length === 0) return;
+      setActiveView("invoice");
+      const sig = `${p.customerName || ""}|${p.amount || 0}|${p.description || ""}`;
+      const alreadyApplied = appliedPrefillRef.current.has(sig);
+      if (!alreadyApplied) appliedPrefillRef.current.add(sig);
+      const currentName = customerNameRef.current;
+      const currentItems = invoiceItemsRef.current;
+      const draftHasContent = currentItems.some(
+        (it) => (it.desc && it.desc.trim()) || it.qty > 0 || it.price > 0,
+      );
+      if (p.customerName && (!currentName || !draftHasContent)) {
+        setCustomerName(p.customerName);
+      }
+      if (!alreadyApplied && (p.amount || p.description)) {
+        const prefillItem = {
+          desc: p.description || "Outstanding balance",
+          qty: 1,
+          price: p.amount ?? 0,
+          total: p.amount ?? 0,
+        };
+        dispatch({
+          type: "SET_INVOICE_ITEMS",
+          payload: draftHasContent
+            ? [...currentItems, prefillItem]
+            : [prefillItem],
+        });
+      }
+    },
+    [dispatch],
+  );
   const [isPrinting, setIsPrinting] = useState(false);
   const [printError, setPrintError] = useState<string | null>(null);
   // Search across saved invoices (was missing — a flat grid of every saved
@@ -85,58 +123,38 @@ export default function Invoice() {
     setInvoiceDate(today);
   }, []);
 
-  // Interlink receiver: Credit Management calls
+  // Interlink receiver: Credit Management / Customer Loyalty calls
   // navigateToTab("invoice", <InvoicePrefill>) to start a new invoice for an
   // outstanding credit balance — pre-fill the customer + a line item.
+  // onTabPayload checks the pending-payload store on registration (handles
+  // the lazy-load race where the component mounts after the tabPayload event
+  // fires), then listens for subsequent event-driven dispatches.
   useEffect(() => {
     return onTabPayload("invoice", (raw) => {
-      const p = (raw || {}) as InvoicePrefill;
-      if (Object.keys(p).length === 0) return;
-      setActiveView("invoice");
-
-      // Idempotency: build a signature from the payload so the multi-dispatch
-      // (50/200/500/1000ms) from navigateToTab doesn't add duplicate items.
-      const sig = `${p.customerName || ""}|${p.amount || 0}|${p.description || ""}`;
-      const alreadyApplied = appliedPrefillRef.current.has(sig);
-      if (!alreadyApplied) {
-        appliedPrefillRef.current.add(sig);
-      }
-
-      // Read latest values from refs (not stale closure captures).
-      const currentName = customerNameRef.current;
-      const currentItems = invoiceItemsRef.current;
-      const draftHasContent = currentItems.some(
-        (it) => (it.desc && it.desc.trim()) || it.qty > 0 || it.price > 0,
-      );
-
-      // Set customer name if empty or draft is empty (no content to preserve).
-      if (p.customerName && (!currentName || !draftHasContent)) {
-        setCustomerName(p.customerName);
-      }
-      // Only add the prefill item on the FIRST dispatch (idempotency guard).
-      if (!alreadyApplied && (p.amount || p.description)) {
-        const prefillItem = {
-          desc: p.description || "Outstanding balance",
-          qty: 1,
-          price: p.amount ?? 0,
-          total: p.amount ?? 0,
-        };
-        if (draftHasContent) {
-          // Append to the existing draft instead of clobbering it.
-          dispatch({
-            type: "SET_INVOICE_ITEMS",
-            payload: [...currentItems, prefillItem],
-          });
-        } else {
-          dispatch({
-            type: "SET_INVOICE_ITEMS",
-            payload: [prefillItem],
-          });
-        }
-      }
+      applyPrefill(raw);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dispatch]);
+
+  // Synchronous mount-time check: consume any pending prefill that was set
+  // BEFORE this component mounted (handles the lazy-load race). Retry for
+  // up to 1s because the payload may arrive slightly after mount.
+  useEffect(() => {
+    let attempts = 0;
+    const maxAttempts = 10; // 10 x 100ms = 1s
+    const interval = setInterval(() => {
+      attempts++;
+      const pending = consumePendingPayload("invoice");
+      if (pending && typeof pending === "object" && Object.keys(pending as object).length > 0) {
+        clearInterval(interval);
+        setTimeout(() => applyPrefill(pending), 50);
+      } else if (attempts >= maxAttempts) {
+        clearInterval(interval);
+      }
+    }, 100);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     // Only pull in the global value if it changed for a reason OTHER than
