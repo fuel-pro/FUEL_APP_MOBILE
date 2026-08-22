@@ -856,6 +856,43 @@ export default function ExpenseTracker() {
                     : "0"}
                 </p>
               </div>
+              {byCategory.length > 0 && (
+                <div className="p-3 bg-violet-50 dark:bg-violet-500/10 rounded-lg">
+                  <p className="text-xs text-gray-500">Top Category</p>
+                  <p className="text-lg font-bold text-violet-600 dark:text-violet-400">
+                    {byCategory[0].label}
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    {currencySymbol}{" "}
+                    {(byCategory[0].total || 0).toLocaleString()} ·{" "}
+                    {byCategory[0].count} entr
+                    {byCategory[0].count !== 1 ? "ies" : "y"}
+                  </p>
+                </div>
+              )}
+              {monthlyBudget > 0 && (
+                <div className="p-3 bg-blue-50 dark:bg-blue-500/10 rounded-lg">
+                  <p className="text-xs text-gray-500">
+                    Budget Utilization ({currencySymbol}
+                    {(monthlyBudget || 0).toLocaleString()})
+                  </p>
+                  <div className="mt-1 h-2 bg-gray-200 dark:bg-gray-600 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full ${(totalExpenses || 0) > monthlyBudget ? "bg-red-500" : (totalExpenses || 0) > monthlyBudget * 0.8 ? "bg-amber-500" : "bg-green-500"}`}
+                      style={{
+                        width: `${Math.min(100, ((totalExpenses || 0) / monthlyBudget) * 100)}%`,
+                      }}
+                    />
+                  </div>
+                  <p className="text-xs mt-1 text-gray-500">
+                    {Math.min(
+                      100,
+                      ((totalExpenses || 0) / monthlyBudget) * 100,
+                    ).toFixed(0)}
+                    % used
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </div>
