@@ -81,7 +81,28 @@ export type LiveCategory =
   | "science"
   | "shop"
   | "travel"
-  | "weather";
+  | "weather"
+  // Radio-specific music-genre sub-categories (real upstream radio taxonomy)
+  | "talk"
+  | "politics"
+  | "hits"
+  | "pop"
+  | "rock"
+  | "electronic"
+  | "indie"
+  | "metal"
+  | "jazz"
+  | "classical"
+  | "soul"
+  | "blues"
+  | "reggae"
+  | "folk"
+  | "country"
+  | "latin"
+  | "schlager"
+  | "oldies"
+  | "chill"
+  | "christmas";
 
 export interface LiveFeedSubCategory {
   /** Stable id (unique within its parent category) */
@@ -284,16 +305,32 @@ export const LIVE_FEED_CATEGORIES: LiveFeedCategory[] = [
     id: "radio",
     label: "Live Radio",
     family: "audio",
-    description: "Thousands of live radio stations",
+    description: "Thousands of live radio stations worldwide",
     subCategories: [
-      { id: "all", label: "All Radio", upstreamCategory: "all", description: "Every live radio station" },
-      { id: "music", label: "Music Radio", upstreamCategory: "music", description: "Music radio stations" },
-      { id: "news", label: "News Radio", upstreamCategory: "news", description: "News & talk radio" },
-      { id: "sports", label: "Sports Radio", upstreamCategory: "sports", description: "Sports talk radio" },
-      { id: "religious", label: "Religious Radio", upstreamCategory: "religious", description: "Religious radio" },
-      { id: "relax", label: "Relax Radio", upstreamCategory: "relax", description: "Relaxing & ambient radio" },
-      { id: "culture", label: "Culture Radio", upstreamCategory: "culture", description: "Cultural radio" },
-      { id: "education", label: "Educational Radio", upstreamCategory: "education", description: "Educational radio" },
+      { id: "all", label: "All Stations", upstreamCategory: "all", description: "Every live radio station" },
+      { id: "news", label: "News", upstreamCategory: "news", description: "News radio stations" },
+      { id: "talk", label: "Talk", upstreamCategory: "talk", description: "Talk radio shows" },
+      { id: "sports", label: "Sports", upstreamCategory: "sports", description: "Sports talk radio" },
+      { id: "politics", label: "Politics", upstreamCategory: "politics", description: "Political talk radio" },
+      { id: "hits", label: "Hits", upstreamCategory: "hits", description: "Today's hit music" },
+      { id: "pop", label: "Pop", upstreamCategory: "pop", description: "Pop music radio" },
+      { id: "rock", label: "Rock", upstreamCategory: "rock", description: "Rock music radio" },
+      { id: "electronic", label: "Electronic", upstreamCategory: "electronic", description: "Electronic & dance music" },
+      { id: "indie", label: "Indie", upstreamCategory: "indie", description: "Indie & alternative music" },
+      { id: "metal", label: "Metal", upstreamCategory: "metal", description: "Metal & hard rock radio" },
+      { id: "jazz", label: "Jazz", upstreamCategory: "jazz", description: "Jazz music radio" },
+      { id: "classical", label: "Classical", upstreamCategory: "classical", description: "Classical music radio" },
+      { id: "soul", label: "Soul", upstreamCategory: "soul", description: "Soul & R&B music radio" },
+      { id: "blues", label: "Blues", upstreamCategory: "blues", description: "Blues music radio" },
+      { id: "reggae", label: "Reggae", upstreamCategory: "reggae", description: "Reggae music radio" },
+      { id: "folk", label: "Folk", upstreamCategory: "folk", description: "Folk & acoustic music" },
+      { id: "country", label: "Country", upstreamCategory: "country", description: "Country music radio" },
+      { id: "latin", label: "Latin", upstreamCategory: "latin", description: "Latin music radio" },
+      { id: "schlager", label: "Schlager", upstreamCategory: "schlager", description: "Schlager music radio" },
+      { id: "oldies", label: "Oldies", upstreamCategory: "oldies", description: "Oldies & golden classics" },
+      { id: "chill", label: "Chill", upstreamCategory: "chill", description: "Chillout & ambient radio" },
+      { id: "christmas", label: "Christmas", upstreamCategory: "christmas", description: "Christmas & holiday music" },
+      { id: "religious", label: "Religious", upstreamCategory: "religious", description: "Religious radio stations" },
     ],
   },
 ];
@@ -485,6 +522,125 @@ export function getCategoryColor(cat: LiveNewsStream["category"]): string {
 export const getTVGardenEmbedUrl = getLiveFeedEmbedUrl;
 export const getTVGardenAllEmbedUrl = getLiveFeedAllEmbedUrl;
 
+// ===========================================================================
+// FAVORITES / HISTORY / RANDOM / RECOMMENDATIONS
+// All cloud-synced (cross-device) via cloudStorageService. NO upstream
+// attribution — these are native FuelPro features.
+// ===========================================================================
+
+/** A user's bookmarked live-feed combination (category + sub + country). */
+export interface LiveFeedFavorite {
+  id: string;
+  category: LiveCategory;
+  categoryLabel: string;
+  subCategoryId?: string;
+  subCategoryLabel?: string;
+  country: string;
+  countryName?: string;
+  createdAt: number;
+}
+
+/** A recently-viewed live-feed combination (auto-tracked, capped at 20). */
+export interface LiveFeedHistoryEntry {
+  category: LiveCategory;
+  categoryLabel: string;
+  subCategoryId?: string;
+  subCategoryLabel?: string;
+  country: string;
+  countryName?: string;
+  viewedAt: number;
+}
+
+export const LIVE_FEED_FAVORITES_KEY = "live_feed_favorites";
+export const LIVE_FEED_HISTORY_KEY = "live_feed_history";
+export const HISTORY_MAX = 20;
+
+/**
+ * Pick a random category + sub-category + country combination for the
+ * "Surprise Me" feature. Always resolves to a REAL upstream category id
+ * so the random channel always surfaces live channels.
+ */
+export function getRandomLiveFeedCombo(): {
+  category: LiveCategory;
+  subCategory: LiveFeedSubCategory;
+} {
+  const cats = LIVE_FEED_CATEGORIES.filter(
+    (c) => c.id !== "tv" && c.id !== "radio",
+  );
+  const cat = cats[Math.floor(Math.random() * cats.length)];
+  const subs = cat.subCategories.filter((s) => s.id !== "all");
+  const sub =
+    subs.length > 0
+      ? subs[Math.floor(Math.random() * subs.length)]
+      : cat.subCategories[0];
+  return { category: cat.id, subCategory: sub };
+}
+
+/**
+ * Generate "For You" recommendations based on the user's favorites +
+   history. Returns the most-watched categories/sub-categories first.
+ */
+export function getRecommendations(
+  favorites: LiveFeedFavorite[],
+  history: LiveFeedHistoryEntry[],
+): {
+  category: LiveCategory;
+  categoryLabel: string;
+  subCategoryId?: string;
+  subCategoryLabel?: string;
+}[] {
+  const scoreMap = new Map<
+    string,
+    {
+      category: LiveCategory;
+      categoryLabel: string;
+      subCategoryId?: string;
+      subCategoryLabel?: string;
+      score: number;
+    }
+  >();
+
+  const addScore = (
+    cat: LiveCategory,
+    catLabel: string,
+    subId?: string,
+    subLabel?: string,
+    weight: number = 1,
+  ) => {
+    const key = `${cat}:${subId || ""}`;
+    const existing = scoreMap.get(key);
+    if (existing) {
+      existing.score += weight;
+    } else {
+      scoreMap.set(key, {
+        category: cat,
+        categoryLabel: catLabel,
+        subCategoryId: subId,
+        subCategoryLabel: subLabel,
+        score: weight,
+      });
+    }
+  };
+
+  // Favorites weigh 3x, recent history weighs by recency
+  favorites.forEach((f) =>
+    addScore(f.category, f.categoryLabel, f.subCategoryId, f.subCategoryLabel, 3),
+  );
+  history.forEach((h, idx) =>
+    addScore(
+      h.category,
+      h.categoryLabel,
+      h.subCategoryId,
+      h.subCategoryLabel,
+      Math.max(1, history.length - idx),
+    ),
+  );
+
+  return Array.from(scoreMap.values())
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 6);
+}
+
 export default {
   getAvailableLiveNewsStreams,
   getCandidateLiveNewsStreams,
@@ -497,5 +653,9 @@ export default {
   getYouTubeEmbedUrl,
   getCategoryLabel,
   getCategoryColor,
+  getRandomLiveFeedCombo,
+  getRecommendations,
   LIVE_FEED_CATEGORIES,
+  LIVE_FEED_FAVORITES_KEY,
+  LIVE_FEED_HISTORY_KEY,
 };
