@@ -136,6 +136,37 @@ export default function AutomationPanel() {
         )}
       </div>
 
+      {/* Quick Stats */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+        <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+          <p className="text-[10px] text-gray-400">Active Automations</p>
+          <p className="text-lg font-bold text-amber-400">
+            {[
+              prefs.autoReorderEnabled,
+              prefs.autoRecordStockOnProductEdit,
+              prefs.autoRefreshDashboard,
+              prefs.autoSyncPricesAcrossTabs,
+            ].filter(Boolean).length}
+          </p>
+        </div>
+        <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+          <p className="text-[10px] text-gray-400">Pending Reorders</p>
+          <p className="text-lg font-bold text-blue-400">{reorders.length}</p>
+        </div>
+        <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+          <p className="text-[10px] text-gray-400">Log Entries</p>
+          <p className="text-lg font-bold text-emerald-400">{log.length}</p>
+        </div>
+        <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+          <p className="text-[10px] text-gray-400">Notifications</p>
+          <p className="text-lg font-bold text-purple-400">
+            {prefs.notifications
+              ? Object.values(prefs.notifications).filter(Boolean).length
+              : 0}
+          </p>
+        </div>
+      </div>
+
       <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
         {SUB_TABS.map((tab) => (
           <button
