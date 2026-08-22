@@ -1435,7 +1435,7 @@ export default function StationManager({ onClose }: StationManagerProps) {
         stationId: m.station_id,
         stationName: m.name || "Shared Station",
         role: m.role,
-        invitedBy: m.name || "Station Owner",
+        invitedBy: m.name || "Owner",
         status: m.status,
         member: m,
       }));
@@ -1464,7 +1464,7 @@ export default function StationManager({ onClose }: StationManagerProps) {
           stationName: row.stations?.name || row.name || "Shared Station",
           role: row.role || "staff",
           invitedBy:
-            row.invited_by_name || row.invited_by_unique_id || "Station Owner",
+            row.invited_by_name || row.invited_by_unique_id || "Owner",
           status: "pending",
           member: row as StationMember,
         }),
@@ -2615,7 +2615,7 @@ export default function StationManager({ onClose }: StationManagerProps) {
                     const role =
                       s.memberRole || s.userRole || binding?.role || "member";
                     const invitedBy =
-                      s.invitedBy || binding?.invitedBy || "Station Owner";
+                      s.invitedBy || binding?.invitedBy || "Owner";
                     return (
                       <div
                         key={s.id}

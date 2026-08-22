@@ -329,7 +329,7 @@ const PumpMappingV1: React.FC = () => {
     {
       id: "system-welcome",
       role: "system",
-      text: '👋 Welcome to Pump Mapping AI Tuner! I can help you customize extraction rules for your fuel pump documents. Try saying things like:\n\n• "Use KSh for currency"\n• "Pumps are labeled P1, P2, P3..."\n• "Night shift is 6PM to 6AM"\n• "Show values in liters, not currency"',
+      text: `👋 Welcome to Pump Mapping AI Tuner! I can help you customize extraction rules for your fuel pump documents. Try saying things like:\n\n• "Set currency to my station's currency"\n• "Pumps are labeled P1, P2, P3..."\n• "Night shift is 6PM to 6AM"\n• "Show values in liters, not currency"`,
       timestamp: new Date().toISOString(),
     },
   ]);
@@ -1690,8 +1690,8 @@ const PumpMappingV1: React.FC = () => {
                   </button>
                 </div>
                 <p className="text-[10px] text-slate-400 mt-2 text-center">
-                  Try: "Set currency to KSh" or "Update pump format to P1, P2,
-                  P3"
+                  Try: "Set currency to my station's currency" or "Update pump
+                  format to P1, P2, P3"
                 </p>
               </div>
             </div>
