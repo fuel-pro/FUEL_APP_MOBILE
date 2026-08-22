@@ -6284,3 +6284,85 @@ Logged in as founder QA, News tab → Live Channels sub-tab → Movies category:
   (prodBranch=main) auto-deploys c479d4e when the quota resets (~24h).
 - Supabase: no schema changes (frontend-only).
 - tsc 0 errors, build success, prettier pass.
+
+## News tab — FULL feature extraction + expanded radio taxonomy (DEPLOYED LIVE 2026-08-22, commit 584fbad)
+
+**Requirement**: integrate EVERYTHING from the upstream live-feed provider
+into the News tab — extract ALL current + future features — with ZERO trace
+of the upstream source. Organize each stream/channel into categories AND
+sub-categories (add more beyond the examples).
+
+### NEW FEATURES (all cloud-synced cross-device via cloudStorageService)
+
+1. **Favorites** (♥ button): bookmark any category+sub+country combo.
+   Cloud key `live_feed_favorites`. Toggle on/off; view in a collapsible
+   panel with quick-load buttons. Persists across devices.
+2. **Surprise Me** (Shuffle button): random channel discovery. Always
+   lands on a REAL upstream category id so the random channel always has
+   live content (never a dead stream). Respects the family restriction
+   (video/audio).
+3. **Recently Watched**: auto-tracked history (cloud key
+   `live_feed_history`, capped at 20). Deduped by category+sub+country,
+   sorted by recency. 3s debounce before tracking (avoids noise from
+   rapid category switching).
+4. **For You**: recommendations computed from favorites (3x weight) +
+   history (recency-weighted). Surfaces the user's most-watched combos.
+5. **Fullscreen mode**: full-viewport overlay with the complete feature
+   set (category switcher, sub-category switcher, country filter,
+   favorites, surprise, history).
+6. **Collapsible Favorites/History panel**: "Recent" button toggles a
+   panel showing favorites + recently watched with quick-load buttons.
+
+### EXPANDED RADIO TAXONOMY (24 real music-genre sub-categories)
+
+Replaced the 8 generic radio sub-categories with the upstream's REAL
+24-genre radio taxonomy (extracted from the upstream's JS bundle):
+All Stations, News, Talk, Sports, Politics, Hits, Pop, Rock, Electronic,
+Indie, Metal, Jazz, Classical, Soul, Blues, Reggae, Folk, Country, Latin,
+Schlager, Oldies, Chill, Christmas, Religious. Each maps to a real
+upstream radio category id (`?category=pop`, `?category=jazz`, etc.) so
+every genre surfaces REAL live radio stations — never dead streams.
+
+The `LiveCategory` union widened to 48 ids (28 TV + 20 radio-specific
+music genres). `LiveFeedEmbed` now accepts `showFeatureToolbar` prop
+(default true).
+
+### Architecture
+
+- **LiveStreamService.ts**: +`LiveFeedFavorite`, +`LiveFeedHistoryEntry`
+  types, +`getRandomLiveFeedCombo()`, +`getRecommendations()`,
+  +`LIVE_FEED_FAVORITES_KEY`, +`LIVE_FEED_HISTORY_KEY`, +`HISTORY_MAX`.
+  Radio category rewritten with 24 real music-genre sub-categories.
+- **LiveFeedEmbed.tsx**: full rewrite with favorites, surprise, history
+  tracking, For You recommendations, fullscreen mode, collapsible panel.
+  Uses `useAuth` + `cloudStorageService` for cross-device sync.
+  `cloudLoadCompleteRef` guard prevents overwrite race on fresh device
+  (same pattern as FuelContext/PayrollSystem/Communication).
+- **News.tsx**: no changes needed (`showFeatureToolbar` defaults to true).
+
+### Verification (live, Cloudflare preview 2906df1a + Vercel production)
+
+- Logged in as founder QA → News tab → Live Radio sub-tab:
+  - "Surprise" button renders and loads a random category on click.
+  - ♥ favorites button renders (toggles red when favorited).
+  - Fullscreen button renders.
+  - Country selector + Show All button render.
+  - Radio sub-categories include Pop, Rock, Jazz, Classical, Electronic,
+    Indie, Metal, Soul, Blues, Reggae, Folk, Country, Latin, Schlager,
+    Oldies, Chill, Christmas, Hits, Talk, Politics (verified in built
+    News-qxnn59Gi.js bundle).
+  - Feature markers confirmed in bundle: Surprise, favorites,
+    live_feed_favorites, live_feed_history, Recently Watched.
+- No upstream attribution visible anywhere in the UI (overlay masks the
+  upstream header; no "Powered by" text; no "Open full" links).
+
+### Deploy state 2026-08-22 (commit 584fbad)
+
+- GitHub main: 584fbad (pushed, synced with origin/main).
+- Cloudflare Pages: LIVE (preview https://2906df1a.fuel-app-mobile.pages.dev
+  + main alias https://fuel-app-mobile.pages.dev).
+- Vercel production: LIVE (prebuilt deploy, aliased to
+  fuel-app-mobile.vercel.app).
+- Supabase: no schema changes (frontend-only; favorites + history use
+  existing `app_kv` table with scoped row ids).
+- tsc 0 errors, build 107 precache, prettier pass.
