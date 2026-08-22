@@ -660,6 +660,42 @@ export default function DeliveryTracker() {
           </div>
         </div>
 
+        {/* Quick Stats */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-3 border border-gray-200 dark:border-gray-700 shadow-sm">
+            <p className="text-xs text-gray-500 dark:text-gray-400">Total Entries</p>
+            <p className="text-xl font-bold text-blue-600 dark:text-blue-400">
+              {state.deliveryData?.rows?.length || 0}
+            </p>
+          </div>
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-3 border border-gray-200 dark:border-gray-700 shadow-sm">
+            <p className="text-xs text-gray-500 dark:text-gray-400">Columns</p>
+            <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400">
+              {state.deliveryData?.columns?.length || 0}
+            </p>
+          </div>
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-3 border border-gray-200 dark:border-gray-700 shadow-sm">
+            <p className="text-xs text-gray-500 dark:text-gray-400">Fuel Types</p>
+            <p className="text-xl font-bold text-purple-600 dark:text-purple-400">
+              {fuelTypeApi.activeFuelTypes.length}
+            </p>
+          </div>
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-3 border border-gray-200 dark:border-gray-700 shadow-sm">
+            <p className="text-xs text-gray-500 dark:text-gray-400">Signatures</p>
+            <p className="text-xl font-bold text-amber-600 dark:text-amber-400">
+              {(() => {
+                try {
+                  return Object.keys(
+                    JSON.parse(localStorage.getItem(SIG_KEY) || "{}")
+                  ).length;
+                } catch {
+                  return 0;
+                }
+              })()}
+            </p>
+          </div>
+        </div>
+
         {/* Form Fields */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
           <div className="form-group">
