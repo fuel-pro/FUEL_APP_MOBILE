@@ -124,7 +124,7 @@ export default function NotificationCenter() {
 
         // 4. Low stock products (from Supabase products table)
         try {
-          const { getSupabaseClient } = await import("@/react-app/lib/supabase/client");
+          const { getSupabaseClient } = await import("@/supabase/client");
           const client = getSupabaseClient();
           const { data: products } = await client
             .from("products")
