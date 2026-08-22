@@ -3,6 +3,7 @@ import { useLocation } from "@/react-app/context/LocationContext";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 import { useAuth } from "@/react-app/context/AuthContext";
 import { useStations } from "@/react-app/context/StationContext";
+import { useFuel } from "@/react-app/context/FuelContext";
 import { useStationFuelTypes } from "@/react-app/hooks/useStationFuelTypes";
 import { getFuelLabel } from "@/react-app/config/pricing";
 import {
@@ -155,6 +156,7 @@ export default function CustomerLoyalty() {
   const location = useLocation();
   const { user } = useAuth();
   const { currentStation } = useStations();
+  const { state } = useFuel();
   const stationId = currentStation?.id;
   const fuelTypeApi = useStationFuelTypes(stationId);
   const [customers, setCustomers] = useState<Customer[]>(() => {
@@ -247,8 +249,32 @@ export default function CustomerLoyalty() {
         "loyalty_customers",
         stationId,
       );
-      if (!cancelled && cloudData && !localModifiedRef.current)
+      if (cancelled) return;
+      if (cloudData && cloudData.length > 0 && !localModifiedRef.current) {
         setCustomers(normalizeLoyaltyCustomers(cloudData));
+      } else {
+        // Fallback: read from FuelContext compact blob (state.clients).
+        // POS/Invoice tabs save customers here; without this fallback the
+        // Customers tab appears empty even though customers exist.
+        const compactClients = Object.values(state.clients || {});
+        if (compactClients.length > 0 && !localModifiedRef.current) {
+          const mapped = compactClients.map((c: any) => ({
+            id: c.id || c.phone || c.name || String(Math.random()),
+            name: c.name || c.clientName || "Unknown",
+            email: c.email || "",
+            phone: c.phone || c.phoneNo || "",
+            address: c.address || "",
+            vehicleReg: c.vehicleReg || c.vehicleNumber || "",
+            preferredFuel: "Both",
+            points: 0,
+            totalSpent: 0,
+            visits: 0,
+            tier: "Bronze",
+            createdAt: c.createdAt || new Date().toISOString(),
+          }));
+          setCustomers(mapped);
+        }
+      }
       if (!cancelled) {
         cloudLoadCompleteRef.current = true;
         setSynced(true);
@@ -270,6 +296,7 @@ export default function CustomerLoyalty() {
       cancelled = true;
       unsubs.forEach((u) => u());
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, stationId]);
 
   // Post-load flush: if the user made changes before/during the cloud load,

@@ -6634,3 +6634,20 @@ network fetch). The tvgarden.world API runs entirely in the background.
   commit 3907647 when quota resets.
 - **Supabase**: no schema changes (frontend-only).
 - tsc 0 errors, build success, prettier pass.
+
+## Session 2026-08-22 — Customers empty data fix + News Quick Stats + Invoice client creation
+
+### Customers tab empty data — root cause + fix (DEPLOYED LIVE)
+Customers tab showed No customers yet even with POS/Invoice customers. Root cause: loadCustomers() only read from DB table + cloud KV, never state.clients. Fix: added state.clients fallback + Invoice saveInvoice now dispatches SET_CLIENTS.
+
+### News tab Quick Stats row (DEPLOYED LIVE)
+Added 4-card Quick Stats (Total Articles, Unread, Bookmarked, Source). Verified live on Cloudflare 1642a293.
+
+### Lost commit audit (2026-08-22)
+All fix/feature branches already merged to main. No lost work.
+
+### Deploy state 2026-08-22
+- GitHub: f11c6b5 + e42c82e pushed
+- Cloudflare: LIVE (1642a293)
+- Vercel: BLOCKED (resets ~2026-08-23 20:08 UTC)
+- Supabase: no schema changes
