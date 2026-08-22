@@ -36,6 +36,7 @@ export default function TerminalSessions() {
   const [closingSession, setClosingSession] = useState<any>(null);
   const [openingCash, setOpeningCash] = useState(0);
   const [countedCash, setCountedCash] = useState(0);
+  const [error, setError] = useState<string | null>(null);
 
   const loadSessions = useCallback(async () => {
     if (!currentStation?.id) return;
@@ -67,17 +68,39 @@ export default function TerminalSessions() {
     loadSessions();
   }, [loadSessions]);
 
+  // Realtime: refresh when a session is opened/closed on another device.
+  useEffect(() => {
+    if (!currentStation?.id) return;
+    const channel = supabase
+      .channel(`terminal_sessions:${currentStation.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "terminal_sessions",
+          filter: `station_id=eq.${currentStation.id}`,
+        },
+        () => loadSessions(),
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentStation?.id, loadSessions]);
+
   const handleOpenSession = async () => {
     if (!currentStation?.id) return;
     setLoading(true);
+    setError(null);
     try {
       await openTerminalSession(currentStation.id, openingCash);
       setShowOpenModal(false);
       setOpeningCash(0);
       loadSessions();
-    } catch (error) {
-      console.error("Failed:", error);
-      alert("Failed to open session");
+    } catch (err: any) {
+      console.error("Failed:", err);
+      setError(err?.message || "Failed to open session");
     } finally {
       setLoading(false);
     }
@@ -86,6 +109,7 @@ export default function TerminalSessions() {
   const handleCloseSession = async () => {
     if (!closingSession) return;
     setLoading(true);
+    setError(null);
     try {
       const result = await closeTerminalSession(closingSession.id, countedCash);
       if (result.success) {
@@ -94,10 +118,11 @@ export default function TerminalSessions() {
         setCountedCash(0);
         loadSessions();
       } else {
-        alert(result.error || "Failed to close session");
+        setError(result.error || "Failed to close session");
       }
-    } catch (error) {
-      console.error("Failed:", error);
+    } catch (err: any) {
+      console.error("Failed:", err);
+      setError(err?.message || "Failed to close session");
     } finally {
       setLoading(false);
     }
@@ -136,6 +161,14 @@ export default function TerminalSessions() {
       </div>
 
       {/* Cross-tab interlinks — quick navigation to related tabs */}
+      {error && (
+        <div className="mb-4 p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-sm flex items-center justify-between">
+          <span>{error}</span>
+          <button onClick={() => setError(null)} className="ml-2 hover:text-red-300">
+            <X size={16} />
+          </button>
+        </div>
+      )}
       <div className="flex flex-wrap gap-2 mb-6">
         <button
           onClick={() => switchToTab("pos")}
