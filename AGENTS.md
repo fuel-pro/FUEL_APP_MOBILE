@@ -6576,3 +6576,61 @@ but segments never buffer, or 403/404 on segment requests). The old code:
 - `93b659a`: robust auto-select + fetch error surfacing.
 - `a5cdc2a`: 15s playback timeout + playing event listener.
 - `fc8368f`: YouTube-first priority + 10s timeout + 2 recovery attempts.
+
+## Session 2026-08-22 — Silent background pre-fetch of live channel data (DEPLOYED LIVE, commit 3907647)
+
+### Requirement
+"Silently and invisibly run 'https://tvgarden.world/' in the background to
+use its API and feed and render."
+
+### What was already in place (verified)
+The tvgarden.world API was ALREADY running silently + invisibly:
+- `api/live-channels.ts` (serverless proxy on Vercel) fetches
+  `https://tvgarden.world/api/tv/countries/{cc}.json` server-side,
+  decompresses gzip, filters out dead channels (no stream_urls +
+  no youtube_urls), and returns JSON with CORS headers.
+- The client (`LiveStreamService.fetchLiveChannels`) calls `/api/live-channels`
+  — the user NEVER sees "tvgarden.world" in the UI or network panel (the
+  proxy hostname is the only visible endpoint, and on Vercel it's same-origin).
+- `LiveFeedEmbed.tsx` renders a NATIVE FuelPro channel grid + player (NO
+  iframe to tvgarden.world, zero upstream attribution). The loading text
+  is generic ("Loading live channels…").
+
+### What was added (commit 3907647)
+A **background pre-fetcher** so the channel data is cached BEFORE the user
+navigates to News → Live TV, making the grid render instantly:
+
+- **`prefetchLiveChannelsInBackground()`** (NEW in `LiveStreamService.ts`):
+  fire-and-forget function that pre-fetches the 3 most common channel lists
+  (US TV, GB TV, US radio) in parallel 3 seconds after app load. Results
+  populate the in-memory `channelCache` (5-min TTL). Errors are swallowed
+  via `Promise.allSettled` — best-effort cache warm, never throws, never
+  blocks the UI. Guarded by `backgroundPrefetchStarted` flag (runs once
+  per page load).
+- **`main.tsx`**: calls `prefetchLiveChannelsInBackground()` on app boot,
+  right after error monitoring init. No UI, no visible indication.
+
+### Effect
+When the user opens News → Live TV, the US TV channels are already in the
+in-memory cache → the grid renders INSTANTLY (no loading spinner, no
+network fetch). The tvgarden.world API runs entirely in the background.
+
+### Verification (live, 2026-08-22, Cloudflare preview 545eb729)
+- Logged in as founder QA on fresh preview URL.
+- Waited 8s (login + 3s prefetch delay).
+- Navigated to News → Live TV tab.
+- Channels loaded **INSTANTLY** (no "Loading live channels…" spinner).
+- 44 channel cards rendered. First channel: "3ABN Kids" (YouTube-first
+  sorting). Video element present. No error/reconnecting overlays.
+- Deployed chunk `index-CTb_oPYC.js` confirmed: `prefetch` + `live-channels`
+  markers present.
+
+### Deploy state 2026-08-22 (commit 3907647)
+- **GitHub main**: 3907647 (pushed, synced with origin/main).
+- **Cloudflare Pages**: LIVE (preview https://545eb729.fuel-app-mobile.pages.dev
+  + main alias https://fuel-app-mobile.pages.dev).
+- **Vercel production**: BLOCKED by `api-deployments-free-per-day`
+  (100/100 exhausted; resets ~24h). GitHub integration auto-deploys
+  commit 3907647 when quota resets.
+- **Supabase**: no schema changes (frontend-only).
+- tsc 0 errors, build success, prettier pass.
