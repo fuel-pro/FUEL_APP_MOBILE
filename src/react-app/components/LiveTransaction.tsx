@@ -1100,7 +1100,7 @@ export default function LiveTransaction() {
       )}
 
       {/* Payment Sources */}
-      <div className="bg-gray-800 p-4 rounded-lg">
+      <div className="bg-white dark:bg-gray-800 p-4 rounded-lg">
         <h3 className="font-semibold text-white mb-3 flex items-center gap-2">
           <Building2 size={18} />
           Registered Payment Sources
@@ -1261,7 +1261,7 @@ export default function LiveTransaction() {
       </div>
 
       {/* Time Range Search */}
-      <div className="bg-gray-800 p-4 rounded-lg">
+      <div className="bg-white dark:bg-gray-800 p-4 rounded-lg">
         <h3 className="font-semibold text-white mb-3 flex items-center gap-2">
           <Search size={18} />
           Search By Time Range
@@ -1319,7 +1319,7 @@ export default function LiveTransaction() {
       </div>
 
       {/* Live Transaction Feed */}
-      <div className="bg-gray-800 p-4 rounded-lg">
+      <div className="bg-white dark:bg-gray-800 p-4 rounded-lg">
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-semibold text-white flex items-center gap-2">
             <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
@@ -1456,7 +1456,7 @@ export default function LiveTransaction() {
       {/* STK Push Modal */}
       {showSTKPush && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-gray-800 rounded-lg p-6 w-full max-w-md">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md">
             <h3 className="text-lg font-semibold text-white mb-4">
               M-PESA STK Push
             </h3>
@@ -1678,7 +1678,7 @@ export default function LiveTransaction() {
       {/* Add Source Modal */}
       {showAddSource && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-gray-800 rounded-lg p-6 w-full max-w-md">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md">
             <h3 className="text-lg font-semibold text-white mb-4">
               Add Payment Source
             </h3>
@@ -1892,7 +1892,7 @@ export default function LiveTransaction() {
       {/* Edit Source Modal */}
       {showEditSource && selectedSource && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-gray-800 rounded-lg p-6 w-full max-w-md">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md">
             <h3 className="text-lg font-semibold text-white mb-4">
               Edit Payment Source
             </h3>
@@ -1991,7 +1991,7 @@ export default function LiveTransaction() {
       {/* Delete Confirmation Modal */}
       {showDeleteConfirm && selectedSource && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-gray-800 rounded-lg p-6 w-full max-w-md">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md">
             <div className="flex items-center gap-3 mb-4">
               <AlertTriangle className="text-red-400" size={24} />
               <h3 className="text-lg font-semibold text-white">
@@ -2039,7 +2039,7 @@ export default function LiveTransaction() {
 
       {/* Shared Transactions from M-PESA Analyzer (interlinked) */}
       {sharedTxns.length > 0 && (
-        <div className="bg-gray-800 p-4 rounded-lg">
+        <div className="bg-white dark:bg-gray-800 p-4 rounded-lg">
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-semibold text-white flex items-center gap-2">
               <FileText size={18} className="text-blue-400" />
@@ -2130,7 +2130,7 @@ export default function LiveTransaction() {
       {/* Manual Payment Modal — record cash / bank / offline payments */}
       {showManualPayment && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-gray-800 rounded-lg p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
             <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
               <HandCoins className="text-amber-400" size={20} />
               Record Payment
@@ -2311,7 +2311,7 @@ function SummaryCard({
   subValue?: string;
 }) {
   return (
-    <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-700/50">
+    <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3 border border-gray-200 dark:border-gray-700/50">
       <div className="flex items-center gap-1.5 mb-1">
         {icon}
         <span className="text-[10px] text-gray-400 uppercase tracking-wide">

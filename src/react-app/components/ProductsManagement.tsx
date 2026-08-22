@@ -73,7 +73,7 @@ const TableHeader = ({
       {columns.map((col) => (
         <th
           key={col.label}
-          className={`text-left text-xs font-semibold text-gray-400 px-4 py-3 ${col.className || ""}`}
+          className={`text-left text-xs font-semibold text-gray-500 dark:text-gray-400 px-4 py-3 ${col.className || ""}`}
         >
           {col.label}
         </th>
@@ -98,7 +98,7 @@ const ProductRow = ({
           <Package size={18} className="text-amber-400" />
         </div>
         <div>
-          <p className="text-white font-medium">{product.name}</p>
+          <p className="text-gray-900 dark:text-white font-medium">{product.name}</p>
           <p className="text-gray-500 text-xs">{product.sku}</p>
         </div>
       </div>
@@ -118,7 +118,7 @@ const ProductRow = ({
       </span>
     </td>
     <td className="px-4 py-4">
-      <span className="text-white">{formatMoney(product.cost_price || 0)}</span>
+      <span className="text-gray-900 dark:text-white">{formatMoney(product.cost_price || 0)}</span>
     </td>
     <td className="px-4 py-4">
       <span className="text-amber-400 font-medium">
@@ -130,7 +130,7 @@ const ProductRow = ({
         className={`text-xs px-2 py-1 rounded-full ${
           product.is_active
             ? "bg-emerald-500/20 text-emerald-400"
-            : "bg-gray-500/20 text-gray-400"
+            : "bg-gray-500/20 text-gray-500 dark:text-gray-400"
         }`}
       >
         {product.is_active ? "Active" : "Inactive"}
@@ -140,13 +140,13 @@ const ProductRow = ({
       <div className="flex items-center gap-2">
         <button
           onClick={() => onEdit(product)}
-          className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+          className="p-2 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:text-white hover:bg-white/10 rounded-lg transition-colors"
         >
           <Edit2 size={16} />
         </button>
         <button
           onClick={() => onDelete(product)}
-          className="p-2 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+          className="p-2 text-gray-500 dark:text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
         >
           <Trash2 size={16} />
         </button>
@@ -192,12 +192,12 @@ const ProductModal = ({
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-800 rounded-2xl w-full max-w-2xl border border-white/10 max-h-[90vh] overflow-y-auto">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-2xl border border-gray-200 dark:border-white/10 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-6 border-b border-white/10">
-          <h3 className="text-xl font-semibold text-white">
+          <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
             {product ? "Edit Product" : "Add Product"}
           </h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-white">
+          <button onClick={onClose} className="text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:text-white">
             <X size={20} />
           </button>
         </div>
@@ -206,19 +206,19 @@ const ProductModal = ({
           {/* Basic Info */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="text-gray-400 text-xs mb-2 block">SKU *</label>
+              <label className="text-gray-500 dark:text-gray-400 text-xs mb-2 block">SKU *</label>
               <input
                 type="text"
                 value={formData.sku}
                 onChange={(e) =>
                   setFormData({ ...formData, sku: e.target.value })
                 }
-                className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white"
+                className="w-full px-4 py-3 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white"
                 required
               />
             </div>
             <div>
-              <label className="text-gray-400 text-xs mb-2 block">
+              <label className="text-gray-500 dark:text-gray-400 text-xs mb-2 block">
                 Barcode
               </label>
               <input
@@ -227,13 +227,13 @@ const ProductModal = ({
                 onChange={(e) =>
                   setFormData({ ...formData, barcode: e.target.value })
                 }
-                className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white"
+                className="w-full px-4 py-3 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white"
               />
             </div>
           </div>
 
           <div>
-            <label className="text-gray-400 text-xs mb-2 block">
+            <label className="text-gray-500 dark:text-gray-400 text-xs mb-2 block">
               Product Name *
             </label>
             <input
@@ -242,13 +242,13 @@ const ProductModal = ({
               onChange={(e) =>
                 setFormData({ ...formData, name: e.target.value })
               }
-              className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white"
+              className="w-full px-4 py-3 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white"
               required
             />
           </div>
 
           <div>
-            <label className="text-gray-400 text-xs mb-2 block">
+            <label className="text-gray-500 dark:text-gray-400 text-xs mb-2 block">
               Description
             </label>
             <textarea
@@ -256,7 +256,7 @@ const ProductModal = ({
               onChange={(e) =>
                 setFormData({ ...formData, description: e.target.value })
               }
-              className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white resize-none"
+              className="w-full px-4 py-3 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white resize-none"
               rows={3}
             />
           </div>
@@ -264,21 +264,21 @@ const ProductModal = ({
           {/* Category & Unit */}
           <div className="grid grid-cols-2 gap-4">
             <div className="relative">
-              <label className="text-gray-400 text-xs mb-2 block">
+              <label className="text-gray-500 dark:text-gray-400 text-xs mb-2 block">
                 Category *
               </label>
               <button
                 type="button"
                 onClick={() => setShowCategoryDropdown(!showCategoryDropdown)}
-                className="w-full flex items-center justify-between px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-left"
+                className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl text-left"
               >
-                <span className="text-white">
+                <span className="text-gray-900 dark:text-white">
                   {formData.category || "Select Category"}
                 </span>
-                <ChevronDown size={16} className="text-gray-400" />
+                <ChevronDown size={16} className="text-gray-500 dark:text-gray-400" />
               </button>
               {showCategoryDropdown && (
-                <div className="absolute top-full left-0 right-0 mt-2 bg-gray-900 border border-white/10 rounded-xl shadow-xl z-10 overflow-hidden">
+                <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-white/10 rounded-xl shadow-xl z-10 overflow-hidden">
                   <div className="p-2">
                     <div className="flex gap-2">
                       <input
@@ -286,7 +286,7 @@ const ProductModal = ({
                         value={newCategory}
                         onChange={(e) => setNewCategory(e.target.value)}
                         placeholder="New category"
-                        className="flex-1 px-3 py-2 bg-white/10 border border-white/10 rounded-lg text-white text-sm"
+                        className="flex-1 px-3 py-2 bg-white/10 border border-gray-200 dark:border-white/10 rounded-lg text-gray-900 dark:text-white text-sm"
                         onKeyDown={(e) =>
                           e.key === "Enter" &&
                           (e.preventDefault(), addCategory())
@@ -295,7 +295,7 @@ const ProductModal = ({
                       <button
                         type="button"
                         onClick={addCategory}
-                        className="px-3 py-2 bg-amber-500 text-white rounded-lg text-sm"
+                        className="px-3 py-2 bg-amber-500 text-gray-900 dark:text-white rounded-lg text-sm"
                       >
                         Add
                       </button>
@@ -320,13 +320,13 @@ const ProductModal = ({
               )}
             </div>
             <div>
-              <label className="text-gray-400 text-xs mb-2 block">Unit</label>
+              <label className="text-gray-500 dark:text-gray-400 text-xs mb-2 block">Unit</label>
               <select
                 value={formData.unit}
                 onChange={(e) =>
                   setFormData({ ...formData, unit: e.target.value })
                 }
-                className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white"
+                className="w-full px-4 py-3 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white"
               >
                 <option value="pcs">Pieces</option>
                 <option value="liters">Liters</option>
@@ -339,7 +339,7 @@ const ProductModal = ({
           {/* Pricing */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="text-gray-400 text-xs mb-2 block">
+              <label className="text-gray-500 dark:text-gray-400 text-xs mb-2 block">
                 Cost Price *
               </label>
               <input
@@ -354,7 +354,7 @@ const ProductModal = ({
                         : parseFloat(e.target.value) || 0,
                   })
                 }
-                className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white"
+                className="w-full px-4 py-3 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white"
                 min="0"
                 step="0.01"
                 required
@@ -362,7 +362,7 @@ const ProductModal = ({
               />
             </div>
             <div>
-              <label className="text-gray-400 text-xs mb-2 block">
+              <label className="text-gray-500 dark:text-gray-400 text-xs mb-2 block">
                 Selling Price *
               </label>
               <input
@@ -377,7 +377,7 @@ const ProductModal = ({
                         : parseFloat(e.target.value) || 0,
                   })
                 }
-                className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white"
+                className="w-full px-4 py-3 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white"
                 min="0"
                 step="0.01"
                 required
@@ -389,7 +389,7 @@ const ProductModal = ({
           {/* Stock & Tax */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="text-gray-400 text-xs mb-2 block">
+              <label className="text-gray-500 dark:text-gray-400 text-xs mb-2 block">
                 Initial Stock
               </label>
               <input
@@ -404,14 +404,14 @@ const ProductModal = ({
                         : parseFloat(e.target.value) || 0,
                   })
                 }
-                className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white"
+                className="w-full px-4 py-3 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white"
                 min="0"
                 step="0.01"
                 placeholder="0"
               />
             </div>
             <div>
-              <label className="text-gray-400 text-xs mb-2 block">
+              <label className="text-gray-500 dark:text-gray-400 text-xs mb-2 block">
                 Reorder Level
               </label>
               <input
@@ -426,7 +426,7 @@ const ProductModal = ({
                         : parseFloat(e.target.value) || 0,
                   })
                 }
-                className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white"
+                className="w-full px-4 py-3 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white"
                 min="0"
                 step="0.01"
                 placeholder="0"
@@ -436,7 +436,7 @@ const ProductModal = ({
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="text-gray-400 text-xs mb-2 block">
+              <label className="text-gray-500 dark:text-gray-400 text-xs mb-2 block">
                 Tax Rate (%)
               </label>
               <input
@@ -451,14 +451,14 @@ const ProductModal = ({
                         : parseFloat(e.target.value) || 0,
                   })
                 }
-                className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white"
+                className="w-full px-4 py-3 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white"
                 min="0"
                 max="100"
                 step="0.01"
               />
             </div>
             <div className="flex flex-col gap-2">
-              <label className="text-gray-400 text-xs mb-2 block">
+              <label className="text-gray-500 dark:text-gray-400 text-xs mb-2 block">
                 Options
               </label>
               <label className="flex items-center gap-3 cursor-pointer">
@@ -491,14 +491,14 @@ const ProductModal = ({
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-colors"
+              className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 dark:bg-white/10 dark:hover:bg-white/20 text-gray-900 dark:text-white rounded-xl transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isLoading}
-              className="flex-1 py-3 bg-amber-500 hover:bg-amber-600 disabled:bg-gray-600 text-white font-medium rounded-xl transition-colors flex items-center justify-center gap-2"
+              className="flex-1 py-3 bg-amber-500 hover:bg-amber-600 disabled:bg-gray-600 text-gray-900 dark:text-white font-medium rounded-xl transition-colors flex items-center justify-center gap-2"
             >
               {isLoading ? (
                 <>
@@ -531,30 +531,30 @@ const DeleteConfirmModal = ({
   isLoading: boolean;
 }) => (
   <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-    <div className="bg-gray-800 rounded-2xl p-6 max-w-md w-full border border-white/10">
+    <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 max-w-md w-full border border-gray-200 dark:border-white/10">
       <div className="text-center">
         <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
           <AlertCircle className="w-8 h-8 text-red-400" />
         </div>
-        <h3 className="text-xl font-semibold text-white mb-2">
+        <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
           Delete Product
         </h3>
-        <p className="text-gray-400 mb-6">
+        <p className="text-gray-500 dark:text-gray-400 mb-6">
           Are you sure you want to delete{" "}
-          <span className="text-white font-medium">{product.name}</span>? This
+          <span className="text-gray-900 dark:text-white font-medium">{product.name}</span>? This
           action cannot be undone.
         </p>
         <div className="flex gap-3">
           <button
             onClick={onCancel}
-            className="flex-1 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-colors"
+            className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 dark:bg-white/10 dark:hover:bg-white/20 text-gray-900 dark:text-white rounded-xl transition-colors"
           >
             Cancel
           </button>
           <button
             onClick={onConfirm}
             disabled={isLoading}
-            className="flex-1 py-3 bg-red-500 hover:bg-red-600 disabled:bg-gray-600 text-white rounded-xl transition-colors flex items-center justify-center gap-2"
+            className="flex-1 py-3 bg-red-500 hover:bg-red-600 disabled:bg-gray-600 text-gray-900 dark:text-white rounded-xl transition-colors flex items-center justify-center gap-2"
           >
             {isLoading ? (
               <Loader2 size={18} className="animate-spin" />
@@ -712,7 +712,7 @@ export default function ProductsManagement() {
       <div className="flex items-center justify-center h-full">
         <div className="text-center">
           <Loader2 className="w-12 h-12 text-amber-500 animate-spin mx-auto mb-4" />
-          <p className="text-gray-400">Loading products...</p>
+          <p className="text-gray-500 dark:text-gray-400">Loading products...</p>
         </div>
       </div>
     );
@@ -723,8 +723,8 @@ export default function ProductsManagement() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-white">Products</h1>
-          <p className="text-gray-400 text-sm mt-1">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Products</h1>
+          <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
             {filteredProducts.length} product
             {filteredProducts.length !== 1 ? "s" : ""}
           </p>
@@ -734,7 +734,7 @@ export default function ProductsManagement() {
             setEditingProduct(null);
             setShowModal(true);
           }}
-          className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl transition-colors"
+          className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-gray-900 dark:text-white rounded-xl transition-colors"
         >
           <Plus size={20} />
           Add Product
@@ -745,7 +745,7 @@ export default function ProductsManagement() {
       <div className="flex flex-col sm:flex-row gap-4 mb-6">
         <div className="relative flex-1">
           <Search
-            className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
+            className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400"
             size={18}
           />
           <input
@@ -753,13 +753,13 @@ export default function ProductsManagement() {
             placeholder="Search products..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-11 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white"
+            className="w-full pl-11 pr-4 py-3 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white"
           />
         </div>
         <select
           value={categoryFilter}
           onChange={(e) => setCategoryFilter(e.target.value)}
-          className="px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white"
+          className="px-4 py-3 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white"
         >
           <option value="">All Categories</option>
           {allCategories.map((cat) => (
@@ -768,7 +768,7 @@ export default function ProductsManagement() {
             </option>
           ))}
         </select>
-        <label className="flex items-center gap-3 px-4 py-3 bg-white/5 border border-white/10 rounded-xl cursor-pointer">
+        <label className="flex items-center gap-3 px-4 py-3 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl cursor-pointer">
           <input
             type="checkbox"
             checked={showLowStock}
@@ -780,7 +780,7 @@ export default function ProductsManagement() {
       </div>
 
       {/* Table */}
-      <div className="bg-white/5 border border-white/10 rounded-xl overflow-hidden">
+      <div className="bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl overflow-hidden">
         <table className="w-full">
           <TableHeader
             columns={[
@@ -798,7 +798,7 @@ export default function ProductsManagement() {
               <tr>
                 <td colSpan={7} className="text-center py-12">
                   <Package className="w-12 h-12 text-gray-600 mx-auto mb-3" />
-                  <p className="text-gray-400">No products found</p>
+                  <p className="text-gray-500 dark:text-gray-400">No products found</p>
                   <p className="text-gray-500 text-sm mt-1">
                     {search || categoryFilter || showLowStock
                       ? "Try adjusting your filters"
@@ -849,7 +849,7 @@ export default function ProductsManagement() {
 
       {/* Notice */}
       {notice && (
-        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 bg-emerald-500/90 text-white text-sm font-medium px-4 py-2 rounded-xl shadow-lg">
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 bg-emerald-500/90 text-gray-900 dark:text-white text-sm font-medium px-4 py-2 rounded-xl shadow-lg">
           {notice}
         </div>
       )}

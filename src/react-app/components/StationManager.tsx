@@ -74,7 +74,7 @@ interface StationManagerProps {
 // ============================================================
 
 const GLASS_CARD =
-  "bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl";
+  "bg-white/5 backdrop-blur-sm border border-gray-200 dark:border-white/10 rounded-xl";
 
 function StatCard({
   label,
@@ -93,8 +93,8 @@ function StatCard({
         <Icon size={18} className={accent} />
       </div>
       <div>
-        <p className="text-xs text-gray-400">{label}</p>
-        <p className="font-bold text-white text-sm">{value}</p>
+        <p className="text-xs text-gray-500 dark:text-gray-400">{label}</p>
+        <p className="font-bold text-gray-900 dark:text-white text-sm">{value}</p>
       </div>
     </div>
   );
@@ -107,7 +107,7 @@ function StatusBadge({
 }) {
   const styles = {
     active: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
-    inactive: "bg-gray-500/20 text-gray-400 border-gray-500/30",
+    inactive: "bg-gray-500/20 text-gray-500 dark:text-gray-400 border-gray-500/30",
     maintenance: "bg-amber-500/20 text-amber-400 border-amber-500/30",
   };
   const labels = {
@@ -149,13 +149,13 @@ function EmptyState({ onCreate }: { onCreate: () => void }) {
   return (
     <div className={`${GLASS_CARD} p-12 text-center`}>
       <Layers size={48} className="text-gray-600 mx-auto mb-4" />
-      <h3 className="text-lg font-bold text-white mb-2">No stations yet</h3>
-      <p className="text-gray-400 text-sm mb-6">
+      <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">No stations yet</h3>
+      <p className="text-gray-500 dark:text-gray-400 text-sm mb-6">
         Create your first fuel station to get started
       </p>
       <button
         onClick={onCreate}
-        className="px-6 py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold rounded-xl transition-all flex items-center gap-2 mx-auto"
+        className="px-6 py-3 bg-emerald-500 hover:bg-emerald-600 text-gray-900 dark:text-white font-semibold rounded-xl transition-all flex items-center gap-2 mx-auto"
       >
         <Plus size={18} />
         Create Station
@@ -207,12 +207,12 @@ function StationCard({
           <div
             className={`w-12 h-12 rounded-xl ${avatarColor(
               station.name,
-            )} flex items-center justify-center text-white font-bold text-sm`}
+            )} flex items-center justify-center text-gray-900 dark:text-white font-bold text-sm`}
           >
             {initialsOf(station.name)}
           </div>
           <div>
-            <h3 className="font-bold text-white text-sm flex items-center gap-2">
+            <h3 className="font-bold text-gray-900 dark:text-white text-sm flex items-center gap-2">
               {station.name}
               {isCurrent && (
                 <span className="px-1.5 py-0.5 bg-amber-500/20 text-amber-400 text-[10px] rounded">
@@ -220,12 +220,12 @@ function StationCard({
                 </span>
               )}
             </h3>
-            <p className="text-xs text-gray-400">{updated}</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">{updated}</p>
           </div>
         </div>
         <button
           onClick={onToggleStatus}
-          className="text-gray-400 hover:text-white"
+          className="text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:text-white"
           title="Toggle status"
         >
           <StatusBadge status={status} />
@@ -234,21 +234,21 @@ function StationCard({
 
       {/* Revenue stats */}
       <div className="grid grid-cols-3 gap-2 mb-4">
-        <div className="bg-white/5 rounded-lg p-2 text-center">
-          <p className="text-[10px] text-gray-400 mb-0.5">Today</p>
+        <div className="bg-gray-50 dark:bg-white/5 rounded-lg p-2 text-center">
+          <p className="text-[10px] text-gray-500 dark:text-gray-400 mb-0.5">Today</p>
           <p className="font-semibold text-emerald-400 text-xs">
             {formatMoney(todayRev)}
           </p>
         </div>
-        <div className="bg-white/5 rounded-lg p-2 text-center">
-          <p className="text-[10px] text-gray-400 mb-0.5">Month</p>
+        <div className="bg-gray-50 dark:bg-white/5 rounded-lg p-2 text-center">
+          <p className="text-[10px] text-gray-500 dark:text-gray-400 mb-0.5">Month</p>
           <p className="font-semibold text-sky-400 text-xs">
             {formatMoney(monthRev)}
           </p>
         </div>
-        <div className="bg-white/5 rounded-lg p-2 text-center">
-          <p className="text-[10px] text-gray-400 mb-0.5">Total</p>
-          <p className="font-semibold text-white text-xs">
+        <div className="bg-gray-50 dark:bg-white/5 rounded-lg p-2 text-center">
+          <p className="text-[10px] text-gray-500 dark:text-gray-400 mb-0.5">Total</p>
+          <p className="font-semibold text-gray-900 dark:text-white text-xs">
             {formatMoney(totalRev)}
           </p>
         </div>
@@ -257,13 +257,13 @@ function StationCard({
       {/* Info rows */}
       <div className="space-y-1.5 mb-4">
         {station.location && (
-          <div className="flex items-center gap-2 text-xs text-gray-400">
+          <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
             <MapPin size={12} className="text-gray-500" />
             <span className="truncate">{station.location}</span>
           </div>
         )}
         {station.phone && (
-          <div className="flex items-center gap-2 text-xs text-gray-400">
+          <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
             <Phone size={12} className="text-gray-500" />
             <span>{station.phone}</span>
           </div>
@@ -356,10 +356,10 @@ function StationFormModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
       <div className={`${GLASS_CARD} w-full max-w-md p-6`}>
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-lg font-bold text-white">{title}</h2>
+          <h2 className="text-lg font-bold text-gray-900 dark:text-white">{title}</h2>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center"
+            className="w-8 h-8 rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-white/10 dark:hover:bg-white/20 flex items-center justify-center"
           >
             <X size={16} />
           </button>
@@ -373,7 +373,7 @@ function StationFormModal({
 
         <div className="space-y-4">
           <div>
-            <label className="block text-xs text-gray-400 mb-1.5">
+            <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1.5">
               Station Name *
             </label>
             <input
@@ -381,11 +381,11 @@ function StationFormModal({
               value={form.name || ""}
               onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
               placeholder="e.g., downtown_branch"
-              className="w-full px-4 py-2.5 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-400"
+              className="w-full px-4 py-2.5 rounded-lg bg-white/10 border border-white/20 text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-400"
             />
           </div>
           <div>
-            <label className="block text-xs text-gray-400 mb-1.5">
+            <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1.5">
               Location
             </label>
             <input
@@ -395,12 +395,12 @@ function StationFormModal({
                 setForm((p) => ({ ...p, location: e.target.value }))
               }
               placeholder="e.g., Downtown, [Your City]"
-              className="w-full px-4 py-2.5 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-400"
+              className="w-full px-4 py-2.5 rounded-lg bg-white/10 border border-white/20 text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-400"
             />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs text-gray-400 mb-1.5">
+              <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1.5">
                 Phone
               </label>
               <input
@@ -410,11 +410,11 @@ function StationFormModal({
                   setForm((p) => ({ ...p, phone: e.target.value }))
                 }
                 placeholder="+1 555 000 0000"
-                className="w-full px-4 py-2.5 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                className="w-full px-4 py-2.5 rounded-lg bg-white/10 border border-white/20 text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-400"
               />
             </div>
             <div>
-              <label className="block text-xs text-gray-400 mb-1.5">
+              <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1.5">
                 Tax Rate (%)
               </label>
               <input
@@ -426,12 +426,12 @@ function StationFormModal({
                     taxRate: parseFloat(e.target.value) || 16,
                   }))
                 }
-                className="w-full px-4 py-2.5 rounded-lg bg-white/10 border border-white/20 text-white focus:outline-none focus:ring-2 focus:ring-amber-400"
+                className="w-full px-4 py-2.5 rounded-lg bg-white/10 border border-white/20 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-400"
               />
             </div>
           </div>
           <div>
-            <label className="block text-xs text-gray-400 mb-1.5">
+            <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1.5">
               Email / Manager
             </label>
             <input
@@ -441,7 +441,7 @@ function StationFormModal({
                 setForm((p) => ({ ...p, email: e.target.value }))
               }
               placeholder="manager@station.com"
-              className="w-full px-4 py-2.5 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-400"
+              className="w-full px-4 py-2.5 rounded-lg bg-white/10 border border-white/20 text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-400"
             />
           </div>
         </div>
@@ -449,13 +449,13 @@ function StationFormModal({
         <div className="flex gap-3 mt-6">
           <button
             onClick={handleSubmit}
-            className="flex-1 px-6 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold rounded-xl transition-colors"
+            className="flex-1 px-6 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-gray-900 dark:text-white font-semibold rounded-xl transition-colors"
           >
             {submitLabel}
           </button>
           <button
             onClick={onClose}
-            className="px-6 py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-colors"
+            className="px-6 py-2.5 bg-gray-100 hover:bg-gray-200 dark:bg-white/10 dark:hover:bg-white/20 text-gray-900 dark:text-white rounded-xl transition-colors"
           >
             Cancel
           </button>
@@ -495,10 +495,10 @@ function ShareModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
       <div className={`${GLASS_CARD} w-full max-w-md p-6`}>
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-lg font-bold text-white">Share Station Access</h2>
+          <h2 className="text-lg font-bold text-gray-900 dark:text-white">Share Station Access</h2>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center"
+            className="w-8 h-8 rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-white/10 dark:hover:bg-white/20 flex items-center justify-center"
           >
             <X size={16} />
           </button>
@@ -516,7 +516,7 @@ function ShareModal({
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="User email address"
-            className="w-full px-4 py-2.5 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-400"
+            className="w-full px-4 py-2.5 rounded-lg bg-white/10 border border-white/20 text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-400"
           />
           <div className="relative">
             <input
@@ -524,11 +524,11 @@ function ShareModal({
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Set access password"
-              className="w-full px-4 py-2.5 pr-10 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-400"
+              className="w-full px-4 py-2.5 pr-10 rounded-lg bg-white/10 border border-white/20 text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-400"
             />
             <button
               onClick={() => setShowPw(!showPw)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:text-white"
             >
               {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
             </button>
@@ -536,7 +536,7 @@ function ShareModal({
           <button
             onClick={handleShare}
             disabled={!email.trim() || !password}
-            className="w-full px-4 py-2.5 bg-purple-500 hover:bg-purple-600 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-colors flex items-center justify-center gap-2"
+            className="w-full px-4 py-2.5 bg-purple-500 hover:bg-purple-600 disabled:bg-gray-600 disabled:cursor-not-allowed text-gray-900 dark:text-white font-semibold rounded-lg transition-colors flex items-center justify-center gap-2"
           >
             <Share2 size={16} />
             Grant Access
@@ -552,7 +552,7 @@ function ShareModal({
               {sharedUsers.map((user: any, idx: number) => (
                 <div
                   key={idx}
-                  className="flex items-center justify-between p-3 bg-white/5 rounded-lg"
+                  className="flex items-center justify-between p-3 bg-gray-50 dark:bg-white/5 rounded-lg"
                 >
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 rounded-full bg-purple-500/20 flex items-center justify-center text-purple-400 text-xs font-bold">
@@ -602,12 +602,12 @@ function AccessModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
       <div className={`${GLASS_CARD} w-full max-w-md p-6`}>
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-lg font-bold text-white">
+          <h2 className="text-lg font-bold text-gray-900 dark:text-white">
             Access Shared Station
           </h2>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center"
+            className="w-8 h-8 rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-white/10 dark:hover:bg-white/20 flex items-center justify-center"
           >
             <X size={16} />
           </button>
@@ -621,13 +621,13 @@ function AccessModal({
 
         <div className="space-y-4">
           <div>
-            <label className="block text-xs text-gray-400 mb-1.5">
+            <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1.5">
               Select Station
             </label>
             <select
               value={selectedId}
               onChange={(e) => setSelectedId(e.target.value)}
-              className="w-full px-4 py-2.5 rounded-lg bg-white/10 border border-white/20 text-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+              className="w-full px-4 py-2.5 rounded-lg bg-white/10 border border-white/20 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-400"
             >
               <option value="" className="bg-gray-800">
                 Choose a station...
@@ -640,7 +640,7 @@ function AccessModal({
             </select>
           </div>
           <div>
-            <label className="block text-xs text-gray-400 mb-1.5">
+            <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1.5">
               Station Password
             </label>
             <input
@@ -648,7 +648,7 @@ function AccessModal({
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Enter the access password"
-              className="w-full px-4 py-2.5 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-400"
+              className="w-full px-4 py-2.5 rounded-lg bg-white/10 border border-white/20 text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-400"
             />
           </div>
         </div>
@@ -656,14 +656,14 @@ function AccessModal({
         <div className="flex gap-3 mt-6">
           <button
             onClick={handleAccess}
-            className="flex-1 px-6 py-2.5 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"
+            className="flex-1 px-6 py-2.5 bg-blue-500 hover:bg-blue-600 text-gray-900 dark:text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"
           >
             <LogIn size={16} />
             Access Station
           </button>
           <button
             onClick={onClose}
-            className="px-6 py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-colors"
+            className="px-6 py-2.5 bg-gray-100 hover:bg-gray-200 dark:bg-white/10 dark:hover:bg-white/20 text-gray-900 dark:text-white rounded-xl transition-colors"
           >
             Cancel
           </button>
@@ -698,7 +698,7 @@ function RoleBadge({ role }: { role: string }) {
     auditor: "bg-purple-500/20 text-purple-400 border-purple-500/30",
   };
   const label = role ? role.charAt(0).toUpperCase() + role.slice(1) : "Member";
-  const cls = styles[role?.toLowerCase()] || "bg-gray-500/20 text-gray-400 border-gray-500/30";
+  const cls = styles[role?.toLowerCase()] || "bg-gray-500/20 text-gray-500 dark:text-gray-400 border-gray-500/30";
   return (
     <span className={`px-2 py-0.5 rounded-full text-xs border ${cls}`}>{label}</span>
   );
@@ -781,24 +781,24 @@ function AccessSharedStationModal({
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-white/10">
           <div>
-            <h2 className="text-lg font-bold text-white flex items-center gap-2">
+            <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
               <Building2 size={20} className="text-sky-400" />
               Access Another Station
             </h2>
-            <p className="text-xs text-gray-400 mt-1">
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
               Switch to a station shared with you, accept a pending invite, or join via invite link
             </p>
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
+            className="w-8 h-8 rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-white/10 dark:hover:bg-white/20 flex items-center justify-center transition-colors"
           >
             <X size={16} />
           </button>
         </div>
 
         {/* Tabs */}
-        <div className="flex items-center gap-1 p-2 bg-white/5 border-b border-white/10">
+        <div className="flex items-center gap-1 p-2 bg-gray-50 dark:bg-white/5 border-b border-white/10">
           {tabs.map((t) => (
             <button
               key={t.id}
@@ -806,7 +806,7 @@ function AccessSharedStationModal({
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
                 tab === t.id
                   ? "bg-sky-500/30 text-sky-300"
-                  : "text-gray-400 hover:text-white hover:bg-white/5"
+                  : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:text-white hover:bg-white/5"
               }`}
             >
               <t.icon size={15} />
@@ -827,7 +827,7 @@ function AccessSharedStationModal({
               {sharedStations.length === 0 ? (
                 <div className="text-center py-12">
                   <Building2 size={40} className="text-gray-600 mx-auto mb-3" />
-                  <p className="text-gray-400 text-sm mb-1">No stations shared with you yet</p>
+                  <p className="text-gray-500 dark:text-gray-400 text-sm mb-1">No stations shared with you yet</p>
                   <p className="text-gray-500 text-xs">
                     When a station owner invites you, the station will appear here
                   </p>
@@ -836,21 +836,21 @@ function AccessSharedStationModal({
                 sharedStations.map((s) => (
                   <div
                     key={s.stationId}
-                    className="bg-white/5 border border-white/10 rounded-xl p-4 hover:bg-white/10 transition-colors group"
+                    className="bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl p-4 hover:bg-white/10 transition-colors group"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-center gap-3 flex-1 min-w-0">
                         <div
-                          className={`w-11 h-11 rounded-xl ${avatarColor(s.stationName)} flex items-center justify-center text-white font-bold text-sm flex-shrink-0`}
+                          className={`w-11 h-11 rounded-xl ${avatarColor(s.stationName)} flex items-center justify-center text-gray-900 dark:text-white font-bold text-sm flex-shrink-0`}
                         >
                           {initialsOf(s.stationName)}
                         </div>
                         <div className="min-w-0 flex-1">
-                          <h3 className="font-semibold text-white text-sm truncate">{s.stationName}</h3>
+                          <h3 className="font-semibold text-gray-900 dark:text-white text-sm truncate">{s.stationName}</h3>
                           <div className="flex items-center gap-2 mt-1 flex-wrap">
                             <RoleBadge role={s.role} />
                             {s.invitedBy && (
-                              <span className="text-xs text-gray-400 flex items-center gap-1">
+                              <span className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
                                 <UserCheck size={11} />
                                 Invited by {s.invitedBy}
                               </span>
@@ -860,7 +860,7 @@ function AccessSharedStationModal({
                       </div>
                       <button
                         onClick={() => onAccess(s.stationId)}
-                        className="px-3 py-1.5 bg-sky-500 hover:bg-sky-600 text-white rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors flex-shrink-0"
+                        className="px-3 py-1.5 bg-sky-500 hover:bg-sky-600 text-gray-900 dark:text-white rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors flex-shrink-0"
                       >
                         <LogIn size={13} />
                         Access
@@ -877,7 +877,7 @@ function AccessSharedStationModal({
               {pendingInvites.length === 0 ? (
                 <div className="text-center py-12">
                   <Inbox size={40} className="text-gray-600 mx-auto mb-3" />
-                  <p className="text-gray-400 text-sm mb-1">No pending invites</p>
+                  <p className="text-gray-500 dark:text-gray-400 text-sm mb-1">No pending invites</p>
                   <p className="text-gray-500 text-xs">
                     Invitations awaiting your acceptance will appear here
                   </p>
@@ -891,12 +891,12 @@ function AccessSharedStationModal({
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-center gap-3 flex-1 min-w-0">
                         <div
-                          className={`w-11 h-11 rounded-xl ${avatarColor(s.stationName)} flex items-center justify-center text-white font-bold text-sm flex-shrink-0`}
+                          className={`w-11 h-11 rounded-xl ${avatarColor(s.stationName)} flex items-center justify-center text-gray-900 dark:text-white font-bold text-sm flex-shrink-0`}
                         >
                           {initialsOf(s.stationName)}
                         </div>
                         <div className="min-w-0 flex-1">
-                          <h3 className="font-semibold text-white text-sm truncate">{s.stationName}</h3>
+                          <h3 className="font-semibold text-gray-900 dark:text-white text-sm truncate">{s.stationName}</h3>
                           <div className="flex items-center gap-2 mt-1 flex-wrap">
                             <RoleBadge role={s.role} />
                             <span className="text-xs text-amber-400 flex items-center gap-1">
@@ -904,7 +904,7 @@ function AccessSharedStationModal({
                               Awaiting acceptance
                             </span>
                             {s.invitedBy && (
-                              <span className="text-xs text-gray-400">from {s.invitedBy}</span>
+                              <span className="text-xs text-gray-500 dark:text-gray-400">from {s.invitedBy}</span>
                             )}
                           </div>
                         </div>
@@ -928,8 +928,8 @@ function AccessSharedStationModal({
             <div className="space-y-4">
               <div className="text-center py-4">
                 <LinkIcon size={36} className="text-sky-400 mx-auto mb-3" />
-                <h3 className="text-white font-semibold text-sm mb-1">Join by Invite Link</h3>
-                <p className="text-gray-400 text-xs">
+                <h3 className="text-gray-900 dark:text-white font-semibold text-sm mb-1">Join by Invite Link</h3>
+                <p className="text-gray-500 dark:text-gray-400 text-xs">
                   Paste an invite link or token you received from a station owner
                 </p>
               </div>
@@ -949,13 +949,13 @@ function AccessSharedStationModal({
               )}
 
               <div>
-                <label className="block text-xs text-gray-400 mb-1.5">Invite Link or Token</label>
+                <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1.5">Invite Link or Token</label>
                 <input
                   type="text"
                   value={inviteInput}
                   onChange={(e) => setInviteInput(e.target.value)}
                   placeholder="https://fuel-app-mobile.pages.dev/?invite=abc123... or just abc123..."
-                  className="w-full px-4 py-2.5 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-sky-400 text-sm"
+                  className="w-full px-4 py-2.5 rounded-lg bg-white/10 border border-white/20 text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-sky-400 text-sm"
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !joining) handleJoin();
                   }}
@@ -965,7 +965,7 @@ function AccessSharedStationModal({
               <button
                 onClick={handleJoin}
                 disabled={joining || !inviteInput.trim()}
-                className="w-full px-6 py-2.5 bg-sky-500 hover:bg-sky-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"
+                className="w-full px-6 py-2.5 bg-sky-500 hover:bg-sky-600 disabled:opacity-50 disabled:cursor-not-allowed text-gray-900 dark:text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"
               >
                 {joining ? (
                   <>
@@ -980,8 +980,8 @@ function AccessSharedStationModal({
                 )}
               </button>
 
-              <div className="p-3 bg-white/5 rounded-lg border border-white/10">
-                <p className="text-xs text-gray-400 flex items-start gap-2">
+              <div className="p-3 bg-gray-50 dark:bg-white/5 rounded-lg border border-gray-200 dark:border-white/10">
+                <p className="text-xs text-gray-500 dark:text-gray-400 flex items-start gap-2">
                   <ShieldCheck size={14} className="text-sky-400 flex-shrink-0 mt-0.5" />
                   <span>
                     Only accept invites from station owners you trust. Once accepted, you'll
@@ -1002,7 +1002,7 @@ function AccessSharedStationModal({
           </p>
           <button
             onClick={onClose}
-            className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg text-sm transition-colors"
+            className="px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-white/10 dark:hover:bg-white/20 text-gray-900 dark:text-white rounded-lg text-sm transition-colors"
           >
             Close
           </button>
@@ -1051,7 +1051,7 @@ function AcceptPendingButton({
       <button
         onClick={handleAccept}
         disabled={accepting}
-        className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors"
+        className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-gray-900 dark:text-white rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors"
       >
         {accepting ? (
           <Loader2 size={13} className="animate-spin" />
@@ -1098,13 +1098,13 @@ function CombinedViewModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
       <div className={`${GLASS_CARD} w-full max-w-lg p-6`}>
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-lg font-bold text-white flex items-center gap-2">
+          <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
             <Layers size={20} className="text-amber-400" />
             Combined Station View
           </h2>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center"
+            className="w-8 h-8 rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-white/10 dark:hover:bg-white/20 flex items-center justify-center"
           >
             <X size={16} />
           </button>
@@ -1112,25 +1112,25 @@ function CombinedViewModal({
 
         <div className="grid grid-cols-2 gap-4 mb-6">
           <div className={`${GLASS_CARD} p-4 text-center`}>
-            <p className="text-xs text-gray-400 mb-1">Today's Revenue</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Today's Revenue</p>
             <p className="text-xl font-bold text-emerald-400">
               {formatMoney(todayRevenue)}
             </p>
           </div>
           <div className={`${GLASS_CARD} p-4 text-center`}>
-            <p className="text-xs text-gray-400 mb-1">This Month</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">This Month</p>
             <p className="text-xl font-bold text-sky-400">
               {formatMoney(monthRevenue)}
             </p>
           </div>
           <div className={`${GLASS_CARD} p-4 text-center`}>
-            <p className="text-xs text-gray-400 mb-1">Total Revenue</p>
-            <p className="text-xl font-bold text-white">
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Total Revenue</p>
+            <p className="text-xl font-bold text-gray-900 dark:text-white">
               {formatMoney(totalRevenue)}
             </p>
           </div>
           <div className={`${GLASS_CARD} p-4 text-center`}>
-            <p className="text-xs text-gray-400 mb-1">Total Sales</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Total Sales</p>
             <p className="text-xl font-bold text-purple-400">{totalSales}</p>
           </div>
         </div>
@@ -1143,11 +1143,11 @@ function CombinedViewModal({
             {stations.map((s) => (
               <div
                 key={s.id}
-                className="flex items-center justify-between p-3 bg-white/5 rounded-lg"
+                className="flex items-center justify-between p-3 bg-gray-50 dark:bg-white/5 rounded-lg"
               >
                 <div className="flex items-center gap-3">
                   <div
-                    className={`w-8 h-8 rounded-lg ${avatarColor(s.name)} flex items-center justify-center text-white text-xs font-bold`}
+                    className={`w-8 h-8 rounded-lg ${avatarColor(s.name)} flex items-center justify-center text-gray-900 dark:text-white text-xs font-bold`}
                   >
                     {initialsOf(s.name)}
                   </div>
@@ -1163,7 +1163,7 @@ function CombinedViewModal({
 
         <button
           onClick={onClose}
-          className="w-full px-6 py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-colors"
+          className="w-full px-6 py-2.5 bg-gray-100 hover:bg-gray-200 dark:bg-white/10 dark:hover:bg-white/20 text-gray-900 dark:text-white rounded-xl transition-colors"
         >
           Close
         </button>
@@ -1193,19 +1193,19 @@ function ConfirmDialog({
           <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center">
             <AlertTriangle size={20} className="text-red-400" />
           </div>
-          <h2 className="text-lg font-bold text-white">{title}</h2>
+          <h2 className="text-lg font-bold text-gray-900 dark:text-white">{title}</h2>
         </div>
         <p className="text-gray-300 text-sm mb-6">{message}</p>
         <div className="flex gap-3">
           <button
             onClick={onConfirm}
-            className="flex-1 px-6 py-2.5 bg-red-500 hover:bg-red-600 text-white font-semibold rounded-xl transition-colors"
+            className="flex-1 px-6 py-2.5 bg-red-500 hover:bg-red-600 text-gray-900 dark:text-white font-semibold rounded-xl transition-colors"
           >
             {confirmLabel}
           </button>
           <button
             onClick={onCancel}
-            className="px-6 py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-colors"
+            className="px-6 py-2.5 bg-gray-100 hover:bg-gray-200 dark:bg-white/10 dark:hover:bg-white/20 text-gray-900 dark:text-white rounded-xl transition-colors"
           >
             Cancel
           </button>
@@ -1631,7 +1631,7 @@ export default function StationManager({ onClose }: StationManagerProps) {
   const combined = combineStations();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-white">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-gray-900 dark:text-white">
       {/* Header */}
       <header className="bg-white/5 backdrop-blur-lg border-b border-white/10 px-6 py-4 sticky top-0 z-50">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
@@ -1639,7 +1639,7 @@ export default function StationManager({ onClose }: StationManagerProps) {
             {onClose && (
               <button
                 onClick={onClose}
-                className="w-10 h-10 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
+                className="w-10 h-10 rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-white/10 dark:hover:bg-white/20 flex items-center justify-center transition-colors"
               >
                 <ArrowLeft size={18} />
               </button>
@@ -1649,7 +1649,7 @@ export default function StationManager({ onClose }: StationManagerProps) {
                 <Layers size={20} className="text-amber-400" />
                 Station Manager
               </h1>
-              <p className="text-xs text-gray-400">
+              <p className="text-xs text-gray-500 dark:text-gray-400">
                 {ownedStations.length} owned · {sharedStationsFromContext.length} shared | Manage access & data
               </p>
             </div>
@@ -1714,7 +1714,7 @@ export default function StationManager({ onClose }: StationManagerProps) {
 
         {/* Sync status bar */}
         {lastBackendSync && (
-          <div className="flex items-center gap-2 text-xs text-gray-400">
+          <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
             {isBackendSyncing || syncing ? (
               <>
                 <RefreshCw size={12} className="animate-spin text-sky-400" />
@@ -1742,12 +1742,12 @@ export default function StationManager({ onClose }: StationManagerProps) {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search stations..."
-              className="w-full pl-10 pr-4 py-2 rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-400 text-sm"
+              className="w-full pl-10 pr-4 py-2 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-400 text-sm"
             />
           </div>
 
           {/* Status filter */}
-          <div className="flex items-center gap-1 bg-white/5 rounded-xl p-1">
+          <div className="flex items-center gap-1 bg-gray-50 dark:bg-white/5 rounded-xl p-1">
             {(
               ["all", "active", "inactive", "maintenance"] as FilterStatus[]
             ).map((s) => (
@@ -1757,7 +1757,7 @@ export default function StationManager({ onClose }: StationManagerProps) {
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                   filterStatus === s
                     ? "bg-amber-500/30 text-amber-300"
-                    : "text-gray-400 hover:text-white"
+                    : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:text-white"
                 }`}
               >
                 {s.charAt(0).toUpperCase() + s.slice(1)}
@@ -1769,7 +1769,7 @@ export default function StationManager({ onClose }: StationManagerProps) {
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as SortBy)}
-            className="px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+            className="px-3 py-2 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
           >
             <option value="recent">Recent first</option>
             <option value="name">Name A–Z</option>
@@ -1780,7 +1780,7 @@ export default function StationManager({ onClose }: StationManagerProps) {
           {/* Create button */}
           <button
             onClick={openCreate}
-            className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-sm font-medium flex items-center gap-2 transition-colors"
+            className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-gray-900 dark:text-white rounded-xl text-sm font-medium flex items-center gap-2 transition-colors"
           >
             <Plus size={16} />
             Create Station
@@ -1794,7 +1794,7 @@ export default function StationManager({ onClose }: StationManagerProps) {
             <Building2 size={16} />
             Access Another Station
             {(pendingInvites.length > 0 || sharedStations.length > 0) && (
-              <span className="absolute -top-1 -right-1 w-5 h-5 bg-amber-500 rounded-full text-[10px] font-bold flex items-center justify-center text-white">
+              <span className="absolute -top-1 -right-1 w-5 h-5 bg-amber-500 rounded-full text-[10px] font-bold flex items-center justify-center text-gray-900 dark:text-white">
                 {pendingInvites.length + sharedStations.length}
               </span>
             )}
@@ -1803,9 +1803,9 @@ export default function StationManager({ onClose }: StationManagerProps) {
 
         {/* Station grid */}
         <div>
-          <h2 className="text-lg font-semibold text-white mb-3">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">
             Your Stations{" "}
-            <span className="text-sm text-gray-400 font-normal">
+            <span className="text-sm text-gray-500 dark:text-gray-400 font-normal">
               · Combined Revenue: {formatMoney(stats.totalRevenue)}
             </span>
           </h2>
@@ -1850,10 +1850,10 @@ export default function StationManager({ onClose }: StationManagerProps) {
             user has been invited to access (read or read-write based on role). */}
         {sharedStationsFromContext.length > 0 && (
           <div>
-            <h2 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
               <Building2 size={18} className="text-sky-400" />
               Shared With You
-              <span className="text-sm text-gray-400 font-normal">
+              <span className="text-sm text-gray-500 dark:text-gray-400 font-normal">
                 · {sharedStationsFromContext.length} station(s)
               </span>
             </h2>
@@ -1876,12 +1876,12 @@ export default function StationManager({ onClose }: StationManagerProps) {
                         <div
                           className={`w-12 h-12 rounded-xl ${avatarColor(
                             s.name,
-                          )} flex items-center justify-center text-white font-bold text-sm`}
+                          )} flex items-center justify-center text-gray-900 dark:text-white font-bold text-sm`}
                         >
                           {initialsOf(s.name)}
                         </div>
                         <div>
-                          <h3 className="font-bold text-white text-sm flex items-center gap-2">
+                          <h3 className="font-bold text-gray-900 dark:text-white text-sm flex items-center gap-2">
                             {s.name}
                             {currentStation?.id === s.id && (
                               <span className="px-1.5 py-0.5 bg-sky-500/20 text-sky-400 text-[10px] rounded">
@@ -1891,7 +1891,7 @@ export default function StationManager({ onClose }: StationManagerProps) {
                           </h3>
                           <div className="flex items-center gap-2 mt-1 flex-wrap">
                             <RoleBadge role={role} />
-                            <span className="text-xs text-gray-400 flex items-center gap-1">
+                            <span className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
                               <UserCheck size={11} />
                               {invitedBy}
                             </span>
@@ -1900,7 +1900,7 @@ export default function StationManager({ onClose }: StationManagerProps) {
                       </div>
                     </div>
                     {s.location && (
-                      <div className="flex items-center gap-2 text-xs text-gray-400 mb-3">
+                      <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mb-3">
                         <MapPin size={12} className="text-gray-500" />
                         <span className="truncate">{s.location}</span>
                       </div>
@@ -1908,7 +1908,7 @@ export default function StationManager({ onClose }: StationManagerProps) {
                     <div className="flex gap-2">
                       <button
                         onClick={() => handleAccessSharedStation(s.id)}
-                        className="flex-1 px-4 py-2 bg-sky-500 hover:bg-sky-600 text-white rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-colors"
+                        className="flex-1 px-4 py-2 bg-sky-500 hover:bg-sky-600 text-gray-900 dark:text-white rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-colors"
                       >
                         <LogIn size={15} />
                         {currentStation?.id === s.id ? "Currently Active" : "Access Station"}
@@ -1931,7 +1931,7 @@ export default function StationManager({ onClose }: StationManagerProps) {
 
       {/* Notice toast */}
       {notice ? (
-        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 bg-emerald-500/90 text-white text-sm font-medium px-4 py-2 rounded-xl shadow-lg">
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 bg-emerald-500/90 text-gray-900 dark:text-white text-sm font-medium px-4 py-2 rounded-xl shadow-lg">
           {notice}
         </div>
       ) : null}

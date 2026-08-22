@@ -109,7 +109,7 @@ export default function PurchasesSuppliers() {
       <div className="flex justify-center h-full">
         <div className="text-center">
           <Loader2 className="w-12 h-12 text-amber-500 animate-spin mx-auto mb-4" />
-          <p className="text-gray-400">Loading...</p>
+          <p className="text-gray-500 dark:text-gray-400">Loading...</p>
         </div>
       </div>
     );
@@ -118,17 +118,17 @@ export default function PurchasesSuppliers() {
   return (
     <div className="p-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-        <h1 className="text-2xl font-bold text-white">Purchases & Suppliers</h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Purchases & Suppliers</h1>
         <div className="flex gap-2">
           <button
             onClick={() => setActiveTab("orders")}
-            className={`px-4 py-2 rounded-xl text-sm font-medium ${activeTab === "orders" ? "bg-amber-500 text-white" : "bg-white/5 text-gray-400"}`}
+            className={`px-4 py-2 rounded-xl text-sm font-medium ${activeTab === "orders" ? "bg-amber-500 text-gray-900 dark:text-white" : "bg-white/5 text-gray-500 dark:text-gray-400"}`}
           >
             Orders
           </button>
           <button
             onClick={() => setActiveTab("suppliers")}
-            className={`px-4 py-2 rounded-xl text-sm font-medium ${activeTab === "suppliers" ? "bg-amber-500 text-white" : "bg-white/5 text-gray-400"}`}
+            className={`px-4 py-2 rounded-xl text-sm font-medium ${activeTab === "suppliers" ? "bg-amber-500 text-gray-900 dark:text-white" : "bg-white/5 text-gray-500 dark:text-gray-400"}`}
           >
             Suppliers
           </button>
@@ -139,27 +139,27 @@ export default function PurchasesSuppliers() {
         <div className="space-y-4">
           <button
             onClick={() => setShowOrderModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl"
+            className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-gray-900 dark:text-white rounded-xl"
           >
             <Plus size={20} /> New Order
           </button>
-          <div className="bg-white/5 border border-white/10 rounded-xl overflow-hidden">
+          <div className="bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl overflow-hidden">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-white/10">
-                  <th className="text-left text-xs font-semibold text-gray-400 px-4 py-3">
+                  <th className="text-left text-xs font-semibold text-gray-500 dark:text-gray-400 px-4 py-3">
                     Order #
                   </th>
-                  <th className="text-left text-xs font-semibold text-gray-400 px-4 py-3">
+                  <th className="text-left text-xs font-semibold text-gray-500 dark:text-gray-400 px-4 py-3">
                     Supplier
                   </th>
-                  <th className="text-left text-xs font-semibold text-gray-400 px-4 py-3">
+                  <th className="text-left text-xs font-semibold text-gray-500 dark:text-gray-400 px-4 py-3">
                     Date
                   </th>
-                  <th className="text-left text-xs font-semibold text-gray-400 px-4 py-3">
+                  <th className="text-left text-xs font-semibold text-gray-500 dark:text-gray-400 px-4 py-3">
                     Status
                   </th>
-                  <th className="text-right text-xs font-semibold text-gray-400 px-4 py-3">
+                  <th className="text-right text-xs font-semibold text-gray-500 dark:text-gray-400 px-4 py-3">
                     Total
                   </th>
                 </tr>
@@ -169,7 +169,7 @@ export default function PurchasesSuppliers() {
                   <tr>
                     <td colSpan={5} className="text-center py-12">
                       <Package className="w-12 h-12 text-gray-600 mx-auto mb-3" />
-                      <p className="text-gray-400">No orders</p>
+                      <p className="text-gray-500 dark:text-gray-400">No orders</p>
                     </td>
                   </tr>
                 ) : (
@@ -178,7 +178,7 @@ export default function PurchasesSuppliers() {
                       key={order.id}
                       className="border-b border-white/5 hover:bg-white/5"
                     >
-                      <td className="px-4 py-4 text-white font-medium">
+                      <td className="px-4 py-4 text-gray-900 dark:text-white font-medium">
                         {order.order_number}
                       </td>
                       <td className="px-4 py-4 text-gray-300">
@@ -189,7 +189,7 @@ export default function PurchasesSuppliers() {
                       </td>
                       <td className="px-4 py-4">
                         <span
-                          className={`text-xs px-2 py-1 rounded-full ${order.status === "received" ? "bg-emerald-500/20 text-emerald-400" : order.status === "draft" ? "bg-gray-500/20 text-gray-400" : "bg-amber-500/20 text-amber-400"}`}
+                          className={`text-xs px-2 py-1 rounded-full ${order.status === "received" ? "bg-emerald-500/20 text-emerald-400" : order.status === "draft" ? "bg-gray-500/20 text-gray-500 dark:text-gray-400" : "bg-amber-500/20 text-amber-400"}`}
                         >
                           {order.status}
                         </span>
@@ -211,7 +211,7 @@ export default function PurchasesSuppliers() {
               setEditingSupplier(null);
               setShowSupplierModal(true);
             }}
-            className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl"
+            className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-gray-900 dark:text-white rounded-xl"
           >
             <Plus size={20} /> Add Supplier
           </button>
@@ -219,17 +219,17 @@ export default function PurchasesSuppliers() {
             {suppliers.length === 0 ? (
               <div className="col-span-full text-center py-12">
                 <Package className="w-12 h-12 text-gray-600 mx-auto mb-3" />
-                <p className="text-gray-400">No suppliers</p>
+                <p className="text-gray-500 dark:text-gray-400">No suppliers</p>
               </div>
             ) : (
               suppliers.map((supplier) => (
                 <div
                   key={supplier.id}
-                  className="bg-white/5 border border-white/10 rounded-xl p-4"
+                  className="bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl p-4"
                 >
                   <div className="flex items-start justify-between mb-3">
                     <div>
-                      <h4 className="text-white font-medium">
+                      <h4 className="text-gray-900 dark:text-white font-medium">
                         {supplier.name}
                       </h4>
                       <p className="text-gray-500 text-xs">{supplier.email}</p>
@@ -240,19 +240,19 @@ export default function PurchasesSuppliers() {
                           setEditingSupplier(supplier);
                           setShowSupplierModal(true);
                         }}
-                        className="p-2 text-gray-400 hover:text-white"
+                        className="p-2 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:text-white"
                       >
                         <Edit2 size={16} />
                       </button>
                       <button
                         onClick={() => handleDeleteSupplier(supplier.id)}
-                        className="p-2 text-gray-400 hover:text-red-400"
+                        className="p-2 text-gray-500 dark:text-gray-400 hover:text-red-400"
                       >
                         <Trash2 size={16} />
                       </button>
                     </div>
                   </div>
-                  <p className="text-gray-400 text-sm">{supplier.phone}</p>
+                  <p className="text-gray-500 dark:text-gray-400 text-sm">{supplier.phone}</p>
                 </div>
               ))
             )}
@@ -300,12 +300,12 @@ function SupplierModal({
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-800 rounded-2xl w-full max-w-md border border-white/10">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-md border border-gray-200 dark:border-white/10">
         <div className="flex items-center justify-between p-6 border-b border-white/10">
-          <h3 className="text-xl font-semibold text-white">
+          <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
             {supplier ? "Edit Supplier" : "Add Supplier"}
           </h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-white">
+          <button onClick={onClose} className="text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:text-white">
             <X size={20} />
           </button>
         </div>
@@ -317,53 +317,53 @@ function SupplierModal({
           className="p-6 space-y-4"
         >
           <div>
-            <label className="text-gray-400 text-xs mb-2 block">Name *</label>
+            <label className="text-gray-500 dark:text-gray-400 text-xs mb-2 block">Name *</label>
             <input
               type="text"
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
-              className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white"
+              className="w-full px-4 py-3 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white"
               required
             />
           </div>
           <div>
-            <label className="text-gray-400 text-xs mb-2 block">Email</label>
+            <label className="text-gray-500 dark:text-gray-400 text-xs mb-2 block">Email</label>
             <input
               type="email"
               value={form.email}
               onChange={(e) => setForm({ ...form, email: e.target.value })}
-              className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white"
+              className="w-full px-4 py-3 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white"
             />
           </div>
           <div>
-            <label className="text-gray-400 text-xs mb-2 block">Phone</label>
+            <label className="text-gray-500 dark:text-gray-400 text-xs mb-2 block">Phone</label>
             <input
               type="tel"
               value={form.phone}
               onChange={(e) => setForm({ ...form, phone: e.target.value })}
-              className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white"
+              className="w-full px-4 py-3 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white"
             />
           </div>
           <div>
-            <label className="text-gray-400 text-xs mb-2 block">Address</label>
+            <label className="text-gray-500 dark:text-gray-400 text-xs mb-2 block">Address</label>
             <input
               type="text"
               value={form.address}
               onChange={(e) => setForm({ ...form, address: e.target.value })}
-              className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white"
+              className="w-full px-4 py-3 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white"
             />
           </div>
           <div className="flex gap-3 pt-4">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl"
+              className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 dark:bg-white/10 dark:hover:bg-white/20 text-gray-900 dark:text-white rounded-xl"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="flex-1 py-3 bg-amber-500 hover:bg-amber-600 text-white font-medium rounded-xl flex items-center justify-center gap-2"
+              className="flex-1 py-3 bg-amber-500 hover:bg-amber-600 text-gray-900 dark:text-white font-medium rounded-xl flex items-center justify-center gap-2"
             >
               <CheckCircle size={18} /> Save
             </button>
@@ -461,24 +461,24 @@ function OrderModal({
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-800 rounded-2xl w-full max-w-lg border border-white/10 max-h-[90vh] overflow-y-auto">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-lg border border-gray-200 dark:border-white/10 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-6 border-b border-white/10">
-          <h3 className="text-xl font-semibold text-white">
+          <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
             New Purchase Order
           </h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-white">
+          <button onClick={onClose} className="text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:text-white">
             <X size={20} />
           </button>
         </div>
         <div className="p-6 space-y-4">
           <div>
-            <label className="text-gray-400 text-xs mb-2 block">
+            <label className="text-gray-500 dark:text-gray-400 text-xs mb-2 block">
               Supplier *
             </label>
             <select
               value={form.supplierId}
               onChange={(e) => setForm({ ...form, supplierId: e.target.value })}
-              className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white"
+              className="w-full px-4 py-3 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white"
             >
               <option value="">Select supplier</option>
               {suppliers.map((s) => (
@@ -489,7 +489,7 @@ function OrderModal({
             </select>
           </div>
           <div>
-            <label className="text-gray-400 text-xs mb-2 block">
+            <label className="text-gray-500 dark:text-gray-400 text-xs mb-2 block">
               Expected Date
             </label>
             <input
@@ -498,11 +498,11 @@ function OrderModal({
               onChange={(e) =>
                 setForm({ ...form, expectedDate: e.target.value })
               }
-              className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white"
+              className="w-full px-4 py-3 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white"
             />
           </div>
           <div>
-            <label className="text-gray-400 text-xs mb-2 block">
+            <label className="text-gray-500 dark:text-gray-400 text-xs mb-2 block">
               Add Products
             </label>
             <select
@@ -510,7 +510,7 @@ function OrderModal({
                 const p = products.find((pr) => pr.id === e.target.value);
                 if (p) addItem(p);
               }}
-              className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white"
+              className="w-full px-4 py-3 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white"
             >
               <option value="">Select product</option>
               {products.map((p) => (
@@ -525,9 +525,9 @@ function OrderModal({
               {items.map((item, index) => (
                 <div
                   key={item.productId}
-                  className="flex items-center gap-2 p-3 bg-white/5 rounded-lg"
+                  className="flex items-center gap-2 p-3 bg-gray-50 dark:bg-white/5 rounded-lg"
                 >
-                  <span className="flex-1 text-white text-sm">
+                  <span className="flex-1 text-gray-900 dark:text-white text-sm">
                     {item.productName}
                   </span>
                   <input
@@ -540,7 +540,7 @@ function OrderModal({
                         parseFloat(e.target.value) || 1,
                       )
                     }
-                    className="w-20 px-2 py-1 bg-white/10 border border-white/10 rounded text-white text-sm"
+                    className="w-20 px-2 py-1 bg-white/10 border border-gray-200 dark:border-white/10 rounded text-gray-900 dark:text-white text-sm"
                     min="1"
                   />
                   <input
@@ -553,7 +553,7 @@ function OrderModal({
                         parseFloat(e.target.value) || 0,
                       )
                     }
-                    className="w-24 px-2 py-1 bg-white/10 border border-white/10 rounded text-white text-sm"
+                    className="w-24 px-2 py-1 bg-white/10 border border-gray-200 dark:border-white/10 rounded text-gray-900 dark:text-white text-sm"
                   />
                   <button
                     onClick={() => removeItem(index)}
@@ -564,7 +564,7 @@ function OrderModal({
                 </div>
               ))}
               <div className="flex justify-between pt-2 border-t border-white/10">
-                <span className="text-gray-400">Total</span>
+                <span className="text-gray-500 dark:text-gray-400">Total</span>
                 <span className="text-amber-400 font-bold">
                   {formatMoney(total)}
                 </span>
@@ -574,14 +574,14 @@ function OrderModal({
           <div className="flex gap-3 pt-4">
             <button
               onClick={onClose}
-              className="flex-1 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl"
+              className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 dark:bg-white/10 dark:hover:bg-white/20 text-gray-900 dark:text-white rounded-xl"
             >
               Cancel
             </button>
             <button
               onClick={handleSubmit}
               disabled={loading || !form.supplierId || items.length === 0}
-              className="flex-1 py-3 bg-amber-500 hover:bg-amber-600 disabled:bg-gray-600 text-white font-medium rounded-xl flex items-center justify-center gap-2"
+              className="flex-1 py-3 bg-amber-500 hover:bg-amber-600 disabled:bg-gray-600 text-gray-900 dark:text-white font-medium rounded-xl flex items-center justify-center gap-2"
             >
               {loading ? (
                 <Loader2 size={18} className="animate-spin" />
