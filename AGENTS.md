@@ -6505,3 +6505,74 @@ fix/pump-mapping-v1-auth-fix (5 ahead, 501 behind),
 fix/security-critical-patches-2026 (255 ahead, 508 behind),
 fix/station-persistence-and-currency (6 ahead, 426 behind). No lost
 work needs merging.
+
+## Session 2026-08-22 — Live TV playback fix: YouTube-first + faster auto-advance (DEPLOYED LIVE, commit fc8368f)
+
+### Root cause of stuck "Reconnecting to stream..." overlay
+The Live TV tab (`LiveFeedEmbed.tsx`) integrates with the TVGarden API
+(https://tvgarden.world/tv) which returns 1410+ channels. Many channels have
+HLS `stream_urls` but the actual stream endpoints are DEAD (manifest loads
+but segments never buffer, or 403/404 on segment requests). The old code:
+
+1. Auto-selected the first channel alphabetically ("21 Jump Street" — an HLS
+   stream that doesn't play).
+2. Had a 15-second playback timeout + 3 recovery attempts, meaning each dead
+   channel wasted ~15-20s before auto-advancing.
+3. With 1410 channels (many dead), the user could wait MINUTES before finding
+   a working stream, all while seeing the "Reconnecting to stream…" overlay.
+
+### Fixes (commit fc8368f)
+
+1. **YouTube-first channel priority**: channels with `youtube_urls` (YouTube
+   embed URLs — far more reliable playback via iframe) are now sorted FIRST
+   in the channel list, auto-selected first, and preferred during auto-advance.
+   YouTube embeds don't suffer from the dead-HLS-endpoint problem because
+   YouTube handles stream reliability server-side.
+
+2. **Reduced playback timeout**: 15s → 10s. Dead channels are skipped 33%
+   faster.
+
+3. **Reduced recovery attempts**: 3 → 2. Less time wasted retrying dead
+   streams before giving up and auto-advancing.
+
+4. **Clearer overlay message**: "Reconnecting to stream…" → "Trying next
+   available stream…" so the user understands the system is actively
+   searching for a working channel, not stuck.
+
+5. **Auto-advance candidate filter widened**: now includes YouTube-embed
+   channels (was HLS-only), so auto-advance can jump to a YouTube channel
+   after an HLS channel fails.
+
+### Verification (live, 2026-08-22, Cloudflare preview 37e2dd2a + main alias)
+- Navigated to News → Live TV tab.
+- 1410 channels loaded. Channel dropdown first entry: "3ABN Kids" (YouTube
+  embed channel — was "21 Jump Street" before the fix, confirming
+  YouTube-first sorting works).
+- Video element (`<video>`) rendered. No "Reconnecting" or error overlays
+  after 45+ seconds (was stuck on "Reconnecting" indefinitely before).
+- Click-to-play overlay present (browser autoplay policy — user clicks to
+  start playback).
+- Deployed chunk `News-Cjxms41t.js` confirmed: "Trying next available
+  stream", "Click to play", "youtube_urls" all present.
+
+### Deploy state 2026-08-22 (commit fc8368f)
+- **GitHub main**: fc8368f (pushed, synced with origin/main).
+- **Cloudflare Pages**: LIVE (preview https://37e2dd2a.fuel-app-mobile.pages.dev
+  + main alias https://fuel-app-mobile.pages.dev, chunk `News-Cjxms41t.js`).
+- **Vercel production**: BLOCKED by `api-deployments-free-per-day`
+  (100/100 exhausted; resets ~24h). GitHub integration (prodBranch=main)
+  auto-deploys commit fc8368f when quota resets. The PREVIOUS commit
+  (a5cdc2a) is live on Vercel production (has the 15s timeout + YouTube
+  sorting is NOT in that version — Vercel users get the fix when quota
+  resets).
+- **Supabase**: no schema changes (frontend-only).
+- tsc 0 errors, build success, prettier pass.
+
+### Prior Live TV commits (this session)
+- `6e029fe`: initial Live TV integration (TVGarden API, 1410 channels,
+  country/category filters, favorites, search).
+- `00161c9`: docs.
+- `91b5eaf`: autoplay + click-to-play overlay + controls.
+- `93b659a`: robust auto-select + fetch error surfacing.
+- `a5cdc2a`: 15s playback timeout + playing event listener.
+- `fc8368f`: YouTube-first priority + 10s timeout + 2 recovery attempts.
