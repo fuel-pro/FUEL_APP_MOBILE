@@ -26,6 +26,7 @@ import {
   ShoppingCart,
   Plus,
   Sparkles,
+  CreditCard,
 } from "lucide-react";
 import { formatNumber } from "@/react-app/utils/formatUtils";
 import { switchToTab } from "@/react-app/lib/mpesa-integration-service";
@@ -82,6 +83,9 @@ export default function AdvancedAnalytics() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [salesData, setSalesData] = useState<DailySales[]>([]);
+  const [paymentBreakdown, setPaymentBreakdown] = useState<
+    Record<string, { count: number; total: number }>
+  >({});
   const [inventoryLevels, setInventoryLevels] = useState<InventoryLevel[]>([]);
   const [fuelPrices, setFuelPrices] = useState({ pms: 0, ago: 0 });
   const [dataSource, setDataSource] = useState<"supabase" | "local" | "none">(
@@ -124,7 +128,7 @@ export default function AdvancedAnalytics() {
       // Fetch sales from sales_enhanced table (the canonical POS sales table).
       const { data: sales, error: salesError } = await supabase
         .from("sales_enhanced")
-        .select("sale_date, total_amount")
+        .select("sale_date, total_amount, payment_method")
         .eq("station_id", currentStation.id)
         .gte("sale_date", dateRange.start)
         .lte("sale_date", dateRange.end)
@@ -138,6 +142,8 @@ export default function AdvancedAnalytics() {
       const salesByDate: Record<string, DailySales> = {};
 
       if (sales && sales.length > 0) {
+        const pmBreakdown: Record<string, { count: number; total: number }> =
+          {};
         for (const sale of sales) {
           const dateStr = new Date(sale.sale_date).toISOString().split("T")[0];
           if (!salesByDate[dateStr]) {
@@ -145,7 +151,17 @@ export default function AdvancedAnalytics() {
           }
           salesByDate[dateStr].total += sale.total_amount || 0;
           salesByDate[dateStr].count += 1;
+          // Build payment method breakdown.
+          const method = (sale.payment_method || "unknown")
+            .toString()
+            .toLowerCase();
+          if (!pmBreakdown[method]) pmBreakdown[method] = { count: 0, total: 0 };
+          pmBreakdown[method].count += 1;
+          pmBreakdown[method].total += sale.total_amount || 0;
         }
+        setPaymentBreakdown(pmBreakdown);
+      } else {
+        setPaymentBreakdown({});
       }
 
       // If sales_enhanced returned nothing, try the legacy `sales` table as a
@@ -812,6 +828,69 @@ export default function AdvancedAnalytics() {
               </span>
             </div>
           </div>
+
+          {/* Payment Method Breakdown */}
+          {Object.keys(paymentBreakdown).length > 0 && (
+            <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700">
+              <h3 className="text-sm font-semibold dark:text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                <CreditCard size={16} className="text-indigo-500" /> Payment
+                Method Breakdown
+              </h3>
+              <div className="space-y-3">
+                {(() => {
+                  const entries = Object.entries(paymentBreakdown).sort(
+                    (a, b) => b[1].total - a[1].total,
+                  );
+                  const grandTotal = entries.reduce(
+                    (s, [, v]) => s + v.total,
+                    0,
+                  );
+                  const methodColors: Record<string, string> = {
+                    cash: "bg-green-500",
+                    mpesa: "bg-purple-500",
+                    card: "bg-blue-500",
+                    bank: "bg-indigo-500",
+                    credit: "bg-orange-500",
+                    unknown: "bg-gray-500",
+                  };
+                  const methodLabels: Record<string, string> = {
+                    cash: "Cash",
+                    mpesa: "M-Pesa",
+                    card: "Card",
+                    bank: "Bank Transfer",
+                    credit: "Credit",
+                    unknown: "Other",
+                  };
+                  return entries.map(([method, data]) => {
+                    const pct =
+                      grandTotal > 0 ? (data.total / grandTotal) * 100 : 0;
+                    return (
+                      <div key={method}>
+                        <div className="flex justify-between text-xs mb-1">
+                          <span className="text-gray-600 dark:text-gray-400">
+                            {methodLabels[method] || method}
+                            <span className="text-gray-400 ml-1">
+                              ({data.count} txn{data.count !== 1 ? "s" : ""})
+                            </span>
+                          </span>
+                          <span className="font-semibold text-gray-900 dark:text-white">
+                            {currencySymbol}
+                            {formatNumber(data.total, 0)} ({pct.toFixed(1)}%)
+                          </span>
+                        </div>
+                        <div className="h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full ${methodColors[method] || "bg-gray-500"} rounded-full transition-all duration-500`}
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
+            </div>
+          )}
 
           {/* Insights */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
