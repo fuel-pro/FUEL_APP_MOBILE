@@ -1733,26 +1733,46 @@ export default function Dashboard() {
         >
           {tankLevelCards.map((card) => {
             const dispensed = card.closing - card.opening;
+            const fillPct = tankFillPercent(card.opening, card.closing);
+            const fillColor =
+              fillPct < 20
+                ? "bg-red-500"
+                : fillPct < 50
+                  ? "bg-yellow-500"
+                  : "bg-green-500";
+            const statusLabel =
+              fillPct < 20
+                ? "LOW"
+                : fillPct < 50
+                  ? "MEDIUM"
+                  : "OK";
+            const statusColor =
+              fillPct < 20
+                ? "text-red-600 dark:text-red-400"
+                : fillPct < 50
+                  ? "text-yellow-600 dark:text-yellow-400"
+                  : "text-green-600 dark:text-green-400";
             return (
               <div key={card.key}>
                 <div className="flex justify-between items-center mb-2">
                   <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
                     {card.label} Tank
                   </span>
-                  <span className="text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400">
-                    {formatNumber(dispensed, 0)} L dispensed
+                  <span className={`text-xs font-bold ${statusColor}`}>
+                    {statusLabel} · {fillPct.toFixed(0)}%
                   </span>
                 </div>
                 <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
                   <div
-                    className={`h-full bg-gradient-to-r ${card.barClass} rounded-full transition-all duration-500`}
+                    className={`h-full ${fillColor} rounded-full transition-all duration-500`}
                     style={{
-                      width: `${tankFillPercent(card.opening, card.closing)}%`,
+                      width: `${fillPct}%`,
                     }}
                   />
                 </div>
                 <div className="flex justify-between mt-1 text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400">
                   <span>Opening: {formatNumber(card.opening)} L</span>
+                  <span>{formatNumber(dispensed, 0)} L dispensed</span>
                   <span>Closing: {formatNumber(card.closing)} L</span>
                 </div>
               </div>
