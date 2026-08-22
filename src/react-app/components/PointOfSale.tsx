@@ -143,6 +143,8 @@ export default function PointOfSale() {
   const [customerName, setCustomerName] = useState("");
   const [customerPin, setCustomerPin] = useState("");
   const [showReceipt, setShowReceipt] = useState(false);
+  const [showAllTxns, setShowAllTxns] = useState(false);
+  const [txnSearch, setTxnSearch] = useState("");
   const [showSettings, setShowSettings] = useState(false);
   const [currentTransaction, setCurrentTransaction] =
     useState<POSTransaction | null>(null);
@@ -1581,16 +1583,46 @@ export default function PointOfSale() {
 
               {/* Recent Transactions */}
               <div className="card">
-                <h3 className="text-lg font-semibold mb-4">
-                  Recent Transactions
-                </h3>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-lg font-semibold">Recent Transactions</h3>
+                  {transactions.length > 0 && (
+                    <button
+                      onClick={() => setShowAllTxns(!showAllTxns)}
+                      className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                    >
+                      {showAllTxns ? "Show Recent" : "Show All"}
+                    </button>
+                  )}
+                </div>
+                {transactions.length > 5 && (
+                  <input
+                    type="text"
+                    value={txnSearch}
+                    onChange={(e) => setTxnSearch(e.target.value)}
+                    placeholder="Search by invoice # or payment method..."
+                    className="w-full px-3 py-2 mb-2 text-sm rounded-lg border dark:bg-gray-800 dark:border-gray-600"
+                  />
+                )}
                 <div className="space-y-2 max-h-60 overflow-y-auto">
                   {transactions.length === 0 ? (
                     <p className="text-sm text-gray-500 text-center py-4">
                       No transactions yet
                     </p>
                   ) : (
-                    transactions.slice(0, 5).map((txn) => (
+                    (showAllTxns
+                      ? transactions
+                      : transactions.slice(0, 5)
+                    )
+                      .filter((t) => {
+                        if (!txnSearch.trim()) return true;
+                        const q = txnSearch.toLowerCase();
+                        return (
+                          t.invoiceNumber.toLowerCase().includes(q) ||
+                          t.paymentMethod.toLowerCase().includes(q) ||
+                          (t.customerName || "").toLowerCase().includes(q)
+                        );
+                      })
+                      .map((txn) => (
                       <div
                         key={txn.id}
                         className="p-2 bg-gray-50 dark:bg-white dark:bg-gray-800 rounded cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
