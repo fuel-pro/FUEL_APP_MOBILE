@@ -1145,6 +1145,34 @@ export default function Communication() {
         </button>
       </div>
 
+      {/* Quick Stats */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+        <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-3 border border-gray-200 dark:border-gray-700">
+          <p className="text-[10px] text-gray-500">Total Contacts</p>
+          <p className="text-lg font-bold text-gray-900 dark:text-white">
+            {contacts.length}
+          </p>
+        </div>
+        <div className="bg-amber-50 dark:bg-amber-500/10 rounded-xl p-3">
+          <p className="text-[10px] text-gray-500">Starred</p>
+          <p className="text-lg font-bold text-amber-600 dark:text-amber-400">
+            {contacts.filter((c) => c.starred).length}
+          </p>
+        </div>
+        <div className="bg-blue-50 dark:bg-blue-500/10 rounded-xl p-3">
+          <p className="text-[10px] text-gray-500">Messages</p>
+          <p className="text-lg font-bold text-blue-600 dark:text-blue-400">
+            {messages.length}
+          </p>
+        </div>
+        <div className="bg-violet-50 dark:bg-violet-500/10 rounded-xl p-3">
+          <p className="text-[10px] text-gray-500">Templates</p>
+          <p className="text-lg font-bold text-violet-600 dark:text-violet-400">
+            {templates.length}
+          </p>
+        </div>
+      </div>
+
       {/* Tab Content */}
       {activeTab === "contacts" && renderContactsTab()}
       {activeTab === "messages" && renderMessagesTab()}
