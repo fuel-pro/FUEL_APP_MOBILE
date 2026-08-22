@@ -290,16 +290,28 @@ export default function LiveFeedEmbed({
             (ch.stream_urls && ch.stream_urls.length > 0) ||
             (ch.youtube_urls && ch.youtube_urls.length > 0),
         );
-        // Sort: non-geo-blocked first, then alphabetical
+        // Sort: YouTube-embed channels first (most reliable playback),
+        // then non-geo-blocked, then alphabetical.
         playable.sort((a, b) => {
-          if (a.isGeoBlocked !== b.isGeoBlocked) return a.isGeoBlocked ? 1 : -1;
+          const aYT = a.youtube_urls && a.youtube_urls.length > 0 ? 1 : 0;
+          const bYT = b.youtube_urls && b.youtube_urls.length > 0 ? 1 : 0;
+          if (aYT !== bYT) return bYT - aYT; // YouTube first
+          if (a.isGeoBlocked !== b.isGeoBlocked)
+            return a.isGeoBlocked ? 1 : -1;
           return a.name.localeCompare(b.name);
         });
         setChannels(playable);
         // Reset the auto-advance guard for the fresh channel list
         autoAdvanceTriedRef.current = new Set();
-        // Auto-select the first non-geo-blocked, non-geo playable channel
+        // Auto-select: prefer non-geo-blocked YouTube channels (most reliable),
+        // then any non-geo-blocked HLS channel, then the first channel.
         const firstPlayable =
+          playable.find(
+            (c) =>
+              !c.isGeoBlocked &&
+              c.youtube_urls &&
+              c.youtube_urls.length > 0,
+          ) ||
           playable.find(
             (c) => !c.isGeoBlocked && c.stream_urls && c.stream_urls.length > 0,
           ) ||
@@ -330,6 +342,12 @@ export default function LiveFeedEmbed({
     if (!activeChannel && channels.length > 0 && !loading) {
       const first =
         channels.find(
+          (c) =>
+            !c.isGeoBlocked &&
+            c.youtube_urls &&
+            c.youtube_urls.length > 0,
+        ) ||
+        channels.find(
           (c) => !c.isGeoBlocked && c.stream_urls && c.stream_urls.length > 0,
         ) ||
         channels.find((c) => !c.isGeoBlocked) ||
@@ -344,15 +362,23 @@ export default function LiveFeedEmbed({
   const autoAdvanceToNextChannel = useCallback(
     (excludeNanoid: string): boolean => {
       autoAdvanceTriedRef.current.add(excludeNanoid);
-      // Find the next playable channel we haven't tried yet
+      // Find the next playable channel we haven't tried yet.
+      // Prefer YouTube-embed channels (most reliable), then HLS streams.
       const candidates = channels.filter(
         (c) =>
           c.nanoid !== excludeNanoid &&
           !autoAdvanceTriedRef.current.has(c.nanoid) &&
           !c.isGeoBlocked &&
-          c.stream_urls &&
-          c.stream_urls.length > 0,
+          ((c.youtube_urls && c.youtube_urls.length > 0) ||
+            (c.stream_urls && c.stream_urls.length > 0)),
       );
+      // Sort: YouTube first, then alphabetical
+      candidates.sort((a, b) => {
+        const aYT = a.youtube_urls && a.youtube_urls.length > 0 ? 1 : 0;
+        const bYT = b.youtube_urls && b.youtube_urls.length > 0 ? 1 : 0;
+        if (aYT !== bYT) return bYT - aYT;
+        return a.name.localeCompare(b.name);
+      });
       if (candidates.length > 0) {
         setActiveChannel(candidates[0]);
         return true;
@@ -397,7 +423,7 @@ export default function LiveFeedEmbed({
       return; // handled by YouTube iframe
     }
 
-    const MAX_RECOVERY_ATTEMPTS = 3;
+    const MAX_RECOVERY_ATTEMPTS = 2;
 
     // Called when hls.js parsed the manifest — attempt autoplay (muted first
     // to satisfy browser autoplay policies), then show a play overlay if the
@@ -423,10 +449,12 @@ export default function LiveFeedEmbed({
       }
     };
 
-    // Safety timeout: if the video hasn't started playing within 15 seconds
+    // Safety timeout: if the video hasn't started playing within 10 seconds
     // of the HLS effect firing, auto-advance to the next channel. This
     // catches streams where the manifest loads but segments never buffer
-    // (non-fatal errors that don't trigger the recovery path).
+    // (non-fatal errors that don't trigger the recovery path) AND streams
+    // where recovery is spinning (the timeout fires regardless of recovery
+    // state since it's set once and never reset).
     // Declared here, assigned after the hls instance is created.
     let playbackStarted = false;
     const onPlaying = () => {
@@ -462,7 +490,7 @@ export default function LiveFeedEmbed({
           const advanced = autoAdvanceToNextChannel(activeChannel.nanoid);
           if (!advanced) setPlaybackError(true);
         }
-      }, 15000);
+      }, 10000);
       hls.on(Hls.Events.ERROR, (_event, data) => {
         if (!data.fatal) return;
 
@@ -517,7 +545,7 @@ export default function LiveFeedEmbed({
           const advanced = autoAdvanceToNextChannel(activeChannel.nanoid);
           if (!advanced) setPlaybackError(true);
         }
-      }, 15000);
+      }, 10000);
       video.play().catch(() => {
         setShowPlayOverlay(true);
       });
@@ -533,7 +561,7 @@ export default function LiveFeedEmbed({
             setShowPlayOverlay(true);
           }
         }
-      }, 15000);
+      }, 10000);
       video.play().catch(() => {
         const advanced = autoAdvanceToNextChannel(activeChannel.nanoid);
         if (!advanced) {
@@ -1099,7 +1127,7 @@ export default function LiveFeedEmbed({
                 <div className="text-center px-4">
                   <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
                   <p className="text-xs text-gray-300">
-                    Reconnecting to stream…
+                    Trying next available stream…
                   </p>
                   <p className="text-[10px] text-gray-500 mt-1 truncate max-w-[200px]">
                     {activeChannel.name}
