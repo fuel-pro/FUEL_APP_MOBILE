@@ -701,6 +701,12 @@ export default function News() {
           All ({news.length})
         </button>
         <button
+          onClick={() => setActiveFilter("bookmarked")}
+          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 ${activeFilter === "bookmarked" ? "bg-amber-500 text-gray-900 dark:text-white" : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"}`}
+        >
+          <Bookmark size={12} /> Saved ({news.filter((n) => n.bookmarked).length})
+        </button>
+        <button
           onClick={() => setActiveFilter("unread")}
           className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 ${activeFilter === "unread" ? "bg-blue-500 text-gray-900 dark:text-white" : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"}`}
         >
