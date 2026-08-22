@@ -34,25 +34,22 @@ import {
   Monitor,
   Radio,
   Tv,
-  Maximize2,
 } from "lucide-react";
 import NewsService, {
   ExternalNewsItem,
 } from "@/react-app/services/NewsService";
 import {
   getCountryByCode,
-  ALL_COUNTRIES,
 } from "@/react-app/lib/world-country-utils";
 import LiveStreamService, {
   getAvailableLiveNewsStreams,
   getCandidateLiveNewsStreams,
   getYouTubeEmbedUrl,
-  getTVGardenEmbedUrl,
-  getTVGardenAllEmbedUrl,
   getCategoryLabel,
   getCategoryColor,
   LiveNewsStream,
 } from "@/react-app/services/LiveStreamService";
+import LiveFeedEmbed from "@/react-app/components/LiveFeedEmbed";
 
 interface DisplayNewsItem extends ExternalNewsItem {
   bookmarked: boolean;
@@ -298,9 +295,9 @@ export default function News() {
   const [source, setSource] = useState<"curated" | "external">("curated");
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Sub-tab navigation: News Articles | Live TV | Live Radio
+  // Sub-tab navigation: News Articles | Live Channels | Live TV | Live Radio
   const [activeSubTab, setActiveSubTab] = useState<
-    "articles" | "live-tv" | "live-radio"
+    "articles" | "live-channels" | "live-tv" | "live-radio"
   >("articles");
 
   // Live news stream state — verified-available YouTube 24/7 streams
@@ -310,11 +307,9 @@ export default function News() {
   const [verifyingStreams, setVerifyingStreams] = useState(true);
   const [activeStreamIdx, setActiveStreamIdx] = useState(0);
 
-  // TVGarden embed state
+  // Live feed embed state — country filter for TV / Radio sub-tabs
   const [tvCountry, setTvCountry] = useState<string>(currentCountry.id);
   const [radioCountry, setRadioCountry] = useState<string>(currentCountry.id);
-  const [tvShowAll, setTvShowAll] = useState(false);
-  const [radioShowAll, setRadioShowAll] = useState(false);
 
   // Cross-device cloud-sync guards (prevent realtime echo from wiping local edits)
   const cloudLoadCompleteRef = useRef(false);
@@ -642,10 +637,11 @@ export default function News() {
         </div>
       </div>
 
-      {/* Sub-tab navigation: Articles | Live TV | Live Radio */}
+      {/* Sub-tab navigation: Articles | Live Channels | Live TV | Live Radio */}
       <SubTabBar
         tabs={[
           { id: "articles", label: "News Articles", icon: Newspaper },
+          { id: "live-channels", label: "Live Channels", icon: Monitor },
           { id: "live-tv", label: "Live TV", icon: Tv },
           { id: "live-radio", label: "Live Radio", icon: Radio },
         ]}
@@ -714,6 +710,115 @@ export default function News() {
             })}
           </div>
         </>
+      )}
+
+      {/* ===================== LIVE CHANNELS SUB-TAB (multi-category grid) ===================== */}
+      {activeSubTab === "live-channels" && (
+        <div className="space-y-4">
+          {/* Verified live news streams (only AVAILABLE ones shown) */}
+          <div className="bg-gradient-to-r from-gray-900 to-gray-800 rounded-xl border border-gray-700 p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Radio size={16} className="text-red-500 animate-pulse" />
+              <h3 className="text-sm font-semibold text-white">
+                Live News Streams
+              </h3>
+              <span className="text-[10px] bg-green-500/20 text-green-400 px-1.5 py-0.5 rounded-full">
+                {verifyingStreams
+                  ? "Verifying availability..."
+                  : `${liveStreams.length} available`}
+              </span>
+            </div>
+
+            {verifyingStreams ? (
+              <div className="flex items-center justify-center py-8">
+                <RefreshCw size={20} className="text-gray-400 animate-spin" />
+                <span className="text-gray-400 text-xs ml-2">
+                  Checking stream availability…
+                </span>
+              </div>
+            ) : liveStreams.length === 0 ? (
+              <div className="text-center py-8">
+                <WifiOff size={32} className="text-gray-500 mx-auto mb-2" />
+                <p className="text-gray-400 text-xs">
+                  No live news streams currently available. Try the live
+                  channels below.
+                </p>
+              </div>
+            ) : (
+              <>
+                {/* Active stream player */}
+                {liveStreams[activeStreamIdx] && (
+                  <div className="relative bg-black rounded-lg overflow-hidden aspect-video mb-3">
+                    <iframe
+                      key={liveStreams[activeStreamIdx].id}
+                      src={getYouTubeEmbedUrl(
+                        liveStreams[activeStreamIdx].videoId,
+                      )}
+                      title={liveStreams[activeStreamIdx].name}
+                      className="w-full h-full"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                    />
+                  </div>
+                )}
+
+                {/* Stream selector — only available streams */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {liveStreams.map((stream, i) => {
+                    const isActive = i === activeStreamIdx;
+                    return (
+                      <button
+                        key={stream.id}
+                        onClick={() => setActiveStreamIdx(i)}
+                        className={`flex items-center gap-2 p-2 rounded-lg text-left transition-all ${
+                          isActive
+                            ? "bg-blue-600/30 border border-blue-500"
+                            : "bg-gray-800/50 border border-gray-700 hover:bg-gray-700/50"
+                        }`}
+                      >
+                        <Radio
+                          size={12}
+                          className={`flex-shrink-0 ${
+                            isActive ? "text-blue-400" : "text-red-400"
+                          }`}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p
+                            className={`text-xs font-medium truncate ${
+                              isActive ? "text-white" : "text-gray-300"
+                            }`}
+                          >
+                            {stream.name}
+                          </p>
+                          <p className="text-[10px] text-gray-500 truncate">
+                            {stream.description}
+                          </p>
+                        </div>
+                        <span
+                          className={`flex-shrink-0 text-[9px] px-1.5 py-0.5 rounded border ${getCategoryColor(stream.category)}`}
+                        >
+                          {getCategoryLabel(stream.category)}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-[10px] text-gray-500 mt-2 flex items-center gap-1">
+                  <Wifi size={10} /> Only verified-available streams are shown.
+                  Unavailable streams are automatically hidden.
+                </p>
+              </>
+            )}
+          </div>
+
+          {/* Multi-category live channel grid — silently integrated */}
+          <LiveFeedEmbed
+            defaultCategory="tv"
+            defaultCountry={currentCountry.id}
+            showCategorySwitcher={true}
+            accent="blue"
+          />
+        </div>
       )}
 
       {/* ===================== LIVE TV SUB-TAB ===================== */}
@@ -815,158 +920,28 @@ export default function News() {
             )}
           </div>
 
-          {/* TVGarden live TV embed — thousands of global channels */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-            <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-900/50">
-              <div className="flex items-center gap-2">
-                <Tv size={16} className="text-blue-600 dark:text-blue-400" />
-                <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
-                  Live Global TV Channels
-                </h3>
-                <a
-                  href={
-                    tvShowAll
-                      ? getTVGardenAllEmbedUrl("tv")
-                      : getTVGardenEmbedUrl(tvCountry, "tv")
-                  }
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-[10px] text-blue-500 hover:text-blue-400 flex items-center gap-1"
-                >
-                  <Maximize2 size={10} /> Open full
-                </a>
-              </div>
-              <div className="flex items-center gap-2">
-                <select
-                  value={tvCountry}
-                  onChange={(e) => {
-                    setTvCountry(e.target.value);
-                    setTvShowAll(false);
-                  }}
-                  className="text-xs bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1 text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  aria-label="Select TV country"
-                >
-                  <option value="">🌍 All Countries</option>
-                  {ALL_COUNTRIES.map((c) => (
-                    <option key={c.code} value={c.code}>
-                      {c.flag} {c.name}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  onClick={() => setTvShowAll((v) => !v)}
-                  className={`text-[10px] px-2 py-1 rounded-lg transition-colors ${
-                    tvShowAll
-                      ? "bg-blue-500 text-white"
-                      : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
-                  }`}
-                >
-                  {tvShowAll ? "Showing All" : "Show All"}
-                </button>
-              </div>
-            </div>
-            <div className="relative w-full" style={{ height: "500px" }}>
-              <iframe
-                key={`tv-${tvShowAll ? "all" : tvCountry}`}
-                src={
-                  tvShowAll
-                    ? getTVGardenAllEmbedUrl("tv")
-                    : getTVGardenEmbedUrl(tvCountry, "tv")
-                }
-                title="Live Global TV"
-                className="w-full h-full"
-                loading="lazy"
-                allowFullScreen
-              />
-            </div>
-            <p className="text-[10px] text-gray-500 dark:text-gray-400 p-2 text-center">
-              Powered by tvgarden.world — thousands of live TV channels from
-              {tvShowAll
-                ? " every country"
-                : ` ${currentCountry.flag} ${currentCountry.name}`}
-              . TVGarden shows only live, available channels.
-            </p>
-          </div>
+          {/* Live global TV channels — silently integrated (no upstream attribution) */}
+          <LiveFeedEmbed
+            defaultCategory="tv"
+            defaultCountry={tvCountry}
+            showCategorySwitcher={false}
+            family="video"
+            accent="blue"
+          />
         </div>
       )}
 
       {/* ===================== LIVE RADIO SUB-TAB ===================== */}
       {activeSubTab === "live-radio" && (
         <div className="space-y-4">
-          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-            <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-900/50">
-              <div className="flex items-center gap-2">
-                <Radio
-                  size={16}
-                  className="text-purple-600 dark:text-purple-400"
-                />
-                <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
-                  Live Global Radio Stations
-                </h3>
-                <a
-                  href={
-                    radioShowAll
-                      ? getTVGardenAllEmbedUrl("radio")
-                      : getTVGardenEmbedUrl(radioCountry, "radio")
-                  }
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-[10px] text-blue-500 hover:text-blue-400 flex items-center gap-1"
-                >
-                  <Maximize2 size={10} /> Open full
-                </a>
-              </div>
-              <div className="flex items-center gap-2">
-                <select
-                  value={radioCountry}
-                  onChange={(e) => {
-                    setRadioCountry(e.target.value);
-                    setRadioShowAll(false);
-                  }}
-                  className="text-xs bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1 text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  aria-label="Select radio country"
-                >
-                  <option value="">🌍 All Countries</option>
-                  {ALL_COUNTRIES.map((c) => (
-                    <option key={c.code} value={c.code}>
-                      {c.flag} {c.name}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  onClick={() => setRadioShowAll((v) => !v)}
-                  className={`text-[10px] px-2 py-1 rounded-lg transition-colors ${
-                    radioShowAll
-                      ? "bg-purple-500 text-white"
-                      : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
-                  }`}
-                >
-                  {radioShowAll ? "Showing All" : "Show All"}
-                </button>
-              </div>
-            </div>
-            <div className="relative w-full" style={{ height: "500px" }}>
-              <iframe
-                key={`radio-${radioShowAll ? "all" : radioCountry}`}
-                src={
-                  radioShowAll
-                    ? getTVGardenAllEmbedUrl("radio")
-                    : getTVGardenEmbedUrl(radioCountry, "radio")
-                }
-                title="Live Global Radio"
-                className="w-full h-full"
-                loading="lazy"
-                allowFullScreen
-              />
-            </div>
-            <p className="text-[10px] text-gray-500 dark:text-gray-400 p-2 text-center">
-              Powered by tvgarden.world — live radio stations from
-              {radioShowAll
-                ? " every country"
-                : ` ${currentCountry.flag} ${currentCountry.name}`}
-              . TVGarden shows only live, available stations.
-            </p>
-          </div>
+          {/* Live global radio stations — silently integrated */}
+          <LiveFeedEmbed
+            defaultCategory="radio"
+            defaultCountry={radioCountry}
+            showCategorySwitcher={false}
+            family="audio"
+            accent="purple"
+          />
         </div>
       )}
 

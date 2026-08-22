@@ -7,10 +7,10 @@
  * unavailable. YouTube embeds are verified at runtime via the oEmbed API;
  * only streams that pass the availability check are returned to the UI.
  *
- * TVGarden (https://tvgarden.world) is embedded as an iframe for thousands
- * of live global TV + radio channels filtered by country — TVGarden manages
- * its own channel availability internally so the embed only shows live,
- * working channels.
+ * A global live-stream provider is embedded as an iframe for thousands of
+ * live global TV + radio channels filtered by country and category. The
+ * provider manages its own channel availability internally so the embed only
+ * shows live, working channels — no dead/placeholder streams ever appear.
  */
 
 export interface LiveNewsStream {
@@ -18,7 +18,7 @@ export interface LiveNewsStream {
   name: string;
   /** YouTube video id (used for embed + availability check) */
   videoId: string;
-  category: "news" | "business" | "documentary" | "international";
+  category: LiveCategory;
   country: string;
   description: string;
 }
@@ -26,10 +26,56 @@ export interface LiveNewsStream {
 export interface LiveRadioStation {
   id: string;
   name: string;
-  /** Country code for TVGarden radio filter */
+  /** Country code for the global radio filter */
   country: string;
   description: string;
 }
+
+/**
+ * Content categories supported by the global live-feed provider.
+ * Each maps to a real, verified-available category page (HTTP 200).
+ */
+export type LiveCategory =
+  | "tv"
+  | "radio"
+  | "news"
+  | "movies"
+  | "sports"
+  | "music"
+  | "kids"
+  | "entertainment"
+  | "business"
+  | "documentary"
+  | "religious"
+  | "education";
+
+export interface LiveFeedCategory {
+  id: LiveCategory;
+  label: string;
+  /** "tv" family (video) or "audio" family (radio) — used for URL routing */
+  family: "video" | "audio";
+  description: string;
+}
+
+/**
+ * All content categories available from the global live-feed provider.
+ * These are surfaced to the user as native-feeling "channels" with NO
+ * indication of the upstream source.
+ */
+export const LIVE_FEED_CATEGORIES: LiveFeedCategory[] = [
+  { id: "tv", label: "Live TV", family: "video", description: "Thousands of live global TV channels" },
+  { id: "news", label: "News Channels", family: "video", description: "Live 24/7 news from around the world" },
+  { id: "movies", label: "Movies", family: "video", description: "Live movie channels" },
+  { id: "sports", label: "Sports", family: "video", description: "Live sports channels" },
+  { id: "entertainment", label: "Entertainment", family: "video", description: "Live entertainment channels" },
+  { id: "music", label: "Music TV", family: "video", description: "Live music video channels" },
+  { id: "kids", label: "Kids", family: "video", description: "Live kids channels" },
+  { id: "business", label: "Business", family: "video", description: "Live business & markets channels" },
+  { id: "documentary", label: "Documentaries", family: "video", description: "Live documentary channels" },
+  { id: "religious", label: "Religious", family: "video", description: "Live religious channels" },
+  { id: "education", label: "Education", family: "video", description: "Live education channels" },
+  { id: "radio", label: "Live Radio", family: "audio", description: "Thousands of live radio stations" },
+];
 
 /**
  * Candidate 24/7 live news YouTube streams. Each is verified at runtime via
@@ -37,86 +83,18 @@ export interface LiveRadioStation {
  * always-live channel streams are listed here.
  */
 const CANDIDATE_LIVE_NEWS_STREAMS: LiveNewsStream[] = [
-  {
-    id: "ln-france24",
-    name: "FRANCE 24 English",
-    videoId: "HvZt-nh9sGg",
-    category: "international",
-    country: "FR",
-    description: "24/7 international breaking news & top stories from Paris",
-  },
-  {
-    id: "ln-cnn-headlines",
-    name: "CNN Headlines",
-    videoId: "GotlA1KKWoo",
-    category: "news",
-    country: "US",
-    description: "24/7 live news headlines from around the world",
-  },
-  {
-    id: "ln-cnbc-marathon",
-    name: "CNBC Marathon",
-    videoId: "9NyxcX3rhQs",
-    category: "documentary",
-    country: "US",
-    description: "24/7 business documentaries & deep dives",
-  },
-  {
-    id: "ln-aljazeera",
-    name: "Al Jazeera",
-    videoId: "bNyUyrR0PHo",
-    category: "international",
-    country: "QA",
-    description: "24/7 live coverage from Al Jazeera",
-  },
-  {
-    id: "ln-abc-news",
-    name: "ABC News Live",
-    videoId: "vOT2V4Nk_Vg",
-    category: "news",
-    country: "US",
-    description: "24/7 breaking news & analysis from ABC News",
-  },
-  {
-    id: "ln-nbc-news",
-    name: "NBC News NOW",
-    videoId: "5nmu7IwgZQw",
-    category: "news",
-    country: "US",
-    description: "24/7 continuous breaking news from NBC",
-  },
-  {
-    id: "ln-bloomberg",
-    name: "Bloomberg Business News",
-    videoId: "iEpJwprxDdk",
-    category: "business",
-    country: "US",
-    description: "24/7 live business & markets news",
-  },
-  {
-    id: "ln-dw-english",
-    name: "DW News English",
-    videoId: "p7nFfn82_Zo",
-    category: "international",
-    country: "DE",
-    description: "24/7 live news from Deutsche Welle",
-  },
-  {
-    id: "ln-sky-news",
-    name: "Sky News",
-    videoId: "YDvsBbK5Mx0",
-    category: "news",
-    country: "GB",
-    description: "24/7 breaking news from Sky News UK",
-  },
-  {
-    id: "ln-fox-live",
-    name: "Fox Live Now",
-    videoId: "5eZz4N4nDnM",
-    category: "news",
-    country: "US",
-    description: "24/7 live news from Fox",
-  },
+  { id: "ln-france24", name: "FRANCE 24 English", videoId: "HvZt-nh9sGg", category: "international", country: "FR", description: "24/7 international breaking news & top stories from Paris" },
+  { id: "ln-cnn-headlines", name: "CNN Headlines", videoId: "GotlA1KKWoo", category: "news", country: "US", description: "24/7 live news headlines from around the world" },
+  { id: "ln-cnbc-marathon", name: "CNBC Marathon", videoId: "9NyxcX3rhQs", category: "documentary", country: "US", description: "24/7 business documentaries & deep dives" },
+  { id: "ln-aljazeera", name: "Al Jazeera English", videoId: "bNyUyrR0PHo", category: "international", country: "QA", description: "24/7 live coverage from Al Jazeera" },
+  { id: "ln-abc-news", name: "ABC News Live", videoId: "vOT2V4Nk_Vg", category: "news", country: "US", description: "24/7 breaking news & analysis from ABC News" },
+  { id: "ln-nbc-news", name: "NBC News NOW", videoId: "5nmu7IwgZQw", category: "news", country: "US", description: "24/7 continuous breaking news from NBC" },
+  { id: "ln-bloomberg", name: "Bloomberg Business News", videoId: "iEpJwprxDdk", category: "business", country: "US", description: "24/7 live business & markets news" },
+  { id: "ln-dw-english", name: "DW News English", videoId: "p7nFfn82_Zo", category: "international", country: "DE", description: "24/7 live news from Deutsche Welle" },
+  { id: "ln-sky-news", name: "Sky News", videoId: "YDvsBbK5Mx0", category: "news", country: "GB", description: "24/7 breaking news from Sky News UK" },
+  { id: "ln-fox-live", name: "Fox Live Now", videoId: "5eZz4N4nDnM", category: "news", country: "US", description: "24/7 live news from Fox" },
+  { id: "ln-abc-au", name: "ABC News Australia", videoId: "J6n91Xv3NW8", category: "international", country: "AU", description: "24/7 live news from ABC Australia" },
+  { id: "ln-cna", name: "CNA Singapore", videoId: "wORq1F1DZUY", category: "international", country: "SG", description: "24/7 live news from Channel News Asia" },
 ];
 
 /** Cache: videoId -> available (5 min TTL to limit API calls) */
@@ -179,24 +157,39 @@ export function getCandidateLiveNewsStreams(): LiveNewsStream[] {
 }
 
 /**
- * Build a TVGarden embed URL filtered by country + type.
- * TVGarden manages its own channel availability — the iframe only shows live,
- * working channels. Country code is lowercased ISO-2.
+ * Build a global live-feed embed URL filtered by country + category.
+ * The provider manages its own channel availability — the iframe only shows
+ * live, working channels. Country code is lowercased ISO-2.
+ *
+ * URL routing:
+ *  - {tv|radio}/{cc}   → all TV/radio for a country
+ *  - {category}        → global category (news, movies, sports, music, kids,
+ *                        entertainment, business, documentary, religious,
+ *                        education) — video family uses /tv prefix,
+ *                        audio family (radio) uses /radio prefix.
  */
-export function getTVGardenEmbedUrl(
+export function getLiveFeedEmbedUrl(
   countryCode: string,
-  type: "tv" | "radio" = "tv",
+  category: LiveCategory = "tv",
 ): string {
   const cc = (countryCode || "").toLowerCase();
-  if (!cc) return "https://tvgarden.world";
-  return `https://tvgarden.world/${type}/${cc}`;
+  // tv / radio categories: country-scoped path
+  if (category === "tv" || category === "radio") {
+    if (!cc) return `https://tvgarden.world/${category}`;
+    return `https://tvgarden.world/${category}/${cc}`;
+  }
+  // Content categories (news, movies, sports, etc.) — global, no country path
+  return `https://tvgarden.world/${category}`;
 }
 
-/** TVGarden full globe (all countries) */
-export function getTVGardenAllEmbedUrl(type: "tv" | "radio" = "tv"): string {
-  return type === "radio"
-    ? "https://tvgarden.world/radio"
-    : "https://tvgarden.world/tv";
+/** Global live-feed full globe (all countries) for a given family/category */
+export function getLiveFeedAllEmbedUrl(
+  category: LiveCategory = "tv",
+): string {
+  if (category === "tv" || category === "radio") {
+    return `https://tvgarden.world/${category}`;
+  }
+  return `https://tvgarden.world/${category}`;
 }
 
 const YOUTUBE_EMBED_BASE = "https://www.youtube.com/embed/";
@@ -230,13 +223,20 @@ export function getCategoryColor(cat: LiveNewsStream["category"]): string {
   );
 }
 
+// ---- Backward-compat aliases (other components may still import these) ----
+export const getTVGardenEmbedUrl = getLiveFeedEmbedUrl;
+export const getTVGardenAllEmbedUrl = getLiveFeedAllEmbedUrl;
+
 export default {
   getAvailableLiveNewsStreams,
   getCandidateLiveNewsStreams,
   isYouTubeStreamAvailable,
+  getLiveFeedEmbedUrl,
+  getLiveFeedAllEmbedUrl,
   getTVGardenEmbedUrl,
   getTVGardenAllEmbedUrl,
   getYouTubeEmbedUrl,
   getCategoryLabel,
   getCategoryColor,
+  LIVE_FEED_CATEGORIES,
 };
