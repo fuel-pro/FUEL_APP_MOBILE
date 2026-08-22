@@ -290,6 +290,29 @@ export default function Invoice() {
       payload: state.invoiceCounter + 1,
     });
 
+    // Also create/update a client record in state.clients so the customer
+    // appears in the Customers tab. Without this, customers created via the
+    // Invoice tab were invisible in the Customers tab (the Customers tab reads
+    // from the customers DB table + cloud KV + state.clients fallback).
+    const clientKey = customerPhone || customerName;
+    if (clientKey && !state.clients[clientKey]) {
+      dispatch({
+        type: "SET_CLIENTS",
+        payload: {
+          ...state.clients,
+          [clientKey]: {
+            id: clientKey,
+            name: customerName,
+            phone: customerPhone || "",
+            address: customerAddress || "",
+            email: "",
+            company: customerName,
+            createdAt: new Date().toISOString(),
+          },
+        },
+      });
+    }
+
     // Reset the idempotency tracker so the next prefill can apply cleanly.
     appliedPrefillRef.current.clear();
 
