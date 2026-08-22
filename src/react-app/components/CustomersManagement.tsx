@@ -69,6 +69,7 @@ export default function CustomersManagement() {
           ...data,
           station_id: currentStation.id,
           owner_id: userData?.user?.id,
+          is_active: true,
         });
         if (error) throw error;
       }

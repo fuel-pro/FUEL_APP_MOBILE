@@ -1038,22 +1038,30 @@ export async function fetchAllProducts(stationId: string): Promise<any[]> {
 }
 
 export async function fetchCustomers(stationId: string): Promise<any[]> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("customers")
     .select("*")
     .eq("station_id", stationId)
-    .eq("is_active", true)
+    .or("is_active.is.null,is_active.eq.true")
     .order("name");
+  if (error) {
+    console.error("[fetchCustomers] query failed:", error);
+    throw error;
+  }
   return data || [];
 }
 
 export async function fetchSuppliers(stationId: string): Promise<any[]> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("suppliers")
     .select("*")
     .eq("station_id", stationId)
-    .eq("is_active", true)
+    .or("is_active.is.null,is_active.eq.true")
     .order("name");
+  if (error) {
+    console.error("[fetchSuppliers] query failed:", error);
+    throw error;
+  }
   return data || [];
 }
 

@@ -748,7 +748,11 @@ class CloudStorageService {
       }
       // No cloud row — fall back to cache (e.g. offline-first write not yet synced).
       return readCache<T>(ck);
-    } catch {
+    } catch (err) {
+      console.warn(
+        `[CloudStorage] get failed for key="${key}" stationId="${stationId ?? ""}":`,
+        err,
+      );
       return readCache<T>(ck);
     }
   }
