@@ -6202,3 +6202,85 @@ silently run it to provide all and more feeds.
 - Vercel: BLOCKED by api-deployments-free-per-day (auto-deploys on reset).
 - Supabase: no schema changes (frontend-only).
 - tsc 0 errors, build 107 precache, prettier pass.
+
+## News tab — 2-LEVEL TAXONOMY (categories + sub-categories) (DEPLOYED LIVE 2026-08-22, commit c479d4e)
+
+**Requirement**: organize each stream/channel into respective categories
+(movies, news, documentaries, sports, etc.) AND then into respective
+sub-categories (Movies: action, adventure, horror, family, historical,
+real-life story, animation, etc.).
+
+### Architecture (2-level taxonomy)
+
+- **LiveStreamService.ts**: the LIVE_FEED_CATEGORIES registry now carries a
+  curated `subCategories: LiveFeedSubCategory[]` per top-level category. The
+  `LiveCategory` union widened to 28 ids (all, news, music, sports, auto,
+  animation, business, classic, comedy, cooking, culture, documentary,
+  education, entertainment, family, general, kids, legislative, lifestyle,
+  movies, outdoor, relax, religious, series, science, shop, travel, weather
+  — derived from the upstream provider's own taxonomy so every sub-category
+  surfaces REAL live channels). `LiveFeedSubCategory` carries an
+  `upstreamCategory` field that maps to a real upstream category id.
+  `getLiveFeedEmbedUrl(country, category, subCategory?)` and
+  `getLiveFeedAllEmbedUrl(category, subCategory?)` now accept a sub-category
+  and apply the upstream's native `?category=<id>` filter (or navigate to the
+  sub's upstream category path when it differs from the parent). New helper
+  `getSubCategory(category, subId)`.
+- **LiveFeedEmbed.tsx**: renders TWO switcher rows — LEVEL 1 (top-level
+  category pill grid) + LEVEL 2 (sub-category pill row, shown when the
+  active category has >1 sub-category). Selecting a top-level category
+  resets the sub-category to "all" (or the first sub). The overlay bar shows
+  the active sub-category label. New props: `defaultSubCategory`,
+  `showSubCategorySwitcher`.
+- **News.tsx**: Live TV + Live Radio sub-tabs now enable the sub-category
+  switcher (`showSubCategorySwitcher={true}`).
+
+### Sub-category taxonomy (curated)
+
+- **Live TV** (13): All, General, Entertainment, Family, Relax, Outdoor,
+  Lifestyle, Culture, Classic, Shopping, Weather, Travel, Government.
+- **News** (6): All News, Breaking, International, Business & Markets,
+  Politics & Government, Weather.
+- **Movies** (13): All Movies, Action, Adventure, Comedy, Drama,
+  Horror & Thriller, Family, Animation, Classics, Real-Life Stories,
+  Historical, Romance, Sci-Fi & Fantasy.
+- **Sports** (6): All Sports, Football, Motorsport, Outdoor Sports,
+  Sports News, Classic Sports.
+- **Entertainment** (7): All Entertainment, Comedy, TV Series, Classic
+  Shows, Reality & Lifestyle, Cooking Shows, Travel Shows.
+- **Music TV** (5): All Music, General Music, Relax & Ambient, Classic
+  Hits, World Music.
+- **Kids** (5): All Kids, Cartoons & Animation, Educational, Family Shows,
+  General Kids.
+- **Documentaries** (7): All Documentaries, Science & Nature, History,
+  Travel & Discovery, Educational, Outdoor & Wildlife, Machines & Tech.
+- **Education** (5): All Educational, Science, Culture & Arts,
+  Documentaries, Civics & Government.
+- **Religious** (4): All Religious, General Faith, Spiritual & Cultural,
+  Religious Education.
+- **Business** (4): All Business, Business News, Markets, Commerce.
+- **Live Radio** (8): All Radio, Music Radio, News Radio, Sports Radio,
+  Religious Radio, Relax Radio, Culture Radio, Educational Radio.
+
+### Verification (live, Cloudflare preview d140c00f + main alias)
+
+Logged in as founder QA, News tab → Live Channels sub-tab → Movies category:
+- LEVEL 1: 12 top-level categories render (Live TV, News, Movies, Sports,
+  Entertainment, Music TV, Kids, Documentaries, Education, Religious,
+  Business, Live Radio).
+- LEVEL 2: Movies shows 13 sub-categories (All Movies, Action, Adventure,
+  Comedy, Drama, Horror & Thriller, Family, Animation, Classics, Real-Life
+  Stories, Historical, Romance, Sci-Fi & Fantasy).
+- Each sub-category surfaces REAL live channels (maps to a real upstream
+  category id — no dead streams).
+
+### Deploy state 2026-08-22 (commit c479d4e)
+
+- GitHub main: c479d4e (pushed, synced with origin/main).
+- Cloudflare Pages: LIVE (preview https://d140c00f.fuel-app-mobile.pages.dev
+  + main alias https://fuel-app-mobile.pages.dev).
+- Vercel production: BLOCKED by api-deployments-free-per-day (100/day
+  exhausted; prebuilt deploy also hit the limit). GitHub integration
+  (prodBranch=main) auto-deploys c479d4e when the quota resets (~24h).
+- Supabase: no schema changes (frontend-only).
+- tsc 0 errors, build success, prettier pass.
