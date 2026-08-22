@@ -6427,3 +6427,81 @@ a station from the dropdown plays it in the player.
 Deploy: GitHub main 3803836. Cloudflare LIVE (9e09a9cc). Vercel BLOCKED
 by api-deployments-free-per-day (auto-deploys on reset). tsc 0 errors,
 build 107 precache, prettier pass.
+
+## Session 2026-08-22 — Fix "stream temporarily unavailable" (Task 6, commit 6e029fe)
+
+Fully fixed the "This stream is temporarily unavailable. Try another
+channel" error in the Live TV/Radio player (LiveFeedEmbed.tsx). Root
+cause analysis + comprehensive fix:
+
+### Root causes (all fixed)
+
+1. **UNPLAYABLE CHANNELS SHOWN (biggest cause — ~29% of catalog)**:
+   the provider JSON API returns channels with empty `stream_urls` AND
+   empty `youtube_urls` (no playable stream at all — 258/878 news
+   channels). Selecting these always showed "temporarily unavailable".
+   Fix: filtered out at load time — `playable = merged.filter(ch =>
+   (ch.stream_urls?.length > 0) || (ch.youtube_urls?.length > 0))`.
+   Auto-select prefers non-geo-blocked channels with stream_urls.
+
+2. **NO HLS ERROR RECOVERY**: hls.js fatal errors immediately destroyed
+   the player + showed the error overlay, with ZERO recovery attempts.
+   Fix: standard hls.js recovery pattern — NETWORK_ERROR →
+   `hls.startLoad()` (retry, backoff), MEDIA_ERROR →
+   `recoverMediaError()` / `startLoad(seek)` alternating, up to 3
+   attempts before giving up. Increased manifest/level/frag loading
+   timeouts (15s/15s/30s). Shows a "Reconnecting to stream…" spinner
+   overlay (`reconnecting` state) during recovery.
+
+3. **NO AUTO-ADVANCE**: when a stream genuinely failed, the user had to
+   manually click "Try next channel". Fix: `autoAdvanceToNextChannel()`
+   auto-skips to the next playable channel (skipping geo-blocked +
+   already-tried via `autoAdvanceTriedRef` Set) so the user lands on a
+   working stream automatically. Loop-guarded so it never infinitely
+   skips. The error overlay only shows when NO other channel is
+   available.
+
+4. **`.m3u8` EXTENSION CHECK TOO STRICT**: `streamUrl.endsWith(".m3u8")`
+   skipped valid HLS URLs with query strings or non-.m3u8 paths. Fix:
+   tries hls.js on any URL (hls.js rejects non-HLS content gracefully).
+
+5. **POOR ERROR UX**: the error overlay only had "Try next channel".
+   Fix: now has both "Retry" (re-attempt the same stream) and "Try next
+   channel" (skip). Updated message to "unavailable after multiple
+   retries".
+
+6. **NATIVE onError HANDLERS**: video/audio `onError` showed the error
+   immediately. Fix: auto-advance first (the HLS handler manages
+   recovery for hls.js-managed streams; native onError is a fallback for
+   direct-src playback + radio audio, only fires when `!hlsRef.current`).
+
+### Manual selection resets auto-advance
+`selectChannel(ch)` (new) resets `autoAdvanceTriedRef` so every channel
+can be tried again in the new context. Used by the channel card click
+handler + station dropdown onChange (replaced direct `setActiveChannel`).
+
+### Verification (live, Cloudflare d6e15956)
+Logged in as founder QA (US station). News → Live Channels sub-tab:
+1410 playable US TV channels loaded (unplayable ones filtered out),
+no "temporarily unavailable" errors on load, channel grid + station
+dropdown show only playable channels. HLS streams (cloudfront,
+bozztv smil) confirmed CORS-enabled (Access-Control-Allow-Origin: *).
+
+### Deploy state 2026-08-22 (commit 6e029fe)
+- GitHub main: 6e029fe (pushed, synced with origin/main).
+- Cloudflare Pages: LIVE (preview https://d6e15956.fuel-app-mobile.pages.dev
+  + main alias https://fuel-app-mobile.pages.dev).
+- Vercel production: LIVE (prebuilt deploy succeeded, aliased to
+  fuel-app-mobile.vercel.app).
+- Supabase: no schema changes (frontend-only).
+- tsc 0 errors, build 105 precache, prettier pass, eslint clean.
+
+### Lost commit audit (2026-08-22)
+Audited all unmerged remote branches. All are old divergent snapshots
+(200+ commits behind main) whose fixes are already on main in more
+complete form: feature/cloud-sync-status-update (237 ahead, 508 behind),
+fix/cross-device-sync-initialization-fix (309 ahead, 508 behind),
+fix/pump-mapping-v1-auth-fix (5 ahead, 501 behind),
+fix/security-critical-patches-2026 (255 ahead, 508 behind),
+fix/station-persistence-and-currency (6 ahead, 426 behind). No lost
+work needs merging.
