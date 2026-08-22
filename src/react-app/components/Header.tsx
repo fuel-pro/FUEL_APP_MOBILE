@@ -9,6 +9,7 @@ import TabConfigModal from "@/react-app/components/TabConfigModal";
 import SyncStatusIndicator from "@/react-app/components/SyncStatusIndicator";
 import RoleSelector from "@/react-app/components/RoleSelector";
 import QuickSearch from "@/react-app/components/QuickSearch";
+import NotificationCenter from "@/react-app/components/NotificationCenter";
 import { useNavigate } from "react-router";
 import { useState, useEffect, useRef } from "react";
 import { uploadStationLogo } from "@/react-app/lib/logo-storage-service";
@@ -393,6 +394,7 @@ export default function Header({
               countryCode={location.currentCountry.id}
               compact
             />
+            <NotificationCenter />
             <RoleSelector />
             <button
               onClick={() => navigate("/founder")}
