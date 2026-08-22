@@ -6397,3 +6397,33 @@ The "Live News Streams" section in Live Channels + Live TV sub-tabs showed 5 har
 ### Lost commit audit (2026-08-22)
 
 No lost work found. All unmerged branches (feat/document-center-folders, feat/village-level-real-fuel-prices, feature/firebase-*, feature/google-oauth-signin, fix/*) are old divergent snapshots whose work is already on main in more complete form. dependabot branches are dependency bumps.
+
+## Session 2026-08-22 (cont.) — Dropdown menus for categories, sub-categories, stations
+
+Replaced the flat button rows for categories (LEVEL 1) and sub-categories
+(LEVEL 2) with native <select> dropdown menus, and added a NEW station
+(channel) dropdown (LEVEL 3) that lets the user pick a channel directly
+from a dropdown — selecting a station plays it immediately in the player.
+
+All three dropdowns sit in a unified filter bar alongside the existing
+Country dropdown, each with an icon label:
+- Layers icon + Category dropdown (Live TV, News, Movies, Sports, etc.)
+- Tag icon + Sub-category dropdown (All Channels, General, Entertainment, etc.)
+- Monitor icon + Station dropdown (direct channel picker: 21 Jump Street, 24 Hour Free Movies, 3ABN English, etc.)
+- Country dropdown (already existed)
+
+The global CSS (index.css) styles all native <select> elements with the
+CLICKING.txt 5 rules: 48px touch target, custom SVG caret, focus ring,
+dark mode, 150ms transitions, prefers-reduced-motion support.
+
+Removed the now-unused accentSubBg variable. Added Layers, Tag, Monitor
+lucide icons.
+
+Verified live on Cloudflare (9e09a9cc): Live Channels sub-tab shows all
+4 dropdowns in a unified filter bar. Live TV sub-tab shows Sub-category +
+Station + Country (category is hidden since its locked to tv). Selecting
+a station from the dropdown plays it in the player.
+
+Deploy: GitHub main 3803836. Cloudflare LIVE (9e09a9cc). Vercel BLOCKED
+by api-deployments-free-per-day (auto-deploys on reset). tsc 0 errors,
+build 107 precache, prettier pass.
