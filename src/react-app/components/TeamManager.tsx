@@ -126,7 +126,8 @@ const getRoleIcon = (role: string): any => ROLE_ICONS[role] || BadgeCheck;
 const getRoleLabel = (role: string) =>
   ROLE_LABELS[role] || {
     label: role.charAt(0).toUpperCase() + role.slice(1),
-    color: "bg-gray-100 text-gray-700 dark:bg-white dark:bg-gray-900/30 dark:text-gray-300",
+    color:
+      "bg-gray-100 text-gray-700 dark:bg-white dark:bg-gray-900/30 dark:text-gray-300",
     desc: "Custom role defined by the Owner.",
   };
 
@@ -1259,19 +1260,25 @@ export default function TeamManager() {
               <p className="text-lg font-bold leading-none">
                 {combinedMembers.filter((m) => m.active).length}
               </p>
-              <p className="text-gray-900 dark:text-white/70 text-[10px]">Members</p>
+              <p className="text-gray-900 dark:text-white/70 text-[10px]">
+                Members
+              </p>
             </div>
             <div className="bg-white/20 rounded-lg px-3 py-1.5 text-center">
               <p className="text-lg font-bold leading-none">
                 {activeInvites.length}
               </p>
-              <p className="text-gray-900 dark:text-white/70 text-[10px]">Invites</p>
+              <p className="text-gray-900 dark:text-white/70 text-[10px]">
+                Invites
+              </p>
             </div>
             <div className="bg-white/20 rounded-lg px-3 py-1.5 text-center">
               <p className="text-lg font-bold leading-none">
                 {accessCodes.filter((c) => c.enabled).length}
               </p>
-              <p className="text-gray-900 dark:text-white/70 text-[10px]">Codes</p>
+              <p className="text-gray-900 dark:text-white/70 text-[10px]">
+                Codes
+              </p>
             </div>
           </div>
         </div>
@@ -1289,7 +1296,8 @@ export default function TeamManager() {
             )}
             {lastPublished && (
               <span className="flex items-center gap-1 bg-gray-100 dark:bg-white/10 px-2 py-1 rounded-full">
-                <Radio size={12} /> Snapshot {new Date(lastPublished).toLocaleTimeString()}
+                <Radio size={12} /> Snapshot{" "}
+                {new Date(lastPublished).toLocaleTimeString()}
               </span>
             )}
           </div>
@@ -1352,12 +1360,17 @@ export default function TeamManager() {
                 className={`flex items-start gap-2.5 p-2.5 rounded-lg text-left transition-colors ${item.done ? "bg-green-50 dark:bg-green-900/20" : "bg-white dark:bg-white dark:bg-gray-800 hover:bg-amber-50 dark:hover:bg-amber-900/10"} border border-gray-200 dark:border-gray-700`}
               >
                 {item.done ? (
-                  <CheckCircle2 size={16} className="text-green-500 flex-shrink-0 mt-0.5" />
+                  <CheckCircle2
+                    size={16}
+                    className="text-green-500 flex-shrink-0 mt-0.5"
+                  />
                 ) : (
                   <div className="w-4 h-4 rounded-full border-2 border-amber-300 flex-shrink-0 mt-0.5" />
                 )}
                 <div className="flex-1 min-w-0">
-                  <p className={`text-xs font-semibold ${item.done ? "text-green-700 dark:text-green-300 line-through" : "text-gray-900 dark:text-gray-900 dark:text-white"}`}>
+                  <p
+                    className={`text-xs font-semibold ${item.done ? "text-green-700 dark:text-green-300 line-through" : "text-gray-900 dark:text-gray-900 dark:text-white"}`}
+                  >
                     {item.label}
                   </p>
                   <p className="text-[10px] text-gray-500">{item.desc}</p>
@@ -1877,9 +1890,15 @@ export default function TeamManager() {
                       </div>
                     </div>
                     {showFeatureGrant ? (
-                      <ChevronUp size={16} className="text-gray-500 dark:text-gray-400" />
+                      <ChevronUp
+                        size={16}
+                        className="text-gray-500 dark:text-gray-400"
+                      />
                     ) : (
-                      <ChevronDown size={16} className="text-gray-500 dark:text-gray-400" />
+                      <ChevronDown
+                        size={16}
+                        className="text-gray-500 dark:text-gray-400"
+                      />
                     )}
                   </button>
 
@@ -1891,7 +1910,10 @@ export default function TeamManager() {
                           Allowed
                         </span>
                         <span className="flex items-center gap-1">
-                          <ToggleLeft size={14} className="text-gray-500 dark:text-gray-400" />{" "}
+                          <ToggleLeft
+                            size={14}
+                            className="text-gray-500 dark:text-gray-400"
+                          />{" "}
                           Denied
                         </span>
                         <span className="ml-auto text-gray-500 dark:text-gray-400">
@@ -2272,7 +2294,10 @@ export default function TeamManager() {
                               <Eye size={11} /> Details
                             </button>
                             {isExpanded ? (
-                              <ChevronUp size={16} className="text-gray-500 dark:text-gray-400" />
+                              <ChevronUp
+                                size={16}
+                                className="text-gray-500 dark:text-gray-400"
+                              />
                             ) : (
                               <ChevronDown
                                 size={16}
@@ -2482,7 +2507,10 @@ export default function TeamManager() {
               {(usedInvites.length > 0 || expiredInvites.length > 0) && (
                 <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
                   <div className="flex items-center gap-2 mb-3">
-                    <Clock size={16} className="text-gray-500 dark:text-gray-400" />
+                    <Clock
+                      size={16}
+                      className="text-gray-500 dark:text-gray-400"
+                    />
                     <h3 className="text-sm font-bold text-gray-500 dark:text-gray-500 dark:text-gray-400">
                       Invite History
                     </h3>
@@ -2602,7 +2630,10 @@ export default function TeamManager() {
                 </h4>
                 {drawerMember.email && (
                   <div className="flex items-center gap-2 text-sm">
-                    <Mail size={14} className="text-gray-500 dark:text-gray-400" />
+                    <Mail
+                      size={14}
+                      className="text-gray-500 dark:text-gray-400"
+                    />
                     <span className="text-gray-700 dark:text-gray-300 truncate">
                       {drawerMember.email}
                     </span>
@@ -2610,21 +2641,31 @@ export default function TeamManager() {
                 )}
                 {drawerMember.uniqueId && (
                   <div className="flex items-center gap-2 text-sm">
-                    <IdCard size={14} className="text-gray-500 dark:text-gray-400" />
+                    <IdCard
+                      size={14}
+                      className="text-gray-500 dark:text-gray-400"
+                    />
                     <span className="text-gray-700 dark:text-gray-300 font-mono text-xs">
                       {drawerMember.uniqueId}
                     </span>
                   </div>
                 )}
                 <div className="flex items-center gap-2 text-sm">
-                  <Clock size={14} className="text-gray-500 dark:text-gray-400" />
+                  <Clock
+                    size={14}
+                    className="text-gray-500 dark:text-gray-400"
+                  />
                   <span className="text-gray-700 dark:text-gray-300">
-                    Joined {new Date(drawerMember.invitedAt).toLocaleDateString()}
+                    Joined{" "}
+                    {new Date(drawerMember.invitedAt).toLocaleDateString()}
                   </span>
                 </div>
                 {drawerMember.invitedBy && (
                   <div className="flex items-center gap-2 text-sm">
-                    <GitBranch size={14} className="text-gray-500 dark:text-gray-400" />
+                    <GitBranch
+                      size={14}
+                      className="text-gray-500 dark:text-gray-400"
+                    />
                     <span className="text-gray-700 dark:text-gray-300">
                       Invited by {drawerMember.invitedBy}
                       {drawerMember.invitedByUniqueId &&
@@ -2650,7 +2691,9 @@ export default function TeamManager() {
                     <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-lg p-2 text-center">
                       <p className="text-xs font-semibold text-gray-700 dark:text-gray-300">
                         {drawerMember.lastAccessedAt
-                          ? new Date(drawerMember.lastAccessedAt).toLocaleDateString()
+                          ? new Date(
+                              drawerMember.lastAccessedAt,
+                            ).toLocaleDateString()
                           : "Never"}
                       </p>
                       <p className="text-[10px] text-gray-500">Last Access</p>
@@ -2676,13 +2719,17 @@ export default function TeamManager() {
                         </span>
                       )}
                       {pumpOptions.map((p) => {
-                        const selected = drawerMember.assignedPumps.includes(p.id);
+                        const selected = drawerMember.assignedPumps.includes(
+                          p.id,
+                        );
                         return (
                           <button
                             key={p.id}
                             onClick={() => {
                               const next = selected
-                                ? drawerMember.assignedPumps.filter((x: string) => x !== p.id)
+                                ? drawerMember.assignedPumps.filter(
+                                    (x: string) => x !== p.id,
+                                  )
                                 : [...drawerMember.assignedPumps, p.id];
                               assignPumps(drawerMember.id, next);
                             }}
@@ -2704,7 +2751,9 @@ export default function TeamManager() {
                           key={s}
                           onClick={() => {
                             const next = drawerMember.assignedShifts.includes(s)
-                              ? drawerMember.assignedShifts.filter((x: string) => x !== s)
+                              ? drawerMember.assignedShifts.filter(
+                                  (x: string) => x !== s,
+                                )
                               : [...drawerMember.assignedShifts, s];
                             assignShifts(drawerMember.id, next);
                           }}
@@ -2727,17 +2776,28 @@ export default function TeamManager() {
                   <div className="grid grid-cols-2 gap-2">
                     <button
                       onClick={async () => {
-                        await toggleAccessCode(drawerMember.id, currentStation?.id);
+                        await toggleAccessCode(
+                          drawerMember.id,
+                          currentStation?.id,
+                        );
                         loadAccessCodes();
                       }}
                       className="px-3 py-2 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 text-xs font-medium rounded-lg flex items-center justify-center gap-1.5"
                     >
-                      <KeyRound size={12} /> {drawerMember.active ? "Disable" : "Enable"}
+                      <KeyRound size={12} />{" "}
+                      {drawerMember.active ? "Disable" : "Enable"}
                     </button>
                     <button
                       onClick={async () => {
-                        if (confirm(`Delete the access code for ${drawerMember.memberName}?`)) {
-                          await deleteAccessCode(drawerMember.id, currentStation?.id);
+                        if (
+                          confirm(
+                            `Delete the access code for ${drawerMember.memberName}?`,
+                          )
+                        ) {
+                          await deleteAccessCode(
+                            drawerMember.id,
+                            currentStation?.id,
+                          );
                           loadAccessCodes();
                           setDrawerMemberId(null);
                         }
@@ -2767,7 +2827,9 @@ export default function TeamManager() {
                           onClick={() =>
                             extendAccess(
                               drawerMember.id,
-                              parseInt(extendDaysByMember[drawerMember.id] ?? "30") || 30,
+                              parseInt(
+                                extendDaysByMember[drawerMember.id] ?? "30",
+                              ) || 30,
                             )
                           }
                           className="flex-1 px-3 py-2 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 text-xs font-medium rounded-lg flex items-center justify-center gap-1.5"
@@ -2779,7 +2841,9 @@ export default function TeamManager() {
                     {canRevoke && drawerMember.role !== "owner" && (
                       <button
                         onClick={() => {
-                          if (confirm(`Remove ${drawerMember.username}'s access?`)) {
+                          if (
+                            confirm(`Remove ${drawerMember.username}'s access?`)
+                          ) {
                             revokeMember(drawerMember.id);
                             setDrawerMemberId(null);
                           }
@@ -2792,7 +2856,9 @@ export default function TeamManager() {
                   </div>
                 )}
                 {drawerMember.expiresAt && (
-                  <div className={`text-[10px] text-center p-2 rounded-lg ${new Date(drawerMember.expiresAt) < new Date() ? "bg-red-50 dark:bg-red-900/20 text-red-600" : "bg-gray-50 dark:bg-white dark:bg-gray-800 text-gray-500"}`}>
+                  <div
+                    className={`text-[10px] text-center p-2 rounded-lg ${new Date(drawerMember.expiresAt) < new Date() ? "bg-red-50 dark:bg-red-900/20 text-red-600" : "bg-gray-50 dark:bg-white dark:bg-gray-800 text-gray-500"}`}
+                  >
                     {new Date(drawerMember.expiresAt) < new Date()
                       ? "Expired"
                       : "Expires"}{" "}
@@ -3084,9 +3150,15 @@ function RolesAndPermissionsView(props: RolesAndPermissionsViewProps) {
                 </span>
               </div>
               {isOpen ? (
-                <ChevronUp size={16} className="text-gray-500 dark:text-gray-400" />
+                <ChevronUp
+                  size={16}
+                  className="text-gray-500 dark:text-gray-400"
+                />
               ) : (
-                <ChevronDown size={16} className="text-gray-500 dark:text-gray-400" />
+                <ChevronDown
+                  size={16}
+                  className="text-gray-500 dark:text-gray-400"
+                />
               )}
             </button>
             {isOpen && (
@@ -3372,7 +3444,9 @@ function AccessCodeForm({
         </button>
       </div>
       {stationName && (
-        <p className="text-[10px] text-gray-500 dark:text-gray-400">For station: {stationName}</p>
+        <p className="text-[10px] text-gray-500 dark:text-gray-400">
+          For station: {stationName}
+        </p>
       )}
     </div>
   );
@@ -3510,7 +3584,9 @@ function AccessCodesView({
       </div>
 
       <div className="flex justify-between items-center">
-        <h3 className="font-semibold dark:text-gray-900 dark:text-white">Access Codes</h3>
+        <h3 className="font-semibold dark:text-gray-900 dark:text-white">
+          Access Codes
+        </h3>
         <button
           onClick={() => setShowForm(!showForm)}
           className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-gray-900 dark:text-white rounded-lg text-sm font-medium flex items-center gap-2"
@@ -3554,7 +3630,9 @@ function AccessCodesView({
                   <span className="font-semibold text-sm dark:text-gray-900 dark:text-white">
                     {c.memberName}
                   </span>
-                  <span className="text-xs text-gray-500 dark:text-gray-400">({c.username})</span>
+                  <span className="text-xs text-gray-500 dark:text-gray-400">
+                    ({c.username})
+                  </span>
                   <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600">
                     {c.memberRole}
                   </span>
@@ -3590,7 +3668,11 @@ function AccessCodesView({
                 >
                   <KeyRound
                     size={14}
-                    className={c.enabled ? "text-green-600" : "text-gray-500 dark:text-gray-400"}
+                    className={
+                      c.enabled
+                        ? "text-green-600"
+                        : "text-gray-500 dark:text-gray-400"
+                    }
                   />
                 </button>
                 <button
@@ -3966,7 +4048,9 @@ function ActivityHealthView({
                     <p className="text-sm font-bold text-indigo-600">
                       {m.accessCount ?? 0}
                     </p>
-                    <p className="text-[10px] text-gray-500 dark:text-gray-400">logins</p>
+                    <p className="text-[10px] text-gray-500 dark:text-gray-400">
+                      logins
+                    </p>
                   </div>
                 </div>
               ))}

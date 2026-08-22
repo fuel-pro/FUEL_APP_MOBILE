@@ -70,17 +70,14 @@ export default function QuickSearch({ entries }: QuickSearchProps) {
 
   const results = filtered();
 
-  const execute = useCallback(
-    (entry: SearchEntry) => {
-      if (entry.action) {
-        entry.action();
-      } else if (entry.tabId) {
-        switchToTab(entry.tabId);
-      }
-      setOpen(false);
-    },
-    [],
-  );
+  const execute = useCallback((entry: SearchEntry) => {
+    if (entry.action) {
+      entry.action();
+    } else if (entry.tabId) {
+      switchToTab(entry.tabId);
+    }
+    setOpen(false);
+  }, []);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "ArrowDown") {
@@ -155,10 +152,7 @@ export default function QuickSearch({ entries }: QuickSearchProps) {
           </div>
 
           {/* Results */}
-          <div
-            ref={listRef}
-            className="max-h-[50vh] overflow-y-auto p-2"
-          >
+          <div ref={listRef} className="max-h-[50vh] overflow-y-auto p-2">
             {results.length === 0 ? (
               <div className="px-4 py-8 text-center text-slate-500">
                 <Search size={32} className="mx-auto mb-2 opacity-40" />

@@ -329,7 +329,9 @@ export default function EnhancedDashboard() {
       }
 
       const salesTrend = Object.entries(salesByDay).map(([date, value]) => ({
-        label: new Date(date).toLocaleDateString(getLocaleForCountry(), { weekday: "short" }),
+        label: new Date(date).toLocaleDateString(getLocaleForCountry(), {
+          weekday: "short",
+        }),
         value: value,
       }));
 

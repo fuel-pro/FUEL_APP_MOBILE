@@ -477,7 +477,9 @@ export default function FuelPriceLocator() {
           <Navigation className="w-6 h-6 text-blue-400" />
         </div>
         <div>
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white">Fuel Price Finder</h2>
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+            Fuel Price Finder
+          </h2>
           <p className="text-sm text-slate-400">
             Find real-time fuel prices near your location using GPS coordinates
           </p>

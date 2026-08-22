@@ -43,6 +43,14 @@ import {
   Inbox,
   Loader2,
   LogOut,
+  BarChart3,
+  Activity,
+  Settings,
+  Zap,
+  Gauge,
+  AlertCircle,
+  CheckCircle2,
+  XCircle,
 } from "lucide-react";
 import {
   formatMoney,
@@ -58,6 +66,8 @@ import {
   startOfMonth,
   getCurrencySymbol,
 } from "@/react-app/lib/station-stats";
+import { getDetectedCountryCode } from "@/react-app/lib/currency";
+import { getVATRate } from "@/react-app/config/pricing";
 import {
   getSharedStations,
   acceptInvite,
@@ -93,8 +103,12 @@ function StatCard({
         <Icon size={18} className={accent} />
       </div>
       <div>
-        <p className="text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400">{label}</p>
-        <p className="font-bold text-gray-900 dark:text-gray-900 dark:text-white text-sm">{value}</p>
+        <p className="text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400">
+          {label}
+        </p>
+        <p className="font-bold text-gray-900 dark:text-gray-900 dark:text-white text-sm">
+          {value}
+        </p>
       </div>
     </div>
   );
@@ -107,7 +121,8 @@ function StatusBadge({
 }) {
   const styles = {
     active: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
-    inactive: "bg-gray-500/20 text-gray-500 dark:text-gray-500 dark:text-gray-400 border-gray-500/30",
+    inactive:
+      "bg-gray-500/20 text-gray-500 dark:text-gray-500 dark:text-gray-400 border-gray-500/30",
     maintenance: "bg-amber-500/20 text-amber-400 border-amber-500/30",
   };
   const labels = {
@@ -149,7 +164,9 @@ function EmptyState({ onCreate }: { onCreate: () => void }) {
   return (
     <div className={`${GLASS_CARD} p-12 text-center`}>
       <Layers size={48} className="text-gray-600 mx-auto mb-4" />
-      <h3 className="text-lg font-bold text-gray-900 dark:text-gray-900 dark:text-white mb-2">No stations yet</h3>
+      <h3 className="text-lg font-bold text-gray-900 dark:text-gray-900 dark:text-white mb-2">
+        No stations yet
+      </h3>
       <p className="text-gray-500 dark:text-gray-500 dark:text-gray-400 text-sm mb-6">
         Create your first fuel station to get started
       </p>
@@ -220,7 +237,9 @@ function StationCard({
                 </span>
               )}
             </h3>
-            <p className="text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400">{updated}</p>
+            <p className="text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400">
+              {updated}
+            </p>
           </div>
         </div>
         <button
@@ -235,19 +254,25 @@ function StationCard({
       {/* Revenue stats */}
       <div className="grid grid-cols-3 gap-2 mb-4">
         <div className="bg-gray-50 dark:bg-gray-50 dark:bg-white/5 rounded-lg p-2 text-center">
-          <p className="text-[10px] text-gray-500 dark:text-gray-500 dark:text-gray-400 mb-0.5">Today</p>
+          <p className="text-[10px] text-gray-500 dark:text-gray-500 dark:text-gray-400 mb-0.5">
+            Today
+          </p>
           <p className="font-semibold text-emerald-400 text-xs">
             {formatMoney(todayRev)}
           </p>
         </div>
         <div className="bg-gray-50 dark:bg-gray-50 dark:bg-white/5 rounded-lg p-2 text-center">
-          <p className="text-[10px] text-gray-500 dark:text-gray-500 dark:text-gray-400 mb-0.5">Month</p>
+          <p className="text-[10px] text-gray-500 dark:text-gray-500 dark:text-gray-400 mb-0.5">
+            Month
+          </p>
           <p className="font-semibold text-sky-400 text-xs">
             {formatMoney(monthRev)}
           </p>
         </div>
         <div className="bg-gray-50 dark:bg-gray-50 dark:bg-white/5 rounded-lg p-2 text-center">
-          <p className="text-[10px] text-gray-500 dark:text-gray-500 dark:text-gray-400 mb-0.5">Total</p>
+          <p className="text-[10px] text-gray-500 dark:text-gray-500 dark:text-gray-400 mb-0.5">
+            Total
+          </p>
           <p className="font-semibold text-gray-900 dark:text-gray-900 dark:text-white text-xs">
             {formatMoney(totalRev)}
           </p>
@@ -356,7 +381,9 @@ function StationFormModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
       <div className={`${GLASS_CARD} w-full max-w-md p-6`}>
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-lg font-bold text-gray-900 dark:text-gray-900 dark:text-white">{title}</h2>
+          <h2 className="text-lg font-bold text-gray-900 dark:text-gray-900 dark:text-white">
+            {title}
+          </h2>
           <button
             onClick={onClose}
             className="w-8 h-8 rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-white/10 dark:hover:bg-white/20 flex items-center justify-center"
@@ -409,7 +436,7 @@ function StationFormModal({
                 onChange={(e) =>
                   setForm((p) => ({ ...p, phone: e.target.value }))
                 }
-                placeholder="+1 555 000 0000"
+                placeholder={getPhonePlaceholder()}
                 className="w-full px-4 py-2.5 rounded-lg bg-gray-100 dark:bg-white/10 border border-white/20 text-gray-900 dark:text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-400"
               />
             </div>
@@ -419,11 +446,11 @@ function StationFormModal({
               </label>
               <input
                 type="number"
-                value={form.taxRate ?? 16}
+                value={form.taxRate ?? getDefaultTaxRate()}
                 onChange={(e) =>
                   setForm((p) => ({
                     ...p,
-                    taxRate: parseFloat(e.target.value) || 16,
+                    taxRate: parseFloat(e.target.value) || 0,
                   }))
                 }
                 className="w-full px-4 py-2.5 rounded-lg bg-gray-100 dark:bg-white/10 border border-white/20 text-gray-900 dark:text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-400"
@@ -495,7 +522,9 @@ function ShareModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
       <div className={`${GLASS_CARD} w-full max-w-md p-6`}>
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-lg font-bold text-gray-900 dark:text-gray-900 dark:text-white">Share Station Access</h2>
+          <h2 className="text-lg font-bold text-gray-900 dark:text-gray-900 dark:text-white">
+            Share Station Access
+          </h2>
           <button
             onClick={onClose}
             className="w-8 h-8 rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-white/10 dark:hover:bg-white/20 flex items-center justify-center"
@@ -633,7 +662,11 @@ function AccessModal({
                 Choose a station...
               </option>
               {stations.map((s) => (
-                <option key={s.id} value={s.id} className="bg-white dark:bg-gray-800">
+                <option
+                  key={s.id}
+                  value={s.id}
+                  className="bg-white dark:bg-gray-800"
+                >
                   {s.name}
                 </option>
               ))}
@@ -698,9 +731,13 @@ function RoleBadge({ role }: { role: string }) {
     auditor: "bg-purple-500/20 text-purple-400 border-purple-500/30",
   };
   const label = role ? role.charAt(0).toUpperCase() + role.slice(1) : "Member";
-  const cls = styles[role?.toLowerCase()] || "bg-gray-500/20 text-gray-500 dark:text-gray-500 dark:text-gray-400 border-gray-500/30";
+  const cls =
+    styles[role?.toLowerCase()] ||
+    "bg-gray-500/20 text-gray-500 dark:text-gray-500 dark:text-gray-400 border-gray-500/30";
   return (
-    <span className={`px-2 py-0.5 rounded-full text-xs border ${cls}`}>{label}</span>
+    <span className={`px-2 py-0.5 rounded-full text-xs border ${cls}`}>
+      {label}
+    </span>
   );
 }
 
@@ -720,7 +757,11 @@ function AccessSharedStationModal({
   onInvitesChanged: () => void;
 }) {
   const [tab, setTab] = useState<"shared" | "join" | "pending">(
-    sharedStations.length > 0 ? "shared" : pendingInvites.length > 0 ? "pending" : "join",
+    sharedStations.length > 0
+      ? "shared"
+      : pendingInvites.length > 0
+        ? "pending"
+        : "join",
   );
   const [inviteInput, setInviteInput] = useState("");
   const [joining, setJoining] = useState(false);
@@ -760,24 +801,46 @@ function AccessSharedStationModal({
           onAccess(result.stationId!);
         }, 1000);
       } else {
-        setJoinError(result.error || "Failed to accept invite. The link may be invalid or expired.");
+        setJoinError(
+          result.error ||
+            "Failed to accept invite. The link may be invalid or expired.",
+        );
       }
     } catch (e: any) {
-      setJoinError(e?.message || "An error occurred while accepting the invite");
+      setJoinError(
+        e?.message || "An error occurred while accepting the invite",
+      );
     } finally {
       setJoining(false);
     }
   };
 
   const tabs = [
-    { id: "shared" as const, label: "Shared With You", icon: Building2, count: sharedStations.length },
-    { id: "pending" as const, label: "Pending Invites", icon: Inbox, count: pendingInvites.length },
-    { id: "join" as const, label: "Join by Invite", icon: LinkIcon, count: null },
+    {
+      id: "shared" as const,
+      label: "Shared With You",
+      icon: Building2,
+      count: sharedStations.length,
+    },
+    {
+      id: "pending" as const,
+      label: "Pending Invites",
+      icon: Inbox,
+      count: pendingInvites.length,
+    },
+    {
+      id: "join" as const,
+      label: "Join by Invite",
+      icon: LinkIcon,
+      count: null,
+    },
   ];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className={`${GLASS_CARD} w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col`}>
+      <div
+        className={`${GLASS_CARD} w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col`}
+      >
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-white/10">
           <div>
@@ -786,7 +849,8 @@ function AccessSharedStationModal({
               Access Another Station
             </h2>
             <p className="text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400 mt-1">
-              Switch to a station shared with you, accept a pending invite, or join via invite link
+              Switch to a station shared with you, accept a pending invite, or
+              join via invite link
             </p>
           </div>
           <button
@@ -827,9 +891,12 @@ function AccessSharedStationModal({
               {sharedStations.length === 0 ? (
                 <div className="text-center py-12">
                   <Building2 size={40} className="text-gray-600 mx-auto mb-3" />
-                  <p className="text-gray-500 dark:text-gray-500 dark:text-gray-400 text-sm mb-1">No stations shared with you yet</p>
+                  <p className="text-gray-500 dark:text-gray-500 dark:text-gray-400 text-sm mb-1">
+                    No stations shared with you yet
+                  </p>
                   <p className="text-gray-500 text-xs">
-                    When a station owner invites you, the station will appear here
+                    When a station owner invites you, the station will appear
+                    here
                   </p>
                 </div>
               ) : (
@@ -846,7 +913,9 @@ function AccessSharedStationModal({
                           {initialsOf(s.stationName)}
                         </div>
                         <div className="min-w-0 flex-1">
-                          <h3 className="font-semibold text-gray-900 dark:text-gray-900 dark:text-white text-sm truncate">{s.stationName}</h3>
+                          <h3 className="font-semibold text-gray-900 dark:text-gray-900 dark:text-white text-sm truncate">
+                            {s.stationName}
+                          </h3>
                           <div className="flex items-center gap-2 mt-1 flex-wrap">
                             <RoleBadge role={s.role} />
                             {s.invitedBy && (
@@ -877,7 +946,9 @@ function AccessSharedStationModal({
               {pendingInvites.length === 0 ? (
                 <div className="text-center py-12">
                   <Inbox size={40} className="text-gray-600 mx-auto mb-3" />
-                  <p className="text-gray-500 dark:text-gray-500 dark:text-gray-400 text-sm mb-1">No pending invites</p>
+                  <p className="text-gray-500 dark:text-gray-500 dark:text-gray-400 text-sm mb-1">
+                    No pending invites
+                  </p>
                   <p className="text-gray-500 text-xs">
                     Invitations awaiting your acceptance will appear here
                   </p>
@@ -896,7 +967,9 @@ function AccessSharedStationModal({
                           {initialsOf(s.stationName)}
                         </div>
                         <div className="min-w-0 flex-1">
-                          <h3 className="font-semibold text-gray-900 dark:text-gray-900 dark:text-white text-sm truncate">{s.stationName}</h3>
+                          <h3 className="font-semibold text-gray-900 dark:text-gray-900 dark:text-white text-sm truncate">
+                            {s.stationName}
+                          </h3>
                           <div className="flex items-center gap-2 mt-1 flex-wrap">
                             <RoleBadge role={s.role} />
                             <span className="text-xs text-amber-400 flex items-center gap-1">
@@ -904,7 +977,9 @@ function AccessSharedStationModal({
                               Awaiting acceptance
                             </span>
                             {s.invitedBy && (
-                              <span className="text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400">from {s.invitedBy}</span>
+                              <span className="text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400">
+                                from {s.invitedBy}
+                              </span>
                             )}
                           </div>
                         </div>
@@ -928,9 +1003,12 @@ function AccessSharedStationModal({
             <div className="space-y-4">
               <div className="text-center py-4">
                 <LinkIcon size={36} className="text-sky-400 mx-auto mb-3" />
-                <h3 className="text-gray-900 dark:text-gray-900 dark:text-white font-semibold text-sm mb-1">Join by Invite Link</h3>
+                <h3 className="text-gray-900 dark:text-gray-900 dark:text-white font-semibold text-sm mb-1">
+                  Join by Invite Link
+                </h3>
                 <p className="text-gray-500 dark:text-gray-500 dark:text-gray-400 text-xs">
-                  Paste an invite link or token you received from a station owner
+                  Paste an invite link or token you received from a station
+                  owner
                 </p>
               </div>
 
@@ -949,7 +1027,9 @@ function AccessSharedStationModal({
               )}
 
               <div>
-                <label className="block text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400 mb-1.5">Invite Link or Token</label>
+                <label className="block text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400 mb-1.5">
+                  Invite Link or Token
+                </label>
                 <input
                   type="text"
                   value={inviteInput}
@@ -982,12 +1062,15 @@ function AccessSharedStationModal({
 
               <div className="p-3 bg-gray-50 dark:bg-gray-50 dark:bg-white/5 rounded-lg border border-gray-200 dark:border-gray-200 dark:border-white/10">
                 <p className="text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400 flex items-start gap-2">
-                  <ShieldCheck size={14} className="text-sky-400 flex-shrink-0 mt-0.5" />
+                  <ShieldCheck
+                    size={14}
+                    className="text-sky-400 flex-shrink-0 mt-0.5"
+                  />
                   <span>
-                    Only accept invites from station owners you trust. Once accepted, you'll
-                    have access to that station's data based on your assigned role (read-only
-                    or read-write). You can switch back to your own stations anytime from the
-                    station selector.
+                    Only accept invites from station owners you trust. Once
+                    accepted, you'll have access to that station's data based on
+                    your assigned role (read-only or read-write). You can switch
+                    back to your own stations anytime from the station selector.
                   </span>
                 </p>
               </div>
@@ -998,7 +1081,8 @@ function AccessSharedStationModal({
         {/* Footer */}
         <div className="p-4 border-t border-gray-200 dark:border-white/10 flex items-center justify-between">
           <p className="text-xs text-gray-500">
-            {ownedStations.length} owned · {sharedStations.length} shared · {pendingInvites.length} pending
+            {ownedStations.length} owned · {sharedStations.length} shared ·{" "}
+            {pendingInvites.length} pending
           </p>
           <button
             onClick={onClose}
@@ -1060,11 +1144,14 @@ function AcceptPendingButton({
         )}
         Accept
       </button>
-      {error && <span className="text-[10px] text-red-400 max-w-[120px] text-right">{error}</span>}
+      {error && (
+        <span className="text-[10px] text-red-400 max-w-[120px] text-right">
+          {error}
+        </span>
+      )}
     </div>
   );
 }
-
 
 // Combined View Modal
 function CombinedViewModal({
@@ -1112,25 +1199,33 @@ function CombinedViewModal({
 
         <div className="grid grid-cols-2 gap-4 mb-6">
           <div className={`${GLASS_CARD} p-4 text-center`}>
-            <p className="text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400 mb-1">Today's Revenue</p>
+            <p className="text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400 mb-1">
+              Today's Revenue
+            </p>
             <p className="text-xl font-bold text-emerald-400">
               {formatMoney(todayRevenue)}
             </p>
           </div>
           <div className={`${GLASS_CARD} p-4 text-center`}>
-            <p className="text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400 mb-1">This Month</p>
+            <p className="text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400 mb-1">
+              This Month
+            </p>
             <p className="text-xl font-bold text-sky-400">
               {formatMoney(monthRevenue)}
             </p>
           </div>
           <div className={`${GLASS_CARD} p-4 text-center`}>
-            <p className="text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400 mb-1">Total Revenue</p>
+            <p className="text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400 mb-1">
+              Total Revenue
+            </p>
             <p className="text-xl font-bold text-gray-900 dark:text-gray-900 dark:text-white">
               {formatMoney(totalRevenue)}
             </p>
           </div>
           <div className={`${GLASS_CARD} p-4 text-center`}>
-            <p className="text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400 mb-1">Total Sales</p>
+            <p className="text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400 mb-1">
+              Total Sales
+            </p>
             <p className="text-xl font-bold text-purple-400">{totalSales}</p>
           </div>
         </div>
@@ -1193,7 +1288,9 @@ function ConfirmDialog({
           <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center">
             <AlertTriangle size={20} className="text-red-400" />
           </div>
-          <h2 className="text-lg font-bold text-gray-900 dark:text-gray-900 dark:text-white">{title}</h2>
+          <h2 className="text-lg font-bold text-gray-900 dark:text-gray-900 dark:text-white">
+            {title}
+          </h2>
         </div>
         <p className="text-gray-300 text-sm mb-6">{message}</p>
         <div className="flex gap-3">
@@ -1219,6 +1316,27 @@ function ConfirmDialog({
 // Main component
 // ============================================================
 
+/** Country-aware default tax rate (e.g. 16% Kenya, 0% US) */
+function getDefaultTaxRate(): number {
+  try {
+    return Math.round(getVATRate(getDetectedCountryCode()) * 100);
+  } catch {
+    return 0;
+  }
+}
+
+/** Country-aware phone placeholder */
+function getPhonePlaceholder(): string {
+  const cc = getDetectedCountryCode();
+  if (cc === "KE") return "+254 700 000 000";
+  if (cc === "UG") return "+256 700 000 000";
+  if (cc === "TZ") return "+255 700 000 000";
+  if (cc === "NG") return "+234 800 000 0000";
+  if (cc === "ZA") return "+27 82 000 0000";
+  if (cc === "GB") return "+44 7700 000000";
+  return "Enter phone number";
+}
+
 const EMPTY_FORM = {
   name: "",
   location: "",
@@ -1226,13 +1344,14 @@ const EMPTY_FORM = {
   email: "",
   kraPin: "",
   etrSerial: "",
-  taxRate: 16,
+  taxRate: getDefaultTaxRate(),
   theme: "dark",
   description: "",
 };
 
 type FilterStatus = "all" | "active" | "inactive" | "maintenance";
 type SortBy = "name" | "revenue" | "recent" | "oldest";
+type SubTab = "stations" | "shared" | "analytics" | "activity";
 
 export default function StationManager({ onClose }: StationManagerProps) {
   const {
@@ -1265,6 +1384,11 @@ export default function StationManager({ onClose }: StationManagerProps) {
   const [sortBy, setSortBy] = useState<SortBy>("recent");
   const [notice, setNotice] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [activeSubTab, setActiveSubTab] = useState<SubTab>("stations");
+  const [bulkSelectMode, setBulkSelectMode] = useState(false);
+  const [selectedStationIds, setSelectedStationIds] = useState<Set<string>>(
+    new Set(),
+  );
 
   // Modal state
   const [modal, setModal] = useState<{
@@ -1334,14 +1458,17 @@ export default function StationManager({ onClose }: StationManagerProps) {
         .or(`user_id.eq.${user.id},invited_email.eq.${user.email}`)
         .eq("status", "pending")
         .order("created_at", { ascending: true });
-      const pending: SharedStationInfo[] = (pendingRows || []).map((row: any) => ({
-        stationId: row.station_id,
-        stationName: row.stations?.name || row.name || "Shared Station",
-        role: row.role || "staff",
-        invitedBy: row.invited_by_name || row.invited_by_unique_id || "Station Owner",
-        status: "pending",
-        member: row as StationMember,
-      }));
+      const pending: SharedStationInfo[] = (pendingRows || []).map(
+        (row: any) => ({
+          stationId: row.station_id,
+          stationName: row.stations?.name || row.name || "Shared Station",
+          role: row.role || "staff",
+          invitedBy:
+            row.invited_by_name || row.invited_by_unique_id || "Station Owner",
+          status: "pending",
+          member: row as StationMember,
+        }),
+      );
       setPendingInvites(pending);
     } catch (err) {
       console.warn("[StationManager] Failed to load pending invites:", err);
@@ -1446,7 +1573,7 @@ export default function StationManager({ onClose }: StationManagerProps) {
       email: station.email || "",
       kraPin: station.kraPin || "",
       etrSerial: station.etrSerial || "",
-      taxRate: station.taxRate ?? 16,
+      taxRate: station.taxRate ?? getDefaultTaxRate(),
       theme: station.theme || "dark",
       description: station.description || "",
     });
@@ -1547,7 +1674,11 @@ export default function StationManager({ onClose }: StationManagerProps) {
   // Leave a shared station — removes the user's membership from station_members
   const handleLeaveSharedStation = useCallback(
     async (stationId: string, stationName: string) => {
-      if (!confirm(`Leave "${stationName}"? You will no longer have access to this shared station.`)) {
+      if (
+        !confirm(
+          `Leave "${stationName}"? You will no longer have access to this shared station.`,
+        )
+      ) {
         return;
       }
       try {
@@ -1628,6 +1759,119 @@ export default function StationManager({ onClose }: StationManagerProps) {
     }
   }, [syncToBackend, syncFromBackend, showNotice]);
 
+  // Bulk actions
+  const toggleStationSelection = useCallback((stationId: string) => {
+    setSelectedStationIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(stationId)) next.delete(stationId);
+      else next.add(stationId);
+      return next;
+    });
+  }, []);
+
+  const handleBulkExport = useCallback(() => {
+    const selected = stations.filter((s) => selectedStationIds.has(s.id));
+    downloadJson(
+      `stations_export_${Date.now()}.json`,
+      selected.map((s) => ({
+        id: s.id,
+        name: s.name,
+        location: s.location,
+        data: s.data,
+      })),
+    );
+    showNotice(`Exported ${selected.length} stations`);
+    setBulkSelectMode(false);
+    setSelectedStationIds(new Set());
+  }, [stations, selectedStationIds, showNotice]);
+
+  const handleBulkSync = useCallback(async () => {
+    setSyncing(true);
+    try {
+      await syncToBackend();
+      await syncFromBackend();
+      showNotice(`Synced ${selectedStationIds.size} stations`);
+    } catch {
+      showNotice("Bulk sync failed");
+    } finally {
+      setSyncing(false);
+      setBulkSelectMode(false);
+      setSelectedStationIds(new Set());
+    }
+  }, [syncToBackend, syncFromBackend, selectedStationIds.size, showNotice]);
+
+  const handleBulkActivate = useCallback(() => {
+    selectedStationIds.forEach((id) => {
+      const station = stations.find((s) => s.id === id);
+      if (station) {
+        updateStation(id, {
+          ...station,
+          data: { ...station.data, status: "active" },
+        });
+      }
+    });
+    showNotice(`Activated ${selectedStationIds.size} stations`);
+    setBulkSelectMode(false);
+    setSelectedStationIds(new Set());
+  }, [selectedStationIds, stations, updateStation, showNotice]);
+
+  // Analytics: per-station health + comparison
+  const stationAnalytics = useMemo(() => {
+    return stations
+      .map((s) => {
+        const data = s.data || {};
+        const totalRev = stationTotalRevenue(data);
+        const todayRev = stationRevenueSince(data, startOfToday());
+        const monthRev = stationRevenueSince(data, startOfMonth());
+        const sales = stationSalesCount(data);
+        const status = stationStatus(data);
+        const sharedCount = (data.sharedUsers || []).length;
+        // Health score: simple heuristic based on sales + revenue recency
+        let healthScore = 50;
+        if (status === "active") healthScore += 20;
+        if (status === "maintenance") healthScore += 5;
+        if (sales > 0) healthScore += 15;
+        if (todayRev > 0) healthScore += 15;
+        healthScore = Math.min(100, healthScore);
+        const healthLabel =
+          healthScore >= 80
+            ? "Excellent"
+            : healthScore >= 60
+              ? "Good"
+              : healthScore >= 40
+                ? "Fair"
+                : "Needs Attention";
+        return {
+          station: s,
+          totalRev,
+          todayRev,
+          monthRev,
+          sales,
+          status,
+          sharedCount,
+          healthScore,
+          healthLabel,
+        };
+      })
+      .sort((a, b) => b.totalRev - a.totalRev);
+  }, [stations]);
+
+  // Top performing station
+  const topStation = stationAnalytics[0] || null;
+  const avgRevenue =
+    stations.length > 0 ? stats.totalRevenue / stations.length : 0;
+  const totalSales = stationAnalytics.reduce((sum, a) => sum + a.sales, 0);
+  const activeCount = stationAnalytics.filter(
+    (a) => a.status === "active",
+  ).length;
+  const avgHealth =
+    stationAnalytics.length > 0
+      ? Math.round(
+          stationAnalytics.reduce((sum, a) => sum + a.healthScore, 0) /
+            stationAnalytics.length,
+        )
+      : 0;
+
   const combined = combineStations();
 
   return (
@@ -1650,7 +1894,8 @@ export default function StationManager({ onClose }: StationManagerProps) {
                 Station Manager
               </h1>
               <p className="text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400">
-                {ownedStations.length} owned · {sharedStationsFromContext.length} shared | Manage access & data
+                {ownedStations.length} owned ·{" "}
+                {sharedStationsFromContext.length} shared | Manage access & data
               </p>
             </div>
           </div>
@@ -1684,7 +1929,48 @@ export default function StationManager({ onClose }: StationManagerProps) {
       </header>
 
       <div className="max-w-6xl mx-auto p-6 space-y-6">
-        {/* Stat cards */}
+        {/* Sub-tab navigation */}
+        <div className="flex gap-1 bg-gray-100 dark:bg-gray-800 rounded-lg p-1 overflow-x-auto">
+          {[
+            { id: "stations" as const, label: "My Stations", icon: Layers },
+            {
+              id: "shared" as const,
+              label: "Shared With Me",
+              icon: Building2,
+              count: sharedStationsFromContext.length,
+            },
+            { id: "analytics" as const, label: "Analytics", icon: BarChart3 },
+            {
+              id: "activity" as const,
+              label: "Activity & Health",
+              icon: Activity,
+            },
+          ].map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeSubTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveSubTab(tab.id)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium whitespace-nowrap transition-all ${
+                  isActive
+                    ? "bg-white dark:bg-gray-600 text-blue-600 dark:text-blue-400 shadow-sm"
+                    : "text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-white"
+                }`}
+              >
+                <Icon size={16} />
+                {tab.label}
+                {tab.count !== undefined && tab.count > 0 && (
+                  <span className="px-1.5 py-0.5 bg-blue-500/20 text-blue-400 rounded-full text-[10px] font-bold">
+                    {tab.count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Stat cards (always visible) */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <StatCard
             label="Your Stations"
@@ -1729,203 +2015,697 @@ export default function StationManager({ onClose }: StationManagerProps) {
           </div>
         )}
 
-        {/* Toolbar */}
-        <div className="flex flex-wrap items-center gap-3">
-          {/* Search */}
-          <div className="relative flex-1 min-w-[200px]">
-            <Search
-              size={16}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"
-            />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search stations..."
-              className="w-full pl-10 pr-4 py-2 rounded-xl bg-gray-50 dark:bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-gray-200 dark:border-white/10 text-gray-900 dark:text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-400 text-sm"
-            />
-          </div>
-
-          {/* Status filter */}
-          <div className="flex items-center gap-1 bg-gray-50 dark:bg-gray-50 dark:bg-white/5 rounded-xl p-1">
-            {(
-              ["all", "active", "inactive", "maintenance"] as FilterStatus[]
-            ).map((s) => (
-              <button
-                key={s}
-                onClick={() => setFilterStatus(s)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                  filterStatus === s
-                    ? "bg-amber-500/30 text-amber-300"
-                    : "text-gray-500 dark:text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:text-gray-900 dark:text-white"
-                }`}
-              >
-                {s.charAt(0).toUpperCase() + s.slice(1)}
-              </button>
-            ))}
-          </div>
-
-          {/* Sort */}
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as SortBy)}
-            className="px-3 py-2 rounded-xl bg-gray-50 dark:bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-gray-200 dark:border-white/10 text-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
-          >
-            <option value="recent">Recent first</option>
-            <option value="name">Name A–Z</option>
-            <option value="revenue">Revenue (high → low)</option>
-            <option value="oldest">Oldest first</option>
-          </select>
-
-          {/* Create button */}
-          <button
-            onClick={openCreate}
-            className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-gray-900 dark:text-gray-900 dark:text-white rounded-xl text-sm font-medium flex items-center gap-2 transition-colors"
-          >
-            <Plus size={16} />
-            Create Station
-          </button>
-
-          {/* Access Another Station button */}
-          <button
-            onClick={() => setModal({ type: "access-shared" })}
-            className="px-4 py-2 bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 rounded-xl text-sm font-medium flex items-center gap-2 transition-colors relative"
-          >
-            <Building2 size={16} />
-            Access Another Station
-            {(pendingInvites.length > 0 || sharedStations.length > 0) && (
-              <span className="absolute -top-1 -right-1 w-5 h-5 bg-amber-500 rounded-full text-[10px] font-bold flex items-center justify-center text-gray-900 dark:text-gray-900 dark:text-white">
-                {pendingInvites.length + sharedStations.length}
-              </span>
-            )}
-          </button>
-        </div>
-
-        {/* Station grid */}
-        <div>
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-900 dark:text-white mb-3">
-            Your Stations{" "}
-            <span className="text-sm text-gray-500 dark:text-gray-500 dark:text-gray-400 font-normal">
-              · Combined Revenue: {formatMoney(stats.totalRevenue)}
-            </span>
-          </h2>
-
-          {isStationLoading ? (
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              <SkeletonCard />
-              <SkeletonCard />
-              <SkeletonCard />
-            </div>
-          ) : ownedStations.length === 0 && sharedStationsFromContext.length === 0 ? (
-            <EmptyState onCreate={openCreate} />
-          ) : visibleStations.length === 0 ? (
-            <div className={`${GLASS_CARD} p-8 text-center`}>
-              <Search className="w-8 h-8 text-gray-500 mx-auto mb-3" />
-              <p className="text-gray-300 text-sm">
-                No stations match your search/filter.
-              </p>
-            </div>
-          ) : (
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              {visibleStations
-                .filter((s) => ownedStations.includes(s))
-                .map((s) => (
-                <StationCard
-                  key={s.id}
-                  station={s}
-                  isCurrent={currentStation?.id === s.id}
-                  onOpen={() => handleOpenStation(s)}
-                  onEdit={() => handleEdit(s)}
-                  onShare={() => handleShareOpen(s)}
-                  onExport={() => handleExport(s)}
-                  onDelete={() => handleDeleteOpen(s)}
-                  onToggleStatus={() => handleToggleStatus(s)}
+        {/* ===================== STATIONS SUB-TAB ===================== */}
+        {activeSubTab === "stations" && (
+          <>
+            {/* Toolbar */}
+            <div className="flex flex-wrap items-center gap-3">
+              {/* Search */}
+              <div className="relative flex-1 min-w-[200px]">
+                <Search
+                  size={16}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"
                 />
-              ))}
-            </div>
-          )}
-        </div>
+                <input
+                  type="text"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search stations..."
+                  className="w-full pl-10 pr-4 py-2 rounded-xl bg-gray-50 dark:bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-gray-200 dark:border-white/10 text-gray-900 dark:text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-400 text-sm"
+                />
+              </div>
 
-        {/* Shared With You section — stations owned by OTHER users that this
-            user has been invited to access (read or read-write based on role). */}
-        {sharedStationsFromContext.length > 0 && (
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-              <Building2 size={18} className="text-sky-400" />
-              Shared With You
-              <span className="text-sm text-gray-500 dark:text-gray-500 dark:text-gray-400 font-normal">
-                · {sharedStationsFromContext.length} station(s)
-              </span>
-            </h2>
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              {sharedStationsFromContext.map((s) => {
-                const binding = bindings.find((b) => b.stationId === s.id);
-                const role = s.memberRole || s.userRole || binding?.role || "member";
-                const invitedBy = s.invitedBy || binding?.invitedBy || "Station Owner";
-                return (
-                  <div
-                    key={s.id}
-                    className={`${
-                      currentStation?.id === s.id
-                        ? "ring-2 ring-sky-400/50"
-                        : ""
-                    } ${GLASS_CARD} p-5 hover:bg-gray-100 dark:bg-white/10 transition-all relative`}
+              {/* Status filter */}
+              <div className="flex items-center gap-1 bg-gray-50 dark:bg-gray-50 dark:bg-white/5 rounded-xl p-1">
+                {(
+                  ["all", "active", "inactive", "maintenance"] as FilterStatus[]
+                ).map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => setFilterStatus(s)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                      filterStatus === s
+                        ? "bg-amber-500/30 text-amber-300"
+                        : "text-gray-500 dark:text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:text-gray-900 dark:text-white"
+                    }`}
                   >
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex items-center gap-3">
-                        <div
-                          className={`w-12 h-12 rounded-xl ${avatarColor(
-                            s.name,
-                          )} flex items-center justify-center text-gray-900 dark:text-gray-900 dark:text-white font-bold text-sm`}
-                        >
-                          {initialsOf(s.name)}
-                        </div>
-                        <div>
-                          <h3 className="font-bold text-gray-900 dark:text-gray-900 dark:text-white text-sm flex items-center gap-2">
-                            {s.name}
-                            {currentStation?.id === s.id && (
-                              <span className="px-1.5 py-0.5 bg-sky-500/20 text-sky-400 text-[10px] rounded">
-                                Active
-                              </span>
+                    {s.charAt(0).toUpperCase() + s.slice(1)}
+                  </button>
+                ))}
+              </div>
+
+              {/* Sort */}
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as SortBy)}
+                className="px-3 py-2 rounded-xl bg-gray-50 dark:bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-gray-200 dark:border-white/10 text-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+              >
+                <option value="recent">Recent first</option>
+                <option value="name">Name A–Z</option>
+                <option value="revenue">Revenue (high → low)</option>
+                <option value="oldest">Oldest first</option>
+              </select>
+
+              {/* Bulk select toggle */}
+              {ownedStations.length > 0 && (
+                <button
+                  onClick={() => {
+                    setBulkSelectMode((v) => !v);
+                    setSelectedStationIds(new Set());
+                  }}
+                  className={`px-4 py-2 rounded-xl text-sm font-medium flex items-center gap-2 transition-colors ${
+                    bulkSelectMode
+                      ? "bg-purple-500/30 text-purple-300"
+                      : "bg-gray-100 dark:bg-white/5 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/10"
+                  }`}
+                  title="Select multiple stations for bulk actions"
+                >
+                  <CheckCircle2 size={16} />
+                  {bulkSelectMode ? "Cancel Bulk" : "Bulk Select"}
+                </button>
+              )}
+
+              {/* Create button */}
+              <button
+                onClick={openCreate}
+                className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-gray-900 dark:text-gray-900 dark:text-white rounded-xl text-sm font-medium flex items-center gap-2 transition-colors"
+              >
+                <Plus size={16} />
+                Create Station
+              </button>
+
+              {/* Access Another Station button */}
+              <button
+                onClick={() => setModal({ type: "access-shared" })}
+                className="px-4 py-2 bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 rounded-xl text-sm font-medium flex items-center gap-2 transition-colors relative"
+              >
+                <Building2 size={16} />
+                Access Another Station
+                {(pendingInvites.length > 0 || sharedStations.length > 0) && (
+                  <span className="absolute -top-1 -right-1 w-5 h-5 bg-amber-500 rounded-full text-[10px] font-bold flex items-center justify-center text-gray-900 dark:text-gray-900 dark:text-white">
+                    {pendingInvites.length + sharedStations.length}
+                  </span>
+                )}
+              </button>
+            </div>
+
+            {/* Bulk actions bar */}
+            {bulkSelectMode && selectedStationIds.size > 0 && (
+              <div className="flex items-center gap-2 p-3 bg-purple-500/10 border border-purple-500/20 rounded-xl">
+                <span className="text-sm text-purple-300 font-medium">
+                  {selectedStationIds.size} selected
+                </span>
+                <button
+                  onClick={handleBulkExport}
+                  className="px-3 py-1.5 bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 rounded-lg text-xs flex items-center gap-1.5 transition-colors"
+                >
+                  <Download size={13} /> Export
+                </button>
+                <button
+                  onClick={handleBulkSync}
+                  disabled={syncing}
+                  className="px-3 py-1.5 bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 rounded-lg text-xs flex items-center gap-1.5 transition-colors disabled:opacity-50"
+                >
+                  <RefreshCw
+                    size={13}
+                    className={syncing ? "animate-spin" : ""}
+                  />{" "}
+                  Sync
+                </button>
+                <button
+                  onClick={handleBulkActivate}
+                  className="px-3 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 rounded-lg text-xs flex items-center gap-1.5 transition-colors"
+                >
+                  <CheckCircle2 size={13} /> Activate All
+                </button>
+                <button
+                  onClick={() => setSelectedStationIds(new Set())}
+                  className="ml-auto text-xs text-gray-500 hover:text-gray-300"
+                >
+                  Clear selection
+                </button>
+              </div>
+            )}
+
+            {/* Station grid */}
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-900 dark:text-white mb-3">
+                Your Stations{" "}
+                <span className="text-sm text-gray-500 dark:text-gray-500 dark:text-gray-400 font-normal">
+                  · Combined Revenue: {formatMoney(stats.totalRevenue)}
+                </span>
+              </h2>
+
+              {isStationLoading ? (
+                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                  <SkeletonCard />
+                  <SkeletonCard />
+                  <SkeletonCard />
+                </div>
+              ) : ownedStations.length === 0 &&
+                sharedStationsFromContext.length === 0 ? (
+                <EmptyState onCreate={openCreate} />
+              ) : visibleStations.length === 0 ? (
+                <div className={`${GLASS_CARD} p-8 text-center`}>
+                  <Search className="w-8 h-8 text-gray-500 mx-auto mb-3" />
+                  <p className="text-gray-300 text-sm">
+                    No stations match your search/filter.
+                  </p>
+                </div>
+              ) : (
+                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                  {visibleStations
+                    .filter((s) => ownedStations.includes(s))
+                    .map((s) => (
+                      <div key={s.id} className="relative">
+                        {bulkSelectMode && (
+                          <button
+                            onClick={() => toggleStationSelection(s.id)}
+                            className={`absolute -top-2 -left-2 z-10 w-6 h-6 rounded-full flex items-center justify-center transition-colors ${
+                              selectedStationIds.has(s.id)
+                                ? "bg-purple-500 text-white"
+                                : "bg-gray-300 dark:bg-gray-600 text-gray-500"
+                            }`}
+                          >
+                            {selectedStationIds.has(s.id) && (
+                              <Check size={14} />
                             )}
-                          </h3>
-                          <div className="flex items-center gap-2 mt-1 flex-wrap">
-                            <RoleBadge role={role} />
-                            <span className="text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400 flex items-center gap-1">
-                              <UserCheck size={11} />
-                              {invitedBy}
+                          </button>
+                        )}
+                        <StationCard
+                          station={s}
+                          isCurrent={currentStation?.id === s.id}
+                          onOpen={() => handleOpenStation(s)}
+                          onEdit={() => handleEdit(s)}
+                          onShare={() => handleShareOpen(s)}
+                          onExport={() => handleExport(s)}
+                          onDelete={() => handleDeleteOpen(s)}
+                          onToggleStatus={() => handleToggleStatus(s)}
+                        />
+                      </div>
+                    ))}
+                </div>
+              )}
+            </div>
+          </>
+        )}
+
+        {/* ===================== ANALYTICS SUB-TAB ===================== */}
+        {activeSubTab === "analytics" && (
+          <div className="space-y-6">
+            {/* Aggregate analytics */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <StatCard
+                label="Total Sales"
+                value={String(totalSales)}
+                icon={BarChart3}
+                accent="text-purple-400"
+              />
+              <StatCard
+                label="Avg Revenue / Station"
+                value={formatMoney(avgRevenue)}
+                icon={TrendingUp}
+                accent="text-emerald-400"
+              />
+              <StatCard
+                label="Active Stations"
+                value={`${activeCount}/${stations.length}`}
+                icon={CheckCircle2}
+                accent="text-emerald-400"
+              />
+              <StatCard
+                label="Avg Health Score"
+                value={`${avgHealth}%`}
+                icon={Gauge}
+                accent={avgHealth >= 60 ? "text-emerald-400" : "text-amber-400"}
+              />
+            </div>
+
+            {/* Top performer */}
+            {topStation && (
+              <div className={`${GLASS_CARD} p-5`}>
+                <div className="flex items-center gap-2 mb-3">
+                  <TrendingUp size={18} className="text-emerald-400" />
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
+                    Top Performing Station
+                  </h3>
+                </div>
+                <div className="flex items-center gap-4">
+                  <div
+                    className={`w-14 h-14 rounded-xl ${avatarColor(topStation.station.name)} flex items-center justify-center text-gray-900 dark:text-white font-bold`}
+                  >
+                    {initialsOf(topStation.station.name)}
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-bold text-gray-900 dark:text-white">
+                      {topStation.station.name}
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      {topStation.sales} sales ·{" "}
+                      {formatMoney(topStation.todayRev)} today ·{" "}
+                      {formatMoney(topStation.monthRev)} this month
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-lg font-bold text-emerald-400">
+                      {formatMoney(topStation.totalRev)}
+                    </p>
+                    <p className="text-[10px] text-gray-500">Total Revenue</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Station comparison table */}
+            <div className={`${GLASS_CARD} overflow-hidden`}>
+              <div className="p-4 border-b border-gray-200 dark:border-white/10">
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                  <BarChart3 size={16} className="text-blue-400" />
+                  Station Comparison
+                </h3>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 dark:bg-white/5">
+                    <tr>
+                      <th className="text-left p-3 text-xs text-gray-500 dark:text-gray-400 font-medium">
+                        Station
+                      </th>
+                      <th className="text-right p-3 text-xs text-gray-500 dark:text-gray-400 font-medium">
+                        Today
+                      </th>
+                      <th className="text-right p-3 text-xs text-gray-500 dark:text-gray-400 font-medium">
+                        Month
+                      </th>
+                      <th className="text-right p-3 text-xs text-gray-500 dark:text-gray-400 font-medium">
+                        Total
+                      </th>
+                      <th className="text-right p-3 text-xs text-gray-500 dark:text-gray-400 font-medium">
+                        Sales
+                      </th>
+                      <th className="text-center p-3 text-xs text-gray-500 dark:text-gray-400 font-medium">
+                        Health
+                      </th>
+                      <th className="text-center p-3 text-xs text-gray-500 dark:text-gray-400 font-medium">
+                        Status
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {stationAnalytics.map((a) => (
+                      <tr
+                        key={a.station.id}
+                        className="border-t border-gray-200 dark:border-white/5 hover:bg-gray-50 dark:hover:bg-white/5"
+                      >
+                        <td className="p-3">
+                          <div className="flex items-center gap-2">
+                            <div
+                              className={`w-7 h-7 rounded-lg ${avatarColor(a.station.name)} flex items-center justify-center text-[10px] font-bold text-gray-900 dark:text-white`}
+                            >
+                              {initialsOf(a.station.name)}
+                            </div>
+                            <span className="text-gray-900 dark:text-white font-medium truncate max-w-[120px]">
+                              {a.station.name}
                             </span>
                           </div>
+                        </td>
+                        <td className="text-right p-3 text-emerald-400 text-xs">
+                          {formatMoney(a.todayRev)}
+                        </td>
+                        <td className="text-right p-3 text-sky-400 text-xs">
+                          {formatMoney(a.monthRev)}
+                        </td>
+                        <td className="text-right p-3 text-gray-900 dark:text-white font-medium text-xs">
+                          {formatMoney(a.totalRev)}
+                        </td>
+                        <td className="text-right p-3 text-gray-500 dark:text-gray-400 text-xs">
+                          {a.sales}
+                        </td>
+                        <td className="text-center p-3">
+                          <span
+                            className={`text-xs font-medium ${a.healthScore >= 80 ? "text-emerald-400" : a.healthScore >= 60 ? "text-sky-400" : a.healthScore >= 40 ? "text-amber-400" : "text-red-400"}`}
+                          >
+                            {a.healthScore}%
+                          </span>
+                        </td>
+                        <td className="text-center p-3">
+                          <StatusBadge status={a.status} />
+                        </td>
+                      </tr>
+                    ))}
+                    {stationAnalytics.length === 0 && (
+                      <tr>
+                        <td
+                          colSpan={7}
+                          className="p-8 text-center text-gray-500 dark:text-gray-400 text-sm"
+                        >
+                          No stations to compare yet
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Export analytics */}
+            <button
+              onClick={() => {
+                downloadJson(
+                  `station_analytics_${Date.now()}.json`,
+                  stationAnalytics.map((a) => ({
+                    station: a.station.name,
+                    todayRevenue: a.todayRev,
+                    monthRevenue: a.monthRev,
+                    totalRevenue: a.totalRev,
+                    sales: a.sales,
+                    healthScore: a.healthScore,
+                    healthLabel: a.healthLabel,
+                    status: a.status,
+                  })),
+                );
+                showNotice("Analytics exported");
+              }}
+              className="px-4 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 rounded-xl text-sm flex items-center gap-2 transition-colors"
+            >
+              <Download size={14} /> Export Analytics
+            </button>
+          </div>
+        )}
+
+        {/* ===================== ACTIVITY & HEALTH SUB-TAB ===================== */}
+        {activeSubTab === "activity" && (
+          <div className="space-y-6">
+            {/* Health overview */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <StatCard
+                label="Avg Health"
+                value={`${avgHealth}%`}
+                icon={Gauge}
+                accent={avgHealth >= 60 ? "text-emerald-400" : "text-amber-400"}
+              />
+              <StatCard
+                label="Active"
+                value={String(activeCount)}
+                icon={CheckCircle2}
+                accent="text-emerald-400"
+              />
+              <StatCard
+                label="Needs Attention"
+                value={String(
+                  stationAnalytics.filter((a) => a.healthScore < 60).length,
+                )}
+                icon={AlertCircle}
+                accent="text-red-400"
+              />
+              <StatCard
+                label="Cloud Synced"
+                value={String(
+                  stationAnalytics.filter(
+                    (a) =>
+                      a.station.id.includes("-") ||
+                      a.station.id.includes("backend_"),
+                  ).length,
+                )}
+                icon={Cloud}
+                accent="text-emerald-400"
+              />
+            </div>
+
+            {/* Per-station health cards */}
+            <div>
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                <Activity size={16} className="text-amber-400" />
+                Station Health Dashboard
+              </h3>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {stationAnalytics.map((a) => {
+                  const HealthIcon =
+                    a.healthScore >= 80
+                      ? CheckCircle2
+                      : a.healthScore >= 60
+                        ? Gauge
+                        : a.healthScore >= 40
+                          ? AlertCircle
+                          : XCircle;
+                  const healthColor =
+                    a.healthScore >= 80
+                      ? "text-emerald-400"
+                      : a.healthScore >= 60
+                        ? "text-sky-400"
+                        : a.healthScore >= 40
+                          ? "text-amber-400"
+                          : "text-red-400";
+                  return (
+                    <div key={a.station.id} className={`${GLASS_CARD} p-4`}>
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <div
+                            className={`w-8 h-8 rounded-lg ${avatarColor(a.station.name)} flex items-center justify-center text-[10px] font-bold text-gray-900 dark:text-white`}
+                          >
+                            {initialsOf(a.station.name)}
+                          </div>
+                          <span className="text-sm font-medium text-gray-900 dark:text-white truncate max-w-[100px]">
+                            {a.station.name}
+                          </span>
+                        </div>
+                        <StatusBadge status={a.status} />
+                      </div>
+                      <div className="flex items-center gap-2 mb-2">
+                        <HealthIcon size={16} className={healthColor} />
+                        <span className={`text-sm font-medium ${healthColor}`}>
+                          {a.healthLabel}
+                        </span>
+                        <span className="text-xs text-gray-500 ml-auto">
+                          {a.healthScore}%
+                        </span>
+                      </div>
+                      <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mb-3">
+                        <div
+                          className={`h-2 rounded-full transition-all ${
+                            a.healthScore >= 80
+                              ? "bg-emerald-500"
+                              : a.healthScore >= 60
+                                ? "bg-sky-500"
+                                : a.healthScore >= 40
+                                  ? "bg-amber-500"
+                                  : "bg-red-500"
+                          }`}
+                          style={{ width: `${a.healthScore}%` }}
+                        />
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 text-center text-[10px]">
+                        <div>
+                          <p className="text-gray-500 dark:text-gray-400">
+                            Today
+                          </p>
+                          <p className="text-emerald-400 font-medium">
+                            {formatMoney(a.todayRev)}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-gray-500 dark:text-gray-400">
+                            Sales
+                          </p>
+                          <p className="text-gray-900 dark:text-white font-medium">
+                            {a.sales}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-gray-500 dark:text-gray-400">
+                            Shared
+                          </p>
+                          <p className="text-purple-400 font-medium">
+                            {a.sharedCount}
+                          </p>
                         </div>
                       </div>
+                      <p className="text-[10px] text-gray-500 mt-2">
+                        Updated {relativeTime(a.station.updatedAt)}
+                      </p>
                     </div>
-                    {s.location && (
-                      <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400 mb-3">
-                        <MapPin size={12} className="text-gray-500" />
-                        <span className="truncate">{s.location}</span>
-                      </div>
-                    )}
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => handleAccessSharedStation(s.id)}
-                        className="flex-1 px-4 py-2 bg-sky-500 hover:bg-sky-600 text-gray-900 dark:text-gray-900 dark:text-white rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-colors"
-                      >
-                        <LogIn size={15} />
-                        {currentStation?.id === s.id ? "Currently Active" : "Access Station"}
-                      </button>
-                      <button
-                        onClick={() => handleLeaveSharedStation(s.id, s.name)}
-                        title="Leave this shared station"
-                        className="px-3 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg text-sm transition-colors"
-                      >
-                        <LogOut size={15} />
-                      </button>
-                    </div>
+                  );
+                })}
+                {stationAnalytics.length === 0 && (
+                  <div className={`${GLASS_CARD} p-8 text-center col-span-2`}>
+                    <Activity
+                      size={32}
+                      className="text-gray-500 mx-auto mb-2"
+                    />
+                    <p className="text-gray-500 dark:text-gray-400 text-sm">
+                      No station activity yet
+                    </p>
                   </div>
-                );
-              })}
+                )}
+              </div>
+            </div>
+
+            {/* Sync status */}
+            <div className={`${GLASS_CARD} p-4`}>
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                <Cloud size={16} className="text-emerald-400" />
+                Cloud Sync Status
+              </h3>
+              <div className="space-y-2 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-500 dark:text-gray-400">
+                    Backend Syncing
+                  </span>
+                  <span
+                    className={
+                      isBackendSyncing ? "text-sky-400" : "text-emerald-400"
+                    }
+                  >
+                    {isBackendSyncing ? "In progress..." : "Idle"}
+                  </span>
+                </div>
+                {lastBackendSync && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-500 dark:text-gray-400">
+                      Last Sync
+                    </span>
+                    <span className="text-gray-900 dark:text-white">
+                      {relativeTime(lastBackendSync)}
+                    </span>
+                  </div>
+                )}
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-500 dark:text-gray-400">
+                    Admin Mode
+                  </span>
+                  <span
+                    className={isAdmin ? "text-emerald-400" : "text-gray-500"}
+                  >
+                    {isAdmin ? "Yes" : "No"}
+                  </span>
+                </div>
+                <button
+                  onClick={handleSyncNow}
+                  disabled={syncing || isBackendSyncing}
+                  className="mt-2 px-4 py-2 bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 rounded-lg text-xs flex items-center gap-2 transition-colors disabled:opacity-50"
+                >
+                  <RefreshCw
+                    size={13}
+                    className={syncing ? "animate-spin" : ""}
+                  />{" "}
+                  Sync Now
+                </button>
+              </div>
             </div>
           </div>
+        )}
+
+        {/* ===================== SHARED SUB-TAB ===================== */}
+        {activeSubTab === "shared" && (
+          <>
+            {/* Shared With You section — stations owned by OTHER users that this
+                user has been invited to access (read or read-write based on role). */}
+            {sharedStationsFromContext.length > 0 && (
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                  <Building2 size={18} className="text-sky-400" />
+                  Shared With You
+                  <span className="text-sm text-gray-500 dark:text-gray-500 dark:text-gray-400 font-normal">
+                    · {sharedStationsFromContext.length} station(s)
+                  </span>
+                </h2>
+                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                  {sharedStationsFromContext.map((s) => {
+                    const binding = bindings.find((b) => b.stationId === s.id);
+                    const role =
+                      s.memberRole || s.userRole || binding?.role || "member";
+                    const invitedBy =
+                      s.invitedBy || binding?.invitedBy || "Station Owner";
+                    return (
+                      <div
+                        key={s.id}
+                        className={`${
+                          currentStation?.id === s.id
+                            ? "ring-2 ring-sky-400/50"
+                            : ""
+                        } ${GLASS_CARD} p-5 hover:bg-gray-100 dark:bg-white/10 transition-all relative`}
+                      >
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex items-center gap-3">
+                            <div
+                              className={`w-12 h-12 rounded-xl ${avatarColor(
+                                s.name,
+                              )} flex items-center justify-center text-gray-900 dark:text-gray-900 dark:text-white font-bold text-sm`}
+                            >
+                              {initialsOf(s.name)}
+                            </div>
+                            <div>
+                              <h3 className="font-bold text-gray-900 dark:text-gray-900 dark:text-white text-sm flex items-center gap-2">
+                                {s.name}
+                                {currentStation?.id === s.id && (
+                                  <span className="px-1.5 py-0.5 bg-sky-500/20 text-sky-400 text-[10px] rounded">
+                                    Active
+                                  </span>
+                                )}
+                              </h3>
+                              <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                <RoleBadge role={role} />
+                                <span className="text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                                  <UserCheck size={11} />
+                                  {invitedBy}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                        {s.location && (
+                          <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400 mb-3">
+                            <MapPin size={12} className="text-gray-500" />
+                            <span className="truncate">{s.location}</span>
+                          </div>
+                        )}
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleAccessSharedStation(s.id)}
+                            className="flex-1 px-4 py-2 bg-sky-500 hover:bg-sky-600 text-gray-900 dark:text-gray-900 dark:text-white rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-colors"
+                          >
+                            <LogIn size={15} />
+                            {currentStation?.id === s.id
+                              ? "Currently Active"
+                              : "Access Station"}
+                          </button>
+                          <button
+                            onClick={() =>
+                              handleLeaveSharedStation(s.id, s.name)
+                            }
+                            title="Leave this shared station"
+                            className="px-3 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg text-sm transition-colors"
+                          >
+                            <LogOut size={15} />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            {/* Empty state for shared tab */}
+            {sharedStationsFromContext.length === 0 && (
+              <div className={`${GLASS_CARD} p-12 text-center`}>
+                <Building2 size={48} className="text-gray-600 mx-auto mb-4" />
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">
+                  No stations shared with you
+                </h3>
+                <p className="text-gray-500 dark:text-gray-400 text-sm mb-6">
+                  When a station owner invites you, the station will appear
+                  here.
+                </p>
+                <button
+                  onClick={() => setModal({ type: "access-shared" })}
+                  className="px-6 py-3 bg-sky-500 hover:bg-sky-600 text-white font-semibold rounded-xl transition-all flex items-center gap-2 mx-auto"
+                >
+                  <Building2 size={18} />
+                  Access Another Station
+                </button>
+              </div>
+            )}
+          </>
         )}
       </div>
 

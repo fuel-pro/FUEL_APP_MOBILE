@@ -1076,7 +1076,9 @@ export default function DataManager() {
                           await loadFromCloud();
                           toastSuccess("Data loaded from cloud successfully!");
                         } catch (error) {
-                          toastError("Failed to load from cloud. Using local data.");
+                          toastError(
+                            "Failed to load from cloud. Using local data.",
+                          );
                         }
                       }}
                       className="w-full btn btn-secondary flex items-center gap-3"

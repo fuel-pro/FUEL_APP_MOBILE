@@ -2439,9 +2439,15 @@ export default function IntegrationHub() {
                         </span>
                       )}
                       {isExpanded ? (
-                        <ChevronUp size={18} className="text-gray-500 dark:text-gray-400" />
+                        <ChevronUp
+                          size={18}
+                          className="text-gray-500 dark:text-gray-400"
+                        />
                       ) : (
-                        <ChevronDown size={18} className="text-gray-500 dark:text-gray-400" />
+                        <ChevronDown
+                          size={18}
+                          className="text-gray-500 dark:text-gray-400"
+                        />
                       )}
                     </div>
                   </div>
@@ -2998,7 +3004,9 @@ function AddWebhookForm({
         Add Webhook Endpoint
       </h4>
       <div>
-        <label className="text-xs text-gray-600 dark:text-gray-500 dark:text-gray-400">Name</label>
+        <label className="text-xs text-gray-600 dark:text-gray-500 dark:text-gray-400">
+          Name
+        </label>
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
@@ -3007,7 +3015,9 @@ function AddWebhookForm({
         />
       </div>
       <div>
-        <label className="text-xs text-gray-600 dark:text-gray-500 dark:text-gray-400">URL</label>
+        <label className="text-xs text-gray-600 dark:text-gray-500 dark:text-gray-400">
+          URL
+        </label>
         <input
           value={url}
           onChange={(e) => setUrl(e.target.value)}

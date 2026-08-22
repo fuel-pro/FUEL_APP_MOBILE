@@ -2213,7 +2213,9 @@ export default function FounderAccess() {
                                     `${u.email}: ${u.role} → ${newRole}`,
                                     "warning",
                                   );
-                                  toastSuccess(`Role change logged for ${u.email}: ${u.role} → ${newRole}. Use Supabase admin API to apply.`);
+                                  toastSuccess(
+                                    `Role change logged for ${u.email}: ${u.role} → ${newRole}. Use Supabase admin API to apply.`,
+                                  );
                                 }
                               }}
                               className="p-1 text-gray-500 hover:text-indigo-400 transition-colors"
@@ -2419,7 +2421,7 @@ export default function FounderAccess() {
                       onClick={() => {
                         const info = `Station Details:\n\nName: ${s.name}\nLocation: ${s.location}\nOwner: ${s.ownerName}\nMembers: ${s.members}\nRevenue: ${getCurrencySymbol(getDetectedCurrency())} ${s.revenue.toLocaleString()}\nID: ${s.id}\nOwner ID: ${s.ownerId}\nCreated: ${s.createdAt}\nLast Active: ${s.lastActive}`;
                         toastSuccess("User details logged to console");
-                                console.log(info);
+                        console.log(info);
                       }}
                       className="flex items-center gap-1 text-[10px] text-gray-500 hover:text-blue-400 transition-colors mt-2"
                     >

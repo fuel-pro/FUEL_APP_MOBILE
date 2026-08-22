@@ -565,7 +565,8 @@ function stationRowToStation(
     // distinguish owned stations from shared/member stations.
     ownerId: row.owner_id || cached?.ownerId,
     userRole: row.user_role || cached?.userRole,
-    invitedBy: row.invited_by_name || row.invited_by_unique_id || cached?.invitedBy,
+    invitedBy:
+      row.invited_by_name || row.invited_by_unique_id || cached?.invitedBy,
     memberRole: row.member_role || cached?.memberRole,
   };
 }

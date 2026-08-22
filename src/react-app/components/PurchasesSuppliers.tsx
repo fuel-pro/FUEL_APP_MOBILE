@@ -118,7 +118,9 @@ export default function PurchasesSuppliers() {
   return (
     <div className="p-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Purchases & Suppliers</h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+          Purchases & Suppliers
+        </h1>
         <div className="flex gap-2">
           <button
             onClick={() => setActiveTab("orders")}
@@ -169,7 +171,9 @@ export default function PurchasesSuppliers() {
                   <tr>
                     <td colSpan={5} className="text-center py-12">
                       <Package className="w-12 h-12 text-gray-600 mx-auto mb-3" />
-                      <p className="text-gray-500 dark:text-gray-400">No orders</p>
+                      <p className="text-gray-500 dark:text-gray-400">
+                        No orders
+                      </p>
                     </td>
                   </tr>
                 ) : (
@@ -252,7 +256,9 @@ export default function PurchasesSuppliers() {
                       </button>
                     </div>
                   </div>
-                  <p className="text-gray-500 dark:text-gray-400 text-sm">{supplier.phone}</p>
+                  <p className="text-gray-500 dark:text-gray-400 text-sm">
+                    {supplier.phone}
+                  </p>
                 </div>
               ))
             )}
@@ -305,7 +311,10 @@ function SupplierModal({
           <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
             {supplier ? "Edit Supplier" : "Add Supplier"}
           </h3>
-          <button onClick={onClose} className="text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:text-white">
+          <button
+            onClick={onClose}
+            className="text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:text-white"
+          >
             <X size={20} />
           </button>
         </div>
@@ -317,7 +326,9 @@ function SupplierModal({
           className="p-6 space-y-4"
         >
           <div>
-            <label className="text-gray-500 dark:text-gray-400 text-xs mb-2 block">Name *</label>
+            <label className="text-gray-500 dark:text-gray-400 text-xs mb-2 block">
+              Name *
+            </label>
             <input
               type="text"
               value={form.name}
@@ -327,7 +338,9 @@ function SupplierModal({
             />
           </div>
           <div>
-            <label className="text-gray-500 dark:text-gray-400 text-xs mb-2 block">Email</label>
+            <label className="text-gray-500 dark:text-gray-400 text-xs mb-2 block">
+              Email
+            </label>
             <input
               type="email"
               value={form.email}
@@ -336,7 +349,9 @@ function SupplierModal({
             />
           </div>
           <div>
-            <label className="text-gray-500 dark:text-gray-400 text-xs mb-2 block">Phone</label>
+            <label className="text-gray-500 dark:text-gray-400 text-xs mb-2 block">
+              Phone
+            </label>
             <input
               type="tel"
               value={form.phone}
@@ -345,7 +360,9 @@ function SupplierModal({
             />
           </div>
           <div>
-            <label className="text-gray-500 dark:text-gray-400 text-xs mb-2 block">Address</label>
+            <label className="text-gray-500 dark:text-gray-400 text-xs mb-2 block">
+              Address
+            </label>
             <input
               type="text"
               value={form.address}
@@ -453,7 +470,9 @@ function OrderModal({
       onCreated();
     } catch (error: any) {
       console.error("Failed:", error);
-      toastError("Failed to create purchase order: " + (error?.message || error));
+      toastError(
+        "Failed to create purchase order: " + (error?.message || error),
+      );
     } finally {
       setLoading(false);
     }
@@ -466,7 +485,10 @@ function OrderModal({
           <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
             New Purchase Order
           </h3>
-          <button onClick={onClose} className="text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:text-white">
+          <button
+            onClick={onClose}
+            className="text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:text-white"
+          >
             <X size={20} />
           </button>
         </div>

@@ -302,9 +302,8 @@ export default function InviteAccept() {
       // if the DB table has RLS issues. This is the same store the
       // PermissionContext uses for team_members.
       try {
-        const { cloudStorageService } = await import(
-          "@/react-app/lib/cloud-storage-service"
-        );
+        const { cloudStorageService } =
+          await import("@/react-app/lib/cloud-storage-service");
         const membershipKey = "station_memberships";
         const existing =
           (await cloudStorageService.get<

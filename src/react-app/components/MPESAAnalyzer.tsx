@@ -1088,7 +1088,10 @@ export default function MPESAAnalyzer() {
             }}
             className="hidden"
           />
-          <Upload size={36} className="mx-auto mb-3 text-gray-500 dark:text-gray-400" />
+          <Upload
+            size={36}
+            className="mx-auto mb-3 text-gray-500 dark:text-gray-400"
+          />
           <p className="text-sm text-gray-600 dark:text-gray-500 dark:text-gray-400 mb-2">
             Upload M-PESA PDF statement(s)
           </p>

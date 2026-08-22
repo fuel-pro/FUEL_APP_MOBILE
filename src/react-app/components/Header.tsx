@@ -490,7 +490,9 @@ export default function Header({
                 className="flex flex-col items-center gap-1.5 p-3 bg-gray-50 dark:bg-white/5 rounded-xl hover:bg-gray-100 dark:bg-white/10 transition-colors"
               >
                 <Edit3 size={16} className="text-gray-300" />
-                <span className="text-[10px] text-gray-500 dark:text-gray-400">Edit Info</span>
+                <span className="text-[10px] text-gray-500 dark:text-gray-400">
+                  Edit Info
+                </span>
               </button>
               <button
                 onClick={() => {
@@ -500,7 +502,9 @@ export default function Header({
                 className="flex flex-col items-center gap-1.5 p-3 bg-gray-50 dark:bg-white/5 rounded-xl hover:bg-gray-100 dark:bg-white/10 transition-colors"
               >
                 <LayoutDashboard size={16} className="text-gray-300" />
-                <span className="text-[10px] text-gray-500 dark:text-gray-400">Tabs</span>
+                <span className="text-[10px] text-gray-500 dark:text-gray-400">
+                  Tabs
+                </span>
               </button>
               <label className="flex flex-col items-center gap-1.5 p-3 bg-gray-50 dark:bg-white/5 rounded-xl hover:bg-gray-100 dark:bg-white/10 transition-colors cursor-pointer">
                 {logoUploading ? (
@@ -530,7 +534,9 @@ export default function Header({
                 className="flex flex-col items-center gap-1.5 p-3 bg-gray-50 dark:bg-white/5 rounded-xl hover:bg-gray-100 dark:bg-white/10 transition-colors"
               >
                 <QrCode size={16} className="text-gray-300" />
-                <span className="text-[10px] text-gray-500 dark:text-gray-400">QR Code</span>
+                <span className="text-[10px] text-gray-500 dark:text-gray-400">
+                  QR Code
+                </span>
               </button>
               <button
                 onClick={() => {
@@ -540,7 +546,9 @@ export default function Header({
                 className="flex flex-col items-center gap-1.5 p-3 bg-gray-50 dark:bg-white/5 rounded-xl hover:bg-gray-100 dark:bg-white/10 transition-colors"
               >
                 <HelpCircle size={16} className="text-amber-400" />
-                <span className="text-[10px] text-gray-500 dark:text-gray-400">Tutorial</span>
+                <span className="text-[10px] text-gray-500 dark:text-gray-400">
+                  Tutorial
+                </span>
               </button>
               <button
                 onClick={() => {
@@ -567,7 +575,9 @@ export default function Header({
                   className="flex flex-col items-center gap-1.5 p-3 bg-gray-50 dark:bg-white/5 rounded-xl hover:bg-gray-100 dark:bg-white/10 transition-colors"
                 >
                   <Layers size={16} className="text-blue-400" />
-                  <span className="text-[10px] text-gray-500 dark:text-gray-400">Stations</span>
+                  <span className="text-[10px] text-gray-500 dark:text-gray-400">
+                    Stations
+                  </span>
                 </button>
               )}
               <button
@@ -578,7 +588,9 @@ export default function Header({
                 className="flex flex-col items-center gap-1.5 p-3 bg-amber-500/10 rounded-xl hover:bg-amber-500/20 transition-colors"
               >
                 <Crown size={16} className="text-amber-400" />
-                <span className="text-[10px] text-gray-500 dark:text-gray-400">Admin</span>
+                <span className="text-[10px] text-gray-500 dark:text-gray-400">
+                  Admin
+                </span>
               </button>
             </div>
 

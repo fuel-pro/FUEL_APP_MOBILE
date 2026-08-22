@@ -216,9 +216,7 @@ export default function Dashboard() {
       locationPrice?.kerosenePrice ??
       effectiveFuelPrice?.kerosenePrice ??
       0)
-    : (locationPrice?.kerosenePrice ??
-      effectiveFuelPrice?.kerosenePrice ??
-      0);
+    : (locationPrice?.kerosenePrice ?? effectiveFuelPrice?.kerosenePrice ?? 0);
   // Show the detected city for location-based pricing
   const priceCityName =
     locationPrice?.cityName || regionalPrice.cityName || stationCity;
@@ -807,7 +805,9 @@ export default function Dashboard() {
       const d = new Date();
       d.setDate(d.getDate() - i);
       const dateStr = d.toISOString().split("T")[0];
-      days.push(d.toLocaleDateString(getLocaleForCountry(), { weekday: "short" }));
+      days.push(
+        d.toLocaleDateString(getLocaleForCountry(), { weekday: "short" }),
+      );
 
       const dayTotals: Record<string, number> = {};
       allFuelTypes.forEach((t) => (dayTotals[t] = 0));
@@ -1177,7 +1177,8 @@ export default function Dashboard() {
           `<tr><td>${ft.localName || ft.canonicalType || "—"}</td><td style="text-align:right">${cur}${formatNumber(ft.price || 0)}</td><td style="text-align:right">${ft.pumpCount || 0}</td></tr>`,
       )
       .join("");
-    printWin.document.write(`<!DOCTYPE html><html><head><title>${companyName} — Dashboard Summary</title>
+    printWin.document
+      .write(`<!DOCTYPE html><html><head><title>${companyName} — Dashboard Summary</title>
     <style>
       body{font-family:Arial,sans-serif;margin:40px;color:#1a1a1a}
       h1{font-size:24px;border-bottom:2px solid #d4af37;padding-bottom:8px}
@@ -1438,7 +1439,9 @@ export default function Dashboard() {
                 <p className={`text-xl font-bold ${card.color}`}>
                   {currencySymbol} {(card.price ?? 0).toFixed(2)}
                 </p>
-                <p className="text-[9px] text-gray-500 dark:text-gray-400">per litre</p>
+                <p className="text-[9px] text-gray-500 dark:text-gray-400">
+                  per litre
+                </p>
                 {isLocationBased ? (
                   <p className={`text-[9px] mt-0.5 ${card.color}`}>
                     {priceCityName}
@@ -1554,7 +1557,9 @@ export default function Dashboard() {
           </h3>
           <div className="space-y-2">
             <div className="flex justify-between text-xs">
-              <span className="text-gray-600 dark:text-gray-500 dark:text-gray-400">VAT Rate</span>
+              <span className="text-gray-600 dark:text-gray-500 dark:text-gray-400">
+                VAT Rate
+              </span>
               <span className="font-semibold text-gray-800 dark:text-gray-200">
                 {(taxRates || location.revenueAuthority).vatRate}%
               </span>
@@ -1741,11 +1746,7 @@ export default function Dashboard() {
                   ? "bg-yellow-500"
                   : "bg-green-500";
             const statusLabel =
-              fillPct < 20
-                ? "LOW"
-                : fillPct < 50
-                  ? "MEDIUM"
-                  : "OK";
+              fillPct < 20 ? "LOW" : fillPct < 50 ? "MEDIUM" : "OK";
             const statusColor =
               fillPct < 20
                 ? "text-red-600 dark:text-red-400"
@@ -1803,7 +1804,9 @@ export default function Dashboard() {
             <p className="text-2xl font-bold text-blue-700 dark:text-blue-300">
               {Object.keys(state.invoices).length}
             </p>
-            <p className="text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400">Invoices</p>
+            <p className="text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400">
+              Invoices
+            </p>
           </div>
           <div className="text-center p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
             <p className="text-2xl font-bold text-purple-700 dark:text-purple-300">

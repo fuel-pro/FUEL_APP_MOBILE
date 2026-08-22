@@ -106,7 +106,9 @@ export default function SettingsPanel() {
 
   return (
     <div className="p-6 max-w-3xl mx-auto">
-      <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Settings</h1>
+      <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">
+        Settings
+      </h1>
 
       {/* Tab switcher */}
       <div className="flex gap-2 mb-6 p-1 bg-gray-50 dark:bg-white/5 rounded-xl w-fit">
@@ -245,7 +247,9 @@ export default function SettingsPanel() {
                       </span>
                     </div>
                     <div>
-                      <p className="text-gray-900 dark:text-white font-medium">M-PESA</p>
+                      <p className="text-gray-900 dark:text-white font-medium">
+                        M-PESA
+                      </p>
                       <p className="text-gray-500 text-xs">
                         Mobile money payments
                       </p>
@@ -269,7 +273,9 @@ export default function SettingsPanel() {
                     </span>
                   </div>
                   <div>
-                    <p className="text-gray-900 dark:text-white font-medium">M-PESA</p>
+                    <p className="text-gray-900 dark:text-white font-medium">
+                      M-PESA
+                    </p>
                     <p className="text-gray-500 text-xs">
                       M-PESA is available in Kenya only
                     </p>
@@ -288,7 +294,9 @@ export default function SettingsPanel() {
                       </span>
                     </div>
                     <div>
-                      <p className="text-gray-900 dark:text-white font-medium">Kopo Kopo</p>
+                      <p className="text-gray-900 dark:text-white font-medium">
+                        Kopo Kopo
+                      </p>
                       <p className="text-gray-500 text-xs">Payment gateway</p>
                     </div>
                   </div>
@@ -308,7 +316,9 @@ export default function SettingsPanel() {
                     <span className="text-blue-400 font-bold text-sm">KK</span>
                   </div>
                   <div>
-                    <p className="text-gray-900 dark:text-white font-medium">Kopo Kopo</p>
+                    <p className="text-gray-900 dark:text-white font-medium">
+                      Kopo Kopo
+                    </p>
                     <p className="text-gray-500 text-xs">
                       Kopo Kopo is available in Kenya only
                     </p>
@@ -357,7 +367,11 @@ export default function SettingsPanel() {
                     "JPY",
                     "CNY",
                   ].map((c) => (
-                    <option key={c} value={c} className="bg-white dark:bg-gray-800">
+                    <option
+                      key={c}
+                      value={c}
+                      className="bg-white dark:bg-gray-800"
+                    >
                       {c} ({getCurrencySymbol(c)})
                     </option>
                   ))}

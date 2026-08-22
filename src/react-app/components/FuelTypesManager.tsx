@@ -979,9 +979,15 @@ export default function FuelTypesManager() {
                         <Trash2 size={14} />
                       </button>
                       {isExpanded ? (
-                        <ChevronUp size={16} className="text-gray-500 dark:text-gray-400" />
+                        <ChevronUp
+                          size={16}
+                          className="text-gray-500 dark:text-gray-400"
+                        />
                       ) : (
-                        <ChevronDown size={16} className="text-gray-500 dark:text-gray-400" />
+                        <ChevronDown
+                          size={16}
+                          className="text-gray-500 dark:text-gray-400"
+                        />
                       )}
                     </div>
                   </div>

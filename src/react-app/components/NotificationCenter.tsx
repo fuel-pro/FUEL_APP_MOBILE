@@ -11,7 +11,15 @@
  * Displays in a bell-icon dropdown in the Header.
  */
 import { useState, useEffect, useRef, useMemo } from "react";
-import { Bell, AlertTriangle, TrendingDown, Clock, FileText, Users, X } from "lucide-react";
+import {
+  Bell,
+  AlertTriangle,
+  TrendingDown,
+  Clock,
+  FileText,
+  Users,
+  X,
+} from "lucide-react";
 import { useFuel } from "@/react-app/context/FuelContext";
 import { useStations } from "@/react-app/context/StationContext";
 import { cloudStorageService } from "@/react-app/lib/cloud-storage-service";
@@ -55,7 +63,11 @@ export default function NotificationCenter() {
           if (!ft.active) continue;
           const canonical = ft.canonicalType || ft.localName || "";
           const tank = tankValues[canonical];
-          if (tank && tank.closing !== undefined && tank.opening !== undefined) {
+          if (
+            tank &&
+            tank.closing !== undefined &&
+            tank.opening !== undefined
+          ) {
             const capacity = tank.opening || 10000;
             const current = tank.closing || 0;
             const pct = capacity > 0 ? (current / capacity) * 100 : 0;
@@ -78,7 +90,9 @@ export default function NotificationCenter() {
         for (const inv of invoices) {
           if (inv.status === "unpaid" || (!inv.status && inv.totalAmount)) {
             const invDate = inv.date ? new Date(inv.date).getTime() : now;
-            const daysOverdue = Math.floor((now - invDate) / (1000 * 60 * 60 * 24));
+            const daysOverdue = Math.floor(
+              (now - invDate) / (1000 * 60 * 60 * 24),
+            );
             if (daysOverdue > 7) {
               items.push({
                 id: `invoice-${inv.id || inv.invoiceNumber}`,
@@ -103,7 +117,9 @@ export default function NotificationCenter() {
             for (const acc of creditAccounts) {
               const balance = Number(acc.balance) || 0;
               if (balance > 0) {
-                const dueDate = acc.dueDate ? new Date(acc.dueDate).getTime() : 0;
+                const dueDate = acc.dueDate
+                  ? new Date(acc.dueDate).getTime()
+                  : 0;
                 if (dueDate && dueDate < now) {
                   items.push({
                     id: `credit-${acc.id}`,
@@ -154,14 +170,21 @@ export default function NotificationCenter() {
 
         // 5. Pending shifts (from cloud)
         try {
-          const shifts = await cloudStorageService.get<any[]>("shift_data", stationId);
+          const shifts = await cloudStorageService.get<any[]>(
+            "shift_data",
+            stationId,
+          );
           if (Array.isArray(shifts)) {
             for (const shift of shifts) {
               if (shift.status === "scheduled" || shift.status === "active") {
                 const shiftDate = shift.startTime
                   ? new Date(shift.startTime).getTime()
                   : 0;
-                if (shiftDate && shiftDate < now && shift.status === "scheduled") {
+                if (
+                  shiftDate &&
+                  shiftDate < now &&
+                  shift.status === "scheduled"
+                ) {
                   items.push({
                     id: `shift-${shift.id}`,
                     type: "info",
@@ -198,7 +221,10 @@ export default function NotificationCenter() {
   // Close on outside click
   useEffect(() => {
     function handleClick(e: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(e.target as Node)
+      ) {
         setOpen(false);
       }
     }
@@ -276,7 +302,10 @@ export default function NotificationCenter() {
               </div>
             ) : notifications.length === 0 ? (
               <div className="p-8 text-center">
-                <Bell size={32} className="mx-auto mb-2 text-gray-300 dark:text-gray-600" />
+                <Bell
+                  size={32}
+                  className="mx-auto mb-2 text-gray-300 dark:text-gray-600"
+                />
                 <p className="text-sm text-gray-500 dark:text-gray-400">
                   No active notifications
                 </p>
@@ -294,7 +323,9 @@ export default function NotificationCenter() {
                   }}
                   className="w-full px-4 py-3 flex items-start gap-3 hover:bg-gray-50 dark:hover:bg-white/5 border-b border-gray-100 dark:border-gray-700/50 text-left transition-colors group"
                 >
-                  <div className="flex-shrink-0 mt-0.5">{typeIcon(n.category)}</div>
+                  <div className="flex-shrink-0 mt-0.5">
+                    {typeIcon(n.category)}
+                  </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
                       {n.title}

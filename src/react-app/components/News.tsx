@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useLocation } from "@/react-app/context/LocationContext";
 import { useAuth } from "@/react-app/context/AuthContext";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
+import SubTabBar from "@/react-app/components/SubTabBar";
 import { Search } from "lucide-react";
 import {
   Newspaper,
@@ -33,6 +34,7 @@ import {
   Monitor,
   Radio,
   Tv,
+  Maximize2,
 } from "lucide-react";
 import NewsService, {
   ExternalNewsItem,
@@ -41,6 +43,16 @@ import {
   getCountryByCode,
   ALL_COUNTRIES,
 } from "@/react-app/lib/world-country-utils";
+import LiveStreamService, {
+  getAvailableLiveNewsStreams,
+  getCandidateLiveNewsStreams,
+  getYouTubeEmbedUrl,
+  getTVGardenEmbedUrl,
+  getTVGardenAllEmbedUrl,
+  getCategoryLabel,
+  getCategoryColor,
+  LiveNewsStream,
+} from "@/react-app/services/LiveStreamService";
 
 interface DisplayNewsItem extends ExternalNewsItem {
   bookmarked: boolean;
@@ -76,90 +88,6 @@ const CATEGORY_LABELS: Record<string, string> = {
   market: "Market",
   tax: "Tax",
 };
-
-// Video news sources for fuel industry
-const VIDEO_SOURCES = [
-  {
-    id: "v1",
-    name: "Bloomberg Energy",
-    type: "live",
-    url: "https://www.youtube.com/embed/gCNeDWCIQvo",
-    embed: true,
-    desc: "Bloomberg Live Financial News",
-  },
-  {
-    id: "v2",
-    name: "CNBC Energy",
-    type: "video",
-    url: "https://www.youtube.com/embed/9NyxcX3rhQs",
-    embed: true,
-    desc: "OPEC & Oil Market Updates",
-  },
-  {
-    id: "v3",
-    name: "Reuters Business",
-    type: "live",
-    url: "https://www.youtube.com/embed/Z5umnGydW1g",
-    embed: true,
-    desc: "Global Business & Energy News",
-  },
-  {
-    id: "v4",
-    name: "Energy Central",
-    type: "video",
-    url: "https://www.youtube.com/embed/JGz7hAwp2wQ",
-    embed: true,
-    desc: "Energy Industry Analysis",
-  },
-  {
-    id: "v5",
-    name: "Oil Price News",
-    type: "video",
-    url: "https://www.youtube.com/embed/1dA_nzBzBgE",
-    embed: true,
-    desc: "Oil Price & Market Reports",
-  },
-  {
-    id: "v6",
-    name: "Al Jazeera Business",
-    type: "live",
-    url: "https://www.youtube.com/embed/bNyUyrR0PHo",
-    embed: true,
-    desc: "International Business Coverage",
-  },
-  {
-    id: "v7",
-    name: "Oil & Gas Journal",
-    type: "video",
-    url: "https://www.youtube.com/embed/videoseries?list=PL8Y8JwV_bD9p1Z3Z3Z3Z3Z3",
-    embed: true,
-    desc: "Oil & Gas industry technical news",
-  },
-  {
-    id: "v8",
-    name: "S&P Global Commodity Insights",
-    type: "live",
-    url: "https://www.youtube.com/embed/videoseries?list=PLrB6ZhHJ-QUU",
-    embed: true,
-    desc: "Platts oil price assessments & market analysis",
-  },
-  {
-    id: "v9",
-    name: "Argus Media",
-    type: "video",
-    url: "https://www.youtube.com/embed/videoseries?list=PLrB6ZhHJ",
-    embed: true,
-    desc: "Energy commodity market reporting",
-  },
-  {
-    id: "v10",
-    name: "Aramco Energy News",
-    type: "video",
-    url: "https://www.youtube.com/embed/videoseries?list=PLrB6",
-    embed: true,
-    desc: "Middle East energy sector updates",
-  },
-];
 
 // Social media sources for fuel industry news (opens in new tab)
 const SOCIAL_MEDIA_SOURCES = [
@@ -369,11 +297,24 @@ export default function News() {
   const [lastFetch, setLastFetch] = useState<Date | null>(null);
   const [source, setSource] = useState<"curated" | "external">("curated");
   const [searchQuery, setSearchQuery] = useState("");
-  // Video feed state
-  const [videoIndex, setVideoIndex] = useState(0);
-  const [showVideos, setShowVideos] = useState(false);
-  const [videoDropdown, setVideoDropdown] = useState(false);
-  const currentVideo = VIDEO_SOURCES[videoIndex];
+
+  // Sub-tab navigation: News Articles | Live TV | Live Radio
+  const [activeSubTab, setActiveSubTab] = useState<
+    "articles" | "live-tv" | "live-radio"
+  >("articles");
+
+  // Live news stream state — verified-available YouTube 24/7 streams
+  const [liveStreams, setLiveStreams] = useState<LiveNewsStream[]>(
+    getCandidateLiveNewsStreams(),
+  );
+  const [verifyingStreams, setVerifyingStreams] = useState(true);
+  const [activeStreamIdx, setActiveStreamIdx] = useState(0);
+
+  // TVGarden embed state
+  const [tvCountry, setTvCountry] = useState<string>(currentCountry.id);
+  const [radioCountry, setRadioCountry] = useState<string>(currentCountry.id);
+  const [tvShowAll, setTvShowAll] = useState(false);
+  const [radioShowAll, setRadioShowAll] = useState(false);
 
   // Cross-device cloud-sync guards (prevent realtime echo from wiping local edits)
   const cloudLoadCompleteRef = useRef(false);
@@ -495,6 +436,37 @@ export default function News() {
       unsubRead?.();
     };
   }, [user]);
+
+  // Sync TV/radio country when location changes
+  useEffect(() => {
+    setTvCountry(currentCountry.id);
+    setRadioCountry(currentCountry.id);
+  }, [currentCountry.id]);
+
+  // Verify live news stream availability — only show AVAILABLE streams
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setVerifyingStreams(true);
+      try {
+        const available = await getAvailableLiveNewsStreams();
+        if (!cancelled) {
+          setLiveStreams(available);
+          // Reset index if out of bounds
+          setActiveStreamIdx((prev) =>
+            available.length === 0 ? 0 : Math.min(prev, available.length - 1),
+          );
+        }
+      } catch {
+        /* keep candidate list on error */
+      } finally {
+        if (!cancelled) setVerifyingStreams(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Load news on mount
   useEffect(() => {
@@ -670,341 +642,509 @@ export default function News() {
         </div>
       </div>
 
-      {/* Search bar */}
-      <div className="relative">
-        <Search
-          size={14}
-          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400"
-        />
-        <input
-          type="text"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Search news by title, summary, source, or category..."
-          className="w-full pl-9 pr-4 py-2 text-sm bg-white dark:bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-800 dark:text-gray-200 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
-      </div>
+      {/* Sub-tab navigation: Articles | Live TV | Live Radio */}
+      <SubTabBar
+        tabs={[
+          { id: "articles", label: "News Articles", icon: Newspaper },
+          { id: "live-tv", label: "Live TV", icon: Tv },
+          { id: "live-radio", label: "Live Radio", icon: Radio },
+        ]}
+        active={activeSubTab}
+        onChange={(id) => setActiveSubTab(id as typeof activeSubTab)}
+      />
 
-      {/* Last fetch time */}
-      {lastFetch && (
-        <p className="text-[10px] text-gray-500 dark:text-gray-400 -mt-4">
-          Last updated: {lastFetch.toLocaleString()}
-        </p>
-      )}
-
-      {/* Filters */}
-      <div className="flex flex-wrap gap-2">
-        <button
-          onClick={() => setActiveFilter("all")}
-          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${activeFilter === "all" ? "bg-blue-500 text-gray-900 dark:text-white" : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"}`}
-        >
-          All ({news.length})
-        </button>
-        <button
-          onClick={() => setActiveFilter("bookmarked")}
-          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 ${activeFilter === "bookmarked" ? "bg-amber-500 text-gray-900 dark:text-white" : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"}`}
-        >
-          <Bookmark size={12} /> Saved ({news.filter((n) => n.bookmarked).length})
-        </button>
-        <button
-          onClick={() => setActiveFilter("unread")}
-          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 ${activeFilter === "unread" ? "bg-blue-500 text-gray-900 dark:text-white" : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"}`}
-        >
-          <Clock size={12} /> Unread ({unreadCount})
-        </button>
-        {Object.entries(CATEGORY_LABELS).map(([key, label]) => {
-          const count = news.filter((n) => n.category === key).length;
-          if (count === 0) return null;
-          const Icon = CATEGORY_ICONS[key];
-          return (
-            <button
-              key={key}
-              onClick={() => setActiveFilter(key)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 ${activeFilter === key ? "bg-blue-500 text-gray-900 dark:text-white" : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"}`}
-            >
-              <Icon size={12} /> {label} ({count})
-            </button>
-          );
-        })}
-        <button
-          onClick={() => setActiveFilter("bookmarked")}
-          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 ${activeFilter === "bookmarked" ? "bg-blue-500 text-gray-900 dark:text-white" : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"}`}
-        >
-          <Bookmark size={12} /> Saved ({bookmarks.size})
-        </button>
-      </div>
-
-      {/* Video News Feed Section */}
-      <div className="bg-gradient-to-r from-gray-900 to-gray-800 rounded-xl border border-gray-700 overflow-hidden">
-        <button
-          onClick={() => setShowVideos(!showVideos)}
-          className="w-full flex items-center justify-between p-3 hover:bg-white dark:bg-gray-800/50 transition-all"
-        >
-          <div className="flex items-center gap-2">
-            <Tv size={16} className="text-red-500" />
-            <span className="text-sm font-semibold text-gray-900 dark:text-white">
-              Fuel Industry Video News
-            </span>
-            {currentVideo.type === "live" && (
-              <span className="flex items-center gap-1 text-[10px] bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded-full">
-                <Radio size={8} className="animate-pulse" /> LIVE
-              </span>
-            )}
-            <span className="text-xs text-gray-500 dark:text-gray-400">{currentVideo.name}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] text-gray-500">
-              {videoIndex + 1}/{VIDEO_SOURCES.length}
-            </span>
-            <ChevronDown
+      {/* ===================== NEWS ARTICLES SUB-TAB ===================== */}
+      {activeSubTab === "articles" && (
+        <>
+          {/* Search bar */}
+          <div className="relative">
+            <Search
               size={14}
-              className={`text-gray-500 dark:text-gray-400 transition-transform ${showVideos ? "rotate-180" : ""}`}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400"
+            />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search news by title, summary, source, or category..."
+              className="w-full pl-9 pr-4 py-2 text-sm bg-white dark:bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-800 dark:text-gray-200 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
-        </button>
 
-        {showVideos && (
-          <div className="border-t border-gray-700">
-            {/* Video Player */}
-            <div className="relative bg-black aspect-video">
+          {/* Last fetch time */}
+          {lastFetch && (
+            <p className="text-[10px] text-gray-500 dark:text-gray-400 -mt-4">
+              Last updated: {lastFetch.toLocaleString()}
+            </p>
+          )}
+
+          {/* Filters */}
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setActiveFilter("all")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${activeFilter === "all" ? "bg-blue-500 text-gray-900 dark:text-white" : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"}`}
+            >
+              All ({news.length})
+            </button>
+            <button
+              onClick={() => setActiveFilter("bookmarked")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 ${activeFilter === "bookmarked" ? "bg-amber-500 text-gray-900 dark:text-white" : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"}`}
+            >
+              <Bookmark size={12} /> Saved ({bookmarks.size})
+            </button>
+            <button
+              onClick={() => setActiveFilter("unread")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 ${activeFilter === "unread" ? "bg-blue-500 text-gray-900 dark:text-white" : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"}`}
+            >
+              <Clock size={12} /> Unread ({unreadCount})
+            </button>
+            {Object.entries(CATEGORY_LABELS).map(([key, label]) => {
+              const count = news.filter((n) => n.category === key).length;
+              if (count === 0) return null;
+              const Icon = CATEGORY_ICONS[key];
+              return (
+                <button
+                  key={key}
+                  onClick={() => setActiveFilter(key)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 ${activeFilter === key ? "bg-blue-500 text-gray-900 dark:text-white" : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"}`}
+                >
+                  <Icon size={12} /> {label} ({count})
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      {/* ===================== LIVE TV SUB-TAB ===================== */}
+      {activeSubTab === "live-tv" && (
+        <div className="space-y-4">
+          {/* Verified live news streams (only AVAILABLE ones shown) */}
+          <div className="bg-gradient-to-r from-gray-900 to-gray-800 rounded-xl border border-gray-700 p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Radio size={16} className="text-red-500 animate-pulse" />
+              <h3 className="text-sm font-semibold text-white">
+                Live News Streams
+              </h3>
+              <span className="text-[10px] bg-green-500/20 text-green-400 px-1.5 py-0.5 rounded-full">
+                {verifyingStreams
+                  ? "Verifying availability..."
+                  : `${liveStreams.length} available`}
+              </span>
+            </div>
+
+            {verifyingStreams ? (
+              <div className="flex items-center justify-center py-8">
+                <RefreshCw size={20} className="text-gray-400 animate-spin" />
+                <span className="text-gray-400 text-xs ml-2">
+                  Checking stream availability…
+                </span>
+              </div>
+            ) : liveStreams.length === 0 ? (
+              <div className="text-center py-8">
+                <WifiOff size={32} className="text-gray-500 mx-auto mb-2" />
+                <p className="text-gray-400 text-xs">
+                  No live news streams currently available. Try the Live TV
+                  channels below.
+                </p>
+              </div>
+            ) : (
+              <>
+                {/* Active stream player */}
+                {liveStreams[activeStreamIdx] && (
+                  <div className="relative bg-black rounded-lg overflow-hidden aspect-video mb-3">
+                    <iframe
+                      key={liveStreams[activeStreamIdx].id}
+                      src={getYouTubeEmbedUrl(
+                        liveStreams[activeStreamIdx].videoId,
+                      )}
+                      title={liveStreams[activeStreamIdx].name}
+                      className="w-full h-full"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                    />
+                  </div>
+                )}
+
+                {/* Stream selector — only available streams */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {liveStreams.map((stream, i) => {
+                    const isActive = i === activeStreamIdx;
+                    return (
+                      <button
+                        key={stream.id}
+                        onClick={() => setActiveStreamIdx(i)}
+                        className={`flex items-center gap-2 p-2 rounded-lg text-left transition-all ${
+                          isActive
+                            ? "bg-blue-600/30 border border-blue-500"
+                            : "bg-gray-800/50 border border-gray-700 hover:bg-gray-700/50"
+                        }`}
+                      >
+                        <Radio
+                          size={12}
+                          className={`flex-shrink-0 ${
+                            isActive ? "text-blue-400" : "text-red-400"
+                          }`}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p
+                            className={`text-xs font-medium truncate ${
+                              isActive ? "text-white" : "text-gray-300"
+                            }`}
+                          >
+                            {stream.name}
+                          </p>
+                          <p className="text-[10px] text-gray-500 truncate">
+                            {stream.description}
+                          </p>
+                        </div>
+                        <span
+                          className={`flex-shrink-0 text-[9px] px-1.5 py-0.5 rounded border ${getCategoryColor(stream.category)}`}
+                        >
+                          {getCategoryLabel(stream.category)}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-[10px] text-gray-500 mt-2 flex items-center gap-1">
+                  <Wifi size={10} /> Only verified-available streams are shown.
+                  Unavailable streams are automatically hidden.
+                </p>
+              </>
+            )}
+          </div>
+
+          {/* TVGarden live TV embed — thousands of global channels */}
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-900/50">
+              <div className="flex items-center gap-2">
+                <Tv size={16} className="text-blue-600 dark:text-blue-400" />
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
+                  Live Global TV Channels
+                </h3>
+                <a
+                  href={
+                    tvShowAll
+                      ? getTVGardenAllEmbedUrl("tv")
+                      : getTVGardenEmbedUrl(tvCountry, "tv")
+                  }
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[10px] text-blue-500 hover:text-blue-400 flex items-center gap-1"
+                >
+                  <Maximize2 size={10} /> Open full
+                </a>
+              </div>
+              <div className="flex items-center gap-2">
+                <select
+                  value={tvCountry}
+                  onChange={(e) => {
+                    setTvCountry(e.target.value);
+                    setTvShowAll(false);
+                  }}
+                  className="text-xs bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1 text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  aria-label="Select TV country"
+                >
+                  <option value="">🌍 All Countries</option>
+                  {ALL_COUNTRIES.map((c) => (
+                    <option key={c.code} value={c.code}>
+                      {c.flag} {c.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  onClick={() => setTvShowAll((v) => !v)}
+                  className={`text-[10px] px-2 py-1 rounded-lg transition-colors ${
+                    tvShowAll
+                      ? "bg-blue-500 text-white"
+                      : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+                  }`}
+                >
+                  {tvShowAll ? "Showing All" : "Show All"}
+                </button>
+              </div>
+            </div>
+            <div className="relative w-full" style={{ height: "500px" }}>
               <iframe
-                src={currentVideo.url}
-                title={currentVideo.name}
+                key={`tv-${tvShowAll ? "all" : tvCountry}`}
+                src={
+                  tvShowAll
+                    ? getTVGardenAllEmbedUrl("tv")
+                    : getTVGardenEmbedUrl(tvCountry, "tv")
+                }
+                title="Live Global TV"
                 className="w-full h-full"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                loading="lazy"
                 allowFullScreen
               />
             </div>
-
-            {/* Video Controls */}
-            <div className="p-3 flex items-center justify-between bg-white dark:bg-gray-800/50">
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() =>
-                    setVideoIndex(
-                      (vi) =>
-                        (vi - 1 + VIDEO_SOURCES.length) % VIDEO_SOURCES.length,
-                    )
-                  }
-                  className="p-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-900 dark:text-white transition-all"
-                  title="Previous"
-                >
-                  <ChevronLeft size={14} />
-                </button>
-                <button
-                  onClick={() =>
-                    setVideoIndex((vi) => (vi + 1) % VIDEO_SOURCES.length)
-                  }
-                  className="p-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-900 dark:text-white transition-all"
-                  title="Next"
-                >
-                  <ChevronRight size={14} />
-                </button>
-                <span className="text-xs text-gray-500 dark:text-gray-400 ml-1">
-                  {currentVideo.desc}
-                </span>
-              </div>
-
-              {/* Video Station Dropdown */}
-              <div className="relative">
-                <button
-                  onClick={() => setVideoDropdown(!videoDropdown)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded-lg text-xs text-gray-900 dark:text-white transition-all"
-                >
-                  <Monitor size={12} /> Change Station <ChevronDown size={10} />
-                </button>
-                {videoDropdown && (
-                  <div className="absolute right-0 bottom-full mb-1 w-56 bg-white dark:bg-gray-800 border border-gray-700 rounded-xl shadow-xl overflow-hidden z-10">
-                    {VIDEO_SOURCES.map((vs, i) => (
-                      <button
-                        key={vs.id}
-                        onClick={() => {
-                          setVideoIndex(i);
-                          setVideoDropdown(false);
-                        }}
-                        className={`w-full flex items-center gap-2 px-3 py-2 text-xs text-left transition-all ${
-                          i === videoIndex
-                            ? "bg-blue-600/20 text-blue-400"
-                            : "text-gray-300 hover:bg-gray-700"
-                        }`}
-                      >
-                        {vs.type === "live" ? (
-                          <Radio size={10} className="text-red-400" />
-                        ) : (
-                          <Play size={10} />
-                        )}
-                        <span className="flex-1">{vs.name}</span>
-                        {i === videoIndex && (
-                          <span className="text-[9px] bg-blue-600 text-gray-900 dark:text-white px-1 rounded">
-                            ON
-                          </span>
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
+            <p className="text-[10px] text-gray-500 dark:text-gray-400 p-2 text-center">
+              Powered by tvgarden.world — thousands of live TV channels from
+              {tvShowAll
+                ? " every country"
+                : ` ${currentCountry.flag} ${currentCountry.name}`}
+              . TVGarden shows only live, available channels.
+            </p>
           </div>
-        )}
-      </div>
-
-      {/* Social Media News Sources */}
-      <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
-        <h3 className="font-bold text-gray-900 dark:text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-          <Globe size={18} className="text-blue-600" />
-          Social Media Fuel News
-        </h3>
-        <p className="text-xs text-gray-500 mb-4">
-          Live fuel industry news from social media platforms. Click to open in
-          a new tab.
-        </p>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {SOCIAL_MEDIA_SOURCES.map((src) => (
-            <a
-              key={src.id}
-              href={src.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block p-3 bg-gray-50 dark:bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-blue-400 dark:hover:border-blue-500 transition-all group"
-            >
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs font-bold text-blue-600">
-                  {src.platform}
-                </span>
-                <ExternalLink
-                  size={12}
-                  className="text-gray-500 dark:text-gray-400 group-hover:text-blue-600"
-                />
-              </div>
-              <p className="text-xs font-medium text-gray-700 dark:text-gray-200">
-                {src.name}
-              </p>
-              <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1">{src.desc}</p>
-            </a>
-          ))}
-        </div>
-      </div>
-
-      {/* News Grid */}
-      {loading ? (
-        <div className="flex items-center justify-center py-20">
-          <RefreshCw size={32} className="text-gray-500 dark:text-gray-400 animate-spin mb-4" />
-          <p className="text-gray-500">Loading news...</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {searchedNews.map((item) => {
-            const Icon = CATEGORY_ICONS[item.category] || Newspaper;
-            const colorClass = CATEGORY_COLORS[item.category];
-            const isPriority = item.priority === "high";
-            const isRead = readIds.has(item.id) || item.read;
-
-            return (
-              <div
-                key={item.id}
-                className={`group bg-white dark:bg-white dark:bg-gray-800 rounded-xl border transition-all hover:shadow-lg cursor-pointer ${
-                  isRead
-                    ? "border-gray-200 dark:border-gray-700 opacity-70"
-                    : isPriority
-                      ? "border-red-300 dark:border-red-700"
-                      : "border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-700"
-                }`}
-                onClick={() => {
-                  if (item.sourceUrl && item.sourceUrl !== "#") {
-                    window.open(
-                      item.sourceUrl,
-                      "_blank",
-                      "noopener,noreferrer",
-                    );
-                  }
-                  markAsRead(item.id);
-                }}
-              >
-                <div className="p-5">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span
-                        className={`px-2 py-0.5 rounded text-[10px] font-medium border flex items-center gap-1 ${colorClass}`}
-                      >
-                        <Icon size={10} /> {CATEGORY_LABELS[item.category]}
-                      </span>
-                      {isPriority && (
-                        <span className="px-2 py-0.5 bg-red-500/20 text-red-400 rounded text-[10px] font-medium flex items-center gap-1">
-                          <AlertTriangle size={10} /> High Priority
-                        </span>
-                      )}
-                      {!isRead && (
-                        <span className="w-2 h-2 bg-blue-500 rounded-full" />
-                      )}
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleBookmark(item.id);
-                        }}
-                        className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                      >
-                        {item.bookmarked ? (
-                          <BookmarkCheck size={14} className="text-amber-400" />
-                        ) : (
-                          <Bookmark size={14} className="text-gray-500 dark:text-gray-400" />
-                        )}
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          shareNews(item);
-                        }}
-                        className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                      >
-                        <Share2 size={14} className="text-gray-500 dark:text-gray-400" />
-                      </button>
-                    </div>
-                  </div>
-
-                  <h3
-                    className={`font-semibold mb-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors ${isRead ? "text-gray-600 dark:text-gray-500 dark:text-gray-400" : "text-gray-900 dark:text-gray-900 dark:text-white"}`}
-                  >
-                    {item.title}
-                  </h3>
-                  <p className="text-sm text-gray-500 dark:text-gray-500 dark:text-gray-400 line-clamp-3 mb-3">
-                    {item.summary}
-                  </p>
-                  <div className="flex items-center justify-between text-[11px] text-gray-500 dark:text-gray-400">
-                    <div className="flex items-center gap-3">
-                      <span className="flex items-center gap-1">
-                        <Globe size={10} /> {item.source}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Clock size={10} />{" "}
-                        {item.publishedAt
-                          ? new Date(item.publishedAt).toLocaleDateString()
-                          : "—"}
-                      </span>
-                    </div>
-                    <ExternalLink
-                      size={12}
-                      className="text-gray-500 dark:text-gray-400 group-hover:text-blue-400 transition-colors"
-                    />
-                  </div>
-                </div>
-              </div>
-            );
-          })}
         </div>
       )}
 
-      {searchedNews.length === 0 && !loading && (
-        <div className="text-center py-16">
-          <Newspaper size={48} className="mx-auto text-gray-300 mb-4" />
-          <p className="text-gray-500">
-            {searchQuery
-              ? `No news matching "${searchQuery}"`
-              : "No news items in this category"}
-          </p>
+      {/* ===================== LIVE RADIO SUB-TAB ===================== */}
+      {activeSubTab === "live-radio" && (
+        <div className="space-y-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-900/50">
+              <div className="flex items-center gap-2">
+                <Radio
+                  size={16}
+                  className="text-purple-600 dark:text-purple-400"
+                />
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
+                  Live Global Radio Stations
+                </h3>
+                <a
+                  href={
+                    radioShowAll
+                      ? getTVGardenAllEmbedUrl("radio")
+                      : getTVGardenEmbedUrl(radioCountry, "radio")
+                  }
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[10px] text-blue-500 hover:text-blue-400 flex items-center gap-1"
+                >
+                  <Maximize2 size={10} /> Open full
+                </a>
+              </div>
+              <div className="flex items-center gap-2">
+                <select
+                  value={radioCountry}
+                  onChange={(e) => {
+                    setRadioCountry(e.target.value);
+                    setRadioShowAll(false);
+                  }}
+                  className="text-xs bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1 text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  aria-label="Select radio country"
+                >
+                  <option value="">🌍 All Countries</option>
+                  {ALL_COUNTRIES.map((c) => (
+                    <option key={c.code} value={c.code}>
+                      {c.flag} {c.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  onClick={() => setRadioShowAll((v) => !v)}
+                  className={`text-[10px] px-2 py-1 rounded-lg transition-colors ${
+                    radioShowAll
+                      ? "bg-purple-500 text-white"
+                      : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+                  }`}
+                >
+                  {radioShowAll ? "Showing All" : "Show All"}
+                </button>
+              </div>
+            </div>
+            <div className="relative w-full" style={{ height: "500px" }}>
+              <iframe
+                key={`radio-${radioShowAll ? "all" : radioCountry}`}
+                src={
+                  radioShowAll
+                    ? getTVGardenAllEmbedUrl("radio")
+                    : getTVGardenEmbedUrl(radioCountry, "radio")
+                }
+                title="Live Global Radio"
+                className="w-full h-full"
+                loading="lazy"
+                allowFullScreen
+              />
+            </div>
+            <p className="text-[10px] text-gray-500 dark:text-gray-400 p-2 text-center">
+              Powered by tvgarden.world — live radio stations from
+              {radioShowAll
+                ? " every country"
+                : ` ${currentCountry.flag} ${currentCountry.name}`}
+              . TVGarden shows only live, available stations.
+            </p>
+          </div>
         </div>
+      )}
+
+      {/* ===================== ARTICLES GRID (articles sub-tab only) ===================== */}
+      {activeSubTab === "articles" && (
+        <>
+          {/* Social Media News Sources */}
+          <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
+            <h3 className="font-bold text-gray-900 dark:text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+              <Globe size={18} className="text-blue-600" />
+              Social Media Fuel News
+            </h3>
+            <p className="text-xs text-gray-500 mb-4">
+              Live fuel industry news from social media platforms. Click to open
+              in a new tab.
+            </p>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {SOCIAL_MEDIA_SOURCES.map((src) => (
+                <a
+                  key={src.id}
+                  href={src.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block p-3 bg-gray-50 dark:bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-blue-400 dark:hover:border-blue-500 transition-all group"
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs font-bold text-blue-600">
+                      {src.platform}
+                    </span>
+                    <ExternalLink
+                      size={12}
+                      className="text-gray-500 dark:text-gray-400 group-hover:text-blue-600"
+                    />
+                  </div>
+                  <p className="text-xs font-medium text-gray-700 dark:text-gray-200">
+                    {src.name}
+                  </p>
+                  <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1">
+                    {src.desc}
+                  </p>
+                </a>
+              ))}
+            </div>
+          </div>
+
+          {/* News Grid */}
+          {loading ? (
+            <div className="flex items-center justify-center py-20">
+              <RefreshCw
+                size={32}
+                className="text-gray-500 dark:text-gray-400 animate-spin mb-4"
+              />
+              <p className="text-gray-500">Loading news...</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {searchedNews.map((item) => {
+                const Icon = CATEGORY_ICONS[item.category] || Newspaper;
+                const colorClass = CATEGORY_COLORS[item.category];
+                const isPriority = item.priority === "high";
+                const isRead = readIds.has(item.id) || item.read;
+
+                return (
+                  <div
+                    key={item.id}
+                    className={`group bg-white dark:bg-white dark:bg-gray-800 rounded-xl border transition-all hover:shadow-lg cursor-pointer ${
+                      isRead
+                        ? "border-gray-200 dark:border-gray-700 opacity-70"
+                        : isPriority
+                          ? "border-red-300 dark:border-red-700"
+                          : "border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-700"
+                    }`}
+                    onClick={() => {
+                      if (item.sourceUrl && item.sourceUrl !== "#") {
+                        window.open(
+                          item.sourceUrl,
+                          "_blank",
+                          "noopener,noreferrer",
+                        );
+                      }
+                      markAsRead(item.id);
+                    }}
+                  >
+                    <div className="p-5">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span
+                            className={`px-2 py-0.5 rounded text-[10px] font-medium border flex items-center gap-1 ${colorClass}`}
+                          >
+                            <Icon size={10} /> {CATEGORY_LABELS[item.category]}
+                          </span>
+                          {isPriority && (
+                            <span className="px-2 py-0.5 bg-red-500/20 text-red-400 rounded text-[10px] font-medium flex items-center gap-1">
+                              <AlertTriangle size={10} /> High Priority
+                            </span>
+                          )}
+                          {!isRead && (
+                            <span className="w-2 h-2 bg-blue-500 rounded-full" />
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleBookmark(item.id);
+                            }}
+                            className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                          >
+                            {item.bookmarked ? (
+                              <BookmarkCheck
+                                size={14}
+                                className="text-amber-400"
+                              />
+                            ) : (
+                              <Bookmark
+                                size={14}
+                                className="text-gray-500 dark:text-gray-400"
+                              />
+                            )}
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              shareNews(item);
+                            }}
+                            className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                          >
+                            <Share2
+                              size={14}
+                              className="text-gray-500 dark:text-gray-400"
+                            />
+                          </button>
+                        </div>
+                      </div>
+
+                      <h3
+                        className={`font-semibold mb-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors ${isRead ? "text-gray-600 dark:text-gray-500 dark:text-gray-400" : "text-gray-900 dark:text-gray-900 dark:text-white"}`}
+                      >
+                        {item.title}
+                      </h3>
+                      <p className="text-sm text-gray-500 dark:text-gray-500 dark:text-gray-400 line-clamp-3 mb-3">
+                        {item.summary}
+                      </p>
+                      <div className="flex items-center justify-between text-[11px] text-gray-500 dark:text-gray-400">
+                        <div className="flex items-center gap-3">
+                          <span className="flex items-center gap-1">
+                            <Globe size={10} /> {item.source}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <Clock size={10} />{" "}
+                            {item.publishedAt
+                              ? new Date(item.publishedAt).toLocaleDateString()
+                              : "—"}
+                          </span>
+                        </div>
+                        <ExternalLink
+                          size={12}
+                          className="text-gray-500 dark:text-gray-400 group-hover:text-blue-400 transition-colors"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {searchedNews.length === 0 && !loading && (
+            <div className="text-center py-16">
+              <Newspaper size={48} className="mx-auto text-gray-300 mb-4" />
+              <p className="text-gray-500">
+                {searchQuery
+                  ? `No news matching "${searchQuery}"`
+                  : "No news items in this category"}
+              </p>
+            </div>
+          )}
+        </>
       )}
 
       {/* Detail Modal */}

@@ -98,7 +98,9 @@ const ProductRow = ({
           <Package size={18} className="text-amber-400" />
         </div>
         <div>
-          <p className="text-gray-900 dark:text-white font-medium">{product.name}</p>
+          <p className="text-gray-900 dark:text-white font-medium">
+            {product.name}
+          </p>
           <p className="text-gray-500 text-xs">{product.sku}</p>
         </div>
       </div>
@@ -118,7 +120,9 @@ const ProductRow = ({
       </span>
     </td>
     <td className="px-4 py-4">
-      <span className="text-gray-900 dark:text-white">{formatMoney(product.cost_price || 0)}</span>
+      <span className="text-gray-900 dark:text-white">
+        {formatMoney(product.cost_price || 0)}
+      </span>
     </td>
     <td className="px-4 py-4">
       <span className="text-amber-400 font-medium">
@@ -197,7 +201,10 @@ const ProductModal = ({
           <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
             {product ? "Edit Product" : "Add Product"}
           </h3>
-          <button onClick={onClose} className="text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:text-white">
+          <button
+            onClick={onClose}
+            className="text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:text-white"
+          >
             <X size={20} />
           </button>
         </div>
@@ -206,7 +213,9 @@ const ProductModal = ({
           {/* Basic Info */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="text-gray-500 dark:text-gray-400 text-xs mb-2 block">SKU *</label>
+              <label className="text-gray-500 dark:text-gray-400 text-xs mb-2 block">
+                SKU *
+              </label>
               <input
                 type="text"
                 value={formData.sku}
@@ -275,7 +284,10 @@ const ProductModal = ({
                 <span className="text-gray-900 dark:text-white">
                   {formData.category || "Select Category"}
                 </span>
-                <ChevronDown size={16} className="text-gray-500 dark:text-gray-400" />
+                <ChevronDown
+                  size={16}
+                  className="text-gray-500 dark:text-gray-400"
+                />
               </button>
               {showCategoryDropdown && (
                 <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-white/10 rounded-xl shadow-xl z-10 overflow-hidden">
@@ -320,7 +332,9 @@ const ProductModal = ({
               )}
             </div>
             <div>
-              <label className="text-gray-500 dark:text-gray-400 text-xs mb-2 block">Unit</label>
+              <label className="text-gray-500 dark:text-gray-400 text-xs mb-2 block">
+                Unit
+              </label>
               <select
                 value={formData.unit}
                 onChange={(e) =>
@@ -541,8 +555,10 @@ const DeleteConfirmModal = ({
         </h3>
         <p className="text-gray-500 dark:text-gray-400 mb-6">
           Are you sure you want to delete{" "}
-          <span className="text-gray-900 dark:text-white font-medium">{product.name}</span>? This
-          action cannot be undone.
+          <span className="text-gray-900 dark:text-white font-medium">
+            {product.name}
+          </span>
+          ? This action cannot be undone.
         </p>
         <div className="flex gap-3">
           <button
@@ -712,7 +728,9 @@ export default function ProductsManagement() {
       <div className="flex items-center justify-center h-full">
         <div className="text-center">
           <Loader2 className="w-12 h-12 text-amber-500 animate-spin mx-auto mb-4" />
-          <p className="text-gray-500 dark:text-gray-400">Loading products...</p>
+          <p className="text-gray-500 dark:text-gray-400">
+            Loading products...
+          </p>
         </div>
       </div>
     );
@@ -723,7 +741,9 @@ export default function ProductsManagement() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Products</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+            Products
+          </h1>
           <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
             {filteredProducts.length} product
             {filteredProducts.length !== 1 ? "s" : ""}
@@ -798,7 +818,9 @@ export default function ProductsManagement() {
               <tr>
                 <td colSpan={7} className="text-center py-12">
                   <Package className="w-12 h-12 text-gray-600 mx-auto mb-3" />
-                  <p className="text-gray-500 dark:text-gray-400">No products found</p>
+                  <p className="text-gray-500 dark:text-gray-400">
+                    No products found
+                  </p>
                   <p className="text-gray-500 text-sm mt-1">
                     {search || categoryFilter || showLowStock
                       ? "Try adjusting your filters"

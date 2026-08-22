@@ -993,7 +993,9 @@ export default function AIChatbot() {
               >
                 <RefreshCw size={12} /> Clear Chat
               </button>
-              <span className="text-xs text-gray-500 dark:text-gray-400">|</span>
+              <span className="text-xs text-gray-500 dark:text-gray-400">
+                |
+              </span>
               <span
                 className={`text-xs flex items-center gap-1 ${
                   connectionStatus === "connected"

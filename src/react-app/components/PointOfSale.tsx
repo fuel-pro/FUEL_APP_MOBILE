@@ -1024,13 +1024,15 @@ export default function PointOfSale() {
           {(() => {
             const today = new Date().toDateString();
             const todayTxns = transactions.filter(
-              (t) => t.timestamp && new Date(t.timestamp).toDateString() === today,
+              (t) =>
+                t.timestamp && new Date(t.timestamp).toDateString() === today,
             );
-                          const todayTotal = todayTxns.reduce(
+            const todayTotal = todayTxns.reduce(
               (sum, t) => sum + (Number(t.total) || 0),
               0,
             );
-            const avgSale = todayTxns.length > 0 ? todayTotal / todayTxns.length : 0;
+            const avgSale =
+              todayTxns.length > 0 ? todayTotal / todayTxns.length : 0;
             if (todayTxns.length === 0) return null;
             return (
               <div className="grid grid-cols-3 gap-2 mb-3">
@@ -1609,10 +1611,7 @@ export default function PointOfSale() {
                       No transactions yet
                     </p>
                   ) : (
-                    (showAllTxns
-                      ? transactions
-                      : transactions.slice(0, 5)
-                    )
+                    (showAllTxns ? transactions : transactions.slice(0, 5))
                       .filter((t) => {
                         if (!txnSearch.trim()) return true;
                         const q = txnSearch.toLowerCase();
@@ -1623,28 +1622,28 @@ export default function PointOfSale() {
                         );
                       })
                       .map((txn) => (
-                      <div
-                        key={txn.id}
-                        className="p-2 bg-gray-50 dark:bg-white dark:bg-gray-800 rounded cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
-                        onClick={() => {
-                          setCurrentTransaction(txn);
-                          setShowReceipt(true);
-                        }}
-                      >
-                        <div className="flex justify-between text-sm">
-                          <span className="font-mono text-xs">
-                            {txn.invoiceNumber}
-                          </span>
-                          <span className="font-semibold">
-                            {currencySymbol} {formatNumber(txn.total)}
-                          </span>
+                        <div
+                          key={txn.id}
+                          className="p-2 bg-gray-50 dark:bg-white dark:bg-gray-800 rounded cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
+                          onClick={() => {
+                            setCurrentTransaction(txn);
+                            setShowReceipt(true);
+                          }}
+                        >
+                          <div className="flex justify-between text-sm">
+                            <span className="font-mono text-xs">
+                              {txn.invoiceNumber}
+                            </span>
+                            <span className="font-semibold">
+                              {currencySymbol} {formatNumber(txn.total)}
+                            </span>
+                          </div>
+                          <div className="flex justify-between text-xs text-gray-500">
+                            <span>{txn.paymentMethod.toUpperCase()}</span>
+                            <span>{formatDate(txn.timestamp)}</span>
+                          </div>
                         </div>
-                        <div className="flex justify-between text-xs text-gray-500">
-                          <span>{txn.paymentMethod.toUpperCase()}</span>
-                          <span>{formatDate(txn.timestamp)}</span>
-                        </div>
-                      </div>
-                    ))
+                      ))
                   )}
                 </div>
               </div>

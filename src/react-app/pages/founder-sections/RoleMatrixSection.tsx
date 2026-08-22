@@ -142,7 +142,9 @@ export default function RoleMatrixSection({ store, logAudit }: Props) {
       <div className="grid grid-cols-3 gap-2">
         <div className="bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl p-3">
           <span className="text-[10px] text-gray-500">Total Cells</span>
-          <p className="text-lg font-semibold text-gray-900 dark:text-white">{stats.total}</p>
+          <p className="text-lg font-semibold text-gray-900 dark:text-white">
+            {stats.total}
+          </p>
         </div>
         <div className="bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl p-3">
           <span className="text-[10px] text-gray-500">Granted</span>

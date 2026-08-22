@@ -578,7 +578,12 @@ function PermitsSection({ config }: { config: ComplianceConfig }) {
             <div
               className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${isObtained ? "bg-green-500 border-green-500" : "border-gray-300 dark:border-gray-600"}`}
             >
-              {isObtained && <CheckCircle2 size={12} className="text-gray-900 dark:text-white" />}
+              {isObtained && (
+                <CheckCircle2
+                  size={12}
+                  className="text-gray-900 dark:text-white"
+                />
+              )}
             </div>
             <span
               className={`text-xs ${isObtained ? "text-gray-500 line-through" : "text-gray-700 dark:text-gray-300"}`}
@@ -647,7 +652,9 @@ function FeaturesSection({ config }: { config: ComplianceConfig }) {
               )}
             </p>
             <p className="text-xs text-gray-500">{f.description}</p>
-            <span className="text-[10px] text-gray-500 dark:text-gray-400">{f.category}</span>
+            <span className="text-[10px] text-gray-500 dark:text-gray-400">
+              {f.category}
+            </span>
           </div>
         </div>
       ))}
@@ -757,8 +764,12 @@ function InfoCard({
       <p className="text-[10px] text-gray-500 uppercase tracking-wider">
         {title}
       </p>
-      <p className="text-sm font-bold text-gray-900 dark:text-gray-900 dark:text-white">{value}</p>
-      {desc && <p className="text-[10px] text-gray-500 dark:text-gray-400">{desc}</p>}
+      <p className="text-sm font-bold text-gray-900 dark:text-gray-900 dark:text-white">
+        {value}
+      </p>
+      {desc && (
+        <p className="text-[10px] text-gray-500 dark:text-gray-400">{desc}</p>
+      )}
     </div>
   );
 }

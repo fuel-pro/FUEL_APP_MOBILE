@@ -146,7 +146,11 @@ export default function Invoice() {
     const interval = setInterval(() => {
       attempts++;
       const pending = consumePendingPayload("invoice");
-      if (pending && typeof pending === "object" && Object.keys(pending as object).length > 0) {
+      if (
+        pending &&
+        typeof pending === "object" &&
+        Object.keys(pending as object).length > 0
+      ) {
         clearInterval(interval);
         setTimeout(() => applyPrefill(pending), 50);
       } else if (attempts >= maxAttempts) {
@@ -236,7 +240,9 @@ export default function Invoice() {
 
   const saveInvoice = () => {
     if (!customerName || state.invoiceItems.length === 0) {
-      toastError("Please add customer details and invoice items before saving.");
+      toastError(
+        "Please add customer details and invoice items before saving.",
+      );
       return;
     }
     // Reject empty all-blank items (a user who clicked "Add Item" but never
@@ -245,7 +251,9 @@ export default function Invoice() {
       (it) => (it.desc && it.desc.trim()) || it.qty > 0 || it.price > 0,
     );
     if (!hasContent) {
-      toastError("Please add at least one item with a description before saving.");
+      toastError(
+        "Please add at least one item with a description before saving.",
+      );
       return;
     }
 
@@ -540,13 +548,17 @@ export default function Invoice() {
     },
     whatsapp: () => {
       if (!customerName || state.invoiceItems.length === 0) {
-        toastError("Please add customer details and invoice items before sharing.");
+        toastError(
+          "Please add customer details and invoice items before sharing.",
+        );
         return;
       }
       const data = getInvoiceData();
       const companyName = state.companyData.name;
       if (!companyName) {
-        toastError("Please set your company name in business info before sharing.");
+        toastError(
+          "Please set your company name in business info before sharing.",
+        );
         return;
       }
       const msg = `*${companyName}*\n\n*INVOICE ${getInvoiceNumber()}*\n\n${data}\n\n*CONTACTS:* ${state.companyData.contacts}\n*EMAIL:* ${state.companyData.email}`;
@@ -555,13 +567,17 @@ export default function Invoice() {
     },
     email: () => {
       if (!customerName || state.invoiceItems.length === 0) {
-        toastError("Please add customer details and invoice items before emailing.");
+        toastError(
+          "Please add customer details and invoice items before emailing.",
+        );
         return;
       }
       const data = getInvoiceData();
       const companyName = state.companyData.name;
       if (!companyName) {
-        toastError("Please set your company name in business info before emailing.");
+        toastError(
+          "Please set your company name in business info before emailing.",
+        );
         return;
       }
       const subject = `Invoice ${getInvoiceNumber()} from ${companyName}`;

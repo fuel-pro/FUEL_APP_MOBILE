@@ -274,7 +274,8 @@ export default function UserProfileSettings() {
 
   const inputClass =
     "w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:border-amber-500 focus:outline-none transition-colors";
-  const labelClass = "text-gray-500 dark:text-gray-400 text-xs mb-2 block font-medium";
+  const labelClass =
+    "text-gray-500 dark:text-gray-400 text-xs mb-2 block font-medium";
   const cardClass = "bg-white/5 border border-white/10 rounded-xl p-6 mb-6";
   const btnClass =
     "w-full py-3 bg-amber-500 hover:bg-amber-600 disabled:bg-gray-600 text-white font-medium rounded-xl flex items-center justify-center gap-2 transition-colors";
@@ -360,7 +361,10 @@ export default function UserProfileSettings() {
           <Mail size={20} className="text-blue-400" /> Change Email
         </h3>
         <p className="text-gray-500 dark:text-gray-400 text-sm mb-3">
-          Current email: <span className="font-semibold text-gray-900 dark:text-white">{user?.email}</span>
+          Current email:{" "}
+          <span className="font-semibold text-gray-900 dark:text-white">
+            {user?.email}
+          </span>
         </p>
         <div className="flex gap-3">
           <input

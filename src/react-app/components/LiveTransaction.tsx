@@ -1187,7 +1187,9 @@ export default function LiveTransaction() {
                 <Smartphone size={16} className="text-emerald-400" />
               </div>
               <div className="flex-1">
-                <p className="text-sm font-medium text-gray-900 dark:text-white">M-PESA Payment</p>
+                <p className="text-sm font-medium text-gray-900 dark:text-white">
+                  M-PESA Payment
+                </p>
                 <p className="text-[11px] text-gray-500 dark:text-gray-400">
                   Daraja STK Push, Paybill & Buy Goods
                 </p>
@@ -2318,8 +2320,14 @@ function SummaryCard({
           {label}
         </span>
       </div>
-      <p className="text-sm font-bold text-gray-900 dark:text-white truncate">{value}</p>
-      {subValue && <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{subValue}</p>}
+      <p className="text-sm font-bold text-gray-900 dark:text-white truncate">
+        {value}
+      </p>
+      {subValue && (
+        <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+          {subValue}
+        </p>
+      )}
     </div>
   );
 }

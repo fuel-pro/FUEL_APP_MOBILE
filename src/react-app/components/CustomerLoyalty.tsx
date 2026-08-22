@@ -224,7 +224,11 @@ export default function CustomerLoyalty() {
       cloudStorageService
         .set("loyalty_customers", c, stationId)
         .then(() => {
-          console.log("[CustomerLoyalty] cloud save OK:", c.length, "customers");
+          console.log(
+            "[CustomerLoyalty] cloud save OK:",
+            c.length,
+            "customers",
+          );
         })
         .catch((e) => {
           console.error("[CustomerLoyalty] cloud save FAILED:", e);
@@ -938,7 +942,10 @@ export default function CustomerLoyalty() {
                                 ? `${c.preferredFuel} fuel`
                                 : "",
                             };
-                            console.log("[CustomerLoyalty] Create Invoice clicked, prefill:", JSON.stringify(prefillPayload));
+                            console.log(
+                              "[CustomerLoyalty] Create Invoice clicked, prefill:",
+                              JSON.stringify(prefillPayload),
+                            );
                             navigateToTab("invoice", prefillPayload);
                           }}
                           className="p-1.5 bg-purple-50 hover:bg-purple-100 dark:bg-purple-900/20 rounded-lg text-purple-600"

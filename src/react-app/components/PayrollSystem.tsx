@@ -471,7 +471,9 @@ export default function PayrollSystem() {
       localStorage.setItem("fuelpro_payroll_settings", JSON.stringify(payload));
     } catch (error) {
       console.error("Error saving settings:", error);
-      toastError("Failed to save payroll settings: " + (error as Error).message);
+      toastError(
+        "Failed to save payroll settings: " + (error as Error).message,
+      );
     } finally {
       setSaving(false);
     }
@@ -1607,7 +1609,9 @@ export default function PayrollSystem() {
         row.some((cell) => cell !== undefined && cell !== ""),
       );
       if (nonEmptyRows.length < 2) {
-        toastError("Please ensure your Excel file has headers and employee data.");
+        toastError(
+          "Please ensure your Excel file has headers and employee data.",
+        );
         return;
       }
 
@@ -2983,7 +2987,10 @@ export default function PayrollSystem() {
       {/* No employees message */}
       {filteredEmployees.length === 0 && (
         <div className="text-center py-12">
-          <Users size={48} className="mx-auto text-gray-500 dark:text-gray-400 mb-4" />
+          <Users
+            size={48}
+            className="mx-auto text-gray-500 dark:text-gray-400 mb-4"
+          />
           <p className="text-gray-500 dark:text-gray-500 dark:text-gray-400">
             {searchTerm
               ? "No employees found matching your search."

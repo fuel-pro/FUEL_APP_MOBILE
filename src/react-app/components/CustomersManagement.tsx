@@ -88,7 +88,10 @@ export default function CustomersManagement() {
       setDataSource("cloud");
       cloudLoadCompleteRef.current = true;
     } catch (error) {
-      console.error("[Customers] DB load failed, falling back to cloud:", error);
+      console.error(
+        "[Customers] DB load failed, falling back to cloud:",
+        error,
+      );
       // Fallback: load from cloud KV store
       try {
         const cloudData = await cloudStorageService.get<Customer[]>(
@@ -237,7 +240,9 @@ export default function CustomersManagement() {
       <div className="flex justify-center h-full p-12">
         <div className="text-center">
           <Loader2 className="w-12 h-12 text-amber-500 animate-spin mx-auto mb-4" />
-          <p className="text-gray-500 dark:text-gray-400">Loading customers...</p>
+          <p className="text-gray-500 dark:text-gray-400">
+            Loading customers...
+          </p>
         </div>
       </div>
     );

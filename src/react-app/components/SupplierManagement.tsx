@@ -469,7 +469,8 @@ export default function SupplierManagement() {
 
   const statusColors: Record<string, string> = {
     active: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
-    inactive: "bg-gray-500/10 text-gray-500 dark:text-gray-400 border-gray-500/20",
+    inactive:
+      "bg-gray-500/10 text-gray-500 dark:text-gray-400 border-gray-500/20",
     blacklisted: "bg-red-500/10 text-red-400 border-red-500/20",
     pending: "bg-amber-500/10 text-amber-400",
     confirmed: "bg-blue-500/10 text-blue-400",
@@ -646,7 +647,10 @@ export default function SupplierManagement() {
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 bg-gradient-to-br from-amber-400 to-amber-600 rounded-xl flex items-center justify-center">
-                        <Truck size={18} className="text-gray-900 dark:text-white" />
+                        <Truck
+                          size={18}
+                          className="text-gray-900 dark:text-white"
+                        />
                       </div>
                       <div>
                         <h3 className="font-semibold text-gray-900 dark:text-gray-900 dark:text-white">

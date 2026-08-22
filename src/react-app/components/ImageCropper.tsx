@@ -451,7 +451,9 @@ export default function ImageCropper({
       <div className="flex items-center justify-between p-3 bg-white dark:bg-gray-900 border-b border-gray-700">
         <div className="flex items-center gap-2">
           <Crop className="w-5 h-5 text-amber-500" />
-          <h2 className="text-gray-900 dark:text-white font-semibold">Crop & Enhance</h2>
+          <h2 className="text-gray-900 dark:text-white font-semibold">
+            Crop & Enhance
+          </h2>
           {enhancedImage && (
             <span className="px-2 py-0.5 bg-green-600 text-gray-900 dark:text-white text-xs rounded">
               Enhanced

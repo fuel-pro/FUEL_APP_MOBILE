@@ -661,7 +661,10 @@ export default function FuelOffloading() {
                   <tr key={record.id}>
                     <td>
                       <div className="flex items-center gap-1">
-                        <Calendar size={14} className="text-gray-500 dark:text-gray-400" />
+                        <Calendar
+                          size={14}
+                          className="text-gray-500 dark:text-gray-400"
+                        />
                         <div>
                           <div className="font-medium">{record.date}</div>
                           <div className="text-sm text-gray-500">

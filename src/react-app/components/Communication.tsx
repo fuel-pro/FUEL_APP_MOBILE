@@ -923,7 +923,10 @@ export default function Communication() {
 
       {filteredContacts.length === 0 && (
         <div className="text-center py-12">
-          <Users size={48} className="mx-auto text-gray-500 dark:text-gray-400 mb-4" />
+          <Users
+            size={48}
+            className="mx-auto text-gray-500 dark:text-gray-400 mb-4"
+          />
           <p className="text-gray-500">No contacts found</p>
         </div>
       )}
@@ -1002,7 +1005,10 @@ export default function Communication() {
 
       {messages.length === 0 && (
         <div className="text-center py-12">
-          <MessageCircleMore size={48} className="mx-auto text-gray-500 dark:text-gray-400 mb-4" />
+          <MessageCircleMore
+            size={48}
+            className="mx-auto text-gray-500 dark:text-gray-400 mb-4"
+          />
           <p className="text-gray-500">No messages yet</p>
           <button
             onClick={() => openNewMessage()}
@@ -1088,7 +1094,10 @@ export default function Communication() {
 
       {templates.length === 0 && (
         <div className="text-center py-12">
-          <Archive size={48} className="mx-auto text-gray-500 dark:text-gray-400 mb-4" />
+          <Archive
+            size={48}
+            className="mx-auto text-gray-500 dark:text-gray-400 mb-4"
+          />
           <p className="text-gray-500">No templates created yet</p>
         </div>
       )}

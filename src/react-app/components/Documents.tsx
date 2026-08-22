@@ -869,7 +869,9 @@ export default function Documents() {
       console.error("[Documents] preview failed:", err);
       setError("Failed to load preview");
       setPreviewMode(false);
-      toastError("Failed to load preview. The document content may be missing.");
+      toastError(
+        "Failed to load preview. The document content may be missing.",
+      );
     } finally {
       setPreviewLoading(false);
     }
@@ -908,7 +910,9 @@ export default function Documents() {
       console.error("[Documents] quick preview failed:", err);
       setError("Failed to load preview");
       setQuickPreviewDoc(null);
-      toastError("Failed to load preview. The document content may be missing.");
+      toastError(
+        "Failed to load preview. The document content may be missing.",
+      );
     } finally {
       setQuickPreviewLoading(false);
     }
@@ -935,7 +939,9 @@ export default function Documents() {
     } catch (err) {
       console.error("[Documents] download failed:", err);
       setError("Failed to download document");
-      toastError("Failed to download document. The file content may be missing.");
+      toastError(
+        "Failed to download document. The file content may be missing.",
+      );
     }
   };
 

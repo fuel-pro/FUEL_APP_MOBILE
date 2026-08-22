@@ -155,7 +155,8 @@ export default function AdvancedAnalytics() {
           const method = (sale.payment_method || "unknown")
             .toString()
             .toLowerCase();
-          if (!pmBreakdown[method]) pmBreakdown[method] = { count: 0, total: 0 };
+          if (!pmBreakdown[method])
+            pmBreakdown[method] = { count: 0, total: 0 };
           pmBreakdown[method].count += 1;
           pmBreakdown[method].total += sale.total_amount || 0;
         }
@@ -586,7 +587,9 @@ export default function AdvancedAnalytics() {
                     </span>
                   )}
                   {dataSource === "none" && (
-                    <span className="ml-2 text-gray-500 dark:text-gray-400">• No data yet</span>
+                    <span className="ml-2 text-gray-500 dark:text-gray-400">
+                      • No data yet
+                    </span>
                   )}
                 </p>
               </div>

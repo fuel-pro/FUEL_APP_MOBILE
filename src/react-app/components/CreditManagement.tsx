@@ -685,7 +685,9 @@ export default function CreditManagement() {
                             className={`font-semibold ${isOver ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"}`}
                           >
                             Available: {currencySymbol}
-                            {formatNumber(Math.max(0, creditLimit - balanceUsed))}
+                            {formatNumber(
+                              Math.max(0, creditLimit - balanceUsed),
+                            )}
                           </span>
                           <span className="text-gray-400">
                             {pct.toFixed(0)}% used

@@ -58,9 +58,7 @@ export default function CloudDiagnosticsPanel() {
       const cloudRows: CloudRow[] = Object.entries(all).map(([id, data]) => {
         const jsonStr = typeof data === "string" ? data : JSON.stringify(data);
         const isCompressed =
-          typeof data === "object" &&
-          data !== null &&
-          "__compressed" in data;
+          typeof data === "object" && data !== null && "__compressed" in data;
         return {
           id,
           dataPreview:
@@ -130,7 +128,11 @@ export default function CloudDiagnosticsPanel() {
 
     // Step 2: Check station
     if (!stationId) {
-      addResult("Station", "fail", "No station selected — per-station keys will use user-scoped fallback");
+      addResult(
+        "Station",
+        "fail",
+        "No station selected — per-station keys will use user-scoped fallback",
+      );
     } else {
       addResult("Station", "pass", `Station ID: ${stationId.slice(0, 8)}...`);
     }
@@ -146,7 +148,12 @@ export default function CloudDiagnosticsPanel() {
       const writeStart = performance.now();
       await cloudStorageService.set(testKey, testData, stationId);
       const writeDuration = Math.round(performance.now() - writeStart);
-      addResult("Write", "pass", `Data written to key "${testKey}"`, writeDuration);
+      addResult(
+        "Write",
+        "pass",
+        `Data written to key "${testKey}"`,
+        writeDuration,
+      );
     } catch (err) {
       addResult("Write", "fail", `Write failed: ${(err as Error).message}`);
       setRunningTest(false);
@@ -159,12 +166,24 @@ export default function CloudDiagnosticsPanel() {
       // Clear cache first to force a cloud read
       cloudStorageService.clearCache(testKey, stationId);
       const readStart = performance.now();
-      const readBack = await cloudStorageService.get<typeof testData>(testKey, stationId);
+      const readBack = await cloudStorageService.get<typeof testData>(
+        testKey,
+        stationId,
+      );
       const readDuration = Math.round(performance.now() - readStart);
       if (readBack && readBack.message === testData.message) {
-        addResult("Read", "pass", `Data read back successfully (value: ${readBack.value?.toFixed(2)})`, readDuration);
+        addResult(
+          "Read",
+          "pass",
+          `Data read back successfully (value: ${readBack.value?.toFixed(2)})`,
+          readDuration,
+        );
       } else {
-        addResult("Read", "fail", `Data mismatch or null. Got: ${JSON.stringify(readBack)?.slice(0, 100)}`);
+        addResult(
+          "Read",
+          "fail",
+          `Data mismatch or null. Got: ${JSON.stringify(readBack)?.slice(0, 100)}`,
+        );
       }
     } catch (err) {
       addResult("Read", "fail", `Read failed: ${(err as Error).message}`);
@@ -173,14 +192,29 @@ export default function CloudDiagnosticsPanel() {
     // Step 5: Cache test
     addResult("Cache", "pending", "Testing in-memory cache...");
     try {
-      const cached = cloudStorageService.getCached<typeof testData>(testKey, stationId);
+      const cached = cloudStorageService.getCached<typeof testData>(
+        testKey,
+        stationId,
+      );
       if (cached) {
-        addResult("Cache", "pass", `Cache hit (value: ${cached.value?.toFixed(2)})`);
+        addResult(
+          "Cache",
+          "pass",
+          `Cache hit (value: ${cached.value?.toFixed(2)})`,
+        );
       } else {
-        addResult("Cache", "fail", "Cache miss after write — cache may not be working");
+        addResult(
+          "Cache",
+          "fail",
+          "Cache miss after write — cache may not be working",
+        );
       }
     } catch (err) {
-      addResult("Cache", "fail", `Cache test failed: ${(err as Error).message}`);
+      addResult(
+        "Cache",
+        "fail",
+        `Cache test failed: ${(err as Error).message}`,
+      );
     }
 
     // Step 6: Delete test
@@ -197,7 +231,9 @@ export default function CloudDiagnosticsPanel() {
     addResult(
       "Realtime",
       realtimeEnabled ? "pass" : "fail",
-      realtimeEnabled ? "Realtime subscriptions are enabled" : "Realtime is DISABLED (Low-bandwidth mode ON)",
+      realtimeEnabled
+        ? "Realtime subscriptions are enabled"
+        : "Realtime is DISABLED (Low-bandwidth mode ON)",
     );
 
     const totalDuration = Math.round(performance.now() - t0);
@@ -256,14 +292,20 @@ export default function CloudDiagnosticsPanel() {
         <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow border border-gray-200 dark:border-gray-600">
           <div className="flex items-center gap-2 mb-1">
             <Database size={18} className="text-blue-500" />
-            <span className="text-sm text-gray-500 dark:text-gray-400">Total Rows</span>
+            <span className="text-sm text-gray-500 dark:text-gray-400">
+              Total Rows
+            </span>
           </div>
-          <div className="text-2xl font-bold text-gray-800 dark:text-white">{stats.totalRows}</div>
+          <div className="text-2xl font-bold text-gray-800 dark:text-white">
+            {stats.totalRows}
+          </div>
         </div>
         <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow border border-gray-200 dark:border-gray-600">
           <div className="flex items-center gap-2 mb-1">
             <Zap size={18} className="text-green-500" />
-            <span className="text-sm text-gray-500 dark:text-gray-400">Compressed</span>
+            <span className="text-sm text-gray-500 dark:text-gray-400">
+              Compressed
+            </span>
           </div>
           <div className="text-2xl font-bold text-gray-800 dark:text-white">
             {stats.compressedRows}
@@ -275,14 +317,27 @@ export default function CloudDiagnosticsPanel() {
         <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow border border-gray-200 dark:border-gray-600">
           <div className="flex items-center gap-2 mb-1">
             <Cloud size={18} className="text-purple-500" />
-            <span className="text-sm text-gray-500 dark:text-gray-400">Data Size</span>
+            <span className="text-sm text-gray-500 dark:text-gray-400">
+              Data Size
+            </span>
           </div>
-          <div className="text-2xl font-bold text-gray-800 dark:text-white">{formatSize(stats.totalSize)}</div>
+          <div className="text-2xl font-bold text-gray-800 dark:text-white">
+            {formatSize(stats.totalSize)}
+          </div>
         </div>
         <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow border border-gray-200 dark:border-gray-600">
           <div className="flex items-center gap-2 mb-1">
-            <Activity size={18} className={cloudStorageService.isRealtimeEnabled() ? "text-green-500" : "text-orange-500"} />
-            <span className="text-sm text-gray-500 dark:text-gray-400">Realtime</span>
+            <Activity
+              size={18}
+              className={
+                cloudStorageService.isRealtimeEnabled()
+                  ? "text-green-500"
+                  : "text-orange-500"
+              }
+            />
+            <span className="text-sm text-gray-500 dark:text-gray-400">
+              Realtime
+            </span>
           </div>
           <div className="text-2xl font-bold text-gray-800 dark:text-white">
             {cloudStorageService.isRealtimeEnabled() ? "ON" : "OFF"}
@@ -302,7 +357,11 @@ export default function CloudDiagnosticsPanel() {
             disabled={runningTest}
             className="btn btn-primary flex items-center gap-2 text-sm"
           >
-            {runningTest ? <Loader size={16} className="animate-spin" /> : <Zap size={16} />}
+            {runningTest ? (
+              <Loader size={16} className="animate-spin" />
+            ) : (
+              <Zap size={16} />
+            )}
             {runningTest ? "Running..." : "Run Test"}
           </button>
         </div>
@@ -334,20 +393,33 @@ export default function CloudDiagnosticsPanel() {
                 }`}
               >
                 {r.status === "pass" ? (
-                  <CheckCircle size={16} className="text-green-500 mt-0.5 flex-shrink-0" />
+                  <CheckCircle
+                    size={16}
+                    className="text-green-500 mt-0.5 flex-shrink-0"
+                  />
                 ) : r.status === "fail" ? (
-                  <XCircle size={16} className="text-red-500 mt-0.5 flex-shrink-0" />
+                  <XCircle
+                    size={16}
+                    className="text-red-500 mt-0.5 flex-shrink-0"
+                  />
                 ) : (
-                  <Loader size={16} className="text-blue-500 animate-spin mt-0.5 flex-shrink-0" />
+                  <Loader
+                    size={16}
+                    className="text-blue-500 animate-spin mt-0.5 flex-shrink-0"
+                  />
                 )}
                 <div className="flex-1">
                   <div className="font-medium text-gray-800 dark:text-white">
                     {r.step}
                     {r.duration != null && (
-                      <span className="text-gray-400 ml-2 font-normal">({r.duration}ms)</span>
+                      <span className="text-gray-400 ml-2 font-normal">
+                        ({r.duration}ms)
+                      </span>
                     )}
                   </div>
-                  <div className="text-gray-600 dark:text-gray-400 text-xs">{r.detail}</div>
+                  <div className="text-gray-600 dark:text-gray-400 text-xs">
+                    {r.detail}
+                  </div>
                 </div>
               </div>
             ))}
@@ -382,7 +454,10 @@ export default function CloudDiagnosticsPanel() {
         </div>
 
         <div className="mb-4 relative">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <Search
+            size={16}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+          />
           <input
             type="text"
             value={search}
@@ -424,7 +499,9 @@ export default function CloudDiagnosticsPanel() {
                         raw
                       </span>
                     )}
-                    <span className="text-xs text-gray-400">{formatSize(row.size)}</span>
+                    <span className="text-xs text-gray-400">
+                      {formatSize(row.size)}
+                    </span>
                   </div>
                   <div className="font-mono text-xs text-gray-500 dark:text-gray-400 truncate">
                     {row.dataPreview}
