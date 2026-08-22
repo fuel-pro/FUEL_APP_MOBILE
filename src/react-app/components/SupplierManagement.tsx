@@ -550,6 +550,42 @@ export default function SupplierManagement() {
         <PurchasesSuppliers />
       ) : activeView === "suppliers" ? (
         <>
+          {/* Supplier Summary Stats */}
+          {suppliers.length > 0 && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+              <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-3 border border-gray-200 dark:border-gray-700">
+                <p className="text-[10px] text-gray-500">Total Suppliers</p>
+                <p className="text-lg font-bold text-gray-900 dark:text-white">
+                  {suppliers.length}
+                </p>
+              </div>
+              <div className="bg-emerald-50 dark:bg-emerald-500/10 rounded-xl p-3">
+                <p className="text-[10px] text-gray-500">Active</p>
+                <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
+                  {suppliers.filter((s) => s.status === "active").length}
+                </p>
+              </div>
+              <div className="bg-amber-50 dark:bg-amber-500/10 rounded-xl p-3">
+                <p className="text-[10px] text-gray-500">Avg Rating</p>
+                <p className="text-lg font-bold text-amber-600 dark:text-amber-400">
+                  {suppliers.length > 0
+                    ? (
+                        suppliers.reduce((s, x) => s + (x.rating || 0), 0) /
+                        suppliers.length
+                      ).toFixed(1)
+                    : "0"}
+                  ★
+                </p>
+              </div>
+              <div className="bg-red-50 dark:bg-red-500/10 rounded-xl p-3">
+                <p className="text-[10px] text-gray-500">Blacklisted</p>
+                <p className="text-lg font-bold text-red-600 dark:text-red-400">
+                  {suppliers.filter((s) => s.status === "blacklisted").length}
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Toolbar */}
           <div className="flex flex-col md:flex-row gap-3">
             <div className="relative flex-1">
