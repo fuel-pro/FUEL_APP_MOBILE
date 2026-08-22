@@ -19,6 +19,7 @@ import { useStations } from "@/react-app/context/StationContext";
 import { usePermissions } from "@/react-app/context/PermissionContext";
 import { formatNumber } from "@/react-app/utils/formatUtils";
 import { getFuelLabel } from "@/react-app/config/pricing";
+import { toastSuccess, toastError, toastInfo } from "@/react-app/lib/toast";
 import DataRecovery from "@/react-app/components/DataRecovery";
 import CloudSyncPanel from "@/react-app/components/CloudSyncPanel";
 import SyncDashboard from "@/react-app/components/SyncDashboard";
@@ -552,7 +553,7 @@ export default function DataManager() {
         
         function exportAsCSV() {
             if (!appData.deliveryData || !appData.deliveryData.rows.length) {
-                alert('No delivery data to export');
+                toastError('No delivery data to export');
                 return;
             }
             
@@ -603,12 +604,12 @@ export default function DataManager() {
         URL.revokeObjectURL(url);
       }, 100);
 
-      alert(
-        "Standalone version downloaded successfully!\n\nOpen the HTML file in any browser to use your app offline.",
+      toastSuccess(
+        "Standalone version downloaded successfully! Open the HTML file in any browser to use your app offline.",
       );
     } catch (error) {
       console.error("Download error:", error);
-      alert("Failed to create standalone version. Please try again.");
+      toastError("Failed to create standalone version. Please try again.");
     }
   };
 
@@ -617,9 +618,9 @@ export default function DataManager() {
 
     try {
       await saveToCloud();
-      alert("Data synced to cloud successfully!");
+      toastSuccess("Data synced to cloud successfully!");
     } catch (error) {
-      alert("Cloud sync failed. Please try again.");
+      toastError("Cloud sync failed. Please try again.");
     }
   };
 
@@ -949,7 +950,7 @@ export default function DataManager() {
                       a.click();
 
                       URL.revokeObjectURL(url);
-                      alert("Settings backup created!");
+                      toastSuccess("Settings backup created!");
                     }}
                     className="w-full btn btn-secondary flex items-center gap-3"
                   >
@@ -1073,9 +1074,9 @@ export default function DataManager() {
                       onClick={async () => {
                         try {
                           await loadFromCloud();
-                          alert("Data loaded from cloud successfully!");
+                          toastSuccess("Data loaded from cloud successfully!");
                         } catch (error) {
-                          alert("Failed to load from cloud. Using local data.");
+                          toastError("Failed to load from cloud. Using local data.");
                         }
                       }}
                       className="w-full btn btn-secondary flex items-center gap-3"

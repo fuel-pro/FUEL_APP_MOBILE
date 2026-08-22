@@ -31,6 +31,7 @@ import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
 import { loadLogoAsDataURL } from "@/react-app/utils/exportUtils";
 import { getLocaleForCountry } from "@/react-app/lib/currency";
+import { toastSuccess, toastError } from "@/react-app/lib/toast";
 
 const formatNumber = (num: number): string => {
   return new Intl.NumberFormat(getLocaleForCountry(), {
@@ -177,7 +178,7 @@ export default function FuelOffloading() {
       !formData.quantity ||
       !formData.rate
     ) {
-      alert("Please fill in all required fields");
+      toastError("Please fill in all required fields");
       return;
     }
 
@@ -209,7 +210,7 @@ export default function FuelOffloading() {
 
     dispatch({ type: "SET_OFFLOADING_RECORDS", payload: updatedRecords });
     resetForm();
-    alert(
+    toastSuccess(
       selectedRecord
         ? "Record updated successfully!"
         : "Record added successfully!",

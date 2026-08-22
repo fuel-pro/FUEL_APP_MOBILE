@@ -29,6 +29,7 @@ import {
 } from "@/react-app/lib/currency";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 import { normalizeFuelType, getFuelLabel } from "@/react-app/config/pricing";
+import { toastError } from "@/react-app/lib/toast";
 
 /** Generate a unique row id (stable across devices/sessions). */
 function rowId(): string {
@@ -359,7 +360,7 @@ export default function DeliveryTracker() {
       "debt",
     ];
     if (essentialColumns.includes(column.key)) {
-      alert(
+      toastError(
         `Cannot delete the "${column.label}" column as it is essential for calculations.`,
       );
       return;
