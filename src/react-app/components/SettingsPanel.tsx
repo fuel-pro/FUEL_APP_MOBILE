@@ -25,6 +25,7 @@ import {
 } from "@/react-app/lib/mpesa-integration-service";
 import { isKenyaStation, getCurrencySymbol } from "@/react-app/lib/currency";
 import { useUserPrefs } from "@/react-app/lib/user-preferences";
+import { toastSuccess, toastError } from "@/react-app/lib/toast";
 
 export default function SettingsPanel() {
   const { currentStation, updateStation } = useStations();
@@ -97,7 +98,7 @@ export default function SettingsPanel() {
       setTimeout(() => setNotice(null), 3000);
     } catch (error) {
       console.error("Failed:", error);
-      alert("Failed to save settings");
+      toastError("Failed to save settings");
     } finally {
       setLoading(false);
     }

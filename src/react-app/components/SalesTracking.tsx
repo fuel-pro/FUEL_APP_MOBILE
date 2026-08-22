@@ -45,6 +45,7 @@ import {
 } from "@/react-app/lib/currency";
 import { switchToTab } from "@/react-app/lib/mpesa-integration-service";
 import ImageCropper from "@/react-app/components/ImageCropper";
+import { toastSuccess, toastError } from "@/react-app/lib/toast";
 
 interface ExtractedPump {
   name: string;
@@ -411,7 +412,7 @@ export default function SalesTracking() {
     }
 
     resetScan();
-    alert("Data applied successfully! Review and adjust as needed.");
+    toastSuccess("Data applied successfully! Review and adjust as needed.");
   };
 
   const pumpsForType = (type: CanonicalFuelType): typeof state.pmsPumps => {

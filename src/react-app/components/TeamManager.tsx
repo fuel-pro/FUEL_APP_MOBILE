@@ -81,6 +81,7 @@ import {
   getFuelLabel,
   getFuelCode,
 } from "@/react-app/config/pricing";
+import { toastSuccess, toastError } from "@/react-app/lib/toast";
 
 const BASE_ROLES: BaseUserRole[] = ["manager", "staff", "auditor"];
 
@@ -2909,7 +2910,7 @@ function RolesAndPermissionsView(props: RolesAndPermissionsViewProps) {
       setShowRoleCreator(false);
       setPermEditorRole(created.name);
     } else {
-      alert(
+      toastError(
         "Could not create role. The name may be reserved (owner/manager/staff/auditor) or already exists.",
       );
     }

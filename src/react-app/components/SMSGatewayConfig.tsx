@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 import { useAuth } from "@/react-app/context/AuthContext";
+import { toastSuccess, toastError } from "@/react-app/lib/toast";
 import {
   MessageSquare,
   Key,
@@ -150,7 +151,7 @@ export default function SMSGatewayConfig() {
     setError("");
     try {
       // Send test SMS — no artificial delay
-      alert(`Test SMS sent to ${testPhone}!`);
+      toastSuccess(`Test SMS sent to ${testPhone}!`);
       setTestPhone("");
     } catch (e) {
       setError("Failed to send test SMS");

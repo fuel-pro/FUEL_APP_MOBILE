@@ -57,6 +57,7 @@ import { switchToTab } from "@/react-app/lib/mpesa-integration-service";
 import { cloudStorageService } from "@/react-app/lib/cloud-storage-service";
 import { getVATRate } from "@/react-app/config/pricing";
 import { lazy, Suspense } from "react";
+import { toastSuccess, toastError } from "@/react-app/lib/toast";
 
 const EnhancedInventoryManagement = lazy(() =>
   import("@/react-app/features/inventory-pro/EnhancedInventory").then((m) => ({
@@ -479,7 +480,7 @@ const TransfersList = ({ onComplete }: { onComplete?: () => void }) => {
   const handleComplete = async (id: string) => {
     const result = await completeStockTransfer(id);
     if (!result.success) {
-      alert(
+      toastError(
         "Failed to complete transfer: " + (result.error || "Unknown error"),
       );
       return;
@@ -1568,7 +1569,7 @@ const ReordersPanel = ({
       // user no feedback (and never moved stock).
       const result = await fulfillReorder(id, qty);
       if (!result.success) {
-        alert(
+        toastError(
           "Failed to fulfill reorder: " + (result.error || "Unknown error"),
         );
         return;
@@ -1578,7 +1579,7 @@ const ReordersPanel = ({
       // Refresh the parent Products list so the new stock shows up.
       onFulfilled?.();
     } catch (error: any) {
-      alert("Failed to fulfill reorder: " + (error?.message || error));
+      toastError("Failed to fulfill reorder: " + (error?.message || error));
     } finally {
       setBusy(false);
     }
@@ -1819,7 +1820,7 @@ export default function InventoryManagement() {
       loadData();
     } catch (error: any) {
       console.error("Failed to save product:", error);
-      alert("Failed to save product: " + (error?.message || error));
+      toastError("Failed to save product: " + (error?.message || error));
     } finally {
       setSaving(false);
     }
@@ -1844,7 +1845,7 @@ export default function InventoryManagement() {
       showNotice("Product deleted successfully");
     } catch (error: any) {
       console.error("Failed to delete product:", error);
-      alert("Failed to delete product: " + (error?.message || error));
+      toastError("Failed to delete product: " + (error?.message || error));
     } finally {
       setSaving(false);
     }
@@ -1868,7 +1869,7 @@ export default function InventoryManagement() {
         })),
       );
       if (!result.success) {
-        alert("Failed to adjust stock: " + (result.error || "Unknown error"));
+        toastError("Failed to adjust stock: " + (result.error || "Unknown error"));
         return;
       }
       // Emit automation events — reorder check + dashboard refresh fire automatically
@@ -1884,7 +1885,7 @@ export default function InventoryManagement() {
       showNotice("Adjustments applied");
       loadData();
     } catch (error: any) {
-      alert("Failed: " + (error?.message || error));
+      toastError("Failed: " + (error?.message || error));
     } finally {
       setProcessing(false);
     }
@@ -1910,7 +1911,7 @@ export default function InventoryManagement() {
       // false "Transfer created" notice when the insert actually failed (RLS,
       // constraint, etc.). Previously the result was ignored.
       if (!result.success) {
-        alert(
+        toastError(
           "Failed to create transfer: " + (result.error || "Unknown error"),
         );
         return;
@@ -1925,7 +1926,7 @@ export default function InventoryManagement() {
       showNotice("Transfer created");
       loadData();
     } catch (error: any) {
-      alert("Failed: " + (error?.message || error));
+      toastError("Failed: " + (error?.message || error));
     } finally {
       setProcessing(false);
     }
@@ -1942,7 +1943,7 @@ export default function InventoryManagement() {
         counts.filter((c) => c.variance !== 0),
       );
       if (!result.success) {
-        alert("Failed to submit count: " + (result.error || "Unknown error"));
+        toastError("Failed to submit count: " + (result.error || "Unknown error"));
         return;
       }
       counts
@@ -1959,7 +1960,7 @@ export default function InventoryManagement() {
       showNotice("Count submitted");
       loadData();
     } catch (error: any) {
-      alert("Failed: " + (error?.message || error));
+      toastError("Failed: " + (error?.message || error));
     } finally {
       setProcessing(false);
     }
@@ -1980,7 +1981,7 @@ export default function InventoryManagement() {
         data.notes,
       );
       if (!result.success) {
-        alert("Failed to record wastage: " + (result.error || "Unknown error"));
+        toastError("Failed to record wastage: " + (result.error || "Unknown error"));
         return;
       }
       emit({
@@ -1992,7 +1993,7 @@ export default function InventoryManagement() {
       showNotice("Wastage recorded");
       loadData();
     } catch (error: any) {
-      alert("Failed: " + (error?.message || error));
+      toastError("Failed: " + (error?.message || error));
     } finally {
       setProcessing(false);
     }

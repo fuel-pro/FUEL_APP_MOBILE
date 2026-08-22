@@ -42,6 +42,7 @@ import {
 } from "@/react-app/lib/mpesa-integration-service";
 import { useAuth } from "@/react-app/context/AuthContext";
 import { useStations } from "@/react-app/context/StationContext";
+import { toastError } from "@/react-app/lib/toast";
 
 // ============================================================
 // M-PESA Inflow Analyzer v5 - RESTRUCTURED
@@ -810,8 +811,8 @@ export default function MPESAAnalyzer() {
       // UI just showed "0 inflows" with no explanation.
       const msg = err instanceof Error ? err.message : String(err);
       addProgress(`⚠️ AI extraction failed: ${msg}`);
-      alert(
-        `AI extraction failed:\n\n${msg}\n\nTry Pattern extraction mode instead.`,
+      toastError(
+        `AI extraction failed: ${msg}. Try Pattern extraction mode instead.`,
       );
       setInflowData([]);
       setStats(null);
@@ -875,8 +876,8 @@ export default function MPESAAnalyzer() {
       console.error("Failed to save to shared store:", err);
       setSavedToShared(null);
       addProgress(`⚠️ Failed to save to shared store: ${msg}`);
-      alert(
-        `Could not save ${records.length} transactions to the shared store (they will NOT sync to other devices).\n\nError: ${msg}\n\nYou can re-run the extraction to retry.`,
+      toastError(
+        `Could not save ${records.length} transactions to the shared store. Error: ${msg}. You can re-run the extraction to retry.`,
       );
     }
   };

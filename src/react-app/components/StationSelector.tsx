@@ -15,6 +15,7 @@ import {
   X,
 } from "lucide-react";
 import { useFuel, Station } from "@/react-app/context/FuelContext";
+import { toastSuccess, toastError } from "@/react-app/lib/toast";
 
 interface StationSelectorProps {
   compact?: boolean;
@@ -107,7 +108,7 @@ export default function StationSelector({
 
   const handleDeleteStation = (stationId: string) => {
     if (stations.length <= 1) {
-      alert("You must have at least one station.");
+      toastError("You must have at least one station.");
       return;
     }
 

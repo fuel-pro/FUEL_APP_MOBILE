@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { useStations } from "@/react-app/context/StationContext";
 import { supabase } from "@/supabase/client";
+import { toastSuccess, toastError } from "@/react-app/lib/toast";
 import {
   getCurrencySymbol,
   getDetectedCurrency,
@@ -89,7 +90,7 @@ export default function PurchasesSuppliers() {
       setEditingSupplier(null);
     } catch (error: any) {
       console.error("Failed to save:", error);
-      alert("Failed to save supplier: " + (error?.message || error));
+      toastError("Failed to save supplier: " + (error?.message || error));
     }
   };
 
@@ -97,7 +98,7 @@ export default function PurchasesSuppliers() {
     if (!confirm("Delete this supplier?")) return;
     const { error } = await supabase.from("suppliers").delete().eq("id", id);
     if (error) {
-      alert("Failed to delete supplier: " + error.message);
+      toastError("Failed to delete supplier: " + error.message);
       return;
     }
     loadData();
@@ -443,7 +444,7 @@ function OrderModal({
         form.expectedDate || null,
       );
       if (!result.success) {
-        alert(
+        toastError(
           "Failed to create purchase order: " +
             (result.error || "Unknown error"),
         );
@@ -452,7 +453,7 @@ function OrderModal({
       onCreated();
     } catch (error: any) {
       console.error("Failed:", error);
-      alert("Failed to create purchase order: " + (error?.message || error));
+      toastError("Failed to create purchase order: " + (error?.message || error));
     } finally {
       setLoading(false);
     }
