@@ -6366,3 +6366,34 @@ music genres). `LiveFeedEmbed` now accepts `showFeatureToolbar` prop
 - Supabase: no schema changes (frontend-only; favorites + history use
   existing `app_kv` table with scoped row ids).
 - tsc 0 errors, build 107 precache, prettier pass.
+
+## Session 2026-08-22 — Clean tvgarden integration (no full-website iframe)
+
+User request: The iframe was displaying the FULL tvgarden.world website (header, nav, sidebar). User wants a clean container with NO upstream UI. Also: never include any unavailable station/stream/radio.
+
+### What was done
+
+- Serverless proxy (api/live-channels.ts): upstream tvgarden API sends NO CORS headers so browser fetches were blocked. Created a Vercel serverless function that fetches server-side, decompresses the gzip response (upstream sends gzipped bytes WITHOUT a Content-Encoding header — added gunzipSync from zlib), filters out channels with no playable URL, returns {channels,count} with permissive CORS headers + 5-min in-memory cache. Zero upstream attribution in the UI.
+- Removed @vercel/node dependency (TS2307): replaced VercelRequest/VercelResponse with standard http types + wrapRes()/parseQuery() helpers.
+- Moved api/lib/fuel-engine.ts -> api/_lib/fuel-engine.ts: Vercel Hobby plan limits to 12 serverless functions; the _-prefix frees the slot for api/live-channels.ts. Updated imports in api/fuel-local.ts and api/cron/monthly-fuel-sync.ts.
+- LiveStreamService.ts fetchLiveChannels(): now calls /api/live-channels proxy instead of direct upstream fetch.
+- LiveFeedEmbed.tsx: native FuelPro player UI (hls.js for HLS streams, YouTube iframe ONLY for channels with YouTube URLs). Category switcher, sub-categories, country filter, search, Surprise, favorites, history — all native.
+
+### Removed unavailable YouTube streams (commit 659c5b8)
+
+The "Live News Streams" section in Live Channels + Live TV sub-tabs showed 5 hardcoded YouTube 24/7 news streams (FRANCE 24, CNN, CNBC, Al Jazeera, Bloomberg). The oembed check verified the videos EXIST, but YouTube returned "Video unavailable" when embedded (region-blocked / embedding-disabled) — violating "never include unavailable streams". Removed the entire section; the native LiveFeedEmbed grid provides 878+ live news channels from the API proxy. Cleaned up all unused imports/variables.
+
+### Verified LIVE (2026-08-22, Cloudflare 19d094c5 + Vercel production)
+
+- Live TV sub-tab: NO iframe, NO YouTube "Video unavailable", clean native grid with 46+ channel cards, category switcher, country filter, Surprise.
+- Live Channels sub-tab: 12 categories + sub-categories + 44 cards.
+- API proxy: TV=1410 channels, News=878, Radio=4100.
+
+### Deploy state 2026-08-22 (commit 659c5b8)
+
+- GitHub main: 659c5b8 (pushed). Cloudflare: LIVE. Vercel: LIVE.
+- Supabase: no schema changes (frontend-only). tsc 0 errors, build 107 precache, prettier pass.
+
+### Lost commit audit (2026-08-22)
+
+No lost work found. All unmerged branches (feat/document-center-folders, feat/village-level-real-fuel-prices, feature/firebase-*, feature/google-oauth-signin, fix/*) are old divergent snapshots whose work is already on main in more complete form. dependabot branches are dependency bumps.
