@@ -2437,6 +2437,33 @@ export default function PayrollSystem() {
         </div>
       </div>
 
+      {/* Headcount by Department */}
+      {employees.length > 0 && (
+        <div className="mt-2 md:mt-4 p-2 md:p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
+          <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2">
+            Headcount by Department ({employees.length} total)
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {Object.entries(
+              employees.reduce<Record<string, number>>((acc, emp) => {
+                const dept = emp.department || "Unassigned";
+                acc[dept] = (acc[dept] || 0) + 1;
+                return acc;
+              }, {}),
+            )
+              .sort((a, b) => b[1] - a[1])
+              .map(([dept, count]) => (
+                <span
+                  key={dept}
+                  className="px-3 py-1 bg-white dark:bg-gray-700 rounded-full text-xs font-medium text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-600"
+                >
+                  {dept}: {count}
+                </span>
+              ))}
+          </div>
+        </div>
+      )}
+
       {/* Bulk Actions */}
       <div className="grid grid-cols-2 md:flex gap-2 md:gap-4 flex-wrap">
         <button
