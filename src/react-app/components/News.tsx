@@ -597,6 +597,46 @@ export default function News() {
         onChange={(id) => setActiveSubTab(id as typeof activeSubTab)}
       />
 
+      {/* Quick Stats */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 flex items-center gap-3">
+          <div className="p-2 bg-blue-50 dark:bg-blue-900/30 rounded-lg">
+            <Newspaper size={16} className="text-blue-600 dark:text-blue-400" />
+          </div>
+          <div>
+            <p className="text-[10px] text-gray-500 dark:text-gray-400 uppercase">Total Articles</p>
+            <p className="text-lg font-bold text-gray-800 dark:text-white">{news.length}</p>
+          </div>
+        </div>
+        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 flex items-center gap-3">
+          <div className="p-2 bg-amber-50 dark:bg-amber-900/30 rounded-lg">
+            <Clock size={16} className="text-amber-600 dark:text-amber-400" />
+          </div>
+          <div>
+            <p className="text-[10px] text-gray-500 dark:text-gray-400 uppercase">Unread</p>
+            <p className="text-lg font-bold text-gray-800 dark:text-white">{unreadCount}</p>
+          </div>
+        </div>
+        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 flex items-center gap-3">
+          <div className="p-2 bg-emerald-50 dark:bg-emerald-900/30 rounded-lg">
+            <BookmarkCheck size={16} className="text-emerald-600 dark:text-emerald-400" />
+          </div>
+          <div>
+            <p className="text-[10px] text-gray-500 dark:text-gray-400 uppercase">Bookmarked</p>
+            <p className="text-lg font-bold text-gray-800 dark:text-white">{news.filter((n) => n.bookmarked).length}</p>
+          </div>
+        </div>
+        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 flex items-center gap-3">
+          <div className={`p-2 rounded-lg ${source === "external" ? "bg-green-50 dark:bg-green-900/30" : "bg-gray-100 dark:bg-gray-700"}`}>
+            <Wifi size={16} className={source === "external" ? "text-green-600 dark:text-green-400" : "text-gray-500"} />
+          </div>
+          <div>
+            <p className="text-[10px] text-gray-500 dark:text-gray-400 uppercase">Source</p>
+            <p className="text-lg font-bold text-gray-800 dark:text-white">{source === "external" ? "Live" : "Curated"}</p>
+          </div>
+        </div>
+      </div>
+
       {/* ===================== NEWS ARTICLES SUB-TAB ===================== */}
       {activeSubTab === "articles" && (
         <>
