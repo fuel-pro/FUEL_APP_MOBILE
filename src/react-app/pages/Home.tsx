@@ -333,6 +333,29 @@ function HomeContent() {
     return () => window.removeEventListener("changeTab", handleChangeTab);
   }, [broadcast]);
 
+  // Alt+1..9 keyboard shortcuts — switch to the Nth visible tab
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (!e.altKey) return;
+      const num = parseInt(e.key, 10);
+      if (isNaN(num) || num < 1 || num > 9) return;
+      // Skip if user is typing in an input/textarea/select
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      const tabs = Object.values(filteredTabConfig)
+        .filter((t: any) => t.enabled !== false)
+        .sort((a: any, b: any) => (a.order || 0) - (b.order || 0)) as any[];
+      const target = tabs[num - 1];
+      if (target?.id) {
+        e.preventDefault();
+        setActiveTab(target.id);
+        broadcast("tab_change", target.id);
+      }
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [filteredTabConfig, broadcast]);
+
   // Automation notification toast — listens for `automation:notify`
   // CustomEvents fired by the automation engine (e.g. auto-reorder created)
   // and surfaces them as a transient toast near the bottom of the page.
