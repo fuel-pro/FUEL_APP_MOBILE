@@ -18,6 +18,8 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { useStations } from "@/react-app/context/StationContext";
+import { getVATRate } from "@/react-app/config/pricing";
+import { getDetectedCountryCode } from "@/react-app/lib/currency";
 import { supabase } from "@/supabase/client";
 import { toastSuccess, toastError } from "@/react-app/lib/toast";
 import {
@@ -57,7 +59,7 @@ const INITIAL_PRODUCT = {
   selling_price: 0,
   reorder_level: 10,
   stock_quantity: 0,
-  tax_rate: 16,
+  tax_rate: getVATRate(getDetectedCountryCode()),
   is_active: true,
   is_taxable: true,
 };

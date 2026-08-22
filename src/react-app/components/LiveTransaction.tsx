@@ -129,7 +129,7 @@ const DIALING_CODES: Record<string, string> = {
 };
 function getDialingCode(): string {
   const cc = getDetectedCountryCode();
-  return DIALING_CODES[cc] || "254";
+  return DIALING_CODES[cc] || "1";
 }
 
 interface PaymentSource {

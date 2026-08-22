@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { Download, Upload, AlertCircle, CheckCircle } from "lucide-react";
+import { Download, Upload, AlertCircle, CheckCircle, Cloud } from "lucide-react";
 import EnhancedCard from "./EnhancedCard";
 import EnhancedButton from "./EnhancedButton";
+import { cloudStorageService } from "@/react-app/lib/cloud-storage-service";
 
 interface DataRecoveryProps {
   onRestore?: (data: any) => void;
@@ -10,6 +11,7 @@ interface DataRecoveryProps {
 export default function DataRecovery({ onRestore }: DataRecoveryProps) {
   const [status, setStatus] = useState<"idle" | "success" | "error">("idle");
   const [message, setMessage] = useState("");
+  const [cloudExporting, setCloudExporting] = useState(false);
 
   const handleExport = () => {
     try {
@@ -32,12 +34,43 @@ export default function DataRecovery({ onRestore }: DataRecoveryProps) {
       URL.revokeObjectURL(url);
 
       setStatus("success");
-      setMessage("Backup exported successfully");
+      setMessage("Local backup exported successfully");
       setTimeout(() => setStatus("idle"), 3000);
     } catch (error) {
       setStatus("error");
       setMessage("Failed to export backup");
       setTimeout(() => setStatus("idle"), 3000);
+    }
+  };
+
+  const handleCloudExport = async () => {
+    setCloudExporting(true);
+    try {
+      const allData = await cloudStorageService.getAll();
+      const data = {
+        timestamp: new Date().toISOString(),
+        source: "cloud",
+        cloudData: allData,
+      };
+      const blob = new Blob([JSON.stringify(data, null, 2)], {
+        type: "application/json",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `fuelpro-cloud-backup-${new Date().toISOString().split("T")[0]}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+
+      setStatus("success");
+      setMessage(`Cloud backup exported (${Object.keys(allData).length} records)`);
+      setTimeout(() => setStatus("idle"), 3000);
+    } catch (error) {
+      setStatus("error");
+      setMessage("Failed to export cloud backup");
+      setTimeout(() => setStatus("idle"), 3000);
+    } finally {
+      setCloudExporting(false);
     }
   };
 
@@ -122,6 +155,29 @@ export default function DataRecovery({ onRestore }: DataRecoveryProps) {
               Import Backup
             </EnhancedButton>
           </label>
+        </div>
+
+        <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Cloud size={20} className="text-indigo-500" />
+            <h4 className="font-semibold text-gray-900 dark:text-white">
+              Cloud Backup (Cross-Device)
+            </h4>
+          </div>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+            Export ALL your cloud-synced data (POS transactions, credit
+            accounts, expenses, suppliers, payroll, inventory, loyalty
+            customers, etc.) into a single portable JSON file.
+          </p>
+          <EnhancedButton
+            onClick={handleCloudExport}
+            icon={<Cloud size={20} />}
+            variant="primary"
+            fullWidth
+            disabled={cloudExporting}
+          >
+            {cloudExporting ? "Exporting..." : "Export All Cloud Data"}
+          </EnhancedButton>
         </div>
       </div>
     </EnhancedCard>

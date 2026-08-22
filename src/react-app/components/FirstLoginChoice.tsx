@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import type { Station } from "@/react-app/context/StationContext";
+import { getVATRate } from "@/react-app/config/pricing";
+import { getDetectedCountryCode } from "@/react-app/lib/currency";
 import {
   Building2,
   Link2,
@@ -90,7 +92,7 @@ export default function FirstLoginChoice({
           email: "",
           kraPin: "",
           etrSerial: "",
-          taxRate: 16,
+          taxRate: getVATRate(getDetectedCountryCode()),
           theme: "default",
           logo: "",
           description: `Station accessed via ${binding.role} invite`,

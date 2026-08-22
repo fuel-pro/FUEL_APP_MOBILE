@@ -23,7 +23,8 @@ import {
   getKopokopoConfig,
   switchToTab,
 } from "@/react-app/lib/mpesa-integration-service";
-import { isKenyaStation, getCurrencySymbol } from "@/react-app/lib/currency";
+import { isKenyaStation, getCurrencySymbol, getDetectedCountryCode } from "@/react-app/lib/currency";
+import { getVATRate } from "@/react-app/config/pricing";
 import { useUserPrefs } from "@/react-app/lib/user-preferences";
 import { toastSuccess, toastError } from "@/react-app/lib/toast";
 
@@ -43,7 +44,7 @@ export default function SettingsPanel() {
     phone: currentStation?.phone || "",
     email: currentStation?.email || "",
     kraPin: currentStation?.kraPin || "",
-    taxRate: String(currentStation?.taxRate ?? 16),
+    taxRate: String(currentStation?.taxRate ?? getVATRate(getDetectedCountryCode())),
   });
   const [mpesaConnected, setMpesaConnected] = useState(false);
   const [kopoConnected, setKopoConnected] = useState(false);
@@ -76,7 +77,7 @@ export default function SettingsPanel() {
       await updateStation(currentStation.id, {
         ...currentStation,
         ...form,
-        taxRate: parseFloat(form.taxRate) || 16,
+        taxRate: parseFloat(form.taxRate) || getVATRate(getDetectedCountryCode()),
       });
       // ALSO sync the company-info fields into FuelContext.companyData so
       // invoices/reports (which read from companyData, NOT the station

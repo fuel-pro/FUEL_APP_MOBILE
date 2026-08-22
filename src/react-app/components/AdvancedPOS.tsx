@@ -21,6 +21,8 @@ import {
   Loader2,
 } from "lucide-react";
 import { useStations } from "@/react-app/context/StationContext";
+import { getVATRate } from "@/react-app/config/pricing";
+import { getDetectedCountryCode } from "@/react-app/lib/currency";
 import {
   fetchProducts,
   fetchCustomers,
@@ -501,7 +503,7 @@ export default function AdvancedPOS() {
         return item;
       });
     } else {
-      const taxRate = product.tax_rate || 16;
+      const taxRate = product.tax_rate || getVATRate(getDetectedCountryCode());
       const unitPrice = product.selling_price || 0;
       const baseAmount = unitPrice;
       const tax = baseAmount * (taxRate / 100);
