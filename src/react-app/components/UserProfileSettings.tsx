@@ -274,7 +274,7 @@ export default function UserProfileSettings() {
 
   const inputClass =
     "w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 focus:border-amber-500 focus:outline-none transition-colors";
-  const labelClass = "text-gray-400 text-xs mb-2 block font-medium";
+  const labelClass = "text-gray-500 dark:text-gray-400 text-xs mb-2 block font-medium";
   const cardClass = "bg-white/5 border border-white/10 rounded-xl p-6 mb-6";
   const btnClass =
     "w-full py-3 bg-amber-500 hover:bg-amber-600 disabled:bg-gray-600 text-white font-medium rounded-xl flex items-center justify-center gap-2 transition-colors";
@@ -284,7 +284,7 @@ export default function UserProfileSettings() {
       <h2 className="text-2xl font-bold text-white mb-2 flex items-center gap-2">
         <User className="text-amber-400" size={24} /> User Profile
       </h2>
-      <p className="text-gray-400 text-sm mb-6">
+      <p className="text-gray-500 dark:text-gray-400 text-sm mb-6">
         Your unique ID:{" "}
         <code className="text-amber-400 text-xs bg-white/5 px-2 py-1 rounded">
           {user?.id || "—"}
@@ -359,8 +359,8 @@ export default function UserProfileSettings() {
         <h3 className="text-white font-semibold mb-4 flex items-center gap-2">
           <Mail size={20} className="text-blue-400" /> Change Email
         </h3>
-        <p className="text-gray-400 text-sm mb-3">
-          Current email: <span className="text-white">{user?.email}</span>
+        <p className="text-gray-500 dark:text-gray-400 text-sm mb-3">
+          Current email: <span className="font-semibold text-gray-900 dark:text-white">{user?.email}</span>
         </p>
         <div className="flex gap-3">
           <input
@@ -445,9 +445,9 @@ export default function UserProfileSettings() {
         <h3 className="text-white font-semibold mb-4 flex items-center gap-2">
           <Share2 size={20} className="text-purple-400" /> Share Station Access
         </h3>
-        <p className="text-gray-400 text-sm mb-4">
+        <p className="text-gray-500 dark:text-gray-400 text-sm mb-4">
           Invite team members to access{" "}
-          <span className="text-white">
+          <span className="font-semibold text-gray-900 dark:text-white">
             {currentStation?.name || "your station"}
           </span>{" "}
           from any device. They'll receive a link to accept access.
@@ -491,7 +491,7 @@ export default function UserProfileSettings() {
         {/* Members list */}
         {members.length > 0 && (
           <div className="space-y-2 mt-4">
-            <p className="text-gray-400 text-xs font-medium">
+            <p className="text-gray-500 dark:text-gray-400 text-xs font-medium">
               Current Members:
             </p>
             {members.map((m) => (
@@ -547,7 +547,7 @@ export default function UserProfileSettings() {
           <FileUp size={20} className="text-orange-400" /> Cross-Device File
           Storage
         </h3>
-        <p className="text-gray-400 text-sm mb-4">
+        <p className="text-gray-500 dark:text-gray-400 text-sm mb-4">
           Upload files from this device and access them from any other device or
           browser when you log in. Files are stored in Supabase cloud storage
           (not localStorage).
@@ -581,7 +581,7 @@ export default function UserProfileSettings() {
 
         {documents.length > 0 && (
           <div className="space-y-2 mt-4">
-            <p className="text-gray-400 text-xs font-medium">
+            <p className="text-gray-500 dark:text-gray-400 text-xs font-medium">
               Your Files ({documents.length}):
             </p>
             {documents.map((doc) => (
