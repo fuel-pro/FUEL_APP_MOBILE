@@ -423,6 +423,20 @@ export default function LiveFeedEmbed({
       }
     };
 
+    // Safety timeout: if the video hasn't started playing within 15 seconds
+    // of the HLS effect firing, auto-advance to the next channel. This
+    // catches streams where the manifest loads but segments never buffer
+    // (non-fatal errors that don't trigger the recovery path).
+    // Declared here, assigned after the hls instance is created.
+    let playbackStarted = false;
+    const onPlaying = () => {
+      playbackStarted = true;
+      setReconnecting(false);
+      setShowPlayOverlay(false);
+    };
+    video.addEventListener("playing", onPlaying);
+    let playbackTimeout: ReturnType<typeof setTimeout> | undefined;
+
     // HLS playback — accept any URL (not just .m3u8) since some HLS
     // endpoints use smil/playlist paths or query strings. hls.js will
     // reject non-HLS content gracefully via the error handler.
@@ -439,6 +453,16 @@ export default function LiveFeedEmbed({
       hls.loadSource(streamUrl);
       hls.attachMedia(video);
       hls.on(Hls.Events.MANIFEST_PARSED, attemptAutoplay);
+      // Start the playback safety timeout now that hls is defined.
+      playbackTimeout = setTimeout(() => {
+        if (!playbackStarted && hlsRef.current === hls) {
+          hls.destroy();
+          hlsRef.current = null;
+          setReconnecting(false);
+          const advanced = autoAdvanceToNextChannel(activeChannel.nanoid);
+          if (!advanced) setPlaybackError(true);
+        }
+      }, 15000);
       hls.on(Hls.Events.ERROR, (_event, data) => {
         if (!data.fatal) return;
 
@@ -488,6 +512,12 @@ export default function LiveFeedEmbed({
       video.src = streamUrl;
       video.muted = true;
       setMuted(true);
+      playbackTimeout = setTimeout(() => {
+        if (!playbackStarted) {
+          const advanced = autoAdvanceToNextChannel(activeChannel.nanoid);
+          if (!advanced) setPlaybackError(true);
+        }
+      }, 15000);
       video.play().catch(() => {
         setShowPlayOverlay(true);
       });
@@ -496,6 +526,14 @@ export default function LiveFeedEmbed({
       video.src = streamUrl;
       video.muted = true;
       setMuted(true);
+      playbackTimeout = setTimeout(() => {
+        if (!playbackStarted) {
+          const advanced = autoAdvanceToNextChannel(activeChannel.nanoid);
+          if (!advanced) {
+            setShowPlayOverlay(true);
+          }
+        }
+      }, 15000);
       video.play().catch(() => {
         const advanced = autoAdvanceToNextChannel(activeChannel.nanoid);
         if (!advanced) {
@@ -505,6 +543,8 @@ export default function LiveFeedEmbed({
     }
 
     return () => {
+      clearTimeout(playbackTimeout);
+      video.removeEventListener("playing", onPlaying);
       if (hlsRef.current) {
         hlsRef.current.destroy();
         hlsRef.current = null;
