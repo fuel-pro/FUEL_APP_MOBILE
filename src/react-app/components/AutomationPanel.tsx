@@ -22,6 +22,8 @@ import {
   ToggleLeft,
   ToggleRight,
   Activity,
+  ArrowRight,
+  Warehouse,
 } from "lucide-react";
 import {
   automation,
@@ -34,6 +36,7 @@ import {
   type AutomationPreferences,
   type AutomationLogEntry,
 } from "@/react-app/lib/automation-engine";
+import { switchToTab } from "@/react-app/lib/mpesa-integration-service";
 
 type SubTab = "settings" | "log" | "reorders";
 
@@ -295,6 +298,14 @@ export default function AutomationPanel() {
                 Reorder suggestions appear automatically when stock drops below
                 the threshold
               </p>
+              <button
+                onClick={() => switchToTab("inventory")}
+                className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white rounded-xl text-sm transition-colors"
+              >
+                <Warehouse size={16} />
+                View Stock Management
+                <ArrowRight size={14} />
+              </button>
             </div>
           ) : (
             <div className="space-y-3">
@@ -310,13 +321,21 @@ export default function AutomationPanel() {
                       {r.reorderLevel} · Suggested: {r.suggestedQty} units
                     </p>
                   </div>
-                  <button
-                    onClick={() => handleFulfillReorder(r.id, r.suggestedQty)}
-                    className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-sm flex items-center gap-2"
-                  >
-                    <Package size={16} />
-                    Fulfill
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => switchToTab("suppliers")}
+                      className="px-3 py-2 bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white rounded-xl text-sm flex items-center gap-2 transition-colors"
+                    >
+                      Create PO
+                    </button>
+                    <button
+                      onClick={() => handleFulfillReorder(r.id, r.suggestedQty)}
+                      className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-sm flex items-center gap-2"
+                    >
+                      <Package size={16} />
+                      Fulfill
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
