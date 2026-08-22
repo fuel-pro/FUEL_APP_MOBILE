@@ -5,6 +5,12 @@ import App from "@/react-app/App.tsx";
 import { initErrorMonitoring } from "@/react-app/lib/errorMonitoring";
 import "@/react-app/services/enhanced/SyncService";
 import "@/react-app/lib/enhanced/performance";
+import { prefetchLiveChannelsInBackground } from "@/react-app/services/LiveStreamService";
+
+// Silently pre-fetch live channel data in the background so it's cached
+// and instantly available when the user opens News → Live TV. Runs
+// invisibly — no UI, no attribution, fire-and-forget.
+prefetchLiveChannelsInBackground();
 
 // Activate error monitoring (Sentry when VITE_SENTRY_DSN is set; otherwise
 // the listeners below still surface uncaught errors to the console + a

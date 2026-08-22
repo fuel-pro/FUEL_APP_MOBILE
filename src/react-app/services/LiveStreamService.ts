@@ -1248,6 +1248,42 @@ export function resolveChannelFetchParams(
 }
 
 // ===========================================================================
+// BACKGROUND PRE-FETCH — silently warms the channel cache on app load so
+// channels are instantly available when the user opens the News → Live TV
+// tab. Runs invisibly in the background; no UI, no attribution. The data
+// feeds the native FuelPro channel grid + player.
+// ===========================================================================
+
+let backgroundPrefetchStarted = false;
+
+/**
+ * Silently pre-fetch the most common channel lists (US + GB TV, US radio)
+ * in the background on app load. The results populate the in-memory cache
+ * so the LiveFeedEmbed component renders instantly without a loading
+ * spinner when the user navigates to News → Live TV.
+ *
+ * Fire-and-forget — never throws, never blocks the UI, never shows any
+ * visible indication. Called once on app boot.
+ */
+export function prefetchLiveChannelsInBackground(): void {
+  if (backgroundPrefetchStarted) return;
+  if (typeof window === "undefined") return;
+  backgroundPrefetchStarted = true;
+
+  // Defer 3s after load so it doesn't compete with initial app hydration
+  setTimeout(() => {
+    // Fetch the most common combinations in parallel (all fire-and-forget)
+    const commonFetches: Promise<LiveChannel[]>[] = [
+      fetchLiveChannels("tv", "countries", "us"),
+      fetchLiveChannels("tv", "countries", "gb"),
+      fetchLiveChannels("radio", "countries", "us"),
+    ];
+    // Swallow all errors silently — this is a best-effort cache warm
+    Promise.allSettled(commonFetches).catch(() => {});
+  }, 3000);
+}
+
+// ===========================================================================
 // FAVORITES / HISTORY / RANDOM / RECOMMENDATIONS
 // All cloud-synced (cross-device) via cloudStorageService. NO upstream
 // attribution — these are native FuelPro features.
