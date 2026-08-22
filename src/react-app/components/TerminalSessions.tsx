@@ -140,7 +140,7 @@ export default function TerminalSessions() {
       <div className="flex justify-center h-full">
         <div className="text-center">
           <Loader2 className="w-12 h-12 text-amber-500 animate-spin mx-auto mb-4" />
-          <p className="text-gray-500 dark:text-gray-400">Loading...</p>
+          <p className="text-gray-500 dark:text-gray-500 dark:text-gray-400">Loading...</p>
         </div>
       </div>
     );
@@ -149,11 +149,11 @@ export default function TerminalSessions() {
   return (
     <div className="p-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Terminal Sessions</h1>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-900 dark:text-white">Terminal Sessions</h1>
         {!openSession && (
           <button
             onClick={() => setShowOpenModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-gray-900 dark:text-white rounded-xl"
+            className="flex items-center gap-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-gray-900 dark:text-gray-900 dark:text-white rounded-xl"
           >
             <Plus size={20} /> Open Session
           </button>
@@ -201,30 +201,30 @@ export default function TerminalSessions() {
             <span className="text-emerald-400 font-semibold">
               Session Active
             </span>
-            <span className="text-gray-500 dark:text-gray-400">•</span>
+            <span className="text-gray-500 dark:text-gray-500 dark:text-gray-400">•</span>
             <span className="text-gray-300">{openSession.session_number}</span>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
             <div>
-              <p className="text-gray-500 dark:text-gray-400 text-xs mb-1">Opening Cash</p>
-              <p className="text-gray-900 dark:text-white font-medium">
+              <p className="text-gray-500 dark:text-gray-500 dark:text-gray-400 text-xs mb-1">Opening Cash</p>
+              <p className="text-gray-900 dark:text-gray-900 dark:text-white font-medium">
                 {safeMoney(openSession.opening_cash)}
               </p>
             </div>
             <div>
-              <p className="text-gray-500 dark:text-gray-400 text-xs mb-1">Cash Sales</p>
+              <p className="text-gray-500 dark:text-gray-500 dark:text-gray-400 text-xs mb-1">Cash Sales</p>
               <p className="text-emerald-400 font-medium">
                 {safeMoney(openSession.cash_sales)}
               </p>
             </div>
             <div>
-              <p className="text-gray-500 dark:text-gray-400 text-xs mb-1">M-PESA</p>
+              <p className="text-gray-500 dark:text-gray-500 dark:text-gray-400 text-xs mb-1">M-PESA</p>
               <p className="text-blue-400 font-medium">
                 {safeMoney(openSession.mpesa_sales)}
               </p>
             </div>
             <div>
-              <p className="text-gray-500 dark:text-gray-400 text-xs mb-1">Card</p>
+              <p className="text-gray-500 dark:text-gray-500 dark:text-gray-400 text-xs mb-1">Card</p>
               <p className="text-purple-400 font-medium">
                 {safeMoney(openSession.card_sales)}
               </p>
@@ -232,8 +232,8 @@ export default function TerminalSessions() {
           </div>
           <div className="flex items-center justify-between pt-4 border-t border-emerald-500/20">
             <div>
-              <p className="text-gray-500 dark:text-gray-400 text-sm">Expected Cash</p>
-              <p className="text-gray-900 dark:text-white text-2xl font-bold">
+              <p className="text-gray-500 dark:text-gray-500 dark:text-gray-400 text-sm">Expected Cash</p>
+              <p className="text-gray-900 dark:text-gray-900 dark:text-white text-2xl font-bold">
                 {safeMoney(openSessionsTotal)}
               </p>
             </div>
@@ -242,7 +242,7 @@ export default function TerminalSessions() {
                 setClosingSession(openSession);
                 setShowCloseModal(true);
               }}
-              className="px-6 py-3 bg-red-500 hover:bg-red-600 text-gray-900 dark:text-white font-medium rounded-xl"
+              className="px-6 py-3 bg-red-500 hover:bg-red-600 text-gray-900 dark:text-gray-900 dark:text-white font-medium rounded-xl"
             >
               Close Session
             </button>
@@ -251,29 +251,29 @@ export default function TerminalSessions() {
       )}
 
       {/* Session History */}
-      <div className="bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl overflow-hidden">
-        <div className="p-4 border-b border-white/10">
-          <h3 className="text-gray-900 dark:text-white font-semibold">Session History</h3>
+      <div className="bg-gray-50 dark:bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-gray-200 dark:border-white/10 rounded-xl overflow-hidden">
+        <div className="p-4 border-b border-gray-200 dark:border-white/10">
+          <h3 className="text-gray-900 dark:text-gray-900 dark:text-white font-semibold">Session History</h3>
         </div>
         <table className="w-full">
           <thead>
-            <tr className="border-b border-white/10">
-              <th className="text-left text-xs font-semibold text-gray-500 dark:text-gray-400 px-4 py-3">
+            <tr className="border-b border-gray-200 dark:border-white/10">
+              <th className="text-left text-xs font-semibold text-gray-500 dark:text-gray-500 dark:text-gray-400 px-4 py-3">
                 Session
               </th>
-              <th className="text-left text-xs font-semibold text-gray-500 dark:text-gray-400 px-4 py-3">
+              <th className="text-left text-xs font-semibold text-gray-500 dark:text-gray-500 dark:text-gray-400 px-4 py-3">
                 Opened
               </th>
-              <th className="text-left text-xs font-semibold text-gray-500 dark:text-gray-400 px-4 py-3">
+              <th className="text-left text-xs font-semibold text-gray-500 dark:text-gray-500 dark:text-gray-400 px-4 py-3">
                 Closed
               </th>
-              <th className="text-right text-xs font-semibold text-gray-500 dark:text-gray-400 px-4 py-3">
+              <th className="text-right text-xs font-semibold text-gray-500 dark:text-gray-500 dark:text-gray-400 px-4 py-3">
                 Sales
               </th>
-              <th className="text-right text-xs font-semibold text-gray-500 dark:text-gray-400 px-4 py-3">
+              <th className="text-right text-xs font-semibold text-gray-500 dark:text-gray-500 dark:text-gray-400 px-4 py-3">
                 Variance
               </th>
-              <th className="text-left text-xs font-semibold text-gray-500 dark:text-gray-400 px-4 py-3">
+              <th className="text-left text-xs font-semibold text-gray-500 dark:text-gray-500 dark:text-gray-400 px-4 py-3">
                 Status
               </th>
             </tr>
@@ -283,7 +283,7 @@ export default function TerminalSessions() {
               <tr>
                 <td colSpan={6} className="text-center py-12">
                   <Clock className="w-12 h-12 text-gray-600 mx-auto mb-3" />
-                  <p className="text-gray-500 dark:text-gray-400">No session history</p>
+                  <p className="text-gray-500 dark:text-gray-500 dark:text-gray-400">No session history</p>
                 </td>
               </tr>
             ) : (
@@ -292,9 +292,9 @@ export default function TerminalSessions() {
                 .map((session) => (
                   <tr
                     key={session.id}
-                    className="border-b border-white/5 hover:bg-white/5"
+                    className="border-b border-white/5 hover:bg-gray-50 dark:bg-white/5"
                   >
-                    <td className="px-4 py-4 text-gray-900 dark:text-white font-medium">
+                    <td className="px-4 py-4 text-gray-900 dark:text-gray-900 dark:text-white font-medium">
                       {session.session_number}
                     </td>
                     <td className="px-4 py-4 text-gray-300 text-sm">
@@ -315,7 +315,7 @@ export default function TerminalSessions() {
                     </td>
                     <td className="px-4 py-4">
                       <span
-                        className={`text-xs px-2 py-1 rounded-full ${session.status === "closed" ? "bg-gray-500/20 text-gray-500 dark:text-gray-400" : "bg-amber-500/20 text-amber-400"}`}
+                        className={`text-xs px-2 py-1 rounded-full ${session.status === "closed" ? "bg-gray-500/20 text-gray-500 dark:text-gray-500 dark:text-gray-400" : "bg-amber-500/20 text-amber-400"}`}
                       >
                         {session.status}
                       </span>
@@ -330,19 +330,19 @@ export default function TerminalSessions() {
       {/* Open Session Modal */}
       {showOpenModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-md border border-gray-200 dark:border-white/10">
-            <div className="flex items-center justify-between p-6 border-b border-white/10">
-              <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Open Session</h3>
+          <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-2xl w-full max-w-md border border-gray-200 dark:border-gray-200 dark:border-white/10">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-white/10">
+              <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-900 dark:text-white">Open Session</h3>
               <button
                 onClick={() => setShowOpenModal(false)}
-                className="text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:text-white"
+                className="text-gray-500 dark:text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:text-gray-900 dark:text-white"
               >
                 <X size={20} />
               </button>
             </div>
             <div className="p-6 space-y-4">
               <div>
-                <label className="text-gray-500 dark:text-gray-400 text-xs mb-2 block">
+                <label className="text-gray-500 dark:text-gray-500 dark:text-gray-400 text-xs mb-2 block">
                   Opening Cash (Float)
                 </label>
                 <input
@@ -355,7 +355,7 @@ export default function TerminalSessions() {
                         : parseFloat(e.target.value) || 0,
                     )
                   }
-                  className="w-full px-4 py-3 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white"
+                  className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-gray-900 dark:text-white"
                   min="0"
                   placeholder="0"
                 />
@@ -363,7 +363,7 @@ export default function TerminalSessions() {
               <button
                 onClick={handleOpenSession}
                 disabled={loading}
-                className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 disabled:bg-gray-600 text-gray-900 dark:text-white font-medium rounded-xl flex items-center justify-center gap-2"
+                className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 disabled:bg-gray-600 text-gray-900 dark:text-gray-900 dark:text-white font-medium rounded-xl flex items-center justify-center gap-2"
               >
                 {loading ? (
                   <Loader2 size={18} className="animate-spin" />
@@ -380,9 +380,9 @@ export default function TerminalSessions() {
       {/* Close Session Modal */}
       {showCloseModal && closingSession && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-md border border-gray-200 dark:border-white/10">
-            <div className="flex items-center justify-between p-6 border-b border-white/10">
-              <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
+          <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-2xl w-full max-w-md border border-gray-200 dark:border-gray-200 dark:border-white/10">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-white/10">
+              <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-900 dark:text-white">
                 Close Session
               </h3>
               <button
@@ -390,34 +390,34 @@ export default function TerminalSessions() {
                   setShowCloseModal(false);
                   setClosingSession(null);
                 }}
-                className="text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:text-white"
+                className="text-gray-500 dark:text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:text-gray-900 dark:text-white"
               >
                 <X size={20} />
               </button>
             </div>
             <div className="p-6 space-y-4">
-              <div className="bg-gray-50 dark:bg-white/5 rounded-xl p-4 space-y-2">
+              <div className="bg-gray-50 dark:bg-gray-50 dark:bg-white/5 rounded-xl p-4 space-y-2">
                 <div className="flex justify-between">
-                  <span className="text-gray-500 dark:text-gray-400">Opening Cash</span>
-                  <span className="text-gray-900 dark:text-white">
+                  <span className="text-gray-500 dark:text-gray-500 dark:text-gray-400">Opening Cash</span>
+                  <span className="text-gray-900 dark:text-gray-900 dark:text-white">
                     {safeMoney(closingSession.opening_cash)}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-500 dark:text-gray-400">Cash Sales</span>
-                  <span className="text-gray-900 dark:text-white">
+                  <span className="text-gray-500 dark:text-gray-500 dark:text-gray-400">Cash Sales</span>
+                  <span className="text-gray-900 dark:text-gray-900 dark:text-white">
                     {safeMoney(closingSession.cash_sales)}
                   </span>
                 </div>
                 <div className="flex justify-between font-semibold">
                   <span className="text-gray-300">Expected</span>
-                  <span className="text-gray-900 dark:text-white">
+                  <span className="text-gray-900 dark:text-gray-900 dark:text-white">
                     {safeMoney(openSessionsTotal)}
                   </span>
                 </div>
               </div>
               <div>
-                <label className="text-gray-500 dark:text-gray-400 text-xs mb-2 block">
+                <label className="text-gray-500 dark:text-gray-500 dark:text-gray-400 text-xs mb-2 block">
                   Counted Cash
                 </label>
                 <input
@@ -430,7 +430,7 @@ export default function TerminalSessions() {
                         : parseFloat(e.target.value) || 0,
                     )
                   }
-                  className="w-full px-4 py-3 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white"
+                  className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-gray-900 dark:text-white"
                   min="0"
                   placeholder="0"
                 />
@@ -448,7 +448,7 @@ export default function TerminalSessions() {
               <button
                 onClick={handleCloseSession}
                 disabled={loading}
-                className="w-full py-3 bg-red-500 hover:bg-red-600 disabled:bg-gray-600 text-gray-900 dark:text-white font-medium rounded-xl flex items-center justify-center gap-2"
+                className="w-full py-3 bg-red-500 hover:bg-red-600 disabled:bg-gray-600 text-gray-900 dark:text-gray-900 dark:text-white font-medium rounded-xl flex items-center justify-center gap-2"
               >
                 {loading ? (
                   <Loader2 size={18} className="animate-spin" />

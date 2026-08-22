@@ -22,7 +22,7 @@ export default function EnhancedTooltip({
     <div className="relative group">
       {children}
       <div
-        className={`absolute ${positionStyles[position]} px-3 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10`}
+        className={`absolute ${positionStyles[position]} px-3 py-1 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10`}
       >
         {content}
       </div>

@@ -56,7 +56,7 @@ const categoryConfig: Record<
   },
   config: {
     icon: Settings,
-    color: "text-gray-600 dark:text-gray-400",
+    color: "text-gray-600 dark:text-gray-500 dark:text-gray-400",
     label: "Config",
   },
   sync: {
@@ -186,10 +186,10 @@ export default function AuditTrail({ stationId }: AuditTrailProps) {
             />
           </div>
           <div>
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-900 dark:text-white">
               Audit Trail
             </h2>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
+            <p className="text-sm text-gray-500 dark:text-gray-500 dark:text-gray-400">
               Complete activity log for compliance
               <span className="ml-2 text-green-600 dark:text-green-400">
                 • Cloud-synced
@@ -200,7 +200,7 @@ export default function AuditTrail({ stationId }: AuditTrailProps) {
         <button
           onClick={() => load()}
           disabled={loading}
-          className="p-2 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors disabled:opacity-50"
+          className="p-2 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors disabled:opacity-50"
           title="Refresh"
           aria-label="Refresh audit log"
         >
@@ -209,19 +209,19 @@ export default function AuditTrail({ stationId }: AuditTrailProps) {
       </div>
 
       <div className="grid grid-cols-3 gap-4">
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+        <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
           <p className="text-xs text-gray-500">Total Events</p>
-          <p className="text-2xl font-bold text-gray-900 dark:text-white">
+          <p className="text-2xl font-bold text-gray-900 dark:text-gray-900 dark:text-white">
             {stats.total}
           </p>
         </div>
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+        <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
           <p className="text-xs text-gray-500">Today</p>
           <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
             {stats.today}
           </p>
         </div>
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+        <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
           <p className="text-xs text-gray-500">This Week</p>
           <p className="text-2xl font-bold text-green-600 dark:text-green-400">
             {stats.thisWeek}
@@ -238,7 +238,7 @@ export default function AuditTrail({ stationId }: AuditTrailProps) {
             </p>
             <button
               onClick={() => load()}
-              className="mt-2 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-600 text-white text-xs font-medium hover:bg-amber-700 transition-colors"
+              className="mt-2 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-600 text-gray-900 dark:text-white text-xs font-medium hover:bg-amber-700 transition-colors"
             >
               <RefreshCw size={12} /> Retry
             </button>
@@ -250,20 +250,20 @@ export default function AuditTrail({ stationId }: AuditTrailProps) {
         <div className="relative flex-1 min-w-[200px]">
           <Search
             size={16}
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400"
           />
           <input
             type="text"
             placeholder="Search audit log..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-white"
+            className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-gray-900 dark:text-white"
           />
         </div>
         <select
           value={category}
           onChange={(e) => setCategory(e.target.value)}
-          className="px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-white"
+          className="px-4 py-2.5 bg-white dark:bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-gray-900 dark:text-white"
           aria-label="Filter by category"
         >
           <option value="all">All Categories</option>
@@ -278,7 +278,7 @@ export default function AuditTrail({ stationId }: AuditTrailProps) {
         <button
           onClick={exportCSV}
           disabled={filtered.length === 0}
-          className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-gray-900 dark:text-white rounded-xl text-sm font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           <Download size={16} /> Export
         </button>
@@ -293,7 +293,7 @@ export default function AuditTrail({ stationId }: AuditTrailProps) {
                 setConfirmingClear(false);
                 load();
               }}
-              className="px-3 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-medium"
+              className="px-3 py-2.5 bg-red-600 hover:bg-red-700 text-gray-900 dark:text-white rounded-xl text-sm font-medium"
             >
               Confirm
             </button>
@@ -314,14 +314,14 @@ export default function AuditTrail({ stationId }: AuditTrailProps) {
         )}
         <button
           onClick={addTestEntry}
-          className="px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl text-sm font-medium flex items-center gap-2 transition-colors"
+          className="px-4 py-2.5 bg-green-600 hover:bg-green-700 text-gray-900 dark:text-white rounded-xl text-sm font-medium flex items-center gap-2 transition-colors"
           title="Add a test entry to verify cloud sync"
         >
           <Plus size={16} /> Test Entry
         </button>
       </div>
 
-      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+      <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
         <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
           <table className="w-full text-xs">
             <thead className="sticky top-0 bg-gray-50 dark:bg-gray-700 z-10">
@@ -345,7 +345,7 @@ export default function AuditTrail({ stationId }: AuditTrailProps) {
                     <td className="px-3 py-2 text-gray-500 whitespace-nowrap">
                       {new Date(e.timestamp).toLocaleString()}
                     </td>
-                    <td className="px-3 py-2 font-medium dark:text-white">
+                    <td className="px-3 py-2 font-medium dark:text-gray-900 dark:text-white">
                       {e.action}
                     </td>
                     <td className="px-3 py-2">
@@ -357,7 +357,7 @@ export default function AuditTrail({ stationId }: AuditTrailProps) {
                     <td className="px-3 py-2 text-gray-500">
                       {e.user || "System"}
                     </td>
-                    <td className="px-3 py-2 text-gray-600 dark:text-gray-400 max-w-xs truncate">
+                    <td className="px-3 py-2 text-gray-600 dark:text-gray-500 dark:text-gray-400 max-w-xs truncate">
                       {e.details}
                     </td>
                   </tr>
@@ -383,13 +383,13 @@ export default function AuditTrail({ stationId }: AuditTrailProps) {
             <p className="text-sm text-gray-500 mb-3">
               No audit entries found.
             </p>
-            <p className="text-xs text-gray-400 mb-4">
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
               Activities are logged automatically as you use the system. You can
               also add a test entry to verify cloud sync.
             </p>
             <button
               onClick={addTestEntry}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 transition-colors"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-indigo-600 text-gray-900 dark:text-white text-sm font-medium hover:bg-indigo-700 transition-colors"
             >
               <Plus size={16} /> Add Test Entry
             </button>

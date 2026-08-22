@@ -626,10 +626,10 @@ export default function News() {
             <Newspaper className="text-blue-600 dark:text-blue-400" size={24} />
           </div>
           <div>
-            <h2 className="text-xl font-bold text-gray-800 dark:text-white">
+            <h2 className="text-xl font-bold text-gray-800 dark:text-gray-900 dark:text-white">
               Fuel Industry News
             </h2>
-            <p className="text-xs text-gray-500 dark:text-gray-400">
+            <p className="text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400">
               {currentCountry.flag} {currentCountry.name} &bull; {unreadCount}{" "}
               unread &bull;
               <span
@@ -674,20 +674,20 @@ export default function News() {
       <div className="relative">
         <Search
           size={14}
-          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400"
         />
         <input
           type="text"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="Search news by title, summary, source, or category..."
-          className="w-full pl-9 pr-4 py-2 text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-800 dark:text-gray-200 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full pl-9 pr-4 py-2 text-sm bg-white dark:bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-800 dark:text-gray-200 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
       </div>
 
       {/* Last fetch time */}
       {lastFetch && (
-        <p className="text-[10px] text-gray-400 -mt-4">
+        <p className="text-[10px] text-gray-500 dark:text-gray-400 -mt-4">
           Last updated: {lastFetch.toLocaleString()}
         </p>
       )}
@@ -696,13 +696,13 @@ export default function News() {
       <div className="flex flex-wrap gap-2">
         <button
           onClick={() => setActiveFilter("all")}
-          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${activeFilter === "all" ? "bg-blue-500 text-white" : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"}`}
+          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${activeFilter === "all" ? "bg-blue-500 text-gray-900 dark:text-white" : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"}`}
         >
           All ({news.length})
         </button>
         <button
           onClick={() => setActiveFilter("unread")}
-          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 ${activeFilter === "unread" ? "bg-blue-500 text-white" : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"}`}
+          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 ${activeFilter === "unread" ? "bg-blue-500 text-gray-900 dark:text-white" : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"}`}
         >
           <Clock size={12} /> Unread ({unreadCount})
         </button>
@@ -714,7 +714,7 @@ export default function News() {
             <button
               key={key}
               onClick={() => setActiveFilter(key)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 ${activeFilter === key ? "bg-blue-500 text-white" : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"}`}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 ${activeFilter === key ? "bg-blue-500 text-gray-900 dark:text-white" : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"}`}
             >
               <Icon size={12} /> {label} ({count})
             </button>
@@ -722,7 +722,7 @@ export default function News() {
         })}
         <button
           onClick={() => setActiveFilter("bookmarked")}
-          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 ${activeFilter === "bookmarked" ? "bg-blue-500 text-white" : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"}`}
+          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 ${activeFilter === "bookmarked" ? "bg-blue-500 text-gray-900 dark:text-white" : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"}`}
         >
           <Bookmark size={12} /> Saved ({bookmarks.size})
         </button>
@@ -732,11 +732,11 @@ export default function News() {
       <div className="bg-gradient-to-r from-gray-900 to-gray-800 rounded-xl border border-gray-700 overflow-hidden">
         <button
           onClick={() => setShowVideos(!showVideos)}
-          className="w-full flex items-center justify-between p-3 hover:bg-gray-800/50 transition-all"
+          className="w-full flex items-center justify-between p-3 hover:bg-white dark:bg-gray-800/50 transition-all"
         >
           <div className="flex items-center gap-2">
             <Tv size={16} className="text-red-500" />
-            <span className="text-sm font-semibold text-white">
+            <span className="text-sm font-semibold text-gray-900 dark:text-white">
               Fuel Industry Video News
             </span>
             {currentVideo.type === "live" && (
@@ -744,7 +744,7 @@ export default function News() {
                 <Radio size={8} className="animate-pulse" /> LIVE
               </span>
             )}
-            <span className="text-xs text-gray-400">{currentVideo.name}</span>
+            <span className="text-xs text-gray-500 dark:text-gray-400">{currentVideo.name}</span>
           </div>
           <div className="flex items-center gap-2">
             <span className="text-[10px] text-gray-500">
@@ -752,7 +752,7 @@ export default function News() {
             </span>
             <ChevronDown
               size={14}
-              className={`text-gray-400 transition-transform ${showVideos ? "rotate-180" : ""}`}
+              className={`text-gray-500 dark:text-gray-400 transition-transform ${showVideos ? "rotate-180" : ""}`}
             />
           </div>
         </button>
@@ -771,7 +771,7 @@ export default function News() {
             </div>
 
             {/* Video Controls */}
-            <div className="p-3 flex items-center justify-between bg-gray-800/50">
+            <div className="p-3 flex items-center justify-between bg-white dark:bg-gray-800/50">
               <div className="flex items-center gap-2">
                 <button
                   onClick={() =>
@@ -780,7 +780,7 @@ export default function News() {
                         (vi - 1 + VIDEO_SOURCES.length) % VIDEO_SOURCES.length,
                     )
                   }
-                  className="p-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-white transition-all"
+                  className="p-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-900 dark:text-white transition-all"
                   title="Previous"
                 >
                   <ChevronLeft size={14} />
@@ -789,12 +789,12 @@ export default function News() {
                   onClick={() =>
                     setVideoIndex((vi) => (vi + 1) % VIDEO_SOURCES.length)
                   }
-                  className="p-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-white transition-all"
+                  className="p-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-900 dark:text-white transition-all"
                   title="Next"
                 >
                   <ChevronRight size={14} />
                 </button>
-                <span className="text-xs text-gray-400 ml-1">
+                <span className="text-xs text-gray-500 dark:text-gray-400 ml-1">
                   {currentVideo.desc}
                 </span>
               </div>
@@ -803,12 +803,12 @@ export default function News() {
               <div className="relative">
                 <button
                   onClick={() => setVideoDropdown(!videoDropdown)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded-lg text-xs text-white transition-all"
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded-lg text-xs text-gray-900 dark:text-white transition-all"
                 >
                   <Monitor size={12} /> Change Station <ChevronDown size={10} />
                 </button>
                 {videoDropdown && (
-                  <div className="absolute right-0 bottom-full mb-1 w-56 bg-gray-800 border border-gray-700 rounded-xl shadow-xl overflow-hidden z-10">
+                  <div className="absolute right-0 bottom-full mb-1 w-56 bg-white dark:bg-gray-800 border border-gray-700 rounded-xl shadow-xl overflow-hidden z-10">
                     {VIDEO_SOURCES.map((vs, i) => (
                       <button
                         key={vs.id}
@@ -829,7 +829,7 @@ export default function News() {
                         )}
                         <span className="flex-1">{vs.name}</span>
                         {i === videoIndex && (
-                          <span className="text-[9px] bg-blue-600 text-white px-1 rounded">
+                          <span className="text-[9px] bg-blue-600 text-gray-900 dark:text-white px-1 rounded">
                             ON
                           </span>
                         )}
@@ -844,8 +844,8 @@ export default function News() {
       </div>
 
       {/* Social Media News Sources */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
-        <h3 className="font-bold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+      <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
+        <h3 className="font-bold text-gray-900 dark:text-gray-900 dark:text-white mb-3 flex items-center gap-2">
           <Globe size={18} className="text-blue-600" />
           Social Media Fuel News
         </h3>
@@ -860,7 +860,7 @@ export default function News() {
               href={src.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="block p-3 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-blue-400 dark:hover:border-blue-500 transition-all group"
+              className="block p-3 bg-gray-50 dark:bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-blue-400 dark:hover:border-blue-500 transition-all group"
             >
               <div className="flex items-center justify-between mb-1">
                 <span className="text-xs font-bold text-blue-600">
@@ -868,13 +868,13 @@ export default function News() {
                 </span>
                 <ExternalLink
                   size={12}
-                  className="text-gray-400 group-hover:text-blue-600"
+                  className="text-gray-500 dark:text-gray-400 group-hover:text-blue-600"
                 />
               </div>
               <p className="text-xs font-medium text-gray-700 dark:text-gray-200">
                 {src.name}
               </p>
-              <p className="text-[10px] text-gray-400 mt-1">{src.desc}</p>
+              <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1">{src.desc}</p>
             </a>
           ))}
         </div>
@@ -883,7 +883,7 @@ export default function News() {
       {/* News Grid */}
       {loading ? (
         <div className="flex items-center justify-center py-20">
-          <RefreshCw size={32} className="text-gray-400 animate-spin mb-4" />
+          <RefreshCw size={32} className="text-gray-500 dark:text-gray-400 animate-spin mb-4" />
           <p className="text-gray-500">Loading news...</p>
         </div>
       ) : (
@@ -897,7 +897,7 @@ export default function News() {
             return (
               <div
                 key={item.id}
-                className={`group bg-white dark:bg-gray-800 rounded-xl border transition-all hover:shadow-lg cursor-pointer ${
+                className={`group bg-white dark:bg-white dark:bg-gray-800 rounded-xl border transition-all hover:shadow-lg cursor-pointer ${
                   isRead
                     ? "border-gray-200 dark:border-gray-700 opacity-70"
                     : isPriority
@@ -943,7 +943,7 @@ export default function News() {
                         {item.bookmarked ? (
                           <BookmarkCheck size={14} className="text-amber-400" />
                         ) : (
-                          <Bookmark size={14} className="text-gray-400" />
+                          <Bookmark size={14} className="text-gray-500 dark:text-gray-400" />
                         )}
                       </button>
                       <button
@@ -953,20 +953,20 @@ export default function News() {
                         }}
                         className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                       >
-                        <Share2 size={14} className="text-gray-400" />
+                        <Share2 size={14} className="text-gray-500 dark:text-gray-400" />
                       </button>
                     </div>
                   </div>
 
                   <h3
-                    className={`font-semibold mb-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors ${isRead ? "text-gray-600 dark:text-gray-400" : "text-gray-900 dark:text-white"}`}
+                    className={`font-semibold mb-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors ${isRead ? "text-gray-600 dark:text-gray-500 dark:text-gray-400" : "text-gray-900 dark:text-gray-900 dark:text-white"}`}
                   >
                     {item.title}
                   </h3>
-                  <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-3 mb-3">
+                  <p className="text-sm text-gray-500 dark:text-gray-500 dark:text-gray-400 line-clamp-3 mb-3">
                     {item.summary}
                   </p>
-                  <div className="flex items-center justify-between text-[11px] text-gray-400">
+                  <div className="flex items-center justify-between text-[11px] text-gray-500 dark:text-gray-400">
                     <div className="flex items-center gap-3">
                       <span className="flex items-center gap-1">
                         <Globe size={10} /> {item.source}
@@ -980,7 +980,7 @@ export default function News() {
                     </div>
                     <ExternalLink
                       size={12}
-                      className="text-gray-400 group-hover:text-blue-400 transition-colors"
+                      className="text-gray-500 dark:text-gray-400 group-hover:text-blue-400 transition-colors"
                     />
                   </div>
                 </div>
@@ -1008,7 +1008,7 @@ export default function News() {
           onClick={() => setSelectedItem(null)}
         >
           <div
-            className="bg-white dark:bg-gray-800 rounded-2xl max-w-lg w-full shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden"
+            className="bg-white dark:bg-white dark:bg-gray-800 rounded-2xl max-w-lg w-full shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="p-6 max-h-[80vh] overflow-auto">
@@ -1020,18 +1020,18 @@ export default function News() {
                 </span>
                 <button
                   onClick={() => setSelectedItem(null)}
-                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                  className="text-gray-500 dark:text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
                 >
                   Close
                 </button>
               </div>
-              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-3">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-gray-900 dark:text-white mb-3">
                 {selectedItem.title}
               </h3>
               <p className="text-sm text-gray-600 dark:text-gray-300 mb-4 leading-relaxed">
                 {selectedItem.summary}
               </p>
-              <div className="flex items-center justify-between text-xs text-gray-400">
+              <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
                 <span>Source: {selectedItem.source}</span>
                 <span>
                   {selectedItem.publishedAt
@@ -1049,7 +1049,7 @@ export default function News() {
                         "noopener,noreferrer",
                       )
                     }
-                    className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-colors"
+                    className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-gray-900 dark:text-white rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-colors"
                   >
                     <ExternalLink size={16} /> Read Full Article
                   </button>

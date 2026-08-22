@@ -2192,22 +2192,22 @@ export default function IntegrationHub() {
           <Plug size={24} className="text-indigo-600 dark:text-indigo-400" />
         </div>
         <div>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-900 dark:text-white">
             Integration Hub
           </h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
+          <p className="text-sm text-gray-500 dark:text-gray-500 dark:text-gray-400">
             Country-specific integrations for {countryConfig.country}
           </p>
         </div>
       </div>
 
       {/* Country Selector — Searchable dropdown for all 250+ Countries */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+      <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
         <div className="flex items-center justify-between mb-2">
           <label className="text-xs font-medium text-gray-500 uppercase tracking-wider">
             Select Country
           </label>
-          <span className="text-[10px] text-gray-400">
+          <span className="text-[10px] text-gray-500 dark:text-gray-400">
             {ALL_COUNTRIES.length} countries supported
           </span>
         </div>
@@ -2288,25 +2288,25 @@ export default function IntegrationHub() {
 
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 text-center">
+        <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 text-center">
           <p className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
             {connectors.length}
           </p>
           <p className="text-[10px] text-gray-500">Connectors</p>
         </div>
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 text-center">
+        <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 text-center">
           <p className="text-2xl font-bold text-green-600 dark:text-green-400">
             {connectedCount}
           </p>
           <p className="text-[10px] text-gray-500">Connected</p>
         </div>
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 text-center">
+        <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 text-center">
           <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
             {webhooks.length}
           </p>
           <p className="text-[10px] text-gray-500">Webhooks</p>
         </div>
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 text-center">
+        <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700 text-center">
           <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">
             {apiKeys.length}
           </p>
@@ -2330,7 +2330,7 @@ export default function IntegrationHub() {
           <button
             key={t.id}
             onClick={() => setActiveTab(t.id)}
-            className={`px-4 py-2.5 text-sm font-medium flex items-center gap-2 transition-all ${activeTab === t.id ? "text-indigo-600 dark:text-indigo-400 border-b-2 border-indigo-600" : "text-gray-500 dark:text-gray-400 hover:text-gray-700"}`}
+            className={`px-4 py-2.5 text-sm font-medium flex items-center gap-2 transition-all ${activeTab === t.id ? "text-indigo-600 dark:text-indigo-400 border-b-2 border-indigo-600" : "text-gray-500 dark:text-gray-500 dark:text-gray-400 hover:text-gray-700"}`}
           >
             <t.icon size={16} />
             {t.label}
@@ -2342,12 +2342,12 @@ export default function IntegrationHub() {
       {activeTab === "connectors" && (
         <div className="space-y-4">
           <div className="flex flex-wrap items-center gap-3">
-            <div className="flex gap-1 bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
+            <div className="flex gap-1 bg-gray-100 dark:bg-white dark:bg-gray-800 rounded-lg p-1">
               {categories.map((cat) => (
                 <button
                   key={cat}
                   onClick={() => setCategoryFilter(cat)}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${categoryFilter === cat ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow" : "text-gray-500 dark:text-gray-400"}`}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${categoryFilter === cat ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-900 dark:text-white shadow" : "text-gray-500 dark:text-gray-500 dark:text-gray-400"}`}
                 >
                   {cat === "all" ? "All" : cat}
                 </button>
@@ -2356,13 +2356,13 @@ export default function IntegrationHub() {
             <div className="flex gap-2 ml-auto">
               <button
                 onClick={() => exportData("csv")}
-                className="px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-600 flex items-center gap-1.5"
+                className="px-3 py-2 bg-white dark:bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-600 flex items-center gap-1.5"
               >
                 <Download size={14} /> CSV
               </button>
               <button
                 onClick={() => exportData("json")}
-                className="px-3 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-600 flex items-center gap-1.5"
+                className="px-3 py-2 bg-white dark:bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs text-gray-600 flex items-center gap-1.5"
               >
                 <Download size={14} /> JSON
               </button>
@@ -2395,7 +2395,7 @@ export default function IntegrationHub() {
               return (
                 <div
                   key={conn.id}
-                  className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden"
+                  className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden"
                 >
                   <div
                     className="flex items-center gap-3 p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50"
@@ -2419,7 +2419,7 @@ export default function IntegrationHub() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
+                        <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-900 dark:text-white">
                           {conn.name}
                         </h3>
                         <span
@@ -2428,20 +2428,20 @@ export default function IntegrationHub() {
                           {conn.status}
                         </span>
                       </div>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                      <p className="text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400 truncate">
                         {conn.description}
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
                       {conn.lastSync && (
-                        <span className="text-[10px] text-gray-400">
+                        <span className="text-[10px] text-gray-500 dark:text-gray-400">
                           Synced {new Date(conn.lastSync).toLocaleTimeString()}
                         </span>
                       )}
                       {isExpanded ? (
-                        <ChevronUp size={18} className="text-gray-400" />
+                        <ChevronUp size={18} className="text-gray-500 dark:text-gray-400" />
                       ) : (
-                        <ChevronDown size={18} className="text-gray-400" />
+                        <ChevronDown size={18} className="text-gray-500 dark:text-gray-400" />
                       )}
                     </div>
                   </div>
@@ -2484,7 +2484,7 @@ export default function IntegrationHub() {
                           <div className="space-y-3">
                             {Object.entries(conn.config).map(([key, value]) => (
                               <div key={key}>
-                                <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1 capitalize">
+                                <label className="block text-xs text-gray-600 dark:text-gray-500 dark:text-gray-400 mb-1 capitalize">
                                   {key.replace(/([A-Z])/g, " $1").trim()}
                                 </label>
                                 <div className="relative">
@@ -2510,7 +2510,7 @@ export default function IntegrationHub() {
                                         [key]: e.target.value,
                                       }))
                                     }
-                                    className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-xs dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none"
+                                    className="w-full px-3 py-2 bg-white dark:bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-xs dark:text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none"
                                   />
                                   {(key.toLowerCase().includes("password") ||
                                     key.toLowerCase().includes("secret") ||
@@ -2524,7 +2524,7 @@ export default function IntegrationHub() {
                                             !p[`${conn.id}-${key}`],
                                         }))
                                       }
-                                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400"
+                                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400"
                                     >
                                       {showPasswords[`${conn.id}-${key}`] ? (
                                         <EyeOff size={14} />
@@ -2539,7 +2539,7 @@ export default function IntegrationHub() {
                             <div className="flex gap-2">
                               <button
                                 onClick={() => saveConnectorConfig(conn.id)}
-                                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium rounded-lg flex items-center gap-1.5"
+                                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-gray-900 dark:text-white text-xs font-medium rounded-lg flex items-center gap-1.5"
                               >
                                 <Save size={14} /> Save
                               </button>
@@ -2556,9 +2556,9 @@ export default function IntegrationHub() {
                             {Object.entries(conn.config).map(([key, value]) => (
                               <div
                                 key={key}
-                                className="p-2 bg-gray-50 dark:bg-gray-900 rounded-lg"
+                                className="p-2 bg-gray-50 dark:bg-white dark:bg-gray-900 rounded-lg"
                               >
-                                <p className="text-[10px] text-gray-400 capitalize">
+                                <p className="text-[10px] text-gray-500 dark:text-gray-400 capitalize">
                                   {key.replace(/([A-Z])/g, " $1").trim()}
                                 </p>
                                 <p className="text-xs text-gray-700 dark:text-gray-300 font-mono truncate">
@@ -2570,7 +2570,7 @@ export default function IntegrationHub() {
                                       value
                                     )
                                   ) : (
-                                    <span className="text-gray-400 italic">
+                                    <span className="text-gray-500 dark:text-gray-400 italic">
                                       Not set
                                     </span>
                                   )}
@@ -2594,7 +2594,7 @@ export default function IntegrationHub() {
                               updateConnectorStatus(conn.id, "connected");
                               addLog(`${conn.name} connected`);
                             }}
-                            className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-xs font-medium rounded-lg flex items-center gap-1.5"
+                            className="px-4 py-2 bg-green-600 hover:bg-green-700 text-gray-900 dark:text-white text-xs font-medium rounded-lg flex items-center gap-1.5"
                           >
                             <Link2 size={14} /> Connect
                           </button>
@@ -2623,13 +2623,13 @@ export default function IntegrationHub() {
       {activeTab === "webhooks" && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <p className="text-sm text-gray-500 dark:text-gray-400">
+            <p className="text-sm text-gray-500 dark:text-gray-500 dark:text-gray-400">
               Webhooks for {countryConfig.country} —{" "}
               {countryConfig.webhooks.length} preset templates available
             </p>
             <button
               onClick={() => setShowAddWebhook(true)}
-              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium rounded-lg flex items-center gap-1.5"
+              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-gray-900 dark:text-white text-xs font-medium rounded-lg flex items-center gap-1.5"
             >
               <Plus size={14} /> Add Webhook
             </button>
@@ -2647,10 +2647,10 @@ export default function IntegrationHub() {
                   return (
                     <div
                       key={i}
-                      className="flex items-center justify-between p-3 bg-white dark:bg-gray-800 rounded-lg"
+                      className="flex items-center justify-between p-3 bg-white dark:bg-white dark:bg-gray-800 rounded-lg"
                     >
                       <div>
-                        <p className="text-xs font-medium text-gray-900 dark:text-white">
+                        <p className="text-xs font-medium text-gray-900 dark:text-gray-900 dark:text-white">
                           {preset.name}
                         </p>
                         <p className="text-[10px] text-gray-500 font-mono">
@@ -2686,7 +2686,7 @@ export default function IntegrationHub() {
                             ]);
                             addLog(`Added preset webhook: ${preset.name}`);
                           }}
-                          className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-medium rounded-lg"
+                          className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-gray-900 dark:text-white text-[11px] font-medium rounded-lg"
                         >
                           Add
                         </button>
@@ -2714,7 +2714,7 @@ export default function IntegrationHub() {
             {webhooks.map((wh) => (
               <div
                 key={wh.id}
-                className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4"
+                className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4"
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
@@ -2722,7 +2722,7 @@ export default function IntegrationHub() {
                       className={`w-2 h-2 rounded-full ${wh.active ? "bg-green-500" : "bg-gray-400"}`}
                     />
                     <div>
-                      <p className="text-sm font-medium text-gray-900 dark:text-white">
+                      <p className="text-sm font-medium text-gray-900 dark:text-gray-900 dark:text-white">
                         {wh.name}
                       </p>
                       <p className="text-xs text-gray-500 font-mono">
@@ -2770,7 +2770,7 @@ export default function IntegrationHub() {
               </div>
             ))}
             {webhooks.length === 0 && (
-              <p className="text-center text-sm text-gray-400 py-8">
+              <p className="text-center text-sm text-gray-500 dark:text-gray-400 py-8">
                 No webhooks configured yet.
               </p>
             )}
@@ -2782,12 +2782,12 @@ export default function IntegrationHub() {
       {activeTab === "apikeys" && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <p className="text-sm text-gray-500 dark:text-gray-400">
+            <p className="text-sm text-gray-500 dark:text-gray-500 dark:text-gray-400">
               API Keys for {countryConfig.country} access
             </p>
             <button
               onClick={() => setShowAddApiKey(true)}
-              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium rounded-lg flex items-center gap-1.5"
+              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-gray-900 dark:text-white text-xs font-medium rounded-lg flex items-center gap-1.5"
             >
               <Plus size={14} /> Generate Key
             </button>
@@ -2802,7 +2802,7 @@ export default function IntegrationHub() {
               {countryConfig.scopes.map((s) => (
                 <span
                   key={s}
-                  className="text-[10px] px-2 py-0.5 bg-white dark:bg-gray-800 rounded-full border border-purple-200 text-purple-600"
+                  className="text-[10px] px-2 py-0.5 bg-white dark:bg-white dark:bg-gray-800 rounded-full border border-purple-200 text-purple-600"
                 >
                   {s}
                 </span>
@@ -2826,20 +2826,20 @@ export default function IntegrationHub() {
             {apiKeys.map((k) => (
               <div
                 key={k.id}
-                className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4"
+                className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4"
               >
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-gray-900 dark:text-white">
+                    <p className="text-sm font-medium text-gray-900 dark:text-gray-900 dark:text-white">
                       {k.name}
                     </p>
                     <div className="flex items-center gap-2 mt-1">
-                      <code className="text-xs text-gray-500 font-mono bg-gray-100 dark:bg-gray-900 px-2 py-1 rounded">
+                      <code className="text-xs text-gray-500 font-mono bg-gray-100 dark:bg-white dark:bg-gray-900 px-2 py-1 rounded">
                         {k.key.slice(0, 12)}...{k.key.slice(-4)}
                       </code>
                       <button
                         onClick={() => navigator.clipboard.writeText(k.key)}
-                        className="text-gray-400 hover:text-indigo-600"
+                        className="text-gray-500 dark:text-gray-400 hover:text-indigo-600"
                       >
                         <Copy size={14} />
                       </button>
@@ -2865,20 +2865,20 @@ export default function IntegrationHub() {
                     </span>
                   ))}
                 </div>
-                <p className="text-[10px] text-gray-400 mt-1">
+                <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1">
                   Created {new Date(k.created).toLocaleDateString()}
                 </p>
               </div>
             ))}
             {apiKeys.length === 0 && (
-              <p className="text-center text-sm text-gray-400 py-8">
+              <p className="text-center text-sm text-gray-500 dark:text-gray-400 py-8">
                 No API keys generated yet.
               </p>
             )}
           </div>
 
-          <div className="bg-gray-50 dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
-            <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
+          <div className="bg-gray-50 dark:bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+            <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-900 dark:text-white mb-2 flex items-center gap-2">
               <ArrowRight size={16} className="text-indigo-500" /> API Endpoints
             </h4>
             <div className="space-y-2 text-xs font-mono">
@@ -2892,7 +2892,7 @@ export default function IntegrationHub() {
               ].map((ep) => (
                 <div
                   key={ep}
-                  className="flex items-center gap-2 p-2 bg-white dark:bg-gray-800 rounded"
+                  className="flex items-center gap-2 p-2 bg-white dark:bg-white dark:bg-gray-800 rounded"
                 >
                   <span
                     className={`font-bold ${ep.startsWith("GET") ? "text-green-600" : ep.startsWith("POST") ? "text-blue-600" : "text-purple-600"}`}
@@ -2913,7 +2913,7 @@ export default function IntegrationHub() {
       {activeTab === "logs" && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <p className="text-sm text-gray-500 dark:text-gray-400">
+            <p className="text-sm text-gray-500 dark:text-gray-500 dark:text-gray-400">
               Integration activity for {countryConfig.country}
             </p>
             <button
@@ -2923,7 +2923,7 @@ export default function IntegrationHub() {
               Clear Logs
             </button>
           </div>
-          <div className="bg-gray-900 rounded-xl p-4 font-mono text-xs max-h-[500px] overflow-y-auto">
+          <div className="bg-white dark:bg-gray-900 rounded-xl p-4 font-mono text-xs max-h-[500px] overflow-y-auto">
             {logs.length === 0 && (
               <p className="text-gray-500 italic">No activity yet.</p>
             )}
@@ -2998,37 +2998,37 @@ function AddWebhookForm({
         Add Webhook Endpoint
       </h4>
       <div>
-        <label className="text-xs text-gray-600 dark:text-gray-400">Name</label>
+        <label className="text-xs text-gray-600 dark:text-gray-500 dark:text-gray-400">Name</label>
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
-          className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-xs dark:text-white"
+          className="w-full px-3 py-2 bg-white dark:bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-xs dark:text-gray-900 dark:text-white"
           placeholder="e.g. Invoice Sync"
         />
       </div>
       <div>
-        <label className="text-xs text-gray-600 dark:text-gray-400">URL</label>
+        <label className="text-xs text-gray-600 dark:text-gray-500 dark:text-gray-400">URL</label>
         <input
           value={url}
           onChange={(e) => setUrl(e.target.value)}
-          className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-xs dark:text-white"
+          className="w-full px-3 py-2 bg-white dark:bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-xs dark:text-gray-900 dark:text-white"
           placeholder="https://your-system.com/webhook"
         />
       </div>
       <div>
-        <label className="text-xs text-gray-600 dark:text-gray-400">
+        <label className="text-xs text-gray-600 dark:text-gray-500 dark:text-gray-400">
           Secret (optional)
         </label>
         <input
           type="password"
           value={secret}
           onChange={(e) => setSecret(e.target.value)}
-          className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-xs dark:text-white"
+          className="w-full px-3 py-2 bg-white dark:bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-xs dark:text-gray-900 dark:text-white"
           placeholder="HMAC signature validation"
         />
       </div>
       <div>
-        <label className="text-xs text-gray-600 dark:text-gray-400 mb-1 block">
+        <label className="text-xs text-gray-600 dark:text-gray-500 dark:text-gray-400 mb-1 block">
           Events
         </label>
         <div className="flex flex-wrap gap-2">
@@ -3040,7 +3040,7 @@ function AddWebhookForm({
                   p.includes(e) ? p.filter((x) => x !== e) : [...p, e],
                 )
               }
-              className={`text-[11px] px-2.5 py-1 rounded-full border transition-all ${selectedEvents.includes(e) ? "bg-indigo-600 text-white border-indigo-600" : "bg-white dark:bg-gray-800 text-gray-600 border-gray-200"}`}
+              className={`text-[11px] px-2.5 py-1 rounded-full border transition-all ${selectedEvents.includes(e) ? "bg-indigo-600 text-gray-900 dark:text-white border-indigo-600" : "bg-white dark:bg-white dark:bg-gray-800 text-gray-600 border-gray-200"}`}
             >
               {e}
             </button>
@@ -3062,7 +3062,7 @@ function AddWebhookForm({
               secret: secret || undefined,
             });
           }}
-          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium rounded-lg"
+          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-gray-900 dark:text-white text-xs font-medium rounded-lg"
         >
           Save Webhook
         </button>
@@ -3108,18 +3108,18 @@ function AddApiKeyForm({
         Generate API Key
       </h4>
       <div>
-        <label className="text-xs text-gray-600 dark:text-gray-400">
+        <label className="text-xs text-gray-600 dark:text-gray-500 dark:text-gray-400">
           Key Name
         </label>
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
-          className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-xs dark:text-white"
+          className="w-full px-3 py-2 bg-white dark:bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-xs dark:text-gray-900 dark:text-white"
           placeholder="e.g. POS System Integration"
         />
       </div>
       <div>
-        <label className="text-xs text-gray-600 dark:text-gray-400 mb-1 block">
+        <label className="text-xs text-gray-600 dark:text-gray-500 dark:text-gray-400 mb-1 block">
           Scopes
         </label>
         <div className="flex flex-wrap gap-2">
@@ -3131,7 +3131,7 @@ function AddApiKeyForm({
                   p.includes(s) ? p.filter((x) => x !== s) : [...p, s],
                 )
               }
-              className={`text-[11px] px-2.5 py-1 rounded-full border transition-all ${selectedScopes.includes(s) ? "bg-purple-600 text-white border-purple-600" : "bg-white dark:bg-gray-800 text-gray-600 border-gray-200"}`}
+              className={`text-[11px] px-2.5 py-1 rounded-full border transition-all ${selectedScopes.includes(s) ? "bg-purple-600 text-gray-900 dark:text-white border-purple-600" : "bg-white dark:bg-white dark:bg-gray-800 text-gray-600 border-gray-200"}`}
             >
               {s}
             </button>
@@ -3155,7 +3155,7 @@ function AddApiKeyForm({
               created: new Date().toISOString(),
             });
           }}
-          className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-medium rounded-lg"
+          className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-gray-900 dark:text-white text-xs font-medium rounded-lg"
         >
           Generate Key
         </button>

@@ -1012,7 +1012,7 @@ export default function PointOfSale() {
                 <Settings size={16} />
                 {kenyaStation ? "KRA Settings" : "Tax Settings"}
               </button>
-              <div className="text-sm text-gray-500 dark:text-gray-400">
+              <div className="text-sm text-gray-500 dark:text-gray-500 dark:text-gray-400">
                 Fiscal #{fiscalCounter} | Today: {transactions.length}
               </div>
             </div>
@@ -1081,7 +1081,7 @@ export default function PointOfSale() {
                               }
                               className={`px-4 py-2 rounded-lg font-medium transition-all ${
                                 selected
-                                  ? "bg-green-500 text-white"
+                                  ? "bg-green-500 text-gray-900 dark:text-white"
                                   : "bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
                               }`}
                             >
@@ -1107,7 +1107,7 @@ export default function PointOfSale() {
                             className={`px-4 py-2 rounded-lg font-medium transition-all ${
                               quickSaleFuel ===
                               CANONICAL_FUEL_TYPES.petrol.label
-                                ? "bg-green-500 text-white"
+                                ? "bg-green-500 text-gray-900 dark:text-white"
                                 : "bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
                             }`}
                           >
@@ -1131,7 +1131,7 @@ export default function PointOfSale() {
                             className={`px-4 py-2 rounded-lg font-medium transition-all ${
                               quickSaleFuel ===
                               CANONICAL_FUEL_TYPES.diesel.label
-                                ? "bg-yellow-500 text-white"
+                                ? "bg-yellow-500 text-gray-900 dark:text-white"
                                 : "bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
                             }`}
                           >
@@ -1239,7 +1239,7 @@ export default function PointOfSale() {
                     {cart.map((item) => (
                       <div
                         key={item.id}
-                        className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg"
+                        className="flex items-center justify-between p-3 bg-gray-50 dark:bg-white dark:bg-gray-800 rounded-lg"
                       >
                         <div className="flex-1">
                           <p className="font-medium">{item.name}</p>
@@ -1295,7 +1295,7 @@ export default function PointOfSale() {
               {/* Customer Info (Optional) */}
               <div className="card">
                 <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-semibold text-gray-600 dark:text-gray-400">
+                  <h3 className="text-sm font-semibold text-gray-600 dark:text-gray-500 dark:text-gray-400">
                     Customer Info (Optional)
                   </h3>
                   {loyaltyConfig?.isEnabled && (
@@ -1349,7 +1349,7 @@ export default function PointOfSale() {
 
                 {/* Loyalty Scanner Modal */}
                 {showLoyaltyScanner && (
-                  <div className="mb-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                  <div className="mb-3 p-3 bg-gray-50 dark:bg-white dark:bg-gray-800 rounded-lg">
                     <p className="text-xs text-gray-500 mb-2">
                       Enter phone number or card number
                     </p>
@@ -1405,20 +1405,20 @@ export default function PointOfSale() {
 
                 {/* VAT Breakdown */}
                 <div className="space-y-1 mb-4 text-sm">
-                  <div className="flex justify-between text-gray-600 dark:text-gray-400">
+                  <div className="flex justify-between text-gray-600 dark:text-gray-500 dark:text-gray-400">
                     <span>Taxable (A-{vatPercent}%):</span>
                     <span>
                       {currencySymbol} {formatNumber(taxableA)}
                     </span>
                   </div>
-                  <div className="flex justify-between text-gray-600 dark:text-gray-400">
+                  <div className="flex justify-between text-gray-600 dark:text-gray-500 dark:text-gray-400">
                     <span>VAT ({vatPercent}%):</span>
                     <span>
                       {currencySymbol} {formatNumber(vatA)}
                     </span>
                   </div>
                   {taxableB > 0 && (
-                    <div className="flex justify-between text-gray-600 dark:text-gray-400">
+                    <div className="flex justify-between text-gray-600 dark:text-gray-500 dark:text-gray-400">
                       <span>Zero-rated (B-0%):</span>
                       <span>
                         {currencySymbol} {formatNumber(taxableB)}
@@ -1426,7 +1426,7 @@ export default function PointOfSale() {
                     </div>
                   )}
                   {exemptE > 0 && (
-                    <div className="flex justify-between text-gray-600 dark:text-gray-400">
+                    <div className="flex justify-between text-gray-600 dark:text-gray-500 dark:text-gray-400">
                       <span>Exempt (E):</span>
                       <span>
                         {currencySymbol} {formatNumber(exemptE)}
@@ -1508,7 +1508,7 @@ export default function PointOfSale() {
                           !customerPhone ||
                           cart.length === 0
                         }
-                        className="w-full btn bg-green-600 hover:bg-green-700 text-white disabled:opacity-50"
+                        className="w-full btn bg-green-600 hover:bg-green-700 text-gray-900 dark:text-white disabled:opacity-50"
                       >
                         {stkPushStatus === "pending" ? (
                           <>Processing STK Push...</>
@@ -1549,7 +1549,7 @@ export default function PointOfSale() {
                     transactions.slice(0, 5).map((txn) => (
                       <div
                         key={txn.id}
-                        className="p-2 bg-gray-50 dark:bg-gray-800 rounded cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
+                        className="p-2 bg-gray-50 dark:bg-white dark:bg-gray-800 rounded cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
                         onClick={() => {
                           setCurrentTransaction(txn);
                           setShowReceipt(true);
@@ -1578,7 +1578,7 @@ export default function PointOfSale() {
           {/* Tax/KRA Settings Modal */}
           {showSettings && (
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-              <div className="bg-white dark:bg-gray-900 rounded-lg max-w-lg w-full max-h-[90vh] overflow-y-auto">
+              <div className="bg-white dark:bg-white dark:bg-gray-900 rounded-lg max-w-lg w-full max-h-[90vh] overflow-y-auto">
                 <div className="p-4 border-b dark:border-gray-700 flex justify-between items-center">
                   <h3 className="font-semibold">
                     {kenyaStation
@@ -1587,7 +1587,7 @@ export default function PointOfSale() {
                   </h3>
                   <button
                     onClick={() => setShowSettings(false)}
-                    className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded"
+                    className="p-2 hover:bg-gray-100 dark:hover:bg-white dark:bg-gray-800 rounded"
                   >
                     <X size={20} />
                   </button>
@@ -1784,7 +1784,7 @@ export default function PointOfSale() {
           {/* Receipt Modal - KRA Compliant */}
           {showReceipt && currentTransaction && (
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-              <div className="bg-white dark:bg-gray-900 rounded-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
+              <div className="bg-white dark:bg-white dark:bg-gray-900 rounded-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
                 <div className="p-4 border-b dark:border-gray-700 flex justify-between items-center">
                   <h3 className="font-semibold">Tax Invoice / Receipt</h3>
                   <div className="flex gap-2">
@@ -1796,7 +1796,7 @@ export default function PointOfSale() {
                     </button>
                     <button
                       onClick={() => setShowReceipt(false)}
-                      className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded"
+                      className="p-2 hover:bg-gray-100 dark:hover:bg-white dark:bg-gray-800 rounded"
                     >
                       <X size={20} />
                     </button>
@@ -1847,7 +1847,7 @@ export default function PointOfSale() {
                     )}
                   </div>
 
-                  <div className="tax-invoice-title bg-black text-white text-center py-1 font-bold text-sm mb-3">
+                  <div className="tax-invoice-title bg-black text-gray-900 dark:text-white text-center py-1 font-bold text-sm mb-3">
                     TAX INVOICE
                   </div>
 

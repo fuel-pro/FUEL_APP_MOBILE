@@ -156,7 +156,7 @@ export default function WeatherWidget() {
       case "Clear":
         return <Sun size={32} className="text-amber-400" />;
       case "Cloudy":
-        return <Cloud size={32} className="text-gray-400" />;
+        return <Cloud size={32} className="text-gray-500 dark:text-gray-400" />;
       case "Rain":
         return <CloudRain size={32} className="text-blue-400" />;
       case "Snow":
@@ -214,10 +214,10 @@ export default function WeatherWidget() {
             <div className="flex items-center gap-3">
               {getIcon()}
               <div>
-                <p className="text-3xl font-bold text-gray-900 dark:text-white">
+                <p className="text-3xl font-bold text-gray-900 dark:text-gray-900 dark:text-white">
                   {Math.round(weather.temp)}°C
                 </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
+                <p className="text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400">
                   Feels like {Math.round(weather.feelsLike)}°C
                 </p>
               </div>
@@ -228,7 +228,7 @@ export default function WeatherWidget() {
               </p>
               <p className="text-xs text-gray-500">{weather.location}</p>
               {lastUpdated && (
-                <p className="text-[10px] text-gray-400">
+                <p className="text-[10px] text-gray-500 dark:text-gray-400">
                   Updated {lastUpdated.toLocaleTimeString()}
                 </p>
               )}
@@ -257,7 +257,7 @@ export default function WeatherWidget() {
             ].map((m) => (
               <div
                 key={m.label}
-                className="bg-white/50 dark:bg-white/5 rounded-lg p-2.5 text-center"
+                className="bg-white/50 dark:bg-gray-50 dark:bg-white/5 rounded-lg p-2.5 text-center"
               >
                 <m.icon size={16} className={`mx-auto mb-1 ${m.color}`} />
                 <p className="text-[10px] text-gray-500">{m.label}</p>

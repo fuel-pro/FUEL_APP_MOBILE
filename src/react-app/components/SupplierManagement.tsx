@@ -469,7 +469,7 @@ export default function SupplierManagement() {
 
   const statusColors: Record<string, string> = {
     active: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
-    inactive: "bg-gray-500/10 text-gray-400 border-gray-500/20",
+    inactive: "bg-gray-500/10 text-gray-500 dark:text-gray-400 border-gray-500/20",
     blacklisted: "bg-red-500/10 text-red-400 border-red-500/20",
     pending: "bg-amber-500/10 text-amber-400",
     confirmed: "bg-blue-500/10 text-blue-400",
@@ -496,7 +496,7 @@ export default function SupplierManagement() {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+          <h2 className="text-xl font-bold text-gray-900 dark:text-gray-900 dark:text-white flex items-center gap-2">
             <Truck size={22} className="text-amber-500" /> Supplier Management
           </h2>
           <p className="text-sm text-gray-500 mt-1">
@@ -508,7 +508,7 @@ export default function SupplierManagement() {
             onClick={() => {
               setActiveView("suppliers");
             }}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeView === "suppliers" ? "bg-amber-500 text-white shadow-lg" : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200"}`}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeView === "suppliers" ? "bg-amber-500 text-gray-900 dark:text-white shadow-lg" : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200"}`}
           >
             Suppliers
           </button>
@@ -516,7 +516,7 @@ export default function SupplierManagement() {
             onClick={() => {
               setActiveView("orders");
             }}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeView === "orders" ? "bg-amber-500 text-white shadow-lg" : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200"}`}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeView === "orders" ? "bg-amber-500 text-gray-900 dark:text-white shadow-lg" : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200"}`}
           >
             Purchase Orders
           </button>
@@ -524,7 +524,7 @@ export default function SupplierManagement() {
             onClick={() => {
               setActiveView("purchases");
             }}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5 ${activeView === "purchases" ? "bg-amber-500 text-white shadow-lg" : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200"}`}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5 ${activeView === "purchases" ? "bg-amber-500 text-gray-900 dark:text-white shadow-lg" : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200"}`}
           >
             <ShoppingCart size={14} />
             Purchases
@@ -555,19 +555,19 @@ export default function SupplierManagement() {
             <div className="relative flex-1">
               <Search
                 size={16}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400"
               />
               <input
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="Search suppliers..."
-                className="w-full pl-9 pr-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500/30"
+                className="w-full pl-9 pr-4 py-2.5 bg-white dark:bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500/30"
               />
             </div>
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-700 dark:text-gray-300 focus:outline-none"
+              className="px-4 py-2.5 bg-white dark:bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-700 dark:text-gray-300 focus:outline-none"
             >
               <option value="all">All Status</option>
               <option value="active">Active</option>
@@ -593,7 +593,7 @@ export default function SupplierManagement() {
                   notes: "",
                 });
               }}
-              className="px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-sm font-medium flex items-center gap-2 transition-all shadow-lg shadow-amber-500/20"
+              className="px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-gray-900 dark:text-white rounded-xl text-sm font-medium flex items-center gap-2 transition-all shadow-lg shadow-amber-500/20"
             >
               <Plus size={16} /> Add Supplier
             </button>
@@ -604,16 +604,16 @@ export default function SupplierManagement() {
             {filteredSuppliers.map((supplier) => (
               <div
                 key={supplier.id}
-                className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden hover:shadow-lg transition-all"
+                className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden hover:shadow-lg transition-all"
               >
                 <div className="p-4">
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 bg-gradient-to-br from-amber-400 to-amber-600 rounded-xl flex items-center justify-center">
-                        <Truck size={18} className="text-white" />
+                        <Truck size={18} className="text-gray-900 dark:text-white" />
                       </div>
                       <div>
-                        <h3 className="font-semibold text-gray-900 dark:text-white">
+                        <h3 className="font-semibold text-gray-900 dark:text-gray-900 dark:text-white">
                           {supplier.name}
                         </h3>
                         <p className="text-xs text-gray-500">
@@ -629,16 +629,16 @@ export default function SupplierManagement() {
                   </div>
 
                   <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-                    <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
+                    <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-500 dark:text-gray-400">
                       <Phone size={12} /> {supplier.phone}
                     </div>
-                    <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
+                    <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-500 dark:text-gray-400">
                       <Mail size={12} /> {supplier.email || "N/A"}
                     </div>
-                    <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
+                    <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-500 dark:text-gray-400">
                       <MapPin size={12} /> {supplier.address || "N/A"}
                     </div>
-                    <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
+                    <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-500 dark:text-gray-400">
                       <Clock size={12} /> {supplier.deliveryDays}
                     </div>
                   </div>
@@ -757,7 +757,7 @@ export default function SupplierManagement() {
                       </div>
                     </div>
                     {supplier.notes && (
-                      <div className="mt-2 p-2 bg-gray-50 dark:bg-gray-700/30 rounded-lg text-xs text-gray-600 dark:text-gray-400">
+                      <div className="mt-2 p-2 bg-gray-50 dark:bg-gray-700/30 rounded-lg text-xs text-gray-600 dark:text-gray-500 dark:text-gray-400">
                         <FileText size={10} className="inline mr-1" />{" "}
                         {supplier.notes}
                       </div>
@@ -790,39 +790,39 @@ export default function SupplierManagement() {
                 setSelectedSupplierId("");
                 setShowOrderForm(true);
               }}
-              className="px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-sm font-medium flex items-center gap-2 transition-all shadow-lg shadow-amber-500/20"
+              className="px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-gray-900 dark:text-white rounded-xl text-sm font-medium flex items-center gap-2 transition-all shadow-lg shadow-amber-500/20"
             >
               <Plus size={16} /> New Purchase Order
             </button>
           </div>
 
-          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+          <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50">
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-500 dark:text-gray-400">
                       Order ID
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-500 dark:text-gray-400">
                       Supplier
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-500 dark:text-gray-400">
                       Fuel
                     </th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400">
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-500 dark:text-gray-400">
                       Liters
                     </th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400">
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-500 dark:text-gray-400">
                       Total
                     </th>
-                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400">
+                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-500 dark:text-gray-400">
                       Status
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-500 dark:text-gray-400">
                       Expected
                     </th>
-                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400">
+                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-500 dark:text-gray-400">
                       Actions
                     </th>
                   </tr>
@@ -833,10 +833,10 @@ export default function SupplierManagement() {
                       key={order.id}
                       className="border-b border-gray-100 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700/20"
                     >
-                      <td className="px-4 py-3 font-mono text-xs text-gray-600 dark:text-gray-400">
+                      <td className="px-4 py-3 font-mono text-xs text-gray-600 dark:text-gray-500 dark:text-gray-400">
                         {order.id.slice(-6)}
                       </td>
-                      <td className="px-4 py-3 text-gray-900 dark:text-white font-medium">
+                      <td className="px-4 py-3 text-gray-900 dark:text-gray-900 dark:text-white font-medium">
                         {order.supplierName}
                       </td>
                       <td className="px-4 py-3">
@@ -847,7 +847,7 @@ export default function SupplierManagement() {
                       <td className="px-4 py-3 text-right text-gray-700 dark:text-gray-300">
                         {order.liters.toLocaleString()}
                       </td>
-                      <td className="px-4 py-3 text-right font-medium text-gray-900 dark:text-white">
+                      <td className="px-4 py-3 text-right font-medium text-gray-900 dark:text-gray-900 dark:text-white">
                         {currencySymbol} {order.total.toLocaleString()}
                       </td>
                       <td className="px-4 py-3 text-center">
@@ -857,7 +857,7 @@ export default function SupplierManagement() {
                           {order.status}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-gray-500 dark:text-gray-400">
+                      <td className="px-4 py-3 text-gray-500 dark:text-gray-500 dark:text-gray-400">
                         {new Date(order.expectedDate).toLocaleDateString()}
                       </td>
                       <td className="px-4 py-3">
@@ -912,10 +912,10 @@ export default function SupplierManagement() {
       {/* Supplier Form Modal */}
       {showForm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+          <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+                <h3 className="text-lg font-bold text-gray-900 dark:text-gray-900 dark:text-white">
                   {editingId ? "Edit Supplier" : "Add Supplier"}
                 </h3>
                 <button
@@ -935,7 +935,7 @@ export default function SupplierManagement() {
                     onChange={(e) =>
                       setFormData({ ...formData, name: e.target.value })
                     }
-                    className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
+                    className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-gray-900 dark:text-white"
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
@@ -951,7 +951,7 @@ export default function SupplierManagement() {
                           contactPerson: e.target.value,
                         })
                       }
-                      className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
+                      className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-gray-900 dark:text-white"
                     />
                   </div>
                   <div>
@@ -963,7 +963,7 @@ export default function SupplierManagement() {
                       onChange={(e) =>
                         setFormData({ ...formData, phone: e.target.value })
                       }
-                      className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
+                      className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-gray-900 dark:text-white"
                     />
                   </div>
                 </div>
@@ -977,7 +977,7 @@ export default function SupplierManagement() {
                       onChange={(e) =>
                         setFormData({ ...formData, email: e.target.value })
                       }
-                      className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
+                      className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-gray-900 dark:text-white"
                     />
                   </div>
                   <div>
@@ -993,7 +993,7 @@ export default function SupplierManagement() {
                         })
                       }
                       placeholder="e.g. 3-5 days"
-                      className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
+                      className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-gray-900 dark:text-white"
                     />
                   </div>
                 </div>
@@ -1006,7 +1006,7 @@ export default function SupplierManagement() {
                     onChange={(e) =>
                       setFormData({ ...formData, address: e.target.value })
                     }
-                    className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
+                    className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-gray-900 dark:text-white"
                   />
                 </div>
                 <div>
@@ -1025,7 +1025,7 @@ export default function SupplierManagement() {
                               : [...(formData.fuelTypes || []), ft],
                           })
                         }
-                        className={`px-3 py-1 rounded-lg text-xs border transition-all ${formData.fuelTypes?.includes(ft) ? "bg-amber-500 text-white border-amber-500" : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-600"}`}
+                        className={`px-3 py-1 rounded-lg text-xs border transition-all ${formData.fuelTypes?.includes(ft) ? "bg-amber-500 text-gray-900 dark:text-white border-amber-500" : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-600"}`}
                       >
                         {ft}
                       </button>
@@ -1046,7 +1046,7 @@ export default function SupplierManagement() {
                           creditLimit: Number(e.target.value),
                         })
                       }
-                      className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
+                      className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-gray-900 dark:text-white"
                     />
                   </div>
                   <div>
@@ -1065,7 +1065,7 @@ export default function SupplierManagement() {
                           rating: Number(e.target.value),
                         })
                       }
-                      className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
+                      className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-gray-900 dark:text-white"
                     />
                   </div>
                 </div>
@@ -1079,12 +1079,12 @@ export default function SupplierManagement() {
                       setFormData({ ...formData, notes: e.target.value })
                     }
                     rows={2}
-                    className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
+                    className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-gray-900 dark:text-white"
                   />
                 </div>
                 <button
                   onClick={handleSave}
-                  className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-medium transition-all flex items-center justify-center gap-2"
+                  className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-gray-900 dark:text-white rounded-xl font-medium transition-all flex items-center justify-center gap-2"
                 >
                   <Save size={16} /> {editingId ? "Update" : "Save"} Supplier
                 </button>
@@ -1097,10 +1097,10 @@ export default function SupplierManagement() {
       {/* Order Form Modal */}
       {showOrderForm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md">
+          <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md">
             <div className="p-6">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+                <h3 className="text-lg font-bold text-gray-900 dark:text-gray-900 dark:text-white">
                   New Purchase Order
                 </h3>
                 <button
@@ -1118,7 +1118,7 @@ export default function SupplierManagement() {
                   <select
                     value={selectedSupplierId}
                     onChange={(e) => setSelectedSupplierId(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
+                    className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-gray-900 dark:text-white"
                   >
                     <option value="">Select supplier...</option>
                     {suppliers
@@ -1140,7 +1140,7 @@ export default function SupplierManagement() {
                     onChange={(e) =>
                       setOrderForm({ ...orderForm, fuelType: e.target.value })
                     }
-                    className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
+                    className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-gray-900 dark:text-white"
                   >
                     {fuelTypeOptions.map((ft) => (
                       <option key={ft} value={ft}>
@@ -1165,7 +1165,7 @@ export default function SupplierManagement() {
                             Number(e.target.value) * orderForm.pricePerLiter,
                         })
                       }
-                      className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
+                      className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-gray-900 dark:text-white"
                     />
                   </div>
                   <div>
@@ -1182,7 +1182,7 @@ export default function SupplierManagement() {
                           total: orderForm.liters * Number(e.target.value),
                         })
                       }
-                      className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
+                      className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-gray-900 dark:text-white"
                     />
                   </div>
                 </div>
@@ -1207,7 +1207,7 @@ export default function SupplierManagement() {
                         expectedDate: e.target.value,
                       })
                     }
-                    className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
+                    className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-gray-900 dark:text-white"
                   />
                 </div>
                 <div>
@@ -1220,12 +1220,12 @@ export default function SupplierManagement() {
                       setOrderForm({ ...orderForm, notes: e.target.value })
                     }
                     rows={2}
-                    className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
+                    className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-gray-900 dark:text-white"
                   />
                 </div>
                 <button
                   onClick={handlePlaceOrder}
-                  className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-medium transition-all flex items-center justify-center gap-2"
+                  className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-gray-900 dark:text-white rounded-xl font-medium transition-all flex items-center justify-center gap-2"
                 >
                   <Package size={16} /> Place Order
                 </button>

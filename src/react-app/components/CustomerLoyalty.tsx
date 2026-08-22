@@ -463,10 +463,10 @@ export default function CustomerLoyalty() {
             <Users size={24} className="text-amber-600 dark:text-amber-400" />
           </div>
           <div>
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-900 dark:text-white">
               Customer Loyalty
             </h2>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
+            <p className="text-sm text-gray-500 dark:text-gray-500 dark:text-gray-400">
               Manage customers, points &amp; rewards
               {synced && (
                 <span className="ml-2 inline-flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
@@ -487,7 +487,7 @@ export default function CustomerLoyalty() {
           </button>
           <button
             onClick={() => setShowAdd(true)}
-            className="px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-sm font-semibold flex items-center gap-2 transition-colors"
+            className="px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-gray-900 dark:text-white rounded-xl text-sm font-semibold flex items-center gap-2 transition-colors"
           >
             <Plus size={16} /> Add Customer
           </button>
@@ -496,25 +496,25 @@ export default function CustomerLoyalty() {
 
       {/* KPIs */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+        <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
           <p className="text-xs text-gray-500">Total Members</p>
-          <p className="text-2xl font-bold text-gray-900 dark:text-white">
+          <p className="text-2xl font-bold text-gray-900 dark:text-gray-900 dark:text-white">
             {customers.length}
           </p>
         </div>
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+        <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
           <p className="text-xs text-gray-500">Points Issued</p>
           <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">
             {formatNumber(totalPoints)}
           </p>
         </div>
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+        <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
           <p className="text-xs text-gray-500">Avg. Spend</p>
           <p className="text-2xl font-bold text-green-600 dark:text-green-400">
             {currencySymbol} {formatNumber(avgSpend)}
           </p>
         </div>
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+        <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
           <p className="text-xs text-gray-500">Avg. Visits</p>
           <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
             {customers.length > 0
@@ -533,21 +533,21 @@ export default function CustomerLoyalty() {
       <div className="relative">
         <Search
           size={16}
-          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400"
         />
         <input
           type="text"
           placeholder="Search by name, phone, or vehicle..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-white"
+          className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-gray-900 dark:text-white"
         />
       </div>
 
       {/* Add Customer Modal */}
       {showAdd && (
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700 shadow-lg">
-          <h3 className="text-sm font-semibold text-gray-800 dark:text-white mb-3">
+        <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700 shadow-lg">
+          <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-900 dark:text-white mb-3">
             New Customer
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -557,7 +557,7 @@ export default function CustomerLoyalty() {
               onChange={(e) =>
                 setNewCustomer({ ...newCustomer, name: e.target.value })
               }
-              className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+              className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-900 dark:text-white"
             />
             <input
               placeholder="Phone *"
@@ -565,7 +565,7 @@ export default function CustomerLoyalty() {
               onChange={(e) =>
                 setNewCustomer({ ...newCustomer, phone: e.target.value })
               }
-              className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+              className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-900 dark:text-white"
             />
             <input
               placeholder="Email"
@@ -573,7 +573,7 @@ export default function CustomerLoyalty() {
               onChange={(e) =>
                 setNewCustomer({ ...newCustomer, email: e.target.value })
               }
-              className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+              className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-900 dark:text-white"
             />
             <input
               placeholder="Vehicle Registration"
@@ -581,7 +581,7 @@ export default function CustomerLoyalty() {
               onChange={(e) =>
                 setNewCustomer({ ...newCustomer, vehicleReg: e.target.value })
               }
-              className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+              className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-900 dark:text-white"
             />
             <select
               value={newCustomer.preferredFuel}
@@ -591,7 +591,7 @@ export default function CustomerLoyalty() {
                   preferredFuel: e.target.value,
                 })
               }
-              className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+              className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-900 dark:text-white"
             >
               {(fuelTypeApi.activeFuelTypes.length > 0
                 ? fuelTypeApi.activeFuelTypes
@@ -612,13 +612,13 @@ export default function CustomerLoyalty() {
               onChange={(e) =>
                 setNewCustomer({ ...newCustomer, notes: e.target.value })
               }
-              className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+              className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-900 dark:text-white"
             />
           </div>
           <div className="flex gap-2 mt-3">
             <button
               onClick={addCustomer}
-              className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-sm font-medium"
+              className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-gray-900 dark:text-white rounded-lg text-sm font-medium"
             >
               Add Customer
             </button>
@@ -645,7 +645,7 @@ export default function CustomerLoyalty() {
                   />
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-gray-900 dark:text-white">
                     {selectedCustomer.name || "Unnamed"}
                   </h3>
                   <span
@@ -659,13 +659,13 @@ export default function CustomerLoyalty() {
               </div>
               <button
                 onClick={() => setSelectedCustomer(null)}
-                className="text-gray-400 hover:text-gray-600"
+                className="text-gray-500 dark:text-gray-400 hover:text-gray-600"
               >
                 Close
               </button>
             </div>
             <div className="grid grid-cols-2 gap-3 text-sm mb-3">
-              <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+              <div className="flex items-center gap-2 text-gray-600 dark:text-gray-500 dark:text-gray-400">
                 <Phone size={14} />
                 {selectedCustomer.phone ? (
                   <a
@@ -679,7 +679,7 @@ export default function CustomerLoyalty() {
                 )}
               </div>
               {selectedCustomer.email && (
-                <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+                <div className="flex items-center gap-2 text-gray-600 dark:text-gray-500 dark:text-gray-400">
                   <Mail size={14} />
                   <a
                     href={`mailto:${selectedCustomer.email}`}
@@ -690,12 +690,12 @@ export default function CustomerLoyalty() {
                 </div>
               )}
               {selectedCustomer.vehicleReg && (
-                <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+                <div className="flex items-center gap-2 text-gray-600 dark:text-gray-500 dark:text-gray-400">
                   <MapPin size={14} />
                   {selectedCustomer.vehicleReg}
                 </div>
               )}
-              <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+              <div className="flex items-center gap-2 text-gray-600 dark:text-gray-500 dark:text-gray-400">
                 <Star size={14} className="text-amber-500" />
                 {formatNumber(selectedCustomer.loyaltyPoints || 0)} pts
               </div>
@@ -703,25 +703,25 @@ export default function CustomerLoyalty() {
             <div className="flex gap-2">
               <button
                 onClick={() => addPoints(selectedCustomer.id, 100)}
-                className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-medium"
+                className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-gray-900 dark:text-white rounded-lg text-xs font-medium"
               >
                 +100 pts
               </button>
               <button
                 onClick={() => addPoints(selectedCustomer.id, 500)}
-                className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-medium"
+                className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-gray-900 dark:text-white rounded-lg text-xs font-medium"
               >
                 +500 pts
               </button>
               <button
                 onClick={() => addPoints(selectedCustomer.id, 1000)}
-                className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-medium"
+                className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-gray-900 dark:text-white rounded-lg text-xs font-medium"
               >
                 +1000 pts
               </button>
               <button
                 onClick={() => setShowRewards(!showRewards)}
-                className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-medium flex items-center gap-1"
+                className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-gray-900 dark:text-white rounded-lg text-xs font-medium flex items-center gap-1"
               >
                 <Gift size={12} /> Redeem
               </button>
@@ -733,11 +733,11 @@ export default function CustomerLoyalty() {
                 placeholder="Custom pts (+/-)"
                 value={customPoints}
                 onChange={(e) => setCustomPoints(e.target.value)}
-                className="flex-1 px-3 py-1.5 border rounded-lg text-xs dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                className="flex-1 px-3 py-1.5 border rounded-lg text-xs dark:bg-gray-700 dark:border-gray-600 dark:text-gray-900 dark:text-white"
               />
               <button
                 onClick={() => addCustomPoints(selectedCustomer.id)}
-                className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-medium"
+                className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-gray-900 dark:text-white rounded-lg text-xs font-medium"
               >
                 Apply
               </button>
@@ -746,20 +746,20 @@ export default function CustomerLoyalty() {
             <div className="grid grid-cols-3 gap-2 mt-3 text-center">
               <div className="bg-white/60 dark:bg-gray-700/40 rounded-lg p-2">
                 <p className="text-[10px] text-gray-500">Total Spent</p>
-                <p className="text-sm font-bold text-gray-900 dark:text-white">
+                <p className="text-sm font-bold text-gray-900 dark:text-gray-900 dark:text-white">
                   {currencySymbol}
                   {formatNumber(selectedCustomer.totalSpent || 0)}
                 </p>
               </div>
               <div className="bg-white/60 dark:bg-gray-700/40 rounded-lg p-2">
                 <p className="text-[10px] text-gray-500">Visits</p>
-                <p className="text-sm font-bold text-gray-900 dark:text-white">
+                <p className="text-sm font-bold text-gray-900 dark:text-gray-900 dark:text-white">
                   {selectedCustomer.visits || 0}
                 </p>
               </div>
               <div className="bg-white/60 dark:bg-gray-700/40 rounded-lg p-2">
                 <p className="text-[10px] text-gray-500">Joined</p>
-                <p className="text-sm font-bold text-gray-900 dark:text-white">
+                <p className="text-sm font-bold text-gray-900 dark:text-gray-900 dark:text-white">
                   {selectedCustomer.joinDate || "-"}
                 </p>
               </div>
@@ -777,21 +777,21 @@ export default function CustomerLoyalty() {
             <div className="flex gap-2 mt-3">
               <button
                 onClick={() => setEditingCustomer(selectedCustomer)}
-                className="flex-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-medium flex items-center justify-center gap-1"
+                className="flex-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-gray-900 dark:text-white rounded-lg text-xs font-medium flex items-center justify-center gap-1"
               >
                 <Edit2 size={12} /> Edit
               </button>
               <button
                 onClick={() => setDeleteId(selectedCustomer.id)}
-                className="flex-1 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-medium flex items-center justify-center gap-1"
+                className="flex-1 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-gray-900 dark:text-white rounded-lg text-xs font-medium flex items-center justify-center gap-1"
               >
                 <Trash2 size={12} /> Delete
               </button>
             </div>
           </div>
           {showRewards && (
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700">
-              <h3 className="text-sm font-semibold text-gray-800 dark:text-white mb-3">
+            <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700">
+              <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-900 dark:text-white mb-3">
                 Available Rewards
               </h3>
               <div className="space-y-2 max-h-64 overflow-y-auto">
@@ -804,7 +804,7 @@ export default function CustomerLoyalty() {
                       className={`flex items-center justify-between p-3 rounded-lg border ${canRedeem ? "border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/10" : "border-gray-200 dark:border-gray-700 opacity-50"}`}
                     >
                       <div>
-                        <p className="text-sm font-medium dark:text-white">
+                        <p className="text-sm font-medium dark:text-gray-900 dark:text-white">
                           {r.name}
                         </p>
                         <p className="text-[11px] text-gray-500">
@@ -820,7 +820,7 @@ export default function CustomerLoyalty() {
                             onClick={() =>
                               redeem(selectedCustomer.id, r.points)
                             }
-                            className="text-[10px] px-2 py-1 bg-green-600 text-white rounded mt-1"
+                            className="text-[10px] px-2 py-1 bg-green-600 text-gray-900 dark:text-white rounded mt-1"
                           >
                             Redeem
                           </button>
@@ -836,7 +836,7 @@ export default function CustomerLoyalty() {
       )}
 
       {/* Customers Table */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+      <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
         {filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
             <div className="w-16 h-16 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center mb-4">
@@ -847,7 +847,7 @@ export default function CustomerLoyalty() {
                 ? "No customers yet"
                 : "No matching customers"}
             </p>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 mb-4">
+            <p className="text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400 mt-1 mb-4">
               {customers.length === 0
                 ? "Add your first customer to start tracking loyalty points and rewards."
                 : "Try adjusting your search terms."}
@@ -855,7 +855,7 @@ export default function CustomerLoyalty() {
             {customers.length === 0 && (
               <button
                 onClick={() => setShowAdd(true)}
-                className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-sm font-semibold flex items-center gap-2 transition-colors"
+                className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-gray-900 dark:text-white rounded-xl text-sm font-semibold flex items-center gap-2 transition-colors"
               >
                 <Plus size={16} /> Add Customer
               </button>
@@ -883,7 +883,7 @@ export default function CustomerLoyalty() {
                     className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/30 cursor-pointer transition-colors"
                   >
                     <td className="px-4 py-3">
-                      <p className="font-medium dark:text-white">
+                      <p className="font-medium dark:text-gray-900 dark:text-white">
                         {c.name || ""}
                       </p>
                       <p className="text-[11px] text-gray-500">
@@ -894,13 +894,13 @@ export default function CustomerLoyalty() {
                             getFuelLabel(c.preferredFuel)}
                       </p>
                     </td>
-                    <td className="px-4 py-3 text-gray-600 dark:text-gray-400">
+                    <td className="px-4 py-3 text-gray-600 dark:text-gray-500 dark:text-gray-400">
                       {c.phone || ""}
                     </td>
                     <td className="px-4 py-3 text-right font-semibold text-amber-600 dark:text-amber-400">
                       {formatNumber(c.loyaltyPoints || 0)}
                     </td>
-                    <td className="px-4 py-3 text-right dark:text-white">
+                    <td className="px-4 py-3 text-right dark:text-gray-900 dark:text-white">
                       {currencySymbol}
                       {formatNumber(c.totalSpent || 0)}
                     </td>
@@ -913,7 +913,7 @@ export default function CustomerLoyalty() {
                         {c.tier || "Bronze"}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-right dark:text-white">
+                    <td className="px-4 py-3 text-right dark:text-gray-900 dark:text-white">
                       {c.visits || 0}
                     </td>
                     <td className="px-4 py-3 text-center">
@@ -994,14 +994,14 @@ export default function CustomerLoyalty() {
       {/* Edit Customer Modal */}
       {editingCustomer && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700 shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700 shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-gray-800 dark:text-white">
+              <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-900 dark:text-white">
                 Edit Customer
               </h3>
               <button
                 onClick={() => setEditingCustomer(null)}
-                className="text-gray-400 hover:text-gray-600"
+                className="text-gray-500 dark:text-gray-400 hover:text-gray-600"
               >
                 Close
               </button>
@@ -1018,11 +1018,11 @@ export default function CustomerLoyalty() {
       {/* Delete Confirmation Modal */}
       {deleteId && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700 shadow-xl max-w-sm w-full">
-            <h3 className="text-sm font-semibold text-gray-800 dark:text-white mb-2">
+          <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700 shadow-xl max-w-sm w-full">
+            <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-900 dark:text-white mb-2">
               Delete Customer?
             </h3>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+            <p className="text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400 mb-4">
               This will permanently remove{" "}
               <strong className="text-gray-700 dark:text-gray-200">
                 {customers.find((c) => c.id === deleteId)?.name || "Unknown"}
@@ -1032,7 +1032,7 @@ export default function CustomerLoyalty() {
             <div className="flex gap-2">
               <button
                 onClick={() => deleteCustomer(deleteId)}
-                className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium"
+                className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-gray-900 dark:text-white rounded-lg text-sm font-medium"
               >
                 Delete
               </button>
@@ -1049,7 +1049,7 @@ export default function CustomerLoyalty() {
 
       {/* Toast Notification */}
       {toast && (
-        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 bg-gray-900 dark:bg-gray-700 text-white text-sm px-4 py-2 rounded-lg shadow-lg">
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 bg-gray-900 dark:bg-gray-700 text-gray-900 dark:text-white text-sm px-4 py-2 rounded-lg shadow-lg">
           {toast}
         </div>
       )}
@@ -1075,25 +1075,25 @@ function EditCustomerForm({
           placeholder="Full Name *"
           value={form.name}
           onChange={(e) => setForm({ ...form, name: e.target.value })}
-          className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+          className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-900 dark:text-white"
         />
         <input
           placeholder="Phone *"
           value={form.phone}
           onChange={(e) => setForm({ ...form, phone: e.target.value })}
-          className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+          className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-900 dark:text-white"
         />
         <input
           placeholder="Email"
           value={form.email}
           onChange={(e) => setForm({ ...form, email: e.target.value })}
-          className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+          className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-900 dark:text-white"
         />
         <input
           placeholder="Vehicle Registration"
           value={form.vehicleReg}
           onChange={(e) => setForm({ ...form, vehicleReg: e.target.value })}
-          className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+          className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-900 dark:text-white"
         />
         <select
           value={form.preferredFuel}
@@ -1103,7 +1103,7 @@ function EditCustomerForm({
               preferredFuel: e.target.value,
             })
           }
-          className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+          className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-900 dark:text-white"
         >
           {(fuelTypeApi.activeFuelTypes.length > 0
             ? fuelTypeApi.activeFuelTypes
@@ -1125,7 +1125,7 @@ function EditCustomerForm({
           onChange={(e) =>
             setForm({ ...form, loyaltyPoints: parseInt(e.target.value) || 0 })
           }
-          className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+          className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-900 dark:text-white"
         />
       </div>
       <textarea
@@ -1133,12 +1133,12 @@ function EditCustomerForm({
         value={form.notes}
         onChange={(e) => setForm({ ...form, notes: e.target.value })}
         rows={2}
-        className="w-full px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+        className="w-full px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-900 dark:text-white"
       />
       <div className="flex gap-2">
         <button
           onClick={() => onSave(form)}
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium"
+          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-gray-900 dark:text-white rounded-lg text-sm font-medium"
         >
           Save Changes
         </button>

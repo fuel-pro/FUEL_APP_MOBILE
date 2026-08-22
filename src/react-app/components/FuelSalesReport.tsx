@@ -494,10 +494,10 @@ export default function FuelSalesReport() {
   const currency = resolveCurrencySymbol(state.companyData.currency, undefined);
 
   return (
-    <div className="p-4 md:p-6 space-y-6 text-white min-h-screen">
+    <div className="p-4 md:p-6 space-y-6 text-gray-900 dark:text-white min-h-screen">
       {/* Controls */}
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <h2 className="text-xl md:text-2xl font-bold text-white flex items-center gap-2">
+        <h2 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
           <FileText className="text-blue-400" />
           Fuel Sales Report
         </h2>
@@ -507,7 +507,7 @@ export default function FuelSalesReport() {
             <select
               value={selectedMonth}
               onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
-              className="bg-gray-700 border border-gray-600 rounded p-2 text-white text-sm"
+              className="bg-gray-700 border border-gray-600 rounded p-2 text-gray-900 dark:text-white text-sm"
             >
               {months.map((month, index) => (
                 <option key={month} value={index + 1}>
@@ -518,7 +518,7 @@ export default function FuelSalesReport() {
             <select
               value={selectedYear}
               onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-              className="bg-gray-700 border border-gray-600 rounded p-2 text-white text-sm"
+              className="bg-gray-700 border border-gray-600 rounded p-2 text-gray-900 dark:text-white text-sm"
             >
               {yearOptions.map((year) => (
                 <option key={year} value={year}>
@@ -532,7 +532,7 @@ export default function FuelSalesReport() {
             <button
               onClick={handleSaveReport}
               disabled={isSaving}
-              className="bg-green-600 hover:bg-green-700 disabled:bg-green-800 text-white px-4 py-2 rounded flex items-center gap-2 text-sm"
+              className="bg-green-600 hover:bg-green-700 disabled:bg-green-800 text-gray-900 dark:text-white px-4 py-2 rounded flex items-center gap-2 text-sm"
             >
               <Download size={16} />
               {isSaving ? "Saving..." : "Save Report"}
@@ -540,7 +540,7 @@ export default function FuelSalesReport() {
 
             <button
               onClick={handlePrint}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded flex items-center gap-2 text-sm"
+              className="bg-blue-600 hover:bg-blue-700 text-gray-900 dark:text-white px-4 py-2 rounded flex items-center gap-2 text-sm"
             >
               <Printer size={16} />
               Print Report
@@ -549,7 +549,7 @@ export default function FuelSalesReport() {
             <button
               onClick={handleSilentPrint}
               disabled={isPrinting || reportData.length === 0}
-              className="bg-green-600 hover:bg-green-700 disabled:bg-green-800 text-white px-4 py-2 rounded flex items-center gap-2 text-sm"
+              className="bg-green-600 hover:bg-green-700 disabled:bg-green-800 text-gray-900 dark:text-white px-4 py-2 rounded flex items-center gap-2 text-sm"
             >
               {isPrinting ? (
                 <>
@@ -608,7 +608,7 @@ export default function FuelSalesReport() {
                 <TrendingUp className="text-indigo-400" size={20} />
                 <span className="text-sm text-slate-300">{label} Sales</span>
               </div>
-              <div className="text-xl font-bold text-white">
+              <div className="text-xl font-bold text-gray-900 dark:text-white">
                 {currency} {t.sales.toFixed(2)}
               </div>
               {t.litres > 0 && (
@@ -624,7 +624,7 @@ export default function FuelSalesReport() {
             <TrendingUp className="text-purple-400" size={20} />
             <span className="text-sm text-purple-300">Total Revenue</span>
           </div>
-          <div className="text-xl font-bold text-white">
+          <div className="text-xl font-bold text-gray-900 dark:text-white">
             {currency}{" "}
             {trackedFuelTypes
               .reduce((sum, ft) => sum + (totals[ft]?.sales || 0), 0)
@@ -642,7 +642,7 @@ export default function FuelSalesReport() {
       </div>
 
       {/* Report Content */}
-      <div className="bg-gray-800 rounded-lg overflow-hidden">
+      <div className="bg-white dark:bg-gray-800 rounded-lg overflow-hidden">
         <div id="report-content" className="p-6">
           {/* Header - Only show if company data exists */}
           <div className="text-center mb-6">
@@ -656,11 +656,11 @@ export default function FuelSalesReport() {
               </div>
             )}
             {state.companyData.name && state.companyData.name.trim() !== "" ? (
-              <div className="company-name text-lg font-bold text-white mb-2">
+              <div className="company-name text-lg font-bold text-gray-900 dark:text-white mb-2">
                 {state.companyData.name}
               </div>
             ) : (
-              <div className="company-name text-lg font-bold text-white mb-2">
+              <div className="company-name text-lg font-bold text-gray-900 dark:text-white mb-2">
                 Company Name
               </div>
             )}
@@ -681,7 +681,7 @@ export default function FuelSalesReport() {
                 <div className="text-lg font-semibold text-gray-300 mb-2">
                   No sales recorded for this period
                 </div>
-                <div className="text-gray-400">
+                <div className="text-gray-500 dark:text-gray-400">
                   Sales data for {months[selectedMonth - 1]} {selectedYear} will
                   appear here once you save sales tracking records.
                 </div>
@@ -756,7 +756,7 @@ export default function FuelSalesReport() {
                 const label = getFuelLabel(ft);
                 const t = totals[ft] || { sales: 0, litres: 0 };
                 return (
-                  <div key={ft} className="text-white">
+                  <div key={ft} className="text-gray-900 dark:text-white">
                     <span className="font-semibold">
                       Monthly Total {label} Sales:
                     </span>{" "}
@@ -769,7 +769,7 @@ export default function FuelSalesReport() {
                   </div>
                 );
               })}
-              <div className="text-white text-lg">
+              <div className="text-gray-900 dark:text-white text-lg">
                 <span className="font-bold">Total Monthly Sales/Revenue:</span>{" "}
                 {currency}{" "}
                 {trackedFuelTypes

@@ -627,10 +627,10 @@ export default function DataManager() {
   const summary = getDataSummary();
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-4">
+    <div className="min-h-screen bg-gray-50 dark:bg-white dark:bg-gray-900 p-4">
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg border border-gray-200 dark:border-gray-600">
+        <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg border border-gray-200 dark:border-gray-600">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
               <div className="bg-blue-100 dark:bg-blue-900 p-3 rounded-lg">
@@ -640,7 +640,7 @@ export default function DataManager() {
                 />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-gray-800 dark:text-white">
+                <h1 className="text-2xl font-bold text-gray-800 dark:text-gray-900 dark:text-white">
                   Data Management Center
                 </h1>
                 <p className="text-gray-600 dark:text-gray-300">
@@ -685,7 +685,7 @@ export default function DataManager() {
                     className={`flex items-center gap-2 px-4 py-2 rounded-md font-medium transition-all ${
                       activeTab === tab.id
                         ? "bg-white dark:bg-gray-600 text-blue-600 dark:text-blue-400 shadow-sm"
-                        : "text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-white"
+                        : "text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-900 dark:text-white"
                     }`}
                   >
                     <Icon size={16} />
@@ -700,8 +700,8 @@ export default function DataManager() {
         {activeTab === "overview" && (
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
             {/* Data Summary */}
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg border border-gray-200 dark:border-gray-600">
-              <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-4">
+            <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg border border-gray-200 dark:border-gray-600">
+              <h2 className="text-xl font-bold text-gray-800 dark:text-gray-900 dark:text-white mb-4">
                 Data Summary
               </h2>
               <div className="grid grid-cols-2 gap-4">
@@ -761,7 +761,7 @@ export default function DataManager() {
                     >
                       {formatNumber(item.value, 0)}
                     </div>
-                    <div className="text-sm text-gray-600 dark:text-gray-400">
+                    <div className="text-sm text-gray-600 dark:text-gray-500 dark:text-gray-400">
                       {item.label}
                     </div>
                   </div>
@@ -770,26 +770,26 @@ export default function DataManager() {
 
               <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-600">
                 <div className="flex justify-between items-center">
-                  <span className="text-gray-600 dark:text-gray-400">
+                  <span className="text-gray-600 dark:text-gray-500 dark:text-gray-400">
                     Total Data Size:
                   </span>
-                  <span className="font-semibold text-gray-800 dark:text-white">
+                  <span className="font-semibold text-gray-800 dark:text-gray-900 dark:text-white">
                     {getDataSize()} KB
                   </span>
                 </div>
                 <div className="flex justify-between items-center mt-2">
-                  <span className="text-gray-600 dark:text-gray-400">
+                  <span className="text-gray-600 dark:text-gray-500 dark:text-gray-400">
                     Company:
                   </span>
-                  <span className="font-semibold text-gray-800 dark:text-white">
+                  <span className="font-semibold text-gray-800 dark:text-gray-900 dark:text-white">
                     {state.companyData.name || "Not Set"}
                   </span>
                 </div>
                 <div className="flex justify-between items-center mt-2">
-                  <span className="text-gray-600 dark:text-gray-400">
+                  <span className="text-gray-600 dark:text-gray-500 dark:text-gray-400">
                     Theme:
                   </span>
-                  <span className="font-semibold text-gray-800 dark:text-white capitalize">
+                  <span className="font-semibold text-gray-800 dark:text-gray-900 dark:text-white capitalize">
                     {state.theme}
                   </span>
                 </div>
@@ -797,15 +797,15 @@ export default function DataManager() {
             </div>
 
             {/* Quick Actions */}
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg border border-gray-200 dark:border-gray-600">
-              <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-4">
+            <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg border border-gray-200 dark:border-gray-600">
+              <h2 className="text-xl font-bold text-gray-800 dark:text-gray-900 dark:text-white mb-4">
                 Quick Actions
               </h2>
 
               <div className="space-y-4">
                 <button
                   onClick={downloadStandaloneVersion}
-                  className="w-full btn bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700 flex items-center gap-3"
+                  className="w-full btn bg-gradient-to-r from-purple-600 to-blue-600 text-gray-900 dark:text-white hover:from-purple-700 hover:to-blue-700 flex items-center gap-3"
                 >
                   <Download size={16} />
                   Download Standalone Website
@@ -822,7 +822,7 @@ export default function DataManager() {
                 <button
                   onClick={exportAllCloudData}
                   disabled={exportingCloud}
-                  className="w-full btn bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:from-emerald-700 hover:to-teal-700 flex items-center gap-3 disabled:opacity-60 disabled:cursor-wait"
+                  className="w-full btn bg-gradient-to-r from-emerald-600 to-teal-600 text-gray-900 dark:text-white hover:from-emerald-700 hover:to-teal-700 flex items-center gap-3 disabled:opacity-60 disabled:cursor-wait"
                 >
                   <Cloud size={16} />
                   {exportingCloud
@@ -878,7 +878,7 @@ export default function DataManager() {
               </div>
 
               <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-600">
-                <h3 className="font-semibold text-gray-800 dark:text-white mb-2">
+                <h3 className="font-semibold text-gray-800 dark:text-gray-900 dark:text-white mb-2">
                   Danger Zone
                 </h3>
                 <button
@@ -896,17 +896,17 @@ export default function DataManager() {
         {activeTab === "recovery" && <DataRecovery />}
 
         {activeTab === "backup" && (
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg border border-gray-200 dark:border-gray-600">
-            <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-4">
+          <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg border border-gray-200 dark:border-gray-600">
+            <h2 className="text-xl font-bold text-gray-800 dark:text-gray-900 dark:text-white mb-4">
               Backup Management
             </h2>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-4">
-                <h3 className="font-semibold text-gray-800 dark:text-white">
+                <h3 className="font-semibold text-gray-800 dark:text-gray-900 dark:text-white">
                   Local Backups
                 </h3>
-                <p className="text-gray-600 dark:text-gray-400 text-sm">
+                <p className="text-gray-600 dark:text-gray-500 dark:text-gray-400 text-sm">
                   Create and manage local backup files that you can store on
                   your device or cloud storage.
                 </p>
@@ -961,10 +961,10 @@ export default function DataManager() {
               </div>
 
               <div className="space-y-4">
-                <h3 className="font-semibold text-gray-800 dark:text-white">
+                <h3 className="font-semibold text-gray-800 dark:text-gray-900 dark:text-white">
                   Restore Options
                 </h3>
-                <p className="text-gray-600 dark:text-gray-400 text-sm">
+                <p className="text-gray-600 dark:text-gray-500 dark:text-gray-400 text-sm">
                   Import data from backup files to restore your application
                   state.
                 </p>
@@ -1003,14 +1003,14 @@ export default function DataManager() {
             {/* New Firebase Cloud Sync Panel */}
             <CloudSyncPanel />
 
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg border border-gray-200 dark:border-gray-600">
-              <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-4">
+            <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg border border-gray-200 dark:border-gray-600">
+              <h2 className="text-xl font-bold text-gray-800 dark:text-gray-900 dark:text-white mb-4">
                 Local Cloud Sync
               </h2>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-4">
-                  <h3 className="font-semibold text-gray-800 dark:text-white">
+                  <h3 className="font-semibold text-gray-800 dark:text-gray-900 dark:text-white">
                     Sync Status
                   </h3>
 
@@ -1024,12 +1024,12 @@ export default function DataManager() {
                         }
                         size={20}
                       />
-                      <span className="font-medium text-gray-800 dark:text-white">
+                      <span className="font-medium text-gray-800 dark:text-gray-900 dark:text-white">
                         {isCloudSaving ? "Syncing..." : "Connected"}
                       </span>
                     </div>
 
-                    <div className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
+                    <div className="space-y-2 text-sm text-gray-600 dark:text-gray-500 dark:text-gray-400">
                       <div className="flex justify-between">
                         <span>Last Sync:</span>
                         <span>
@@ -1053,7 +1053,7 @@ export default function DataManager() {
                 </div>
 
                 <div className="space-y-4">
-                  <h3 className="font-semibold text-gray-800 dark:text-white">
+                  <h3 className="font-semibold text-gray-800 dark:text-gray-900 dark:text-white">
                     Manual Actions
                   </h3>
 

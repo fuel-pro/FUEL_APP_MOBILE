@@ -812,17 +812,17 @@ export default function SalesTracking() {
       <div className="card overflow-hidden">
         <button
           onClick={() => setShowScanPanel(!showScanPanel)}
-          className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+          className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-white dark:bg-gray-800/50 transition-colors"
         >
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 text-white">
+            <div className="p-2 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 text-gray-900 dark:text-white">
               <Sparkles size={24} />
             </div>
             <div className="text-left">
-              <h3 className="font-bold text-lg text-gray-900 dark:text-white">
+              <h3 className="font-bold text-lg text-gray-900 dark:text-gray-900 dark:text-white">
                 AI-Powered Scan & Upload
               </h3>
-              <p className="text-sm text-gray-500 dark:text-gray-400">
+              <p className="text-sm text-gray-500 dark:text-gray-500 dark:text-gray-400">
                 Snap a photo of handwritten records — AI reads it for you
               </p>
             </div>
@@ -920,10 +920,10 @@ export default function SalesTracking() {
                     />
                   </div>
                   <div>
-                    <p className="font-semibold text-gray-900 dark:text-white mb-1">
+                    <p className="font-semibold text-gray-900 dark:text-gray-900 dark:text-white mb-1">
                       Drop your sales record here
                     </p>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                    <p className="text-sm text-gray-500 dark:text-gray-500 dark:text-gray-400">
                       or use the buttons below
                     </p>
                   </div>
@@ -931,14 +931,14 @@ export default function SalesTracking() {
                   <div className="flex flex-wrap justify-center gap-3 mt-2">
                     <button
                       onClick={() => cameraInputRef.current?.click()}
-                      className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-medium rounded-xl shadow-lg shadow-amber-500/25 transition-all"
+                      className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-gray-900 dark:text-white font-medium rounded-xl shadow-lg shadow-amber-500/25 transition-all"
                     >
                       <Camera size={18} />
                       Take Photo
                     </button>
                     <button
                       onClick={() => fileInputRef.current?.click()}
-                      className="flex items-center gap-2 px-5 py-2.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 hover:border-amber-400 text-gray-700 dark:text-gray-200 font-medium rounded-xl transition-all"
+                      className="flex items-center gap-2 px-5 py-2.5 bg-white dark:bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 hover:border-amber-400 text-gray-700 dark:text-gray-200 font-medium rounded-xl transition-all"
                     >
                       <Upload size={18} />
                       Choose File
@@ -959,7 +959,7 @@ export default function SalesTracking() {
                   <div className="w-16 h-16 rounded-full border-4 border-amber-200 dark:border-amber-800" />
                   <div className="absolute inset-0 w-16 h-16 rounded-full border-4 border-amber-500 border-t-transparent animate-spin" />
                 </div>
-                <p className="mt-4 font-medium text-gray-900 dark:text-white">
+                <p className="mt-4 font-medium text-gray-900 dark:text-gray-900 dark:text-white">
                   Uploading document...
                 </p>
               </div>
@@ -976,10 +976,10 @@ export default function SalesTracking() {
                     />
                   </div>
                 </div>
-                <p className="mt-4 font-medium text-gray-900 dark:text-white">
+                <p className="mt-4 font-medium text-gray-900 dark:text-gray-900 dark:text-white">
                   AI is reading your document...
                 </p>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                <p className="text-sm text-gray-500 dark:text-gray-500 dark:text-gray-400 mt-1">
                   Extracting pump readings, expenses, and totals
                 </p>
               </div>
@@ -1002,14 +1002,14 @@ export default function SalesTracking() {
                     {scanSuggestion}
                   </p>
                 )}
-                <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+                <p className="text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400 mb-4">
                   AI service may be temporarily busy. You can try again or enter
                   data manually below.
                 </p>
                 <div className="flex flex-col sm:flex-row gap-3 justify-center">
                   <button
                     onClick={resetScan}
-                    className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-medium transition-colors"
+                    className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-gray-900 dark:text-white rounded-lg font-medium transition-colors"
                   >
                     Try Again
                   </button>
@@ -1026,7 +1026,7 @@ export default function SalesTracking() {
                           dateSection.scrollIntoView({ behavior: "smooth" });
                       }, 100);
                     }}
-                    className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg font-medium transition-colors"
+                    className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-gray-900 dark:text-white rounded-lg font-medium transition-colors"
                   >
                     Enter Manually Instead
                   </button>
@@ -1059,7 +1059,7 @@ export default function SalesTracking() {
                   </div>
                 </div>
 
-                <p className="text-sm text-gray-600 dark:text-gray-400">
+                <p className="text-sm text-gray-600 dark:text-gray-500 dark:text-gray-400">
                   Review and edit the extracted data below, then click "Apply to
                   Form" to use it.
                 </p>
@@ -1137,7 +1137,7 @@ export default function SalesTracking() {
                       {editableResult.pumps.map((pump, i) => (
                         <div
                           key={i}
-                          className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-800 rounded-lg text-sm"
+                          className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-white dark:bg-gray-800 rounded-lg text-sm"
                         >
                           <input
                             type="text"
@@ -1193,7 +1193,7 @@ export default function SalesTracking() {
                         {editableResult.expenses.map((expense, i) => (
                           <div
                             key={i}
-                            className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-800 rounded-lg text-sm"
+                            className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-white dark:bg-gray-800 rounded-lg text-sm"
                           >
                             <input
                               type="text"
@@ -1232,14 +1232,14 @@ export default function SalesTracking() {
                 <div className="flex gap-3 pt-2">
                   <button
                     onClick={applyScannedData}
-                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-medium rounded-xl shadow-lg shadow-green-500/25 transition-all"
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-gray-900 dark:text-white font-medium rounded-xl shadow-lg shadow-green-500/25 transition-all"
                   >
                     <Check size={18} />
                     Apply to Form
                   </button>
                   <button
                     onClick={resetScan}
-                    className="px-4 py-2.5 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 font-medium rounded-xl transition-colors"
+                    className="px-4 py-2.5 bg-gray-100 dark:bg-white dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 font-medium rounded-xl transition-colors"
                   >
                     Cancel
                   </button>
@@ -1741,7 +1741,7 @@ export default function SalesTracking() {
         </div>
         <div className="history-panel">
           {Object.keys(state.salesHistory).length === 0 ? (
-            <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+            <div className="text-center py-8 text-gray-500 dark:text-gray-500 dark:text-gray-400">
               <BarChart3 size={40} className="mx-auto mb-2 opacity-30" />
               <p className="text-sm">
                 No saved records yet. Fill in the form above and click "Save" to
@@ -1775,7 +1775,7 @@ export default function SalesTracking() {
                           (editing)
                         </span>
                       )}
-                      <div className="flex flex-wrap gap-3 mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      <div className="flex flex-wrap gap-3 mt-1 text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400">
                         <span className="inline-flex items-center gap-1">
                           <TrendingUp size={11} />
                           {currencySymbol} {formatNumber(rec.revenue, 0)}

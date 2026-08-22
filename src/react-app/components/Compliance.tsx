@@ -123,10 +123,10 @@ export default function Compliance() {
           <Globe size={24} className="text-blue-600 dark:text-blue-400" />
         </div>
         <div className="flex-1">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-900 dark:text-white">
             Compliance
           </h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
+          <p className="text-sm text-gray-500 dark:text-gray-500 dark:text-gray-400">
             Country-specific regulations, permits, tax rules, and compliance
             requirements for every nation
           </p>
@@ -174,7 +174,7 @@ export default function Compliance() {
       </div>
 
       {/* Country Selector */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+      <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
         <div className="w-full max-w-md">
           <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">
             Select Country
@@ -241,7 +241,7 @@ export default function Compliance() {
           return (
             <div
               key={section.id}
-              className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden"
+              className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden"
             >
               <button
                 onClick={() =>
@@ -250,12 +250,12 @@ export default function Compliance() {
                 className="w-full flex items-center gap-3 p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-all"
               >
                 <SectionIcon size={18} className="text-blue-500" />
-                <span className="text-sm font-semibold text-gray-900 dark:text-white flex-1 text-left">
+                <span className="text-sm font-semibold text-gray-900 dark:text-gray-900 dark:text-white flex-1 text-left">
                   {section.label}
                 </span>
                 <ChevronDown
                   size={16}
-                  className={`text-gray-400 transition-transform ${isExpanded ? "rotate-180" : ""}`}
+                  className={`text-gray-500 dark:text-gray-400 transition-transform ${isExpanded ? "rotate-180" : ""}`}
                 />
               </button>
 
@@ -350,7 +350,7 @@ function OverviewItem({
           {label}
         </p>
       </div>
-      <p className="text-sm font-semibold text-gray-900 dark:text-white">
+      <p className="text-sm font-semibold text-gray-900 dark:text-gray-900 dark:text-white">
         {value}
       </p>
     </div>
@@ -465,10 +465,10 @@ function FuelSection({ config }: { config: ComplianceConfig }) {
         {config.fuelTypes.map((ft) => (
           <div
             key={ft.code}
-            className="p-3 bg-gray-50 dark:bg-gray-900 rounded-lg"
+            className="p-3 bg-gray-50 dark:bg-white dark:bg-gray-900 rounded-lg"
           >
             <div className="flex items-center justify-between">
-              <p className="text-sm font-medium text-gray-900 dark:text-white">
+              <p className="text-sm font-medium text-gray-900 dark:text-gray-900 dark:text-white">
                 {ft.localName}
               </p>
               <span className="text-[10px] px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full">
@@ -482,7 +482,7 @@ function FuelSection({ config }: { config: ComplianceConfig }) {
             {ft.levyRate > 0 && (
               <p className="text-xs text-amber-600">Levy: {ft.levyRate}%</p>
             )}
-            <p className="text-[10px] text-gray-400 mt-1">
+            <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1">
               Body: {ft.regulatoryBody}
             </p>
           </div>
@@ -573,12 +573,12 @@ function PermitsSection({ config }: { config: ComplianceConfig }) {
           <button
             key={i}
             onClick={() => toggle(permit)}
-            className="w-full flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-900 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-all text-left"
+            className="w-full flex items-center gap-2 p-2 bg-gray-50 dark:bg-white dark:bg-gray-900 rounded-lg hover:bg-gray-100 dark:hover:bg-white dark:bg-gray-800 transition-all text-left"
           >
             <div
               className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${isObtained ? "bg-green-500 border-green-500" : "border-gray-300 dark:border-gray-600"}`}
             >
-              {isObtained && <CheckCircle2 size={12} className="text-white" />}
+              {isObtained && <CheckCircle2 size={12} className="text-gray-900 dark:text-white" />}
             </div>
             <span
               className={`text-xs ${isObtained ? "text-gray-500 line-through" : "text-gray-700 dark:text-gray-300"}`}
@@ -609,7 +609,7 @@ function ReceiptsSection({ config }: { config: ComplianceConfig }) {
       {config.receiptRequirements.map((req, i) => (
         <div
           key={i}
-          className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-900 rounded-lg"
+          className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-white dark:bg-gray-900 rounded-lg"
         >
           <Receipt size={14} className="text-blue-500 flex-shrink-0" />
           <span className="text-xs text-gray-700 dark:text-gray-300">
@@ -627,13 +627,13 @@ function FeaturesSection({ config }: { config: ComplianceConfig }) {
       {config.complianceFeatures.map((f) => (
         <div
           key={f.id}
-          className="flex items-start gap-3 p-3 bg-gray-50 dark:bg-gray-900 rounded-lg"
+          className="flex items-start gap-3 p-3 bg-gray-50 dark:bg-white dark:bg-gray-900 rounded-lg"
         >
           <div
             className={`w-2 h-2 rounded-full mt-1 flex-shrink-0 ${f.required ? "bg-red-500" : "bg-gray-400"}`}
           />
           <div>
-            <p className="text-xs font-medium text-gray-900 dark:text-white">
+            <p className="text-xs font-medium text-gray-900 dark:text-gray-900 dark:text-white">
               {f.name}
               {f.required && (
                 <span className="ml-2 text-[9px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full">
@@ -647,7 +647,7 @@ function FeaturesSection({ config }: { config: ComplianceConfig }) {
               )}
             </p>
             <p className="text-xs text-gray-500">{f.description}</p>
-            <span className="text-[10px] text-gray-400">{f.category}</span>
+            <span className="text-[10px] text-gray-500 dark:text-gray-400">{f.category}</span>
           </div>
         </div>
       ))}
@@ -662,10 +662,10 @@ function PaymentsSection({ config }: { config: ComplianceConfig }) {
         {config.paymentMethods.map((pm) => (
           <div
             key={pm.id}
-            className="p-3 bg-gray-50 dark:bg-gray-900 rounded-lg"
+            className="p-3 bg-gray-50 dark:bg-white dark:bg-gray-900 rounded-lg"
           >
             <div className="flex items-center justify-between">
-              <p className="text-sm font-medium text-gray-900 dark:text-white">
+              <p className="text-sm font-medium text-gray-900 dark:text-gray-900 dark:text-white">
                 {pm.name}
               </p>
               <span
@@ -699,7 +699,7 @@ function PaymentsSection({ config }: { config: ComplianceConfig }) {
           {config.bankSupport.map((b) => (
             <span
               key={b.code}
-              className="text-[10px] px-2 py-1 bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700"
+              className="text-[10px] px-2 py-1 bg-white dark:bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700"
             >
               {b.name}{" "}
               {b.supportsApi && <span className="text-green-500">API</span>}
@@ -736,7 +736,7 @@ function TemplateSection({ config }: { config: ComplianceConfig }) {
           <Download size={12} /> Download Template
         </button>
       </div>
-      <div className="p-4 bg-gray-50 dark:bg-gray-900 rounded-lg font-mono text-xs text-gray-700 dark:text-gray-300 overflow-x-auto">
+      <div className="p-4 bg-gray-50 dark:bg-white dark:bg-gray-900 rounded-lg font-mono text-xs text-gray-700 dark:text-gray-300 overflow-x-auto">
         <pre>{JSON.stringify(template, null, 2)}</pre>
       </div>
     </div>
@@ -753,12 +753,12 @@ function InfoCard({
   desc?: string;
 }) {
   return (
-    <div className="p-3 bg-gray-50 dark:bg-gray-900 rounded-lg">
+    <div className="p-3 bg-gray-50 dark:bg-white dark:bg-gray-900 rounded-lg">
       <p className="text-[10px] text-gray-500 uppercase tracking-wider">
         {title}
       </p>
-      <p className="text-sm font-bold text-gray-900 dark:text-white">{value}</p>
-      {desc && <p className="text-[10px] text-gray-400">{desc}</p>}
+      <p className="text-sm font-bold text-gray-900 dark:text-gray-900 dark:text-white">{value}</p>
+      {desc && <p className="text-[10px] text-gray-500 dark:text-gray-400">{desc}</p>}
     </div>
   );
 }

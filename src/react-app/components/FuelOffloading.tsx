@@ -564,7 +564,7 @@ export default function FuelOffloading() {
         <div className="flex flex-col md:flex-row gap-3 mb-4">
           <div className="relative flex-1">
             <Search
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400"
               size={16}
             />
             <input
@@ -609,7 +609,7 @@ export default function FuelOffloading() {
                 setDateFrom("");
                 setDateTo("");
               }}
-              className="px-3 py-2 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white border border-gray-300 dark:border-gray-600 rounded-lg"
+              className="px-3 py-2 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600 rounded-lg"
             >
               Clear
             </button>
@@ -637,7 +637,7 @@ export default function FuelOffloading() {
                 <tr>
                   <td
                     colSpan={9}
-                    className="text-center py-8 text-gray-500 dark:text-gray-400"
+                    className="text-center py-8 text-gray-500 dark:text-gray-500 dark:text-gray-400"
                   >
                     <Truck size={48} className="mx-auto mb-2 opacity-30" />
                     <p>No offloading records found</p>
@@ -650,7 +650,7 @@ export default function FuelOffloading() {
                 <tr>
                   <td
                     colSpan={9}
-                    className="text-center py-8 text-gray-500 dark:text-gray-400"
+                    className="text-center py-8 text-gray-500 dark:text-gray-500 dark:text-gray-400"
                   >
                     <Search size={48} className="mx-auto mb-2 opacity-30" />
                     <p>No records match your filters</p>
@@ -661,7 +661,7 @@ export default function FuelOffloading() {
                   <tr key={record.id}>
                     <td>
                       <div className="flex items-center gap-1">
-                        <Calendar size={14} className="text-gray-400" />
+                        <Calendar size={14} className="text-gray-500 dark:text-gray-400" />
                         <div>
                           <div className="font-medium">{record.date}</div>
                           <div className="text-sm text-gray-500">
@@ -724,7 +724,7 @@ export default function FuelOffloading() {
       {/* Form Modal */}
       {showForm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 p-6 rounded-lg max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white dark:bg-white dark:bg-gray-800 p-6 rounded-lg max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-xl font-bold">
                 {selectedRecord

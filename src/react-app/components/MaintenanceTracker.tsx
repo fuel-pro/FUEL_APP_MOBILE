@@ -442,7 +442,7 @@ export default function MaintenanceTracker() {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+          <h2 className="text-xl font-bold text-gray-900 dark:text-gray-900 dark:text-white flex items-center gap-2">
             <Wrench size={22} className="text-amber-500" /> Maintenance Tracker
           </h2>
           <p className="text-sm text-gray-500 mt-1">
@@ -466,7 +466,7 @@ export default function MaintenanceTracker() {
               notes: "",
             });
           }}
-          className="px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-sm font-medium flex items-center gap-2 transition-all shadow-lg shadow-amber-500/20"
+          className="px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-gray-900 dark:text-white rounded-xl text-sm font-medium flex items-center gap-2 transition-all shadow-lg shadow-amber-500/20"
         >
           <Plus size={16} /> New Task
         </button>
@@ -503,7 +503,7 @@ export default function MaintenanceTracker() {
       )}
 
       {Object.keys(costByType).length > 0 && (
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+        <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
           <h4 className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2">
             Spend by Equipment Type
           </h4>
@@ -517,7 +517,7 @@ export default function MaintenanceTracker() {
                   EQUIPMENT_TYPES.find((t) => t.value === type)?.label || type;
                 return (
                   <div key={type} className="flex items-center gap-2">
-                    <span className="text-xs text-gray-600 dark:text-gray-400 w-28 truncate">
+                    <span className="text-xs text-gray-600 dark:text-gray-500 dark:text-gray-400 w-28 truncate">
                       {label}
                     </span>
                     <div className="flex-1 h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
@@ -542,7 +542,7 @@ export default function MaintenanceTracker() {
           {
             label: "Total",
             value: stats.total,
-            color: "text-gray-600 dark:text-gray-400",
+            color: "text-gray-600 dark:text-gray-500 dark:text-gray-400",
             bg: "bg-gray-100 dark:bg-gray-700/50",
           },
           {
@@ -588,19 +588,19 @@ export default function MaintenanceTracker() {
         <div className="relative flex-1">
           <Search
             size={16}
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400"
           />
           <input
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search equipment or technician..."
-            className="w-full pl-9 pr-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500/30"
+            className="w-full pl-9 pr-4 py-2.5 bg-white dark:bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500/30"
           />
         </div>
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-gray-300 focus:outline-none"
+          className="px-4 py-2.5 bg-white dark:bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-gray-300 focus:outline-none"
         >
           <option value="all">All Status</option>
           <option value="scheduled">Scheduled</option>
@@ -611,7 +611,7 @@ export default function MaintenanceTracker() {
         <select
           value={priorityFilter}
           onChange={(e) => setPriorityFilter(e.target.value)}
-          className="px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-gray-300 focus:outline-none"
+          className="px-4 py-2.5 bg-white dark:bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-gray-300 focus:outline-none"
         >
           <option value="all">All Priority</option>
           <option value="critical">Critical</option>
@@ -638,7 +638,7 @@ export default function MaintenanceTracker() {
           return (
             <div
               key={record.id}
-              className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden hover:shadow-lg transition-all"
+              className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden hover:shadow-lg transition-all"
             >
               <div className="p-4">
                 <div className="flex items-start justify-between">
@@ -658,7 +658,7 @@ export default function MaintenanceTracker() {
                       />
                     </div>
                     <div>
-                      <h3 className="font-semibold text-gray-900 dark:text-white">
+                      <h3 className="font-semibold text-gray-900 dark:text-gray-900 dark:text-white">
                         {record.equipmentName}
                       </h3>
                       <p className="text-xs text-gray-500">
@@ -683,22 +683,22 @@ export default function MaintenanceTracker() {
                 </div>
 
                 <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
-                  <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
+                  <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-500 dark:text-gray-400">
                     <Clock size={12} /> {record.assignedTo || ""}
                   </div>
-                  <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
+                  <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-500 dark:text-gray-400">
                     <Calendar size={12} />{" "}
                     {new Date(
                       record.scheduledDate || Date.now(),
                     ).toLocaleDateString()}
                   </div>
-                  <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
+                  <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-500 dark:text-gray-400">
                     Next:{" "}
                     {new Date(
                       record.nextDueDate || Date.now(),
                     ).toLocaleDateString()}
                   </div>
-                  <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
+                  <div className="flex items-center gap-1.5 text-gray-600 dark:text-gray-500 dark:text-gray-400">
                     {currencySymbol} {(record.cost || 0).toLocaleString()}
                   </div>
                 </div>
@@ -772,7 +772,7 @@ export default function MaintenanceTracker() {
 
                 {expandedId === record.id && (
                   <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
-                    <div className="grid grid-cols-2 gap-3 text-xs text-gray-600 dark:text-gray-400">
+                    <div className="grid grid-cols-2 gap-3 text-xs text-gray-600 dark:text-gray-500 dark:text-gray-400">
                       <div>
                         <span className="text-gray-500">Full Description:</span>{" "}
                         {record.description || ""}
@@ -820,10 +820,10 @@ export default function MaintenanceTracker() {
       {/* Form Modal */}
       {showForm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+          <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+                <h3 className="text-lg font-bold text-gray-900 dark:text-gray-900 dark:text-white">
                   {editingId ? "Edit" : "New"} Maintenance Task
                 </h3>
                 <button
@@ -847,7 +847,7 @@ export default function MaintenanceTracker() {
                           equipmentName: e.target.value,
                         })
                       }
-                      className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
+                      className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-gray-900 dark:text-white"
                     />
                   </div>
                   <div>
@@ -862,7 +862,7 @@ export default function MaintenanceTracker() {
                           equipmentType: e.target.value as any,
                         })
                       }
-                      className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
+                      className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-gray-900 dark:text-white"
                     >
                       {EQUIPMENT_TYPES.map((t) => (
                         <option key={t.value} value={t.value}>
@@ -882,7 +882,7 @@ export default function MaintenanceTracker() {
                       setFormData({ ...formData, description: e.target.value })
                     }
                     rows={2}
-                    className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
+                    className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-gray-900 dark:text-white"
                   />
                 </div>
                 <div className="grid grid-cols-3 gap-3">
@@ -898,7 +898,7 @@ export default function MaintenanceTracker() {
                           priority: e.target.value as any,
                         })
                       }
-                      className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
+                      className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-gray-900 dark:text-white"
                     >
                       {["low", "medium", "high", "critical"].map((p) => (
                         <option key={p} value={p}>
@@ -919,7 +919,7 @@ export default function MaintenanceTracker() {
                           status: e.target.value as any,
                         })
                       }
-                      className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
+                      className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-gray-900 dark:text-white"
                     >
                       {["scheduled", "in_progress", "completed", "overdue"].map(
                         (s) => (
@@ -943,7 +943,7 @@ export default function MaintenanceTracker() {
                           cost: Number(e.target.value),
                         })
                       }
-                      className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
+                      className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-gray-900 dark:text-white"
                     />
                   </div>
                 </div>
@@ -957,7 +957,7 @@ export default function MaintenanceTracker() {
                       onChange={(e) =>
                         setFormData({ ...formData, assignedTo: e.target.value })
                       }
-                      className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
+                      className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-gray-900 dark:text-white"
                     />
                   </div>
                   <div>
@@ -973,7 +973,7 @@ export default function MaintenanceTracker() {
                           scheduledDate: e.target.value,
                         })
                       }
-                      className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
+                      className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-gray-900 dark:text-white"
                     />
                   </div>
                 </div>
@@ -987,7 +987,7 @@ export default function MaintenanceTracker() {
                     onChange={(e) =>
                       setFormData({ ...formData, nextDueDate: e.target.value })
                     }
-                    className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
+                    className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-gray-900 dark:text-white"
                   />
                 </div>
                 <div>
@@ -1000,12 +1000,12 @@ export default function MaintenanceTracker() {
                       setFormData({ ...formData, notes: e.target.value })
                     }
                     rows={2}
-                    className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
+                    className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-gray-900 dark:text-white"
                   />
                 </div>
                 <button
                   onClick={handleSave}
-                  className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-medium transition-all flex items-center justify-center gap-2"
+                  className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-gray-900 dark:text-white rounded-xl font-medium transition-all flex items-center justify-center gap-2"
                 >
                   <Save size={16} /> Save
                 </button>

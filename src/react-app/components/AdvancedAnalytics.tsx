@@ -554,10 +554,10 @@ export default function AdvancedAnalytics() {
                 />
               </div>
               <div>
-                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-900 dark:text-white">
                   Advanced Analytics
                 </h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
+                <p className="text-sm text-gray-500 dark:text-gray-500 dark:text-gray-400">
                   Real data from your sales records
                   {dataSource === "supabase" && (
                     <span className="ml-2 text-green-600 dark:text-green-400">
@@ -570,7 +570,7 @@ export default function AdvancedAnalytics() {
                     </span>
                   )}
                   {dataSource === "none" && (
-                    <span className="ml-2 text-gray-400">• No data yet</span>
+                    <span className="ml-2 text-gray-500 dark:text-gray-400">• No data yet</span>
                   )}
                 </p>
               </div>
@@ -578,7 +578,7 @@ export default function AdvancedAnalytics() {
             <div className="flex items-center gap-2">
               <button
                 onClick={() => fetchAnalytics()}
-                className="p-2 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                className="p-2 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
                 title="Refresh data"
                 aria-label="Refresh analytics data"
               >
@@ -587,7 +587,7 @@ export default function AdvancedAnalytics() {
               <button
                 onClick={exportCSV}
                 disabled={salesData.length === 0}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-violet-600 text-white text-sm font-medium hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-violet-600 text-gray-900 dark:text-white text-sm font-medium hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 title="Export data as CSV"
               >
                 <Download size={16} />
@@ -610,7 +610,7 @@ export default function AdvancedAnalytics() {
                 </p>
                 <button
                   onClick={() => fetchAnalytics()}
-                  className="mt-2 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-600 text-white text-xs font-medium hover:bg-amber-700 transition-colors"
+                  className="mt-2 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-600 text-gray-900 dark:text-white text-xs font-medium hover:bg-amber-700 transition-colors"
                 >
                   <RefreshCw size={12} /> Retry
                 </button>
@@ -621,17 +621,17 @@ export default function AdvancedAnalytics() {
           {/* Empty State — new stations with no sales see a helpful CTA instead of
           a confusing zero-filled dashboard. */}
           {dataSource === "none" && !error && (
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-8 border border-gray-200 dark:border-gray-700 text-center">
+            <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-8 border border-gray-200 dark:border-gray-700 text-center">
               <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center">
                 <BarChart3
                   size={32}
                   className="text-violet-600 dark:text-violet-400"
                 />
               </div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-900 dark:text-white mb-2">
                 No sales data yet
               </h3>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mb-4 max-w-md mx-auto">
+              <p className="text-sm text-gray-500 dark:text-gray-500 dark:text-gray-400 mb-4 max-w-md mx-auto">
                 Your analytics dashboard will populate automatically once you
                 start recording sales. Create your first sale or check your
                 station inventory to get started.
@@ -639,7 +639,7 @@ export default function AdvancedAnalytics() {
               <div className="flex flex-wrap gap-2 justify-center">
                 <button
                   onClick={() => switchToTab("pos")}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-violet-600 text-white text-sm font-medium hover:bg-violet-700 transition-colors"
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-violet-600 text-gray-900 dark:text-white text-sm font-medium hover:bg-violet-700 transition-colors"
                 >
                   <Plus size={16} /> Record a Sale
                 </button>
@@ -665,7 +665,7 @@ export default function AdvancedAnalytics() {
               <button
                 key={r}
                 onClick={() => setTimeRange(r)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${timeRange === r ? "bg-violet-600 text-white" : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600"}`}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${timeRange === r ? "bg-violet-600 text-gray-900 dark:text-white" : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600"}`}
                 aria-pressed={timeRange === r}
               >
                 {r === "7d"
@@ -681,21 +681,21 @@ export default function AdvancedAnalytics() {
 
           {/* KPI Cards */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+            <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
               <p className="text-xs text-gray-500">Total Revenue</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">
+              <p className="text-2xl font-bold text-gray-900 dark:text-gray-900 dark:text-white">
                 {currencySymbol}
                 {formatNumber(totals.totalRevenue, 0)}
               </p>
             </div>
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+            <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
               <p className="text-xs text-gray-500">Avg Daily Sales</p>
               <p className="text-2xl font-bold text-green-600 dark:text-green-400">
                 {currencySymbol}
                 {formatNumber(totals.avgDaily, 0)}
               </p>
             </div>
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+            <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
               <p className="text-xs text-gray-500">7-Day Growth</p>
               <p
                 className={`text-2xl font-bold flex items-center gap-1 ${growthData.growth7d >= 0 ? "text-green-600" : "text-red-600"}`}
@@ -708,7 +708,7 @@ export default function AdvancedAnalytics() {
                 {Math.abs(growthData.growth7d).toFixed(1)}%
               </p>
             </div>
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+            <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
               <p className="text-xs text-gray-500">Transactions</p>
               <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
                 {formatNumber(totals.totalTransactions)}
@@ -717,12 +717,12 @@ export default function AdvancedAnalytics() {
           </div>
 
           {/* Sales Trend Chart */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700 shadow-sm">
-            <h3 className="text-sm font-semibold dark:text-white mb-4">
+          <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700 shadow-sm">
+            <h3 className="text-sm font-semibold dark:text-gray-900 dark:text-white mb-4">
               Daily Revenue Trend ({currencySymbol})
             </h3>
             {salesData.length === 0 ? (
-              <div className="h-48 flex items-center justify-center text-gray-400">
+              <div className="h-48 flex items-center justify-center text-gray-500 dark:text-gray-400">
                 <p>No sales data available for this period</p>
               </div>
             ) : (
@@ -744,7 +744,7 @@ export default function AdvancedAnalytics() {
                       />
                       {i % Math.max(1, Math.floor(salesData.length / 10)) ===
                         0 && (
-                        <span className="text-[8px] text-gray-400 mt-1 -rotate-45 origin-top-left whitespace-nowrap">
+                        <span className="text-[8px] text-gray-500 dark:text-gray-400 mt-1 -rotate-45 origin-top-left whitespace-nowrap">
                           {d.date.slice(5)}
                         </span>
                       )}
@@ -795,7 +795,7 @@ export default function AdvancedAnalytics() {
                         />
                       </div>
                     </div>
-                    <span className="text-[8px] text-gray-400 mt-1 text-center">
+                    <span className="text-[8px] text-gray-500 dark:text-gray-400 mt-1 text-center">
                       {p.date.slice(5)}
                     </span>
                   </div>
@@ -815,8 +815,8 @@ export default function AdvancedAnalytics() {
 
           {/* Insights */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700">
-              <h3 className="text-sm font-semibold dark:text-white mb-3 flex items-center gap-2">
+            <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700">
+              <h3 className="text-sm font-semibold dark:text-gray-900 dark:text-white mb-3 flex items-center gap-2">
                 <Activity size={16} className="text-green-500" /> Key Insights
               </h3>
               <div className="space-y-2 text-xs">
@@ -845,14 +845,14 @@ export default function AdvancedAnalytics() {
                 </div>
               </div>
             </div>
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700">
-              <h3 className="text-sm font-semibold dark:text-white mb-3 flex items-center gap-2">
+            <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700">
+              <h3 className="text-sm font-semibold dark:text-gray-900 dark:text-white mb-3 flex items-center gap-2">
                 <PieChart size={16} className="text-purple-500" /> Period Growth
               </h3>
               <div className="space-y-3">
                 <div>
                   <div className="flex justify-between text-xs mb-1">
-                    <span className="text-gray-600 dark:text-gray-400">
+                    <span className="text-gray-600 dark:text-gray-500 dark:text-gray-400">
                       7-Day Change
                     </span>
                     <span
@@ -873,7 +873,7 @@ export default function AdvancedAnalytics() {
                 </div>
                 <div>
                   <div className="flex justify-between text-xs mb-1">
-                    <span className="text-gray-600 dark:text-gray-400">
+                    <span className="text-gray-600 dark:text-gray-500 dark:text-gray-400">
                       30-Day Trend
                     </span>
                     <span
@@ -898,8 +898,8 @@ export default function AdvancedAnalytics() {
 
           {/* Tank Levels */}
           {inventoryLevels.length > 0 && (
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700">
-              <h3 className="text-sm font-semibold dark:text-white mb-4 flex items-center gap-2">
+            <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700">
+              <h3 className="text-sm font-semibold dark:text-gray-900 dark:text-white mb-4 flex items-center gap-2">
                 <Activity size={16} className="text-cyan-500" /> Current Tank
                 Levels
               </h3>
@@ -907,10 +907,10 @@ export default function AdvancedAnalytics() {
                 {inventoryLevels.map((inv, idx) => (
                   <div key={idx} className="space-y-2">
                     <div className="flex justify-between text-xs">
-                      <span className="text-gray-600 dark:text-gray-400">
+                      <span className="text-gray-600 dark:text-gray-500 dark:text-gray-400">
                         {inv.fuel_type}
                       </span>
-                      <span className="font-semibold dark:text-white">
+                      <span className="font-semibold dark:text-gray-900 dark:text-white">
                         {inv.percentage.toFixed(1)}%
                       </span>
                     </div>
@@ -920,7 +920,7 @@ export default function AdvancedAnalytics() {
                         style={{ width: `${inv.percentage}%` }}
                       />
                     </div>
-                    <p className="text-[10px] text-gray-400">
+                    <p className="text-[10px] text-gray-500 dark:text-gray-400">
                       {formatNumber(inv.current_level)} /{" "}
                       {formatNumber(inv.tank_capacity)} L
                     </p>

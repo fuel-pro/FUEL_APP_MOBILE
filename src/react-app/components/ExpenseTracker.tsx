@@ -434,7 +434,7 @@ export default function ExpenseTracker() {
     rejected: "bg-red-500/10 text-red-600 dark:text-red-400",
   };
   const DEFAULT_STATUS_COLOR =
-    "bg-gray-500/10 text-gray-600 dark:text-gray-400";
+    "bg-gray-500/10 text-gray-600 dark:text-gray-500 dark:text-gray-400";
 
   const catColors: Record<string, string> = {
     fuel_purchase: "text-amber-500",
@@ -444,7 +444,7 @@ export default function ExpenseTracker() {
     rent: "text-green-500",
     supplies: "text-gray-500",
     taxes: "text-orange-500",
-    other: "text-gray-400",
+    other: "text-gray-500 dark:text-gray-400",
   };
   const DEFAULT_CAT_COLOR = "text-gray-500";
 
@@ -466,7 +466,7 @@ export default function ExpenseTracker() {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+          <h2 className="text-xl font-bold text-gray-900 dark:text-gray-900 dark:text-white flex items-center gap-2">
             <Receipt size={22} className="text-amber-500" /> Expense Tracker
           </h2>
           <p className="text-sm text-gray-500 mt-1">
@@ -476,13 +476,13 @@ export default function ExpenseTracker() {
         <div className="flex gap-2">
           <button
             onClick={() => setActiveView("list")}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeView === "list" ? "bg-amber-500 text-white" : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300"}`}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeView === "list" ? "bg-amber-500 text-gray-900 dark:text-white" : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300"}`}
           >
             Records
           </button>
           <button
             onClick={() => setActiveView("analytics")}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeView === "analytics" ? "bg-amber-500 text-white" : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300"}`}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeView === "analytics" ? "bg-amber-500 text-gray-900 dark:text-white" : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300"}`}
           >
             Analytics
           </button>
@@ -491,16 +491,16 @@ export default function ExpenseTracker() {
 
       {/* KPI Cards */}
       <div className="grid grid-cols-3 gap-4">
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+        <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
           <div className="flex items-center gap-2 mb-1">
             <TrendingDown size={14} className="text-red-500" />
             <span className="text-xs text-gray-500">Total Expenses</span>
           </div>
-          <p className="text-xl font-bold text-gray-900 dark:text-white">
+          <p className="text-xl font-bold text-gray-900 dark:text-gray-900 dark:text-white">
             {currencySymbol} {(totalExpenses || 0).toLocaleString()}
           </p>
         </div>
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+        <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
           <div className="flex items-center gap-2 mb-1">
             <CheckCircle2 size={14} className="text-emerald-500" />
             <span className="text-xs text-gray-500">Approved</span>
@@ -509,7 +509,7 @@ export default function ExpenseTracker() {
             {currencySymbol} {(approvedTotal || 0).toLocaleString()}
           </p>
         </div>
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+        <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
           <div className="flex items-center gap-2 mb-1">
             <AlertTriangle size={14} className="text-amber-500" />
             <span className="text-xs text-gray-500">Pending</span>
@@ -561,19 +561,19 @@ export default function ExpenseTracker() {
             <div className="relative flex-1 min-w-[200px]">
               <Search
                 size={16}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400"
               />
               <input
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="Search expenses..."
-                className="w-full pl-9 pr-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500/30"
+                className="w-full pl-9 pr-4 py-2.5 bg-white dark:bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500/30"
               />
             </div>
             <select
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
-              className="px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-gray-300 focus:outline-none"
+              className="px-4 py-2.5 bg-white dark:bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-gray-300 focus:outline-none"
             >
               <option value="all">All Categories</option>
               {EXPENSE_CATEGORIES.map((c) => (
@@ -585,7 +585,7 @@ export default function ExpenseTracker() {
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-gray-300 focus:outline-none"
+              className="px-4 py-2.5 bg-white dark:bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-gray-300 focus:outline-none"
             >
               <option value="all">All Status</option>
               <option value="pending">Pending</option>
@@ -607,20 +607,20 @@ export default function ExpenseTracker() {
                   status: "pending",
                 });
               }}
-              className="px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-sm font-medium flex items-center gap-2 transition-all shadow-lg shadow-amber-500/20"
+              className="px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-gray-900 dark:text-white rounded-xl text-sm font-medium flex items-center gap-2 transition-all shadow-lg shadow-amber-500/20"
             >
               <Plus size={16} /> Add Expense
             </button>
             <button
               onClick={() => switchToTab("reports")}
-              className="px-4 py-2.5 bg-blue-500 hover:bg-blue-600 text-white rounded-xl text-sm font-medium flex items-center gap-2 transition-all"
+              className="px-4 py-2.5 bg-blue-500 hover:bg-blue-600 text-gray-900 dark:text-white rounded-xl text-sm font-medium flex items-center gap-2 transition-all"
               title="View expense breakdown in Reports"
             >
               <PieChart size={16} /> Reports
             </button>
             <button
               onClick={() => switchToTab("analytics")}
-              className="px-4 py-2.5 bg-cyan-500 hover:bg-cyan-600 text-white rounded-xl text-sm font-medium flex items-center gap-2 transition-all"
+              className="px-4 py-2.5 bg-cyan-500 hover:bg-cyan-600 text-gray-900 dark:text-white rounded-xl text-sm font-medium flex items-center gap-2 transition-all"
               title="View analytics dashboard"
             >
               <BarChart3 size={16} /> Analytics
@@ -628,30 +628,30 @@ export default function ExpenseTracker() {
           </div>
 
           {/* Table */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+          <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50">
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-500 dark:text-gray-400">
                       Date
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-500 dark:text-gray-400">
                       Category
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-500 dark:text-gray-400">
                       Description
                     </th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400">
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-500 dark:text-gray-400">
                       Amount
                     </th>
-                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400">
+                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-500 dark:text-gray-400">
                       Status
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400">
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-500 dark:text-gray-400">
                       Ref
                     </th>
-                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400">
+                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-500 dark:text-gray-400">
                       Actions
                     </th>
                   </tr>
@@ -667,7 +667,7 @@ export default function ExpenseTracker() {
                         key={exp.id || `exp_${Math.random()}`}
                         className="border-b border-gray-100 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700/20"
                       >
-                        <td className="px-4 py-3 text-gray-600 dark:text-gray-400">
+                        <td className="px-4 py-3 text-gray-600 dark:text-gray-500 dark:text-gray-400">
                           {(exp.date &&
                             new Date(exp.date).toLocaleDateString()) ||
                             "—"}
@@ -689,10 +689,10 @@ export default function ExpenseTracker() {
                             </span>
                           </div>
                         </td>
-                        <td className="px-4 py-3 text-gray-900 dark:text-white max-w-[200px] truncate">
+                        <td className="px-4 py-3 text-gray-900 dark:text-gray-900 dark:text-white max-w-[200px] truncate">
                           {exp.description || ""}
                         </td>
-                        <td className="px-4 py-3 text-right font-medium text-gray-900 dark:text-white">
+                        <td className="px-4 py-3 text-right font-medium text-gray-900 dark:text-gray-900 dark:text-white">
                           {currencySymbol} {(exp.amount || 0).toLocaleString()}
                         </td>
                         <td className="px-4 py-3 text-center">
@@ -750,8 +750,8 @@ export default function ExpenseTracker() {
         /* Analytics View */
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Monthly Budget Setter */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 md:col-span-2">
-            <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+          <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 md:col-span-2">
+            <h3 className="text-sm font-medium text-gray-900 dark:text-gray-900 dark:text-white mb-3 flex items-center gap-2">
               <DollarSign size={14} className="text-emerald-500" /> Monthly
               Budget
             </h3>
@@ -762,11 +762,11 @@ export default function ExpenseTracker() {
                 value={budgetInput}
                 onChange={(e) => setBudgetInput(e.target.value)}
                 placeholder="Set monthly expense budget (0 = none)"
-                className="flex-1 min-w-[200px] px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500/30"
+                className="flex-1 min-w-[200px] px-3 py-2 bg-gray-50 dark:bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500/30"
               />
               <button
                 onClick={saveBudget}
-                className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-sm font-medium flex items-center gap-2 transition-all"
+                className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-gray-900 dark:text-white rounded-lg text-sm font-medium flex items-center gap-2 transition-all"
               >
                 <Save size={14} /> Save Budget
               </button>
@@ -786,8 +786,8 @@ export default function ExpenseTracker() {
               </p>
             )}
           </div>
-          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
-            <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+          <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
+            <h3 className="text-sm font-medium text-gray-900 dark:text-gray-900 dark:text-white mb-4 flex items-center gap-2">
               <PieChart size={14} className="text-amber-500" /> By Category
             </h3>
             <div className="space-y-3">
@@ -798,10 +798,10 @@ export default function ExpenseTracker() {
                 return (
                   <div key={cat.value}>
                     <div className="flex justify-between text-xs mb-1">
-                      <span className="flex items-center gap-1.5 text-gray-600 dark:text-gray-400">
+                      <span className="flex items-center gap-1.5 text-gray-600 dark:text-gray-500 dark:text-gray-400">
                         <CatIcon size={12} /> {cat.label}
                       </span>
-                      <span className="text-gray-900 dark:text-white font-medium">
+                      <span className="text-gray-900 dark:text-gray-900 dark:text-white font-medium">
                         {currencySymbol} {(cat.total || 0).toLocaleString()} (
                         {(pct || 0).toFixed(1)}%)
                       </span>
@@ -822,14 +822,14 @@ export default function ExpenseTracker() {
               )}
             </div>
           </div>
-          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
-            <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+          <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
+            <h3 className="text-sm font-medium text-gray-900 dark:text-gray-900 dark:text-white mb-4 flex items-center gap-2">
               <DollarSign size={14} className="text-emerald-500" /> Summary
             </h3>
             <div className="space-y-4">
               <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
                 <p className="text-xs text-gray-500">Total Records</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                <p className="text-2xl font-bold text-gray-900 dark:text-gray-900 dark:text-white">
                   {filtered.length}
                 </p>
               </div>
@@ -864,10 +864,10 @@ export default function ExpenseTracker() {
       {/* Form Modal */}
       {showForm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md">
+          <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md">
             <div className="p-6">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+                <h3 className="text-lg font-bold text-gray-900 dark:text-gray-900 dark:text-white">
                   {editingId ? "Edit" : "New"} Expense
                 </h3>
                 <button
@@ -889,7 +889,7 @@ export default function ExpenseTracker() {
                       onChange={(e) =>
                         setFormData({ ...formData, date: e.target.value })
                       }
-                      className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
+                      className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-gray-900 dark:text-white"
                     />
                   </div>
                   <div>
@@ -905,7 +905,7 @@ export default function ExpenseTracker() {
                           amount: Number(e.target.value),
                         })
                       }
-                      className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
+                      className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-gray-900 dark:text-white"
                     />
                   </div>
                 </div>
@@ -919,7 +919,7 @@ export default function ExpenseTracker() {
                       onChange={(e) =>
                         setFormData({ ...formData, category: e.target.value })
                       }
-                      className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
+                      className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-gray-900 dark:text-white"
                     >
                       {EXPENSE_CATEGORIES.map((c) => (
                         <option key={c.value} value={c.value}>
@@ -940,7 +940,7 @@ export default function ExpenseTracker() {
                           paymentMethod: e.target.value,
                         })
                       }
-                      className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
+                      className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-gray-900 dark:text-white"
                     >
                       {PAYMENT_METHODS.map((m) => (
                         <option key={m} value={m}>
@@ -960,7 +960,7 @@ export default function ExpenseTracker() {
                       setFormData({ ...formData, description: e.target.value })
                     }
                     rows={2}
-                    className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
+                    className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-gray-900 dark:text-white"
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
@@ -973,7 +973,7 @@ export default function ExpenseTracker() {
                       onChange={(e) =>
                         setFormData({ ...formData, reference: e.target.value })
                       }
-                      className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
+                      className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-gray-900 dark:text-white"
                     />
                   </div>
                   <div>
@@ -985,13 +985,13 @@ export default function ExpenseTracker() {
                       onChange={(e) =>
                         setFormData({ ...formData, approvedBy: e.target.value })
                       }
-                      className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-white"
+                      className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm dark:bg-gray-700 dark:text-gray-900 dark:text-white"
                     />
                   </div>
                 </div>
                 <button
                   onClick={handleSave}
-                  className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-medium transition-all flex items-center justify-center gap-2"
+                  className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-gray-900 dark:text-white rounded-xl font-medium transition-all flex items-center justify-center gap-2"
                 >
                   <Save size={16} /> Save
                 </button>

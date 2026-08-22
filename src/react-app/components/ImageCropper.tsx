@@ -448,19 +448,19 @@ export default function ImageCropper({
   return (
     <div className="fixed inset-0 bg-black/90 z-50 flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between p-3 bg-gray-900 border-b border-gray-700">
+      <div className="flex items-center justify-between p-3 bg-white dark:bg-gray-900 border-b border-gray-700">
         <div className="flex items-center gap-2">
           <Crop className="w-5 h-5 text-amber-500" />
-          <h2 className="text-white font-semibold">Crop & Enhance</h2>
+          <h2 className="text-gray-900 dark:text-white font-semibold">Crop & Enhance</h2>
           {enhancedImage && (
-            <span className="px-2 py-0.5 bg-green-600 text-white text-xs rounded">
+            <span className="px-2 py-0.5 bg-green-600 text-gray-900 dark:text-white text-xs rounded">
               Enhanced
             </span>
           )}
         </div>
         <button
           onClick={onCancel}
-          className="text-gray-400 hover:text-white p-1"
+          className="text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:text-white p-1"
         >
           <X className="w-6 h-6" />
         </button>
@@ -490,7 +490,7 @@ export default function ImageCropper({
             }}
           />
         ) : (
-          <div className="text-gray-400 text-center">
+          <div className="text-gray-500 dark:text-gray-400 text-center">
             <div className="animate-spin w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full mx-auto mb-2"></div>
             <p>Loading image...</p>
           </div>
@@ -498,14 +498,14 @@ export default function ImageCropper({
       </div>
 
       {/* Tools */}
-      <div className="flex items-center justify-center gap-2 p-3 bg-gray-900 border-t border-gray-700 flex-wrap">
+      <div className="flex items-center justify-center gap-2 p-3 bg-white dark:bg-gray-900 border-t border-gray-700 flex-wrap">
         <button
           onClick={enhanceImage}
           disabled={isEnhancing}
           className={`flex items-center gap-1.5 px-3 py-2 rounded-lg font-medium transition-colors ${
             enhancedImage
-              ? "bg-green-600 text-white"
-              : "bg-purple-600 hover:bg-purple-500 text-white"
+              ? "bg-green-600 text-gray-900 dark:text-white"
+              : "bg-purple-600 hover:bg-purple-500 text-gray-900 dark:text-white"
           } ${isEnhancing ? "opacity-50 cursor-wait" : ""}`}
         >
           <Sparkles className="w-4 h-4" />
@@ -517,7 +517,7 @@ export default function ImageCropper({
         </button>
         <button
           onClick={handleRotate}
-          className="flex items-center gap-1.5 px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
+          className="flex items-center gap-1.5 px-3 py-2 bg-gray-700 hover:bg-gray-600 text-gray-900 dark:text-white rounded-lg transition-colors"
         >
           <RotateCw className="w-4 h-4" />
           Rotate
@@ -525,17 +525,17 @@ export default function ImageCropper({
         <div className="flex items-center gap-1">
           <button
             onClick={handleZoomOut}
-            className="p-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors disabled:opacity-50"
+            className="p-2 bg-gray-700 hover:bg-gray-600 text-gray-900 dark:text-white rounded-lg transition-colors disabled:opacity-50"
             disabled={zoom <= 0.5}
           >
             <ZoomOut className="w-4 h-4" />
           </button>
-          <span className="text-white text-xs w-12 text-center">
+          <span className="text-gray-900 dark:text-white text-xs w-12 text-center">
             {Math.round(zoom * 100)}%
           </span>
           <button
             onClick={handleZoomIn}
-            className="p-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors disabled:opacity-50"
+            className="p-2 bg-gray-700 hover:bg-gray-600 text-gray-900 dark:text-white rounded-lg transition-colors disabled:opacity-50"
             disabled={zoom >= 3}
           >
             <ZoomIn className="w-4 h-4" />
@@ -544,7 +544,7 @@ export default function ImageCropper({
         {cropArea && cropArea.width > 20 && (
           <button
             onClick={handleResetCrop}
-            className="flex items-center gap-1.5 px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
+            className="flex items-center gap-1.5 px-3 py-2 bg-gray-700 hover:bg-gray-600 text-gray-900 dark:text-white rounded-lg transition-colors"
           >
             <RefreshCw className="w-4 h-4" />
             Reset
@@ -553,16 +553,16 @@ export default function ImageCropper({
       </div>
 
       {/* Actions */}
-      <div className="flex items-center justify-center gap-3 p-3 bg-gray-800">
+      <div className="flex items-center justify-center gap-3 p-3 bg-white dark:bg-gray-800">
         <button
           onClick={onCancel}
-          className="px-5 py-2.5 bg-gray-600 hover:bg-gray-500 text-white rounded-lg font-medium transition-colors"
+          className="px-5 py-2.5 bg-gray-600 hover:bg-gray-500 text-gray-900 dark:text-white rounded-lg font-medium transition-colors"
         >
           Cancel
         </button>
         <button
           onClick={handleConfirmCrop}
-          className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-lg font-semibold transition-colors shadow-lg"
+          className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-gray-900 dark:text-white rounded-lg font-semibold transition-colors shadow-lg"
         >
           <Check className="w-5 h-5" />
           {cropArea && cropArea.width > 20 ? "Crop & Scan" : "Scan Image"}

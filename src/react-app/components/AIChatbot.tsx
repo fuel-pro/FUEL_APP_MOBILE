@@ -759,7 +759,7 @@ export default function AIChatbot() {
     return (
       <button
         onClick={() => setIsOpen(true)}
-        className="fixed bottom-24 md:bottom-6 right-4 md:right-6 w-12 h-12 md:w-14 md:h-14 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center z-30 md:z-50 group"
+        className="fixed bottom-24 md:bottom-6 right-4 md:right-6 w-12 h-12 md:w-14 md:h-14 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-gray-900 dark:text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center z-30 md:z-50 group"
         title="Open AI Assistant"
       >
         <Sparkles size={24} />
@@ -768,7 +768,7 @@ export default function AIChatbot() {
             connectionStatus === "error" ? "bg-red-500" : "bg-green-500"
           }`}
         ></div>
-        <div className="absolute bottom-full right-0 mb-2 px-3 py-1 bg-gray-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+        <div className="absolute bottom-full right-0 mb-2 px-3 py-1 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
           AI Assistant (Gemini)
         </div>
       </button>
@@ -777,14 +777,14 @@ export default function AIChatbot() {
 
   return (
     <div
-      className={`fixed bottom-20 md:bottom-6 right-2 md:right-6 bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-600 z-50 transition-all duration-300 ${
+      className={`fixed bottom-20 md:bottom-6 right-2 md:right-6 bg-white dark:bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-600 z-50 transition-all duration-300 ${
         isMinimized
           ? "w-80 h-16"
           : "w-[calc(100vw-16px)] md:w-[420px] h-[70vh] md:h-[650px] max-h-[650px]"
       }`}
     >
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-600 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-t-2xl">
+      <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-600 bg-gradient-to-r from-blue-600 to-purple-600 text-gray-900 dark:text-white rounded-t-2xl">
         <div className="flex items-center gap-2">
           <Sparkles size={20} />
           <span className="font-semibold">FuelPro AI</span>
@@ -856,7 +856,7 @@ export default function AIChatbot() {
       {!isMinimized && (
         <>
           {/* Quick Actions */}
-          <div className="px-3 py-2 border-b border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-900/50">
+          <div className="px-3 py-2 border-b border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-white dark:bg-gray-900/50">
             <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
               {quickActions.map((action, idx) => (
                 <button
@@ -881,10 +881,10 @@ export default function AIChatbot() {
                 <div
                   className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
                     message.type === "user"
-                      ? "bg-blue-600 text-white"
+                      ? "bg-blue-600 text-gray-900 dark:text-white"
                       : message.isError
-                        ? "bg-amber-500 text-white"
-                        : "bg-gradient-to-r from-purple-600 to-blue-600 text-white"
+                        ? "bg-amber-500 text-gray-900 dark:text-white"
+                        : "bg-gradient-to-r from-purple-600 to-blue-600 text-gray-900 dark:text-white"
                   }`}
                 >
                   {message.type === "user" ? (
@@ -899,7 +899,7 @@ export default function AIChatbot() {
                   <div
                     className={`inline-block p-3 rounded-2xl text-sm ${
                       message.type === "user"
-                        ? "bg-blue-600 text-white rounded-br-sm"
+                        ? "bg-blue-600 text-gray-900 dark:text-white rounded-br-sm"
                         : message.isError
                           ? "bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 text-amber-800 dark:text-amber-200 rounded-bl-sm"
                           : "bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-bl-sm"
@@ -919,7 +919,7 @@ export default function AIChatbot() {
                       <button
                         onClick={retryLastMessage}
                         disabled={isLoading || retryCount >= 3}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded-full disabled:opacity-50 transition-colors"
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-700 text-gray-900 dark:text-white rounded-full disabled:opacity-50 transition-colors"
                       >
                         <RefreshCw
                           size={12}
@@ -960,7 +960,7 @@ export default function AIChatbot() {
 
             {isLoading && (
               <div className="flex gap-3">
-                <div className="w-8 h-8 rounded-full bg-gradient-to-r from-purple-600 to-blue-600 text-white flex items-center justify-center">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-r from-purple-600 to-blue-600 text-gray-900 dark:text-white flex items-center justify-center">
                   <RefreshCw size={16} className="animate-spin" />
                 </div>
                 <div className="bg-gray-100 dark:bg-gray-700 p-3 rounded-2xl rounded-bl-sm">
@@ -993,7 +993,7 @@ export default function AIChatbot() {
               >
                 <RefreshCw size={12} /> Clear Chat
               </button>
-              <span className="text-xs text-gray-400">|</span>
+              <span className="text-xs text-gray-500 dark:text-gray-400">|</span>
               <span
                 className={`text-xs flex items-center gap-1 ${
                   connectionStatus === "connected"
@@ -1030,7 +1030,7 @@ export default function AIChatbot() {
                     onClick={isListening ? stopListening : startListening}
                     className={`absolute right-2 top-1/2 transform -translate-y-1/2 p-1.5 rounded-full transition-colors ${
                       isListening
-                        ? "bg-red-500 text-white animate-pulse"
+                        ? "bg-red-500 text-gray-900 dark:text-white animate-pulse"
                         : "bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-500"
                     }`}
                     title={isListening ? "Stop listening" : "Start voice input"}
@@ -1042,7 +1042,7 @@ export default function AIChatbot() {
               <button
                 type="submit"
                 disabled={!inputMessage.trim() || isLoading}
-                className="p-2.5 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-full hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                className="p-2.5 bg-gradient-to-r from-blue-600 to-purple-600 text-gray-900 dark:text-white rounded-full hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
                 title="Send message"
               >
                 <Send size={18} />

@@ -178,12 +178,12 @@ const AdjustmentForm = ({
 
   return (
     <div className="space-y-6">
-      <div className="bg-white/5 border border-white/10 rounded-xl p-4">
-        <h4 className="text-white font-medium mb-4">Add Adjustment</h4>
+      <div className="bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl p-4">
+        <h4 className="text-gray-900 dark:text-white font-medium mb-4">Add Adjustment</h4>
         <div className="flex gap-3">
           <div className="relative flex-1">
             <Search
-              className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
+              className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400"
               size={18}
             />
             <input
@@ -191,17 +191,17 @@ const AdjustmentForm = ({
               placeholder="Search product..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-11 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white"
+              className="w-full pl-11 pr-4 py-3 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white"
             />
             {search && (
-              <div className="absolute top-full left-0 right-0 mt-2 bg-gray-900 border border-white/10 rounded-xl shadow-xl z-10 max-h-48 overflow-y-auto">
+              <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-white/10 rounded-xl shadow-xl z-10 max-h-48 overflow-y-auto">
                 {filteredProducts.slice(0, 10).map((product) => (
                   <button
                     key={product.id}
                     onClick={() => setSelectedProduct(product)}
-                    className="w-full px-4 py-3 text-left hover:bg-white/5 border-b border-white/5 last:border-0"
+                    className="w-full px-4 py-3 text-left hover:bg-gray-50 dark:bg-white/5 border-b border-white/5 last:border-0"
                   >
-                    <p className="text-white text-sm">{product.name}</p>
+                    <p className="text-gray-900 dark:text-white text-sm">{product.name}</p>
                     <p className="text-gray-500 text-xs">
                       Current: {product.stock_quantity || 0}
                     </p>
@@ -213,18 +213,18 @@ const AdjustmentForm = ({
           <button
             onClick={addAdjustment}
             disabled={!selectedProduct}
-            className="px-4 py-3 bg-amber-500 hover:bg-amber-600 disabled:bg-gray-600 text-white rounded-xl"
+            className="px-4 py-3 bg-amber-500 hover:bg-amber-600 disabled:bg-gray-600 text-gray-900 dark:text-white rounded-xl"
           >
             <Plus size={20} />
           </button>
         </div>
         {selectedProduct && (
           <div className="mt-3 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
-            <p className="text-white text-sm">
+            <p className="text-gray-900 dark:text-white text-sm">
               Selected:{" "}
               <span className="font-medium">{selectedProduct.name}</span>
             </p>
-            <p className="text-gray-400 text-xs">
+            <p className="text-gray-500 dark:text-gray-400 text-xs">
               Current: {selectedProduct.stock_quantity || 0}
             </p>
           </div>
@@ -232,9 +232,9 @@ const AdjustmentForm = ({
       </div>
 
       {adjustments.length > 0 ? (
-        <div className="bg-white/5 border border-white/10 rounded-xl overflow-hidden">
-          <div className="p-4 border-b border-white/10">
-            <h4 className="text-white font-medium">
+        <div className="bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl overflow-hidden">
+          <div className="p-4 border-b border-gray-200 dark:border-white/10">
+            <h4 className="text-gray-900 dark:text-white font-medium">
               Adjustments ({adjustments.length})
             </h4>
           </div>
@@ -244,13 +244,13 @@ const AdjustmentForm = ({
               <div key={adj.productId} className="p-4 border-b border-white/5">
                 <div className="flex items-start gap-4">
                   <div className="flex-1">
-                    <p className="text-white font-medium">{product?.name}</p>
+                    <p className="text-gray-900 dark:text-white font-medium">{product?.name}</p>
                     <p className="text-gray-500 text-xs mb-3">
                       Current: {product?.stock_quantity || 0}
                     </p>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="text-gray-400 text-xs mb-1 block">
+                        <label className="text-gray-500 dark:text-gray-400 text-xs mb-1 block">
                           New Quantity
                         </label>
                         <input
@@ -263,12 +263,12 @@ const AdjustmentForm = ({
                               parseFloat(e.target.value) || 0,
                             )
                           }
-                          className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white"
+                          className="w-full px-3 py-2 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-lg text-gray-900 dark:text-white"
                           min="0"
                         />
                       </div>
                       <div>
-                        <label className="text-gray-400 text-xs mb-1 block">
+                        <label className="text-gray-500 dark:text-gray-400 text-xs mb-1 block">
                           Reason
                         </label>
                         <input
@@ -278,7 +278,7 @@ const AdjustmentForm = ({
                             updateAdjustment(index, "reason", e.target.value)
                           }
                           placeholder="e.g., Damaged"
-                          className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white"
+                          className="w-full px-3 py-2 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-lg text-gray-900 dark:text-white"
                         />
                       </div>
                     </div>
@@ -293,11 +293,11 @@ const AdjustmentForm = ({
               </div>
             );
           })}
-          <div className="p-4 border-t border-white/10">
+          <div className="p-4 border-t border-gray-200 dark:border-white/10">
             <button
               onClick={() => onSubmit(adjustments)}
               disabled={isLoading || adjustments.some((a) => !a.reason)}
-              className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 disabled:bg-gray-600 text-white font-medium rounded-xl flex items-center justify-center gap-2"
+              className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 disabled:bg-gray-600 text-gray-900 dark:text-white font-medium rounded-xl flex items-center justify-center gap-2"
             >
               {isLoading ? (
                 <Loader2 size={18} className="animate-spin" />
@@ -311,7 +311,7 @@ const AdjustmentForm = ({
       ) : (
         <div className="text-center py-12">
           <ArrowUpDown className="w-12 h-12 text-gray-600 mx-auto mb-3" />
-          <p className="text-gray-400">No adjustments</p>
+          <p className="text-gray-500 dark:text-gray-400">No adjustments</p>
           <p className="text-gray-500 text-sm">
             Search products to adjust stock
           </p>
@@ -357,21 +357,21 @@ const TransferForm = ({
 
   return (
     <div className="space-y-6">
-      <div className="bg-white/5 border border-white/10 rounded-xl p-4">
-        <h4 className="text-white font-medium mb-4">New Transfer</h4>
+      <div className="bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl p-4">
+        <h4 className="text-gray-900 dark:text-white font-medium mb-4">New Transfer</h4>
         <div className="space-y-4">
           <div>
-            <label className="text-gray-400 text-xs mb-2 block">Product</label>
+            <label className="text-gray-500 dark:text-gray-400 text-xs mb-2 block">Product</label>
             <div className="relative">
               <input
                 type="text"
                 placeholder="Search product..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white"
+                className="w-full px-4 py-3 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white"
               />
               {search && (
-                <div className="absolute top-full left-0 right-0 mt-2 bg-gray-900 border border-white/10 rounded-xl shadow-xl z-10 max-h-48 overflow-y-auto">
+                <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-white/10 rounded-xl shadow-xl z-10 max-h-48 overflow-y-auto">
                   {filteredProducts.slice(0, 10).map((product) => (
                     <button
                       key={product.id}
@@ -379,9 +379,9 @@ const TransferForm = ({
                         setFormData({ ...formData, productId: product.id });
                         setSearch(product.name);
                       }}
-                      className="w-full px-4 py-3 text-left hover:bg-white/5 border-b border-white/5 last:border-0"
+                      className="w-full px-4 py-3 text-left hover:bg-gray-50 dark:bg-white/5 border-b border-white/5 last:border-0"
                     >
-                      <p className="text-white text-sm">{product.name}</p>
+                      <p className="text-gray-900 dark:text-white text-sm">{product.name}</p>
                       <p className="text-gray-500 text-xs">
                         Available: {product.stock_quantity || 0}
                       </p>
@@ -391,13 +391,13 @@ const TransferForm = ({
               )}
             </div>
             {selectedProduct && (
-              <p className="text-gray-400 text-xs mt-2">
+              <p className="text-gray-500 dark:text-gray-400 text-xs mt-2">
                 Available: {selectedProduct.stock_quantity || 0}
               </p>
             )}
           </div>
           <div>
-            <label className="text-gray-400 text-xs mb-2 block">
+            <label className="text-gray-500 dark:text-gray-400 text-xs mb-2 block">
               Transfer To
             </label>
             <select
@@ -405,7 +405,7 @@ const TransferForm = ({
               onChange={(e) =>
                 setFormData({ ...formData, toStationId: e.target.value })
               }
-              className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white"
+              className="w-full px-4 py-3 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white"
             >
               <option value="">Select station</option>
               {otherStations.map((s) => (
@@ -416,7 +416,7 @@ const TransferForm = ({
             </select>
           </div>
           <div>
-            <label className="text-gray-400 text-xs mb-2 block">Quantity</label>
+            <label className="text-gray-500 dark:text-gray-400 text-xs mb-2 block">Quantity</label>
             <input
               type="number"
               value={formData.quantity}
@@ -426,25 +426,25 @@ const TransferForm = ({
                   quantity: parseFloat(e.target.value) || 1,
                 })
               }
-              className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white"
+              className="w-full px-4 py-3 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white"
               min="1"
             />
           </div>
           <div>
-            <label className="text-gray-400 text-xs mb-2 block">Notes</label>
+            <label className="text-gray-500 dark:text-gray-400 text-xs mb-2 block">Notes</label>
             <textarea
               value={formData.notes}
               onChange={(e) =>
                 setFormData({ ...formData, notes: e.target.value })
               }
-              className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white resize-none"
+              className="w-full px-4 py-3 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white resize-none"
               rows={2}
             />
           </div>
           <button
             onClick={() => onSubmit(formData)}
             disabled={isLoading || !formData.productId || !formData.toStationId}
-            className="w-full py-3 bg-amber-500 hover:bg-amber-600 disabled:bg-gray-600 text-white font-medium rounded-xl flex items-center justify-center gap-2"
+            className="w-full py-3 bg-amber-500 hover:bg-amber-600 disabled:bg-gray-600 text-gray-900 dark:text-white font-medium rounded-xl flex items-center justify-center gap-2"
           >
             {isLoading ? (
               <Loader2 size={18} className="animate-spin" />
@@ -495,15 +495,15 @@ const TransfersList = ({ onComplete }: { onComplete?: () => void }) => {
   if (transfers.length === 0) {
     return (
       <div className="text-center py-8">
-        <p className="text-gray-400">No pending transfers</p>
+        <p className="text-gray-500 dark:text-gray-400">No pending transfers</p>
       </div>
     );
   }
 
   return (
-    <div className="bg-white/5 border border-white/10 rounded-xl overflow-hidden">
-      <div className="p-4 border-b border-white/10">
-        <h4 className="text-white font-medium">Pending</h4>
+    <div className="bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl overflow-hidden">
+      <div className="p-4 border-b border-gray-200 dark:border-white/10">
+        <h4 className="text-gray-900 dark:text-white font-medium">Pending</h4>
       </div>
       {transfers.map((t) => (
         <div
@@ -511,7 +511,7 @@ const TransfersList = ({ onComplete }: { onComplete?: () => void }) => {
           className="p-4 border-b border-white/5 flex items-center justify-between"
         >
           <div>
-            <p className="text-white text-sm">{t.transfer_number}</p>
+            <p className="text-gray-900 dark:text-white text-sm">{t.transfer_number}</p>
             <p className="text-gray-500 text-xs">{t.quantity} units</p>
           </div>
           <button
@@ -573,12 +573,12 @@ const CountForm = ({
 
   return (
     <div className="space-y-6">
-      <div className="bg-white/5 border border-white/10 rounded-xl p-4">
-        <h4 className="text-white font-medium mb-4">Add Count</h4>
+      <div className="bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl p-4">
+        <h4 className="text-gray-900 dark:text-white font-medium mb-4">Add Count</h4>
         <div className="flex gap-3">
           <div className="relative flex-1">
             <Search
-              className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
+              className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400"
               size={18}
             />
             <input
@@ -586,17 +586,17 @@ const CountForm = ({
               placeholder="Search product..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-11 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white"
+              className="w-full pl-11 pr-4 py-3 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white"
             />
             {search && (
-              <div className="absolute top-full left-0 right-0 mt-2 bg-gray-900 border border-white/10 rounded-xl shadow-xl z-10 max-h-48 overflow-y-auto">
+              <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-white/10 rounded-xl shadow-xl z-10 max-h-48 overflow-y-auto">
                 {filteredProducts.slice(0, 10).map((p) => (
                   <button
                     key={p.id}
                     onClick={() => setSelectedProduct(p)}
-                    className="w-full px-4 py-3 text-left hover:bg-white/5 border-b border-white/5 last:border-0"
+                    className="w-full px-4 py-3 text-left hover:bg-gray-50 dark:bg-white/5 border-b border-white/5 last:border-0"
                   >
-                    <p className="text-white text-sm">{p.name}</p>
+                    <p className="text-gray-900 dark:text-white text-sm">{p.name}</p>
                     <p className="text-gray-500 text-xs">
                       System: {p.stock_quantity || 0}
                     </p>
@@ -608,7 +608,7 @@ const CountForm = ({
           <button
             onClick={addCount}
             disabled={!selectedProduct}
-            className="px-4 py-3 bg-amber-500 hover:bg-amber-600 disabled:bg-gray-600 text-white rounded-xl"
+            className="px-4 py-3 bg-amber-500 hover:bg-amber-600 disabled:bg-gray-600 text-gray-900 dark:text-white rounded-xl"
           >
             <Plus size={20} />
           </button>
@@ -616,9 +616,9 @@ const CountForm = ({
       </div>
 
       {counts.length > 0 ? (
-        <div className="bg-white/5 border border-white/10 rounded-xl overflow-hidden">
-          <div className="p-4 border-b border-white/10">
-            <h4 className="text-white font-medium">Count ({counts.length})</h4>
+        <div className="bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl overflow-hidden">
+          <div className="p-4 border-b border-gray-200 dark:border-white/10">
+            <h4 className="text-gray-900 dark:text-white font-medium">Count ({counts.length})</h4>
           </div>
           {counts.map((count, index) => {
             const product = products.find((p) => p.id === count.productId);
@@ -633,13 +633,13 @@ const CountForm = ({
               >
                 <div className="flex items-start gap-4">
                   <div className="flex-1">
-                    <p className="text-white font-medium">{product?.name}</p>
+                    <p className="text-gray-900 dark:text-white font-medium">{product?.name}</p>
                     <p className="text-gray-500 text-xs mb-3">
                       System: {product?.stock_quantity || 0}
                     </p>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="text-gray-400 text-xs mb-1 block">
+                        <label className="text-gray-500 dark:text-gray-400 text-xs mb-1 block">
                           Actual
                         </label>
                         <input
@@ -648,16 +648,16 @@ const CountForm = ({
                           onChange={(e) =>
                             updateCount(index, parseFloat(e.target.value) || 0)
                           }
-                          className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white"
+                          className="w-full px-3 py-2 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-lg text-gray-900 dark:text-white"
                           min="0"
                         />
                       </div>
                       <div>
-                        <label className="text-gray-400 text-xs mb-1 block">
+                        <label className="text-gray-500 dark:text-gray-400 text-xs mb-1 block">
                           Variance
                         </label>
                         <div
-                          className={`px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-center font-medium ${variance > 0 ? "text-emerald-400" : variance < 0 ? "text-red-400" : "text-gray-400"}`}
+                          className={`px-3 py-2 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-lg text-center font-medium ${variance > 0 ? "text-emerald-400" : variance < 0 ? "text-red-400" : "text-gray-500 dark:text-gray-400"}`}
                         >
                           {variance > 0 ? "+" : ""}
                           {variance}
@@ -675,7 +675,7 @@ const CountForm = ({
               </div>
             );
           })}
-          <div className="p-4 border-t border-white/10">
+          <div className="p-4 border-t border-gray-200 dark:border-white/10">
             <button
               onClick={() =>
                 onSubmit(
@@ -687,7 +687,7 @@ const CountForm = ({
                 )
               }
               disabled={isLoading}
-              className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 disabled:bg-gray-600 text-white font-medium rounded-xl flex items-center justify-center gap-2"
+              className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 disabled:bg-gray-600 text-gray-900 dark:text-white font-medium rounded-xl flex items-center justify-center gap-2"
             >
               {isLoading ? (
                 <Loader2 size={18} className="animate-spin" />
@@ -701,7 +701,7 @@ const CountForm = ({
       ) : (
         <div className="text-center py-12">
           <Scale className="w-12 h-12 text-gray-600 mx-auto mb-3" />
-          <p className="text-gray-400">No items</p>
+          <p className="text-gray-500 dark:text-gray-400">No items</p>
         </div>
       )}
     </div>
@@ -736,21 +736,21 @@ const WastageForm = ({
 
   return (
     <div className="space-y-6">
-      <div className="bg-white/5 border border-white/10 rounded-xl p-4">
-        <h4 className="text-white font-medium mb-4">Record Wastage</h4>
+      <div className="bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl p-4">
+        <h4 className="text-gray-900 dark:text-white font-medium mb-4">Record Wastage</h4>
         <div className="space-y-4">
           <div>
-            <label className="text-gray-400 text-xs mb-2 block">Product</label>
+            <label className="text-gray-500 dark:text-gray-400 text-xs mb-2 block">Product</label>
             <div className="relative">
               <input
                 type="text"
                 placeholder="Search..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white"
+                className="w-full px-4 py-3 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white"
               />
               {search && (
-                <div className="absolute top-full left-0 right-0 mt-2 bg-gray-900 border border-white/10 rounded-xl shadow-xl z-10 max-h-48 overflow-y-auto">
+                <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-white/10 rounded-xl shadow-xl z-10 max-h-48 overflow-y-auto">
                   {filteredProducts.slice(0, 10).map((p) => (
                     <button
                       key={p.id}
@@ -758,9 +758,9 @@ const WastageForm = ({
                         setFormData({ ...formData, productId: p.id });
                         setSearch(p.name);
                       }}
-                      className="w-full px-4 py-3 text-left hover:bg-white/5 border-b border-white/5 last:border-0"
+                      className="w-full px-4 py-3 text-left hover:bg-gray-50 dark:bg-white/5 border-b border-white/5 last:border-0"
                     >
-                      <p className="text-white text-sm">{p.name}</p>
+                      <p className="text-gray-900 dark:text-white text-sm">{p.name}</p>
                       <p className="text-gray-500 text-xs">
                         Avail: {p.stock_quantity || 0}
                       </p>
@@ -771,7 +771,7 @@ const WastageForm = ({
             </div>
           </div>
           <div>
-            <label className="text-gray-400 text-xs mb-2 block">Quantity</label>
+            <label className="text-gray-500 dark:text-gray-400 text-xs mb-2 block">Quantity</label>
             <input
               type="number"
               value={formData.quantity}
@@ -781,27 +781,27 @@ const WastageForm = ({
                   quantity: parseFloat(e.target.value) || 1,
                 })
               }
-              className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white"
+              className="w-full px-4 py-3 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white"
               min="1"
               max={selectedProduct?.stock_quantity || 1}
             />
           </div>
           <div>
-            <label className="text-gray-400 text-xs mb-2 block">Reason</label>
+            <label className="text-gray-500 dark:text-gray-400 text-xs mb-2 block">Reason</label>
             <textarea
               value={formData.notes}
               onChange={(e) =>
                 setFormData({ ...formData, notes: e.target.value })
               }
               placeholder="e.g., Expired, Spillage..."
-              className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white resize-none"
+              className="w-full px-4 py-3 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white resize-none"
               rows={3}
             />
           </div>
           <button
             onClick={() => onSubmit(formData)}
             disabled={isLoading || !formData.productId || !formData.notes}
-            className="w-full py-3 bg-red-500 hover:bg-red-600 disabled:bg-gray-600 text-white font-medium rounded-xl flex items-center justify-center gap-2"
+            className="w-full py-3 bg-red-500 hover:bg-red-600 disabled:bg-gray-600 text-gray-900 dark:text-white font-medium rounded-xl flex items-center justify-center gap-2"
           >
             {isLoading ? (
               <Loader2 size={18} className="animate-spin" />
@@ -846,15 +846,15 @@ const HistoryTable = () => {
     return (
       <div className="text-center py-12">
         <Package className="w-12 h-12 text-gray-600 mx-auto mb-3" />
-        <p className="text-gray-400">No transactions</p>
+        <p className="text-gray-500 dark:text-gray-400">No transactions</p>
       </div>
     );
 
   return (
-    <div className="bg-white/5 border border-white/10 rounded-xl overflow-hidden">
+    <div className="bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl overflow-hidden">
       <table className="w-full">
         <thead>
-          <tr className="border-b border-white/10">
+          <tr className="border-b border-gray-200 dark:border-white/10">
             {[
               "Date",
               "Product",
@@ -866,7 +866,7 @@ const HistoryTable = () => {
             ].map((h) => (
               <th
                 key={h}
-                className="text-left text-xs font-semibold text-gray-400 px-4 py-3"
+                className="text-left text-xs font-semibold text-gray-500 dark:text-gray-400 px-4 py-3"
               >
                 {h}
               </th>
@@ -877,13 +877,13 @@ const HistoryTable = () => {
           {transactions.map((tx) => (
             <tr
               key={tx.id}
-              className="border-b border-white/5 hover:bg-white/5"
+              className="border-b border-white/5 hover:bg-gray-50 dark:bg-white/5"
             >
               <td className="px-4 py-3 text-sm text-gray-300">
                 {new Date(tx.created_at).toLocaleString()}
               </td>
               <td className="px-4 py-3">
-                <div className="text-sm text-white">
+                <div className="text-sm text-gray-900 dark:text-white">
                   {tx.products?.name || "Unknown"}
                 </div>
                 <div className="text-xs text-gray-500">{tx.products?.sku}</div>
@@ -902,10 +902,10 @@ const HistoryTable = () => {
               <td className="px-4 py-3 text-sm text-gray-300">
                 {tx.previous_quantity}
               </td>
-              <td className="px-4 py-3 text-sm font-semibold text-white">
+              <td className="px-4 py-3 text-sm font-semibold text-gray-900 dark:text-white">
                 {tx.new_quantity}
               </td>
-              <td className="px-4 py-3 text-sm text-gray-400 max-w-xs truncate">
+              <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400 max-w-xs truncate">
                 {tx.notes || "-"}
               </td>
             </tr>
@@ -920,7 +920,7 @@ const HistoryTable = () => {
 
 const ProductTableHeader = () => (
   <thead>
-    <tr className="border-b border-white/10">
+    <tr className="border-b border-gray-200 dark:border-white/10">
       {[
         "Product",
         "Category",
@@ -932,7 +932,7 @@ const ProductTableHeader = () => (
       ].map((label) => (
         <th
           key={label}
-          className="text-left text-xs font-semibold text-gray-400 px-4 py-3"
+          className="text-left text-xs font-semibold text-gray-500 dark:text-gray-400 px-4 py-3"
         >
           {label}
         </th>
@@ -950,14 +950,14 @@ const ProductRow = ({
   onEdit: (product: any) => void;
   onDelete: (product: any) => void;
 }) => (
-  <tr className="border-b border-white/5 hover:bg-white/5">
+  <tr className="border-b border-white/5 hover:bg-gray-50 dark:bg-white/5">
     <td className="px-4 py-4">
       <div className="flex items-center gap-3">
         <div className="w-10 h-10 bg-amber-500/20 rounded-lg flex items-center justify-center">
           <Package size={18} className="text-amber-400" />
         </div>
         <div>
-          <p className="text-white font-medium">{product.name}</p>
+          <p className="text-gray-900 dark:text-white font-medium">{product.name}</p>
           <p className="text-gray-500 text-xs">{product.sku}</p>
         </div>
       </div>
@@ -977,7 +977,7 @@ const ProductRow = ({
       </span>
     </td>
     <td className="px-4 py-4">
-      <span className="text-white">{formatMoney(product.cost_price || 0)}</span>
+      <span className="text-gray-900 dark:text-white">{formatMoney(product.cost_price || 0)}</span>
     </td>
     <td className="px-4 py-4">
       <span className="text-amber-400 font-medium">
@@ -989,7 +989,7 @@ const ProductRow = ({
         className={`text-xs px-2 py-1 rounded-full ${
           product.is_active
             ? "bg-emerald-500/20 text-emerald-400"
-            : "bg-gray-500/20 text-gray-400"
+            : "bg-gray-500/20 text-gray-500 dark:text-gray-400"
         }`}
       >
         {product.is_active ? "Active" : "Inactive"}
@@ -999,13 +999,13 @@ const ProductRow = ({
       <div className="flex items-center gap-2">
         <button
           onClick={() => onEdit(product)}
-          className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+          className="p-2 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:text-white hover:bg-gray-100 dark:bg-white/10 rounded-lg transition-colors"
         >
           <Edit2 size={16} />
         </button>
         <button
           onClick={() => onDelete(product)}
-          className="p-2 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+          className="p-2 text-gray-500 dark:text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
         >
           <Trash2 size={16} />
         </button>
@@ -1051,31 +1051,31 @@ const ProductModal = ({
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-800 rounded-2xl w-full max-w-2xl border border-white/10 max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between p-6 border-b border-white/10">
-          <h3 className="text-xl font-semibold text-white">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-2xl border border-gray-200 dark:border-white/10 max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-white/10">
+          <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
             {product ? "Edit Product" : "Add Product"}
           </h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-white">
+          <button onClick={onClose} className="text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:text-white">
             <X size={20} />
           </button>
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="text-gray-400 text-xs mb-2 block">SKU *</label>
+              <label className="text-gray-500 dark:text-gray-400 text-xs mb-2 block">SKU *</label>
               <input
                 type="text"
                 value={formData.sku}
                 onChange={(e) =>
                   setFormData({ ...formData, sku: e.target.value })
                 }
-                className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white"
+                className="w-full px-4 py-3 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white"
                 required
               />
             </div>
             <div>
-              <label className="text-gray-400 text-xs mb-2 block">
+              <label className="text-gray-500 dark:text-gray-400 text-xs mb-2 block">
                 Barcode
               </label>
               <input
@@ -1084,12 +1084,12 @@ const ProductModal = ({
                 onChange={(e) =>
                   setFormData({ ...formData, barcode: e.target.value })
                 }
-                className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white"
+                className="w-full px-4 py-3 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white"
               />
             </div>
           </div>
           <div>
-            <label className="text-gray-400 text-xs mb-2 block">
+            <label className="text-gray-500 dark:text-gray-400 text-xs mb-2 block">
               Product Name *
             </label>
             <input
@@ -1098,12 +1098,12 @@ const ProductModal = ({
               onChange={(e) =>
                 setFormData({ ...formData, name: e.target.value })
               }
-              className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white"
+              className="w-full px-4 py-3 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white"
               required
             />
           </div>
           <div>
-            <label className="text-gray-400 text-xs mb-2 block">
+            <label className="text-gray-500 dark:text-gray-400 text-xs mb-2 block">
               Description
             </label>
             <textarea
@@ -1111,27 +1111,27 @@ const ProductModal = ({
               onChange={(e) =>
                 setFormData({ ...formData, description: e.target.value })
               }
-              className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white resize-none"
+              className="w-full px-4 py-3 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white resize-none"
               rows={3}
             />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="relative">
-              <label className="text-gray-400 text-xs mb-2 block">
+              <label className="text-gray-500 dark:text-gray-400 text-xs mb-2 block">
                 Category *
               </label>
               <button
                 type="button"
                 onClick={() => setShowCategoryDropdown(!showCategoryDropdown)}
-                className="w-full flex items-center justify-between px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-left"
+                className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl text-left"
               >
-                <span className="text-white">
+                <span className="text-gray-900 dark:text-white">
                   {formData.category || "Select Category"}
                 </span>
-                <ChevronDown size={16} className="text-gray-400" />
+                <ChevronDown size={16} className="text-gray-500 dark:text-gray-400" />
               </button>
               {showCategoryDropdown && (
-                <div className="absolute top-full left-0 right-0 mt-2 bg-gray-900 border border-white/10 rounded-xl shadow-xl z-10 overflow-hidden">
+                <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-white/10 rounded-xl shadow-xl z-10 overflow-hidden">
                   <div className="p-2">
                     <div className="flex gap-2">
                       <input
@@ -1139,7 +1139,7 @@ const ProductModal = ({
                         value={newCategory}
                         onChange={(e) => setNewCategory(e.target.value)}
                         placeholder="New category"
-                        className="flex-1 px-3 py-2 bg-white/10 border border-white/10 rounded-lg text-white text-sm"
+                        className="flex-1 px-3 py-2 bg-gray-100 dark:bg-white/10 border border-gray-200 dark:border-white/10 rounded-lg text-gray-900 dark:text-white text-sm"
                         onKeyDown={(e) =>
                           e.key === "Enter" &&
                           (e.preventDefault(), addCategory())
@@ -1148,7 +1148,7 @@ const ProductModal = ({
                       <button
                         type="button"
                         onClick={addCategory}
-                        className="px-3 py-2 bg-amber-500 text-white rounded-lg text-sm"
+                        className="px-3 py-2 bg-amber-500 text-gray-900 dark:text-white rounded-lg text-sm"
                       >
                         Add
                       </button>
@@ -1163,7 +1163,7 @@ const ProductModal = ({
                           setFormData({ ...formData, category: cat });
                           setShowCategoryDropdown(false);
                         }}
-                        className="w-full px-4 py-2 text-left text-gray-300 hover:bg-white/5"
+                        className="w-full px-4 py-2 text-left text-gray-300 hover:bg-gray-50 dark:bg-white/5"
                       >
                         {cat}
                       </button>
@@ -1173,13 +1173,13 @@ const ProductModal = ({
               )}
             </div>
             <div>
-              <label className="text-gray-400 text-xs mb-2 block">Unit</label>
+              <label className="text-gray-500 dark:text-gray-400 text-xs mb-2 block">Unit</label>
               <select
                 value={formData.unit}
                 onChange={(e) =>
                   setFormData({ ...formData, unit: e.target.value })
                 }
-                className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white"
+                className="w-full px-4 py-3 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white"
               >
                 <option value="pcs">Pieces</option>
                 <option value="liters">Liters</option>
@@ -1192,7 +1192,7 @@ const ProductModal = ({
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="text-gray-400 text-xs mb-2 block">
+              <label className="text-gray-500 dark:text-gray-400 text-xs mb-2 block">
                 Cost Price *
               </label>
               <input
@@ -1204,14 +1204,14 @@ const ProductModal = ({
                     cost_price: parseFloat(e.target.value) || 0,
                   })
                 }
-                className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white"
+                className="w-full px-4 py-3 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white"
                 min="0"
                 step="0.01"
                 required
               />
             </div>
             <div>
-              <label className="text-gray-400 text-xs mb-2 block">
+              <label className="text-gray-500 dark:text-gray-400 text-xs mb-2 block">
                 Selling Price *
               </label>
               <input
@@ -1223,7 +1223,7 @@ const ProductModal = ({
                     selling_price: parseFloat(e.target.value) || 0,
                   })
                 }
-                className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white"
+                className="w-full px-4 py-3 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white"
                 min="0"
                 step="0.01"
                 required
@@ -1232,7 +1232,7 @@ const ProductModal = ({
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="text-gray-400 text-xs mb-2 block">
+              <label className="text-gray-500 dark:text-gray-400 text-xs mb-2 block">
                 Initial Stock
               </label>
               <input
@@ -1244,13 +1244,13 @@ const ProductModal = ({
                     stock_quantity: parseFloat(e.target.value) || 0,
                   })
                 }
-                className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white"
+                className="w-full px-4 py-3 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white"
                 min="0"
                 step="0.01"
               />
             </div>
             <div>
-              <label className="text-gray-400 text-xs mb-2 block">
+              <label className="text-gray-500 dark:text-gray-400 text-xs mb-2 block">
                 Reorder Level
               </label>
               <input
@@ -1262,7 +1262,7 @@ const ProductModal = ({
                     reorder_level: parseFloat(e.target.value) || 0,
                   })
                 }
-                className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white"
+                className="w-full px-4 py-3 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white"
                 min="0"
                 step="0.01"
               />
@@ -1270,7 +1270,7 @@ const ProductModal = ({
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="text-gray-400 text-xs mb-2 block">
+              <label className="text-gray-500 dark:text-gray-400 text-xs mb-2 block">
                 Tax Rate (%)
               </label>
               <input
@@ -1282,14 +1282,14 @@ const ProductModal = ({
                     tax_rate: parseFloat(e.target.value) || 0,
                   })
                 }
-                className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white"
+                className="w-full px-4 py-3 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white"
                 min="0"
                 max="100"
                 step="0.01"
               />
             </div>
             <div className="flex flex-col gap-2">
-              <label className="text-gray-400 text-xs mb-2 block">
+              <label className="text-gray-500 dark:text-gray-400 text-xs mb-2 block">
                 Options
               </label>
               <label className="flex items-center gap-3 cursor-pointer">
@@ -1299,7 +1299,7 @@ const ProductModal = ({
                   onChange={(e) =>
                     setFormData({ ...formData, is_taxable: e.target.checked })
                   }
-                  className="w-5 h-5 bg-white/10 border border-white/20 rounded"
+                  className="w-5 h-5 bg-gray-100 dark:bg-white/10 border border-white/20 rounded"
                 />
                 <span className="text-gray-300 text-sm">Taxable</span>
               </label>
@@ -1310,7 +1310,7 @@ const ProductModal = ({
                   onChange={(e) =>
                     setFormData({ ...formData, is_active: e.target.checked })
                   }
-                  className="w-5 h-5 bg-white/10 border border-white/20 rounded"
+                  className="w-5 h-5 bg-gray-100 dark:bg-white/10 border border-white/20 rounded"
                 />
                 <span className="text-gray-300 text-sm">Active</span>
               </label>
@@ -1320,14 +1320,14 @@ const ProductModal = ({
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-colors"
+              className="flex-1 py-3 bg-gray-100 dark:bg-white/10 hover:bg-white/20 text-gray-900 dark:text-white rounded-xl transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isLoading}
-              className="flex-1 py-3 bg-amber-500 hover:bg-amber-600 disabled:bg-gray-600 text-white font-medium rounded-xl transition-colors flex items-center justify-center gap-2"
+              className="flex-1 py-3 bg-amber-500 hover:bg-amber-600 disabled:bg-gray-600 text-gray-900 dark:text-white font-medium rounded-xl transition-colors flex items-center justify-center gap-2"
             >
               {isLoading ? (
                 <>
@@ -1360,30 +1360,30 @@ const DeleteConfirmModal = ({
   isLoading: boolean;
 }) => (
   <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-    <div className="bg-gray-800 rounded-2xl p-6 max-w-md w-full border border-white/10">
+    <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 max-w-md w-full border border-gray-200 dark:border-white/10">
       <div className="text-center">
         <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
           <AlertCircle className="w-8 h-8 text-red-400" />
         </div>
-        <h3 className="text-xl font-semibold text-white mb-2">
+        <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
           Delete Product
         </h3>
-        <p className="text-gray-400 mb-6">
+        <p className="text-gray-500 dark:text-gray-400 mb-6">
           Are you sure you want to delete{" "}
-          <span className="text-white font-medium">{product.name}</span>? This
+          <span className="text-gray-900 dark:text-white font-medium">{product.name}</span>? This
           action cannot be undone.
         </p>
         <div className="flex gap-3">
           <button
             onClick={onCancel}
-            className="flex-1 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-colors"
+            className="flex-1 py-3 bg-gray-100 dark:bg-white/10 hover:bg-white/20 text-gray-900 dark:text-white rounded-xl transition-colors"
           >
             Cancel
           </button>
           <button
             onClick={onConfirm}
             disabled={isLoading}
-            className="flex-1 py-3 bg-red-500 hover:bg-red-600 disabled:bg-gray-600 text-white rounded-xl transition-colors flex items-center justify-center gap-2"
+            className="flex-1 py-3 bg-red-500 hover:bg-red-600 disabled:bg-gray-600 text-gray-900 dark:text-white rounded-xl transition-colors flex items-center justify-center gap-2"
           >
             {isLoading ? (
               <Loader2 size={18} className="animate-spin" />
@@ -1444,13 +1444,13 @@ const ProductsPanel = ({
   return (
     <div>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-        <p className="text-gray-400 text-sm">
+        <p className="text-gray-500 dark:text-gray-400 text-sm">
           {filtered.length} product{filtered.length !== 1 ? "s" : ""}
         </p>
         <div className="flex items-center gap-2">
           <button
             onClick={() => switchToTab("pos")}
-            className="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white rounded-xl transition-colors text-sm border border-white/10"
+            className="flex items-center gap-2 px-4 py-2 bg-gray-50 dark:bg-white/5 hover:bg-gray-100 dark:bg-white/10 text-gray-300 hover:text-gray-900 dark:text-white rounded-xl transition-colors text-sm border border-gray-200 dark:border-white/10"
             title="Open Point of Sale to sell these products"
           >
             <Package size={18} />
@@ -1458,7 +1458,7 @@ const ProductsPanel = ({
           </button>
           <button
             onClick={onAdd}
-            className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-gray-900 dark:text-white rounded-xl transition-colors"
           >
             <Plus size={20} />
             Add Product
@@ -1468,7 +1468,7 @@ const ProductsPanel = ({
       <div className="flex flex-col sm:flex-row gap-4 mb-6">
         <div className="relative flex-1">
           <Search
-            className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
+            className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400"
             size={18}
           />
           <input
@@ -1476,13 +1476,13 @@ const ProductsPanel = ({
             placeholder="Search products..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-11 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white"
+            className="w-full pl-11 pr-4 py-3 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white"
           />
         </div>
         <select
           value={categoryFilter}
           onChange={(e) => setCategoryFilter(e.target.value)}
-          className="px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white"
+          className="px-4 py-3 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white"
         >
           <option value="">All Categories</option>
           {allCategories.map((cat) => (
@@ -1491,17 +1491,17 @@ const ProductsPanel = ({
             </option>
           ))}
         </select>
-        <label className="flex items-center gap-3 px-4 py-3 bg-white/5 border border-white/10 rounded-xl cursor-pointer">
+        <label className="flex items-center gap-3 px-4 py-3 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl cursor-pointer">
           <input
             type="checkbox"
             checked={showLowStock}
             onChange={(e) => setShowLowStock(e.target.checked)}
-            className="w-5 h-5 bg-white/10 border border-white/20 rounded"
+            className="w-5 h-5 bg-gray-100 dark:bg-white/10 border border-white/20 rounded"
           />
           <span className="text-gray-300 text-sm">Low Stock</span>
         </label>
       </div>
-      <div className="bg-white/5 border border-white/10 rounded-xl overflow-hidden">
+      <div className="bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl overflow-hidden">
         <table className="w-full">
           <ProductTableHeader />
           <tbody>
@@ -1509,7 +1509,7 @@ const ProductsPanel = ({
               <tr>
                 <td colSpan={7} className="text-center py-12">
                   <Package className="w-12 h-12 text-gray-600 mx-auto mb-3" />
-                  <p className="text-gray-400">No products found</p>
+                  <p className="text-gray-500 dark:text-gray-400">No products found</p>
                   <p className="text-gray-500 text-sm mt-1">
                     {search || categoryFilter || showLowStock
                       ? "Try adjusting your filters"
@@ -1587,7 +1587,7 @@ const ReordersPanel = ({
 
   if (loading)
     return (
-      <div className="text-gray-400 text-sm">
+      <div className="text-gray-500 dark:text-gray-400 text-sm">
         Loading reorder suggestions...
       </div>
     );
@@ -1602,7 +1602,7 @@ const ReordersPanel = ({
         </span>
         <button
           onClick={() => switchToTab("suppliers")}
-          className="ml-2 flex items-center gap-1 px-3 py-1 bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white rounded-lg border border-white/10 text-xs"
+          className="ml-2 flex items-center gap-1 px-3 py-1 bg-gray-50 dark:bg-white/5 hover:bg-gray-100 dark:bg-white/10 text-gray-300 hover:text-gray-900 dark:text-white rounded-lg border border-gray-200 dark:border-white/10 text-xs"
           title="Open Supplier Management to create a purchase order"
         >
           <ArrowRight size={12} />
@@ -1612,7 +1612,7 @@ const ReordersPanel = ({
       {reorders.length === 0 ? (
         <div className="text-center py-12">
           <Package className="w-12 h-12 text-gray-600 mx-auto mb-3" />
-          <p className="text-gray-400">No pending reorders</p>
+          <p className="text-gray-500 dark:text-gray-400">No pending reorders</p>
           <p className="text-gray-500 text-sm mt-1">
             Suggestions appear automatically when stock drops below the reorder
             level
@@ -1623,11 +1623,11 @@ const ReordersPanel = ({
           {reorders.map((r: any) => (
             <div
               key={r.id}
-              className="bg-white/5 border border-white/10 rounded-xl p-4 flex items-center justify-between"
+              className="bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl p-4 flex items-center justify-between"
             >
               <div>
-                <p className="text-white font-medium">{r.productName}</p>
-                <p className="text-gray-400 text-xs">
+                <p className="text-gray-900 dark:text-white font-medium">{r.productName}</p>
+                <p className="text-gray-500 dark:text-gray-400 text-xs">
                   Current: {r.currentStock} · Reorder level: {r.reorderLevel} ·
                   Suggested: {r.suggestedQty} units
                 </p>
@@ -1635,7 +1635,7 @@ const ReordersPanel = ({
               <button
                 onClick={() => handleFulfill(r.id, r.suggestedQty)}
                 disabled={busy}
-                className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-sm flex items-center gap-2 disabled:opacity-50"
+                className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-gray-900 dark:text-white rounded-xl text-sm flex items-center gap-2 disabled:opacity-50"
               >
                 {busy ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
@@ -2004,7 +2004,7 @@ export default function InventoryManagement() {
       <div className="flex justify-center h-full">
         <div className="text-center">
           <Loader2 className="w-12 h-12 text-amber-500 animate-spin mx-auto mb-4" />
-          <p className="text-gray-400">Loading...</p>
+          <p className="text-gray-500 dark:text-gray-400">Loading...</p>
         </div>
       </div>
     );
@@ -2012,8 +2012,8 @@ export default function InventoryManagement() {
   return (
     <div className="p-6">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-white">Stock Management</h1>
-        <p className="text-gray-400 text-sm mt-1">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Stock Management</h1>
+        <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
           Products, adjustments, transfers, counts, wastage & auto-reorders
         </p>
       </div>
@@ -2022,7 +2022,7 @@ export default function InventoryManagement() {
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap ${activeTab === tab.id ? "bg-amber-500 text-white" : "bg-white/5 text-gray-400 hover:text-white"}`}
+            className={`px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap ${activeTab === tab.id ? "bg-amber-500 text-gray-900 dark:text-white" : "bg-gray-50 dark:bg-white/5 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:text-white"}`}
           >
             {tab.label}
           </button>
@@ -2118,7 +2118,7 @@ export default function InventoryManagement() {
         />
       )}
       {notice && (
-        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 bg-emerald-500/90 text-white text-sm font-medium px-4 py-2 rounded-xl">
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 bg-emerald-500/90 text-gray-900 dark:text-white text-sm font-medium px-4 py-2 rounded-xl">
           {notice}
         </div>
       )}

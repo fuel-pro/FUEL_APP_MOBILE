@@ -180,7 +180,7 @@ export default function StationSelector({
 
           {/* Dropdown Menu */}
           <div
-            className={`absolute left-0 z-50 w-72 bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-amber-200 dark:border-amber-700 overflow-hidden transition-all duration-150 ${
+            className={`absolute left-0 z-50 w-72 bg-white dark:bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-amber-200 dark:border-amber-700 overflow-hidden transition-all duration-150 ${
               placement === "top"
                 ? "bottom-full mb-2 origin-bottom"
                 : "top-full mt-2 origin-top"
@@ -188,7 +188,7 @@ export default function StationSelector({
             role="listbox"
           >
             {/* Header */}
-            <div className="px-4 py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white">
+            <div className="px-4 py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-gray-900 dark:text-white">
               <div className="flex items-center justify-between">
                 <span className="font-semibold">Your Stations</span>
                 <span className="text-xs bg-white/20 px-2 py-0.5 rounded-full">
@@ -201,7 +201,7 @@ export default function StationSelector({
             {/* Stations List */}
             <div className="max-h-64 overflow-y-auto">
               {stations.length === 0 ? (
-                <div className="px-4 py-6 text-center text-gray-500 dark:text-gray-400">
+                <div className="px-4 py-6 text-center text-gray-500 dark:text-gray-500 dark:text-gray-400">
                   <Building2 size={32} className="mx-auto mb-2 opacity-50" />
                   <p className="text-sm">No stations yet</p>
                   <p className="text-xs">Add your first station below</p>
@@ -240,13 +240,13 @@ export default function StationSelector({
                         <div className="flex gap-1">
                           <button
                             onClick={() => handleSaveEdit(station.id)}
-                            className="flex-1 flex items-center justify-center gap-1 px-2 py-1 bg-green-500 hover:bg-green-600 text-white text-xs rounded transition-colors"
+                            className="flex-1 flex items-center justify-center gap-1 px-2 py-1 bg-green-500 hover:bg-green-600 text-gray-900 dark:text-white text-xs rounded transition-colors"
                           >
                             <Check size={12} /> Save
                           </button>
                           <button
                             onClick={() => setIsEditing(null)}
-                            className="flex-1 flex items-center justify-center gap-1 px-2 py-1 bg-gray-400 hover:bg-gray-500 text-white text-xs rounded transition-colors"
+                            className="flex-1 flex items-center justify-center gap-1 px-2 py-1 bg-gray-400 hover:bg-gray-500 text-gray-900 dark:text-white text-xs rounded transition-colors"
                           >
                             <X size={12} /> Cancel
                           </button>
@@ -265,11 +265,11 @@ export default function StationSelector({
                           className="flex-1 min-w-0"
                           onClick={() => handleSelectStation(station.id)}
                         >
-                          <div className="font-medium text-gray-900 dark:text-white truncate">
+                          <div className="font-medium text-gray-900 dark:text-gray-900 dark:text-white truncate">
                             {station.name}
                           </div>
                           {station.location && (
-                            <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                            <div className="text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400 flex items-center gap-1">
                               <MapPin size={10} />
                               {station.location}
                             </div>
@@ -282,7 +282,7 @@ export default function StationSelector({
                               e.stopPropagation();
                               handleEditStation(station);
                             }}
-                            className="p-1.5 text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded transition-colors"
+                            className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded transition-colors"
                             title="Edit station"
                           >
                             <Edit2 size={12} />
@@ -293,7 +293,7 @@ export default function StationSelector({
                                 e.stopPropagation();
                                 handleDeleteStation(station.id);
                               }}
-                              className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded transition-colors"
+                              className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded transition-colors"
                               title="Delete station"
                             >
                               <Trash2 size={12} />
@@ -334,7 +334,7 @@ export default function StationSelector({
                     <button
                       onClick={handleAddStation}
                       disabled={!newStation.name.trim()}
-                      className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-amber-500 hover:bg-amber-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors"
+                      className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-amber-500 hover:bg-amber-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-gray-900 dark:text-white text-sm font-medium rounded-lg transition-colors"
                     >
                       <Plus size={14} /> Add Station
                     </button>

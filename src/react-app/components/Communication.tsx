@@ -730,7 +730,7 @@ export default function Communication() {
         <div className="flex-1 w-full md:w-auto">
           <div className="relative">
             <Search
-              className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+              className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 dark:text-gray-400"
               size={20}
             />
             <input
@@ -811,7 +811,7 @@ export default function Communication() {
         {filteredContacts.map((contact) => (
           <div
             key={contact.id}
-            className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-shadow"
+            className="bg-white dark:bg-white dark:bg-gray-800 rounded-lg p-4 shadow border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-shadow"
           >
             <div className="flex justify-between items-start mb-3">
               <div className="flex items-center gap-2">
@@ -845,7 +845,7 @@ export default function Communication() {
                   className={
                     contact.starred
                       ? "fill-yellow-400 text-yellow-400"
-                      : "text-gray-400"
+                      : "text-gray-500 dark:text-gray-400"
                   }
                 />
               </button>
@@ -853,7 +853,7 @@ export default function Communication() {
 
             <h3 className="font-semibold text-lg mb-1">{contact.name}</h3>
             {contact.company && (
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+              <p className="text-sm text-gray-600 dark:text-gray-500 dark:text-gray-400 mb-2">
                 {contact.company}
               </p>
             )}
@@ -923,7 +923,7 @@ export default function Communication() {
 
       {filteredContacts.length === 0 && (
         <div className="text-center py-12">
-          <Users size={48} className="mx-auto text-gray-400 mb-4" />
+          <Users size={48} className="mx-auto text-gray-500 dark:text-gray-400 mb-4" />
           <p className="text-gray-500">No contacts found</p>
         </div>
       )}
@@ -950,7 +950,7 @@ export default function Communication() {
           return (
             <div
               key={message.id}
-              className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow border border-gray-200 dark:border-gray-700"
+              className="bg-white dark:bg-white dark:bg-gray-800 rounded-lg p-4 shadow border border-gray-200 dark:border-gray-700"
             >
               <div className="flex justify-between items-start mb-2">
                 <div className="flex items-center gap-3">
@@ -968,7 +968,7 @@ export default function Communication() {
                       {contact?.name || "Unknown"}
                     </h4>
                     {message.subject && (
-                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                      <p className="text-sm text-gray-600 dark:text-gray-500 dark:text-gray-400">
                         {message.subject}
                       </p>
                     )}
@@ -1002,11 +1002,11 @@ export default function Communication() {
 
       {messages.length === 0 && (
         <div className="text-center py-12">
-          <MessageCircleMore size={48} className="mx-auto text-gray-400 mb-4" />
+          <MessageCircleMore size={48} className="mx-auto text-gray-500 dark:text-gray-400 mb-4" />
           <p className="text-gray-500">No messages yet</p>
           <button
             onClick={() => openNewMessage()}
-            className="mt-3 inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700"
+            className="mt-3 inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-blue-600 text-gray-900 dark:text-white text-sm font-medium hover:bg-blue-700"
           >
             <Plus size={16} /> New Message
           </button>
@@ -1036,7 +1036,7 @@ export default function Communication() {
         {templates.map((template) => (
           <div
             key={template.id}
-            className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow border border-gray-200 dark:border-gray-700"
+            className="bg-white dark:bg-white dark:bg-gray-800 rounded-lg p-4 shadow border border-gray-200 dark:border-gray-700"
           >
             <div className="flex justify-between items-start mb-2">
               <div>
@@ -1071,7 +1071,7 @@ export default function Communication() {
                 Subject: {template.subject}
               </p>
             )}
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-3 line-clamp-2">
+            <p className="text-sm text-gray-600 dark:text-gray-500 dark:text-gray-400 mb-3 line-clamp-2">
               {template.content}
             </p>
 
@@ -1088,7 +1088,7 @@ export default function Communication() {
 
       {templates.length === 0 && (
         <div className="text-center py-12">
-          <Archive size={48} className="mx-auto text-gray-400 mb-4" />
+          <Archive size={48} className="mx-auto text-gray-500 dark:text-gray-400 mb-4" />
           <p className="text-gray-500">No templates created yet</p>
         </div>
       )}
@@ -1104,7 +1104,7 @@ export default function Communication() {
           className={`px-6 py-3 font-medium ${
             activeTab === "contacts"
               ? "border-b-2 border-blue-600 text-blue-600"
-              : "text-gray-600 dark:text-gray-400"
+              : "text-gray-600 dark:text-gray-500 dark:text-gray-400"
           }`}
         >
           <Users size={20} className="inline mr-2" />
@@ -1115,7 +1115,7 @@ export default function Communication() {
           className={`px-6 py-3 font-medium ${
             activeTab === "messages"
               ? "border-b-2 border-blue-600 text-blue-600"
-              : "text-gray-600 dark:text-gray-400"
+              : "text-gray-600 dark:text-gray-500 dark:text-gray-400"
           }`}
         >
           <MessageSquare size={20} className="inline mr-2" />
@@ -1126,7 +1126,7 @@ export default function Communication() {
           className={`px-6 py-3 font-medium ${
             activeTab === "templates"
               ? "border-b-2 border-blue-600 text-blue-600"
-              : "text-gray-600 dark:text-gray-400"
+              : "text-gray-600 dark:text-gray-500 dark:text-gray-400"
           }`}
         >
           <Archive size={20} className="inline mr-2" />
@@ -1137,7 +1137,7 @@ export default function Communication() {
           className={`px-6 py-3 font-medium ${
             activeTab === "settings"
               ? "border-b-2 border-blue-600 text-blue-600"
-              : "text-gray-600 dark:text-gray-400"
+              : "text-gray-600 dark:text-gray-500 dark:text-gray-400"
           }`}
         >
           <SettingsIcon size={20} className="inline mr-2" />
@@ -1154,7 +1154,7 @@ export default function Communication() {
       {/* Contact Modal */}
       {showContactModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <h3 className="text-xl font-bold mb-4">
               {selectedContact ? "Edit Contact" : "Add New Contact"}
             </h3>
@@ -1265,7 +1265,7 @@ export default function Communication() {
       {/* Message Modal */}
       {showMessageModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <h3 className="text-xl font-bold mb-4">Send Message</h3>
 
             <div className="space-y-4">
@@ -1354,7 +1354,7 @@ export default function Communication() {
       {/* Template Modal */}
       {showTemplateModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <h3 className="text-xl font-bold mb-4">Create Message Template</h3>
 
             <div className="space-y-4">
@@ -1567,8 +1567,8 @@ function CommSettingsTab({ stationId }: { stationId?: string }) {
       </div>
 
       {/* Default Sender Info */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
-        <h4 className="font-semibold dark:text-white mb-3">
+      <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
+        <h4 className="font-semibold dark:text-gray-900 dark:text-white mb-3">
           Default Sender Info
         </h4>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -1578,7 +1578,7 @@ function CommSettingsTab({ stationId }: { stationId?: string }) {
               type="text"
               value={config.stationName}
               onChange={(e) => update("stationName", e.target.value)}
-              className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+              className="w-full px-3 py-2 bg-gray-50 dark:bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-gray-900 dark:text-white"
               placeholder="e.g. Acme Fuel Station"
             />
           </div>
@@ -1588,7 +1588,7 @@ function CommSettingsTab({ stationId }: { stationId?: string }) {
               type="text"
               value={config.senderPhone}
               onChange={(e) => update("senderPhone", e.target.value)}
-              className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+              className="w-full px-3 py-2 bg-gray-50 dark:bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-gray-900 dark:text-white"
               placeholder="e.g. +1 555 000 1234"
             />
           </div>
@@ -1598,7 +1598,7 @@ function CommSettingsTab({ stationId }: { stationId?: string }) {
               type="email"
               value={config.senderEmail}
               onChange={(e) => update("senderEmail", e.target.value)}
-              className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+              className="w-full px-3 py-2 bg-gray-50 dark:bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-gray-900 dark:text-white"
               placeholder="e.g. info@acme.com"
             />
           </div>
@@ -1606,9 +1606,9 @@ function CommSettingsTab({ stationId }: { stationId?: string }) {
       </div>
 
       {/* SMS Gateway */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
+      <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
         <div className="flex items-center justify-between mb-3">
-          <h4 className="font-semibold dark:text-white flex items-center gap-2">
+          <h4 className="font-semibold dark:text-gray-900 dark:text-white flex items-center gap-2">
             <Phone size={16} /> SMS Gateway
           </h4>
           <label className="flex items-center gap-2 text-sm cursor-pointer">
@@ -1627,7 +1627,7 @@ function CommSettingsTab({ stationId }: { stationId?: string }) {
             <select
               value={config.smsProvider}
               onChange={(e) => update("smsProvider", e.target.value)}
-              className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+              className="w-full px-3 py-2 bg-gray-50 dark:bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-gray-900 dark:text-white"
             >
               <option value="africa-talking">Africa's Talking</option>
               <option value="twilio">Twilio</option>
@@ -1640,7 +1640,7 @@ function CommSettingsTab({ stationId }: { stationId?: string }) {
               type="password"
               value={config.smsApiKey}
               onChange={(e) => update("smsApiKey", e.target.value)}
-              className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+              className="w-full px-3 py-2 bg-gray-50 dark:bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-gray-900 dark:text-white"
               placeholder="Your gateway API key"
             />
           </div>
@@ -1652,7 +1652,7 @@ function CommSettingsTab({ stationId }: { stationId?: string }) {
               type="text"
               value={config.smsSender}
               onChange={(e) => update("smsSender", e.target.value)}
-              className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+              className="w-full px-3 py-2 bg-gray-50 dark:bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-gray-900 dark:text-white"
               placeholder="e.g. ACME"
             />
           </div>
@@ -1660,9 +1660,9 @@ function CommSettingsTab({ stationId }: { stationId?: string }) {
       </div>
 
       {/* Email */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
+      <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
         <div className="flex items-center justify-between mb-3">
-          <h4 className="font-semibold dark:text-white flex items-center gap-2">
+          <h4 className="font-semibold dark:text-gray-900 dark:text-white flex items-center gap-2">
             <Mail size={16} /> Email
           </h4>
           <label className="flex items-center gap-2 text-sm cursor-pointer">
@@ -1681,7 +1681,7 @@ function CommSettingsTab({ stationId }: { stationId?: string }) {
             <select
               value={config.emailProvider}
               onChange={(e) => update("emailProvider", e.target.value)}
-              className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+              className="w-full px-3 py-2 bg-gray-50 dark:bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-gray-900 dark:text-white"
             >
               <option value="smtp">SMTP</option>
               <option value="sendgrid">SendGrid</option>
@@ -1694,7 +1694,7 @@ function CommSettingsTab({ stationId }: { stationId?: string }) {
               type="text"
               value={config.smtpHost}
               onChange={(e) => update("smtpHost", e.target.value)}
-              className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+              className="w-full px-3 py-2 bg-gray-50 dark:bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-gray-900 dark:text-white"
               placeholder="smtp.gmail.com"
             />
           </div>
@@ -1704,7 +1704,7 @@ function CommSettingsTab({ stationId }: { stationId?: string }) {
               type="text"
               value={config.smtpPort}
               onChange={(e) => update("smtpPort", e.target.value)}
-              className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+              className="w-full px-3 py-2 bg-gray-50 dark:bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-gray-900 dark:text-white"
               placeholder="587"
             />
           </div>
@@ -1714,7 +1714,7 @@ function CommSettingsTab({ stationId }: { stationId?: string }) {
               type="text"
               value={config.smtpUser}
               onChange={(e) => update("smtpUser", e.target.value)}
-              className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+              className="w-full px-3 py-2 bg-gray-50 dark:bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-gray-900 dark:text-white"
               placeholder="user@gmail.com"
             />
           </div>
@@ -1724,7 +1724,7 @@ function CommSettingsTab({ stationId }: { stationId?: string }) {
               type="password"
               value={config.smtpPassword}
               onChange={(e) => update("smtpPassword", e.target.value)}
-              className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+              className="w-full px-3 py-2 bg-gray-50 dark:bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-gray-900 dark:text-white"
               placeholder="App password"
             />
           </div>
@@ -1732,9 +1732,9 @@ function CommSettingsTab({ stationId }: { stationId?: string }) {
       </div>
 
       {/* WhatsApp Business */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
+      <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
         <div className="flex items-center justify-between mb-3">
-          <h4 className="font-semibold dark:text-white flex items-center gap-2">
+          <h4 className="font-semibold dark:text-gray-900 dark:text-white flex items-center gap-2">
             <MessageSquare size={16} /> WhatsApp Business
           </h4>
           <label className="flex items-center gap-2 text-sm cursor-pointer">
@@ -1754,7 +1754,7 @@ function CommSettingsTab({ stationId }: { stationId?: string }) {
               type="text"
               value={config.whatsappPhone}
               onChange={(e) => update("whatsappPhone", e.target.value)}
-              className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+              className="w-full px-3 py-2 bg-gray-50 dark:bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-gray-900 dark:text-white"
               placeholder="e.g. 15550001234"
             />
           </div>
@@ -1764,7 +1764,7 @@ function CommSettingsTab({ stationId }: { stationId?: string }) {
               type="text"
               value={config.whatsappApiUrl}
               onChange={(e) => update("whatsappApiUrl", e.target.value)}
-              className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+              className="w-full px-3 py-2 bg-gray-50 dark:bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-gray-900 dark:text-white"
               placeholder="https://graph.facebook.com/v17.0/..."
             />
           </div>
@@ -1774,7 +1774,7 @@ function CommSettingsTab({ stationId }: { stationId?: string }) {
               type="password"
               value={config.whatsappToken}
               onChange={(e) => update("whatsappToken", e.target.value)}
-              className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+              className="w-full px-3 py-2 bg-gray-50 dark:bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-gray-900 dark:text-white"
               placeholder="WhatsApp Cloud API token"
             />
           </div>
@@ -1785,7 +1785,7 @@ function CommSettingsTab({ stationId }: { stationId?: string }) {
         <button
           onClick={handleSave}
           disabled={saving}
-          className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium flex items-center gap-2 disabled:opacity-50"
+          className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-gray-900 dark:text-white rounded-xl font-medium flex items-center gap-2 disabled:opacity-50"
         >
           <Download size={16} />
           {saving ? "Saving…" : "Save Settings"}
@@ -1793,7 +1793,7 @@ function CommSettingsTab({ stationId }: { stationId?: string }) {
       </div>
 
       {toast && (
-        <div className="fixed bottom-6 right-6 bg-gray-900 text-white px-4 py-3 rounded-xl shadow-2xl text-sm font-medium z-50">
+        <div className="fixed bottom-6 right-6 bg-white dark:bg-gray-900 text-gray-900 dark:text-white px-4 py-3 rounded-xl shadow-2xl text-sm font-medium z-50">
           {toast}
         </div>
       )}

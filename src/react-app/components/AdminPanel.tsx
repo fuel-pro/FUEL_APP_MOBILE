@@ -530,12 +530,12 @@ export default function AdminPanel() {
             backgroundSize: "20px 20px",
           }}
         />
-        <div className="bg-white/5 backdrop-blur-2xl rounded-3xl p-8 shadow-2xl border border-white/10 max-w-md w-full relative z-10">
+        <div className="bg-gray-50 dark:bg-white/5 backdrop-blur-2xl rounded-3xl p-8 shadow-2xl border border-gray-200 dark:border-white/10 max-w-md w-full relative z-10">
           <div className="text-center mb-8">
             <div className="w-20 h-20 mx-auto mb-6 bg-gradient-to-br from-red-500 via-amber-500 to-orange-500 rounded-2xl flex items-center justify-center shadow-lg shadow-amber-500/20">
-              <Shield size={36} className="text-white" />
+              <Shield size={36} className="text-gray-900 dark:text-white" />
             </div>
-            <h1 className="text-2xl font-bold text-white font-serif tracking-wide">
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white font-serif tracking-wide">
               Founder Access
             </h1>
             <p className="text-gray-500 mt-2 text-sm">
@@ -583,7 +583,7 @@ export default function AdminPanel() {
                 }
                 onKeyDown={(e) => e.key === "Enter" && handleLogin()}
                 placeholder="Enter founder username"
-                className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/30 text-sm transition-all"
+                className="w-full px-4 py-3 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-gray-900 dark:text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/30 text-sm transition-all"
                 autoFocus
                 disabled={securityLocked}
               />
@@ -601,7 +601,7 @@ export default function AdminPanel() {
                   }
                   onKeyDown={(e) => e.key === "Enter" && handleLogin()}
                   placeholder="Enter founder password"
-                  className="w-full px-4 py-3 pr-12 rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/30 text-sm transition-all"
+                  className="w-full px-4 py-3 pr-12 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-gray-900 dark:text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/30 text-sm transition-all"
                   disabled={securityLocked}
                 />
                 <button
@@ -624,7 +624,7 @@ export default function AdminPanel() {
             <button
               onClick={handleLogin}
               disabled={securityLocked}
-              className="w-full py-3.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 disabled:from-gray-600 disabled:to-gray-700 disabled:cursor-not-allowed text-white font-bold rounded-xl transition-all shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2 text-sm"
+              className="w-full py-3.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 disabled:from-gray-600 disabled:to-gray-700 disabled:cursor-not-allowed text-gray-900 dark:text-white font-bold rounded-xl transition-all shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2 text-sm"
             >
               <Lock size={18} />
               {securityLocked ? "ACCESS LOCKED" : "Access Founder Console"}
@@ -635,7 +635,7 @@ export default function AdminPanel() {
           <div className="mt-8 text-center">
             <button
               onClick={() => navigate("/")}
-              className="text-[11px] text-gray-700 hover:text-gray-400 flex items-center gap-1 mx-auto transition-colors"
+              className="text-[11px] text-gray-700 hover:text-gray-500 dark:text-gray-400 flex items-center gap-1 mx-auto transition-colors"
             >
               <ArrowLeft size={10} />
               Return to Member View
@@ -951,12 +951,12 @@ export default function AdminPanel() {
     .sort((a, b) => a.order - b.order);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-950 text-white">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-950 text-gray-900 dark:text-white">
       {/* Header */}
-      <header className="bg-white/5 backdrop-blur-lg border-b border-white/10 px-6 py-3 flex items-center justify-between sticky top-0 z-50">
+      <header className="bg-gray-50 dark:bg-white/5 backdrop-blur-lg border-b border-gray-200 dark:border-white/10 px-6 py-3 flex items-center justify-between sticky top-0 z-50">
         <div className="flex items-center gap-4">
           <div className="w-10 h-10 bg-gradient-to-br from-red-500 via-amber-500 to-orange-500 rounded-xl flex items-center justify-center">
-            <Shield size={20} className="text-white" />
+            <Shield size={20} className="text-gray-900 dark:text-white" />
           </div>
           <div>
             <h1 className="text-lg font-bold font-serif">Founder Console</h1>
@@ -993,13 +993,13 @@ export default function AdminPanel() {
 
       <div className="flex">
         {/* Sidebar */}
-        <aside className="w-56 bg-white/5 border-r border-white/10 min-h-[calc(100vh-56px)] sticky top-14 overflow-y-auto">
+        <aside className="w-56 bg-gray-50 dark:bg-white/5 border-r border-gray-200 dark:border-white/10 min-h-[calc(100vh-56px)] sticky top-14 overflow-y-auto">
           <nav className="p-2 space-y-0.5">
             {sidebarModules.map((mod) => (
               <button
                 key={mod.id}
                 onClick={() => setActiveTab(mod.id)}
-                className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition-all ${activeTab === mod.id ? "bg-amber-500/20 text-amber-300 border border-amber-500/30" : "text-gray-400 hover:text-white hover:bg-white/5"}`}
+                className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition-all ${activeTab === mod.id ? "bg-amber-500/20 text-amber-300 border border-amber-500/30" : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:text-white hover:bg-gray-50 dark:bg-white/5"}`}
               >
                 <span className="text-amber-400/70">
                   {renderIcon(mod.icon, 15)}
@@ -1026,31 +1026,31 @@ export default function AdminPanel() {
                 Overview
               </h2>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="bg-white/5 rounded-xl p-5 border border-white/10">
+                <div className="bg-gray-50 dark:bg-white/5 rounded-xl p-5 border border-gray-200 dark:border-white/10">
                   <Layers size={24} className="text-blue-400 mb-3" />
                   <p className="text-2xl font-bold">{stations.length}</p>
-                  <p className="text-sm text-gray-400">Stations</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Stations</p>
                 </div>
-                <div className="bg-white/5 rounded-xl p-5 border border-white/10">
+                <div className="bg-gray-50 dark:bg-white/5 rounded-xl p-5 border border-gray-200 dark:border-white/10">
                   <Puzzle size={24} className="text-purple-400 mb-3" />
                   <p className="text-2xl font-bold">
                     {modules.filter((m) => m.isCustom).length}
                   </p>
-                  <p className="text-sm text-gray-400">Custom Features</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Custom Features</p>
                 </div>
-                <div className="bg-white/5 rounded-xl p-5 border border-white/10">
+                <div className="bg-gray-50 dark:bg-white/5 rounded-xl p-5 border border-gray-200 dark:border-white/10">
                   <History size={24} className="text-amber-400 mb-3" />
                   <p className="text-2xl font-bold">
                     {adminSettings.updateHistory.length}
                   </p>
-                  <p className="text-sm text-gray-400">Total Updates</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Total Updates</p>
                 </div>
-                <div className="bg-white/5 rounded-xl p-5 border border-white/10">
+                <div className="bg-gray-50 dark:bg-white/5 rounded-xl p-5 border border-gray-200 dark:border-white/10">
                   <KeyRound size={24} className="text-emerald-400 mb-3" />
                   <p className="text-2xl font-bold">
                     {Object.keys(apiKeys).length + customApis.length}
                   </p>
-                  <p className="text-sm text-gray-400">API Keys</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">API Keys</p>
                 </div>
               </div>
 
@@ -1062,7 +1062,7 @@ export default function AdminPanel() {
                 >
                   <Download size={20} className="text-emerald-400 mb-2" />
                   <p className="font-semibold text-sm">Export All Data</p>
-                  <p className="text-xs text-gray-400 mt-1">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                     Download complete backup
                   </p>
                 </button>
@@ -1072,14 +1072,14 @@ export default function AdminPanel() {
                 >
                   <Upload size={20} className="text-blue-400 mb-2" />
                   <p className="font-semibold text-sm">Import Data</p>
-                  <p className="text-xs text-gray-400 mt-1">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                     Restore from backup
                   </p>
                 </button>
                 <label className="bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 rounded-xl p-5 text-left transition-all cursor-pointer block">
                   <Package size={20} className="text-purple-400 mb-2" />
                   <p className="font-semibold text-sm">Batch Update</p>
-                  <p className="text-xs text-gray-400 mt-1">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                     Deploy site-wide changes
                   </p>
                   <input
@@ -1094,17 +1094,17 @@ export default function AdminPanel() {
               </div>
 
               {showImport && (
-                <div className="bg-white/5 rounded-xl p-5 border border-white/10">
+                <div className="bg-gray-50 dark:bg-white/5 rounded-xl p-5 border border-gray-200 dark:border-white/10">
                   <h3 className="font-semibold mb-3 text-sm">Import Data</h3>
                   <textarea
                     value={importText}
                     onChange={(e) => setImportText(e.target.value)}
                     placeholder="Paste JSON backup data..."
-                    className="w-full h-32 px-4 py-3 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 text-xs font-mono focus:outline-none resize-none"
+                    className="w-full h-32 px-4 py-3 rounded-lg bg-gray-100 dark:bg-white/10 border border-white/20 text-gray-900 dark:text-white placeholder-gray-500 text-xs font-mono focus:outline-none resize-none"
                   />
                   <button
                     onClick={handleImport}
-                    className="mt-3 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm rounded-lg"
+                    className="mt-3 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-gray-900 dark:text-white text-sm rounded-lg"
                   >
                     Import & Overwrite
                   </button>
@@ -1112,7 +1112,7 @@ export default function AdminPanel() {
               )}
 
               {/* Recent Updates */}
-              <div className="bg-white/5 rounded-xl p-5 border border-white/10">
+              <div className="bg-gray-50 dark:bg-white/5 rounded-xl p-5 border border-gray-200 dark:border-white/10">
                 <h3 className="font-semibold mb-4 text-sm flex items-center gap-2">
                   <History size={14} className="text-amber-400" /> Recent
                   Updates
@@ -1121,7 +1121,7 @@ export default function AdminPanel() {
                   {adminSettings.updateHistory.slice(0, 10).map((u) => (
                     <div
                       key={u.id}
-                      className={`flex items-center gap-3 p-3 rounded-lg ${u.reverted ? "bg-red-500/5" : "bg-white/5"}`}
+                      className={`flex items-center gap-3 p-3 rounded-lg ${u.reverted ? "bg-red-500/5" : "bg-gray-50 dark:bg-white/5"}`}
                     >
                       <div
                         className={`w-2 h-2 rounded-full ${u.reverted ? "bg-red-400" : "bg-green-400"}`}
@@ -1156,7 +1156,7 @@ export default function AdminPanel() {
                 <Layers size={20} className="text-blue-400" /> Station
                 Management
               </h2>
-              <div className="bg-white/5 rounded-xl p-5 border border-white/10">
+              <div className="bg-gray-50 dark:bg-white/5 rounded-xl p-5 border border-gray-200 dark:border-white/10">
                 <h3 className="font-semibold mb-4 text-sm flex items-center gap-2">
                   <Plus size={16} className="text-green-400" /> Create New
                   Station
@@ -1168,7 +1168,7 @@ export default function AdminPanel() {
                       setNewStation((p) => ({ ...p, name: e.target.value }))
                     }
                     placeholder="Station Name *"
-                    className="px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400"
+                    className="px-3 py-2 rounded-lg bg-gray-100 dark:bg-white/10 border border-white/20 text-gray-900 dark:text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400"
                   />
                   <input
                     value={newStation.location}
@@ -1176,7 +1176,7 @@ export default function AdminPanel() {
                       setNewStation((p) => ({ ...p, location: e.target.value }))
                     }
                     placeholder="Location"
-                    className="px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400"
+                    className="px-3 py-2 rounded-lg bg-gray-100 dark:bg-white/10 border border-white/20 text-gray-900 dark:text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400"
                   />
                   <input
                     value={newStation.phone}
@@ -1184,7 +1184,7 @@ export default function AdminPanel() {
                       setNewStation((p) => ({ ...p, phone: e.target.value }))
                     }
                     placeholder="Phone"
-                    className="px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400"
+                    className="px-3 py-2 rounded-lg bg-gray-100 dark:bg-white/10 border border-white/20 text-gray-900 dark:text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400"
                   />
                   <input
                     value={newStation.email}
@@ -1192,19 +1192,19 @@ export default function AdminPanel() {
                       setNewStation((p) => ({ ...p, email: e.target.value }))
                     }
                     placeholder="Email"
-                    className="px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400"
+                    className="px-3 py-2 rounded-lg bg-gray-100 dark:bg-white/10 border border-white/20 text-gray-900 dark:text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400"
                   />
                 </div>
                 <button
                   onClick={handleCreateStation}
                   disabled={!newStation.name.trim()}
-                  className="mt-4 px-6 py-2.5 bg-green-500 hover:bg-green-600 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-semibold rounded-lg text-sm flex items-center gap-2 transition-all"
+                  className="mt-4 px-6 py-2.5 bg-green-500 hover:bg-green-600 disabled:bg-gray-600 disabled:cursor-not-allowed text-gray-900 dark:text-white font-semibold rounded-lg text-sm flex items-center gap-2 transition-all"
                 >
                   <Plus size={14} /> Create Station
                 </button>
               </div>
-              <div className="bg-white/5 rounded-xl border border-white/10 overflow-hidden">
-                <div className="px-5 py-3 bg-white/5 border-b border-white/10 flex items-center justify-between">
+              <div className="bg-gray-50 dark:bg-white/5 rounded-xl border border-gray-200 dark:border-white/10 overflow-hidden">
+                <div className="px-5 py-3 bg-gray-50 dark:bg-white/5 border-b border-gray-200 dark:border-white/10 flex items-center justify-between">
                   <h3 className="font-semibold text-sm">
                     All Stations ({stations.length})
                   </h3>
@@ -1219,7 +1219,7 @@ export default function AdminPanel() {
                         <p className="font-semibold text-sm truncate">
                           {s.name}
                         </p>
-                        <p className="text-xs text-gray-400">
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
                           {s.location || "No location"} | {s.sharedUsers.length}{" "}
                           shared users
                         </p>
@@ -1250,11 +1250,11 @@ export default function AdminPanel() {
                 <LayoutDashboard size={20} className="text-purple-400" /> Tab
                 Configuration
               </h2>
-              <p className="text-sm text-gray-400">
+              <p className="text-sm text-gray-500 dark:text-gray-400">
                 Customize member-view tab names, visibility, and order
               </p>
-              <div className="bg-white/5 rounded-xl border border-white/10 overflow-hidden">
-                <div className="grid grid-cols-12 gap-2 px-4 py-2 bg-white/5 border-b border-white/10 text-[10px] text-gray-500 uppercase">
+              <div className="bg-gray-50 dark:bg-white/5 rounded-xl border border-gray-200 dark:border-white/10 overflow-hidden">
+                <div className="grid grid-cols-12 gap-2 px-4 py-2 bg-gray-50 dark:bg-white/5 border-b border-gray-200 dark:border-white/10 text-[10px] text-gray-500 uppercase">
                   <div className="col-span-3">Tab ID</div>
                   <div className="col-span-3">Label</div>
                   <div className="col-span-1">Order</div>
@@ -1280,7 +1280,7 @@ export default function AdminPanel() {
                               [tabId]: { ...p[tabId], label: e.target.value },
                             }))
                           }
-                          className="w-full px-2 py-1 rounded bg-white/10 border border-white/20 text-white text-xs focus:outline-none"
+                          className="w-full px-2 py-1 rounded bg-gray-100 dark:bg-white/10 border border-white/20 text-gray-900 dark:text-white text-xs focus:outline-none"
                         />
                       </div>
                       <div className="col-span-1">
@@ -1296,7 +1296,7 @@ export default function AdminPanel() {
                               },
                             }))
                           }
-                          className="w-12 px-1 py-1 rounded bg-white/10 border border-white/20 text-white text-xs text-center"
+                          className="w-12 px-1 py-1 rounded bg-gray-100 dark:bg-white/10 border border-white/20 text-gray-900 dark:text-white text-xs text-center"
                         />
                       </div>
                       <div className="col-span-2">
@@ -1342,12 +1342,12 @@ export default function AdminPanel() {
                 <KeyRound size={20} className="text-emerald-400" /> API Keys &
                 Integrations
               </h2>
-              <p className="text-sm text-gray-400">
+              <p className="text-sm text-gray-500 dark:text-gray-400">
                 Built-in API keys + ability to add custom keys individually
               </p>
 
               {/* Add Individual API */}
-              <div className="bg-white/5 rounded-xl p-5 border border-white/10">
+              <div className="bg-gray-50 dark:bg-white/5 rounded-xl p-5 border border-gray-200 dark:border-white/10">
                 <h3 className="font-semibold mb-4 text-sm flex items-center gap-2">
                   <Plus size={14} className="text-green-400" /> Add New API Key
                   (Individual)
@@ -1359,7 +1359,7 @@ export default function AdminPanel() {
                       setNewApiForm((p) => ({ ...p, key: e.target.value }))
                     }
                     placeholder="API Key Name (e.g., stripe_api)"
-                    className="px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 text-sm focus:outline-none"
+                    className="px-3 py-2 rounded-lg bg-gray-100 dark:bg-white/10 border border-white/20 text-gray-900 dark:text-white placeholder-gray-500 text-sm focus:outline-none"
                   />
                   <input
                     value={newApiForm.value}
@@ -1367,37 +1367,37 @@ export default function AdminPanel() {
                       setNewApiForm((p) => ({ ...p, value: e.target.value }))
                     }
                     placeholder="API Key Value"
-                    className="px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 text-sm focus:outline-none"
+                    className="px-3 py-2 rounded-lg bg-gray-100 dark:bg-white/10 border border-white/20 text-gray-900 dark:text-white placeholder-gray-500 text-sm focus:outline-none"
                   />
                   <select
                     value={newApiForm.category}
                     onChange={(e) =>
                       setNewApiForm((p) => ({ ...p, category: e.target.value }))
                     }
-                    className="px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-white text-sm focus:outline-none"
+                    className="px-3 py-2 rounded-lg bg-gray-100 dark:bg-white/10 border border-white/20 text-gray-900 dark:text-white text-sm focus:outline-none"
                   >
-                    <option value="General" className="bg-gray-800">
+                    <option value="General" className="bg-white dark:bg-gray-800">
                       General
                     </option>
-                    <option value="Payment" className="bg-gray-800">
+                    <option value="Payment" className="bg-white dark:bg-gray-800">
                       Payment
                     </option>
-                    <option value="Communication" className="bg-gray-800">
+                    <option value="Communication" className="bg-white dark:bg-gray-800">
                       Communication
                     </option>
-                    <option value="AI" className="bg-gray-800">
+                    <option value="AI" className="bg-white dark:bg-gray-800">
                       AI
                     </option>
-                    <option value="Storage" className="bg-gray-800">
+                    <option value="Storage" className="bg-white dark:bg-gray-800">
                       Storage
                     </option>
-                    <option value="Analytics" className="bg-gray-800">
+                    <option value="Analytics" className="bg-white dark:bg-gray-800">
                       Analytics
                     </option>
-                    <option value="Government" className="bg-gray-800">
+                    <option value="Government" className="bg-white dark:bg-gray-800">
                       Government
                     </option>
-                    <option value="Custom" className="bg-gray-800">
+                    <option value="Custom" className="bg-white dark:bg-gray-800">
                       Custom
                     </option>
                   </select>
@@ -1406,7 +1406,7 @@ export default function AdminPanel() {
                     disabled={
                       !newApiForm.key.trim() || !newApiForm.value.trim()
                     }
-                    className="px-4 py-2 bg-green-500 hover:bg-green-600 disabled:bg-gray-600 text-white text-sm rounded-lg font-semibold flex items-center justify-center gap-2"
+                    className="px-4 py-2 bg-green-500 hover:bg-green-600 disabled:bg-gray-600 text-gray-900 dark:text-white text-sm rounded-lg font-semibold flex items-center justify-center gap-2"
                   >
                     <Plus size={14} /> Add Key
                   </button>
@@ -1420,14 +1420,14 @@ export default function AdminPanel() {
                     }))
                   }
                   placeholder="Description (optional)"
-                  className="mt-3 w-full px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 text-sm focus:outline-none"
+                  className="mt-3 w-full px-3 py-2 rounded-lg bg-gray-100 dark:bg-white/10 border border-white/20 text-gray-900 dark:text-white placeholder-gray-500 text-sm focus:outline-none"
                 />
               </div>
 
               {/* Custom API Keys */}
               {customApis.length > 0 && (
-                <div className="bg-white/5 rounded-xl border border-white/10 overflow-hidden">
-                  <div className="px-5 py-3 bg-purple-500/10 border-b border-white/10 flex items-center justify-between">
+                <div className="bg-gray-50 dark:bg-white/5 rounded-xl border border-gray-200 dark:border-white/10 overflow-hidden">
+                  <div className="px-5 py-3 bg-purple-500/10 border-b border-gray-200 dark:border-white/10 flex items-center justify-between">
                     <h3 className="font-semibold text-sm flex items-center gap-2">
                       <Sparkles size={14} className="text-purple-400" /> Custom
                       API Keys ({customApis.length})
@@ -1441,7 +1441,7 @@ export default function AdminPanel() {
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium">
                           {api.key}{" "}
-                          <span className="text-xs text-gray-500 bg-white/10 px-2 py-0.5 rounded ml-2">
+                          <span className="text-xs text-gray-500 bg-gray-100 dark:bg-white/10 px-2 py-0.5 rounded ml-2">
                             {api.category}
                           </span>
                         </p>
@@ -1454,7 +1454,7 @@ export default function AdminPanel() {
                           type={showKey[api.key] ? "text" : "password"}
                           value={api.value}
                           readOnly
-                          className="px-3 py-1.5 pr-8 rounded bg-white/5 border border-white/10 text-gray-400 text-xs w-48"
+                          className="px-3 py-1.5 pr-8 rounded bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-gray-500 dark:text-gray-400 text-xs w-48"
                         />
                         <button
                           onClick={() =>
@@ -1463,7 +1463,7 @@ export default function AdminPanel() {
                               [api.key]: !p[api.key],
                             }))
                           }
-                          className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-600 hover:text-gray-400"
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-600 hover:text-gray-500 dark:text-gray-400"
                         >
                           <Eye size={12} />
                         </button>
@@ -1480,8 +1480,8 @@ export default function AdminPanel() {
               )}
 
               {/* Built-in API Keys */}
-              <div className="bg-white/5 rounded-xl border border-white/10 overflow-hidden">
-                <div className="px-5 py-3 bg-white/5 border-b border-white/10 flex items-center justify-between">
+              <div className="bg-gray-50 dark:bg-white/5 rounded-xl border border-gray-200 dark:border-white/10 overflow-hidden">
+                <div className="px-5 py-3 bg-gray-50 dark:bg-white/5 border-b border-gray-200 dark:border-white/10 flex items-center justify-between">
                   <h3 className="font-semibold text-sm">
                     Built-in Integrations
                   </h3>
@@ -1541,13 +1541,13 @@ export default function AdminPanel() {
                           setApiKeys((p) => ({ ...p, [key]: e.target.value }))
                         }
                         placeholder={`Enter ${label}...`}
-                        className="w-full px-3 py-2 pr-10 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400"
+                        className="w-full px-3 py-2 pr-10 rounded-lg bg-gray-100 dark:bg-white/10 border border-white/20 text-gray-900 dark:text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400"
                       />
                       <button
                         onClick={() =>
                           setShowKey((p) => ({ ...p, [key]: !p[key] }))
                         }
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-900 dark:text-white"
                       >
                         {showKey[key] ? (
                           <EyeOff size={14} />
@@ -1568,13 +1568,13 @@ export default function AdminPanel() {
               <h2 className="text-xl font-bold flex items-center gap-2">
                 <Puzzle size={20} className="text-purple-400" /> Feature Manager
               </h2>
-              <p className="text-sm text-gray-400">
+              <p className="text-sm text-gray-500 dark:text-gray-400">
                 Dynamically add, remove, reorder, and toggle admin features. No
                 code changes required.
               </p>
 
               {/* Add New Feature */}
-              <div className="bg-white/5 rounded-xl p-5 border border-white/10">
+              <div className="bg-gray-50 dark:bg-white/5 rounded-xl p-5 border border-gray-200 dark:border-white/10">
                 <h3 className="font-semibold mb-4 text-sm flex items-center gap-2">
                   <Rocket size={14} className="text-green-400" /> Add New Admin
                   Feature
@@ -1586,17 +1586,17 @@ export default function AdminPanel() {
                       setNewModuleForm((p) => ({ ...p, label: e.target.value }))
                     }
                     placeholder="Feature Name (e.g., Analytics Hub)"
-                    className="px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 text-sm focus:outline-none"
+                    className="px-3 py-2 rounded-lg bg-gray-100 dark:bg-white/10 border border-white/20 text-gray-900 dark:text-white placeholder-gray-500 text-sm focus:outline-none"
                   />
                   <select
                     value={newModuleForm.icon}
                     onChange={(e) =>
                       setNewModuleForm((p) => ({ ...p, icon: e.target.value }))
                     }
-                    className="px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-white text-sm focus:outline-none"
+                    className="px-3 py-2 rounded-lg bg-gray-100 dark:bg-white/10 border border-white/20 text-gray-900 dark:text-white text-sm focus:outline-none"
                   >
                     {Object.keys(FEATURE_ICONS).map((icon) => (
-                      <option key={icon} value={icon} className="bg-gray-800">
+                      <option key={icon} value={icon} className="bg-white dark:bg-gray-800">
                         {icon}
                       </option>
                     ))}
@@ -1604,7 +1604,7 @@ export default function AdminPanel() {
                   <button
                     onClick={handleAddModule}
                     disabled={!newModuleForm.label.trim()}
-                    className="px-4 py-2 bg-green-500 hover:bg-green-600 disabled:bg-gray-600 text-white text-sm rounded-lg font-semibold flex items-center justify-center gap-2"
+                    className="px-4 py-2 bg-green-500 hover:bg-green-600 disabled:bg-gray-600 text-gray-900 dark:text-white text-sm rounded-lg font-semibold flex items-center justify-center gap-2"
                   >
                     <Plus size={14} /> Add Feature
                   </button>
@@ -1618,13 +1618,13 @@ export default function AdminPanel() {
                     }))
                   }
                   placeholder="Description (optional)"
-                  className="mt-3 w-full px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 text-sm focus:outline-none"
+                  className="mt-3 w-full px-3 py-2 rounded-lg bg-gray-100 dark:bg-white/10 border border-white/20 text-gray-900 dark:text-white placeholder-gray-500 text-sm focus:outline-none"
                 />
               </div>
 
               {/* Feature List */}
-              <div className="bg-white/5 rounded-xl border border-white/10 overflow-hidden">
-                <div className="grid grid-cols-12 gap-2 px-4 py-2 bg-white/5 border-b border-white/10 text-[10px] text-gray-500 uppercase">
+              <div className="bg-gray-50 dark:bg-white/5 rounded-xl border border-gray-200 dark:border-white/10 overflow-hidden">
+                <div className="grid grid-cols-12 gap-2 px-4 py-2 bg-gray-50 dark:bg-white/5 border-b border-gray-200 dark:border-white/10 text-[10px] text-gray-500 uppercase">
                   <div className="col-span-4">Feature</div>
                   <div className="col-span-2">Icon</div>
                   <div className="col-span-1">Order</div>
@@ -1640,7 +1640,7 @@ export default function AdminPanel() {
                       className="grid grid-cols-12 gap-2 px-4 py-3 border-b border-white/5 items-center"
                     >
                       <div className="col-span-4 flex items-center gap-2">
-                        <span className="text-gray-400">
+                        <span className="text-gray-500 dark:text-gray-400">
                           {renderIcon(mod.icon, 14)}
                         </span>
                         <div>
@@ -1650,10 +1650,10 @@ export default function AdminPanel() {
                           </p>
                         </div>
                       </div>
-                      <div className="col-span-2 text-xs text-gray-400 font-mono">
+                      <div className="col-span-2 text-xs text-gray-500 dark:text-gray-400 font-mono">
                         {mod.icon}
                       </div>
-                      <div className="col-span-1 text-xs text-gray-400">
+                      <div className="col-span-1 text-xs text-gray-500 dark:text-gray-400">
                         {mod.order}
                       </div>
                       <div className="col-span-1">
@@ -1672,7 +1672,7 @@ export default function AdminPanel() {
                       </div>
                       <div className="col-span-1">
                         <span
-                          className={`text-[10px] px-2 py-0.5 rounded ${mod.isCustom ? "bg-purple-500/20 text-purple-300" : "bg-gray-500/20 text-gray-400"}`}
+                          className={`text-[10px] px-2 py-0.5 rounded ${mod.isCustom ? "bg-purple-500/20 text-purple-300" : "bg-gray-500/20 text-gray-500 dark:text-gray-400"}`}
                         >
                           {mod.isCustom ? "Custom" : "Built-in"}
                         </span>
@@ -1680,14 +1680,14 @@ export default function AdminPanel() {
                       <div className="col-span-3 flex gap-1">
                         <button
                           onClick={() => handleReorderModule(mod.id, "up")}
-                          className="p-1 bg-white/10 rounded hover:bg-white/20"
+                          className="p-1 bg-gray-100 dark:bg-white/10 rounded hover:bg-white/20"
                           title="Move up"
                         >
                           <ChevronLeft size={12} />
                         </button>
                         <button
                           onClick={() => handleReorderModule(mod.id, "down")}
-                          className="p-1 bg-white/10 rounded hover:bg-white/20"
+                          className="p-1 bg-gray-100 dark:bg-white/10 rounded hover:bg-white/20"
                           title="Move down"
                         >
                           <ChevronRight size={12} />
@@ -1714,7 +1714,7 @@ export default function AdminPanel() {
               <h2 className="text-xl font-bold flex items-center gap-2">
                 <Package size={20} className="text-orange-400" /> Batch Updates
               </h2>
-              <p className="text-sm text-gray-400">
+              <p className="text-sm text-gray-500 dark:text-gray-400">
                 Upload files or folders to deploy site-wide changes. JSON
                 configs are automatically parsed and applied.
               </p>
@@ -1725,11 +1725,11 @@ export default function AdminPanel() {
                 <p className="font-semibold text-lg">
                   Drop files here or click to browse
                 </p>
-                <p className="text-sm text-gray-400 mt-2">
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
                   Upload JSON configs, JS modules, or any file to affect
                   site-wide changes
                 </p>
-                <label className="mt-4 inline-block px-6 py-2.5 bg-purple-500 hover:bg-purple-600 text-white rounded-lg cursor-pointer transition-colors text-sm font-semibold">
+                <label className="mt-4 inline-block px-6 py-2.5 bg-purple-500 hover:bg-purple-600 text-gray-900 dark:text-white rounded-lg cursor-pointer transition-colors text-sm font-semibold">
                   Select Files or Folder
                   <input
                     ref={batchFileRef}
@@ -1752,12 +1752,12 @@ export default function AdminPanel() {
               </div>
 
               {/* Upload Instructions */}
-              <div className="bg-white/5 rounded-xl p-5 border border-white/10">
+              <div className="bg-gray-50 dark:bg-white/5 rounded-xl p-5 border border-gray-200 dark:border-white/10">
                 <h3 className="font-semibold mb-3 text-sm flex items-center gap-2">
                   <Info size={14} className="text-blue-400" /> Supported Upload
                   Formats
                 </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs text-gray-400">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs text-gray-500 dark:text-gray-400">
                   <div className="flex items-start gap-2">
                     <FileJson size={14} className="text-green-400 mt-0.5" />
                     <div>
@@ -1796,8 +1796,8 @@ export default function AdminPanel() {
               </div>
 
               {/* Batch History */}
-              <div className="bg-white/5 rounded-xl border border-white/10 overflow-hidden">
-                <div className="px-5 py-3 bg-white/5 border-b border-white/10 flex items-center justify-between">
+              <div className="bg-gray-50 dark:bg-white/5 rounded-xl border border-gray-200 dark:border-white/10 overflow-hidden">
+                <div className="px-5 py-3 bg-gray-50 dark:bg-white/5 border-b border-gray-200 dark:border-white/10 flex items-center justify-between">
                   <h3 className="font-semibold text-sm flex items-center gap-2">
                     <History size={14} className="text-amber-400" /> Batch
                     Upload History ({batchRecords.length})
@@ -1858,7 +1858,7 @@ export default function AdminPanel() {
                 ].map(({ key, label }) => (
                   <div
                     key={key}
-                    className="bg-white/5 rounded-xl p-4 border border-white/10 flex items-center justify-between"
+                    className="bg-gray-50 dark:bg-white/5 rounded-xl p-4 border border-gray-200 dark:border-white/10 flex items-center justify-between"
                   >
                     <div>
                       <p className="font-semibold text-sm">{label}</p>
@@ -1887,7 +1887,7 @@ export default function AdminPanel() {
               </div>
               <button
                 onClick={handleSaveSystem}
-                className="px-6 py-2.5 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-lg text-sm flex items-center gap-2"
+                className="px-6 py-2.5 bg-blue-500 hover:bg-blue-600 text-gray-900 dark:text-white font-semibold rounded-lg text-sm flex items-center gap-2"
               >
                 <Save size={16} /> Save System Settings
               </button>
@@ -1900,8 +1900,8 @@ export default function AdminPanel() {
               <h2 className="text-xl font-bold flex items-center gap-2">
                 <History size={20} className="text-amber-400" /> Update History
               </h2>
-              <div className="bg-white/5 rounded-xl border border-white/10 overflow-hidden">
-                <div className="grid grid-cols-12 gap-2 px-4 py-2 bg-white/5 border-b border-white/10 text-[10px] text-gray-500 uppercase">
+              <div className="bg-gray-50 dark:bg-white/5 rounded-xl border border-gray-200 dark:border-white/10 overflow-hidden">
+                <div className="grid grid-cols-12 gap-2 px-4 py-2 bg-gray-50 dark:bg-white/5 border-b border-gray-200 dark:border-white/10 text-[10px] text-gray-500 uppercase">
                   <div className="col-span-2">Type</div>
                   <div className="col-span-4">Description</div>
                   <div className="col-span-3">Timestamp</div>
@@ -1967,8 +1967,8 @@ export default function AdminPanel() {
                   attempts are also recorded.
                 </span>
               </div>
-              <div className="bg-white/5 rounded-xl border border-white/10 overflow-hidden">
-                <div className="grid grid-cols-12 gap-2 px-4 py-2 bg-white/5 border-b border-white/10 text-[10px] text-gray-500 uppercase">
+              <div className="bg-gray-50 dark:bg-white/5 rounded-xl border border-gray-200 dark:border-white/10 overflow-hidden">
+                <div className="grid grid-cols-12 gap-2 px-4 py-2 bg-gray-50 dark:bg-white/5 border-b border-gray-200 dark:border-white/10 text-[10px] text-gray-500 uppercase">
                   <div className="col-span-3">User</div>
                   <div className="col-span-3">Action</div>
                   <div className="col-span-3">Station</div>
@@ -1983,11 +1983,11 @@ export default function AdminPanel() {
                     <div className="col-span-3 text-sm text-amber-300">
                       {log.action}
                     </div>
-                    <div className="col-span-3 text-[10px] text-gray-400">
+                    <div className="col-span-3 text-[10px] text-gray-500 dark:text-gray-400">
                       {stations.find((s) => s.id === log.stationId)?.name ||
                         log.stationId}
                     </div>
-                    <div className="col-span-3 text-[10px] text-gray-400">
+                    <div className="col-span-3 text-[10px] text-gray-500 dark:text-gray-400">
                       {new Date(log.timestamp).toLocaleString()}
                     </div>
                   </div>
@@ -2013,7 +2013,7 @@ export default function AdminPanel() {
                   founder. No other user can access this area.
                 </p>
               </div>
-              <div className="bg-white/5 rounded-xl p-5 border border-white/10">
+              <div className="bg-gray-50 dark:bg-white/5 rounded-xl p-5 border border-gray-200 dark:border-white/10">
                 <h3 className="font-semibold mb-4 text-sm flex items-center gap-2">
                   <KeyRound size={16} className="text-amber-400" /> Change
                   Founder Password
@@ -2026,7 +2026,7 @@ export default function AdminPanel() {
                       setPwForm((p) => ({ ...p, current: e.target.value }))
                     }
                     placeholder="Current Password"
-                    className="w-full px-4 py-2.5 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+                    className="w-full px-4 py-2.5 rounded-lg bg-gray-100 dark:bg-white/10 border border-white/20 text-gray-900 dark:text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
                   />
                   <input
                     type="password"
@@ -2035,7 +2035,7 @@ export default function AdminPanel() {
                       setPwForm((p) => ({ ...p, new: e.target.value }))
                     }
                     placeholder="New Password"
-                    className="w-full px-4 py-2.5 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+                    className="w-full px-4 py-2.5 rounded-lg bg-gray-100 dark:bg-white/10 border border-white/20 text-gray-900 dark:text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
                   />
                   <input
                     type="password"
@@ -2044,7 +2044,7 @@ export default function AdminPanel() {
                       setPwForm((p) => ({ ...p, confirm: e.target.value }))
                     }
                     placeholder="Confirm New Password"
-                    className="w-full px-4 py-2.5 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+                    className="w-full px-4 py-2.5 rounded-lg bg-gray-100 dark:bg-white/10 border border-white/20 text-gray-900 dark:text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
                   />
                   {pwMsg && (
                     <div
@@ -2074,13 +2074,13 @@ export default function AdminPanel() {
                       );
                       if (ok) setPwForm({ current: "", new: "", confirm: "" });
                     }}
-                    className="px-6 py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-semibold rounded-lg text-sm transition-all"
+                    className="px-6 py-2.5 bg-amber-500 hover:bg-amber-600 text-gray-900 dark:text-white font-semibold rounded-lg text-sm transition-all"
                   >
                     Update Password
                   </button>
                 </div>
               </div>
-              <div className="bg-white/5 rounded-xl p-5 border border-white/10">
+              <div className="bg-gray-50 dark:bg-white/5 rounded-xl p-5 border border-gray-200 dark:border-white/10">
                 <h3 className="font-semibold mb-4 text-sm">
                   Security Information
                 </h3>
@@ -2117,7 +2117,7 @@ export default function AdminPanel() {
                 <h3 className="text-lg font-semibold">
                   {modules.find((m) => m.id === activeTab)?.label}
                 </h3>
-                <p className="text-sm text-gray-400 mt-2">
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
                   {modules.find((m) => m.id === activeTab)?.description}
                 </p>
                 <p className="text-xs text-gray-600 mt-4">

@@ -740,7 +740,7 @@ export default function Invoice() {
                           placeholder="Item description"
                         />
                         {fuelTypeApi.getPriceFor(item.desc) != null && (
-                          <span className="text-[9px] text-gray-400">
+                          <span className="text-[9px] text-gray-500 dark:text-gray-400">
                             Fuel price: {currencySymbol}{" "}
                             {fuelTypeApi.getPriceFor(item.desc)?.toFixed(2)}/L
                           </span>
@@ -1009,7 +1009,7 @@ export default function Invoice() {
 
               {showAIAssistant && (
                 <div className="space-y-2">
-                  <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg min-h-[120px]">
+                  <div className="bg-gray-50 dark:bg-white dark:bg-gray-800 p-4 rounded-lg min-h-[120px]">
                     {aiResponse ? (
                       <div className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
                         {aiResponse}

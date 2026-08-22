@@ -44,7 +44,7 @@ export default function SyncStatusIndicator({
         <button
           onClick={syncNow}
           disabled={isSyncing}
-          className="relative flex items-center gap-1.5 px-2 py-1 rounded-md bg-white/5 hover:bg-white/10 transition-colors text-[10px] text-gray-400"
+          className="relative flex items-center gap-1.5 px-2 py-1 rounded-md bg-gray-50 dark:bg-white/5 hover:bg-gray-100 dark:bg-white/10 transition-colors text-[10px] text-gray-500 dark:text-gray-400"
           title={`Last sync: ${getLastSyncText()}`}
         >
           {isSyncing ? (
@@ -56,12 +56,12 @@ export default function SyncStatusIndicator({
           )}
           <span>{getLastSyncText()}</span>
           {highPriorityCount > 0 && (
-            <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full text-[7px] text-white flex items-center justify-center">
+            <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full text-[7px] text-gray-900 dark:text-white flex items-center justify-center">
               {highPriorityCount}
             </span>
           )}
           {unreadCount > 0 && highPriorityCount === 0 && (
-            <span className="absolute -top-1 -right-1 w-3 h-3 bg-amber-500 rounded-full text-[7px] text-white flex items-center justify-center">
+            <span className="absolute -top-1 -right-1 w-3 h-3 bg-amber-500 rounded-full text-[7px] text-gray-900 dark:text-white flex items-center justify-center">
               {unreadCount}
             </span>
           )}
@@ -74,7 +74,7 @@ export default function SyncStatusIndicator({
     <div className="relative">
       <button
         onClick={() => setShowDetails(!showDetails)}
-        className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
+        className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-50 dark:bg-white/5 hover:bg-gray-100 dark:bg-white/10 transition-colors"
       >
         {isSyncing ? (
           <RefreshCw size={14} className="animate-spin text-blue-400" />
@@ -83,12 +83,12 @@ export default function SyncStatusIndicator({
         ) : (
           <Wifi size={14} className="text-green-400" />
         )}
-        <span className="text-xs text-gray-400">
+        <span className="text-xs text-gray-500 dark:text-gray-400">
           {isSyncing ? "Syncing..." : error ? "Sync error" : getLastSyncText()}
         </span>
         {unreadCount > 0 && (
           <span
-            className={`text-[10px] px-1.5 py-0.5 rounded-full ${highPriorityCount > 0 ? "bg-red-500 text-white" : "bg-amber-500 text-white"}`}
+            className={`text-[10px] px-1.5 py-0.5 rounded-full ${highPriorityCount > 0 ? "bg-red-500 text-gray-900 dark:text-white" : "bg-amber-500 text-gray-900 dark:text-white"}`}
           >
             {unreadCount}
           </span>
@@ -96,8 +96,8 @@ export default function SyncStatusIndicator({
       </button>
 
       {showDetails && (
-        <div className="absolute right-0 top-full mt-2 w-72 bg-gray-900 border border-gray-700 rounded-xl shadow-2xl z-50 p-4">
-          <h4 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
+        <div className="absolute right-0 top-full mt-2 w-72 bg-white dark:bg-gray-900 border border-gray-700 rounded-xl shadow-2xl z-50 p-4">
+          <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
             <RefreshCw
               size={14}
               className={
@@ -108,7 +108,7 @@ export default function SyncStatusIndicator({
           </h4>
 
           <div className="space-y-2 text-xs">
-            <div className="flex justify-between text-gray-400">
+            <div className="flex justify-between text-gray-500 dark:text-gray-400">
               <span>Status:</span>
               <span
                 className={
@@ -122,11 +122,11 @@ export default function SyncStatusIndicator({
                 {isSyncing ? "Syncing..." : error ? "Error" : "Up to date"}
               </span>
             </div>
-            <div className="flex justify-between text-gray-400">
+            <div className="flex justify-between text-gray-500 dark:text-gray-400">
               <span>Last sync:</span>
               <span className="text-gray-300">{getLastSyncText()}</span>
             </div>
-            <div className="flex justify-between text-gray-400">
+            <div className="flex justify-between text-gray-500 dark:text-gray-400">
               <span>Alerts:</span>
               <span
                 className={unreadCount > 0 ? "text-amber-400" : "text-gray-500"}
@@ -147,7 +147,7 @@ export default function SyncStatusIndicator({
               syncNow();
             }}
             disabled={isSyncing}
-            className="w-full mt-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 text-white text-xs font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
+            className="w-full mt-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 text-gray-900 dark:text-white text-xs font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
           >
             <RefreshCw size={12} className={isSyncing ? "animate-spin" : ""} />
             {isSyncing ? "Syncing..." : "Sync Now"}

@@ -1598,7 +1598,7 @@ export default function ReportsCenter() {
                     ([desc, amount]: [string, any]) => (
                       <div
                         key={desc}
-                        className="flex justify-between items-center p-2 bg-white dark:bg-gray-800 rounded"
+                        className="flex justify-between items-center p-2 bg-white dark:bg-white dark:bg-gray-800 rounded"
                       >
                         <span className="text-sm">{desc}</span>
                         <span className="font-medium">
@@ -1614,7 +1614,7 @@ export default function ReportsCenter() {
                 <div className="text-3xl font-bold text-red-600">
                   {currencySymbol} {formatNumber(periodData.totalExpenses)}
                 </div>
-                <div className="text-sm text-gray-600 dark:text-gray-400">
+                <div className="text-sm text-gray-600 dark:text-gray-500 dark:text-gray-400">
                   from {periodData.transactionCount} transactions
                 </div>
               </div>
@@ -1666,8 +1666,8 @@ export default function ReportsCenter() {
             </h4>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-white dark:bg-gray-800 p-4 rounded-lg">
-                <h6 className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">
+              <div className="bg-white dark:bg-white dark:bg-gray-800 p-4 rounded-lg">
+                <h6 className="text-sm font-medium text-gray-600 dark:text-gray-500 dark:text-gray-400 mb-2">
                   Revenue
                 </h6>
                 <div className="text-2xl font-bold text-green-600">
@@ -1675,8 +1675,8 @@ export default function ReportsCenter() {
                 </div>
               </div>
 
-              <div className="bg-white dark:bg-gray-800 p-4 rounded-lg">
-                <h6 className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">
+              <div className="bg-white dark:bg-white dark:bg-gray-800 p-4 rounded-lg">
+                <h6 className="text-sm font-medium text-gray-600 dark:text-gray-500 dark:text-gray-400 mb-2">
                   Expenses
                 </h6>
                 <div className="text-2xl font-bold text-red-600">
@@ -1684,8 +1684,8 @@ export default function ReportsCenter() {
                 </div>
               </div>
 
-              <div className="bg-white dark:bg-gray-800 p-4 rounded-lg">
-                <h6 className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">
+              <div className="bg-white dark:bg-white dark:bg-gray-800 p-4 rounded-lg">
+                <h6 className="text-sm font-medium text-gray-600 dark:text-gray-500 dark:text-gray-400 mb-2">
                   Profit Margin
                 </h6>
                 <div
@@ -1696,7 +1696,7 @@ export default function ReportsCenter() {
               </div>
             </div>
 
-            <div className="mt-4 text-sm text-gray-600 dark:text-gray-400">
+            <div className="mt-4 text-sm text-gray-600 dark:text-gray-500 dark:text-gray-400">
               Till Payments: {currencySymbol}{" "}
               {formatNumber(periodData.tillPayments)}
             </div>
@@ -1776,7 +1776,7 @@ export default function ReportsCenter() {
         {/* Detailed Breakdown */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Revenue Breakdown */}
-          <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700">
+          <div className="bg-white dark:bg-white dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700">
             <h5 className="text-lg font-semibold mb-4 flex items-center gap-2">
               <TrendingUp size={20} className="text-green-600" />
               Revenue Breakdown
@@ -1789,7 +1789,7 @@ export default function ReportsCenter() {
                 </span>
               </div>
               {data.totalPOSRevenue > 0 && (
-                <div className="flex justify-between items-center text-sm text-gray-500 dark:text-gray-400 pl-4">
+                <div className="flex justify-between items-center text-sm text-gray-500 dark:text-gray-500 dark:text-gray-400 pl-4">
                   <span>↳ POS Transactions</span>
                   <span>
                     {currencySymbol} {formatNumber(data.totalPOSRevenue)}
@@ -1812,7 +1812,7 @@ export default function ReportsCenter() {
           </div>
 
           {/* Cost Breakdown */}
-          <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700">
+          <div className="bg-white dark:bg-white dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700">
             <h5 className="text-lg font-semibold mb-4 flex items-center gap-2">
               <TrendingDown size={20} className="text-red-600" />
               Cost Breakdown
@@ -1841,14 +1841,14 @@ export default function ReportsCenter() {
         </div>
 
         {/* Operational Metrics */}
-        <div className="bg-gray-50 dark:bg-gray-800 p-6 rounded-lg">
+        <div className="bg-gray-50 dark:bg-white dark:bg-gray-800 p-6 rounded-lg">
           <h5 className="text-lg font-semibold mb-4">Operational Metrics</h5>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="text-center">
               <div className="text-2xl font-bold text-blue-600">
                 {data.transactionCounts.sales}
               </div>
-              <div className="text-sm text-gray-600 dark:text-gray-400">
+              <div className="text-sm text-gray-600 dark:text-gray-500 dark:text-gray-400">
                 Sales Records
               </div>
             </div>
@@ -1856,7 +1856,7 @@ export default function ReportsCenter() {
               <div className="text-2xl font-bold text-green-600">
                 {data.transactionCounts.deliveries}
               </div>
-              <div className="text-sm text-gray-600 dark:text-gray-400">
+              <div className="text-sm text-gray-600 dark:text-gray-500 dark:text-gray-400">
                 Deliveries
               </div>
             </div>
@@ -1864,7 +1864,7 @@ export default function ReportsCenter() {
               <div className="text-2xl font-bold text-purple-600">
                 {data.transactionCounts.offloading}
               </div>
-              <div className="text-sm text-gray-600 dark:text-gray-400">
+              <div className="text-sm text-gray-600 dark:text-gray-500 dark:text-gray-400">
                 Offloading Records
               </div>
             </div>
@@ -1899,7 +1899,7 @@ export default function ReportsCenter() {
       <div className="space-y-6">
         {/* KRA Info Banner (Kenya only) */}
         {isKenya && (
-          <div className="bg-gradient-to-r from-green-600 to-green-700 text-white p-4 rounded-lg">
+          <div className="bg-gradient-to-r from-green-600 to-green-700 text-gray-900 dark:text-white p-4 rounded-lg">
             <div className="flex items-center gap-3 mb-2">
               <Building2 size={24} />
               <span className="font-bold text-lg">
@@ -1936,7 +1936,7 @@ export default function ReportsCenter() {
         {/* VAT Breakdown */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Output VAT */}
-          <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border-2 border-blue-200 dark:border-blue-700">
+          <div className="bg-white dark:bg-white dark:bg-gray-800 p-6 rounded-lg border-2 border-blue-200 dark:border-blue-700">
             <h5 className="text-lg font-semibold mb-4 flex items-center gap-2 text-blue-700 dark:text-blue-300">
               <Receipt size={20} />
               OUTPUT VAT (Sales)
@@ -1967,7 +1967,7 @@ export default function ReportsCenter() {
           </div>
 
           {/* Input VAT */}
-          <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border-2 border-orange-200 dark:border-orange-700">
+          <div className="bg-white dark:bg-white dark:bg-gray-800 p-6 rounded-lg border-2 border-orange-200 dark:border-orange-700">
             <h5 className="text-lg font-semibold mb-4 flex items-center gap-2 text-orange-700 dark:text-orange-300">
               <Receipt size={20} />
               INPUT VAT (Purchases)
@@ -2012,7 +2012,7 @@ export default function ReportsCenter() {
                     ? "VAT Refundable from KRA"
                     : "VAT Refundable"}
               </h5>
-              <p className="text-sm text-gray-600 dark:text-gray-400">
+              <p className="text-sm text-gray-600 dark:text-gray-500 dark:text-gray-400">
                 Output VAT - Input VAT = Net VAT
               </p>
             </div>
@@ -2028,31 +2028,31 @@ export default function ReportsCenter() {
         <div className="flex flex-wrap gap-3">
           <button
             onClick={exportToPDF}
-            className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+            className="flex items-center gap-2 px-4 py-2 bg-red-600 text-gray-900 dark:text-white rounded-lg hover:bg-red-700"
           >
             <Download size={16} /> Download VAT Return PDF
           </button>
           <button
             onClick={exportToExcel}
-            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-gray-900 dark:text-white rounded-lg hover:bg-green-700"
           >
             <FileText size={16} /> Export to Excel
           </button>
           <button
             onClick={() => navigateToTab("pos")}
-            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-gray-900 dark:text-white rounded-lg hover:bg-indigo-700"
           >
             <ShoppingCart size={16} /> New Sale
           </button>
           <button
             onClick={() => navigateToTab("expenses")}
-            className="flex items-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700"
+            className="flex items-center gap-2 px-4 py-2 bg-amber-600 text-gray-900 dark:text-white rounded-lg hover:bg-amber-700"
           >
             <Receipt size={16} /> Record Expense
           </button>
           <button
             onClick={() => navigateToTab("analytics")}
-            className="flex items-center gap-2 px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700"
+            className="flex items-center gap-2 px-4 py-2 bg-cyan-600 text-gray-900 dark:text-white rounded-lg hover:bg-cyan-700"
           >
             <BarChart3 size={16} /> Analytics
           </button>
@@ -2069,7 +2069,7 @@ export default function ReportsCenter() {
       <div className="space-y-6">
         {/* KRA Compliance Badge (Kenya only) */}
         {isKenya && (
-          <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-4 rounded-lg flex items-center justify-between">
+          <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-gray-900 dark:text-white p-4 rounded-lg flex items-center justify-between">
             <div className="flex items-center gap-3">
               <FileText size={24} />
               <div>
@@ -2095,7 +2095,7 @@ export default function ReportsCenter() {
           dailyData.map((day, index) => (
             <div
               key={index}
-              className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden"
+              className="bg-white dark:bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden"
             >
               {/* Day Header */}
               <div className="bg-gray-100 dark:bg-gray-700 px-4 py-3 flex items-center justify-between">
@@ -2208,37 +2208,37 @@ export default function ReportsCenter() {
         <div className="flex flex-wrap gap-3">
           <button
             onClick={exportToPDF}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-gray-900 dark:text-white rounded-lg hover:bg-blue-700"
           >
             <Printer size={16} /> Print Daily Register
           </button>
           <button
             onClick={() => navigateToTab("pos")}
-            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-gray-900 dark:text-white rounded-lg hover:bg-indigo-700"
           >
             <ShoppingCart size={16} /> New Sale
           </button>
           <button
             onClick={() => navigateToTab("sales")}
-            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
+            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-gray-900 dark:text-white rounded-lg hover:bg-emerald-700"
           >
             <TrendingUp size={16} /> Sales Tracking
           </button>
           <button
             onClick={() => navigateToTab("invoice")}
-            className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+            className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-gray-900 dark:text-white rounded-lg hover:bg-purple-700"
           >
             <FileText size={16} /> Create Invoice
           </button>
           <button
             onClick={() => navigateToTab("inventory")}
-            className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700"
+            className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-gray-900 dark:text-white rounded-lg hover:bg-orange-700"
           >
             <Package size={16} /> Stock Management
           </button>
           <button
             onClick={() => navigateToTab("analytics")}
-            className="flex items-center gap-2 px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700"
+            className="flex items-center gap-2 px-4 py-2 bg-cyan-600 text-gray-900 dark:text-white rounded-lg hover:bg-cyan-700"
           >
             <BarChart3 size={16} /> Analytics
           </button>
@@ -2254,7 +2254,7 @@ export default function ReportsCenter() {
     return (
       <div className="space-y-6">
         {/* Business Info Header */}
-        <div className="bg-gradient-to-r from-green-700 to-green-800 text-white p-6 rounded-lg">
+        <div className="bg-gradient-to-r from-green-700 to-green-800 text-gray-900 dark:text-white p-6 rounded-lg">
           <div className="flex items-center gap-3 mb-4">
             <Building2 size={28} />
             <div>
@@ -2265,19 +2265,19 @@ export default function ReportsCenter() {
             </div>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-            <div className="bg-white/10 p-3 rounded">
+            <div className="bg-gray-100 dark:bg-white/10 p-3 rounded">
               <div className="opacity-75 text-xs">KRA PIN</div>
               <div className="font-bold">{data.businessInfo.kraPin}</div>
             </div>
-            <div className="bg-white/10 p-3 rounded">
+            <div className="bg-gray-100 dark:bg-white/10 p-3 rounded">
               <div className="opacity-75 text-xs">VAT Registration</div>
               <div className="font-bold">{data.businessInfo.vatRegNo}</div>
             </div>
-            <div className="bg-white/10 p-3 rounded">
+            <div className="bg-gray-100 dark:bg-white/10 p-3 rounded">
               <div className="opacity-75 text-xs">ETR Serial No.</div>
               <div className="font-bold">{data.businessInfo.etrSerialNo}</div>
             </div>
-            <div className="bg-white/10 p-3 rounded">
+            <div className="bg-gray-100 dark:bg-white/10 p-3 rounded">
               <div className="opacity-75 text-xs">CU Serial No.</div>
               <div className="font-bold">{data.businessInfo.cuSerialNo}</div>
             </div>
@@ -2327,7 +2327,7 @@ export default function ReportsCenter() {
         </div>
 
         {/* VAT Summary */}
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700">
+        <div className="bg-white dark:bg-white dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700">
           <h5 className="text-lg font-semibold mb-4">
             VAT Computation Summary
           </h5>
@@ -2356,7 +2356,7 @@ export default function ReportsCenter() {
         </div>
 
         {/* Profitability */}
-        <div className="bg-gray-50 dark:bg-gray-800 p-6 rounded-lg">
+        <div className="bg-gray-50 dark:bg-white dark:bg-gray-800 p-6 rounded-lg">
           <h5 className="text-lg font-semibold mb-4">Profitability Analysis</h5>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div>
@@ -2394,13 +2394,13 @@ export default function ReportsCenter() {
         <div className="flex gap-3 flex-wrap">
           <button
             onClick={exportToPDF}
-            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-gray-900 dark:text-white rounded-lg hover:bg-green-700"
           >
             <Download size={16} /> Download KRA Report
           </button>
           <button
             onClick={exportToExcel}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-gray-900 dark:text-white rounded-lg hover:bg-blue-700"
           >
             <FileText size={16} /> Export to Excel
           </button>
@@ -2450,8 +2450,8 @@ export default function ReportsCenter() {
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
                   activeReport === report.id
                     ? isKRA
-                      ? "bg-green-600 text-white shadow-lg"
-                      : "bg-blue-600 text-white shadow-lg"
+                      ? "bg-green-600 text-gray-900 dark:text-white shadow-lg"
+                      : "bg-blue-600 text-gray-900 dark:text-white shadow-lg"
                     : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
                 }`}
               >

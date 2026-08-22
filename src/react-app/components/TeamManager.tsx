@@ -126,7 +126,7 @@ const getRoleIcon = (role: string): any => ROLE_ICONS[role] || BadgeCheck;
 const getRoleLabel = (role: string) =>
   ROLE_LABELS[role] || {
     label: role.charAt(0).toUpperCase() + role.slice(1),
-    color: "bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-300",
+    color: "bg-gray-100 text-gray-700 dark:bg-white dark:bg-gray-900/30 dark:text-gray-300",
     desc: "Custom role defined by the Owner.",
   };
 
@@ -1241,15 +1241,15 @@ export default function TeamManager() {
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
       {/* ── Professional header ── */}
-      <div className="bg-gradient-to-r from-purple-600 to-indigo-600 rounded-2xl p-5 text-white shadow-lg">
+      <div className="bg-gradient-to-r from-purple-600 to-indigo-600 rounded-2xl p-5 text-gray-900 dark:text-white shadow-lg">
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-3">
             <div className="p-2.5 bg-white/20 rounded-xl">
-              <Users size={24} className="text-white" />
+              <Users size={24} className="text-gray-900 dark:text-white" />
             </div>
             <div>
               <h2 className="text-2xl font-bold">Team Manager</h2>
-              <p className="text-sm text-white/80">
+              <p className="text-sm text-gray-900 dark:text-white/80">
                 Manage access, roles, shifts &amp; permissions
               </p>
             </div>
@@ -1259,25 +1259,25 @@ export default function TeamManager() {
               <p className="text-lg font-bold leading-none">
                 {combinedMembers.filter((m) => m.active).length}
               </p>
-              <p className="text-white/70 text-[10px]">Members</p>
+              <p className="text-gray-900 dark:text-white/70 text-[10px]">Members</p>
             </div>
             <div className="bg-white/20 rounded-lg px-3 py-1.5 text-center">
               <p className="text-lg font-bold leading-none">
                 {activeInvites.length}
               </p>
-              <p className="text-white/70 text-[10px]">Invites</p>
+              <p className="text-gray-900 dark:text-white/70 text-[10px]">Invites</p>
             </div>
             <div className="bg-white/20 rounded-lg px-3 py-1.5 text-center">
               <p className="text-lg font-bold leading-none">
                 {accessCodes.filter((c) => c.enabled).length}
               </p>
-              <p className="text-white/70 text-[10px]">Codes</p>
+              <p className="text-gray-900 dark:text-white/70 text-[10px]">Codes</p>
             </div>
           </div>
         </div>
         {/* ── Live sync status + quick-action toolbar ── */}
         <div className="mt-3 flex items-center justify-between flex-wrap gap-2 pt-3 border-t border-white/20">
-          <div className="flex items-center gap-2 text-xs text-white/80">
+          <div className="flex items-center gap-2 text-xs text-gray-900 dark:text-white/80">
             {syncOnline ? (
               <span className="flex items-center gap-1 bg-green-400/20 px-2 py-1 rounded-full">
                 <Wifi size={12} /> Cloud synced
@@ -1288,7 +1288,7 @@ export default function TeamManager() {
               </span>
             )}
             {lastPublished && (
-              <span className="flex items-center gap-1 bg-white/10 px-2 py-1 rounded-full">
+              <span className="flex items-center gap-1 bg-gray-100 dark:bg-white/10 px-2 py-1 rounded-full">
                 <Radio size={12} /> Snapshot {new Date(lastPublished).toLocaleTimeString()}
               </span>
             )}
@@ -1297,7 +1297,7 @@ export default function TeamManager() {
             <button
               onClick={() => publishSnapshot()}
               disabled={publishing || !currentStation?.id}
-              className="px-3 py-1.5 bg-white/15 hover:bg-white/25 disabled:opacity-40 text-white rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors"
+              className="px-3 py-1.5 bg-white/15 hover:bg-white/25 disabled:opacity-40 text-gray-900 dark:text-white rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors"
               title="Publish a read-only snapshot for access-code members"
             >
               <Share2 size={13} className={publishing ? "animate-spin" : ""} />
@@ -1305,14 +1305,14 @@ export default function TeamManager() {
             </button>
             <button
               onClick={() => setActiveView("activity")}
-              className="px-3 py-1.5 bg-white/15 hover:bg-white/25 text-white rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors"
+              className="px-3 py-1.5 bg-white/15 hover:bg-white/25 text-gray-900 dark:text-white rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors"
             >
               <Activity size={13} /> Health
             </button>
             <button
               onClick={() => exportMembersCSV()}
               disabled={combinedMembers.length === 0}
-              className="px-3 py-1.5 bg-white/15 hover:bg-white/25 disabled:opacity-40 text-white rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors"
+              className="px-3 py-1.5 bg-white/15 hover:bg-white/25 disabled:opacity-40 text-gray-900 dark:text-white rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors"
             >
               <Download size={13} /> Export
             </button>
@@ -1326,7 +1326,7 @@ export default function TeamManager() {
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <ClipboardList size={18} className="text-amber-600" />
-              <h3 className="text-sm font-bold text-gray-900 dark:text-white">
+              <h3 className="text-sm font-bold text-gray-900 dark:text-gray-900 dark:text-white">
                 Team Setup Checklist
               </h3>
               <span className="text-xs text-gray-500">
@@ -1349,7 +1349,7 @@ export default function TeamManager() {
               <button
                 key={item.id}
                 onClick={item.action}
-                className={`flex items-start gap-2.5 p-2.5 rounded-lg text-left transition-colors ${item.done ? "bg-green-50 dark:bg-green-900/20" : "bg-white dark:bg-gray-800 hover:bg-amber-50 dark:hover:bg-amber-900/10"} border border-gray-200 dark:border-gray-700`}
+                className={`flex items-start gap-2.5 p-2.5 rounded-lg text-left transition-colors ${item.done ? "bg-green-50 dark:bg-green-900/20" : "bg-white dark:bg-white dark:bg-gray-800 hover:bg-amber-50 dark:hover:bg-amber-900/10"} border border-gray-200 dark:border-gray-700`}
               >
                 {item.done ? (
                   <CheckCircle2 size={16} className="text-green-500 flex-shrink-0 mt-0.5" />
@@ -1357,7 +1357,7 @@ export default function TeamManager() {
                   <div className="w-4 h-4 rounded-full border-2 border-amber-300 flex-shrink-0 mt-0.5" />
                 )}
                 <div className="flex-1 min-w-0">
-                  <p className={`text-xs font-semibold ${item.done ? "text-green-700 dark:text-green-300 line-through" : "text-gray-900 dark:text-white"}`}>
+                  <p className={`text-xs font-semibold ${item.done ? "text-green-700 dark:text-green-300 line-through" : "text-gray-900 dark:text-gray-900 dark:text-white"}`}>
                     {item.label}
                   </p>
                   <p className="text-[10px] text-gray-500">{item.desc}</p>
@@ -1441,7 +1441,7 @@ export default function TeamManager() {
                   Your access level
                 </p>
               </div>
-              <p className="text-xs text-gray-400">
+              <p className="text-xs text-gray-500 dark:text-gray-400">
                 Hierarchy: Owner &gt; Manager &gt; Staff &gt; Auditor
               </p>
             </div>
@@ -1467,7 +1467,7 @@ export default function TeamManager() {
                           ({ triggerSoftReload }) => triggerSoftReload(500),
                         );
                       }}
-                      className="px-3 py-1 text-[11px] bg-red-600 hover:bg-red-700 text-white rounded font-medium"
+                      className="px-3 py-1 text-[11px] bg-red-600 hover:bg-red-700 text-gray-900 dark:text-white rounded font-medium"
                     >
                       Confirm
                     </button>
@@ -1490,13 +1490,13 @@ export default function TeamManager() {
             <div className="lg:col-span-2 space-y-4">
               {/* ── Add Team Member ── */}
               {availableRoles.length > 0 && (
-                <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+                <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
                   <div className="flex items-center gap-2 mb-3">
                     <UserPlus
                       size={16}
                       className="text-indigo-600 dark:text-indigo-400"
                     />
-                    <h3 className="text-sm font-bold text-gray-900 dark:text-white">
+                    <h3 className="text-sm font-bold text-gray-900 dark:text-gray-900 dark:text-white">
                       Add Team Member
                     </h3>
                   </div>
@@ -1507,7 +1507,7 @@ export default function TeamManager() {
                           setAddMode("invite");
                           setShowCreate(true);
                         }}
-                        className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-colors shadow-lg"
+                        className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-gray-900 dark:text-white rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-colors shadow-lg"
                       >
                         <Plus size={18} /> Invite by Link
                       </button>
@@ -1524,10 +1524,10 @@ export default function TeamManager() {
                   ) : (
                     <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-xl border border-indigo-200 dark:border-indigo-800 p-4 space-y-3">
                       {/* Mode switcher */}
-                      <div className="flex gap-2 p-1 bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
+                      <div className="flex gap-2 p-1 bg-white dark:bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
                         <button
                           onClick={() => setAddMode("invite")}
-                          className={`flex-1 px-3 py-2 rounded-md text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${addMode === "invite" ? "bg-indigo-600 text-white shadow" : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"}`}
+                          className={`flex-1 px-3 py-2 rounded-md text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${addMode === "invite" ? "bg-indigo-600 text-gray-900 dark:text-white shadow" : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white dark:bg-gray-800"}`}
                         >
                           <Link2 size={14} /> Invite Link
                           <span className="text-[9px] opacity-80">
@@ -1536,7 +1536,7 @@ export default function TeamManager() {
                         </button>
                         <button
                           onClick={() => setAddMode("code")}
-                          className={`flex-1 px-3 py-2 rounded-md text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${addMode === "code" ? "bg-blue-600 text-white shadow" : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"}`}
+                          className={`flex-1 px-3 py-2 rounded-md text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${addMode === "code" ? "bg-blue-600 text-gray-900 dark:text-white shadow" : "text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white dark:bg-gray-800"}`}
                         >
                           <KeyRound size={14} /> Access Code
                           <span className="text-[9px] opacity-80">
@@ -1562,7 +1562,7 @@ export default function TeamManager() {
                       ) : (
                         <>
                           <div>
-                            <label className="text-xs text-gray-600 dark:text-gray-400 block mb-2">
+                            <label className="text-xs text-gray-600 dark:text-gray-500 dark:text-gray-400 block mb-2">
                               Role
                             </label>
                             <div className="flex flex-wrap gap-2">
@@ -1570,7 +1570,7 @@ export default function TeamManager() {
                                 <button
                                   key={r.id}
                                   onClick={() => setInviteRole(r.id)}
-                                  className={`px-4 py-2 rounded-lg text-xs font-medium transition-all ${inviteRole === r.id ? getRoleLabel(r.id).color + " ring-2 ring-offset-1 ring-indigo-400" : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700"}`}
+                                  className={`px-4 py-2 rounded-lg text-xs font-medium transition-all ${inviteRole === r.id ? getRoleLabel(r.id).color + " ring-2 ring-offset-1 ring-indigo-400" : "bg-white dark:bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700"}`}
                                 >
                                   {r.label}
                                 </button>
@@ -1582,7 +1582,7 @@ export default function TeamManager() {
                           </div>
                           <div className="grid grid-cols-2 gap-3">
                             <div>
-                              <label className="text-xs text-gray-600 dark:text-gray-400 block mb-1">
+                              <label className="text-xs text-gray-600 dark:text-gray-500 dark:text-gray-400 block mb-1">
                                 Expires in (days) - optional
                               </label>
                               <input
@@ -1590,11 +1590,11 @@ export default function TeamManager() {
                                 value={expireDays}
                                 onChange={(e) => setExpireDays(e.target.value)}
                                 placeholder="Never"
-                                className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+                                className="w-full px-3 py-2 bg-white dark:bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-gray-900 dark:text-white"
                               />
                             </div>
                             <div>
-                              <label className="text-xs text-gray-600 dark:text-gray-400 block mb-1">
+                              <label className="text-xs text-gray-600 dark:text-gray-500 dark:text-gray-400 block mb-1">
                                 Max uses
                               </label>
                               <input
@@ -1602,7 +1602,7 @@ export default function TeamManager() {
                                 value={maxUses}
                                 onChange={(e) => setMaxUses(e.target.value)}
                                 min="1"
-                                className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+                                className="w-full px-3 py-2 bg-white dark:bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-gray-900 dark:text-white"
                               />
                             </div>
                           </div>
@@ -1653,7 +1653,7 @@ export default function TeamManager() {
                           <div className="flex gap-2">
                             <button
                               onClick={handleCreateInvite}
-                              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium rounded-lg flex items-center gap-1.5"
+                              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-gray-900 dark:text-white text-xs font-medium rounded-lg flex items-center gap-1.5"
                             >
                               <Link2 size={14} /> Generate Link
                             </button>
@@ -1673,12 +1673,12 @@ export default function TeamManager() {
 
               {/* ── Active Invites ── */}
               {activeInvites.length > 0 && (
-                <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+                <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
                   <div className="flex items-center gap-2 mb-3">
                     <Link2 size={16} className="text-amber-600" />
-                    <h3 className="text-sm font-bold text-gray-900 dark:text-white">
+                    <h3 className="text-sm font-bold text-gray-900 dark:text-gray-900 dark:text-white">
                       Active Invites
-                      <span className="ml-2 text-[10px] text-gray-400 font-normal">
+                      <span className="ml-2 text-[10px] text-gray-500 dark:text-gray-400 font-normal">
                         ({activeInvites.length})
                       </span>
                     </h3>
@@ -1687,7 +1687,7 @@ export default function TeamManager() {
                     {activeInvites.map((inv) => (
                       <div
                         key={inv.id}
-                        className="bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 p-3"
+                        className="bg-gray-50 dark:bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 p-3"
                       >
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
@@ -1696,7 +1696,7 @@ export default function TeamManager() {
                             >
                               {getRoleLabel(inv.role).label}
                             </div>
-                            <code className="text-[10px] text-gray-500 font-mono bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded">
+                            <code className="text-[10px] text-gray-500 font-mono bg-gray-100 dark:bg-white dark:bg-gray-800 px-1.5 py-0.5 rounded">
                               {inv.id}
                             </code>
                           </div>
@@ -1716,7 +1716,7 @@ export default function TeamManager() {
                           <input
                             readOnly
                             value={getLink(inv)}
-                            className="flex-1 px-2 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg text-[10px] font-mono dark:text-gray-300 truncate"
+                            className="flex-1 px-2 py-1.5 bg-white dark:bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg text-[10px] font-mono dark:text-gray-300 truncate"
                           />
                           <button
                             onClick={() => handleCopyLink(inv)}
@@ -1773,10 +1773,10 @@ export default function TeamManager() {
               )}
 
               {/* ── Shared snapshot publisher ── */}
-              <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+              <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
                 <div className="flex items-center gap-2 mb-3">
                   <Share2 size={16} className="text-indigo-600" />
-                  <h3 className="text-sm font-bold text-gray-900 dark:text-white">
+                  <h3 className="text-sm font-bold text-gray-900 dark:text-gray-900 dark:text-white">
                     Shared Snapshot
                   </h3>
                 </div>
@@ -1784,7 +1784,7 @@ export default function TeamManager() {
                   Publishes a read-only snapshot so access-code members can view
                   station data without a Supabase session.
                   {lastPublished && (
-                    <span className="block mt-1 text-gray-400">
+                    <span className="block mt-1 text-gray-500 dark:text-gray-400">
                       Last published:{" "}
                       {new Date(lastPublished).toLocaleTimeString()}
                     </span>
@@ -1793,7 +1793,7 @@ export default function TeamManager() {
                 <button
                   onClick={() => publishSnapshot()}
                   disabled={publishing || !currentStation?.id}
-                  className="w-full px-3 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg text-xs font-medium flex items-center justify-center gap-1.5"
+                  className="w-full px-3 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-gray-900 dark:text-white rounded-lg text-xs font-medium flex items-center justify-center gap-1.5"
                 >
                   <RefreshCw
                     size={14}
@@ -1855,7 +1855,7 @@ export default function TeamManager() {
 
               {/* ── Feature Access Control (collapsible) ── */}
               {canManagePermissions && (
-                <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
                   <button
                     onClick={() => setShowFeatureGrant(!showFeatureGrant)}
                     className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
@@ -1868,7 +1868,7 @@ export default function TeamManager() {
                         />
                       </div>
                       <div className="text-left">
-                        <h3 className="text-sm font-bold text-gray-900 dark:text-white">
+                        <h3 className="text-sm font-bold text-gray-900 dark:text-gray-900 dark:text-white">
                           Feature Access Control
                         </h3>
                         <p className="text-xs text-gray-500">
@@ -1877,9 +1877,9 @@ export default function TeamManager() {
                       </div>
                     </div>
                     {showFeatureGrant ? (
-                      <ChevronUp size={16} className="text-gray-400" />
+                      <ChevronUp size={16} className="text-gray-500 dark:text-gray-400" />
                     ) : (
-                      <ChevronDown size={16} className="text-gray-400" />
+                      <ChevronDown size={16} className="text-gray-500 dark:text-gray-400" />
                     )}
                   </button>
 
@@ -1891,10 +1891,10 @@ export default function TeamManager() {
                           Allowed
                         </span>
                         <span className="flex items-center gap-1">
-                          <ToggleLeft size={14} className="text-gray-400" />{" "}
+                          <ToggleLeft size={14} className="text-gray-500 dark:text-gray-400" />{" "}
                           Denied
                         </span>
-                        <span className="ml-auto text-gray-400">
+                        <span className="ml-auto text-gray-500 dark:text-gray-400">
                           Click to toggle
                         </span>
                       </div>
@@ -1934,7 +1934,7 @@ export default function TeamManager() {
                                   className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-all ${
                                     isAllowed
                                       ? "bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800"
-                                      : "bg-gray-50 dark:bg-gray-900 text-gray-400 border border-gray-200 dark:border-gray-700"
+                                      : "bg-gray-50 dark:bg-white dark:bg-gray-900 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700"
                                   }`}
                                 >
                                   {isAllowed ? (
@@ -1961,7 +1961,7 @@ export default function TeamManager() {
                             });
                           }
                         }}
-                        className="w-full py-2 text-xs text-gray-500 hover:text-gray-700 bg-gray-50 dark:bg-gray-900 rounded-lg transition-colors"
+                        className="w-full py-2 text-xs text-gray-500 hover:text-gray-700 bg-gray-50 dark:bg-white dark:bg-gray-900 rounded-lg transition-colors"
                       >
                         Reset to Default Access
                       </button>
@@ -1971,13 +1971,13 @@ export default function TeamManager() {
               )}
 
               {/* ── Team Members roster (with search + filter + bulk actions) ── */}
-              <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+              <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
                 <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
                   <div className="flex items-center gap-2">
                     <Users size={16} className="text-purple-600" />
-                    <h3 className="text-sm font-bold text-gray-900 dark:text-white">
+                    <h3 className="text-sm font-bold text-gray-900 dark:text-gray-900 dark:text-white">
                       Team Members
-                      <span className="ml-2 text-[10px] text-gray-400 font-normal">
+                      <span className="ml-2 text-[10px] text-gray-500 dark:text-gray-400 font-normal">
                         ({filteredMembers.length}
                         {filteredMembers.length !== combinedMembers.length
                           ? ` of ${combinedMembers.length}`
@@ -1990,7 +1990,7 @@ export default function TeamManager() {
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => setShowBulkActions(!showBulkActions)}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors ${showBulkActions ? "bg-indigo-600 text-white" : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300"}`}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors ${showBulkActions ? "bg-indigo-600 text-gray-900 dark:text-white" : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300"}`}
                         title="Toggle bulk select"
                       >
                         {showBulkActions ? (
@@ -2018,19 +2018,19 @@ export default function TeamManager() {
                       <div className="flex-1 relative">
                         <Search
                           size={14}
-                          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400"
                         />
                         <input
                           type="text"
                           value={memberSearch}
                           onChange={(e) => setMemberSearch(e.target.value)}
                           placeholder="Search by name, username, email, ID..."
-                          className="w-full pl-9 pr-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-xs dark:text-white"
+                          className="w-full pl-9 pr-3 py-2 bg-gray-50 dark:bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-xs dark:text-gray-900 dark:text-white"
                         />
                         {memberSearch && (
                           <button
                             onClick={() => setMemberSearch("")}
-                            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 hover:text-gray-600"
                           >
                             <X size={14} />
                           </button>
@@ -2041,7 +2041,7 @@ export default function TeamManager() {
                       <select
                         value={memberFilterRole}
                         onChange={(e) => setMemberFilterRole(e.target.value)}
-                        className="px-2 py-1.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-[11px] dark:text-white"
+                        className="px-2 py-1.5 bg-gray-50 dark:bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-[11px] dark:text-gray-900 dark:text-white"
                       >
                         <option value="all">All Roles</option>
                         <option value="owner">Owner</option>
@@ -2057,7 +2057,7 @@ export default function TeamManager() {
                       <select
                         value={memberFilterMethod}
                         onChange={(e) => setMemberFilterMethod(e.target.value)}
-                        className="px-2 py-1.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-[11px] dark:text-white"
+                        className="px-2 py-1.5 bg-gray-50 dark:bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-[11px] dark:text-gray-900 dark:text-white"
                       >
                         <option value="all">All Methods</option>
                         <option value="invite">Invite Link</option>
@@ -2066,7 +2066,7 @@ export default function TeamManager() {
                       <select
                         value={memberFilterStatus}
                         onChange={(e) => setMemberFilterStatus(e.target.value)}
-                        className="px-2 py-1.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-[11px] dark:text-white"
+                        className="px-2 py-1.5 bg-gray-50 dark:bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-[11px] dark:text-gray-900 dark:text-white"
                       >
                         <option value="all">All Statuses</option>
                         <option value="active">Active</option>
@@ -2143,10 +2143,10 @@ export default function TeamManager() {
                       size={32}
                       className="mx-auto text-gray-300 dark:text-gray-600 mb-2"
                     />
-                    <p className="text-sm text-gray-400">
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
                       No team members yet.
                     </p>
-                    <p className="text-xs text-gray-400 mt-1">
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                       Add a member via an invite link or access code.
                     </p>
                   </div>
@@ -2157,7 +2157,7 @@ export default function TeamManager() {
                       size={28}
                       className="mx-auto text-gray-300 dark:text-gray-600 mb-2"
                     />
-                    <p className="text-sm text-gray-400">
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
                       No members match your search.
                     </p>
                   </div>
@@ -2174,7 +2174,7 @@ export default function TeamManager() {
                     return (
                       <div
                         key={member.id}
-                        className={`bg-white dark:bg-gray-800 rounded-xl border overflow-hidden ${isExpired ? "border-red-200 dark:border-red-800 opacity-60" : "border-gray-200 dark:border-gray-700"}`}
+                        className={`bg-white dark:bg-white dark:bg-gray-800 rounded-xl border overflow-hidden ${isExpired ? "border-red-200 dark:border-red-800 opacity-60" : "border-gray-200 dark:border-gray-700"}`}
                       >
                         <div
                           className="flex items-center gap-3 p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50"
@@ -2201,7 +2201,7 @@ export default function TeamManager() {
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2">
-                              <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                              <p className="text-sm font-semibold text-gray-900 dark:text-gray-900 dark:text-white">
                                 {isCode ? member.memberName : member.username}
                               </p>
                               <span
@@ -2229,7 +2229,7 @@ export default function TeamManager() {
                             <p className="text-xs text-gray-500">
                               Invited by {member.invitedBy}
                               {member.invitedByUniqueId && (
-                                <span className="text-gray-400">
+                                <span className="text-gray-500 dark:text-gray-400">
                                   {" "}
                                   (ID: {member.invitedByUniqueId})
                                 </span>
@@ -2238,7 +2238,7 @@ export default function TeamManager() {
                               {new Date(member.invitedAt).toLocaleDateString()}
                             </p>
                             {(member.email || member.uniqueId) && (
-                              <p className="text-[10px] text-gray-400 truncate">
+                              <p className="text-[10px] text-gray-500 dark:text-gray-400 truncate">
                                 {member.email && (
                                   <span className="flex items-center gap-1">
                                     <Mail size={9} /> {member.email}
@@ -2254,7 +2254,7 @@ export default function TeamManager() {
                           </div>
                           <div className="flex items-center gap-2">
                             {member.expiresAt && (
-                              <span className="text-[10px] text-gray-400 flex items-center gap-1">
+                              <span className="text-[10px] text-gray-500 dark:text-gray-400 flex items-center gap-1">
                                 <Clock size={10} />{" "}
                                 {new Date(
                                   member.expiresAt,
@@ -2272,11 +2272,11 @@ export default function TeamManager() {
                               <Eye size={11} /> Details
                             </button>
                             {isExpanded ? (
-                              <ChevronUp size={16} className="text-gray-400" />
+                              <ChevronUp size={16} className="text-gray-500 dark:text-gray-400" />
                             ) : (
                               <ChevronDown
                                 size={16}
-                                className="text-gray-400"
+                                className="text-gray-500 dark:text-gray-400"
                               />
                             )}
                           </div>
@@ -2296,7 +2296,7 @@ export default function TeamManager() {
                                       className="inline mr-1"
                                     />
                                     Username:{" "}
-                                    <code className="font-mono bg-gray-100 dark:bg-gray-900 px-1 rounded">
+                                    <code className="font-mono bg-gray-100 dark:bg-white dark:bg-gray-900 px-1 rounded">
                                       {member.username}
                                     </code>
                                   </p>
@@ -2307,7 +2307,7 @@ export default function TeamManager() {
                                       ? ` · Last: ${new Date(member.lastAccessedAt).toLocaleString()}`
                                       : ""}
                                   </p>
-                                  <p className="text-gray-400">
+                                  <p className="text-gray-500 dark:text-gray-400">
                                     Access method: Access Code (no signup
                                     needed). Manage in the Access Codes panel
                                     below.
@@ -2357,7 +2357,7 @@ export default function TeamManager() {
                                       </label>
                                       <div className="flex flex-wrap gap-1">
                                         {pumpOptions.length === 0 && (
-                                          <span className="text-[10px] text-gray-400">
+                                          <span className="text-[10px] text-gray-500 dark:text-gray-400">
                                             No pumps configured for this
                                             station.
                                           </span>
@@ -2433,7 +2433,7 @@ export default function TeamManager() {
                                             [member.id]: e.target.value,
                                           }))
                                         }
-                                        className="w-16 px-2 py-1 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded text-xs dark:text-white"
+                                        className="w-16 px-2 py-1 bg-gray-50 dark:bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded text-xs dark:text-gray-900 dark:text-white"
                                         placeholder="Days"
                                       />
                                       <button
@@ -2480,10 +2480,10 @@ export default function TeamManager() {
 
               {/* ── Invite History (used/expired) ── */}
               {(usedInvites.length > 0 || expiredInvites.length > 0) && (
-                <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+                <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
                   <div className="flex items-center gap-2 mb-3">
-                    <Clock size={16} className="text-gray-400" />
-                    <h3 className="text-sm font-bold text-gray-500 dark:text-gray-400">
+                    <Clock size={16} className="text-gray-500 dark:text-gray-400" />
+                    <h3 className="text-sm font-bold text-gray-500 dark:text-gray-500 dark:text-gray-400">
                       Invite History
                     </h3>
                   </div>
@@ -2491,7 +2491,7 @@ export default function TeamManager() {
                     {usedInvites.map((inv) => (
                       <div
                         key={inv.id}
-                        className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-900 rounded-lg text-xs text-gray-500"
+                        className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-white dark:bg-gray-900 rounded-lg text-xs text-gray-500"
                       >
                         <CheckCircle2 size={14} className="text-green-400" />
                         <span
@@ -2510,7 +2510,7 @@ export default function TeamManager() {
                     {expiredInvites.map((inv) => (
                       <div
                         key={inv.id}
-                        className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-900 rounded-lg text-xs text-gray-500"
+                        className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-white dark:bg-gray-900 rounded-lg text-xs text-gray-500"
                       >
                         <AlertTriangle size={14} className="text-amber-400" />
                         <span
@@ -2533,13 +2533,13 @@ export default function TeamManager() {
           </div>
 
           {/* ── Access Codes panel (full-width below the grid) ── */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+          <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
             <div className="flex items-center gap-2 mb-3">
               <KeyRound size={16} className="text-blue-600" />
-              <h3 className="text-sm font-bold text-gray-900 dark:text-white">
+              <h3 className="text-sm font-bold text-gray-900 dark:text-gray-900 dark:text-white">
                 Access Codes
               </h3>
-              <span className="text-[10px] text-gray-400 font-normal">
+              <span className="text-[10px] text-gray-500 dark:text-gray-400 font-normal">
                 No-signup access for team members
               </span>
             </div>
@@ -2562,8 +2562,8 @@ export default function TeamManager() {
             className="fixed inset-0 bg-black/40 z-40"
             onClick={() => setDrawerMemberId(null)}
           />
-          <div className="fixed right-0 top-0 bottom-0 w-full max-w-md bg-white dark:bg-gray-900 shadow-2xl z-50 overflow-y-auto">
-            <div className="sticky top-0 bg-gradient-to-r from-purple-600 to-indigo-600 text-white p-4 flex items-center justify-between">
+          <div className="fixed right-0 top-0 bottom-0 w-full max-w-md bg-white dark:bg-white dark:bg-gray-900 shadow-2xl z-50 overflow-y-auto">
+            <div className="sticky top-0 bg-gradient-to-r from-purple-600 to-indigo-600 text-gray-900 dark:text-white p-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-white/20 rounded-lg">
                   {(() => {
@@ -2577,7 +2577,7 @@ export default function TeamManager() {
                       ? drawerMember.memberName
                       : drawerMember.username}
                   </h3>
-                  <p className="text-xs text-white/80">
+                  <p className="text-xs text-gray-900 dark:text-white/80">
                     {getRoleLabel(drawerMember.role).label} ·{" "}
                     {drawerMember.accessMethod === "code"
                       ? "Access Code"
@@ -2596,13 +2596,13 @@ export default function TeamManager() {
 
             <div className="p-4 space-y-4">
               {/* Identity */}
-              <div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-3 space-y-2">
+              <div className="bg-gray-50 dark:bg-white dark:bg-gray-800 rounded-xl p-3 space-y-2">
                 <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide flex items-center gap-1">
                   <IdCard size={12} /> Identity
                 </h4>
                 {drawerMember.email && (
                   <div className="flex items-center gap-2 text-sm">
-                    <Mail size={14} className="text-gray-400" />
+                    <Mail size={14} className="text-gray-500 dark:text-gray-400" />
                     <span className="text-gray-700 dark:text-gray-300 truncate">
                       {drawerMember.email}
                     </span>
@@ -2610,21 +2610,21 @@ export default function TeamManager() {
                 )}
                 {drawerMember.uniqueId && (
                   <div className="flex items-center gap-2 text-sm">
-                    <IdCard size={14} className="text-gray-400" />
+                    <IdCard size={14} className="text-gray-500 dark:text-gray-400" />
                     <span className="text-gray-700 dark:text-gray-300 font-mono text-xs">
                       {drawerMember.uniqueId}
                     </span>
                   </div>
                 )}
                 <div className="flex items-center gap-2 text-sm">
-                  <Clock size={14} className="text-gray-400" />
+                  <Clock size={14} className="text-gray-500 dark:text-gray-400" />
                   <span className="text-gray-700 dark:text-gray-300">
                     Joined {new Date(drawerMember.invitedAt).toLocaleDateString()}
                   </span>
                 </div>
                 {drawerMember.invitedBy && (
                   <div className="flex items-center gap-2 text-sm">
-                    <GitBranch size={14} className="text-gray-400" />
+                    <GitBranch size={14} className="text-gray-500 dark:text-gray-400" />
                     <span className="text-gray-700 dark:text-gray-300">
                       Invited by {drawerMember.invitedBy}
                       {drawerMember.invitedByUniqueId &&
@@ -2641,13 +2641,13 @@ export default function TeamManager() {
                     <Activity size={12} /> Access Activity
                   </h4>
                   <div className="grid grid-cols-2 gap-2">
-                    <div className="bg-white dark:bg-gray-800 rounded-lg p-2 text-center">
+                    <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-lg p-2 text-center">
                       <p className="text-xl font-bold text-blue-600">
                         {drawerMember.accessCount ?? 0}
                       </p>
                       <p className="text-[10px] text-gray-500">Logins</p>
                     </div>
-                    <div className="bg-white dark:bg-gray-800 rounded-lg p-2 text-center">
+                    <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-lg p-2 text-center">
                       <p className="text-xs font-semibold text-gray-700 dark:text-gray-300">
                         {drawerMember.lastAccessedAt
                           ? new Date(drawerMember.lastAccessedAt).toLocaleDateString()
@@ -2671,7 +2671,7 @@ export default function TeamManager() {
                     </label>
                     <div className="flex flex-wrap gap-1">
                       {pumpOptions.length === 0 && (
-                        <span className="text-[10px] text-gray-400">
+                        <span className="text-[10px] text-gray-500 dark:text-gray-400">
                           No pumps configured.
                         </span>
                       )}
@@ -2686,7 +2686,7 @@ export default function TeamManager() {
                                 : [...drawerMember.assignedPumps, p.id];
                               assignPumps(drawerMember.id, next);
                             }}
-                            className={`text-[10px] px-2 py-1 rounded-full border transition-all ${selected ? "bg-green-100 text-green-700 border-green-300" : "bg-white dark:bg-gray-800 text-gray-500 border-gray-200 dark:border-gray-600"}`}
+                            className={`text-[10px] px-2 py-1 rounded-full border transition-all ${selected ? "bg-green-100 text-green-700 border-green-300" : "bg-white dark:bg-white dark:bg-gray-800 text-gray-500 border-gray-200 dark:border-gray-600"}`}
                           >
                             {p.label}
                           </button>
@@ -2708,7 +2708,7 @@ export default function TeamManager() {
                               : [...drawerMember.assignedShifts, s];
                             assignShifts(drawerMember.id, next);
                           }}
-                          className={`text-[10px] px-2 py-1 rounded-full border transition-all ${drawerMember.assignedShifts.includes(s) ? "bg-blue-100 text-blue-700 border-blue-300" : "bg-white dark:bg-gray-800 text-gray-500 border-gray-200 dark:border-gray-600"}`}
+                          className={`text-[10px] px-2 py-1 rounded-full border transition-all ${drawerMember.assignedShifts.includes(s) ? "bg-blue-100 text-blue-700 border-blue-300" : "bg-white dark:bg-white dark:bg-gray-800 text-gray-500 border-gray-200 dark:border-gray-600"}`}
                         >
                           {s}
                         </button>
@@ -2760,7 +2760,7 @@ export default function TeamManager() {
                               [drawerMember.id]: e.target.value,
                             }))
                           }
-                          className="w-20 px-2 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded text-xs dark:text-white"
+                          className="w-20 px-2 py-2 bg-gray-50 dark:bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded text-xs dark:text-gray-900 dark:text-white"
                           placeholder="Days"
                         />
                         <button
@@ -2792,7 +2792,7 @@ export default function TeamManager() {
                   </div>
                 )}
                 {drawerMember.expiresAt && (
-                  <div className={`text-[10px] text-center p-2 rounded-lg ${new Date(drawerMember.expiresAt) < new Date() ? "bg-red-50 dark:bg-red-900/20 text-red-600" : "bg-gray-50 dark:bg-gray-800 text-gray-500"}`}>
+                  <div className={`text-[10px] text-center p-2 rounded-lg ${new Date(drawerMember.expiresAt) < new Date() ? "bg-red-50 dark:bg-red-900/20 text-red-600" : "bg-gray-50 dark:bg-white dark:bg-gray-800 text-gray-500"}`}>
                     {new Date(drawerMember.expiresAt) < new Date()
                       ? "Expired"
                       : "Expires"}{" "}
@@ -2805,7 +2805,7 @@ export default function TeamManager() {
         </>
       )}
       {toast && (
-        <div className="fixed bottom-6 right-6 bg-gray-900 text-white px-4 py-3 rounded-xl shadow-2xl text-sm font-medium z-50 flex items-center gap-2">
+        <div className="fixed bottom-6 right-6 bg-white dark:bg-gray-900 text-gray-900 dark:text-white px-4 py-3 rounded-xl shadow-2xl text-sm font-medium z-50 flex items-center gap-2">
           <CheckCircle2 size={16} /> {toast}
         </div>
       )}
@@ -2928,7 +2928,7 @@ function RolesAndPermissionsView(props: RolesAndPermissionsViewProps) {
             />
           </div>
           <div>
-            <h2 className="text-sm font-bold text-gray-900 dark:text-white">
+            <h2 className="text-sm font-bold text-gray-900 dark:text-gray-900 dark:text-white">
               Roles &amp; Permissions Hierarchy
             </h2>
             <p className="text-xs text-gray-500 mt-1">
@@ -2943,7 +2943,7 @@ function RolesAndPermissionsView(props: RolesAndPermissionsViewProps) {
 
       {/* Custom role creator */}
       {canCreateRoles && (
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+        <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
           {!showRoleCreator ? (
             <div className="space-y-3">
               {/* Quick presets */}
@@ -2976,14 +2976,14 @@ function RolesAndPermissionsView(props: RolesAndPermissionsViewProps) {
               </div>
               <button
                 onClick={() => setShowRoleCreator(true)}
-                className="w-full py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-semibold flex items-center justify-center gap-2 transition-colors"
+                className="w-full py-2.5 bg-purple-600 hover:bg-purple-700 text-gray-900 dark:text-white rounded-lg text-sm font-semibold flex items-center justify-center gap-2 transition-colors"
               >
                 <Plus size={16} /> Create Custom Role
               </button>
             </div>
           ) : (
             <div className="space-y-3">
-              <h3 className="text-sm font-bold text-gray-900 dark:text-white">
+              <h3 className="text-sm font-bold text-gray-900 dark:text-gray-900 dark:text-white">
                 New Custom Role
               </h3>
               <p className="text-xs text-gray-500">
@@ -2999,7 +2999,7 @@ function RolesAndPermissionsView(props: RolesAndPermissionsViewProps) {
                     value={newRoleName}
                     onChange={(e) => setNewRoleName(e.target.value)}
                     placeholder="accountant"
-                    className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+                    className="w-full px-3 py-2 bg-white dark:bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-gray-900 dark:text-white"
                   />
                 </div>
                 <div>
@@ -3010,7 +3010,7 @@ function RolesAndPermissionsView(props: RolesAndPermissionsViewProps) {
                     value={newRoleLabel}
                     onChange={(e) => setNewRoleLabel(e.target.value)}
                     placeholder="Accountant"
-                    className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+                    className="w-full px-3 py-2 bg-white dark:bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-gray-900 dark:text-white"
                   />
                 </div>
                 <div>
@@ -3022,7 +3022,7 @@ function RolesAndPermissionsView(props: RolesAndPermissionsViewProps) {
                     onChange={(e) =>
                       setNewRoleBase(e.target.value as BaseUserRole)
                     }
-                    className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+                    className="w-full px-3 py-2 bg-white dark:bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-gray-900 dark:text-white"
                   >
                     <option value="manager">Manager</option>
                     <option value="staff">Staff</option>
@@ -3033,7 +3033,7 @@ function RolesAndPermissionsView(props: RolesAndPermissionsViewProps) {
               <div className="flex gap-2">
                 <button
                   onClick={handleCreateRole}
-                  className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-medium rounded-lg flex items-center gap-1.5"
+                  className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-gray-900 dark:text-white text-xs font-medium rounded-lg flex items-center gap-1.5"
                 >
                   <Plus size={14} /> Create Role
                 </button>
@@ -3051,7 +3051,7 @@ function RolesAndPermissionsView(props: RolesAndPermissionsViewProps) {
 
       {/* Permission editors per role */}
       {allRoles.length === 0 && (
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-8 text-center text-sm text-gray-400">
+        <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-8 text-center text-sm text-gray-500 dark:text-gray-400">
           No roles available for you to manage.
         </div>
       )}
@@ -3062,7 +3062,7 @@ function RolesAndPermissionsView(props: RolesAndPermissionsViewProps) {
         return (
           <div
             key={r.id}
-            className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden"
+            className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden"
           >
             <button
               onClick={() => setPermEditorRole(isOpen ? null : r.id)}
@@ -3084,9 +3084,9 @@ function RolesAndPermissionsView(props: RolesAndPermissionsViewProps) {
                 </span>
               </div>
               {isOpen ? (
-                <ChevronUp size={16} className="text-gray-400" />
+                <ChevronUp size={16} className="text-gray-500 dark:text-gray-400" />
               ) : (
-                <ChevronDown size={16} className="text-gray-400" />
+                <ChevronDown size={16} className="text-gray-500 dark:text-gray-400" />
               )}
             </button>
             {isOpen && (
@@ -3131,7 +3131,7 @@ function RolesAndPermissionsView(props: RolesAndPermissionsViewProps) {
                             className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs border cursor-pointer transition-all ${
                               value
                                 ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-green-700 dark:text-green-300"
-                                : "bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-500"
+                                : "bg-gray-50 dark:bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-500"
                             } ${!canToggle ? "opacity-50 cursor-not-allowed" : ""}`}
                           >
                             <input
@@ -3170,7 +3170,7 @@ function RolesAndPermissionsView(props: RolesAndPermissionsViewProps) {
                 )}
                 {/* Rank display for custom roles */}
                 {cr && (
-                  <div className="text-xs text-gray-400 pt-2 border-t border-gray-100 dark:border-gray-700">
+                  <div className="text-xs text-gray-500 dark:text-gray-400 pt-2 border-t border-gray-100 dark:border-gray-700">
                     Base: {cr.label} · Rank: {cr.rank} · Created{" "}
                     {new Date(cr.createdAt).toLocaleDateString()}
                   </div>
@@ -3274,7 +3274,7 @@ function AccessCodeForm({
             type="text"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
-            className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+            className="w-full px-3 py-2 bg-gray-50 dark:bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-gray-900 dark:text-white"
             placeholder="e.g. cashier1"
           />
         </div>
@@ -3284,7 +3284,7 @@ function AccessCodeForm({
             type="text"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+            className="w-full px-3 py-2 bg-gray-50 dark:bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-gray-900 dark:text-white"
             placeholder="min 4 characters"
           />
         </div>
@@ -3294,7 +3294,7 @@ function AccessCodeForm({
             type="text"
             value={memberName}
             onChange={(e) => setMemberName(e.target.value)}
-            className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+            className="w-full px-3 py-2 bg-gray-50 dark:bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-gray-900 dark:text-white"
             placeholder="e.g. John Mwangi"
           />
         </div>
@@ -3305,7 +3305,7 @@ function AccessCodeForm({
           <select
             value={memberRole}
             onChange={(e) => setMemberRole(e.target.value)}
-            className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-white"
+            className="w-full px-3 py-2 bg-gray-50 dark:bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:text-gray-900 dark:text-white"
           >
             {availableRoles.length === 0 && (
               <option value="staff">Staff</option>
@@ -3325,11 +3325,11 @@ function AccessCodeForm({
       <div>
         <label className="text-xs text-gray-500 block mb-1">
           Allowed Tabs{" "}
-          <span className="text-gray-400">
+          <span className="text-gray-500 dark:text-gray-400">
             (empty = all tabs · restrict to limit what this member can view)
           </span>
         </label>
-        <div className="flex flex-wrap gap-1 max-h-32 overflow-y-auto p-2 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
+        <div className="flex flex-wrap gap-1 max-h-32 overflow-y-auto p-2 bg-gray-50 dark:bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
           {Object.entries(tabIdToLabel).map(([id, label]) => {
             const selected = allowedTabs.includes(id);
             return (
@@ -3337,7 +3337,7 @@ function AccessCodeForm({
                 key={id}
                 type="button"
                 onClick={() => toggleTab(id)}
-                className={`text-[10px] px-2 py-1 rounded-full border transition-all ${selected ? "bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-900/30 dark:text-blue-300" : "bg-white text-gray-500 border-gray-200 dark:bg-gray-800 dark:text-gray-400"}`}
+                className={`text-[10px] px-2 py-1 rounded-full border transition-all ${selected ? "bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-900/30 dark:text-blue-300" : "bg-white text-gray-500 border-gray-200 dark:bg-gray-800 dark:text-gray-500 dark:text-gray-400"}`}
               >
                 {label}
               </button>
@@ -3359,20 +3359,20 @@ function AccessCodeForm({
       <div className="flex gap-2 justify-end">
         <button
           onClick={onCancel}
-          className="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded-lg text-sm dark:text-white"
+          className="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded-lg text-sm dark:text-gray-900 dark:text-white"
         >
           Cancel
         </button>
         <button
           onClick={handleCreate}
           disabled={busy}
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium flex items-center gap-1.5"
+          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-gray-900 dark:text-white rounded-lg text-sm font-medium flex items-center gap-1.5"
         >
           <KeyRound size={14} /> {busy ? "Creating..." : "Create Code"}
         </button>
       </div>
       {stationName && (
-        <p className="text-[10px] text-gray-400">For station: {stationName}</p>
+        <p className="text-[10px] text-gray-500 dark:text-gray-400">For station: {stationName}</p>
       )}
     </div>
   );
@@ -3481,11 +3481,11 @@ function AccessCodesView({
                 readOnly
                 value={accessLink}
                 onClick={(e) => (e.target as HTMLInputElement).select()}
-                className="flex-1 px-3 py-2 bg-white dark:bg-gray-800 border border-blue-300 dark:border-blue-700 rounded-lg text-xs dark:text-white font-mono"
+                className="flex-1 px-3 py-2 bg-white dark:bg-white dark:bg-gray-800 border border-blue-300 dark:border-blue-700 rounded-lg text-xs dark:text-gray-900 dark:text-white font-mono"
               />
               <button
                 onClick={copyLink}
-                className="px-3 py-2 bg-blue-600 text-white rounded-lg text-xs font-medium flex items-center gap-1"
+                className="px-3 py-2 bg-blue-600 text-gray-900 dark:text-white rounded-lg text-xs font-medium flex items-center gap-1"
               >
                 <Copy size={12} /> Copy
               </button>
@@ -3510,17 +3510,17 @@ function AccessCodesView({
       </div>
 
       <div className="flex justify-between items-center">
-        <h3 className="font-semibold dark:text-white">Access Codes</h3>
+        <h3 className="font-semibold dark:text-gray-900 dark:text-white">Access Codes</h3>
         <button
           onClick={() => setShowForm(!showForm)}
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium flex items-center gap-2"
+          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-gray-900 dark:text-white rounded-lg text-sm font-medium flex items-center gap-2"
         >
           <Plus size={14} /> New Access Code
         </button>
       </div>
 
       {showForm && (
-        <div className="p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
+        <div className="p-4 bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
           <AccessCodeForm
             stationId={stationId}
             availableRoles={availableRoles}
@@ -3538,7 +3538,7 @@ function AccessCodesView({
       )}
 
       {codes.length === 0 ? (
-        <p className="text-sm text-gray-400 text-center py-6">
+        <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-6">
           No access codes yet. Create one to let team members log in without
           signing up.
         </p>
@@ -3547,14 +3547,14 @@ function AccessCodesView({
           {codes.map((c) => (
             <div
               key={c.id}
-              className={`flex items-center justify-between p-3 rounded-lg border ${c.enabled ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800" : "bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700"}`}
+              className={`flex items-center justify-between p-3 rounded-lg border ${c.enabled ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800" : "bg-gray-50 dark:bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700"}`}
             >
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-semibold text-sm dark:text-white">
+                  <span className="font-semibold text-sm dark:text-gray-900 dark:text-white">
                     {c.memberName}
                   </span>
-                  <span className="text-xs text-gray-400">({c.username})</span>
+                  <span className="text-xs text-gray-500 dark:text-gray-400">({c.username})</span>
                   <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600">
                     {c.memberRole}
                   </span>
@@ -3575,7 +3575,7 @@ function AccessCodesView({
                     {c.enabled ? "Active" : "Disabled"}
                   </span>
                 </div>
-                <div className="text-[11px] text-gray-400 mt-1">
+                <div className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
                   Accessed {c.accessCount} time{c.accessCount !== 1 ? "s" : ""}
                   {c.lastAccessedAt
                     ? ` · Last: ${new Date(c.lastAccessedAt).toLocaleString()}`
@@ -3590,7 +3590,7 @@ function AccessCodesView({
                 >
                   <KeyRound
                     size={14}
-                    className={c.enabled ? "text-green-600" : "text-gray-400"}
+                    className={c.enabled ? "text-green-600" : "text-gray-500 dark:text-gray-400"}
                   />
                 </button>
                 <button
@@ -3607,7 +3607,7 @@ function AccessCodesView({
       )}
 
       {toast && (
-        <div className="fixed bottom-6 right-6 bg-gray-900 text-white px-4 py-3 rounded-xl shadow-2xl text-sm font-medium z-50">
+        <div className="fixed bottom-6 right-6 bg-white dark:bg-gray-900 text-gray-900 dark:text-white px-4 py-3 rounded-xl shadow-2xl text-sm font-medium z-50">
           {toast}
         </div>
       )}
@@ -3759,7 +3759,7 @@ function ActivityHealthView({
               </span>
             </div>
             <div>
-              <h3 className="text-sm font-bold text-gray-900 dark:text-white">
+              <h3 className="text-sm font-bold text-gray-900 dark:text-gray-900 dark:text-white">
                 Team Health Score
               </h3>
               <p className="text-xs text-gray-500 mt-0.5">
@@ -3776,7 +3776,7 @@ function ActivityHealthView({
           {teamHealth.total > 0 && (
             <button
               onClick={exportMembersCSV}
-              className="px-4 py-2 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-xs font-medium flex items-center gap-2 border border-gray-200 dark:border-gray-600 transition-colors"
+              className="px-4 py-2 bg-white dark:bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-xs font-medium flex items-center gap-2 border border-gray-200 dark:border-gray-600 transition-colors"
             >
               <Download size={14} /> Export Team CSV
             </button>
@@ -3806,7 +3806,7 @@ function ActivityHealthView({
             value: teamHealth.inactive,
             Icon: UserX,
             color: "text-gray-500",
-            bg: "bg-gray-50 dark:bg-gray-800",
+            bg: "bg-gray-50 dark:bg-white dark:bg-gray-800",
           },
           {
             label: "Active Invites",
@@ -3843,15 +3843,15 @@ function ActivityHealthView({
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Role Distribution */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+        <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
           <div className="flex items-center gap-2 mb-3">
             <Crown size={16} className="text-purple-600" />
-            <h3 className="text-sm font-bold text-gray-900 dark:text-white">
+            <h3 className="text-sm font-bold text-gray-900 dark:text-gray-900 dark:text-white">
               Role Distribution
             </h3>
           </div>
           {roleDistribution.length === 0 ? (
-            <p className="text-xs text-gray-400 text-center py-4">
+            <p className="text-xs text-gray-500 dark:text-gray-400 text-center py-4">
               No members to analyze yet.
             </p>
           ) : (
@@ -3867,7 +3867,7 @@ function ActivityHealthView({
                       <span className="text-gray-600 dark:text-gray-300">
                         {info.label}
                       </span>
-                      <span className="text-gray-400">
+                      <span className="text-gray-500 dark:text-gray-400">
                         {count} ({pct}%)
                       </span>
                     </div>
@@ -3885,15 +3885,15 @@ function ActivityHealthView({
         </div>
 
         {/* Access Method Breakdown */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+        <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
           <div className="flex items-center gap-2 mb-3">
             <Users2 size={16} className="text-indigo-600" />
-            <h3 className="text-sm font-bold text-gray-900 dark:text-white">
+            <h3 className="text-sm font-bold text-gray-900 dark:text-gray-900 dark:text-white">
               Access Method Breakdown
             </h3>
           </div>
           {teamHealth.total === 0 ? (
-            <p className="text-xs text-gray-400 text-center py-4">
+            <p className="text-xs text-gray-500 dark:text-gray-400 text-center py-4">
               No members to analyze yet.
             </p>
           ) : (
@@ -3904,7 +3904,7 @@ function ActivityHealthView({
                     <span className="flex items-center gap-1.5 text-gray-600 dark:text-gray-300">
                       <am.Icon size={12} /> {am.label}
                     </span>
-                    <span className="text-gray-400">
+                    <span className="text-gray-500 dark:text-gray-400">
                       {am.count} ({am.pct}%)
                     </span>
                   </div>
@@ -3933,15 +3933,15 @@ function ActivityHealthView({
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Most Active Members */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+        <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
           <div className="flex items-center gap-2 mb-3">
             <TrendingUp size={16} className="text-green-600" />
-            <h3 className="text-sm font-bold text-gray-900 dark:text-white">
+            <h3 className="text-sm font-bold text-gray-900 dark:text-gray-900 dark:text-white">
               Most Active Members
             </h3>
           </div>
           {mostActiveMembers.length === 0 ? (
-            <p className="text-xs text-gray-400 text-center py-4">
+            <p className="text-xs text-gray-500 dark:text-gray-400 text-center py-4">
               No access activity recorded yet. Activity is tracked when
               access-code members log in.
             </p>
@@ -3950,13 +3950,13 @@ function ActivityHealthView({
               {mostActiveMembers.map((m) => (
                 <div
                   key={m.id}
-                  className="flex items-center gap-3 p-2 bg-gray-50 dark:bg-gray-900 rounded-lg"
+                  className="flex items-center gap-3 p-2 bg-gray-50 dark:bg-white dark:bg-gray-900 rounded-lg"
                 >
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold text-gray-900 dark:text-white truncate">
+                    <p className="text-xs font-semibold text-gray-900 dark:text-gray-900 dark:text-white truncate">
                       {m.memberName || m.username}
                     </p>
-                    <p className="text-[10px] text-gray-400 truncate">
+                    <p className="text-[10px] text-gray-500 dark:text-gray-400 truncate">
                       {m.lastAccessedAt
                         ? `Last: ${new Date(m.lastAccessedAt).toLocaleDateString()}`
                         : "Never accessed"}
@@ -3966,7 +3966,7 @@ function ActivityHealthView({
                     <p className="text-sm font-bold text-indigo-600">
                       {m.accessCount ?? 0}
                     </p>
-                    <p className="text-[10px] text-gray-400">logins</p>
+                    <p className="text-[10px] text-gray-500 dark:text-gray-400">logins</p>
                   </div>
                 </div>
               ))}
@@ -3975,15 +3975,15 @@ function ActivityHealthView({
         </div>
 
         {/* Recently Joined */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+        <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
           <div className="flex items-center gap-2 mb-3">
             <Clock size={16} className="text-blue-600" />
-            <h3 className="text-sm font-bold text-gray-900 dark:text-white">
+            <h3 className="text-sm font-bold text-gray-900 dark:text-gray-900 dark:text-white">
               Recently Joined
             </h3>
           </div>
           {recentJoins.length === 0 ? (
-            <p className="text-xs text-gray-400 text-center py-4">
+            <p className="text-xs text-gray-500 dark:text-gray-400 text-center py-4">
               No members have joined yet.
             </p>
           ) : (
@@ -3993,7 +3993,7 @@ function ActivityHealthView({
                 return (
                   <div
                     key={m.id}
-                    className="flex items-center gap-3 p-2 bg-gray-50 dark:bg-gray-900 rounded-lg"
+                    className="flex items-center gap-3 p-2 bg-gray-50 dark:bg-white dark:bg-gray-900 rounded-lg"
                   >
                     <div
                       className={`p-1.5 rounded-lg ${getRoleLabel(m.role).color}`}
@@ -4001,10 +4001,10 @@ function ActivityHealthView({
                       <Icon size={14} />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-gray-900 dark:text-white truncate">
+                      <p className="text-xs font-semibold text-gray-900 dark:text-gray-900 dark:text-white truncate">
                         {m.memberName || m.username}
                       </p>
-                      <p className="text-[10px] text-gray-400">
+                      <p className="text-[10px] text-gray-500 dark:text-gray-400">
                         {getRoleLabel(m.role).label} ·{" "}
                         {new Date(m.invitedAt).toLocaleDateString()}
                       </p>
@@ -4023,10 +4023,10 @@ function ActivityHealthView({
       </div>
 
       {/* Invite Activity Summary */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+      <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
         <div className="flex items-center gap-2 mb-3">
           <Activity size={16} className="text-purple-600" />
-          <h3 className="text-sm font-bold text-gray-900 dark:text-white">
+          <h3 className="text-sm font-bold text-gray-900 dark:text-gray-900 dark:text-white">
             Invite Activity Summary
           </h3>
         </div>
@@ -4073,10 +4073,10 @@ function ActivityHealthView({
 
       {/* Quick Recommendations */}
       {teamHealth.total > 0 && (
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+        <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
           <div className="flex items-center gap-2 mb-3">
             <Zap size={16} className="text-amber-600" />
-            <h3 className="text-sm font-bold text-gray-900 dark:text-white">
+            <h3 className="text-sm font-bold text-gray-900 dark:text-gray-900 dark:text-white">
               Quick Recommendations
             </h3>
           </div>
@@ -4118,10 +4118,10 @@ function ActivityHealthView({
               </div>
             )}
             {teamHealth.inactive > 0 && (
-              <div className="flex items-start gap-2 p-2 bg-gray-50 dark:bg-gray-800 rounded-lg">
+              <div className="flex items-start gap-2 p-2 bg-gray-50 dark:bg-white dark:bg-gray-800 rounded-lg">
                 <UserX
                   size={14}
-                  className="text-gray-400 mt-0.5 flex-shrink-0"
+                  className="text-gray-500 dark:text-gray-400 mt-0.5 flex-shrink-0"
                 />
                 <p className="text-xs text-gray-600 dark:text-gray-300">
                   <strong>{teamHealth.inactive}</strong> member(s) are inactive.

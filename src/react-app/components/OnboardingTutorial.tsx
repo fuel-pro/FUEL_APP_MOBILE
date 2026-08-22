@@ -233,8 +233,8 @@ export default function OnboardingTutorial(_: Props) {
   if (!started) {
     return (
       <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-        <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden border border-gray-200 dark:border-gray-700">
-          <div className="bg-gradient-to-br from-amber-500 to-orange-600 p-6 text-white relative">
+        <div className="bg-white dark:bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden border border-gray-200 dark:border-gray-700">
+          <div className="bg-gradient-to-br from-amber-500 to-orange-600 p-6 text-gray-900 dark:text-white relative">
             <button
               onClick={close}
               aria-label="Skip tutorial"
@@ -244,7 +244,7 @@ export default function OnboardingTutorial(_: Props) {
             </button>
             <div className="text-4xl mb-2">⛽</div>
             <h2 className="text-2xl font-bold">Welcome to FuelPro</h2>
-            <p className="text-white/90 text-sm mt-1">
+            <p className="text-gray-900 dark:text-white/90 text-sm mt-1">
               A quick guided tour of everything your station dashboard can do.
             </p>
           </div>
@@ -267,10 +267,10 @@ export default function OnboardingTutorial(_: Props) {
                 size={22}
               />
               <div>
-                <div className="font-semibold text-gray-900 dark:text-white">
+                <div className="font-semibold text-gray-900 dark:text-gray-900 dark:text-white">
                   Basic Tour
                 </div>
-                <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                <div className="text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400 mt-0.5">
                   Day-to-day features: sales, fuel, invoices, payroll & reports.
                   ~2 min.
                 </div>
@@ -289,10 +289,10 @@ export default function OnboardingTutorial(_: Props) {
                 size={22}
               />
               <div>
-                <div className="font-semibold text-gray-900 dark:text-white">
+                <div className="font-semibold text-gray-900 dark:text-gray-900 dark:text-white">
                   Advanced Tour
                 </div>
-                <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                <div className="text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400 mt-0.5">
                   Day-to-day recap + technical features for skilled operators:
                   analytics, integrations, compliance & founder console. ~5 min.
                 </div>
@@ -302,7 +302,7 @@ export default function OnboardingTutorial(_: Props) {
             <div className="flex items-center justify-between pt-2">
               <button
                 onClick={snoozeTutorial}
-                className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 flex items-center gap-1.5"
+                className="text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 flex items-center gap-1.5"
               >
                 <Clock size={14} /> Remind me later
               </button>
@@ -311,7 +311,7 @@ export default function OnboardingTutorial(_: Props) {
                   completeTutorial();
                   close();
                 }}
-                className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 flex items-center gap-1.5"
+                className="text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 flex items-center gap-1.5"
               >
                 <SkipForward size={14} /> Skip tour
               </button>
@@ -379,9 +379,9 @@ export default function OnboardingTutorial(_: Props) {
 
       {/* Step card */}
       <div className="fixed inset-0 z-[9999] flex items-end md:items-center justify-center p-3 md:p-6 pointer-events-none">
-        <div className="pointer-events-auto bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-w-md w-full overflow-hidden border border-gray-200 dark:border-gray-700">
+        <div className="pointer-events-auto bg-white dark:bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-w-md w-full overflow-hidden border border-gray-200 dark:border-gray-700">
           {/* Progress bar */}
-          <div className="h-1.5 bg-gray-100 dark:bg-gray-800">
+          <div className="h-1.5 bg-gray-100 dark:bg-white dark:bg-gray-800">
             <div
               className="h-full bg-gradient-to-r from-amber-400 to-orange-500 transition-all duration-300"
               style={{ width: `${progress}%` }}
@@ -400,14 +400,14 @@ export default function OnboardingTutorial(_: Props) {
                 >
                   {audience === "basic" ? "BASIC" : "ADVANCED"}
                 </span>
-                <span className="text-[10px] text-gray-400">
+                <span className="text-[10px] text-gray-500 dark:text-gray-400">
                   Step {index + 1} of {steps.length}
                 </span>
               </div>
               <button
                 onClick={close}
                 aria-label="Close tutorial"
-                className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400"
+                className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400"
               >
                 <X size={16} />
               </button>
@@ -418,7 +418,7 @@ export default function OnboardingTutorial(_: Props) {
                 <div className="text-3xl leading-none mt-0.5">{step.emoji}</div>
               )}
               <div className="min-w-0">
-                <h3 className="font-bold text-gray-900 dark:text-white text-lg">
+                <h3 className="font-bold text-gray-900 dark:text-gray-900 dark:text-white text-lg">
                   {step.title}
                 </h3>
                 <p className="text-sm text-gray-600 dark:text-gray-300 mt-1.5 leading-relaxed">
@@ -433,14 +433,14 @@ export default function OnboardingTutorial(_: Props) {
                 <button
                   onClick={goPrev}
                   disabled={index === 0}
-                  className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-30 disabled:cursor-not-allowed text-gray-600 dark:text-gray-300"
+                  className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-white dark:bg-gray-800 disabled:opacity-30 disabled:cursor-not-allowed text-gray-600 dark:text-gray-300"
                   aria-label="Previous"
                 >
                   <ChevronLeft size={18} />
                 </button>
                 <button
                   onClick={goNext}
-                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-sm font-medium transition-colors"
+                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-gray-900 dark:text-white text-sm font-medium transition-colors"
                 >
                   {isLast ? (
                     <>
@@ -457,7 +457,7 @@ export default function OnboardingTutorial(_: Props) {
               <div className="flex items-center gap-2">
                 <button
                   onClick={snoozeTutorial}
-                  className="text-[11px] text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 flex items-center gap-1"
+                  className="text-[11px] text-gray-500 dark:text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 flex items-center gap-1"
                   title="Snooze for 3 days"
                 >
                   <Clock size={13} /> Remind later
@@ -467,7 +467,7 @@ export default function OnboardingTutorial(_: Props) {
                     completeTutorial();
                     close();
                   }}
-                  className="text-[11px] text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 flex items-center gap-1"
+                  className="text-[11px] text-gray-500 dark:text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 flex items-center gap-1"
                 >
                   <SkipForward size={13} /> Skip
                 </button>

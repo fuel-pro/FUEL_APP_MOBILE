@@ -140,17 +140,17 @@ export default function RoleMatrixSection({ store, logAudit }: Props) {
       />
 
       <div className="grid grid-cols-3 gap-2">
-        <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+        <div className="bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl p-3">
           <span className="text-[10px] text-gray-500">Total Cells</span>
-          <p className="text-lg font-semibold text-white">{stats.total}</p>
+          <p className="text-lg font-semibold text-gray-900 dark:text-white">{stats.total}</p>
         </div>
-        <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+        <div className="bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl p-3">
           <span className="text-[10px] text-gray-500">Granted</span>
           <p className="text-lg font-semibold text-green-400">
             {stats.granted}
           </p>
         </div>
-        <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+        <div className="bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl p-3">
           <span className="text-[10px] text-gray-500">Actions</span>
           <p className="text-lg font-semibold text-amber-400">
             {stats.totalActions}
@@ -159,12 +159,12 @@ export default function RoleMatrixSection({ store, logAudit }: Props) {
       </div>
 
       <div className="flex items-center gap-3 flex-wrap">
-        <div className="flex items-center gap-1.5 text-sm text-gray-400">
+        <div className="flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400">
           <Filter size={15} /> Filter by role:
         </div>
         <button
           onClick={() => setFilterRole("all")}
-          className={`px-3 py-1.5 rounded-lg text-xs ${filterRole === "all" ? "bg-amber-500 text-black" : "bg-white/5 text-gray-400 hover:bg-white/10"}`}
+          className={`px-3 py-1.5 rounded-lg text-xs ${filterRole === "all" ? "bg-amber-500 text-black" : "bg-gray-50 dark:bg-white/5 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:bg-white/10"}`}
         >
           All
         </button>
@@ -172,7 +172,7 @@ export default function RoleMatrixSection({ store, logAudit }: Props) {
           <button
             key={r}
             onClick={() => setFilterRole(r)}
-            className={`px-3 py-1.5 rounded-lg text-xs capitalize ${filterRole === r ? "bg-amber-500 text-black" : "bg-white/5 text-gray-400 hover:bg-white/10"}`}
+            className={`px-3 py-1.5 rounded-lg text-xs capitalize ${filterRole === r ? "bg-amber-500 text-black" : "bg-gray-50 dark:bg-white/5 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:bg-white/10"}`}
           >
             {r}
           </button>
@@ -180,13 +180,13 @@ export default function RoleMatrixSection({ store, logAudit }: Props) {
         <div className="flex-1" />
         <button
           onClick={handleReset}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-gray-300 text-sm border border-white/10"
+          className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-gray-50 dark:bg-white/5 hover:bg-gray-100 dark:bg-white/10 text-gray-300 text-sm border border-gray-200 dark:border-white/10"
         >
           <RotateCcw size={16} /> Reset to Defaults
         </button>
         <button
           onClick={exportCsv}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-gray-300 text-sm border border-white/10"
+          className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-gray-50 dark:bg-white/5 hover:bg-gray-100 dark:bg-white/10 text-gray-300 text-sm border border-gray-200 dark:border-white/10"
         >
           <Download size={16} /> Export CSV
         </button>
@@ -195,11 +195,11 @@ export default function RoleMatrixSection({ store, logAudit }: Props) {
       {store.roleMatrix.length === 0 ? (
         <EmptyState icon={Shield} text="No role permissions configured" />
       ) : (
-        <div className="overflow-x-auto rounded-xl bg-white/5 border border-white/10">
+        <div className="overflow-x-auto rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-white/10">
-                <th className="text-left px-3 py-2 text-xs text-gray-400 font-medium sticky left-0 bg-gray-900">
+              <tr className="border-b border-gray-200 dark:border-white/10">
+                <th className="text-left px-3 py-2 text-xs text-gray-500 dark:text-gray-400 font-medium sticky left-0 bg-white dark:bg-gray-900">
                   Resource
                 </th>
                 {filteredRoles.map((role) => (
@@ -215,7 +215,7 @@ export default function RoleMatrixSection({ store, logAudit }: Props) {
             <tbody>
               {resources.map((resource) => (
                 <tr key={resource} className="border-b border-white/5">
-                  <td className="px-3 py-2 text-xs text-gray-200 font-mono sticky left-0 bg-gray-900">
+                  <td className="px-3 py-2 text-xs text-gray-200 font-mono sticky left-0 bg-white dark:bg-gray-900">
                     {resource}
                   </td>
                   {filteredRoles.map((role) => {
@@ -248,7 +248,7 @@ export default function RoleMatrixSection({ store, logAudit }: Props) {
                                 onClick={() =>
                                   handleToggleAction(role, resource, action)
                                 }
-                                className={`px-1.5 py-0.5 rounded text-[9px] font-mono ${active ? ACTION_STYLES[action] : "bg-white/5 text-gray-600 hover:bg-white/10"}`}
+                                className={`px-1.5 py-0.5 rounded text-[9px] font-mono ${active ? ACTION_STYLES[action] : "bg-gray-50 dark:bg-white/5 text-gray-600 hover:bg-gray-100 dark:bg-white/10"}`}
                                 title={`${action} — click to ${active ? "revoke" : "grant"}`}
                               >
                                 {action}

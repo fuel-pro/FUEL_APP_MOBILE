@@ -449,10 +449,10 @@ export default function CreditManagement() {
           <CreditCard size={24} className="text-pink-600 dark:text-pink-400" />
         </div>
         <div>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-900 dark:text-white">
             Credit Management
           </h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
+          <p className="text-sm text-gray-500 dark:text-gray-500 dark:text-gray-400">
             Manage customer credit, track payments
           </p>
         </div>
@@ -473,13 +473,13 @@ export default function CreditManagement() {
       ) : (
         <>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+            <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
               <p className="text-xs text-gray-500">Credit Accounts</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">
+              <p className="text-2xl font-bold text-gray-900 dark:text-gray-900 dark:text-white">
                 {accounts.length}
               </p>
             </div>
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+            <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
               <p className="text-xs text-gray-500">Total Limit</p>
               <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
                 {currencySymbol}
@@ -507,26 +507,26 @@ export default function CreditManagement() {
             <div className="relative flex-1">
               <Search
                 size={16}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400"
               />
               <input
                 placeholder="Search credit accounts..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-white"
+                className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm dark:text-gray-900 dark:text-white"
               />
             </div>
             <button
               onClick={() => setShowAdd(true)}
-              className="px-4 py-2.5 bg-pink-600 hover:bg-pink-700 text-white rounded-xl text-sm font-medium flex items-center gap-2"
+              className="px-4 py-2.5 bg-pink-600 hover:bg-pink-700 text-gray-900 dark:text-white rounded-xl text-sm font-medium flex items-center gap-2"
             >
               <Plus size={16} /> New Account
             </button>
           </div>
 
           {showAdd && (
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700 shadow-lg">
-              <h3 className="text-sm font-semibold dark:text-white mb-3">
+            <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700 shadow-lg">
+              <h3 className="text-sm font-semibold dark:text-gray-900 dark:text-white mb-3">
                 New Credit Account
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -536,7 +536,7 @@ export default function CreditManagement() {
                   onChange={(e) =>
                     setNewAcc({ ...newAcc, customerName: e.target.value })
                   }
-                  className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                  className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-900 dark:text-white"
                 />
                 <input
                   placeholder="Phone"
@@ -544,7 +544,7 @@ export default function CreditManagement() {
                   onChange={(e) =>
                     setNewAcc({ ...newAcc, phone: e.target.value })
                   }
-                  className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                  className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-900 dark:text-white"
                 />
                 <input
                   placeholder="Vehicle Reg"
@@ -552,7 +552,7 @@ export default function CreditManagement() {
                   onChange={(e) =>
                     setNewAcc({ ...newAcc, vehicleReg: e.target.value })
                   }
-                  className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                  className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-900 dark:text-white"
                 />
                 <input
                   type="number"
@@ -567,7 +567,7 @@ export default function CreditManagement() {
                           : parseFloat(e.target.value) || 0,
                     })
                   }
-                  className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                  className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-900 dark:text-white"
                 />
                 <input
                   type="number"
@@ -579,7 +579,7 @@ export default function CreditManagement() {
                       paymentTerms: parseInt(e.target.value) || 30,
                     })
                   }
-                  className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                  className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-900 dark:text-white"
                 />
                 <input
                   placeholder="Notes (optional)"
@@ -587,18 +587,18 @@ export default function CreditManagement() {
                   onChange={(e) =>
                     setNewAcc({ ...newAcc, notes: e.target.value })
                   }
-                  className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:col-span-3"
+                  className="px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-900 dark:text-white sm:col-span-3"
                 />
                 <div className="flex gap-2">
                   <button
                     onClick={addAccount}
-                    className="px-4 py-2 bg-pink-600 text-white rounded-lg text-sm"
+                    className="px-4 py-2 bg-pink-600 text-gray-900 dark:text-white rounded-lg text-sm"
                   >
                     Create
                   </button>
                   <button
                     onClick={() => setShowAdd(false)}
-                    className="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded-lg text-sm dark:text-white"
+                    className="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded-lg text-sm dark:text-gray-900 dark:text-white"
                   >
                     Cancel
                   </button>
@@ -610,7 +610,7 @@ export default function CreditManagement() {
           {/* Accounts */}
           <div className="space-y-3">
             {filtered.length === 0 && (
-              <div className="text-center py-12 text-gray-400">
+              <div className="text-center py-12 text-gray-500 dark:text-gray-400">
                 <CreditCard size={32} className="mx-auto mb-2 opacity-50" />
                 <p className="text-sm">
                   No credit accounts yet. Click "New Account" to create one.
@@ -636,12 +636,12 @@ export default function CreditManagement() {
               return (
                 <div
                   key={acc.id}
-                  className={`bg-white dark:bg-gray-800 rounded-xl p-4 border shadow-sm ${isOver || isDue ? "border-red-200 dark:border-red-800" : "border-gray-200 dark:border-gray-700"}`}
+                  className={`bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-4 border shadow-sm ${isOver || isDue ? "border-red-200 dark:border-red-800" : "border-gray-200 dark:border-gray-700"}`}
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
-                        <h3 className="font-semibold dark:text-white">
+                        <h3 className="font-semibold dark:text-gray-900 dark:text-white">
                           {acc.customerName || ""}
                         </h3>
                         <span
@@ -659,7 +659,7 @@ export default function CreditManagement() {
                         {acc.phone || ""} {acc.vehicleReg || ""}
                       </p>
                       {acc.notes && (
-                        <p className="text-xs text-gray-400 mt-0.5 italic">
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 italic">
                           {acc.notes}
                         </p>
                       )}
@@ -685,14 +685,14 @@ export default function CreditManagement() {
                     <div className="flex flex-col gap-1 ml-4">
                       <button
                         onClick={() => setShowPay(acc.id)}
-                        className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-[11px] font-medium"
+                        className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-gray-900 dark:text-white rounded-lg text-[11px] font-medium"
                       >
                         Record Payment
                       </button>
                       {acc.status === "active" && (
                         <button
                           onClick={() => setShowPurchase(acc.id)}
-                          className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[11px] font-medium"
+                          className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-gray-900 dark:text-white rounded-lg text-[11px] font-medium"
                         >
                           + Purchase
                         </button>
@@ -701,7 +701,7 @@ export default function CreditManagement() {
                         onClick={() =>
                           setHistoryId(historyId === acc.id ? null : acc.id)
                         }
-                        className="px-3 py-1.5 bg-gray-600 hover:bg-gray-700 text-white rounded-lg text-[11px] font-medium flex items-center gap-1"
+                        className="px-3 py-1.5 bg-gray-600 hover:bg-gray-700 text-gray-900 dark:text-white rounded-lg text-[11px] font-medium flex items-center gap-1"
                         title="View transaction history"
                       >
                         <History size={12} /> History
@@ -709,7 +709,7 @@ export default function CreditManagement() {
                       {isDue && (
                         <button
                           onClick={() => setActiveView("reminders")}
-                          className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-[11px] font-medium flex items-center gap-1"
+                          className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-gray-900 dark:text-white rounded-lg text-[11px] font-medium flex items-center gap-1"
                           title="Open Debt Payment Reminders"
                         >
                           <BellRing size={12} /> Send Reminder
@@ -726,7 +726,7 @@ export default function CreditManagement() {
                               openStkPush: true,
                             } satisfies StkPushPrefill)
                           }
-                          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-medium flex items-center gap-1"
+                          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-gray-900 dark:text-white rounded-lg text-[11px] font-medium flex items-center gap-1"
                           title="Collect outstanding balance via M-PESA STK Push"
                         >
                           <Smartphone size={12} /> Collect via M-PESA
@@ -741,7 +741,7 @@ export default function CreditManagement() {
                               description: `Outstanding credit balance`,
                             } satisfies InvoicePrefill)
                           }
-                          className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[11px] font-medium flex items-center gap-1"
+                          className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-gray-900 dark:text-white rounded-lg text-[11px] font-medium flex items-center gap-1"
                           title="Create an invoice for the outstanding balance"
                         >
                           <FileText size={12} /> Create Invoice
@@ -755,7 +755,7 @@ export default function CreditManagement() {
                             e.target.value as CreditAccount["status"],
                           )
                         }
-                        className="px-2 py-1 border rounded-lg text-[11px] dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                        className="px-2 py-1 border rounded-lg text-[11px] dark:bg-gray-700 dark:border-gray-600 dark:text-gray-900 dark:text-white"
                         title="Change account status"
                       >
                         <option value="active">Active</option>
@@ -764,7 +764,7 @@ export default function CreditManagement() {
                       </select>
                       <button
                         onClick={() => setDeleteId(acc.id)}
-                        className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-[11px] font-medium flex items-center gap-1"
+                        className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-gray-900 dark:text-white rounded-lg text-[11px] font-medium flex items-center gap-1"
                         title="Delete account"
                       >
                         <Trash2 size={12} /> Delete
@@ -785,7 +785,7 @@ export default function CreditManagement() {
                             amount: parseFloat(e.target.value) || 0,
                           })
                         }
-                        className="flex-1 px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                        className="flex-1 px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-900 dark:text-white"
                       />
                       <input
                         placeholder="Description"
@@ -796,17 +796,17 @@ export default function CreditManagement() {
                             description: e.target.value,
                           })
                         }
-                        className="flex-1 px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                        className="flex-1 px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-900 dark:text-white"
                       />
                       <button
                         onClick={() => addPayment(acc.id)}
-                        className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm"
+                        className="px-4 py-2 bg-green-600 text-gray-900 dark:text-white rounded-lg text-sm"
                       >
                         Pay
                       </button>
                       <button
                         onClick={() => setShowPay(null)}
-                        className="px-3 py-2 bg-gray-200 dark:bg-gray-700 rounded-lg text-sm dark:text-white"
+                        className="px-3 py-2 bg-gray-200 dark:bg-gray-700 rounded-lg text-sm dark:text-gray-900 dark:text-white"
                       >
                         X
                       </button>
@@ -826,7 +826,7 @@ export default function CreditManagement() {
                             amount: parseFloat(e.target.value) || 0,
                           })
                         }
-                        className="flex-1 px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                        className="flex-1 px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-900 dark:text-white"
                       />
                       <input
                         placeholder="Description (e.g. 50L Super Petrol)"
@@ -837,17 +837,17 @@ export default function CreditManagement() {
                             description: e.target.value,
                           })
                         }
-                        className="flex-1 px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                        className="flex-1 px-3 py-2 border rounded-lg text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-900 dark:text-white"
                       />
                       <button
                         onClick={() => addPurchase(acc.id)}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm"
+                        className="px-4 py-2 bg-blue-600 text-gray-900 dark:text-white rounded-lg text-sm"
                       >
                         Add
                       </button>
                       <button
                         onClick={() => setShowPurchase(null)}
-                        className="px-3 py-2 bg-gray-200 dark:bg-gray-700 rounded-lg text-sm dark:text-white"
+                        className="px-3 py-2 bg-gray-200 dark:bg-gray-700 rounded-lg text-sm dark:text-gray-900 dark:text-white"
                       >
                         X
                       </button>
@@ -860,7 +860,7 @@ export default function CreditManagement() {
                       </h4>
                       {transactions.filter((t) => t.accountId === acc.id)
                         .length === 0 ? (
-                        <p className="text-xs text-gray-400">
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
                           No transactions recorded yet.
                         </p>
                       ) : (
@@ -882,11 +882,11 @@ export default function CreditManagement() {
                                   </span>{" "}
                                   — {currencySymbol}
                                   {formatNumber(t.amount)}
-                                  <span className="text-gray-400 ml-2">
+                                  <span className="text-gray-500 dark:text-gray-400 ml-2">
                                     {t.description || ""}
                                   </span>
                                 </div>
-                                <span className="text-gray-400">
+                                <span className="text-gray-500 dark:text-gray-400">
                                   {new Date(t.date).toLocaleDateString()} by{" "}
                                   {t.recordedBy || "?"}
                                 </span>
@@ -906,10 +906,10 @@ export default function CreditManagement() {
       {/* Delete confirmation modal */}
       {deleteId && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 max-w-sm w-full shadow-2xl">
+          <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-6 max-w-sm w-full shadow-2xl">
             <div className="flex items-center gap-2 mb-4">
               <AlertTriangle className="text-red-500" size={20} />
-              <h3 className="text-lg font-semibold dark:text-white">
+              <h3 className="text-lg font-semibold dark:text-gray-900 dark:text-white">
                 Delete Account?
               </h3>
             </div>
@@ -920,13 +920,13 @@ export default function CreditManagement() {
             <div className="flex gap-2 justify-end">
               <button
                 onClick={() => setDeleteId(null)}
-                className="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded-lg text-sm dark:text-white"
+                className="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded-lg text-sm dark:text-gray-900 dark:text-white"
               >
                 Cancel
               </button>
               <button
                 onClick={() => deleteAccount(deleteId)}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium"
+                className="px-4 py-2 bg-red-600 text-gray-900 dark:text-white rounded-lg text-sm font-medium"
               >
                 Delete
               </button>
@@ -937,7 +937,7 @@ export default function CreditManagement() {
 
       {/* Toast notification */}
       {toast && (
-        <div className="fixed bottom-6 right-6 bg-gray-900 dark:bg-gray-700 text-white px-4 py-3 rounded-xl shadow-2xl text-sm font-medium z-50 flex items-center gap-2">
+        <div className="fixed bottom-6 right-6 bg-gray-900 dark:bg-gray-700 text-gray-900 dark:text-white px-4 py-3 rounded-xl shadow-2xl text-sm font-medium z-50 flex items-center gap-2">
           <CheckCircle2 size={16} className="text-green-400" />
           {toast}
         </div>

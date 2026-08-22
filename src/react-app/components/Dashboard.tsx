@@ -1175,10 +1175,10 @@ export default function Dashboard() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-900 dark:text-white">
             {state.companyData.name || "Dashboard"}
           </h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+          <p className="text-sm text-gray-500 dark:text-gray-500 dark:text-gray-400 mt-1">
             Welcome back! Here's your business overview
           </p>
         </div>
@@ -1189,7 +1189,7 @@ export default function Dashboard() {
               syncing stats…
             </span>
           )}
-          <div className="flex items-center gap-3 bg-white dark:bg-gray-800 rounded-xl px-4 py-2.5 shadow-sm border border-gray-200 dark:border-gray-700">
+          <div className="flex items-center gap-3 bg-white dark:bg-white dark:bg-gray-800 rounded-xl px-4 py-2.5 shadow-sm border border-gray-200 dark:border-gray-700">
             <Clock size={18} className="text-blue-500" />
             <span className="text-sm font-mono text-gray-700 dark:text-gray-300">
               {currentTime.toLocaleString(stationLocale, {
@@ -1208,9 +1208,9 @@ export default function Dashboard() {
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-3 shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow">
+        <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-3 shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-gray-500 dark:text-gray-400">
+            <span className="text-sm text-gray-500 dark:text-gray-500 dark:text-gray-400">
               Total Revenue
             </span>
             <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg">
@@ -1220,7 +1220,7 @@ export default function Dashboard() {
               />
             </div>
           </div>
-          <p className="text-2xl font-bold text-gray-900 dark:text-white">
+          <p className="text-2xl font-bold text-gray-900 dark:text-gray-900 dark:text-white">
             {currencySymbol} {formatNumber(animatedValues.revenue, 0)}
           </p>
           <div className="flex items-center gap-1 mt-2">
@@ -1233,9 +1233,9 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-3 shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow">
+        <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-3 shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-gray-500 dark:text-gray-400">
+            <span className="text-sm text-gray-500 dark:text-gray-500 dark:text-gray-400">
               Net Profit
             </span>
             <div
@@ -1255,7 +1255,7 @@ export default function Dashboard() {
             </div>
           </div>
           <p
-            className={`text-2xl font-bold ${netProfit >= 0 ? "text-gray-900 dark:text-white" : "text-red-600 dark:text-red-400"}`}
+            className={`text-2xl font-bold ${netProfit >= 0 ? "text-gray-900 dark:text-gray-900 dark:text-white" : "text-red-600 dark:text-red-400"}`}
           >
             {currencySymbol} {formatNumber(animatedValues.profit, 0)}
           </p>
@@ -1265,7 +1265,7 @@ export default function Dashboard() {
             ) : (
               <ArrowDownRight size={14} className="text-red-500" />
             )}
-            <span className="text-xs text-gray-500 dark:text-gray-400">
+            <span className="text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400">
               {totalExpenses > 0
                 ? `${currencySymbol} ${formatNumber(totalExpenses)} expenses`
                 : "No expenses recorded"}
@@ -1273,9 +1273,9 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-3 shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow">
+        <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-3 shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-gray-500 dark:text-gray-400">
+            <span className="text-sm text-gray-500 dark:text-gray-500 dark:text-gray-400">
               Fuel Sold
             </span>
             <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
@@ -1285,12 +1285,12 @@ export default function Dashboard() {
               />
             </div>
           </div>
-          <p className="text-2xl font-bold text-gray-900 dark:text-white">
+          <p className="text-2xl font-bold text-gray-900 dark:text-gray-900 dark:text-white">
             {formatNumber(animatedValues.fuelSold, 0)} L
           </p>
           <div className="flex items-center gap-1 mt-2">
             <Fuel size={14} className="text-blue-500" />
-            <span className="text-xs text-gray-500 dark:text-gray-400">
+            <span className="text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400">
               {priceCards
                 .map((c) => `${c.label}: ${currencySymbol} ${c.price ?? 0}/L`)
                 .join(" | ")}
@@ -1298,9 +1298,9 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-3 shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow">
+        <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-3 shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-gray-500 dark:text-gray-400">
+            <span className="text-sm text-gray-500 dark:text-gray-500 dark:text-gray-400">
               Balance Due
             </span>
             <div
@@ -1320,13 +1320,13 @@ export default function Dashboard() {
             </div>
           </div>
           <p
-            className={`text-2xl font-bold ${totalDebt > 0 ? "text-red-600 dark:text-red-400" : "text-gray-900 dark:text-white"}`}
+            className={`text-2xl font-bold ${totalDebt > 0 ? "text-red-600 dark:text-red-400" : "text-gray-900 dark:text-gray-900 dark:text-white"}`}
           >
             {currencySymbol} {formatNumber(animatedValues.debt, 0)}
           </p>
           <div className="flex items-center gap-1 mt-2">
             <Users size={14} className="text-gray-500" />
-            <span className="text-xs text-gray-500 dark:text-gray-400">
+            <span className="text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400">
               {Object.keys(state.clients).length} client(s)
             </span>
           </div>
@@ -1337,7 +1337,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         {/* Current Pump Prices */}
         <div
-          className={`rounded-xl p-3 border shadow-sm ${effectiveFuelPrice ? "bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/10 border-blue-200 dark:border-blue-800" : "bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700"}`}
+          className={`rounded-xl p-3 border shadow-sm ${effectiveFuelPrice ? "bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/10 border-blue-200 dark:border-blue-800" : "bg-gray-50 dark:bg-white dark:bg-gray-800/50 border-gray-200 dark:border-gray-700"}`}
         >
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-200 flex items-center gap-2">
@@ -1364,7 +1364,7 @@ export default function Dashboard() {
                 </span>
               )}
             <span
-              className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${isLocationBased ? "bg-green-100 dark:bg-green-800 text-green-700 dark:text-green-300" : "bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400"}`}
+              className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${isLocationBased ? "bg-green-100 dark:bg-green-800 text-green-700 dark:text-green-300" : "bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-500 dark:text-gray-400"}`}
             >
               {isLocationBased
                 ? `📍 GPS: ${priceCityName} (${(Number(locationPrice?.transportSurcharge) || 0) >= 0 ? "+" : ""}${(Number(locationPrice?.transportSurcharge) || 0).toFixed(2)})`
@@ -1377,7 +1377,7 @@ export default function Dashboard() {
             {priceCards.map((card) => (
               <div
                 key={card.key}
-                className="bg-white dark:bg-gray-800 rounded-lg p-3 text-center"
+                className="bg-white dark:bg-white dark:bg-gray-800 rounded-lg p-3 text-center"
               >
                 <p className="text-[10px] text-gray-500 uppercase tracking-wide">
                   {card.label}
@@ -1385,7 +1385,7 @@ export default function Dashboard() {
                 <p className={`text-xl font-bold ${card.color}`}>
                   {currencySymbol} {(card.price ?? 0).toFixed(2)}
                 </p>
-                <p className="text-[9px] text-gray-400">per litre</p>
+                <p className="text-[9px] text-gray-500 dark:text-gray-400">per litre</p>
                 {isLocationBased ? (
                   <p className={`text-[9px] mt-0.5 ${card.color}`}>
                     {priceCityName}
@@ -1485,7 +1485,7 @@ export default function Dashboard() {
                 <Zap size={8} /> Click to sync latest prices
               </button>
             )}
-            <p className="text-[9px] text-gray-400">
+            <p className="text-[9px] text-gray-500 dark:text-gray-400">
               {effectiveFuelPrice
                 ? new Date(effectiveFuelPrice.lastUpdated).toLocaleDateString()
                 : "Not synced"}
@@ -1501,13 +1501,13 @@ export default function Dashboard() {
           </h3>
           <div className="space-y-2">
             <div className="flex justify-between text-xs">
-              <span className="text-gray-600 dark:text-gray-400">VAT Rate</span>
+              <span className="text-gray-600 dark:text-gray-500 dark:text-gray-400">VAT Rate</span>
               <span className="font-semibold text-gray-800 dark:text-gray-200">
                 {(taxRates || location.revenueAuthority).vatRate}%
               </span>
             </div>
             <div className="flex justify-between text-xs">
-              <span className="text-gray-600 dark:text-gray-400">
+              <span className="text-gray-600 dark:text-gray-500 dark:text-gray-400">
                 {(taxRates || location.payrollConfig).nssfLabel} (Employee)
               </span>
               <span className="font-semibold text-gray-800 dark:text-gray-200">
@@ -1518,7 +1518,7 @@ export default function Dashboard() {
               </span>
             </div>
             <div className="flex justify-between text-xs">
-              <span className="text-gray-600 dark:text-gray-400">
+              <span className="text-gray-600 dark:text-gray-500 dark:text-gray-400">
                 {(taxRates || location.payrollConfig).nssfLabel} (Employer)
               </span>
               <span className="font-semibold text-gray-800 dark:text-gray-200">
@@ -1531,7 +1531,7 @@ export default function Dashboard() {
             {(taxRates?.housingLevyApplicable ??
               location.payrollConfig.housingLevy) && (
               <div className="flex justify-between text-xs">
-                <span className="text-gray-600 dark:text-gray-400">
+                <span className="text-gray-600 dark:text-gray-500 dark:text-gray-400">
                   Housing Levy
                 </span>
                 <span className="font-semibold text-gray-800 dark:text-gray-200">
@@ -1549,7 +1549,7 @@ export default function Dashboard() {
                 : location.revenueAuthority.exciseDuty;
               return exciseDuty > 0 ? (
                 <div className="flex justify-between text-xs">
-                  <span className="text-gray-600 dark:text-gray-400">
+                  <span className="text-gray-600 dark:text-gray-500 dark:text-gray-400">
                     Excise Duty/L
                   </span>
                   <span className="font-semibold text-gray-800 dark:text-gray-200">
@@ -1559,7 +1559,7 @@ export default function Dashboard() {
               ) : null;
             })()}
             <div className="flex justify-between text-xs">
-              <span className="text-gray-600 dark:text-gray-400">
+              <span className="text-gray-600 dark:text-gray-500 dark:text-gray-400">
                 Min. Wage (monthly)
               </span>
               <span className="font-semibold text-gray-800 dark:text-gray-200">
@@ -1570,7 +1570,7 @@ export default function Dashboard() {
               </span>
             </div>
           </div>
-          <p className="text-[9px] text-gray-400 mt-3 text-right">
+          <p className="text-[9px] text-gray-500 dark:text-gray-400 mt-3 text-right">
             {taxRates
               ? `Last updated: ${new Date(taxRates.lastUpdated).toLocaleDateString()}`
               : "Using default rates - click sync to update"}
@@ -1578,12 +1578,12 @@ export default function Dashboard() {
         </div>
 
         {/* Weather Widget */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-3 border border-gray-200 dark:border-gray-700 shadow-sm">
+        <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-3 border border-gray-200 dark:border-gray-700 shadow-sm">
           <WeatherWidget />
         </div>
 
         {/* Regulatory Alerts */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-3 border border-gray-200 dark:border-gray-700 shadow-sm">
+        <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-3 border border-gray-200 dark:border-gray-700 shadow-sm">
           <RegulatoryAlerts countryCode={stationCountry} />
         </div>
       </div>
@@ -1591,13 +1591,13 @@ export default function Dashboard() {
       {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         {/* Sales Trend */}
-        <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-xl p-3 shadow-sm border border-gray-200 dark:border-gray-700">
+        <div className="lg:col-span-2 bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-3 shadow-sm border border-gray-200 dark:border-gray-700">
           <div className="flex items-center justify-between mb-2">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-900 dark:text-white flex items-center gap-2">
               <BarChart3 size={18} className="text-blue-500" />
               Sales Trend (Last 7 Days)
             </h3>
-            <span className="text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
+            <span className="text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
               {currencySymbol}
             </span>
           </div>
@@ -1607,8 +1607,8 @@ export default function Dashboard() {
         </div>
 
         {/* Fuel Distribution */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-3 shadow-sm border border-gray-200 dark:border-gray-700">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
+        <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-3 shadow-sm border border-gray-200 dark:border-gray-700">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-900 dark:text-white mb-2 flex items-center gap-2">
             <Droplets size={18} className="text-green-500" />
             Fuel Distribution
           </h3>
@@ -1621,7 +1621,7 @@ export default function Dashboard() {
                 key={card.key}
                 className="rounded-lg p-2 bg-gray-50 dark:bg-gray-700/30 border border-gray-200 dark:border-gray-700"
               >
-                <p className="text-xs text-gray-500 dark:text-gray-400">
+                <p className="text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400">
                   {card.label} Price
                 </p>
                 <p className={`font-semibold ${card.color}`}>
@@ -1636,8 +1636,8 @@ export default function Dashboard() {
       {/* Second Charts Row + Quick Actions */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         {/* Expense Breakdown */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-3 shadow-sm border border-gray-200 dark:border-gray-700">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
+        <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-3 shadow-sm border border-gray-200 dark:border-gray-700">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-900 dark:text-white mb-2 flex items-center gap-2">
             <Activity size={18} className="text-rose-500" />
             Expense Breakdown
           </h3>
@@ -1647,8 +1647,8 @@ export default function Dashboard() {
         </div>
 
         {/* Quick Actions */}
-        <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-xl p-3 shadow-sm border border-gray-200 dark:border-gray-700">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
+        <div className="lg:col-span-2 bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-3 shadow-sm border border-gray-200 dark:border-gray-700">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-900 dark:text-white mb-2 flex items-center gap-2">
             <ShoppingCart size={18} className="text-blue-500" />
             Quick Actions
           </h3>
@@ -1657,7 +1657,7 @@ export default function Dashboard() {
               <button
                 key={action.label}
                 onClick={() => launchAction(action)}
-                className={`${action.color} text-white rounded-xl p-4 text-left transition-all hover:scale-[1.02] active:scale-[0.98] shadow-sm`}
+                className={`${action.color} text-gray-900 dark:text-white rounded-xl p-4 text-left transition-all hover:scale-[1.02] active:scale-[0.98] shadow-sm`}
               >
                 <action.icon size={24} className="mb-2 opacity-90" />
                 <p className="font-semibold text-sm">{action.label}</p>
@@ -1670,8 +1670,8 @@ export default function Dashboard() {
 
       {/* Tank Levels — dynamic per fuel type (was hardcoded to only
           Super Petrol Tank + Diesel Tank). */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl p-3 shadow-sm border border-gray-200 dark:border-gray-700">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
+      <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-3 shadow-sm border border-gray-200 dark:border-gray-700">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-900 dark:text-white mb-2 flex items-center gap-2">
           <Fuel size={18} className="text-blue-500" />
           Tank Levels
         </h3>
@@ -1686,7 +1686,7 @@ export default function Dashboard() {
                   <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
                     {card.label} Tank
                   </span>
-                  <span className="text-xs text-gray-500 dark:text-gray-400">
+                  <span className="text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400">
                     {formatNumber(dispensed, 0)} L dispensed
                   </span>
                 </div>
@@ -1698,7 +1698,7 @@ export default function Dashboard() {
                     }}
                   />
                 </div>
-                <div className="flex justify-between mt-1 text-xs text-gray-500 dark:text-gray-400">
+                <div className="flex justify-between mt-1 text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400">
                   <span>Opening: {formatNumber(card.opening)} L</span>
                   <span>Closing: {formatNumber(card.closing)} L</span>
                 </div>
@@ -1709,8 +1709,8 @@ export default function Dashboard() {
       </div>
 
       {/* Active Pumps Summary */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl p-3 shadow-sm border border-gray-200 dark:border-gray-700">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
+      <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-3 shadow-sm border border-gray-200 dark:border-gray-700">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-900 dark:text-white mb-2 flex items-center gap-2">
           <Activity size={18} className="text-purple-500" />
           Pump Status
         </h3>
@@ -1721,7 +1721,7 @@ export default function Dashboard() {
               className={`text-center p-3 ${card.bg} rounded-lg`}
             >
               <p className={`text-2xl font-bold ${card.text}`}>{card.count}</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
+              <p className="text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400">
                 {card.label} Pumps
               </p>
             </div>
@@ -1730,13 +1730,13 @@ export default function Dashboard() {
             <p className="text-2xl font-bold text-blue-700 dark:text-blue-300">
               {Object.keys(state.invoices).length}
             </p>
-            <p className="text-xs text-gray-500 dark:text-gray-400">Invoices</p>
+            <p className="text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400">Invoices</p>
           </div>
           <div className="text-center p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
             <p className="text-2xl font-bold text-purple-700 dark:text-purple-300">
               {state.employees.length}
             </p>
-            <p className="text-xs text-gray-500 dark:text-gray-400">
+            <p className="text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400">
               Employees
             </p>
           </div>
