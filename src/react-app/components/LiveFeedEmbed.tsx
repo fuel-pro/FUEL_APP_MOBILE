@@ -112,6 +112,7 @@ export default function LiveFeedEmbed({
   const [searchQuery, setSearchQuery] = useState("");
   const [visibleCount, setVisibleCount] = useState(60);
   const [playbackError, setPlaybackError] = useState(false);
+  const [reconnecting, setReconnecting] = useState(false);
   const [muted, setMuted] = useState(true);
 
   // Cloud load guard
@@ -119,6 +120,10 @@ export default function LiveFeedEmbed({
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const hlsRef = useRef<Hls | null>(null);
+  // Track recovery attempts so we don't loop forever on a dead stream
+  const hlsRecoveryRef = useRef(0);
+  // Auto-advance guard: prevents infinite skip loops when every channel fails
+  const autoAdvanceTriedRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     setCountry(defaultCountry);
@@ -253,14 +258,30 @@ export default function LiveFeedEmbed({
             }
           }
         }
+        // Filter out UNPLAYABLE channels: a channel is playable only if it
+        // has at least one HLS stream URL OR a YouTube embed URL. Channels
+        // with empty stream_urls + youtube_urls (≈29% of the catalog) can
+        // never play and would always show "temporarily unavailable".
+        const playable = merged.filter(
+          (ch) =>
+            (ch.stream_urls && ch.stream_urls.length > 0) ||
+            (ch.youtube_urls && ch.youtube_urls.length > 0),
+        );
         // Sort: non-geo-blocked first, then alphabetical
-        merged.sort((a, b) => {
+        playable.sort((a, b) => {
           if (a.isGeoBlocked !== b.isGeoBlocked) return a.isGeoBlocked ? 1 : -1;
           return a.name.localeCompare(b.name);
         });
-        setChannels(merged);
-        // Auto-select the first non-geo-blocked channel
-        const firstPlayable = merged.find((c) => !c.isGeoBlocked) || merged[0];
+        setChannels(playable);
+        // Reset the auto-advance guard for the fresh channel list
+        autoAdvanceTriedRef.current = new Set();
+        // Auto-select the first non-geo-blocked, non-geo playable channel
+        const firstPlayable =
+          playable.find(
+            (c) => !c.isGeoBlocked && c.stream_urls && c.stream_urls.length > 0,
+          ) ||
+          playable.find((c) => !c.isGeoBlocked) ||
+          playable[0];
         if (firstPlayable) setActiveChannel(firstPlayable);
       } catch {
         // ignore
@@ -273,6 +294,30 @@ export default function LiveFeedEmbed({
     };
   }, [category, subCategoryId, country, showAll]);
 
+  // Auto-advance to the next playable channel when the current stream fails.
+  // Skips channels already tried (via autoAdvanceTriedRef) to avoid loops.
+  // Returns true if a next channel was selected, false if none remain.
+  const autoAdvanceToNextChannel = useCallback(
+    (excludeNanoid: string): boolean => {
+      autoAdvanceTriedRef.current.add(excludeNanoid);
+      // Find the next playable channel we haven't tried yet
+      const candidates = channels.filter(
+        (c) =>
+          c.nanoid !== excludeNanoid &&
+          !autoAdvanceTriedRef.current.has(c.nanoid) &&
+          !c.isGeoBlocked &&
+          c.stream_urls &&
+          c.stream_urls.length > 0,
+      );
+      if (candidates.length > 0) {
+        setActiveChannel(candidates[0]);
+        return true;
+      }
+      return false;
+    },
+    [channels],
+  );
+
   // HLS playback for TV channels
   useEffect(() => {
     if (!activeChannel || isRadio) return;
@@ -282,6 +327,8 @@ export default function LiveFeedEmbed({
       hlsRef.current = null;
     }
     setPlaybackError(false);
+    setReconnecting(false);
+    hlsRecoveryRef.current = 0;
 
     const video = videoRef.current;
     if (!video) return;
@@ -293,7 +340,10 @@ export default function LiveFeedEmbed({
 
     const streamUrl = activeChannel.stream_urls?.[0];
     if (!streamUrl) {
-      setPlaybackError(true);
+      // No stream URL — auto-advance to the next playable channel instead
+      // of showing a dead "temporarily unavailable" error.
+      const advanced = autoAdvanceToNextChannel(activeChannel.nanoid);
+      if (!advanced) setPlaybackError(true);
       return;
     }
 
@@ -302,30 +352,88 @@ export default function LiveFeedEmbed({
       return; // handled by YouTube iframe
     }
 
-    // HLS playback
-    if (Hls.isSupported() && streamUrl.endsWith(".m3u8")) {
-      const hls = new Hls({ enableWorker: true, lowLatencyMode: true });
+    const MAX_RECOVERY_ATTEMPTS = 3;
+
+    // HLS playback — accept any URL (not just .m3u8) since some HLS
+    // endpoints use smil/playlist paths or query strings. hls.js will
+    // reject non-HLS content gracefully via the error handler.
+    if (Hls.isSupported()) {
+      const hls = new Hls({
+        enableWorker: true,
+        lowLatencyMode: true,
+        manifestLoadingTimeOut: 15000,
+        manifestLoadingMaxRetry: 3,
+        levelLoadingTimeOut: 15000,
+        fragLoadingTimeOut: 30000,
+      });
       hlsRef.current = hls;
       hls.loadSource(streamUrl);
       hls.attachMedia(video);
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        video.play().catch(() => {});
+        setReconnecting(false);
+        hlsRecoveryRef.current = 0;
+        video.play().catch(() => {
+          /* autoplay may be blocked; user can press play */
+        });
       });
       hls.on(Hls.Events.ERROR, (_event, data) => {
-        if (data.fatal) {
-          setPlaybackError(true);
-          hls.destroy();
-          hlsRef.current = null;
+        if (!data.fatal) return;
+
+        // Attempt recovery before giving up:
+        //  - NETWORK_ERROR → retry the network load (hls.startLoad)
+        //  - MEDIA_ERROR   → recover the media error (hls.recoverMediaError)
+        // Only after MAX_RECOVERY_ATTEMPTS do we surface the error.
+        const canRecover =
+          data.type === Hls.ErrorTypes.NETWORK_ERROR ||
+          data.type === Hls.ErrorTypes.MEDIA_ERROR;
+
+        if (canRecover && hlsRecoveryRef.current < MAX_RECOVERY_ATTEMPTS) {
+          hlsRecoveryRef.current += 1;
+          setReconnecting(true);
+          if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+            // Small delay before retrying the network load
+            setTimeout(() => {
+              if (hlsRef.current === hls) hls.startLoad();
+            }, 1000 * hlsRecoveryRef.current);
+          } else {
+            // MEDIA_ERROR — alternate recoverMediaError + seek reload
+            setTimeout(() => {
+              if (hlsRef.current === hls) {
+                if (hlsRecoveryRef.current % 2 === 0) {
+                  hls.recoverMediaError();
+                } else {
+                  const ct = video.currentTime || 0;
+                  hls.startLoad(ct);
+                }
+              }
+            }, 500 * hlsRecoveryRef.current);
+          }
+          return;
         }
+
+        // Recovery exhausted (or unrecoverable error type) — give up.
+        hls.destroy();
+        hlsRef.current = null;
+        setReconnecting(false);
+        // Try to auto-advance to the next playable channel; only show
+        // the error overlay if no other channel is available.
+        const advanced = autoAdvanceToNextChannel(activeChannel.nanoid);
+        if (!advanced) setPlaybackError(true);
       });
     } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
       // Native HLS (Safari)
       video.src = streamUrl;
-      video.play().catch(() => {});
+      video.play().catch(() => {
+        const advanced = autoAdvanceToNextChannel(activeChannel.nanoid);
+        if (!advanced) setPlaybackError(true);
+      });
     } else {
       // Non-HLS stream URL — try direct video
       video.src = streamUrl;
-      video.play().catch(() => setPlaybackError(true));
+      video.play().catch(() => {
+        const advanced = autoAdvanceToNextChannel(activeChannel.nanoid);
+        if (!advanced) setPlaybackError(true);
+      });
     }
 
     return () => {
@@ -334,7 +442,14 @@ export default function LiveFeedEmbed({
         hlsRef.current = null;
       }
     };
-  }, [activeChannel, isRadio]);
+  }, [activeChannel, isRadio, autoAdvanceToNextChannel]);
+
+  // Reset the auto-advance guard when the user MANUALLY selects a channel
+  // (so auto-advance can try every channel again in the new context).
+  const selectChannel = useCallback((ch: LiveChannel) => {
+    autoAdvanceTriedRef.current = new Set();
+    setActiveChannel(ch);
+  }, []);
 
   const handleCategoryChange = (newCat: LiveCategory) => {
     setCategory(newCat);
@@ -627,7 +742,7 @@ export default function LiveFeedEmbed({
               value={activeChannel?.nanoid || ""}
               onChange={(e) => {
                 const ch = channels.find((c) => c.nanoid === e.target.value);
-                if (ch) setActiveChannel(ch);
+                if (ch) selectChannel(ch);
               }}
               className="text-xs font-medium bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1 pr-7 text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors max-w-[200px]"
               aria-label="Select station"
@@ -748,7 +863,13 @@ export default function LiveFeedEmbed({
                   autoPlay
                   loop
                   className="hidden"
-                  onError={() => setPlaybackError(true)}
+                  onError={() => {
+                    // Auto-advance to next playable radio channel
+                    const advanced = autoAdvanceToNextChannel(
+                      activeChannel.nanoid,
+                    );
+                    if (!advanced) setPlaybackError(true);
+                  }}
                 />
                 <div className="flex items-end gap-1 h-16 mb-3">
                   {[...Array(7)].map((_, i) => (
@@ -783,8 +904,32 @@ export default function LiveFeedEmbed({
                 playsInline
                 muted={muted}
                 controls={!muted}
-                onError={() => setPlaybackError(true)}
+                onError={() => {
+                  // The HLS error handler manages recovery + auto-advance;
+                  // this native onError is a fallback for direct-src playback.
+                  if (!hlsRef.current) {
+                    const advanced = autoAdvanceToNextChannel(
+                      activeChannel.nanoid,
+                    );
+                    if (!advanced) setPlaybackError(true);
+                  }
+                }}
               />
+            )}
+
+            {/* Reconnecting overlay (auto-retry in progress) */}
+            {reconnecting && !playbackError && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/70">
+                <div className="text-center px-4">
+                  <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+                  <p className="text-xs text-gray-300">
+                    Reconnecting to stream…
+                  </p>
+                  <p className="text-[10px] text-gray-500 mt-1 truncate max-w-[200px]">
+                    {activeChannel.name}
+                  </p>
+                </div>
+              </div>
             )}
 
             {/* Playback error overlay */}
@@ -796,38 +941,67 @@ export default function LiveFeedEmbed({
                     className="text-amber-500 mx-auto mb-2"
                   />
                   <p className="text-xs text-gray-300 mb-3">
-                    This stream is temporarily unavailable. Try another channel.
+                    This stream is unavailable after multiple retries.
                   </p>
-                  {channels.filter((c) => !c.isGeoBlocked).length > 1 && (
+                  <div className="flex items-center justify-center gap-2 flex-wrap">
+                    {/* Retry the same channel */}
                     <button
                       onClick={() => {
+                        autoAdvanceTriedRef.current = new Set();
                         setPlaybackError(false);
-                        const others = channels.filter(
-                          (c) =>
-                            c.nanoid !== activeChannel.nanoid &&
-                            !c.isGeoBlocked,
-                        );
-                        if (others.length > 0) setActiveChannel(others[0]);
+                        // Re-trigger the HLS effect by toggling activeChannel
+                        setActiveChannel({ ...activeChannel });
                       }}
-                      className="text-[10px] px-3 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700"
+                      className="text-[10px] px-3 py-1.5 rounded-lg bg-gray-700 text-white hover:bg-gray-600"
                     >
-                      Try next channel
+                      Retry
                     </button>
-                  )}
+                    {/* Try next available channel */}
+                    {channels.filter(
+                      (c) =>
+                        c.nanoid !== activeChannel.nanoid &&
+                        !c.isGeoBlocked &&
+                        c.stream_urls &&
+                        c.stream_urls.length > 0,
+                    ).length > 0 && (
+                      <button
+                        onClick={() => {
+                          setPlaybackError(false);
+                          autoAdvanceTriedRef.current = new Set([
+                            activeChannel.nanoid,
+                          ]);
+                          const others = channels.filter(
+                            (c) =>
+                              c.nanoid !== activeChannel.nanoid &&
+                              !c.isGeoBlocked &&
+                              c.stream_urls &&
+                              c.stream_urls.length > 0,
+                          );
+                          if (others.length > 0) selectChannel(others[0]);
+                        }}
+                        className="text-[10px] px-3 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700"
+                      >
+                        Try next channel
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             )}
 
             {/* Mute toggle (for HLS video) */}
-            {!activeYouTubeId && !isRadio && !playbackError && (
-              <button
-                onClick={() => setMuted((m) => !m)}
-                className="absolute bottom-2 right-2 p-2 rounded-lg bg-black/60 text-white hover:bg-black/80 transition-colors"
-                title={muted ? "Unmute" : "Mute"}
-              >
-                {muted ? <VolumeX size={14} /> : <Volume2 size={14} />}
-              </button>
-            )}
+            {!activeYouTubeId &&
+              !isRadio &&
+              !playbackError &&
+              !reconnecting && (
+                <button
+                  onClick={() => setMuted((m) => !m)}
+                  className="absolute bottom-2 right-2 p-2 rounded-lg bg-black/60 text-white hover:bg-black/80 transition-colors"
+                  title={muted ? "Unmute" : "Mute"}
+                >
+                  {muted ? <VolumeX size={14} /> : <Volume2 size={14} />}
+                </button>
+              )}
 
             {/* Active channel info bar */}
             <div className="absolute top-0 left-0 right-0 bg-gradient-to-b from-black/70 to-transparent p-2 flex items-center justify-between">
@@ -894,7 +1068,7 @@ export default function LiveFeedEmbed({
                 <button
                   key={ch.nanoid}
                   onClick={() => {
-                    setActiveChannel(ch);
+                    selectChannel(ch);
                     setPlaybackError(false);
                     setMuted(false);
                   }}
