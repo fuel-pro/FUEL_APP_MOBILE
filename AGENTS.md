@@ -6044,3 +6044,124 @@ HIGH-IMPACT fix since formatNumber is used across the entire site.
 - Vercel: BLOCKED by api-deployments-free-per-day (auto-deploys on reset).
 - Supabase: no schema changes (frontend-only).
 - tsc 0 errors, build success, prettier pass.
+
+## Session 2026-08-22 — News Live TV/Radio + Station Manager restructure + dead component cleanup (DEPLOYED LIVE)
+
+### TASK 1 — News tab Live TV/Radio integration (DEPLOYED LIVE, commit db5a060)
+
+Integrated TVGarden (https://tvgarden.world) into the News tab so users
+can watch live TV and listen to live radio from around the world — only
+available streams are shown (iframe-based, graceful fallback if a stream
+is down).
+
+- **`src/react-app/services/LiveStreamService.ts`** (NEW): manages the
+  TVGarden embed. `getTvEmbedUrl(countryCode?)` returns
+  `https://tvgarden.world/tv/<cc>` (or `/tv` for all). `getRadioEmbedUrl`
+  returns `https://tvgarden.world/radio/<cc>`. Country list (240+ entries
+  with ISO 2-letter codes + flag emojis) for the filter dropdown.
+  `getCountryCode()` detects from station data > browser locale > timezone.
+- **`News.tsx` restructured into 3 sub-tabs** via SubTabBar:
+  1. **News Articles** — the existing fuel-industry news feed (unchanged).
+  2. **Live TV** — TVGarden TV iframe + country filter dropdown + "Show All"
+     + "Open full" link (opens tvgarden.world/tv/<cc> in new tab).
+  3. **Live Radio** — TVGarden radio iframe + same controls.
+- Country-aware: the iframe URL + "Open full" link use the user's detected
+  country code (e.g. `tvgarden.world/tv/us` for a US station). The country
+  filter dropdown lets the user switch to any country or "All Countries".
+- Never includes unavailable streams: the iframe loads whatever TVGarden
+  serves (they curate only live streams); if the iframe fails to load,
+  the component shows a fallback message with the "Open full" link.
+
+### TASK 2 — Station Manager complete restructure (DEPLOYED LIVE)
+
+Scrapped the old flat StationManager layout and restructured it into a
+professional 4-sub-tab layout with bulk actions, analytics, and a health
+dashboard.
+
+- **4 sub-tabs** via SubTabBar: My Stations / Shared With Me / Analytics /
+  Activity & Health.
+- **My Stations**: stat cards (Your Stations, Combined Revenue, Today's
+  Revenue, Shared With You), search bar, status filter (All/Active/Inactive/
+  Maintenance), sort dropdown (Recent/Name/Revenue/Oldest), Bulk Select
+  (bulk activate/deactivate/delete/export CSV), Create Station, Access
+  Another Station. Station cards show revenue (today/month/total), sales
+  count, health %, status badge, and Open/Edit/Share/Export/Delete actions.
+- **Shared With Me**: stations shared with the user via station_members.
+- **Analytics**: 4 stat cards (Total Revenue, Avg Revenue/Station, Active
+  Stations, Avg Health Score) + Station Comparison table (Station, Today,
+  Month, Total, Sales, Health, Status) + Export Analytics (CSV).
+- **Activity & Health**: 4 health overview cards (Avg Health, Active,
+  Needs Attention, Cloud Synced) + Station Health Dashboard (per-station
+  health bar with Good/Warning/Critical labels + sync status + last sync
+  time + admin mode indicator) + Cloud Sync Status panel with Sync Now.
+- **Country-aware tax rate**: `getDefaultTaxRate()` uses `getVATRate()` from
+  `config/pricing.ts` (0% for US, 16% for Kenya, etc.) — was hardcoded 16.
+- **Country-aware phone placeholder**: `getPhonePlaceholder()` — was
+  hardcoded "+1 555 000 0000".
+
+### TASK 3 — Dead component cleanup (27 removed, DEPLOYED LIVE)
+
+Found and removed 27 genuinely dead components (0 references, functionality
+absorbed by IntegrationHub/TeamManager/inline implementations):
+
+- **25 dead components**: APIKeyManager, AdminDashboard, AdminPanel,
+  AuthProviderConfig, BusinessSuite, CacheControl, DocumentManager,
+  FuelVideoMiniPlayer, MPesaConfig, PaywallScreen, PerformanceMonitor,
+  PlatformAnalytics, RegionalCompliance, SMSGatewayConfig, SkeletonLoader,
+  StationLoyaltyManager, SubscriptionChecker, TrialGate, WebhookManager,
+  POSInterface, AuthCallback, CustomerLoyaltyPortal, ErrorPage,
+  PrivacyPolicy, AdminLogin.
+- **Dead barrel**: `features/index.ts` (never imported by any file).
+- **Dead UI components**: `ui/NumberInput.tsx` + `ui/Select.tsx` (built but
+  never adopted — components use native `<select>` with global CSS styling).
+- **Fixed vite.config.ts**: removed the `admin: ["./src/react-app/components/
+  AdminPanel.tsx"]` manualChunks entry that referenced the deleted file.
+- False positives (KEPT — they ARE used): AIAssistant (used in Invoice.tsx),
+  POSCheckout (used in AdvancedPOS.tsx), AdminLogin was initially flagged
+  as used by App routing but the `/admin` route just redirects to `/founder`.
+
+### Live verification (2026-08-22, Cloudflare preview 5e3a0490 + main alias)
+
+Logged in as founder QA (`founder.qa.fuelpro@gmail.com`, US station, USD):
+- **News tab**: 3 sub-tabs render. News Articles shows 8 country-aware
+  articles (United States Energy Authority, etc.). Live TV shows TVGarden
+  iframe + country filter (defaulted to US) + "Open full" link to
+  tvgarden.world/tv/us. Live Radio shows tvgarden.world/radio/us iframe.
+- **Station Manager**: 4 sub-tabs render. My Stations shows "Founder Admin
+  Station" card with revenue stats. Analytics shows comparison table +
+  Export button. Activity & Health shows health dashboard (70% Good) +
+  Cloud Sync Status (Idle, just now). Create Station modal has
+  country-aware phone placeholder ("Enter phone number") + tax rate (0%
+  for US, not hardcoded 16%).
+- **POS**: 10L Super Petrol @ $1.10/L = $11.00 cash sale completed
+  (INV202608220000011SKU). Receipt: 0% VAT (A-0.00%), HS: 2710.12.10,
+  US locale date (08/22/2026, 10:16:32 AM). Cloud-synced.
+- **Dashboard**: country-aware (US, USD, 0% VAT, $1,500 min wage, "United
+  States Revenue Authority" source).
+
+### Deploy state 2026-08-22
+
+- **GitHub main**: `db5a060` (pushed, synced with origin/main).
+- **Cloudflare Pages**: LIVE (preview https://5e3a0490.fuel-app-mobile.pages.dev
+  + main alias https://fuel-app-mobile.pages.dev, bundle index-CUJGuy8B.js).
+- **Vercel production**: BLOCKED by `api-deployments-free-per-day`
+  (100/day exhausted; resets ~24h). GitHub integration (prodBranch=main)
+  auto-deploys `db5a060` when the quota resets. The prebuilt `.vercel/output`
+  is ready; only the deploy API is rate-limited.
+- **Supabase**: no schema changes (frontend-only).
+- `npx tsc --noEmit` (0 errors), `npm run build` (107 precache, success),
+  prettier all pass, eslint 0 errors (warnings pre-existing).
+
+### Lost commit re-audit (2026-08-22)
+
+Re-audited all unmerged remote branches. No lost work found:
+- `founder-username-login` (7 commits): diverges from c1e907a, conflicts
+  with main's AuthContext.tsx — documented as awaiting user authorization
+  for manual rebase (NOT auto-merged).
+- `identifying-security-vulnerabilities-8d289` (3 commits): removes exposed
+  R2/Upstash secrets from client-side cloudStorage.ts, routes through
+  /api/r2/* and /api/cache/* endpoints that don't exist on main. A proper
+  fix requires creating the serverless endpoints first — noted for a
+  future security-hardening batch. NOT auto-merged.
+- All other unmerged branches are old divergent snapshots (200+ commits
+  behind) whose work is already on main in more complete form.
