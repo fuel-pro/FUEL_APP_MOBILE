@@ -294,6 +294,36 @@ export default function CustomersManagement() {
         />
       </div>
 
+      {/* Quick Stats */}
+      {customers.length > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+          <div className="bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl p-3">
+            <p className="text-[10px] text-gray-500">Total Customers</p>
+            <p className="text-lg font-bold text-gray-900 dark:text-white">
+              {customers.length}
+            </p>
+          </div>
+          <div className="bg-emerald-50 dark:bg-emerald-500/10 rounded-xl p-3">
+            <p className="text-[10px] text-gray-500">With Vehicle</p>
+            <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
+              {customers.filter((c) => c.vehicle_reg || c.vehicleReg).length}
+            </p>
+          </div>
+          <div className="bg-blue-50 dark:bg-blue-500/10 rounded-xl p-3">
+            <p className="text-[10px] text-gray-500">With Phone</p>
+            <p className="text-lg font-bold text-blue-600 dark:text-blue-400">
+              {customers.filter((c) => c.phone).length}
+            </p>
+          </div>
+          <div className="bg-amber-50 dark:bg-amber-500/10 rounded-xl p-3">
+            <p className="text-[10px] text-gray-500">With Email</p>
+            <p className="text-lg font-bold text-amber-600 dark:text-amber-400">
+              {customers.filter((c) => c.email).length}
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filteredCustomers.length === 0 ? (
           <div className="col-span-full text-center py-16">
