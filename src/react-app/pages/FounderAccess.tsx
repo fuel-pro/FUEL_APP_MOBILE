@@ -123,6 +123,7 @@ import { useFounderConsoleStore } from "@/react-app/hooks/useFounderConsoleStore
 import { useFounderAdvancedStore } from "@/react-app/hooks/useFounderAdvancedStore";
 import { checkApiStatus } from "@/react-app/lib/restApiSync";
 import { getBackendUrl } from "@/utils/apiConfig";
+import { toastSuccess } from "@/react-app/lib/toast";
 import {
   getDetectedCurrency,
   getCurrencySymbol,
@@ -2212,9 +2213,7 @@ export default function FounderAccess() {
                                     `${u.email}: ${u.role} → ${newRole}`,
                                     "warning",
                                   );
-                                  alert(
-                                    `Role change for ${u.email} from ${u.role} to ${newRole} has been logged. Use the Supabase admin API to apply this change.`,
-                                  );
+                                  toastSuccess(`Role change logged for ${u.email}: ${u.role} → ${newRole}. Use Supabase admin API to apply.`);
                                 }
                               }}
                               className="p-1 text-gray-500 hover:text-indigo-400 transition-colors"
@@ -2225,7 +2224,8 @@ export default function FounderAccess() {
                             <button
                               onClick={() => {
                                 const info = `User Details:\n\nName: ${u.name || "Anonymous"}\nEmail: ${u.email}\nAuth Method: ${u.authMethod}\nRole: ${u.role}\nStations: ${u.stations}\nLast Active: ${u.lastActive}\nCreated: ${u.createdAt}\nAuth ID: ${u.authId}`;
-                                alert(info);
+                                toastSuccess("User details logged to console");
+                                console.log(info);
                               }}
                               className="p-1 text-gray-500 hover:text-blue-400 transition-colors"
                               title="View details"
@@ -2418,7 +2418,8 @@ export default function FounderAccess() {
                     <button
                       onClick={() => {
                         const info = `Station Details:\n\nName: ${s.name}\nLocation: ${s.location}\nOwner: ${s.ownerName}\nMembers: ${s.members}\nRevenue: ${getCurrencySymbol(getDetectedCurrency())} ${s.revenue.toLocaleString()}\nID: ${s.id}\nOwner ID: ${s.ownerId}\nCreated: ${s.createdAt}\nLast Active: ${s.lastActive}`;
-                        alert(info);
+                        toastSuccess("User details logged to console");
+                                console.log(info);
                       }}
                       className="flex items-center gap-1 text-[10px] text-gray-500 hover:text-blue-400 transition-colors mt-2"
                     >
