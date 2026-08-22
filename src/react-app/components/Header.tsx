@@ -8,6 +8,7 @@ import LocationSelector from "@/react-app/components/LocationSelector";
 import TabConfigModal from "@/react-app/components/TabConfigModal";
 import SyncStatusIndicator from "@/react-app/components/SyncStatusIndicator";
 import RoleSelector from "@/react-app/components/RoleSelector";
+import QuickSearch from "@/react-app/components/QuickSearch";
 import { useNavigate } from "react-router";
 import { useState, useEffect, useRef } from "react";
 import { uploadStationLogo } from "@/react-app/lib/logo-storage-service";
@@ -335,6 +336,58 @@ export default function Header({
               <HelpCircle size={12} />
               <span className="hidden lg:inline">Tutorial</span>
             </button>
+            <QuickSearch
+              entries={[
+                ...(state.tabConfigurations || []).map((tab) => ({
+                  id: tab.id,
+                  label: tab.label,
+                  description: tab.description || "",
+                  category: "Navigation" as const,
+                  tabId: tab.id,
+                  keywords: `${tab.id} ${tab.label}`,
+                })),
+                {
+                  id: "qa-pos",
+                  label: "New Sale (POS)",
+                  description: "Quick fuel sale",
+                  category: "Quick Action" as const,
+                  tabId: "pos",
+                  keywords: "sell checkout pos cart",
+                },
+                {
+                  id: "qa-invoice",
+                  label: "New Invoice",
+                  description: "Create a new invoice",
+                  category: "Quick Action" as const,
+                  tabId: "invoice",
+                  keywords: "bill receipt customer",
+                },
+                {
+                  id: "qa-expense",
+                  label: "Record Expense",
+                  description: "Log a new expense",
+                  category: "Quick Action" as const,
+                  tabId: "expenses",
+                  keywords: "cost spend money",
+                },
+                {
+                  id: "qa-credit",
+                  label: "Credit Accounts",
+                  description: "Manage customer credit",
+                  category: "Quick Action" as const,
+                  tabId: "credit",
+                  keywords: "debt loan customer balance",
+                },
+                {
+                  id: "qa-stkpush",
+                  label: "M-PESA STK Push",
+                  description: "Collect payment via M-PESA",
+                  category: "Quick Action" as const,
+                  tabId: "livetransaction",
+                  keywords: "mpesa payment collect phone",
+                },
+              ]}
+            />
             <SyncStatusIndicator
               countryCode={location.currentCountry.id}
               compact

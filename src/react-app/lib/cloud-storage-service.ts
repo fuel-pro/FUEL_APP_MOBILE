@@ -1082,7 +1082,8 @@ class CloudStorageService {
         out[logicalKey] = decodeRow<T>(row.data) as T;
       }
       return out;
-    } catch {
+    } catch (err) {
+      console.warn("[cloudStorageService.getAll] failed:", err);
       return {};
     }
   }
