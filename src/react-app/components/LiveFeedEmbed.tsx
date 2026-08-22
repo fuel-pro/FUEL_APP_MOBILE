@@ -32,6 +32,9 @@ import {
   VolumeX,
   AlertCircle,
   Play,
+  Layers,
+  Tag,
+  Monitor,
 } from "lucide-react";
 import Hls from "hls.js";
 
@@ -455,10 +458,6 @@ export default function LiveFeedEmbed({
 
   const accentBg =
     accent === "purple" ? "bg-purple-500 text-white" : "bg-blue-500 text-white";
-  const accentSubBg =
-    accent === "purple"
-      ? "bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 border border-purple-300 dark:border-purple-700"
-      : "bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 border border-blue-300 dark:border-blue-700";
 
   const playerHeight = compact ? 280 : isFullscreen ? "100%" : 400;
   const countryFlag = (cc: string) =>
@@ -576,53 +575,78 @@ export default function LiveFeedEmbed({
         </div>
       </div>
 
-      {/* LEVEL 1: category switcher */}
-      {showCategorySwitcher && availableCategories.length > 1 && (
-        <div className="flex flex-wrap gap-1.5 px-3 py-2 bg-gray-50/50 dark:bg-gray-900/30 border-b border-gray-200 dark:border-gray-700">
-          {availableCategories.map((cat) => {
-            const isActive = cat.id === category;
-            return (
-              <button
-                key={cat.id}
-                onClick={() => handleCategoryChange(cat.id)}
-                title={cat.description}
-                className={`text-[10px] font-medium px-2.5 py-1 rounded-full transition-all flex items-center gap-1 ${
-                  isActive
-                    ? accentBg + " shadow-sm"
-                    : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
-                }`}
-              >
-                {cat.label}
-              </button>
-            );
-          })}
-        </div>
-      )}
-
-      {/* LEVEL 2: sub-category switcher */}
-      {showSubCategorySwitcher &&
-        activeCat &&
-        activeCat.subCategories.length > 1 && (
-          <div className="flex flex-wrap gap-1 px-3 py-2 bg-gray-50/30 dark:bg-gray-900/20 border-b border-gray-200 dark:border-gray-700">
-            {activeCat.subCategories.map((sub) => {
-              const isActive = sub.id === subCategoryId;
-              return (
-                <button
-                  key={sub.id}
-                  onClick={() => setSubCategoryId(sub.id)}
-                  title={sub.description}
-                  className={`text-[10px] font-medium px-2 py-0.5 rounded-md transition-all ${
-                    isActive
-                      ? accentSubBg
-                      : "bg-gray-100 dark:bg-gray-700/60 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600/60"
-                  }`}
-                >
-                  {sub.label}
-                </button>
-              );
-            })}
-          </div>
+      {/* Dropdown filters: Category + Sub-category + Station */}
+      <div className="flex flex-wrap items-center gap-2 px-3 py-2 bg-gray-50/50 dark:bg-gray-900/30 border-b border-gray-200 dark:border-gray-700">
+        {/* LEVEL 1: Category dropdown */}
+        {showCategorySwitcher && availableCategories.length > 1 && (
+          <label className="flex items-center gap-1.5 flex-shrink-0">
+            <Layers size={12} className="text-gray-400 flex-shrink-0" />
+            <select
+              value={category}
+              onChange={(e) =>
+                handleCategoryChange(e.target.value as LiveCategory)
+              }
+              className="text-xs font-medium bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1 pr-7 text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+              aria-label="Select category"
+            >
+              {availableCategories.map((cat) => (
+                <option key={cat.id} value={cat.id} title={cat.description}>
+                  {cat.label}
+                </option>
+              ))}
+            </select>
+          </label>
         )}
+
+        {/* LEVEL 2: Sub-category dropdown */}
+        {showSubCategorySwitcher &&
+          activeCat &&
+          activeCat.subCategories.length > 1 && (
+            <label className="flex items-center gap-1.5 flex-shrink-0">
+              <Tag size={12} className="text-gray-400 flex-shrink-0" />
+              <select
+                value={subCategoryId}
+                onChange={(e) => setSubCategoryId(e.target.value)}
+                className="text-xs font-medium bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1 pr-7 text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                aria-label="Select sub-category"
+              >
+                {activeCat.subCategories.map((sub) => (
+                  <option key={sub.id} value={sub.id} title={sub.description}>
+                    {sub.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+
+        {/* LEVEL 3: Station (channel) dropdown */}
+        {!loading && channels.length > 0 && (
+          <label className="flex items-center gap-1.5 flex-shrink-0 min-w-0">
+            <Monitor size={12} className="text-gray-400 flex-shrink-0" />
+            <select
+              value={activeChannel?.nanoid || ""}
+              onChange={(e) => {
+                const ch = channels.find((c) => c.nanoid === e.target.value);
+                if (ch) setActiveChannel(ch);
+              }}
+              className="text-xs font-medium bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1 pr-7 text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors max-w-[200px]"
+              aria-label="Select station"
+            >
+              <option value="">📡 Select station…</option>
+              {filteredChannels.map((ch) => (
+                <option key={ch.nanoid} value={ch.nanoid}>
+                  {ch.name}
+                  {ch.country ? ` · ${ch.country.toUpperCase()}` : ""}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+
+        <span className="text-[10px] text-gray-400 dark:text-gray-500 ml-auto flex-shrink-0">
+          {filteredChannels.length} stations
+        </span>
+      </div>
 
       {/* Favorites + History panel */}
       {showFavoritesPanel && (
