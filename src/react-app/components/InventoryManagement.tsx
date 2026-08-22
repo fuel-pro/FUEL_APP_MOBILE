@@ -1443,6 +1443,43 @@ const ProductsPanel = ({
 
   return (
     <div>
+      {(() => {
+        const lowStockCount = products.filter(
+          (p) => (p.stock_quantity || 0) <= (p.reorder_level || 10),
+        ).length;
+        const outOfStockCount = products.filter(
+          (p) => (p.stock_quantity || 0) <= 0,
+        ).length;
+        if (lowStockCount === 0) return null;
+        return (
+          <div
+            className={`mb-4 p-3 rounded-xl border ${
+              outOfStockCount > 0
+                ? "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800"
+                : "bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800"
+            }`}
+          >
+            <p
+              className={`text-sm font-medium ${
+                outOfStockCount > 0
+                  ? "text-red-700 dark:text-red-300"
+                  : "text-yellow-700 dark:text-yellow-300"
+              }`}
+            >
+              {outOfStockCount > 0
+                ? `⚠ ${outOfStockCount} product(s) out of stock`
+                : `⚠ ${lowStockCount} product(s) below reorder level`}
+              {" — "}
+              <button
+                onClick={() => setShowLowStock(true)}
+                className="underline font-semibold"
+              >
+                View low stock items
+              </button>
+            </p>
+          </div>
+        );
+      })()}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <p className="text-gray-500 dark:text-gray-400 text-sm">
           {filtered.length} product{filtered.length !== 1 ? "s" : ""}
