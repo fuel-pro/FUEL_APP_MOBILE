@@ -29,6 +29,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { getCurrencySymbol, isKenyaStation } from "../lib/currency";
 import { loadLogoAsDataURL } from "@/react-app/utils/exportUtils";
+import { toastSuccess, toastError } from "@/react-app/lib/toast";
 
 interface Employee {
   id?: number;
@@ -470,7 +471,7 @@ export default function PayrollSystem() {
       localStorage.setItem("fuelpro_payroll_settings", JSON.stringify(payload));
     } catch (error) {
       console.error("Error saving settings:", error);
-      alert("Failed to save payroll settings: " + (error as Error).message);
+      toastError("Failed to save payroll settings: " + (error as Error).message);
     } finally {
       setSaving(false);
     }
@@ -572,11 +573,11 @@ export default function PayrollSystem() {
       // Required-field validation (was missing — a user could save an
       // employee with no name, producing a blank row in the table + cloud).
       if (!employeeForm.firstName.trim() && !employeeForm.lastName.trim()) {
-        alert("Please enter at least a first name or last name.");
+        toastError("Please enter at least a first name or last name.");
         return;
       }
       if (!employeeForm.role.trim()) {
-        alert("Please enter a role/position for the employee.");
+        toastError("Please enter a role/position for the employee.");
         return;
       }
 
@@ -669,7 +670,7 @@ export default function PayrollSystem() {
       }
     } catch (error) {
       console.error("Error saving employee:", error);
-      alert("Failed to save employee: " + (error as Error).message);
+      toastError("Failed to save employee: " + (error as Error).message);
     } finally {
       setSaving(false);
     }
@@ -724,7 +725,7 @@ export default function PayrollSystem() {
       setEmployeeToDeleteId("");
     } catch (error) {
       console.error("Error deleting employee:", error);
-      alert("Failed to delete employee: " + (error as Error).message);
+      toastError("Failed to delete employee: " + (error as Error).message);
     } finally {
       setSaving(false);
     }
@@ -776,7 +777,7 @@ export default function PayrollSystem() {
       // Was only console.error — the user saw the modal close with no SHA
       // applied and no explanation.
       console.error("Error updating SHA:", error);
-      alert("Failed to apply SHA: " + (error as Error).message);
+      toastError("Failed to apply SHA: " + (error as Error).message);
     } finally {
       setSaving(false);
     }
@@ -819,7 +820,7 @@ export default function PayrollSystem() {
       setShowNssfModal(false);
     } catch (error) {
       console.error("Error updating NSSF:", error);
-      alert("Failed to update NSSF: " + (error as Error).message);
+      toastError("Failed to update NSSF: " + (error as Error).message);
     } finally {
       setSaving(false);
     }
@@ -917,7 +918,7 @@ export default function PayrollSystem() {
       );
     } catch (error) {
       console.error("Error updating cell:", error);
-      alert("Failed to update employee: " + (error as Error).message);
+      toastError("Failed to update employee: " + (error as Error).message);
     }
   };
 
@@ -929,12 +930,12 @@ export default function PayrollSystem() {
     // Validate file type and size
     const validTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif"];
     if (!validTypes.includes(file.type)) {
-      alert("Please upload a valid image file (JPG, PNG, GIF)");
+      toastError("Please upload a valid image file (JPG, PNG, GIF)");
       return;
     }
 
     if (file.size > 5 * 1024 * 1024) {
-      alert("Image size should not exceed 5MB");
+      toastError("Image size should not exceed 5MB");
       return;
     }
 
@@ -1079,7 +1080,7 @@ export default function PayrollSystem() {
       });
     } catch (error) {
       console.error("Error exporting combined payroll:", error);
-      alert("Failed to export: " + (error as Error).message);
+      toastError("Failed to export: " + (error as Error).message);
     } finally {
       setSaving(false);
     }
@@ -1102,7 +1103,7 @@ export default function PayrollSystem() {
       });
     } catch (error) {
       console.error("Error exporting CPC centralized:", error);
-      alert("Failed to export CPC: " + (error as Error).message);
+      toastError("Failed to export CPC: " + (error as Error).message);
     } finally {
       setSaving(false);
     }
@@ -1606,7 +1607,7 @@ export default function PayrollSystem() {
         row.some((cell) => cell !== undefined && cell !== ""),
       );
       if (nonEmptyRows.length < 2) {
-        alert("Please ensure your Excel file has headers and employee data.");
+        toastError("Please ensure your Excel file has headers and employee data.");
         return;
       }
 
@@ -1632,7 +1633,7 @@ export default function PayrollSystem() {
       }
 
       if (headerRowIndex === -1) {
-        alert(
+        toastError(
           "Could not find header row. Please ensure your Excel file has column headers.",
         );
         return;
@@ -1773,7 +1774,7 @@ export default function PayrollSystem() {
       });
 
       if (importedEmployees.length === 0) {
-        alert(
+        toastError(
           "No valid employee data found in the Excel file. Please check the format and try again.",
         );
         return;
@@ -1836,7 +1837,7 @@ export default function PayrollSystem() {
           );
           const skippedDupes = localImported.length - toAdd.length;
           if (toAdd.length === 0) {
-            alert(
+            toastError(
               `All ${localImported.length} imported employees already exist (matched by Employee ID). No duplicates added.`,
             );
             return;
@@ -1882,7 +1883,7 @@ export default function PayrollSystem() {
             ...prev,
           ]);
           if (skippedDupes > 0) {
-            alert(
+            toastSuccess(
               `Imported ${toAdd.length} employees. ${skippedDupes} duplicate(s) skipped (already exist by Employee ID).`,
             );
           }
@@ -1891,7 +1892,7 @@ export default function PayrollSystem() {
           // "Successfully imported" even when the cloud write failed.
           errorCount = localImported.length;
           console.error("Error saving imported employees to cloud:", importErr);
-          alert(
+          toastError(
             "Failed to save imported employees to cloud: " +
               (importErr as Error).message,
           );
@@ -1900,16 +1901,16 @@ export default function PayrollSystem() {
 
       // Show results
       if (successCount > 0 && errorCount === 0) {
-        alert(`Successfully imported ${successCount} employees.`);
+        toastSuccess(`Successfully imported ${successCount} employees.`);
         await fetchEmployees(); // Refresh from cloud
       } else if (errorCount > 0) {
-        alert(
+        toastError(
           `Import partially failed: ${errorCount} employee(s) could not be saved.`,
         );
       }
     } catch (error) {
       console.error("Error importing Excel file:", error);
-      alert(
+      toastError(
         "Error reading Excel file. Please ensure it is a valid .xlsx file and try again.",
       );
     } finally {
@@ -2858,7 +2859,7 @@ export default function PayrollSystem() {
           Reset to Default
         </button>
         <button
-          onClick={() => alert("Settings are automatically saved!")}
+          onClick={() => toastSuccess("Settings are automatically saved!")}
           className="btn btn-primary px-2 md:px-4 py-1 md:py-2 text-xs md:text-base"
         >
           <Save size={12} className="md:w-4 md:h-4" />

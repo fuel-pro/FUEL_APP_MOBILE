@@ -24,6 +24,7 @@ import { useAuth } from "@/react-app/context/AuthContext";
 import { useStations } from "@/react-app/context/StationContext";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
 import { resolveCurrencySymbol } from "@/react-app/lib/currency";
+import { toastSuccess, toastError } from "@/react-app/lib/toast";
 
 interface Contact {
   id: string;
@@ -320,12 +321,12 @@ export default function Communication() {
   const saveContact = async () => {
     // Validation: require at least a name.
     if (!contactForm.name.trim()) {
-      alert("Contact name is required.");
+      toastError("Contact name is required.");
       return;
     }
     // Guard: don't save before the initial cloud load completes (would wipe).
     if (!cloudLoadCompleteRef.current) {
-      alert(
+      toastError(
         "Still loading your contacts from cloud. Please try again in a moment.",
       );
       return;
@@ -379,7 +380,7 @@ export default function Communication() {
       );
     } catch (error) {
       console.error("Error saving contact:", error);
-      alert("Failed to save contact: " + (error as Error).message);
+      toastError("Failed to save contact: " + (error as Error).message);
     }
   };
 
@@ -387,7 +388,7 @@ export default function Communication() {
     if (!confirm("Delete this contact? Related messages will also be deleted."))
       return;
     if (!cloudLoadCompleteRef.current) {
-      alert("Still loading from cloud. Please try again in a moment.");
+      toastError("Still loading from cloud. Please try again in a moment.");
       return;
     }
 
@@ -414,24 +415,24 @@ export default function Communication() {
       );
     } catch (error) {
       console.error("Error deleting contact:", error);
-      alert("Failed to delete contact: " + (error as Error).message);
+      toastError("Failed to delete contact: " + (error as Error).message);
     }
   };
 
   const sendMessage = async () => {
     // Validation: require content + at least one recipient.
     if (!messageForm.content.trim()) {
-      alert("Message content is required.");
+      toastError("Message content is required.");
       return;
     }
     const recipients =
       selectedContacts.length > 0 ? selectedContacts : messageForm.recipients;
     if (!recipients || recipients.length === 0) {
-      alert("Please select at least one recipient.");
+      toastError("Please select at least one recipient.");
       return;
     }
     if (!cloudLoadCompleteRef.current) {
-      alert("Still loading from cloud. Please try again in a moment.");
+      toastError("Still loading from cloud. Please try again in a moment.");
       return;
     }
     try {
@@ -472,7 +473,7 @@ export default function Communication() {
   const deleteMessage = async (id: string) => {
     if (!confirm("Delete this message?")) return;
     if (!cloudLoadCompleteRef.current) {
-      alert("Still loading from cloud. Please try again in a moment.");
+      toastError("Still loading from cloud. Please try again in a moment.");
       return;
     }
     try {
@@ -484,21 +485,21 @@ export default function Communication() {
       );
     } catch (error) {
       console.error("Error deleting message:", error);
-      alert("Failed to delete message: " + (error as Error).message);
+      toastError("Failed to delete message: " + (error as Error).message);
     }
   };
 
   const saveTemplate = async () => {
     if (!templateForm.name.trim()) {
-      alert("Template name is required.");
+      toastError("Template name is required.");
       return;
     }
     if (!templateForm.content.trim()) {
-      alert("Template content is required.");
+      toastError("Template content is required.");
       return;
     }
     if (!cloudLoadCompleteRef.current) {
-      alert("Still loading from cloud. Please try again in a moment.");
+      toastError("Still loading from cloud. Please try again in a moment.");
       return;
     }
     try {
@@ -532,14 +533,14 @@ export default function Communication() {
       );
     } catch (error) {
       console.error("Error saving template:", error);
-      alert("Failed to save template: " + (error as Error).message);
+      toastError("Failed to save template: " + (error as Error).message);
     }
   };
 
   const deleteTemplate = async (id: string) => {
     if (!confirm("Delete this template?")) return;
     if (!cloudLoadCompleteRef.current) {
-      alert("Still loading from cloud. Please try again in a moment.");
+      toastError("Still loading from cloud. Please try again in a moment.");
       return;
     }
 
@@ -552,7 +553,7 @@ export default function Communication() {
       );
     } catch (error) {
       console.error("Error deleting template:", error);
-      alert("Failed to delete template: " + (error as Error).message);
+      toastError("Failed to delete template: " + (error as Error).message);
     }
   };
 
@@ -572,7 +573,7 @@ export default function Communication() {
 
   const exportContactsCSV = () => {
     if (contacts.length === 0) {
-      alert("No contacts to export.");
+      toastError("No contacts to export.");
       return;
     }
     const escape = (val: string) => `"${String(val).replace(/"/g, '""')}"`;
