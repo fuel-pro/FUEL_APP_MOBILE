@@ -925,6 +925,7 @@ export default function News() {
             defaultCategory="tv"
             defaultCountry={tvCountry}
             showCategorySwitcher={false}
+            showSubCategorySwitcher={true}
             family="video"
             accent="blue"
           />
@@ -939,6 +940,7 @@ export default function News() {
             defaultCategory="radio"
             defaultCountry={radioCountry}
             showCategorySwitcher={false}
+            showSubCategorySwitcher={true}
             family="audio"
             accent="purple"
           />

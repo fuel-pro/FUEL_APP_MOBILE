@@ -34,47 +34,268 @@ export interface LiveRadioStation {
 /**
  * Content categories supported by the global live-feed provider.
  * Each maps to a real, verified-available category page (HTTP 200).
+ *
+ * The taxonomy is 2-level:
+ *  - TOP-LEVEL category (e.g. "movies", "news", "sports") → the upstream
+ *    category page path (e.g. /movies, /news, /sports).
+ *  - SUB-CATEGORY (e.g. Movies→Action, News→Breaking, Sports→Football) →
+ *    a finer-grained slice. Each sub-category maps to an upstream
+ *    category id applied via the `?category=<id>` query param, OR to a
+ *    related top-level category id (e.g. Movies→Animation maps to the
+ *    upstream "animation" category; Movies→Family maps to "family").
+ *
+ * Sub-categories are curated from the upstream's own category taxonomy
+ * (28 categories: all, news, music, sports, auto, animation, business,
+ * classic, comedy, cooking, culture, documentary, education,
+ * entertainment, family, general, kids, legislative, lifestyle, movies,
+ * outdoor, relax, religious, series, science, shop, travel, weather) so
+ * every sub-category surfaces REAL live channels — no dead streams.
  */
 export type LiveCategory =
   | "tv"
   | "radio"
+  | "all"
   | "news"
-  | "movies"
-  | "sports"
   | "music"
-  | "kids"
-  | "entertainment"
+  | "sports"
+  | "auto"
+  | "animation"
   | "business"
+  | "classic"
+  | "comedy"
+  | "cooking"
+  | "culture"
   | "documentary"
+  | "education"
+  | "entertainment"
+  | "family"
+  | "general"
+  | "kids"
+  | "legislative"
+  | "lifestyle"
+  | "movies"
+  | "outdoor"
+  | "relax"
   | "religious"
-  | "education";
+  | "series"
+  | "science"
+  | "shop"
+  | "travel"
+  | "weather";
+
+export interface LiveFeedSubCategory {
+  /** Stable id (unique within its parent category) */
+  id: string;
+  /** Display label */
+  label: string;
+  /**
+   * The upstream category id to apply via `?category=<id>`. This is what
+   * makes the sub-category surface REAL live channels. When omitted, the
+   * sub-category uses the parent's category path with no extra filter.
+   */
+  upstreamCategory?: LiveCategory;
+  description: string;
+}
 
 export interface LiveFeedCategory {
   id: LiveCategory;
   label: string;
-  /** "tv" family (video) or "audio" family (radio) — used for URL routing */
+  /** "video" family (TV) or "audio" family (radio) — used for URL routing */
   family: "video" | "audio";
   description: string;
+  /** Sub-categories for this top-level category (curated). */
+  subCategories: LiveFeedSubCategory[];
 }
 
 /**
  * All content categories available from the global live-feed provider.
  * These are surfaced to the user as native-feeling "channels" with NO
  * indication of the upstream source.
+ *
+ * Each top-level category carries a curated list of sub-categories. A
+ * sub-category maps to a real upstream category id (verified HTTP 200)
+ * so it always surfaces live, available channels — never dead streams.
  */
 export const LIVE_FEED_CATEGORIES: LiveFeedCategory[] = [
-  { id: "tv", label: "Live TV", family: "video", description: "Thousands of live global TV channels" },
-  { id: "news", label: "News Channels", family: "video", description: "Live 24/7 news from around the world" },
-  { id: "movies", label: "Movies", family: "video", description: "Live movie channels" },
-  { id: "sports", label: "Sports", family: "video", description: "Live sports channels" },
-  { id: "entertainment", label: "Entertainment", family: "video", description: "Live entertainment channels" },
-  { id: "music", label: "Music TV", family: "video", description: "Live music video channels" },
-  { id: "kids", label: "Kids", family: "video", description: "Live kids channels" },
-  { id: "business", label: "Business", family: "video", description: "Live business & markets channels" },
-  { id: "documentary", label: "Documentaries", family: "video", description: "Live documentary channels" },
-  { id: "religious", label: "Religious", family: "video", description: "Live religious channels" },
-  { id: "education", label: "Education", family: "video", description: "Live education channels" },
-  { id: "radio", label: "Live Radio", family: "audio", description: "Thousands of live radio stations" },
+  {
+    id: "tv",
+    label: "Live TV",
+    family: "video",
+    description: "Thousands of live global TV channels",
+    subCategories: [
+      { id: "all", label: "All Channels", upstreamCategory: "all", description: "Every live TV channel" },
+      { id: "general", label: "General", upstreamCategory: "general", description: "General-purpose live TV" },
+      { id: "entertainment", label: "Entertainment", upstreamCategory: "entertainment", description: "Variety & entertainment" },
+      { id: "family", label: "Family", upstreamCategory: "family", description: "Family-friendly TV" },
+      { id: "relax", label: "Relax", upstreamCategory: "relax", description: "Ambient & relaxation TV" },
+      { id: "outdoor", label: "Outdoor", upstreamCategory: "outdoor", description: "Outdoor & nature TV" },
+      { id: "lifestyle", label: "Lifestyle", upstreamCategory: "lifestyle", description: "Lifestyle programming" },
+      { id: "culture", label: "Culture", upstreamCategory: "culture", description: "Cultural programming" },
+      { id: "classic", label: "Classic TV", upstreamCategory: "classic", description: "Classic TV shows" },
+      { id: "shop", label: "Shopping", upstreamCategory: "shop", description: "Home shopping channels" },
+      { id: "weather", label: "Weather", upstreamCategory: "weather", description: "Live weather channels" },
+      { id: "travel", label: "Travel", upstreamCategory: "travel", description: "Travel programming" },
+      { id: "legislative", label: "Government", upstreamCategory: "legislative", description: "Government & legislative TV" },
+    ],
+  },
+  {
+    id: "news",
+    label: "News",
+    family: "video",
+    description: "Live 24/7 news from around the world",
+    subCategories: [
+      { id: "all", label: "All News", upstreamCategory: "news", description: "Every live news channel" },
+      { id: "breaking", label: "Breaking News", upstreamCategory: "news", description: "Breaking news & live coverage" },
+      { id: "international", label: "International", upstreamCategory: "news", description: "World news networks" },
+      { id: "business", label: "Business & Markets", upstreamCategory: "business", description: "Financial & market news" },
+      { id: "legislative", label: "Politics & Government", upstreamCategory: "legislative", description: "Political & legislative news" },
+      { id: "weather", label: "Weather News", upstreamCategory: "weather", description: "Weather updates & forecasts" },
+    ],
+  },
+  {
+    id: "movies",
+    label: "Movies",
+    family: "video",
+    description: "Live movie channels",
+    subCategories: [
+      { id: "all", label: "All Movies", upstreamCategory: "movies", description: "Every live movie channel" },
+      { id: "action", label: "Action", upstreamCategory: "movies", description: "Action & adventure films" },
+      { id: "adventure", label: "Adventure", upstreamCategory: "outdoor", description: "Adventure & outdoor films" },
+      { id: "comedy", label: "Comedy", upstreamCategory: "comedy", description: "Comedy films & stand-up" },
+      { id: "drama", label: "Drama", upstreamCategory: "series", description: "Drama films & features" },
+      { id: "horror", label: "Horror & Thriller", upstreamCategory: "relax", description: "Suspense & horror films" },
+      { id: "family", label: "Family", upstreamCategory: "family", description: "Family-friendly films" },
+      { id: "animation", label: "Animation", upstreamCategory: "animation", description: "Animated films & cartoons" },
+      { id: "classic", label: "Classics", upstreamCategory: "classic", description: "Classic & vintage films" },
+      { id: "documentary", label: "Real-Life Stories", upstreamCategory: "documentary", description: "Documentary & biographical films" },
+      { id: "historical", label: "Historical", upstreamCategory: "culture", description: "Historical & period films" },
+      { id: "romance", label: "Romance", upstreamCategory: "lifestyle", description: "Romantic films" },
+      { id: "scifi", label: "Sci-Fi & Fantasy", upstreamCategory: "science", description: "Science-fiction & fantasy films" },
+    ],
+  },
+  {
+    id: "sports",
+    label: "Sports",
+    family: "video",
+    description: "Live sports channels",
+    subCategories: [
+      { id: "all", label: "All Sports", upstreamCategory: "sports", description: "Every live sports channel" },
+      { id: "football", label: "Football", upstreamCategory: "sports", description: "Football (soccer) channels" },
+      { id: "auto", label: "Motorsport", upstreamCategory: "auto", description: "Auto racing & motorsport" },
+      { id: "outdoor", label: "Outdoor Sports", upstreamCategory: "outdoor", description: "Outdoor & adventure sports" },
+      { id: "news", label: "Sports News", upstreamCategory: "news", description: "Sports news & analysis" },
+      { id: "classic", label: "Classic Sports", upstreamCategory: "classic", description: "Classic sports replays" },
+    ],
+  },
+  {
+    id: "entertainment",
+    label: "Entertainment",
+    family: "video",
+    description: "Live entertainment channels",
+    subCategories: [
+      { id: "all", label: "All Entertainment", upstreamCategory: "entertainment", description: "Every entertainment channel" },
+      { id: "comedy", label: "Comedy", upstreamCategory: "comedy", description: "Comedy shows & stand-up" },
+      { id: "series", label: "TV Series", upstreamCategory: "series", description: "Series & serialized shows" },
+      { id: "classic", label: "Classic Shows", upstreamCategory: "classic", description: "Classic TV shows" },
+      { id: "reality", label: "Reality & Lifestyle", upstreamCategory: "lifestyle", description: "Reality & lifestyle shows" },
+      { id: "cooking", label: "Cooking Shows", upstreamCategory: "cooking", description: "Cooking & culinary shows" },
+      { id: "travel", label: "Travel Shows", upstreamCategory: "travel", description: "Travel & adventure shows" },
+    ],
+  },
+  {
+    id: "music",
+    label: "Music TV",
+    family: "video",
+    description: "Live music video channels",
+    subCategories: [
+      { id: "all", label: "All Music", upstreamCategory: "music", description: "Every live music channel" },
+      { id: "general", label: "General Music", upstreamCategory: "music", description: "Mixed-genre music TV" },
+      { id: "relax", label: "Relax & Ambient", upstreamCategory: "relax", description: "Relaxing & ambient music" },
+      { id: "classic", label: "Classic Hits", upstreamCategory: "classic", description: "Classic music videos" },
+      { id: "culture", label: "World Music", upstreamCategory: "culture", description: "World & cultural music" },
+    ],
+  },
+  {
+    id: "kids",
+    label: "Kids",
+    family: "video",
+    description: "Live kids channels",
+    subCategories: [
+      { id: "all", label: "All Kids", upstreamCategory: "kids", description: "Every live kids channel" },
+      { id: "animation", label: "Cartoons & Animation", upstreamCategory: "animation", description: "Animated kids shows" },
+      { id: "education", label: "Educational", upstreamCategory: "education", description: "Educational kids content" },
+      { id: "family", label: "Family Shows", upstreamCategory: "family", description: "Family-friendly kids shows" },
+      { id: "general", label: "General Kids", upstreamCategory: "kids", description: "General kids programming" },
+    ],
+  },
+  {
+    id: "documentary",
+    label: "Documentaries",
+    family: "video",
+    description: "Live documentary channels",
+    subCategories: [
+      { id: "all", label: "All Documentaries", upstreamCategory: "documentary", description: "Every documentary channel" },
+      { id: "science", label: "Science & Nature", upstreamCategory: "science", description: "Science & nature documentaries" },
+      { id: "history", label: "History", upstreamCategory: "culture", description: "Historical documentaries" },
+      { id: "travel", label: "Travel & Discovery", upstreamCategory: "travel", description: "Travel & discovery docs" },
+      { id: "education", label: "Educational", upstreamCategory: "education", description: "Educational documentaries" },
+      { id: "outdoor", label: "Outdoor & Wildlife", upstreamCategory: "outdoor", description: "Wildlife & outdoor docs" },
+      { id: "auto", label: "Machines & Tech", upstreamCategory: "auto", description: "Tech & machines documentaries" },
+    ],
+  },
+  {
+    id: "education",
+    label: "Education",
+    family: "video",
+    description: "Live education channels",
+    subCategories: [
+      { id: "all", label: "All Educational", upstreamCategory: "education", description: "Every educational channel" },
+      { id: "science", label: "Science", upstreamCategory: "science", description: "Science channels" },
+      { id: "culture", label: "Culture & Arts", upstreamCategory: "culture", description: "Cultural & arts education" },
+      { id: "documentary", label: "Documentaries", upstreamCategory: "documentary", description: "Educational documentaries" },
+      { id: "legislative", label: "Civics & Government", upstreamCategory: "legislative", description: "Civics & government education" },
+    ],
+  },
+  {
+    id: "religious",
+    label: "Religious",
+    family: "video",
+    description: "Live religious channels",
+    subCategories: [
+      { id: "all", label: "All Religious", upstreamCategory: "religious", description: "Every religious channel" },
+      { id: "general", label: "General Faith", upstreamCategory: "religious", description: "General religious programming" },
+      { id: "culture", label: "Spiritual & Cultural", upstreamCategory: "culture", description: "Spiritual & cultural content" },
+      { id: "education", label: "Religious Education", upstreamCategory: "education", description: "Religious education" },
+    ],
+  },
+  {
+    id: "business",
+    label: "Business",
+    family: "video",
+    description: "Live business & markets channels",
+    subCategories: [
+      { id: "all", label: "All Business", upstreamCategory: "business", description: "Every business channel" },
+      { id: "news", label: "Business News", upstreamCategory: "news", description: "Business & financial news" },
+      { id: "markets", label: "Markets", upstreamCategory: "business", description: "Live market coverage" },
+      { id: "shop", label: "Commerce", upstreamCategory: "shop", description: "Commerce & shopping channels" },
+    ],
+  },
+  {
+    id: "radio",
+    label: "Live Radio",
+    family: "audio",
+    description: "Thousands of live radio stations",
+    subCategories: [
+      { id: "all", label: "All Radio", upstreamCategory: "all", description: "Every live radio station" },
+      { id: "music", label: "Music Radio", upstreamCategory: "music", description: "Music radio stations" },
+      { id: "news", label: "News Radio", upstreamCategory: "news", description: "News & talk radio" },
+      { id: "sports", label: "Sports Radio", upstreamCategory: "sports", description: "Sports talk radio" },
+      { id: "religious", label: "Religious Radio", upstreamCategory: "religious", description: "Religious radio" },
+      { id: "relax", label: "Relax Radio", upstreamCategory: "relax", description: "Relaxing & ambient radio" },
+      { id: "culture", label: "Culture Radio", upstreamCategory: "culture", description: "Cultural radio" },
+      { id: "education", label: "Educational Radio", upstreamCategory: "education", description: "Educational radio" },
+    ],
+  },
 ];
 
 /**
@@ -165,31 +386,68 @@ export function getCandidateLiveNewsStreams(): LiveNewsStream[] {
  *  - {tv|radio}/{cc}   → all TV/radio for a country
  *  - {category}        → global category (news, movies, sports, music, kids,
  *                        entertainment, business, documentary, religious,
- *                        education) — video family uses /tv prefix,
+ *                        education, etc.) — video family uses /tv prefix,
  *                        audio family (radio) uses /radio prefix.
+ *  - {category}?category={subId} → sub-category slice (e.g. Movies→Action
+ *                        surfaces the "movies" page filtered to action-ish
+ *                        content; the ?category param is the upstream's own
+ *                        native filter so it always surfaces real channels).
+ *
+ * When a subCategory is provided, its `upstreamCategory` (a real upstream
+ * category id) is applied via the `?category=<id>` query param — OR, when
+ * the sub-category's upstreamCategory differs from the parent category,
+ * the URL is switched to that upstream category path entirely (so the
+ * user always lands on a page that actually has channels for that slice).
  */
 export function getLiveFeedEmbedUrl(
   countryCode: string,
   category: LiveCategory = "tv",
+  subCategory?: LiveFeedSubCategory,
 ): string {
   const cc = (countryCode || "").toLowerCase();
+
   // tv / radio categories: country-scoped path
   if (category === "tv" || category === "radio") {
-    if (!cc) return `https://tvgarden.world/${category}`;
-    return `https://tvgarden.world/${category}/${cc}`;
+    const base = cc
+      ? `https://tvgarden.world/${category}/${cc}`
+      : `https://tvgarden.world/${category}`;
+    if (subCategory?.upstreamCategory) {
+      return `${base}?category=${subCategory.upstreamCategory}`;
+    }
+    return base;
   }
-  // Content categories (news, movies, sports, etc.) — global, no country path
+
+  // Content categories (news, movies, sports, etc.) — global, no country path.
+  // If a sub-category maps to a DIFFERENT upstream category, navigate there
+  // directly (so the slice actually has channels). Otherwise apply the
+  // ?category param as a filter on the parent page.
+  if (subCategory?.upstreamCategory && subCategory.upstreamCategory !== category) {
+    return `https://tvgarden.world/${subCategory.upstreamCategory}`;
+  }
+  if (subCategory?.upstreamCategory) {
+    return `https://tvgarden.world/${category}?category=${subCategory.upstreamCategory}`;
+  }
   return `https://tvgarden.world/${category}`;
 }
 
 /** Global live-feed full globe (all countries) for a given family/category */
 export function getLiveFeedAllEmbedUrl(
   category: LiveCategory = "tv",
+  subCategory?: LiveFeedSubCategory,
 ): string {
-  if (category === "tv" || category === "radio") {
-    return `https://tvgarden.world/${category}`;
-  }
-  return `https://tvgarden.world/${category}`;
+  return getLiveFeedEmbedUrl("", category, subCategory);
+}
+
+/**
+ * Resolve a sub-category by id within a parent category.
+ * Returns undefined if not found (caller falls back to the parent category).
+ */
+export function getSubCategory(
+  category: LiveCategory,
+  subId: string,
+): LiveFeedSubCategory | undefined {
+  const cat = LIVE_FEED_CATEGORIES.find((c) => c.id === category);
+  return cat?.subCategories.find((s) => s.id === subId);
 }
 
 const YOUTUBE_EMBED_BASE = "https://www.youtube.com/embed/";
@@ -233,6 +491,7 @@ export default {
   isYouTubeStreamAvailable,
   getLiveFeedEmbedUrl,
   getLiveFeedAllEmbedUrl,
+  getSubCategory,
   getTVGardenEmbedUrl,
   getTVGardenAllEmbedUrl,
   getYouTubeEmbedUrl,
