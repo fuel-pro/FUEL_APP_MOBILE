@@ -36,13 +36,16 @@ function renderToast(t: ToastMessage): HTMLDivElement {
   const el = document.createElement("div");
   el.id = `toast-${t.id}`;
   el.style.cssText =
-    "pointer-events:auto;padding:12px 16px;border-radius:10px;font-size:13px;font-weight:500;display:flex;align-items:center;gap:10px;animation:toastSlideIn 0.3s ease;box-shadow:0 4px 20px rgba(0,0,0,0.3);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.08);";
+    "pointer-events:auto;padding:12px 16px;border-radius:10px;font-size:13px;font-weight:500;display:flex;align-items:center;gap:10px;animation:toastSlideIn 0.3s ease;box-shadow:0 4px 20px rgba(0,0,0,0.15);backdrop-filter:blur(12px);border:1px solid rgba(0,0,0,0.08);";
 
   const colors: Record<ToastType, string> = {
-    success: "background:rgba(16,185,129,0.15);color:#34d399;",
-    error: "background:rgba(239,68,68,0.15);color:#f87171;",
-    warning: "background:rgba(245,158,11,0.15);color:#fbbf24;",
-    info: "background:rgba(99,102,241,0.15);color:#818cf8;",
+    success:
+      "background:rgba(16,185,129,0.12);color:#059669;border-color:rgba(16,185,129,0.3);",
+    error:
+      "background:rgba(239,68,68,0.12);color:#dc2626;border-color:rgba(239,68,68,0.3);",
+    warning:
+      "background:rgba(245,158,11,0.12);color:#d97706;border-color:rgba(245,158,11,0.3);",
+    info: "background:rgba(99,102,241,0.12);color:#4f46e5;border-color:rgba(99,102,241,0.3);",
   };
   el.style.cssText += colors[t.type];
 
