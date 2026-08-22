@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation } from "@/react-app/context/LocationContext";
 import { useAuth } from "@/react-app/context/AuthContext";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
@@ -9,14 +9,11 @@ import {
   ExternalLink,
   Clock,
   Globe,
-  Filter,
   Share2,
   Bookmark,
   BookmarkCheck,
   RefreshCw,
   Wifi,
-  WifiOff,
-  TrendingUp,
   DollarSign,
   AlertTriangle,
   Zap,
@@ -25,12 +22,6 @@ import {
   Receipt,
   Gavel,
   Building2,
-  Fuel as FuelIcon,
-  BadgeDollarSign,
-  Play,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
   Monitor,
   Radio,
   Tv,
@@ -38,17 +29,7 @@ import {
 import NewsService, {
   ExternalNewsItem,
 } from "@/react-app/services/NewsService";
-import {
-  getCountryByCode,
-} from "@/react-app/lib/world-country-utils";
-import LiveStreamService, {
-  getAvailableLiveNewsStreams,
-  getCandidateLiveNewsStreams,
-  getYouTubeEmbedUrl,
-  getCategoryLabel,
-  getCategoryColor,
-  LiveNewsStream,
-} from "@/react-app/services/LiveStreamService";
+import { getCountryByCode } from "@/react-app/lib/world-country-utils";
 import LiveFeedEmbed from "@/react-app/components/LiveFeedEmbed";
 
 interface DisplayNewsItem extends ExternalNewsItem {
@@ -228,7 +209,6 @@ function getCuratedNews(countryCode: string): DisplayNewsItem[] {
   const country = getCountryByCode(countryCode);
   if (country) {
     const name = country.name;
-    const currency = country.currency;
     const short = countryCode.toLowerCase();
     items.push(
       {
@@ -299,13 +279,6 @@ export default function News() {
   const [activeSubTab, setActiveSubTab] = useState<
     "articles" | "live-channels" | "live-tv" | "live-radio"
   >("articles");
-
-  // Live news stream state — verified-available YouTube 24/7 streams
-  const [liveStreams, setLiveStreams] = useState<LiveNewsStream[]>(
-    getCandidateLiveNewsStreams(),
-  );
-  const [verifyingStreams, setVerifyingStreams] = useState(true);
-  const [activeStreamIdx, setActiveStreamIdx] = useState(0);
 
   // Live feed embed state — country filter for TV / Radio sub-tabs
   const [tvCountry, setTvCountry] = useState<string>(currentCountry.id);
@@ -437,31 +410,6 @@ export default function News() {
     setTvCountry(currentCountry.id);
     setRadioCountry(currentCountry.id);
   }, [currentCountry.id]);
-
-  // Verify live news stream availability — only show AVAILABLE streams
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setVerifyingStreams(true);
-      try {
-        const available = await getAvailableLiveNewsStreams();
-        if (!cancelled) {
-          setLiveStreams(available);
-          // Reset index if out of bounds
-          setActiveStreamIdx((prev) =>
-            available.length === 0 ? 0 : Math.min(prev, available.length - 1),
-          );
-        }
-      } catch {
-        /* keep candidate list on error */
-      } finally {
-        if (!cancelled) setVerifyingStreams(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   // Load news on mount
   useEffect(() => {
@@ -715,102 +663,6 @@ export default function News() {
       {/* ===================== LIVE CHANNELS SUB-TAB (multi-category grid) ===================== */}
       {activeSubTab === "live-channels" && (
         <div className="space-y-4">
-          {/* Verified live news streams (only AVAILABLE ones shown) */}
-          <div className="bg-gradient-to-r from-gray-900 to-gray-800 rounded-xl border border-gray-700 p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <Radio size={16} className="text-red-500 animate-pulse" />
-              <h3 className="text-sm font-semibold text-white">
-                Live News Streams
-              </h3>
-              <span className="text-[10px] bg-green-500/20 text-green-400 px-1.5 py-0.5 rounded-full">
-                {verifyingStreams
-                  ? "Verifying availability..."
-                  : `${liveStreams.length} available`}
-              </span>
-            </div>
-
-            {verifyingStreams ? (
-              <div className="flex items-center justify-center py-8">
-                <RefreshCw size={20} className="text-gray-400 animate-spin" />
-                <span className="text-gray-400 text-xs ml-2">
-                  Checking stream availability…
-                </span>
-              </div>
-            ) : liveStreams.length === 0 ? (
-              <div className="text-center py-8">
-                <WifiOff size={32} className="text-gray-500 mx-auto mb-2" />
-                <p className="text-gray-400 text-xs">
-                  No live news streams currently available. Try the live
-                  channels below.
-                </p>
-              </div>
-            ) : (
-              <>
-                {/* Active stream player */}
-                {liveStreams[activeStreamIdx] && (
-                  <div className="relative bg-black rounded-lg overflow-hidden aspect-video mb-3">
-                    <iframe
-                      key={liveStreams[activeStreamIdx].id}
-                      src={getYouTubeEmbedUrl(
-                        liveStreams[activeStreamIdx].videoId,
-                      )}
-                      title={liveStreams[activeStreamIdx].name}
-                      className="w-full h-full"
-                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                      allowFullScreen
-                    />
-                  </div>
-                )}
-
-                {/* Stream selector — only available streams */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {liveStreams.map((stream, i) => {
-                    const isActive = i === activeStreamIdx;
-                    return (
-                      <button
-                        key={stream.id}
-                        onClick={() => setActiveStreamIdx(i)}
-                        className={`flex items-center gap-2 p-2 rounded-lg text-left transition-all ${
-                          isActive
-                            ? "bg-blue-600/30 border border-blue-500"
-                            : "bg-gray-800/50 border border-gray-700 hover:bg-gray-700/50"
-                        }`}
-                      >
-                        <Radio
-                          size={12}
-                          className={`flex-shrink-0 ${
-                            isActive ? "text-blue-400" : "text-red-400"
-                          }`}
-                        />
-                        <div className="flex-1 min-w-0">
-                          <p
-                            className={`text-xs font-medium truncate ${
-                              isActive ? "text-white" : "text-gray-300"
-                            }`}
-                          >
-                            {stream.name}
-                          </p>
-                          <p className="text-[10px] text-gray-500 truncate">
-                            {stream.description}
-                          </p>
-                        </div>
-                        <span
-                          className={`flex-shrink-0 text-[9px] px-1.5 py-0.5 rounded border ${getCategoryColor(stream.category)}`}
-                        >
-                          {getCategoryLabel(stream.category)}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-                <p className="text-[10px] text-gray-500 mt-2 flex items-center gap-1">
-                  <Wifi size={10} /> Only verified-available streams are shown.
-                  Unavailable streams are automatically hidden.
-                </p>
-              </>
-            )}
-          </div>
-
           {/* Multi-category live channel grid — silently integrated */}
           <LiveFeedEmbed
             defaultCategory="tv"
@@ -824,102 +676,6 @@ export default function News() {
       {/* ===================== LIVE TV SUB-TAB ===================== */}
       {activeSubTab === "live-tv" && (
         <div className="space-y-4">
-          {/* Verified live news streams (only AVAILABLE ones shown) */}
-          <div className="bg-gradient-to-r from-gray-900 to-gray-800 rounded-xl border border-gray-700 p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <Radio size={16} className="text-red-500 animate-pulse" />
-              <h3 className="text-sm font-semibold text-white">
-                Live News Streams
-              </h3>
-              <span className="text-[10px] bg-green-500/20 text-green-400 px-1.5 py-0.5 rounded-full">
-                {verifyingStreams
-                  ? "Verifying availability..."
-                  : `${liveStreams.length} available`}
-              </span>
-            </div>
-
-            {verifyingStreams ? (
-              <div className="flex items-center justify-center py-8">
-                <RefreshCw size={20} className="text-gray-400 animate-spin" />
-                <span className="text-gray-400 text-xs ml-2">
-                  Checking stream availability…
-                </span>
-              </div>
-            ) : liveStreams.length === 0 ? (
-              <div className="text-center py-8">
-                <WifiOff size={32} className="text-gray-500 mx-auto mb-2" />
-                <p className="text-gray-400 text-xs">
-                  No live news streams currently available. Try the Live TV
-                  channels below.
-                </p>
-              </div>
-            ) : (
-              <>
-                {/* Active stream player */}
-                {liveStreams[activeStreamIdx] && (
-                  <div className="relative bg-black rounded-lg overflow-hidden aspect-video mb-3">
-                    <iframe
-                      key={liveStreams[activeStreamIdx].id}
-                      src={getYouTubeEmbedUrl(
-                        liveStreams[activeStreamIdx].videoId,
-                      )}
-                      title={liveStreams[activeStreamIdx].name}
-                      className="w-full h-full"
-                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                      allowFullScreen
-                    />
-                  </div>
-                )}
-
-                {/* Stream selector — only available streams */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {liveStreams.map((stream, i) => {
-                    const isActive = i === activeStreamIdx;
-                    return (
-                      <button
-                        key={stream.id}
-                        onClick={() => setActiveStreamIdx(i)}
-                        className={`flex items-center gap-2 p-2 rounded-lg text-left transition-all ${
-                          isActive
-                            ? "bg-blue-600/30 border border-blue-500"
-                            : "bg-gray-800/50 border border-gray-700 hover:bg-gray-700/50"
-                        }`}
-                      >
-                        <Radio
-                          size={12}
-                          className={`flex-shrink-0 ${
-                            isActive ? "text-blue-400" : "text-red-400"
-                          }`}
-                        />
-                        <div className="flex-1 min-w-0">
-                          <p
-                            className={`text-xs font-medium truncate ${
-                              isActive ? "text-white" : "text-gray-300"
-                            }`}
-                          >
-                            {stream.name}
-                          </p>
-                          <p className="text-[10px] text-gray-500 truncate">
-                            {stream.description}
-                          </p>
-                        </div>
-                        <span
-                          className={`flex-shrink-0 text-[9px] px-1.5 py-0.5 rounded border ${getCategoryColor(stream.category)}`}
-                        >
-                          {getCategoryLabel(stream.category)}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-                <p className="text-[10px] text-gray-500 mt-2 flex items-center gap-1">
-                  <Wifi size={10} /> Only verified-available streams are shown.
-                  Unavailable streams are automatically hidden.
-                </p>
-              </>
-            )}
-          </div>
-
           {/* Live global TV channels — silently integrated (no upstream attribution) */}
           <LiveFeedEmbed
             defaultCategory="tv"

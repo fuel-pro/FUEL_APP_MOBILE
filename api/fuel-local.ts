@@ -17,7 +17,7 @@
  * stay server-side. The client only sees the parsed result.
  */
 
-import { getLocalFuelPrices } from "./lib/fuel-engine.js";
+import { getLocalFuelPrices } from "./_lib/fuel-engine.js";
 
 // CORS headers — allow the Cloudflare Pages mirror (and any origin) to call
 // this endpoint cross-origin. Without these, the browser blocks the fetch.

@@ -47,6 +47,7 @@
     "firebase": "^12.13.0",
     "firebase-admin": "^14.2.0",
     "framer-motion": "^12.43.0",
+    "hls.js": "^1.7.1",
     "hono": "^4.12.23",
     "html2canvas": "^1.4.1",
     "jose": "6.1.3",

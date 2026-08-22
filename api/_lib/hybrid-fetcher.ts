@@ -68,7 +68,7 @@ function isFresh(dateStr: string): boolean {
 }
 
 // Cached rows may store the petrol price under either `super_petrol` (written
-// by api/lib/fuel-engine.ts) or `petrol` (written by this fetcher). Read both
+// by api/_lib/fuel-engine.ts) or `petrol` (written by this fetcher). Read both
 // so the nearest-neighbour fallback works regardless of which engine wrote
 // the row.
 function petrolOf(
