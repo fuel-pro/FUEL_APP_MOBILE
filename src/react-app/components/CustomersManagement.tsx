@@ -21,6 +21,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { useStations } from "@/react-app/context/StationContext";
+import { useFuel } from "@/react-app/context/FuelContext";
 import { supabase } from "@/supabase/client";
 import { fetchCustomers } from "@/react-app/lib/pos-service";
 import cloudStorageService from "@/react-app/lib/cloud-storage-service";
@@ -50,6 +51,7 @@ interface Customer {
 
 export default function CustomersManagement() {
   const { currentStation } = useStations();
+  const { state } = useFuel();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -78,13 +80,42 @@ export default function CustomersManagement() {
         cloudLoadCompleteRef.current = true;
         return;
       }
-      // Fallback: load from cloud KV store
+      // Fallback 1: load from cloud KV store
       const cloudData = await cloudStorageService.get<Customer[]>(
         CLOUD_KEY,
         currentStation.id,
       );
       const normalized = Array.isArray(cloudData) ? cloudData : [];
-      setCustomers(normalized);
+      if (normalized.length > 0) {
+        setCustomers(normalized);
+        setDataSource("cloud");
+        cloudLoadCompleteRef.current = true;
+        return;
+      }
+      // Fallback 2: read from FuelContext compact blob (state.clients)
+      // POS/Invoice tabs save customers here; without this fallback the
+      // Customers tab appears empty even though customers exist.
+      const compactClients = Object.values(state.clients || {});
+      if (compactClients.length > 0) {
+        const mapped = compactClients.map((c: any) => ({
+          id: c.id || c.phone || c.name,
+          name: c.name || c.clientName || "Unknown",
+          email: c.email || "",
+          phone: c.phone || c.phoneNo || "",
+          address: c.address || "",
+          company: c.company || c.companyName || "",
+          tax_id: c.taxId || c.kraPin || "",
+          credit_limit: c.creditLimit || 0,
+          notes: c.notes || "",
+          is_active: true,
+          station_id: currentStation.id,
+        }));
+        setCustomers(mapped);
+        setDataSource("cloud");
+        cloudLoadCompleteRef.current = true;
+        return;
+      }
+      setCustomers([]);
       setDataSource("cloud");
       cloudLoadCompleteRef.current = true;
     } catch (error) {
@@ -99,8 +130,32 @@ export default function CustomersManagement() {
           currentStation?.id,
         );
         const normalized = Array.isArray(cloudData) ? cloudData : [];
-        setCustomers(normalized);
-        setDataSource("cloud");
+        if (normalized.length > 0) {
+          setCustomers(normalized);
+          setDataSource("cloud");
+        } else {
+          // Last resort: FuelContext compact blob
+          const compactClients = Object.values(state.clients || {});
+          if (compactClients.length > 0) {
+            const mapped = compactClients.map((c: any) => ({
+              id: c.id || c.phone || c.name,
+              name: c.name || c.clientName || "Unknown",
+              email: c.email || "",
+              phone: c.phone || c.phoneNo || "",
+              address: c.address || "",
+              company: c.company || c.companyName || "",
+              tax_id: c.taxId || c.kraPin || "",
+              credit_limit: c.creditLimit || 0,
+              notes: c.notes || "",
+              is_active: true,
+              station_id: currentStation?.id,
+            }));
+            setCustomers(mapped);
+          } else {
+            setCustomers([]);
+          }
+          setDataSource("cloud");
+        }
       } catch (cloudError) {
         console.error("[Customers] Cloud fallback also failed:", cloudError);
         setCustomers([]);
@@ -111,7 +166,7 @@ export default function CustomersManagement() {
     } finally {
       setLoading(false);
     }
-  }, [currentStation?.id]);
+  }, [currentStation?.id, state.clients]);
 
   useEffect(() => {
     cloudLoadCompleteRef.current = false;
