@@ -6651,3 +6651,31 @@ All fix/feature branches already merged to main. No lost work.
 - Cloudflare: LIVE (1642a293)
 - Vercel: BLOCKED (resets ~2026-08-23 20:08 UTC)
 - Supabase: no schema changes
+
+## Session 2026-08-22 — Cross-tab interlinks + lost commit audit + live verification
+
+### Cross-tab interlinks completed (DEPLOYED LIVE, commit 931b2b3)
+
+- AutomationPanel.tsx: Auto-Reorders empty state has View Stock Management button (switchToTab inventory); each pending reorder has Create PO button (switchToTab suppliers).
+- News.tsx: price-category articles in detail modal have View Live Fuel Prices button (switchToTab price-finder).
+
+### Lost commit audit (2026-08-22)
+
+- feat/document-center-folders (3 commits): VERIFIED ALREADY ON MAIN (createFolder/renameFolder/deleteFolder/autoSort present).
+- feature/pos-hardware-integration (243 commits): too divergent (app/src/ structure, eventemitter3). NOT merged.
+- feature/google-oauth-signin: already on main.
+- feat/village-level-real-fuel-prices: already on main (PR #100).
+- All fix/* branches: already on main in more complete form.
+- feature/firebase-*: not relevant (Supabase app).
+- Conclusion: no critical lost work needs merging.
+
+### Live verification (2026-08-22, Cloudflare main alias)
+
+- Dashboard: country-aware (US, USD, 0% VAT). Reflects POS sale: Total Revenue $11, Net Profit $11, Fuel Sold 10L.
+- POS: 10L Super Petrol @ $1.10/L = $11 cash sale (INV20260822000001BYFE). Receipt fully country-aware (Tax ID not PIN, TAX COMPLIANT not KRA eTIMS, Powered by FuelPro not TIMS, 0% VAT, US locale).
+- Customers tab: loads with Synced indicator, proper empty state.
+- Data Manager: Recovery sub-tab has Export ALL Cloud Data button.
+
+### Deploy state
+
+- GitHub main: 931b2b3. Cloudflare: LIVE. Vercel: BLOCKED (quota, auto-deploys on reset). Supabase: no schema changes. tsc 0 errors, build success.
