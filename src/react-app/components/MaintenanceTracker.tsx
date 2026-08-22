@@ -472,6 +472,29 @@ export default function MaintenanceTracker() {
         </button>
       </div>
 
+      {/* Overdue / Critical Alert Banner */}
+      {(stats.overdue > 0 || stats.critical > 0) && (
+        <div
+          className={`mb-4 p-3 rounded-xl border flex items-center justify-between ${
+            stats.overdue > 0
+              ? "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800"
+              : "bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800"
+          }`}
+        >
+          <p
+            className={`text-sm font-medium ${
+              stats.overdue > 0
+                ? "text-red-700 dark:text-red-300"
+                : "text-orange-700 dark:text-orange-300"
+            }`}
+          >
+            {stats.overdue > 0
+              ? `⚠ ${stats.overdue} overdue maintenance task(s) need immediate attention`
+              : `⚠ ${stats.critical} critical priority task(s) pending`}
+          </p>
+        </div>
+      )}
+
       {/* Cost Analytics */}
       {records.length > 0 && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
