@@ -680,6 +680,17 @@ export default function CreditManagement() {
                             style={{ width: `${Math.min(100, pct)}%` }}
                           />
                         </div>
+                        <div className="flex justify-between text-xs mt-1">
+                          <span
+                            className={`font-semibold ${isOver ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"}`}
+                          >
+                            Available: {currencySymbol}
+                            {formatNumber(Math.max(0, creditLimit - balanceUsed))}
+                          </span>
+                          <span className="text-gray-400">
+                            {pct.toFixed(0)}% used
+                          </span>
+                        </div>
                       </div>
                     </div>
                     <div className="flex flex-col gap-1 ml-4">
