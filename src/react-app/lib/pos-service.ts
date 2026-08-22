@@ -1120,18 +1120,26 @@ export async function fetchExpenses(
     query = query.lte("expense_date", endDate);
   }
 
-  const { data } = await query;
+  const { data, error } = await query;
+  if (error) {
+    console.error("[fetchExpenses] query failed:", error);
+    throw error;
+  }
   return data || [];
 }
 
 export async function fetchExpenseCategories(
   stationId: string,
 ): Promise<any[]> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("expense_categories")
     .select("*")
     .eq("station_id", stationId)
     .order("name");
+  if (error) {
+    console.error("[fetchExpenseCategories] query failed:", error);
+    throw error;
+  }
   return data || [];
 }
 
@@ -1159,12 +1167,16 @@ export async function fetchInventoryTransactions(
 }
 
 export async function fetchOpenSessions(stationId: string): Promise<any[]> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("terminal_sessions")
     .select("*")
     .eq("station_id", stationId)
     .eq("status", "open")
     .order("created_at", { ascending: false });
+  if (error) {
+    console.error("[fetchOpenSessions] query failed:", error);
+    throw error;
+  }
   return data || [];
 }
 
@@ -1182,11 +1194,13 @@ export async function fetchPurchaseOrders(
     query = query.eq("status", status);
   }
 
-  const { data } = await query;
+  const { data, error } = await query;
+  if (error) {
+    console.error("[fetchPurchaseOrders] query failed:", error);
+    throw error;
+  }
   return data || [];
 }
-
-// ─── Reports ─────────────────────────────────────────────────────────────────
 
 export async function fetchSalesReport(
   stationId: string,
