@@ -115,6 +115,7 @@ export default function LiveFeedEmbed({
   const [reconnecting, setReconnecting] = useState(false);
   const [muted, setMuted] = useState(true);
   const [showPlayOverlay, setShowPlayOverlay] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   // Cloud load guard
   const cloudLoadCompleteRef = useRef(false);
@@ -240,6 +241,8 @@ export default function LiveFeedEmbed({
     setActiveChannel(null);
     setVisibleCount(60);
     setPlaybackError(false);
+    setFetchError(null);
+    setShowPlayOverlay(false);
 
     const params = resolveChannelFetchParams(
       category,
@@ -249,6 +252,7 @@ export default function LiveFeedEmbed({
     );
     if (params.length === 0) {
       setLoading(false);
+      setFetchError("No channels available for this selection.");
       return;
     }
     (async () => {
@@ -267,6 +271,15 @@ export default function LiveFeedEmbed({
               merged.push(ch);
             }
           }
+        }
+        if (merged.length === 0) {
+          if (!cancelled) {
+            setFetchError(
+              "Could not load channels — the live TV service may be temporarily unavailable. Try again or select a different country.",
+            );
+            setLoading(false);
+          }
+          return;
         }
         // Filter out UNPLAYABLE channels: a channel is playable only if it
         // has at least one HLS stream URL OR a YouTube embed URL. Channels
@@ -293,8 +306,13 @@ export default function LiveFeedEmbed({
           playable.find((c) => !c.isGeoBlocked) ||
           playable[0];
         if (firstPlayable) setActiveChannel(firstPlayable);
-      } catch {
-        // ignore
+      } catch (err) {
+        if (!cancelled) {
+          console.error("[LiveFeedEmbed] channel fetch error:", err);
+          setFetchError(
+            "Could not load channels — the live TV service may be temporarily unavailable. Try again or select a different country.",
+          );
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -303,6 +321,22 @@ export default function LiveFeedEmbed({
       cancelled = true;
     };
   }, [category, subCategoryId, country, showAll]);
+
+  // Safety-net auto-select: if channels are loaded but no active channel is
+  // selected (e.g. due to a race between the fetch effect and state updates),
+  // pick the first playable channel. This ensures the video player is never
+  // left empty when channels are available.
+  useEffect(() => {
+    if (!activeChannel && channels.length > 0 && !loading) {
+      const first =
+        channels.find(
+          (c) => !c.isGeoBlocked && c.stream_urls && c.stream_urls.length > 0,
+        ) ||
+        channels.find((c) => !c.isGeoBlocked) ||
+        channels[0];
+      if (first) setActiveChannel(first);
+    }
+  }, [channels, activeChannel, loading]);
 
   // Auto-advance to the next playable channel when the current stream fails.
   // Skips channels already tried (via autoAdvanceTriedRef) to avoid loops.
@@ -874,6 +908,25 @@ export default function LiveFeedEmbed({
             <div className="text-center">
               <div className="inline-block w-8 h-8 border-2 border-gray-600 border-t-blue-500 rounded-full animate-spin mb-2" />
               <p className="text-xs text-gray-400">Loading live channels…</p>
+            </div>
+          </div>
+        ) : fetchError ? (
+          <div className="absolute inset-0 flex items-center justify-center p-4">
+            <div className="text-center">
+              <AlertCircle size={32} className="text-amber-500 mx-auto mb-2" />
+              <p className="text-xs text-gray-300 mb-3 max-w-[280px]">
+                {fetchError}
+              </p>
+              <button
+                onClick={() => {
+                  // Re-trigger the fetch effect by toggling showAll
+                  setShowAll((v) => !v);
+                  setShowAll((v) => !v);
+                }}
+                className="text-[10px] px-3 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-500"
+              >
+                Retry
+              </button>
             </div>
           </div>
         ) : activeChannel ? (
