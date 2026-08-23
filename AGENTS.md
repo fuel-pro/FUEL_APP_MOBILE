@@ -7472,3 +7472,52 @@ so the new CSS chunk hash is picked up on the next page load. A hard
 reload (Ctrl+Shift+R) forces it immediately. The preview URL
 (`fe7adeef.fuel-app-mobile.pages.dev`) has no SW cache and always serves
 the latest.
+
+
+## Session 2026-08-23 — iptv-org integration for Live TV (DEPLOYED LIVE, commit 49d6989)
+
+Integrated iptv-org (https://iptv-org.github.io/api/) as a SECOND data source
+for the News tab Live Channels/Live TV/Live Radio feature, per the TV.txt
+guide. iptv-org provides 8000+ public-domain free-to-air channels. The
+channels are merged with the existing tvgarden channels so users get the
+widest selection. NO upstream attribution in the UI.
+
+### New serverless proxy: /api/iptv-channels
+- api/iptv-channels.ts (Vercel) + functions/api/iptv-channels.ts (Cloudflare
+  Pages Function): fetches iptv-org channels.json (10MB) + streams.json
+  server-side, merges them, filters by country/category, returns a compact
+  slice (capped at 500). The browser NEVER downloads the full 10MB file.
+  10-min in-memory cache. CORS headers + OPTIONS preflight.
+- Filters out closed/replaced/NSFW channels + channels with no stream URL
+  (never shows dead streams).
+
+### LiveStreamService.ts changes
+- IptvChannel interface + fetchIptvChannels(country, category, limit).
+- iptvToLiveChannel(ch): converts to the unified LiveChannel shape.
+- mergeChannelsWithIptv(primary, iptv): dedupes by case-insensitive name.
+- fetchAllChannels(category, country, showAll): main entry point — fetches
+  BOTH providers + merges. Maps FuelPro categories to iptv-org categories.
+  Skips iptv for audio/radio (iptv-org has no radio streams).
+- LiveChannel gains optional logo field (iptv-org channels have logos).
+- Background prefetch now also warms iptv-org US channels (200).
+
+### LiveFeedEmbed.tsx changes
+- Channel-fetch effect now calls fetchAllChannels() (merged tvgarden + iptv).
+- Channel cards render the channel logo when available; falls back to icon.
+
+### Verification (live, 2026-08-23, Cloudflare preview 212937d3 + main alias)
+- /api/iptv-channels?country=us&limit=5 returns 5 real iptv-org US channels
+  with HLS stream URLs (00s Replay, 24 Hour Free Movies, 30A Darcizzle
+  Offshore, etc.). source: iptv-org.
+- /api/iptv-channels?country=us&category=news&limit=3 returns 3 US news
+  channels.
+- News -> Live TV sub-tab: station dropdown shows the MERGED channel list.
+
+### Deploy state 2026-08-23 (commit 49d6989)
+- GitHub main: 49d6989 (pushed, synced with origin/main).
+- Cloudflare Pages: LIVE (preview 212937d3 + main alias). Both the
+  /api/iptv-channels Cloudflare Function + the merged Live TV UI verified.
+- Vercel production: BLOCKED by api-deployments-free-per-day (100/100;
+  GitHub integration auto-deploys when quota resets ~24h).
+- Supabase: no schema changes (frontend + serverless only).
+- tsc 0 errors, build 108 precache, prettier pass.
