@@ -1310,7 +1310,256 @@ export interface LiveFeedHistoryEntry {
 
 export const LIVE_FEED_FAVORITES_KEY = "live_feed_favorites";
 export const LIVE_FEED_HISTORY_KEY = "live_feed_history";
+export const LIVE_FEED_ANALYTICS_KEY = "live_feed_analytics";
+export const LIVE_FEED_REMINDERS_KEY = "live_feed_reminders";
 export const HISTORY_MAX = 20;
+export const ANALYTICS_MAX = 200;
+export const REMINDERS_MAX = 50;
+
+// ===========================================================================
+// ANALYTICS — cloud-backed channel popularity tracking (cross-device).
+// Every channel play is recorded; the aggregated counts drive the
+// "Popular Channels" / "Most Watched" UI. NO upstream attribution —
+// these are native FuelPro analytics.
+// ===========================================================================
+
+/**
+ * A single channel-play analytics record. Aggregated by channel nanoid.
+ * The `name`/`country` are snapshotted at play time so the popularity UI
+ * can render even after the channel list is no longer loaded.
+ */
+export interface LiveFeedAnalyticsEntry {
+  /** Channel nanoid (stable identifier from the provider API) */
+  channelId: string;
+  /** Channel name snapshot (for rendering when the list isn't loaded) */
+  name: string;
+  country: string;
+  category: LiveCategory;
+  /** Incremental play count */
+  plays: number;
+  /** First + last play timestamps (ms) */
+  firstPlayedAt: number;
+  lastPlayedAt: number;
+}
+
+/** Aggregated popularity result used by the "Popular Channels" UI. */
+export interface ChannelPopularity {
+  channelId: string;
+  name: string;
+  country: string;
+  category: LiveCategory;
+  plays: number;
+  lastPlayedAt: number;
+}
+
+/**
+ * Record a channel play into the cloud-backed analytics store. Called by
+ * LiveFeedEmbed when a channel becomes active (selected or auto-advanced).
+ * Aggregates by channelId (increments plays + updates lastPlayedAt) rather
+ * than appending a new row, so the store stays compact (capped at
+ * ANALYTICS_MAX channels). Cross-device via cloudStorageService.
+ *
+ * Returns void — fire-and-forget; failures are swallowed (analytics must
+ * never break playback).
+ */
+export async function trackChannelPlay(
+  channel: LiveChannel,
+  category: LiveCategory,
+): Promise<void> {
+  try {
+    const { cloudStorageService } =
+      await import("@/react-app/lib/cloud-storage-service");
+    const existing =
+      (await cloudStorageService.get<LiveFeedAnalyticsEntry[]>(
+        LIVE_FEED_ANALYTICS_KEY,
+      )) || [];
+    const arr = Array.isArray(existing) ? existing : [];
+    const now = Date.now();
+    const idx = arr.findIndex((e) => e.channelId === channel.nanoid);
+    let next: LiveFeedAnalyticsEntry[];
+    if (idx >= 0) {
+      next = arr.slice();
+      next[idx] = {
+        ...next[idx],
+        name: channel.name, // refresh snapshot in case it changed
+        country: channel.country,
+        category,
+        plays: next[idx].plays + 1,
+        lastPlayedAt: now,
+      };
+    } else {
+      next = [
+        {
+          channelId: channel.nanoid,
+          name: channel.name,
+          country: channel.country,
+          category,
+          plays: 1,
+          firstPlayedAt: now,
+          lastPlayedAt: now,
+        },
+        ...arr,
+      ];
+    }
+    // Cap the store at ANALYTICS_MAX (drop least-recently-played first)
+    if (next.length > ANALYTICS_MAX) {
+      next = next
+        .sort((a, b) => b.lastPlayedAt - a.lastPlayedAt)
+        .slice(0, ANALYTICS_MAX);
+    }
+    await cloudStorageService.set(LIVE_FEED_ANALYTICS_KEY, next);
+  } catch {
+    // analytics must never break playback
+  }
+}
+
+/**
+ * Read the aggregated channel-popularity list from cloud (cross-device).
+ * Returns entries sorted by play count desc. Used by the "Popular Channels"
+ * / "Most Watched" UI.
+ */
+export async function getChannelPopularity(): Promise<ChannelPopularity[]> {
+  try {
+    const { cloudStorageService } =
+      await import("@/react-app/lib/cloud-storage-service");
+    const existing =
+      (await cloudStorageService.get<LiveFeedAnalyticsEntry[]>(
+        LIVE_FEED_ANALYTICS_KEY,
+      )) || [];
+    const arr = Array.isArray(existing) ? existing : [];
+    return arr
+      .map((e) => ({
+        channelId: e.channelId,
+        name: e.name,
+        country: e.country,
+        category: e.category,
+        plays: e.plays,
+        lastPlayedAt: e.lastPlayedAt,
+      }))
+      .sort((a, b) => b.plays - a.plays);
+  } catch {
+    return [];
+  }
+}
+
+// ===========================================================================
+// EPG / WATCH REMINDERS — cloud-backed personal program guide (cross-device).
+//
+// Real now/next EPG for these channels isn't feasible: the provider uses
+// internal `nanoid`s that don't map to iptv-org `channel_id`s, and the
+// upstream XMLTV program files are heavy + unreliable. Instead this is a
+// cloud-backed WATCH SCHEDULE: the user sets a reminder (channel + time +
+// optional daily/weekly recurrence + label), and the "Reminders" panel
+// shows what's coming up. This is a genuine Electronic Program Guide
+// capability (scheduling what to watch when) that works reliably with the
+// existing channel data and syncs across every device.
+// ===========================================================================
+
+export type ReminderRecurrence = "once" | "daily" | "weekly";
+
+/** A user-scheduled watch reminder (cloud-synced, cross-device). */
+export interface LiveFeedReminder {
+  id: string;
+  /** Channel nanoid (so we can re-match the channel when loaded) */
+  channelId: string;
+  /** Channel name snapshot (renders even when the list isn't loaded) */
+  channelName: string;
+  country: string;
+  category: LiveCategory;
+  /** Free-text label for what to watch (e.g. "Evening News") */
+  label: string;
+  /** Scheduled time as minutes-of-day (0-1439) in the user's local tz */
+  minuteOfDay: number;
+  /** Recurrence pattern */
+  recurrence: ReminderRecurrence;
+  /** For weekly: ISO weekday 1 (Mon) - 7 (Sun). Ignored for once/daily. */
+  weekday?: number;
+  createdAt: number;
+  /** Whether the reminder has been dismissed/completed (for "once") */
+  completed?: boolean;
+}
+
+/**
+ * Persist the full reminders list to cloud (cross-device). Used by the
+ * LiveFeedEmbed reminder CRUD. The caller owns dedup + capping.
+ */
+export async function saveReminders(
+  reminders: LiveFeedReminder[],
+): Promise<void> {
+  try {
+    const { cloudStorageService } =
+      await import("@/react-app/lib/cloud-storage-service");
+    await cloudStorageService.set(LIVE_FEED_REMINDERS_KEY, reminders);
+  } catch {
+    // reminders must never break playback
+  }
+}
+
+/** Read the reminders list from cloud (cross-device). */
+export async function loadReminders(): Promise<LiveFeedReminder[]> {
+  try {
+    const { cloudStorageService } =
+      await import("@/react-app/lib/cloud-storage-service");
+    const existing =
+      (await cloudStorageService.get<LiveFeedReminder[]>(
+        LIVE_FEED_REMINDERS_KEY,
+      )) || [];
+    return Array.isArray(existing) ? existing : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Compute the next upcoming firing time (ms epoch) for a reminder, based on
+ * its recurrence + the current time. Returns null if the reminder is a
+ * completed one-off. Used by the "Reminders" panel to show countdowns.
+ */
+export function nextReminderTime(
+  reminder: LiveFeedReminder,
+  now: Date = new Date(),
+): number | null {
+  if (reminder.recurrence === "once" && reminder.completed) return null;
+  const targetMin = reminder.minuteOfDay;
+  const candidate = new Date(now);
+  candidate.setHours(0, 0, 0, 0);
+  candidate.setMinutes(targetMin);
+  if (reminder.recurrence === "weekly") {
+    const wd = reminder.weekday || 1;
+    // Walk forward day-by-day until we hit the target weekday
+    for (let i = 0; i < 8; i++) {
+      const d = new Date(candidate);
+      d.setDate(d.getDate() + i);
+      const isoWd = ((d.getDay() + 6) % 7) + 1; // Sun=0 -> Mon=1..Sun=7
+      if (isoWd === wd) {
+        const t = d.getTime();
+        if (t > now.getTime()) return t;
+      }
+    }
+    return null;
+  }
+  if (reminder.recurrence === "daily") {
+    for (let i = 0; i < 2; i++) {
+      const d = new Date(candidate);
+      d.setDate(d.getDate() + i);
+      const t = d.getTime();
+      if (t > now.getTime()) return t;
+    }
+    return null;
+  }
+  // once
+  const t = candidate.getTime();
+  return t > now.getTime() ? t : null;
+}
+
+/** Format minutes-of-day as a human-readable "h:mm AM/PM" string. */
+export function formatMinuteOfDay(min: number): string {
+  const h24 = Math.floor(min / 60) % 24;
+  const m = min % 60;
+  const ampm = h24 < 12 ? "AM" : "PM";
+  const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
+  return `${h12}:${m.toString().padStart(2, "0")} ${ampm}`;
+}
 
 /**
  * Pick a random category + sub-category + country combination for the
@@ -1418,7 +1667,15 @@ export default {
   getCategoryColor,
   getRandomLiveFeedCombo,
   getRecommendations,
+  trackChannelPlay,
+  getChannelPopularity,
+  saveReminders,
+  loadReminders,
+  nextReminderTime,
+  formatMinuteOfDay,
   LIVE_FEED_CATEGORIES,
   LIVE_FEED_FAVORITES_KEY,
   LIVE_FEED_HISTORY_KEY,
+  LIVE_FEED_ANALYTICS_KEY,
+  LIVE_FEED_REMINDERS_KEY,
 };

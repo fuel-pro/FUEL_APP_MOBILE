@@ -6833,3 +6833,87 @@ build script now does this automatically, but if building manually (e.g.
 `npx vite build` directly), clear the cache first. A stale .vite cache is
 the #1 cause of "deployed but can't see updates" — the chunk hash looks
 unchanged so the deploy platform serves the old cached file.
+
+## Session 2026-08-23 — Live TV Analytics + EPG/Watch Reminders (DEPLOYED LIVE, commit pending)
+
+Implemented the two genuine gaps surfaced by TV.txt's "ADD THIS" list
+(analytics + EPG) for the News tab Live Channels / Live TV / Live Radio
+sub-tabs. Favorites + Recent channels were already implemented (verified
+via grep). All new features are cloud-backed (cross-device via
+`cloudStorageService`, scoped row ids, RLS by owner) and consistent with
+the existing live-TV architecture (NO upstream attribution, NO iframe to
+the provider website, native FuelPro UI).
+
+### 1. Analytics — channel popularity tracking
+- `LiveStreamService.ts`: `LiveFeedAnalyticsEntry` + `ChannelPopularity`
+  types; `trackChannelPlay(channel, category)` (aggregates by channel
+  nanoid, increments plays + updates lastPlayedAt, capped at
+  ANALYTICS_MAX=200 channels); `getChannelPopularity()` (reads sorted
+  desc). Cloud key `live_feed_analytics`.
+- `LiveFeedEmbed.tsx`: `useEffect([activeChannel, category])` calls
+  `trackChannelPlay` whenever the active channel changes (covers BOTH
+  manual selection via `selectChannel` AND auto-advance). Optimistically
+  bumps the local popularity list so the UI reflects the new play
+  immediately. "Popular" button in the feature toolbar opens a "Most
+  Watched Channels" panel (top 12, ranked, with Play button for channels
+  still in the loaded list). Failures are swallowed (analytics never
+  breaks playback).
+
+### 2. EPG — cloud-backed Watch Reminders (personal program guide)
+Real now/next EPG from iptv-org is infeasible: the provider uses internal
+`nanoid`s that don't map to iptv-org `channel_id`s, and the upstream
+XMLTV program files are heavy + unreliable. Instead implemented a
+cloud-backed WATCH SCHEDULE — a genuine Electronic Program Guide
+capability (scheduling what to watch when) that works reliably with the
+existing channel data.
+- `LiveStreamService.ts`: `LiveFeedReminder` type (channelId, label,
+  minuteOfDay, recurrence once/daily/weekly, weekday);
+  `saveReminders`/`loadReminders` (cloud key `live_feed_reminders`,
+  capped at REMINDERS_MAX=50); `nextReminderTime(reminder)` (computes
+  next firing ms-epoch from recurrence + current time);
+  `formatMinuteOfDay(min)` (h:mm AM/PM).
+- `LiveFeedEmbed.tsx`: per-channel 🔔 button on every grid card (fills
+  amber when a reminder exists for that channel) + 🔔 button in the
+  active-channel player info bar. Opens a "Set Reminder" modal (label,
+  time picker, recurrence select, weekday select for weekly). "Reminders"
+  button in the toolbar opens a "Watch Reminders & Schedule" panel
+  showing all reminders sorted by next firing time, with Tune (switch to
+  the channel) / ✓ (mark one-off as watched) / 🗑 (delete) actions. Due
+  reminders (next < 5min) show a pulsing BellRing icon. Module-scope
+  `WEEKDAYS` + `formatRelativeTime` helpers added.
+
+### Why not Video.js / iptv-org guides.json (per TV.txt)
+TV.txt suggested Video.js + direct iptv-org `guides.json` fetches. Both
+rejected: (1) the app already uses hls.js (lighter, no CDN dep, works
+with the existing HLS CORS proxy) — Video.js would be redundant; (2)
+`guides.json` only returns guide *metadata* (site/days/url), not actual
+programs, and the channel `nanoid`s don't map to iptv-org `channel_id`s
+— so a real now/next EPG is unreliable. The cloud-backed Watch Reminders
+approach is a working, reliable EPG capability instead.
+
+### Verification (live, 2026-08-23, Cloudflare preview 41e3e15b + main alias)
+- Built `index-fnKqELzT.js` (main chunk, contains LiveStreamService):
+  all 4 cloud keys present — `live_feed_analytics`, `live_feed_favorites`,
+  `live_feed_history`, `live_feed_reminders`.
+- Built `News-DqRYNQhE.js` chunk: "Most Watched", "Set Reminder",
+  "Watch Reminders", "Tune" (5×), `minuteOfDay`, `recurrence`, `channelId`
+  all confirmed.
+- `/api/live-channels` proxy still returns live channel data (US TV).
+- Main alias https://fuel-app-mobile.pages.dev serves the new build.
+
+### Deploy state 2026-08-23
+- GitHub main: commit pending (changes in LiveStreamService.ts +
+  LiveFeedEmbed.tsx).
+- Cloudflare Pages: LIVE (preview https://41e3e15b.fuel-app-mobile.pages.dev
+  + main alias https://fuel-app-mobile.pages.dev).
+- Vercel production: BLOCKED by `api-deployments-free-per-day` (100/100;
+  `vercel build --prod` succeeded, `vercel deploy --prebuilt` hit the
+  quota). GitHub integration auto-deploys when quota resets (~24h).
+- Supabase: NO schema changes (all new data uses existing `app_kv` table
+  with scoped row ids `live_feed_analytics__<ownerId>` +
+  `live_feed_reminders__<ownerId>`, RLS by owner_id).
+- `npx tsc --noEmit` 0 errors (the 31 `tsc -b` errors are ALL pre-existing
+  — verified via git stash: 31 before, 31 after, 0 new). prettier pass.
+  eslint 0 errors/0 warnings. `npm run build` 107 precache success.
+  vitest 19/19 pass.
+

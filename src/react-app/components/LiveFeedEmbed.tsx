@@ -4,14 +4,24 @@ import {
   LIVE_FEED_FAVORITES_KEY,
   LIVE_FEED_HISTORY_KEY,
   HISTORY_MAX,
+  REMINDERS_MAX,
   fetchLiveChannels,
   resolveChannelFetchParams,
   getRandomLiveFeedCombo,
+  trackChannelPlay,
+  getChannelPopularity,
+  saveReminders,
+  loadReminders,
+  nextReminderTime,
+  formatMinuteOfDay,
   type LiveCategory,
   type LiveFeedCategory,
   type LiveFeedFavorite,
   type LiveFeedHistoryEntry,
   type LiveChannel,
+  type ChannelPopularity,
+  type LiveFeedReminder,
+  type ReminderRecurrence,
 } from "@/react-app/services/LiveStreamService";
 import { cloudStorageService } from "@/react-app/lib/cloud-storage-service";
 import { useAuth } from "@/react-app/context/AuthContext";
@@ -35,6 +45,11 @@ import {
   Layers,
   Tag,
   Monitor,
+  Flame,
+  Bell,
+  BellRing,
+  Calendar,
+  Trash2,
 } from "lucide-react";
 import Hls from "hls.js";
 
@@ -78,9 +93,37 @@ interface LiveFeedEmbedProps {
  *  - 2-LEVEL taxonomy (category + sub-category)
  *  - Country filter (195 countries) + Show All (global)
  *  - Favorites, Surprise Me, Recently Watched, For You
+ *  - ANALYTICS (channel popularity — Most Watched Channels)
+ *  - EPG / WATCH REMINDERS (schedule what to watch when)
  *  - Search within loaded channels
  *  - Fullscreen mode
  */
+
+/** ISO weekdays Mon(1)..Sun(7) labels. */
+const WEEKDAYS = [
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+  "Sunday",
+];
+
+/** Format a ms-epoch timestamp as a relative "in Xm" / "in Xh" / "X ago" string. */
+function formatRelativeTime(ts: number): string {
+  const diff = ts - Date.now();
+  const abs = Math.abs(diff);
+  const past = diff < 0;
+  const mins = Math.round(abs / 60000);
+  if (mins < 1) return "now";
+  if (mins < 60) return past ? `${mins}m ago` : `in ${mins}m`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return past ? `${hours}h ago` : `in ${hours}h`;
+  const days = Math.round(hours / 24);
+  return past ? `${days}d ago` : `in ${days}d`;
+}
+
 export default function LiveFeedEmbed({
   defaultCategory = "tv",
   defaultSubCategory,
@@ -104,6 +147,27 @@ export default function LiveFeedEmbed({
   const [favorites, setFavorites] = useState<LiveFeedFavorite[]>([]);
   const [history, setHistory] = useState<LiveFeedHistoryEntry[]>([]);
   const [isFavorited, setIsFavorited] = useState(false);
+
+  // Analytics (channel popularity) — cloud-backed, cross-device
+  const [popularity, setPopularity] = useState<ChannelPopularity[]>([]);
+  const [showPopularityPanel, setShowPopularityPanel] = useState(false);
+
+  // EPG / Watch Reminders — cloud-backed, cross-device
+  const [reminders, setReminders] = useState<LiveFeedReminder[]>([]);
+  const [showRemindersPanel, setShowRemindersPanel] = useState(false);
+  const [reminderModalChannel, setReminderModalChannel] =
+    useState<LiveChannel | null>(null);
+  const [reminderForm, setReminderForm] = useState<{
+    label: string;
+    time: string; // "HH:MM" 24h
+    recurrence: ReminderRecurrence;
+    weekday: number; // 1-7 (Mon-Sun)
+  }>({
+    label: "",
+    time: "20:00",
+    recurrence: "once",
+    weekday: 1,
+  });
 
   // Channel state
   const [channels, setChannels] = useState<LiveChannel[]>([]);
@@ -152,22 +216,26 @@ export default function LiveFeedEmbed({
   const activeCat = LIVE_FEED_CATEGORIES.find((c) => c.id === category);
   const isRadio = activeCat?.family === "audio";
 
-  // Load favorites + history from cloud
+  // Load favorites + history + popularity + reminders from cloud
   useEffect(() => {
     if (!user?.id) return;
     let cancelled = false;
     cloudLoadCompleteRef.current = false;
     (async () => {
       try {
-        const [favData, histData] = await Promise.all([
+        const [favData, histData, popData, remData] = await Promise.all([
           cloudStorageService.get<LiveFeedFavorite[]>(LIVE_FEED_FAVORITES_KEY),
           cloudStorageService.get<LiveFeedHistoryEntry[]>(
             LIVE_FEED_HISTORY_KEY,
           ),
+          getChannelPopularity(),
+          loadReminders(),
         ]);
         if (!cancelled) {
           if (Array.isArray(favData)) setFavorites(favData);
           if (Array.isArray(histData)) setHistory(histData);
+          setPopularity(popData);
+          setReminders(remData);
         }
       } catch {
         // ignore
@@ -311,8 +379,7 @@ export default function LiveFeedEmbed({
               ? 1
               : 0;
           if (aHls !== bHls) return bHls - aHls; // HLS first (plays via proxy)
-          if (a.isGeoBlocked !== b.isGeoBlocked)
-            return a.isGeoBlocked ? 1 : -1;
+          if (a.isGeoBlocked !== b.isGeoBlocked) return a.isGeoBlocked ? 1 : -1;
           return a.name.localeCompare(b.name);
         });
         setChannels(playable);
@@ -332,9 +399,7 @@ export default function LiveFeedEmbed({
           ) ||
           playable.find(
             (c) =>
-              !c.isGeoBlocked &&
-              c.youtube_urls &&
-              c.youtube_urls.length > 0,
+              !c.isGeoBlocked && c.youtube_urls && c.youtube_urls.length > 0,
           ) ||
           playable.find(
             (c) => !c.isGeoBlocked && c.stream_urls && c.stream_urls.length > 0,
@@ -375,10 +440,7 @@ export default function LiveFeedEmbed({
             !c.stream_urls[0].includes("youtu.be"),
         ) ||
         channels.find(
-          (c) =>
-            !c.isGeoBlocked &&
-            c.youtube_urls &&
-            c.youtube_urls.length > 0,
+          (c) => !c.isGeoBlocked && c.youtube_urls && c.youtube_urls.length > 0,
         ) ||
         channels.find(
           (c) => !c.isGeoBlocked && c.stream_urls && c.stream_urls.length > 0,
@@ -643,6 +705,41 @@ export default function LiveFeedEmbed({
     setActiveChannel(ch);
   }, []);
 
+  // ANALYTICS — record a channel play whenever the active channel changes
+  // (covers both manual selection via selectChannel AND auto-advance).
+  // Fire-and-forget; failures are swallowed inside trackChannelPlay so
+  // analytics never breaks playback.
+  useEffect(() => {
+    if (!activeChannel) return;
+    trackChannelPlay(activeChannel, category).catch(() => {});
+    // Optimistically bump the local popularity list so the UI reflects the
+    // new play immediately without waiting for the cloud round-trip.
+    setPopularity((prev) => {
+      const idx = prev.findIndex((p) => p.channelId === activeChannel.nanoid);
+      const now = Date.now();
+      if (idx >= 0) {
+        const next = prev.slice();
+        next[idx] = {
+          ...next[idx],
+          plays: next[idx].plays + 1,
+          lastPlayedAt: now,
+        };
+        return next.sort((a, b) => b.plays - a.plays);
+      }
+      return [
+        {
+          channelId: activeChannel.nanoid,
+          name: activeChannel.name,
+          country: activeChannel.country,
+          category,
+          plays: 1,
+          lastPlayedAt: now,
+        },
+        ...prev,
+      ].sort((a, b) => b.plays - a.plays);
+    });
+  }, [activeChannel, category]);
+
   const handleCategoryChange = (newCat: LiveCategory) => {
     setCategory(newCat);
     const newCatDef = LIVE_FEED_CATEGORIES.find((c) => c.id === newCat);
@@ -721,6 +818,100 @@ export default function LiveFeedEmbed({
     setShowAll(false);
     setShowFavoritesPanel(false);
   };
+
+  // ─── EPG / REMINDERS CRUD ───────────────────────────────────────────────
+  // Open the Set Reminder modal for a channel (pre-fills the channel).
+  const openReminderModal = (ch: LiveChannel) => {
+    setReminderModalChannel(ch);
+    setReminderForm({
+      label: "",
+      time: "20:00",
+      recurrence: "once",
+      weekday: 1,
+    });
+  };
+
+  const closeReminderModal = () => setReminderModalChannel(null);
+
+  // Persist a new reminder from the modal form. Validates the time format.
+  const saveReminderFromModal = () => {
+    if (!reminderModalChannel) return;
+    const [hhStr, mmStr] = reminderForm.time.split(":");
+    const hh = parseInt(hhStr, 10);
+    const mm = parseInt(mmStr, 10);
+    if (isNaN(hh) || isNaN(mm) || hh < 0 || hh > 23 || mm < 0 || mm > 59)
+      return;
+    const reminder: LiveFeedReminder = {
+      id: `rem_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      channelId: reminderModalChannel.nanoid,
+      channelName: reminderModalChannel.name,
+      country: reminderModalChannel.country,
+      category,
+      label:
+        reminderForm.label.trim() || `${reminderModalChannel.name} reminder`,
+      minuteOfDay: hh * 60 + mm,
+      recurrence: reminderForm.recurrence,
+      weekday:
+        reminderForm.recurrence === "weekly" ? reminderForm.weekday : undefined,
+      createdAt: Date.now(),
+    };
+    setReminders((prev) => {
+      const next = [reminder, ...prev].slice(0, REMINDERS_MAX);
+      saveReminders(next).catch(() => {});
+      return next;
+    });
+    closeReminderModal();
+  };
+
+  // Delete a reminder by id (cloud-synced).
+  const deleteReminder = (id: string) => {
+    setReminders((prev) => {
+      const next = prev.filter((r) => r.id !== id);
+      saveReminders(next).catch(() => {});
+      return next;
+    });
+  };
+
+  // Mark a one-off reminder as completed (cloud-synced).
+  const completeReminder = (id: string) => {
+    setReminders((prev) => {
+      const next = prev.map((r) =>
+        r.id === id ? { ...r, completed: true } : r,
+      );
+      saveReminders(next).catch(() => {});
+      return next;
+    });
+  };
+
+  // Play the channel a reminder refers to (switches category/country to
+  // match, then selects the channel if it's in the loaded list).
+  const playReminderChannel = (reminder: LiveFeedReminder) => {
+    setCategory(reminder.category);
+    setSubCategoryId("all");
+    setCountry(reminder.country);
+    setShowAll(false);
+    setShowRemindersPanel(false);
+    // If the channel is already loaded, select it; otherwise the fetch
+    // effect will load channels for this category/country and the user can
+    // click it. We attempt an immediate match first.
+    const match = channels.find((c) => c.nanoid === reminder.channelId);
+    if (match) selectChannel(match);
+  };
+
+  // Sort reminders by next firing time (soonest first) for display.
+  const sortedReminders = useMemo(() => {
+    return reminders
+      .map((r) => ({ reminder: r, next: nextReminderTime(r) }))
+      .sort((a, b) => {
+        // null (past/completed) sorts last
+        if (a.next === null && b.next === null) return 0;
+        if (a.next === null) return 1;
+        if (b.next === null) return -1;
+        return a.next - b.next;
+      })
+      .filter((x) => x.next !== null || x.reminder.recurrence !== "once")
+      .map((x) => x.reminder);
+  }, [reminders]);
 
   // Filter channels by search query
   const filteredChannels = useMemo(() => {
@@ -891,6 +1082,42 @@ export default function LiveFeedEmbed({
                   <Clock size={10} /> Recent
                 </button>
               )}
+              <button
+                onClick={() => {
+                  setShowPopularityPanel((v) => !v);
+                  setShowRemindersPanel(false);
+                  setShowFavoritesPanel(false);
+                }}
+                title="Most watched channels"
+                className={`text-[10px] px-2 py-1 rounded-lg transition-colors flex items-center gap-1 flex-shrink-0 ${
+                  showPopularityPanel
+                    ? "bg-orange-500 text-white"
+                    : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+                }`}
+              >
+                <Flame size={10} /> Popular
+                {popularity.length > 0 && (
+                  <span className="ml-0.5">{popularity.length}</span>
+                )}
+              </button>
+              <button
+                onClick={() => {
+                  setShowRemindersPanel((v) => !v);
+                  setShowPopularityPanel(false);
+                  setShowFavoritesPanel(false);
+                }}
+                title="Watch reminders & schedule"
+                className={`text-[10px] px-2 py-1 rounded-lg transition-colors flex items-center gap-1 flex-shrink-0 ${
+                  showRemindersPanel
+                    ? "bg-amber-500 text-white"
+                    : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+                }`}
+              >
+                <Bell size={10} /> Reminders
+                {reminders.length > 0 && (
+                  <span className="ml-0.5">{reminders.length}</span>
+                )}
+              </button>
               <button
                 onClick={() => setIsFullscreen((v) => !v)}
                 title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
@@ -1069,6 +1296,264 @@ export default function LiveFeedEmbed({
         </div>
       )}
 
+      {/* POPULAR CHANNELS panel (analytics — cloud-backed channel popularity) */}
+      {showPopularityPanel && (
+        <div className="px-3 py-3 bg-gray-50/50 dark:bg-gray-900/30 border-b border-gray-200 dark:border-gray-700">
+          <h4 className="text-[11px] font-semibold text-gray-700 dark:text-gray-300 mb-1.5 flex items-center gap-1">
+            <Flame size={11} className="text-orange-500" /> Most Watched
+            Channels
+          </h4>
+          <p className="text-[10px] text-gray-500 dark:text-gray-400 mb-2">
+            Your channel popularity, synced across all your devices.
+          </p>
+          {popularity.length > 0 ? (
+            <div className="space-y-1 max-h-[260px] overflow-y-auto custom-scroll">
+              {popularity.slice(0, 12).map((p, idx) => {
+                const matchChannel = channels.find(
+                  (c) => c.nanoid === p.channelId,
+                );
+                return (
+                  <div
+                    key={p.channelId}
+                    className="flex items-center gap-2 p-1.5 rounded-lg bg-white dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700"
+                  >
+                    <span className="text-[10px] font-bold text-gray-400 w-4 text-center flex-shrink-0">
+                      {idx + 1}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-gray-700 dark:text-gray-200 truncate">
+                        {p.name}
+                      </p>
+                      <p className="text-[10px] text-gray-500 dark:text-gray-400">
+                        {p.country.toUpperCase()} ·{" "}
+                        {formatRelativeTime(p.lastPlayedAt)}
+                      </p>
+                    </div>
+                    <span className="text-[10px] font-semibold text-orange-600 dark:text-orange-400 flex items-center gap-0.5 flex-shrink-0">
+                      <Flame size={9} /> {p.plays}
+                    </span>
+                    {matchChannel && (
+                      <button
+                        onClick={() => {
+                          selectChannel(matchChannel);
+                          setShowPopularityPanel(false);
+                        }}
+                        className="text-[10px] px-2 py-0.5 rounded bg-blue-600 text-white hover:bg-blue-500 flex-shrink-0"
+                        title="Play this channel"
+                      >
+                        Play
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-[11px] text-gray-500 dark:text-gray-400 text-center py-2">
+              No channel plays yet. Start watching to build your popularity
+              stats.
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* REMINDERS panel (EPG / watch schedule — cloud-backed, cross-device) */}
+      {showRemindersPanel && (
+        <div className="px-3 py-3 bg-gray-50/50 dark:bg-gray-900/30 border-b border-gray-200 dark:border-gray-700">
+          <h4 className="text-[11px] font-semibold text-gray-700 dark:text-gray-300 mb-1.5 flex items-center gap-1">
+            <BellRing size={11} className="text-amber-500" /> Watch Reminders &
+            Schedule
+          </h4>
+          <p className="text-[10px] text-gray-500 dark:text-gray-400 mb-2">
+            Schedule reminders for your favourite channels. Syncs across all
+            your devices.
+          </p>
+          {sortedReminders.length > 0 ? (
+            <div className="space-y-1 max-h-[260px] overflow-y-auto custom-scroll">
+              {sortedReminders.map((r) => {
+                const next = nextReminderTime(r);
+                const isDue =
+                  next !== null && next - Date.now() < 5 * 60 * 1000;
+                return (
+                  <div
+                    key={r.id}
+                    className="flex items-center gap-2 p-1.5 rounded-lg bg-white dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-gray-700 dark:text-gray-200 truncate">
+                        {r.label}
+                      </p>
+                      <p className="text-[10px] text-gray-500 dark:text-gray-400 truncate">
+                        {r.channelName} · {r.country.toUpperCase()}
+                      </p>
+                      <p className="text-[10px] text-gray-500 dark:text-gray-400">
+                        {formatMinuteOfDay(r.minuteOfDay)}
+                        {r.recurrence === "daily"
+                          ? " · Daily"
+                          : r.recurrence === "weekly"
+                            ? ` · Weekly (${WEEKDAYS[(r.weekday || 1) - 1]})`
+                            : ""}
+                        {next !== null
+                          ? ` · ${formatRelativeTime(next)}`
+                          : " · passed"}
+                      </p>
+                    </div>
+                    {isDue && (
+                      <BellRing
+                        size={12}
+                        className="text-amber-500 animate-pulse flex-shrink-0"
+                      />
+                    )}
+                    <button
+                      onClick={() => playReminderChannel(r)}
+                      className="text-[10px] px-2 py-0.5 rounded bg-blue-600 text-white hover:bg-blue-500 flex-shrink-0"
+                      title="Tune to this channel"
+                    >
+                      Tune
+                    </button>
+                    {r.recurrence === "once" && !r.completed && (
+                      <button
+                        onClick={() => completeReminder(r.id)}
+                        className="text-[10px] px-1.5 py-0.5 rounded bg-green-600 text-white hover:bg-green-500 flex-shrink-0"
+                        title="Mark as watched"
+                      >
+                        ✓
+                      </button>
+                    )}
+                    <button
+                      onClick={() => deleteReminder(r.id)}
+                      className="text-gray-400 hover:text-red-500 flex-shrink-0"
+                      title="Delete reminder"
+                    >
+                      <Trash2 size={11} />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-[11px] text-gray-500 dark:text-gray-400 text-center py-2">
+              No reminders yet. Click the 🔔 button on any channel to schedule a
+              watch reminder.
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* SET REMINDER modal (per-channel EPG form) */}
+      {reminderModalChannel && (
+        <div
+          className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
+          onClick={closeReminderModal}
+        >
+          <div
+            className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-sm w-full p-4 border border-gray-200 dark:border-gray-700"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-1.5">
+                <Calendar size={14} className="text-amber-500" /> Set Reminder
+              </h3>
+              <button
+                onClick={closeReminderModal}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-3 truncate">
+              {reminderModalChannel.name} ·{" "}
+              {reminderModalChannel.country.toUpperCase()}
+            </p>
+            <div className="space-y-3">
+              <div>
+                <label className="text-[11px] font-medium text-gray-600 dark:text-gray-300 block mb-1">
+                  What to watch
+                </label>
+                <input
+                  type="text"
+                  value={reminderForm.label}
+                  onChange={(e) =>
+                    setReminderForm((f) => ({ ...f, label: e.target.value }))
+                  }
+                  placeholder="e.g. Evening News"
+                  className="w-full text-xs px-2 py-1.5 rounded-lg bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] font-medium text-gray-600 dark:text-gray-300 block mb-1">
+                  Time
+                </label>
+                <input
+                  type="time"
+                  value={reminderForm.time}
+                  onChange={(e) =>
+                    setReminderForm((f) => ({ ...f, time: e.target.value }))
+                  }
+                  className="w-full text-xs px-2 py-1.5 rounded-lg bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] font-medium text-gray-600 dark:text-gray-300 block mb-1">
+                  Repeat
+                </label>
+                <select
+                  value={reminderForm.recurrence}
+                  onChange={(e) =>
+                    setReminderForm((f) => ({
+                      ...f,
+                      recurrence: e.target.value as ReminderRecurrence,
+                    }))
+                  }
+                  className="w-full text-xs px-2 py-1.5 rounded-lg bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                >
+                  <option value="once">Once</option>
+                  <option value="daily">Every day</option>
+                  <option value="weekly">Every week</option>
+                </select>
+              </div>
+              {reminderForm.recurrence === "weekly" && (
+                <div>
+                  <label className="text-[11px] font-medium text-gray-600 dark:text-gray-300 block mb-1">
+                    Day of week
+                  </label>
+                  <select
+                    value={reminderForm.weekday}
+                    onChange={(e) =>
+                      setReminderForm((f) => ({
+                        ...f,
+                        weekday: parseInt(e.target.value, 10),
+                      }))
+                    }
+                    className="w-full text-xs px-2 py-1.5 rounded-lg bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  >
+                    {WEEKDAYS.map((label, idx) => (
+                      <option key={idx} value={idx + 1}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+            <div className="flex items-center justify-end gap-2 mt-4">
+              <button
+                onClick={closeReminderModal}
+                className="text-xs px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={saveReminderFromModal}
+                className="text-xs px-3 py-1.5 rounded-lg bg-amber-500 text-white hover:bg-amber-600 flex items-center gap-1"
+              >
+                <Bell size={11} /> Set Reminder
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* PLAYER — native FuelPro player (NO iframe to upstream website) */}
       <div
         className="relative w-full bg-black"
@@ -1131,7 +1616,9 @@ export default function LiveFeedEmbed({
                 {activeChannel.stream_urls &&
                   activeChannel.stream_urls.length > 0 &&
                   !activeChannel.stream_urls[0].includes("youtube.com") &&
-                  !activeChannel.stream_urls[0].includes("youtube-nocookie.com") &&
+                  !activeChannel.stream_urls[0].includes(
+                    "youtube-nocookie.com",
+                  ) &&
                   !activeChannel.stream_urls[0].includes("youtu.be") && (
                     <video
                       ref={videoRef}
@@ -1147,7 +1634,9 @@ export default function LiveFeedEmbed({
                   src={`https://www.youtube-nocookie.com/embed/${activeYouTubeId}?autoplay=1&mute=${muted ? 1 : 0}&playsinline=1&rel=0`}
                   title={activeChannel.name}
                   className={`absolute inset-0 w-full h-full z-10 bg-black transition-opacity duration-300 ${
-                    ytIframeHidden ? "opacity-0 pointer-events-none" : "opacity-100"
+                    ytIframeHidden
+                      ? "opacity-0 pointer-events-none"
+                      : "opacity-100"
                   }`}
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                   allowFullScreen
@@ -1253,7 +1742,11 @@ export default function LiveFeedEmbed({
                 >
                   <div className="text-center">
                     <div className="w-16 h-16 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center mx-auto mb-3 border-2 border-white/40">
-                      <Play size={28} className="text-white ml-1" fill="white" />
+                      <Play
+                        size={28}
+                        className="text-white ml-1"
+                        fill="white"
+                      />
                     </div>
                     <p className="text-sm font-semibold text-white">
                       Click to play
@@ -1375,9 +1868,16 @@ export default function LiveFeedEmbed({
                 )}
                 {activeChannel.name}
               </span>
-              <span className="text-[10px] text-gray-300 flex items-center gap-1 flex-shrink-0">
+              <span className="text-[10px] text-gray-300 flex items-center gap-1.5 flex-shrink-0">
                 {countryFlag(activeChannel.country)}{" "}
                 {activeChannel.country.toUpperCase()}
+                <button
+                  onClick={() => openReminderModal(activeChannel)}
+                  title="Set watch reminder for this channel"
+                  className="ml-1 p-1 rounded hover:bg-white/20 text-white/80 hover:text-white transition-colors"
+                >
+                  <Bell size={11} />
+                </button>
               </span>
             </div>
           </>
@@ -1426,18 +1926,12 @@ export default function LiveFeedEmbed({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
             {visibleChannels.map((ch) => {
               const isActive = activeChannel?.nanoid === ch.nanoid;
+              const hasReminder = reminders.some(
+                (r) => r.channelId === ch.nanoid,
+              );
               return (
-                <button
+                <div
                   key={ch.nanoid}
-                  onClick={() => {
-                    selectChannel(ch);
-                    setPlaybackError(false);
-                    setShowPlayOverlay(false);
-                    // When the user manually selects a channel, start muted
-                    // (autoplay policy) — they can unmute via the toggle.
-                    setMuted(true);
-                    if (videoRef.current) videoRef.current.muted = true;
-                  }}
                   className={`flex items-center gap-2 p-2 rounded-lg text-left transition-all ${
                     isActive
                       ? isRadio
@@ -1446,32 +1940,65 @@ export default function LiveFeedEmbed({
                       : "bg-gray-100 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 hover:bg-gray-200 dark:hover:bg-gray-700/50"
                   }`}
                 >
-                  {isActive ? (
-                    <Play
-                      size={12}
-                      className={isRadio ? "text-purple-400" : "text-blue-400"}
+                  <button
+                    onClick={() => {
+                      selectChannel(ch);
+                      setPlaybackError(false);
+                      setShowPlayOverlay(false);
+                      // When the user manually selects a channel, start muted
+                      // (autoplay policy) — they can unmute via the toggle.
+                      setMuted(true);
+                      if (videoRef.current) videoRef.current.muted = true;
+                    }}
+                    className="flex items-center gap-2 flex-1 min-w-0 text-left"
+                  >
+                    {isActive ? (
+                      <Play
+                        size={12}
+                        className={
+                          isRadio ? "text-purple-400" : "text-blue-400"
+                        }
+                      />
+                    ) : isRadio ? (
+                      <Radio size={12} className="text-purple-400" />
+                    ) : (
+                      <Tv size={12} className="text-blue-400" />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p
+                        className={`text-xs font-medium truncate ${
+                          isActive
+                            ? "text-white"
+                            : "text-gray-700 dark:text-gray-200"
+                        }`}
+                      >
+                        {ch.name}
+                      </p>
+                      <p className="text-[10px] text-gray-500 dark:text-gray-400">
+                        {countryFlag(ch.country)} {ch.country.toUpperCase()}
+                        {ch.isGeoBlocked ? " · Geo-blocked" : ""}
+                      </p>
+                    </div>
+                  </button>
+                  {/* Set Reminder (EPG) — per channel */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openReminderModal(ch);
+                    }}
+                    title="Set watch reminder"
+                    className={`flex-shrink-0 p-1 rounded transition-colors ${
+                      hasReminder
+                        ? "text-amber-500 hover:text-amber-600"
+                        : "text-gray-400 hover:text-amber-500"
+                    }`}
+                  >
+                    <Bell
+                      size={11}
+                      className={hasReminder ? "fill-current" : ""}
                     />
-                  ) : isRadio ? (
-                    <Radio size={12} className="text-purple-400" />
-                  ) : (
-                    <Tv size={12} className="text-blue-400" />
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <p
-                      className={`text-xs font-medium truncate ${
-                        isActive
-                          ? "text-white"
-                          : "text-gray-700 dark:text-gray-200"
-                      }`}
-                    >
-                      {ch.name}
-                    </p>
-                    <p className="text-[10px] text-gray-500 dark:text-gray-400">
-                      {countryFlag(ch.country)} {ch.country.toUpperCase()}
-                      {ch.isGeoBlocked ? " · Geo-blocked" : ""}
-                    </p>
-                  </div>
-                </button>
+                  </button>
+                </div>
               );
             })}
           </div>
