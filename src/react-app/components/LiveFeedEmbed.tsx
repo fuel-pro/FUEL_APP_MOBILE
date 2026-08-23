@@ -389,15 +389,24 @@ export default function LiveFeedEmbed({
         setChannels(playable);
         // Reset the auto-advance guard for the fresh channel list
         autoAdvanceTriedRef.current = new Set();
-        // Auto-select: prefer YouTube channels FIRST (YouTube embeds are
-        // far more reliable than HLS streams — YouTube handles all the
-        // streaming infrastructure server-side, so the video actually
-        // plays instead of getting stuck at 0:00 like many HLS streams).
-        // Then fall back to non-geo-blocked HLS, then any channel.
+        // Auto-select: prefer CURATED known-good channels FIRST (those have
+        // a "curated-" nanoid prefix and are guaranteed-playable). Then
+        // YouTube channels, then non-geo-blocked HLS, then any channel.
+        // This ensures the player shows actual video immediately on load
+        // instead of cycling through potentially-dead tvgarden streams.
         const firstPlayable =
           playable.find(
             (c) =>
+              c.nanoid.startsWith("curated-") &&
+              c.youtube_urls &&
+              c.youtube_urls.length > 0,
+          ) ||
+          playable.find(
+            (c) =>
               !c.isGeoBlocked && c.youtube_urls && c.youtube_urls.length > 0,
+          ) ||
+          playable.find(
+            (c) => c.nanoid.startsWith("curated-") && c.stream_urls.length > 0,
           ) ||
           playable.find(
             (c) =>
@@ -413,7 +422,6 @@ export default function LiveFeedEmbed({
           ) ||
           playable.find((c) => !c.isGeoBlocked) ||
           playable[0];
-        setChannels(playable);
         if (firstPlayable) setActiveChannel(firstPlayable);
       } catch (err) {
         if (!cancelled) {
@@ -448,6 +456,15 @@ export default function LiveFeedEmbed({
       activeChannel && channels.some((c) => c.nanoid === activeChannel.nanoid);
     if (!stillInList) {
       const first =
+        channels.find(
+          (c) =>
+            c.nanoid.startsWith("curated-") &&
+            c.youtube_urls &&
+            c.youtube_urls.length > 0,
+        ) ||
+        channels.find(
+          (c) => c.nanoid.startsWith("curated-") && c.stream_urls.length > 0,
+        ) ||
         channels.find(
           (c) =>
             !c.isGeoBlocked &&
@@ -494,8 +511,12 @@ export default function LiveFeedEmbed({
           ((c.stream_urls && c.stream_urls.length > 0) ||
             (c.youtube_urls && c.youtube_urls.length > 0)),
       );
-      // Sort: HLS first (plays via proxy), then YouTube, then alphabetical
+      // Sort: curated channels first (guaranteed playable), then HLS
+      // (plays via proxy), then YouTube, then alphabetical.
       candidates.sort((a, b) => {
+        const aCurated = a.nanoid.startsWith("curated-") ? 2 : 0;
+        const bCurated = b.nanoid.startsWith("curated-") ? 2 : 0;
+        if (aCurated !== bCurated) return bCurated - aCurated;
         const aHls = isHlsUrl(a) ? 1 : 0;
         const bHls = isHlsUrl(b) ? 1 : 0;
         if (aHls !== bHls) return bHls - aHls;
@@ -1149,10 +1170,11 @@ export default function LiveFeedEmbed({
   }, [activeChannel]);
 
   // YouTube iframe blank-detection: if the YouTube embed hasn't started
-  // playing within 6 seconds, hide the iframe to reveal the HLS <video>
+  // playing within 5 seconds, hide the iframe to reveal the HLS <video>
   // fallback layer underneath (for channels that have both YouTube + HLS).
   // For YouTube-only channels (no HLS), auto-advance to the next channel
-  // that has an HLS stream — ensures the player always shows actual video.
+  // that has an HLS stream OR a curated known-good channel — ensures the
+  // player always shows actual video instead of a blank YouTube iframe.
   useEffect(() => {
     setYtIframeHidden(false);
     if (!activeYouTubeId) return;
@@ -1164,15 +1186,42 @@ export default function LiveFeedEmbed({
       !activeChannel.stream_urls[0].includes("youtube-nocookie.com") &&
       !activeChannel.stream_urls[0].includes("youtu.be");
 
+    // If this is NOT a curated known-good channel, the YouTube embed may
+    // be blank/blocked in some browser contexts. Auto-advance to a curated
+    // channel (guaranteed playable) after the timeout.
+    const isCurated = activeChannel?.nanoid.startsWith("curated-");
+
     const timer = setTimeout(() => {
       if (hasHlsFallback) {
         // Hide the YouTube iframe to reveal the HLS video underneath.
         setYtIframeHidden(true);
+      } else if (!isCurated) {
+        // YouTube-only NON-curated channel with no HLS fallback — the iframe
+        // is likely blank/blocked. Auto-advance to a curated known-good
+        // channel (which has a reliable HLS or YouTube stream) so the player
+        // shows actual video instead of staying blank.
+        const curatedNext = channels.find(
+          (c) =>
+            c.nanoid !== activeChannel?.nanoid &&
+            c.nanoid.startsWith("curated-"),
+        );
+        if (curatedNext) {
+          autoAdvanceTriedRef.current = new Set();
+          setActiveChannel(curatedNext);
+        } else {
+          // No curated channel available — try the auto-advance fallback.
+          const advanced = autoAdvanceToNextChannel(
+            activeChannel?.nanoid || "",
+          );
+          if (!advanced) {
+            // Last resort: hide the iframe so the "no video" state is visible
+            // rather than a misleading blank iframe.
+            setYtIframeHidden(true);
+          }
+        }
       }
-      // For YouTube-only channels (no HLS fallback), do NOT auto-advance.
-      // The YouTube iframe may be loading slowly or blocked by the browser's
-      // autoplay policy. The user can click the iframe to start playback.
-    }, 6000);
+      // For curated YouTube-only channels, keep the iframe (it's known-good).
+    }, 5000);
 
     return () => clearTimeout(timer);
   }, [activeYouTubeId, activeChannel, channels]);
