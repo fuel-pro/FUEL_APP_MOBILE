@@ -7169,3 +7169,37 @@ issue was the frontend using it incorrectly):
 - `.ts` segment through proxy → HTTP 200, 930KB, video/mp2t
 - Direct CloudFront stream with Origin header → `Access-Control-Allow-
   Origin: *` (this is why the direct URL works without the proxy)
+## Session 2026-08-23 — Station Manager restructure + intertwine with Team Manager (DEPLOYED LIVE, commit a43505b)
+
+Phase 2 of the Access Another Station feature rebuild. Station Manager scraped/restructured to work hand-in-hand with Team Manager + invite/access-code systems. New features across the entire access workflow. All verified live on Cloudflare Pages.
+
+### New Access sub-tab (7th sub-tab)
+Unified two-way access dashboard: station selector, 4 stat cards (Active Members / Pending Invites / Access Codes / Active Codes), 4 quick actions (Invite Member / Team Manager / Transfer Ownership / Access Codes), members list with revoke, access codes list with tabs badge + active status.
+
+### Two-way intertwining (Station Manager <-> Team Manager)
+- Station Manager Team Manager + Access Codes buttons: close modal + dispatch changeTab -> Home.tsx switches to Team Manager.
+- Team Manager Stations button (new): dispatches open-station-manager CustomEvent -> Home.tsx opens Station Manager modal.
+- ShareModal footer Open Team Manager button.
+- Bidirectional data sync verified live.
+
+### Transfer Ownership feature
+New TransferOwnershipModal: lists eligible ACCEPTED members (with user_id), transfers via transferOwnership(stationId, newOwnerId, currentOwnerId). Accessible from station card menu AND Access sub-tab.
+
+### Enhanced ShareModal
+Bulk invite mode (toggle): textarea, comma/space/newline separated emails. Verified live: 3 bulk invites created. Open Team Manager footer button.
+
+### StationContext.switchStation
+Updates last_accessed_at on station_members table for shared stations. Fire-and-forget.
+
+### Live verification (2026-08-23, Cloudflare f24a3e41 + main alias)
+All features tested end-to-end as founder QA (US station, USD). Access sub-tab renders, both deep-links work, bulk invite creates 3 invites, revoke works, Transfer Ownership shows accepted members, access code creation + bidirectional sync + delete confirmed. Clean state restored.
+
+### Deploy state 2026-08-23 (commit a43505b)
+- GitHub main: a43505b (pushed, rebased on 1cfd8b2).
+- Cloudflare Pages: LIVE (preview f24a3e41 + main alias). All markers confirmed.
+- Vercel production: BLOCKED by api-deployments-free-per-day (100/100; GitHub integration auto-deploys when quota resets ~24h).
+- Supabase: no schema changes (uses existing station_members + station_access_codes tables + app_kv).
+- tsc 0 errors, build 107 precache, prettier pass, eslint 0 errors.
+
+### Lost commit audit (2026-08-23)
+No lost work found. All unmerged branches are old divergent snapshots (200+ behind) or single-commit fixes already superseded. founder-username-login (7 commits) + identifying-security-vulnerabilities-8d289 (3 commits) documented as awaiting user authorization (NOT auto-merged).
