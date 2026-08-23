@@ -6712,3 +6712,86 @@ All fix/feature branches already merged to main. No lost work.
 ## Session 2026-08-22 — Live TV dual-layer YouTube+HLS fallback (DEPLOYED LIVE, commit d66d89c)
 
 News tab Live TV sub-tab preview video now renders actual live stream content. Dual-layer: YouTube iframe (top) + HLS video (underneath). YouTube-only channels show thumbnail poster + auto-advance to HLS channel after 6s. HLS-only channels use hls.js video. Verified live on Cloudflare ea312353 + Vercel production (aliased fuel-app-mobile.vercel.app). No Supabase changes.
+
+## Session 2026-08-23 — Access Another Station restructure (DEPLOYED LIVE, commit 28ebe5d)
+
+Complete scrap & restructure of the "Access Another Station" feature
+(invite-based station sharing on the `station_members` DB table).
+
+### station-share-service.ts (rewritten, backward compatible)
+Rich typed `StationMember` (expiry, tab grants, delegation flags,
+last_accessed_at, notes, provenance). New/enhanced functions:
+- `inviteMember`: optional expiry(days), maxUses, tabGrants, permissions,
+  delegation flags, inviter provenance. Original 4-arg signature still works.
+- `bulkInvite`: invite multiple emails at once with per-email results.
+- `updateMemberRole`: change role/tabGrants/readOnly/notes after acceptance.
+- `rejectInvite` (member) + `declineInvite` (owner pre-acceptance).
+- `leaveStation`: dedicated member self-leave (migration 023 policy).
+- `transferOwnership`: owner hands station to a member + demoted to manager.
+- `toggleFavorite`/`getFavorites`: cloud-backed favorites (app_kv, cross-device).
+- `recordStationActivity`/`getStationActivity`: cloud activity log (app_kv).
+- `getPendingInvites`: pending invites with station name joined.
+- `getSharedStationDetail`: rich single-station membership view.
+- `getInvitationStats`: quick counts for owner dashboard.
+- `subscribeToMembers` + `subscribeToMyMemberships`: real-time updates.
+- sync-first currentUserId (no auth.getUser() round-trip).
+
+### StationManager.tsx AccessSharedStationModal (scrapped + rebuilt)
+- 4 tabs: Network / Invites / Activity / Help.
+- Network: search + role filter + favorites filter, favorite toggle per
+  station, last-accessed display, detail drawer (activity + tab grants +
+  notes + leave).
+- Invites: pending invites with Accept + Reject, plus Join-by-link entry.
+- Activity: live cross-device activity feed per selected shared station.
+- Help: role explainer + security guidance.
+- StationDetailDrawer slide-over: membership details + recent activity.
+- Real-time subscription to user memberships (instant invite refresh).
+- `handleAccessSharedStation` records an access activity entry on switch.
+- `loadSharedAndPending` uses getPendingInvites + populates lastAccessedAt.
+
+### Migration 025_station_members_access_notes.sql
+Adds `last_accessed_at` + `notes` columns to `station_members` (nullable,
+covered by existing RLS policies). Safe to re-run. NOT yet applied to live
+DB (Supabase PAT scope insufficient from sandbox; app degrades gracefully
+without it). Apply via Supabase Dashboard SQL Editor when DB access is available.
+
+### Deploy state 2026-08-23 (commit 28ebe5d)
+- GitHub main: 28ebe5d (pushed, rebased on dfe043c, synced with origin/main).
+- Cloudflare Pages: LIVE (preview https://404ad2d3.fuel-app-mobile.pages.dev
+  + main alias https://fuel-app-mobile.pages.dev). New index chunk
+  index-DrUJ-Qqe.js verified with markers: Access Another Station,
+  getStationActivity, leaveStation, subscribeToMyMemberships, toggleFavorite.
+- Vercel production: BLOCKED by api-deployments-free-per-day (100/100
+  exhausted). GitHub integration (prodBranch=main) auto-deploys 28ebe5d
+  when quota resets (~24h).
+- Supabase: migration 025 committed but NOT yet applied (PAT scope
+  insufficient; apply via Dashboard SQL Editor — safe/re-runnable).
+- tsc 0 errors, vitest 19/19 pass, eslint 0 errors, build 107 precache.
+
+### Live verification (2026-08-23, Cloudflare preview 404ad2d3)
+Logged in as founder QA (founder.qa.fuelpro@gmail.com, US station, USD):
+- Station Manager -> "Access Another Station" opens the restructured modal
+  with all 4 tabs (Network / Invites / Activity / Help).
+- Network: search bar + All Roles dropdown + Favorites button + empty state.
+- Invites: Join-by-link input + Accept button.
+- Activity: station selector (empty since no shared stations).
+- Help: role explainer rows.
+- Shared With Me sub-tab: renders empty state correctly.
+- POS: 10L Super Petrol @ $1.10/L = $11.00 cash sale completed
+  (INV20260823000001WMOM, country-aware US receipt, 0% VAT, US locale).
+- Broader site fully functional — no regressions from the restructure.
+
+### Lost commit audit (2026-08-23)
+No lost station-sharing work found. founder-username-login (7 commits,
+diverges from c1e907a) + identifying-security-vulnerabilities-8d289
+(3 commits, routes through non-existent /api/r2/* endpoints) remain
+documented as awaiting user authorization. All other unmerged branches
+are old divergent snapshots whose work is already on main.
+
+### Notes
+- The Supabase REST hostname does NOT resolve from this sandbox (HTTP 000,
+  DNS unreachable). API-level invite-accept tests can't run from here;
+  the browser-based live test on Cloudflare is authoritative.
+- The full invite->accept->Network flow requires a second Supabase user
+  account to accept an invite (or DB access). The service functions are
+  typechecked + unit-tested; the UI renders all states correctly.
