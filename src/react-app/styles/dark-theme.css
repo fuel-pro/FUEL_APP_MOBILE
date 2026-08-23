@@ -185,6 +185,154 @@ html.dark tr:hover {
   );
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   DARK BLEND LAYER — eliminate light-mode patches
+   ═══════════════════════════════════════════════════════════════════════════
+   Many components use hardcoded light Tailwind utilities (bg-white,
+   text-gray-900, border-gray-200, …) WITHOUT a matching `dark:` variant.
+   In dark mode those stay light → visible "patches of light mode".
+
+   This layer remaps the common light utility classes to the sleek dark
+   palette when `html.dark` is active, so the whole site blends into one
+   consistent dark aesthetic regardless of which component forgot a
+   `dark:` variant. Scoped under html.dark; light mode is untouched.
+
+   Specificity: `html.dark .bg-white` = (0,0,2,1) which is higher than
+   Tailwind's compiled `.dark .bg-gray-800` = (0,0,2,0), so this layer
+   wins for the raw light utilities. Components that already declare an
+   explicit `dark:` variant also get a dark value (theirs), so nothing
+   turns light — the blend is preserved either way.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+/* ── Surfaces (backgrounds) ─────────────────────────────────────────────── */
+html.dark .bg-white {
+  background-color: var(--dt-bg-card) !important; /* #121212 */
+}
+html.dark .bg-gray-50 {
+  background-color: var(--dt-bg-main) !important; /* #0a0a0a */
+}
+html.dark .bg-gray-100 {
+  background-color: var(--dt-bg-card-hover) !important; /* #181818 */
+}
+html.dark .bg-gray-200 {
+  background-color: #1c1c1c !important;
+}
+html.dark .bg-gray-50\/5,
+html.dark .bg-gray-50\/10 {
+  background-color: rgba(255, 255, 255, 0.04) !important;
+}
+
+/* ── Text tiers ─────────────────────────────────────────────────────────── */
+html.dark .text-gray-900,
+html.dark .text-gray-800 {
+  color: var(--dt-text-primary) !important; /* #ffffff */
+}
+html.dark .text-gray-700,
+html.dark .text-gray-600 {
+  color: var(--dt-text-secondary) !important; /* #a1a1aa */
+}
+html.dark .text-gray-500,
+html.dark .text-gray-400 {
+  color: var(--dt-text-muted) !important; /* #71717a */
+}
+/* gray-300 used for muted icons/dividers → slightly brighter so icons stay visible */
+html.dark .text-gray-300 {
+  color: #9ca3af !important;
+}
+
+/* ── Borders ────────────────────────────────────────────────────────────── */
+html.dark .border-gray-200,
+html.dark .border-gray-300 {
+  border-color: var(--dt-border-subtle) !important; /* #222222 */
+}
+html.dark .border-gray-100 {
+  border-color: #1a1a1a !important;
+}
+/* divide utilities (divide-y divide-gray-200 etc.) */
+html.dark .divide-gray-100 > * + *,
+html.dark .divide-gray-200 > * + *,
+html.dark .divide-gray-300 > * + * {
+  border-color: var(--dt-border-subtle) !important;
+}
+
+/* ── Ring / focus (unguarded light rings) ────────────────────────────────── */
+html.dark .ring-gray-200,
+html.dark .ring-gray-300 {
+  --tw-ring-color: var(--dt-border-active) !important;
+}
+
+/* ── Placeholder text ────────────────────────────────────────────────────── */
+html.dark input::placeholder,
+html.dark textarea::placeholder {
+  color: var(--dt-text-muted) !important;
+  opacity: 0.8;
+}
+
+/* ── Hover states that stay light ────────────────────────────────────────── */
+html.dark .hover\:bg-gray-50:hover,
+html.dark .hover\:bg-gray-100:hover,
+html.dark .hover\:bg-gray-200:hover {
+  background-color: var(--dt-bg-card-hover) !important; /* #181818 */
+}
+html.dark .hover\:bg-white:hover {
+  background-color: #1c1c1c !important;
+}
+html.dark .hover\:text-gray-900:hover,
+html.dark .hover\:text-gray-800:hover {
+  color: var(--dt-text-primary) !important;
+}
+html.dark .hover\:text-gray-700:hover,
+html.dark .hover\:text-gray-600:hover {
+  color: var(--dt-text-secondary) !important;
+}
+
+/* ── Amber/yellow info banners that blind in dark mode (soften, keep hue) ── */
+html.dark .bg-amber-50 {
+  background-color: rgba(217, 119, 6, 0.12) !important;
+}
+html.dark .bg-amber-900\/20 {
+  background-color: rgba(217, 119, 6, 0.18) !important;
+}
+html.dark .text-amber-700 {
+  color: #fbbf24 !important;
+}
+html.dark .text-amber-300 {
+  color: #fcd34d !important;
+}
+/* Red/green status banners */
+html.dark .bg-red-50 {
+  background-color: rgba(239, 68, 68, 0.12) !important;
+}
+html.dark .bg-green-50 {
+  background-color: rgba(34, 197, 94, 0.12) !important;
+}
+html.dark .bg-blue-50 {
+  background-color: rgba(59, 130, 246, 0.12) !important;
+}
+
+/* ── Backdrop / overlay that defaults to white ──────────────────────────── */
+html.dark .bg-white\/5,
+html.dark .bg-white\/10 {
+  background-color: rgba(255, 255, 255, 0.06) !important;
+}
+html.dark .bg-white\/20,
+html.dark .bg-white\/30 {
+  background-color: rgba(255, 255, 255, 0.12) !important;
+}
+html.dark .bg-black\/5 {
+  background-color: rgba(0, 0, 0, 0.3) !important;
+}
+
+/* ── Shadow toning (light shadows vanish on dark; add a subtle glow edge) ── */
+html.dark .shadow,
+html.dark .shadow-sm,
+html.dark .shadow-md,
+html.dark .shadow-lg {
+  box-shadow:
+    0 0 0 1px var(--dt-border-subtle),
+    0 4px 16px rgba(0, 0, 0, 0.4) !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   html.dark body,
   html.dark .card,
