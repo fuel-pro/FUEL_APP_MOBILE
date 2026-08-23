@@ -14,8 +14,8 @@ import type { ReactNode } from "react";
  */
 export interface HaloCardProps {
   children: ReactNode;
-  /** Accent color for the hover glow */
-  accent?: "cobalt" | "amber" | "sage";
+  /** Accent color for the hover glow. "theme" follows the active color theme (99.txt). */
+  accent?: "cobalt" | "amber" | "sage" | "theme";
   /** Extra className on the outer wrapper */
   className?: string;
   /** Disable the lift animation (glow still shows) */
@@ -29,25 +29,31 @@ export default function HaloCard({
   disableLift = false,
 }: HaloCardProps) {
   const glowBg =
-    accent === "amber"
-      ? "radial-gradient(circle at 50% 40%, rgba(246,137,31,0.15), transparent 70%)"
-      : accent === "sage"
-        ? "radial-gradient(circle at 50% 40%, rgba(141,207,116,0.15), transparent 70%)"
-        : "radial-gradient(circle at 50% 40%, rgba(3,91,254,0.15), transparent 70%)";
+    accent === "theme"
+      ? "radial-gradient(circle at 50% 40%, rgba(var(--fp-accent-rgb), 0.22), transparent 70%)"
+      : accent === "amber"
+        ? "radial-gradient(circle at 50% 40%, rgba(246,137,31,0.15), transparent 70%)"
+        : accent === "sage"
+          ? "radial-gradient(circle at 50% 40%, rgba(141,207,116,0.15), transparent 70%)"
+          : "radial-gradient(circle at 50% 40%, rgba(3,91,254,0.15), transparent 70%)";
 
   const hoverBorder =
-    accent === "amber"
-      ? "rgba(246,137,31,0.4)"
-      : accent === "sage"
-        ? "rgba(141,207,116,0.4)"
-        : "rgba(3,91,254,0.4)";
+    accent === "theme"
+      ? "rgba(var(--fp-accent-rgb), 0.55)"
+      : accent === "amber"
+        ? "rgba(246,137,31,0.4)"
+        : accent === "sage"
+          ? "rgba(141,207,116,0.4)"
+          : "rgba(3,91,254,0.4)";
 
   const hoverShadow =
-    accent === "amber"
-      ? "0 20px 40px -15px rgba(246,137,31,0.25)"
-      : accent === "sage"
-        ? "0 20px 40px -15px rgba(141,207,116,0.25)"
-        : "0 20px 40px -15px rgba(3,91,254,0.25)";
+    accent === "theme"
+      ? "0 20px 40px -15px rgba(var(--fp-accent-rgb), 0.35)"
+      : accent === "amber"
+        ? "0 20px 40px -15px rgba(246,137,31,0.25)"
+        : accent === "sage"
+          ? "0 20px 40px -15px rgba(141,207,116,0.25)"
+          : "0 20px 40px -15px rgba(3,91,254,0.25)";
 
   return (
     <div

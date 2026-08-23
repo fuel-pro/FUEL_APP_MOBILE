@@ -1469,6 +1469,70 @@ code {
   --fp-emerald: #235f45;
   --fp-amber: #f6891f;
   --fp-amber-soft: #feaf53;
+
+  /* Default accent (Eucalyptus Glow) — overridden per-theme below */
+  --fp-accent: #a7c4a0;
+  --fp-accent-tint: #f4efe6;
+  --fp-accent-rgb: 167, 196, 160;
+  --fp-accent-gradient: linear-gradient(135deg, #f4efe6 0%, #a7c4a0 100%);
+}
+
+/* ============================================================
+   SOFT PASTEL COLOR THEMES (design spec 99.txt)
+   Applied via <html data-color-theme="..."> by ThemeContext.
+   Each theme overrides the accent variables used site-wide.
+   Rule 9 (Avoid Using Pure Colors): low-saturation pastels
+   prevent eye strain during long monitoring sessions.
+   ============================================================ */
+html[data-color-theme="eucalyptus"] {
+  --fp-accent: #a7c4a0;
+  --fp-accent-tint: #f4efe6;
+  --fp-accent-rgb: 167, 196, 160;
+  --fp-accent-gradient: linear-gradient(135deg, #f4efe6 0%, #a7c4a0 100%);
+}
+html[data-color-theme="mauve"] {
+  --fp-accent: #d8bfd8;
+  --fp-accent-tint: #fdfcfb;
+  --fp-accent-rgb: 216, 191, 216;
+  --fp-accent-gradient: linear-gradient(135deg, #fdfcfb 0%, #d8bfd8 100%);
+}
+html[data-color-theme="ocean"] {
+  --fp-accent: #7fcdff;
+  --fp-accent-tint: #dff7ff;
+  --fp-accent-rgb: 127, 205, 255;
+  --fp-accent-gradient: linear-gradient(135deg, #dff7ff 0%, #7fcdff 100%);
+}
+html[data-color-theme="peach"] {
+  --fp-accent: #ffd3b6;
+  --fp-accent-tint: #fff9f5;
+  --fp-accent-rgb: 255, 211, 182;
+  --fp-accent-gradient: linear-gradient(135deg, #fff9f5 0%, #ffd3b6 100%);
+}
+html[data-color-theme="periwinkle"] {
+  --fp-accent: #b8c0ff;
+  --fp-accent-tint: #e7d8ff;
+  --fp-accent-rgb: 184, 192, 255;
+  --fp-accent-gradient: linear-gradient(135deg, #e7d8ff 0%, #b8c0ff 100%);
+}
+html[data-color-theme="mint"] {
+  --fp-accent: #6dd5c4;
+  --fp-accent-tint: #dff6f0;
+  --fp-accent-rgb: 109, 213, 196;
+  --fp-accent-gradient: linear-gradient(135deg, #dff6f0 0%, #6dd5c4 100%);
+}
+
+/* Premium accent surface: a soft tinted card background derived from the
+   active color theme. Used by HaloCard / accent surfaces. */
+.fp-accent-surface {
+  background: var(--fp-accent-gradient);
+  color: #1f2937;
+}
+.fp-accent-ring {
+  box-shadow: 0 0 0 2px rgba(var(--fp-accent-rgb), 0.45);
+}
+.fp-accent-pill {
+  background: rgba(var(--fp-accent-rgb), 0.18);
+  color: #1f2937;
 }
 
 /* --- 6 Gradient Palettes (file 2) --- */

@@ -1264,7 +1264,7 @@ export default function Dashboard() {
 
       {/* KPI Cards — premium gradient metric cards (design spec file 2) with HALO hover (file 9) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        <HaloCard accent="sage">
+        <HaloCard accent="theme">
           <GradientMetricCard
             title="Total Revenue"
             value={`${currencySymbol} ${formatNumber(animatedValues.revenue, 0)}`}
@@ -1278,7 +1278,7 @@ export default function Dashboard() {
           />
         </HaloCard>
 
-        <HaloCard accent={netProfit >= 0 ? "sage" : "amber"}>
+        <HaloCard accent="theme">
           <GradientMetricCard
             title="Net Profit"
             value={`${currencySymbol} ${formatNumber(animatedValues.profit, 0)}`}
@@ -1298,7 +1298,7 @@ export default function Dashboard() {
           />
         </HaloCard>
 
-        <HaloCard accent="cobalt">
+        <HaloCard accent="theme">
           <GradientMetricCard
             title="Fuel Sold"
             value={`${formatNumber(animatedValues.fuelSold, 0)} L`}
@@ -1310,7 +1310,7 @@ export default function Dashboard() {
           />
         </HaloCard>
 
-        <HaloCard accent={totalDebt > 0 ? "amber" : "sage"}>
+        <HaloCard accent="theme">
           <GradientMetricCard
             title="Balance Due"
             value={`${currencySymbol} ${formatNumber(animatedValues.debt, 0)}`}
@@ -1367,7 +1367,7 @@ export default function Dashboard() {
             {priceCards.map((card) => (
               <HaloCard
                 key={card.key}
-                accent="cobalt"
+                accent="theme"
                 className="bg-white dark:bg-white dark:bg-gray-800 rounded-lg"
               >
                 <div className="p-3 text-center">
