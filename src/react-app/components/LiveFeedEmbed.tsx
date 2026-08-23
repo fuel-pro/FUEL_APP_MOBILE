@@ -571,13 +571,14 @@ export default function LiveFeedEmbed({
       setShowPlayOverlay(false);
     };
     video.addEventListener("playing", onPlaying);
-    // Route HLS streams through the server-side proxy to bypass CORS.
-    // Most upstream HLS CDNs do NOT send Access-Control-Allow-Origin, so
-    // hls.js cannot fetch them cross-origin from the browser. The proxy
-    // fetches server-side, rewrites playlist URLs, and returns with CORS.
-    // Both Vercel (api/hls-proxy.ts) and Cloudflare Pages
-    // (functions/api/hls-proxy.ts) serve the proxy at /api/hls-proxy, so
-    // a relative path works same-origin on both platforms.
+    // CRITICAL: use the DIRECT stream URL with hls.js, NOT the CORS proxy.
+    // Diagnostic testing (tv-diag.html) proved the proxy BREAKS hls.js
+    // (manifestLoadError FATAL) because the proxy rewrites manifest URLs
+    // into a chain that hls.js cannot load. The direct URL works because
+    // most HLS CDNs (CloudFront, bozztv, etc.) send Access-Control-Allow-
+    // Origin: * when an Origin header is present (which the browser sends
+    // automatically on cross-origin XHR/fetch). Only fall back to the
+    // proxy if the direct URL fails with a CORS/network error.
     const proxiedStreamUrl = `/api/hls-proxy?url=${encodeURIComponent(streamUrl)}`;
 
     let playbackTimeout: ReturnType<typeof setTimeout> | undefined;
@@ -595,7 +596,42 @@ export default function LiveFeedEmbed({
         fragLoadingTimeOut: 30000,
       });
       hlsRef.current = hls;
-      hls.loadSource(proxiedStreamUrl);
+
+      // Track whether we've already retried via the proxy, so a second
+      // network error doesn't loop back to the direct URL forever.
+      let retriedViaProxy = false;
+      const tryProxyFallback = () => {
+        if (retriedViaProxy) return false; // already tried the proxy
+        retriedViaProxy = true;
+        setReconnecting(true);
+        // Reload the same hls instance with the proxied URL.
+        hls.destroy();
+        const hls2 = new Hls({
+          enableWorker: true,
+          lowLatencyMode: true,
+          manifestLoadingTimeOut: 15000,
+          manifestLoadingMaxRetry: 3,
+          levelLoadingTimeOut: 15000,
+          fragLoadingTimeOut: 30000,
+        });
+        hlsRef.current = hls2;
+        hls2.loadSource(proxiedStreamUrl);
+        hls2.attachMedia(video);
+        hls2.on(Hls.Events.MANIFEST_PARSED, attemptAutoplay);
+        hls2.on(Hls.Events.ERROR, (_evt2, data2) => {
+          if (!data2.fatal) return;
+          // Proxy also failed — give up on this channel.
+          hls2.destroy();
+          if (hlsRef.current === hls2) hlsRef.current = null;
+          setReconnecting(false);
+          const advanced = autoAdvanceToNextChannel(activeChannel.nanoid);
+          if (!advanced) setPlaybackError(true);
+        });
+        return true;
+      };
+
+      // Load the DIRECT stream URL first (proven to render visuals).
+      hls.loadSource(streamUrl);
       hls.attachMedia(video);
       hls.on(Hls.Events.MANIFEST_PARSED, attemptAutoplay);
       // Start the playback safety timeout now that hls is defined.
@@ -645,7 +681,12 @@ export default function LiveFeedEmbed({
           return;
         }
 
-        // Recovery exhausted (or unrecoverable error type) — give up.
+        // Recovery exhausted (or unrecoverable error type). Before giving
+        // up on this channel entirely, try the CORS proxy as a last resort
+        // (some CDNs don't send Access-Control-Allow-Origin, so the direct
+        // URL fails with a network error — the proxy fetches server-side).
+        if (tryProxyFallback()) return;
+
         hls.destroy();
         hlsRef.current = null;
         setReconnecting(false);
@@ -655,8 +696,10 @@ export default function LiveFeedEmbed({
         if (!advanced) setPlaybackError(true);
       });
     } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
-      // Native HLS (Safari) — also route through the CORS proxy
-      video.src = proxiedStreamUrl;
+      // Native HLS (Safari) — use the DIRECT URL (Safari handles CORS
+      // for media elements natively; the proxy is unnecessary and breaks
+      // native HLS playback the same way it breaks hls.js).
+      video.src = streamUrl;
       video.muted = true;
       setMuted(true);
       playbackTimeout = setTimeout(() => {
@@ -669,8 +712,9 @@ export default function LiveFeedEmbed({
         setShowPlayOverlay(true);
       });
     } else {
-      // Non-HLS stream URL — try direct video (also proxied for CORS)
-      video.src = proxiedStreamUrl;
+      // Non-HLS stream URL — try direct video first (same reasoning:
+      // the proxy breaks media playback).
+      video.src = streamUrl;
       video.muted = true;
       setMuted(true);
       playbackTimeout = setTimeout(() => {
