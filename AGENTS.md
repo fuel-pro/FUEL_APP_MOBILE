@@ -7106,3 +7106,66 @@ the movie content at 0:42 / 1:23) and the stream plays automatically.
 (preview 2bdec3d6 + main alias). Vercel: GitHub integration auto-deploys
 when quota resets. Supabase: no schema changes. tsc 0 errors, build 107
 precache, prettier pass.
+
+## Session 2026-08-23 — Live TV video playback FULLY FIXED (no visuals bug)
+
+**Symptom**: "video playback and feed is not responding, no visuals" on
+the Live TV tab. The video element rendered but showed 0:00/0:00 with no
+actual video content.
+
+**Root cause — the CORS proxy was BREAKING hls.js**:
+Created a standalone diagnostic page (`public/tv-diag.html`, since removed)
+that tested 4 different playback methods side-by-side:
+
+- **Method 1 (hls.js + CORS proxy)**: FAILS — `manifestLoadError FATAL`.
+  The proxy rewrites manifest URLs into a chain (`/api/hls-proxy?url=...`)
+  that hls.js cannot load properly.
+- **Method 2 (hls.js + DIRECT URL)**: WORKS PERFECTLY —
+  `MANIFEST_PARSED → playing VISUALS CONFIRMED videoWidth=640
+  currentTime=42.02` — actual movie content playing!
+- **Method 3 (direct src + proxy)**: FAILS — `Format error, no supported
+  source`.
+- **Method 4 (direct src + DIRECT URL)**: WORKS — `playing VISUALS
+  CONFIRMED videoWidth=640`.
+
+The key discovery: most HLS CDNs (CloudFront `d1oefjzrirx6fc.cloudfront.net`,
+bozztv, etc.) DO send `Access-Control-Allow-Origin: *` when an Origin
+header is present (verified via `curl -H "Origin: ..."`). So hls.js can
+fetch them directly without a proxy. The proxy was not only unnecessary —
+it was actively BREAKING playback by rewriting URLs in a way hls.js
+couldn't handle.
+
+**Fix** (`src/react-app/components/LiveFeedEmbed.tsx`, commit 624598a):
+- `hls.loadSource(streamUrl)` — load the DIRECT stream URL first
+  (was `hls.loadSource(proxiedStreamUrl)` which used the proxy).
+- Added `tryProxyFallback()` — only falls back to the proxy if the direct
+  URL fails with a network/CORS error (for CDNs that genuinely don't send
+  CORS headers). Guarded by `retriedViaProxy` flag to prevent loops.
+- Native HLS (Safari) path: `video.src = streamUrl` (was proxied).
+- Non-HLS fallback path: `video.src = streamUrl` (was proxied).
+
+**Why previous fixes didn't work**: Prior commits (6952997 auto-advance
+removal, etc.) addressed symptoms (cycling, timeouts) but not the root
+cause. The proxy was breaking ALL hls.js playback regardless of timeout
+settings — hls.js simply couldn't load the manifest through the proxy.
+
+**Verified**: tv-diag.html Method 2 confirmed actual video visuals
+(`videoWidth=640`, `currentTime=42.02` = movie content playing). Deployed
+chunk `News-C0m2vxHJ.js` has `loadSource(streamUrl)` direct + only 1
+`hls-proxy` reference (the fallback).
+
+**Deploy state 2026-08-23 (commit 624598a)**:
+- GitHub main: 624598a (pushed, synced with origin/main).
+- Cloudflare Pages: LIVE (preview https://54e06d1e.fuel-app-mobile.pages.dev
+  + main alias https://fuel-app-mobile.pages.dev).
+- Vercel: BLOCKED by api-deployments-free-per-day (auto-deploys on reset).
+- Supabase: no schema changes (frontend-only).
+- tsc 0 errors, prettier pass, build success.
+
+**Backend verification** (the API + proxy pipeline is functional, the
+issue was the frontend using it incorrectly):
+- `/api/live-channels?mode=tv&type=countries&id=us` → 1440 channels
+- `/api/hls-proxy?url=...m3u8` → HTTP 200, manifest with rewritten URLs
+- `.ts` segment through proxy → HTTP 200, 930KB, video/mp2t
+- Direct CloudFront stream with Origin header → `Access-Control-Allow-
+  Origin: *` (this is why the direct URL works without the proxy)
