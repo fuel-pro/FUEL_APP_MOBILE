@@ -7680,3 +7680,102 @@ the owner with a success toast. Session-timeout min lowered 5->0 (0 = never).
 - Supabase: no schema changes (frontend-only; companyData persists via the
   existing FuelContext compact blob in app_kv; general_settings_v1 cloud key
   unchanged).
+
+
+## Session 2026-08-23 — Royal Professional dark mode + final "blend everything perfectly"
+
+### TASK-5: "Blend everything perfectly" (DEPLOYED LIVE, commit 369531c)
+
+The global CSS layers (dark blend/toning/consolidation/contrast) couldn't
+reach inline `style={{ color: '#hex' }}` JSX objects (CSS class selectors
+can't override inline styles). These were the last unblended spots — 102
+bright/colored hex values hard-coded in 4 components (DocumentCenter 54,
+Paywall 22, SyncDashboard 17, DataManager 9).
+
+Fix: added blend CSS variables to dark-theme.css (:root light defaults +
+html.dark dark overrides): --blend-text-primary/secondary/muted, --blend-border,
+--blend-surface-dark, --blend-amber/green/red/blue, --blend-amber-bg.
+Replaced every hardcoded hex in the 4 files with the matching var():
+- slate/gray text -> --blend-text-secondary/muted/border (brightens to
+  #d4d4d8/#a1a1aa in dark for AA contrast)
+- semantic colors (amber/green/red/blue + violet/pink/teal/cyan/orange
+  stragglers) -> the 4 consolidated semantic blend vars (darker/toned in
+  dark, vivid in light). Eliminates the last non-palette hues.
+- pure black #000 -> --blend-surface-dark (#0a0a0a, no harsh pure black).
+Only remaining bare hexes are legit dark-surface backgrounds (#1a1a1f/
+#1e293b/#1f2937/#0f1117/#1a1a1a/#2c2c2c/#111827) which already blend.
+Net: every inline-styled element now respects dark mode + the 4-hue palette
++ the contrast boost. The blend is COMPLETE.
+
+### Royal Professional dark mode (DEPLOYED LIVE, commit 44ceeaa)
+
+Integrated the "Royal Professional Dark Mode" from UI.txt: deep cool-blue-grey
+backgrounds, gold accents, off-white text, subtle blue-grey borders — a
+luxurious, professional look. Added as a new 'royal' color theme and set as
+the DEFAULT.
+
+ThemeContext.tsx:
+- Added 'royal' to the ColorTheme union + COLOR_THEMES registry (name
+  'Royal Professional', primaryHex #c5a059, tintHex #111625).
+- DEFAULT_COLOR_THEME is now 'royal' (new users get royal on first load;
+  existing users keep their saved theme).
+
+index.css — comprehensive [data-color-theme='royal'] block:
+- Backgrounds: --dt-bg-main #0a0e17 (cool blue-grey, not pure black),
+  --dt-bg-card #111625, --dt-bg-input #1a1f2e, --dt-bg-card-hover #161b2c.
+- Gold accent (signature): --dt-accent-blue/--fp-accent #c5a059, hover
+  #d4b475, glow rgba(197,160,89,0.15), --fp-ring gold.
+- Off-white text: --dt-text-primary #e0e6ed, secondary #94a3b8, muted #7b8794.
+- Subtle blue-grey borders: --dt-border-subtle #2d3748, active #3d4a5c.
+- Blend vars retuned so inline-styled elements go royal too; crucially
+  --blend-blue mapped to gold so ALL primary/action inline-styled elements
+  become gold (consistent with the royal accent).
+- Dark-mode surface application: cards/panels get #111625 + #2d3748 border
+  + subtle lift shadow; hover adds a faint gold glow edge.
+- Inputs: #1a1f2e surface + gold focus glow ring.
+- Active tab/nav indicator -> gold (text + border + tinted bg + glow).
+- Links -> gold (hover #d4b475). .fp-btn-primary -> solid gold + dark text.
+- Frosted-glass chrome retuned to royal cool-grey.
+- Selection + focus-visible -> gold. Sidebar nav-item active -> gold tint.
+- Tables: secondary-color headers, #2d3748 row separators, tabular-nums.
+- KPI values + trend colors (positive #4ade80, warning #facc15).
+- HaloCard accent border -> gold.
+
+Dashboard.tsx — royal-aware chart colors:
+- When data-color-theme='royal', the chart palette leads with gold
+  (#c5a059) as the primary data line/border so the signature royal
+  accent shows in the data viz (per UI.txt Fix 9 chart color map).
+  Non-royal themes keep the existing palette.
+
+### Verification (live, 2026-08-23, Cloudflare 8e8870c4 + main alias)
+
+Pixel analysis confirms the royal theme renders:
+- Gold accent pixels: 224 (exact match #c5a059=(197,160,89) at the active
+  Dashboard tab indicator + header).
+- Royal cool-blue-grey card surfaces: 22,488 pixels (#111625-tone).
+- Theme picker shows 'Royal Professional' as the first/selected option.
+- Full palette in live CSS bundle index-D7tuQOgn.css: #0a0e17/#111625/
+  #1a1f2e/#c5a059/#d4b475/#e0e6ed/#94a3b8/#2d3748/#4ade80/#facc15.
+- JS chunk has 'Royal Professional'.
+
+### Deploy state 2026-08-23
+- GitHub main: 44ceeaa (pushed, synced with origin/main).
+- Cloudflare Pages: LIVE (preview https://8e8870c4.fuel-app-mobile.pages.dev
+  + main alias https://fuel-app-mobile.pages.dev).
+- Vercel production: BLOCKED by api-deployments-free-per-day (100/100;
+  GitHub integration auto-deploys when quota resets ~24h).
+- Supabase: no schema changes (frontend-only; theme persists via existing
+  app_color_theme app_kv cloud key + fuelpro_color_theme localStorage).
+- tsc 0 errors, prettier clean, build success (108 precache).
+
+### Theme system summary
+Color themes (ThemeContext, applied via <html data-color-theme="...">):
+1. royal (DEFAULT) — Royal Professional: cool blue-grey + gold.
+2. eucalyptus — Eucalyptus Glow (green).
+3. mauve — Pearl Mauve.
+4. ocean — Ocean Breeze (blue).
+5. peach — Peach Champagne.
+6. periwinkle — Dreamy Periwinkle.
+7. mint — Mint Lagoon.
+Switchable via the Header "Theme" button (desktop dropdown + mobile panel).
+Persists to cloud (app_color_theme app_kv key, scoped row id) + localStorage.
