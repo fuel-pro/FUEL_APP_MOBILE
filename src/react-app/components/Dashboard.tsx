@@ -92,7 +92,7 @@ ChartJS.register(
 // Royal Professional chart typography (matches dashboard.html spec)
 ChartJS.defaults.font.family =
   "'Inter', -apple-system, BlinkMacSystemFont, sans-serif";
-ChartJS.defaults.color = "#8a94a6";
+ChartJS.defaults.color = "#cbd5e1";
 
 /**
  * Tank fill percentage for the Dashboard tank-level bar.
@@ -1059,8 +1059,8 @@ export default function Dashboard() {
         backgroundColor: "#141a2b",
         borderColor: "#252c3f",
         borderWidth: 1,
-        titleColor: "#e7ebf1",
-        bodyColor: "#8a94a6",
+        titleColor: "#ffffff",
+        bodyColor: "#cbd5e1",
         padding: 10,
         displayColors: false,
         titleFont: { weight: 600 as const },
@@ -1077,7 +1077,7 @@ export default function Dashboard() {
       legend: {
         position: "bottom" as const,
         labels: {
-          color: state.theme === "dark" ? "#9ca3af" : "#374151",
+          color: state.theme === "dark" ? "#cbd5e1" : "#374151",
           usePointStyle: true,
           padding: 16,
         },
@@ -1096,7 +1096,7 @@ export default function Dashboard() {
         },
         border: isRoyalTheme ? { display: false } : undefined,
         ticks: {
-          color: state.theme === "dark" ? "#9ca3af" : "#6b7280",
+          color: state.theme === "dark" ? "#cbd5e1" : "#6b7280",
           font: isRoyalTheme ? { size: 11 } : undefined,
         },
       },
@@ -1110,7 +1110,7 @@ export default function Dashboard() {
         },
         border: isRoyalTheme ? { display: false } : undefined,
         ticks: {
-          color: state.theme === "dark" ? "#9ca3af" : "#6b7280",
+          color: state.theme === "dark" ? "#cbd5e1" : "#6b7280",
           font: isRoyalTheme ? { size: 11 } : undefined,
         },
       },
@@ -1124,7 +1124,7 @@ export default function Dashboard() {
       legend: {
         position: "bottom" as const,
         labels: {
-          color: state.theme === "dark" ? "#9ca3af" : "#374151",
+          color: state.theme === "dark" ? "#cbd5e1" : "#374151",
           usePointStyle: true,
           padding: 16,
         },
@@ -1146,7 +1146,7 @@ export default function Dashboard() {
         grid: { display: false },
         border: isRoyalTheme ? { display: false } : undefined,
         ticks: {
-          color: state.theme === "dark" ? "#9ca3af" : "#6b7280",
+          color: state.theme === "dark" ? "#cbd5e1" : "#6b7280",
           font: isRoyalTheme ? { size: 10.5 } : undefined,
         },
       },
@@ -1160,7 +1160,7 @@ export default function Dashboard() {
         },
         border: isRoyalTheme ? { display: false } : undefined,
         ticks: {
-          color: state.theme === "dark" ? "#9ca3af" : "#6b7280",
+          color: state.theme === "dark" ? "#cbd5e1" : "#6b7280",
           font: isRoyalTheme ? { size: 10.5 } : undefined,
         },
       },
