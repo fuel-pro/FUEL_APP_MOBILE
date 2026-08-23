@@ -1524,6 +1524,528 @@ html.dark .fixed.inset-0[class*="z-5"] {
   -webkit-backdrop-filter: blur(4px);
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   CONTRAST BOOST LAYER — maximize text visibility (WCAG AA+)
+   ═══════════════════════════════════════════════════════════════════════════
+   Brightens the neutral text tiers so body/caption text is comfortably
+   readable on the ultra-dark surfaces. Re-tiers the gray scale:
+     - primary (headings, -900/-800): pure white (#ffffff) — 21:1
+     - body (the bulk, -700/-600/-500/-400): #d4d4d8 — ~12:1 on #121212
+     - muted (captions, -300/-200): #a1a1aa — ~7:1
+   Also lifts placeholder + muted icon opacity. Scoped under html.dark.
+   ─────────────────────────────────────────────────────────────────────────── */
+html.dark .text-gray-900,
+html.dark .text-gray-800 {
+  color: #ffffff !important;
+}
+html.dark .text-gray-700,
+html.dark .text-gray-600,
+html.dark .text-gray-500,
+html.dark .text-gray-400 {
+  color: #d4d4d8 !important;
+}
+html.dark .text-gray-300,
+html.dark .text-gray-200,
+html.dark .text-gray-100 {
+  color: #a1a1aa !important;
+}
+/* Muted icons / dividers — lift opacity so icons stay visible */
+html.dark .text-gray-300 {
+  color: #b8bcc4 !important;
+}
+html.dark input::placeholder,
+html.dark textarea::placeholder {
+  color: #9499a3 !important;
+  opacity: 0.9;
+}
+/* Hover text lifts to primary for affordance */
+html.dark .hover\:text-gray-900:hover,
+html.dark .hover\:text-gray-800:hover,
+html.dark .hover\:text-gray-700:hover {
+  color: #ffffff !important;
+}
+html.dark .hover\:text-gray-600:hover,
+html.dark .hover\:text-gray-500:hover {
+  color: #d4d4d8 !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   COLOR CONSOLIDATION LAYER — fewer colors, no clashing
+   ═══════════════════════════════════════════════════════════════════════════
+   Reduces the 16-hue rainbow to a disciplined 4-hue semantic palette in dark
+   mode so the UI reads clearly without color clashing/confusion:
+     blue   = primary / actions / links / active
+     green  = positive / success
+     red    = negative / danger / error
+     amber  = warning / brand accent
+   Minor hues are remapped to their semantic equivalent:
+     orange/yellow -> amber | lime/emerald/teal -> green |
+     sky/indigo/violet/purple/fuchsia -> blue | pink/rose -> red
+   Hue identity is preserved only where it carries meaning (the 4 above).
+   Scoped under html.dark; light mode untouched.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+html.dark .bg-emerald-50,
+html.dark .bg-emerald-100,
+html.dark .bg-emerald-200 {
+  background-color: rgba(34, 197, 94, 0.12) !important;
+}
+html.dark .bg-emerald-400,
+html.dark .bg-emerald-700,
+html.dark .bg-emerald-900 {
+  background-color: rgba(34, 197, 94, 0.22) !important;
+}
+html.dark .bg-emerald-500,
+html.dark .bg-emerald-600 {
+  background-color: rgb(21, 122, 58) !important;
+}
+
+html.dark .bg-fuchsia-500,
+html.dark .bg-fuchsia-600 {
+  background-color: rgb(36, 76, 243) !important;
+}
+
+html.dark .bg-indigo-50,
+html.dark .bg-indigo-100,
+html.dark .bg-indigo-200 {
+  background-color: rgba(59, 130, 246, 0.12) !important;
+}
+html.dark .bg-indigo-500,
+html.dark .bg-indigo-600 {
+  background-color: rgb(36, 76, 243) !important;
+}
+html.dark .bg-indigo-700,
+html.dark .bg-indigo-800,
+html.dark .bg-indigo-900 {
+  background-color: rgba(59, 130, 246, 0.22) !important;
+}
+
+html.dark .bg-orange-50,
+html.dark .bg-orange-100 {
+  background-color: rgba(245, 158, 11, 0.12) !important;
+}
+html.dark .bg-orange-500,
+html.dark .bg-orange-600 {
+  background-color: rgb(151, 97, 6) !important;
+}
+html.dark .bg-orange-700,
+html.dark .bg-orange-900 {
+  background-color: rgba(245, 158, 11, 0.22) !important;
+}
+
+html.dark .bg-pink-100 {
+  background-color: rgba(239, 68, 68, 0.12) !important;
+}
+html.dark .bg-pink-500,
+html.dark .bg-pink-600 {
+  background-color: rgb(148, 42, 42) !important;
+}
+html.dark .bg-pink-700,
+html.dark .bg-pink-900 {
+  background-color: rgba(239, 68, 68, 0.22) !important;
+}
+
+html.dark .bg-purple-50,
+html.dark .bg-purple-100,
+html.dark .bg-purple-200 {
+  background-color: rgba(59, 130, 246, 0.12) !important;
+}
+html.dark .bg-purple-400,
+html.dark .bg-purple-700,
+html.dark .bg-purple-900 {
+  background-color: rgba(59, 130, 246, 0.22) !important;
+}
+html.dark .bg-purple-500,
+html.dark .bg-purple-600 {
+  background-color: rgb(36, 76, 243) !important;
+}
+
+html.dark .bg-rose-50 {
+  background-color: rgba(239, 68, 68, 0.12) !important;
+}
+html.dark .bg-rose-500,
+html.dark .bg-rose-600 {
+  background-color: rgb(148, 42, 42) !important;
+}
+html.dark .bg-rose-700,
+html.dark .bg-rose-900 {
+  background-color: rgba(239, 68, 68, 0.22) !important;
+}
+
+html.dark .bg-sky-50,
+html.dark .bg-sky-100,
+html.dark .bg-sky-200 {
+  background-color: rgba(59, 130, 246, 0.12) !important;
+}
+html.dark .bg-sky-500,
+html.dark .bg-sky-600 {
+  background-color: rgb(36, 76, 243) !important;
+}
+html.dark .bg-sky-800,
+html.dark .bg-sky-900 {
+  background-color: rgba(59, 130, 246, 0.22) !important;
+}
+
+html.dark .bg-teal-100,
+html.dark .bg-teal-200 {
+  background-color: rgba(34, 197, 94, 0.12) !important;
+}
+html.dark .bg-teal-500,
+html.dark .bg-teal-600 {
+  background-color: rgb(21, 122, 58) !important;
+}
+html.dark .bg-teal-700,
+html.dark .bg-teal-900 {
+  background-color: rgba(34, 197, 94, 0.22) !important;
+}
+
+html.dark .bg-violet-50,
+html.dark .bg-violet-100,
+html.dark .bg-violet-200 {
+  background-color: rgba(59, 130, 246, 0.12) !important;
+}
+html.dark .bg-violet-500,
+html.dark .bg-violet-600 {
+  background-color: rgb(36, 76, 243) !important;
+}
+html.dark .bg-violet-700,
+html.dark .bg-violet-800,
+html.dark .bg-violet-900 {
+  background-color: rgba(59, 130, 246, 0.22) !important;
+}
+
+html.dark .bg-yellow-50,
+html.dark .bg-yellow-100 {
+  background-color: rgba(245, 158, 11, 0.12) !important;
+}
+html.dark .bg-yellow-400,
+html.dark .bg-yellow-700,
+html.dark .bg-yellow-900 {
+  background-color: rgba(245, 158, 11, 0.22) !important;
+}
+html.dark .bg-yellow-500,
+html.dark .bg-yellow-600 {
+  background-color: rgb(151, 97, 6) !important;
+}
+
+html.dark .border-emerald-200,
+html.dark .border-emerald-700,
+html.dark .border-emerald-800 {
+  border-color: rgba(34, 197, 94, 0.25) !important;
+}
+html.dark .border-emerald-500 {
+  border-color: rgb(21, 122, 58) !important;
+}
+
+html.dark .border-indigo-100,
+html.dark .border-indigo-200,
+html.dark .border-indigo-700,
+html.dark .border-indigo-800,
+html.dark .border-indigo-900 {
+  border-color: rgba(59, 130, 246, 0.25) !important;
+}
+html.dark .border-indigo-400,
+html.dark .border-indigo-500,
+html.dark .border-indigo-600 {
+  border-color: rgb(36, 76, 243) !important;
+}
+
+html.dark .border-orange-200,
+html.dark .border-orange-300,
+html.dark .border-orange-700,
+html.dark .border-orange-800 {
+  border-color: rgba(245, 158, 11, 0.25) !important;
+}
+html.dark .border-orange-500 {
+  border-color: rgb(151, 97, 6) !important;
+}
+
+html.dark .border-pink-200 {
+  border-color: rgba(239, 68, 68, 0.25) !important;
+}
+
+html.dark .border-purple-200,
+html.dark .border-purple-300,
+html.dark .border-purple-700,
+html.dark .border-purple-800 {
+  border-color: rgba(59, 130, 246, 0.25) !important;
+}
+html.dark .border-purple-400,
+html.dark .border-purple-500,
+html.dark .border-purple-600 {
+  border-color: rgb(36, 76, 243) !important;
+}
+
+html.dark .border-sky-200,
+html.dark .border-sky-300,
+html.dark .border-sky-700,
+html.dark .border-sky-800 {
+  border-color: rgba(59, 130, 246, 0.25) !important;
+}
+html.dark .border-sky-500 {
+  border-color: rgb(36, 76, 243) !important;
+}
+
+html.dark .border-teal-200 {
+  border-color: rgba(34, 197, 94, 0.25) !important;
+}
+
+html.dark .border-violet-200,
+html.dark .border-violet-800 {
+  border-color: rgba(59, 130, 246, 0.25) !important;
+}
+
+html.dark .border-yellow-200,
+html.dark .border-yellow-300,
+html.dark .border-yellow-700,
+html.dark .border-yellow-800 {
+  border-color: rgba(245, 158, 11, 0.25) !important;
+}
+html.dark .border-yellow-500 {
+  border-color: rgb(151, 97, 6) !important;
+}
+
+html.dark .from-emerald-50,
+html.dark .from-emerald-500,
+html.dark .from-emerald-600,
+html.dark .from-emerald-700,
+html.dark .from-emerald-900 {
+  --tw-gradient-from: rgb(21, 122, 58) !important;
+}
+
+html.dark .from-indigo-50,
+html.dark .from-indigo-400,
+html.dark .from-indigo-500,
+html.dark .from-indigo-600,
+html.dark .from-indigo-700,
+html.dark .from-indigo-900 {
+  --tw-gradient-from: rgb(36, 76, 243) !important;
+}
+
+html.dark .from-lime-500 {
+  --tw-gradient-from: rgb(21, 122, 58) !important;
+}
+
+html.dark .from-orange-500,
+html.dark .from-orange-600 {
+  --tw-gradient-from: rgb(151, 97, 6) !important;
+}
+
+html.dark .from-pink-500 {
+  --tw-gradient-from: rgb(148, 42, 42) !important;
+}
+
+html.dark .from-purple-50,
+html.dark .from-purple-400,
+html.dark .from-purple-500,
+html.dark .from-purple-600,
+html.dark .from-purple-700,
+html.dark .from-purple-900 {
+  --tw-gradient-from: rgb(36, 76, 243) !important;
+}
+
+html.dark .from-rose-400,
+html.dark .from-rose-500 {
+  --tw-gradient-from: rgb(148, 42, 42) !important;
+}
+
+html.dark .from-sky-50,
+html.dark .from-sky-500,
+html.dark .from-sky-900 {
+  --tw-gradient-from: rgb(36, 76, 243) !important;
+}
+
+html.dark .from-teal-500 {
+  --tw-gradient-from: rgb(21, 122, 58) !important;
+}
+
+html.dark .from-violet-50,
+html.dark .from-violet-600,
+html.dark .from-violet-900 {
+  --tw-gradient-from: rgb(36, 76, 243) !important;
+}
+
+html.dark .from-yellow-500 {
+  --tw-gradient-from: rgb(151, 97, 6) !important;
+}
+
+html.dark .ring-indigo-400,
+html.dark .ring-indigo-500 {
+  --tw-ring-color: rgb(36, 76, 243) !important;
+}
+
+html.dark .ring-purple-500 {
+  --tw-ring-color: rgb(36, 76, 243) !important;
+}
+
+html.dark .ring-sky-400,
+html.dark .ring-sky-500 {
+  --tw-ring-color: rgb(36, 76, 243) !important;
+}
+
+html.dark .text-emerald-300,
+html.dark .text-emerald-400,
+html.dark .text-emerald-500,
+html.dark .text-emerald-600,
+html.dark .text-emerald-700,
+html.dark .text-emerald-800 {
+  color: rgb(60, 203, 113) !important;
+}
+
+html.dark .text-indigo-300,
+html.dark .text-indigo-400,
+html.dark .text-indigo-500,
+html.dark .text-indigo-600,
+html.dark .text-indigo-700,
+html.dark .text-indigo-800,
+html.dark .text-indigo-900 {
+  color: rgb(82, 145, 247) !important;
+}
+
+html.dark .text-orange-100,
+html.dark .text-orange-200,
+html.dark .text-orange-300,
+html.dark .text-orange-400,
+html.dark .text-orange-500,
+html.dark .text-orange-600,
+html.dark .text-orange-700 {
+  color: rgb(246, 169, 40) !important;
+}
+
+html.dark .text-pink-200,
+html.dark .text-pink-300,
+html.dark .text-pink-400,
+html.dark .text-pink-500,
+html.dark .text-pink-600,
+html.dark .text-pink-700 {
+  color: rgb(240, 90, 90) !important;
+}
+
+html.dark .text-purple-200,
+html.dark .text-purple-300,
+html.dark .text-purple-400,
+html.dark .text-purple-500,
+html.dark .text-purple-600,
+html.dark .text-purple-700,
+html.dark .text-purple-800,
+html.dark .text-purple-900 {
+  color: rgb(82, 145, 247) !important;
+}
+
+html.dark .text-rose-300,
+html.dark .text-rose-400,
+html.dark .text-rose-500,
+html.dark .text-rose-700 {
+  color: rgb(240, 90, 90) !important;
+}
+
+html.dark .text-sky-200,
+html.dark .text-sky-300,
+html.dark .text-sky-400,
+html.dark .text-sky-500,
+html.dark .text-sky-600,
+html.dark .text-sky-700,
+html.dark .text-sky-800 {
+  color: rgb(82, 145, 247) !important;
+}
+
+html.dark .text-teal-300,
+html.dark .text-teal-400,
+html.dark .text-teal-500,
+html.dark .text-teal-600,
+html.dark .text-teal-700 {
+  color: rgb(60, 203, 113) !important;
+}
+
+html.dark .text-violet-200,
+html.dark .text-violet-400,
+html.dark .text-violet-500,
+html.dark .text-violet-600,
+html.dark .text-violet-900 {
+  color: rgb(82, 145, 247) !important;
+}
+
+html.dark .text-yellow-200,
+html.dark .text-yellow-300,
+html.dark .text-yellow-400,
+html.dark .text-yellow-500,
+html.dark .text-yellow-600,
+html.dark .text-yellow-700,
+html.dark .text-yellow-800 {
+  color: rgb(246, 169, 40) !important;
+}
+
+html.dark .to-emerald-50,
+html.dark .to-emerald-600,
+html.dark .to-emerald-700,
+html.dark .to-emerald-900 {
+  --tw-gradient-to: rgb(21, 122, 58) !important;
+}
+
+html.dark .to-indigo-50,
+html.dark .to-indigo-500,
+html.dark .to-indigo-600,
+html.dark .to-indigo-700,
+html.dark .to-indigo-800,
+html.dark .to-indigo-900 {
+  --tw-gradient-to: rgb(36, 76, 243) !important;
+}
+
+html.dark .to-lime-600 {
+  --tw-gradient-to: rgb(21, 122, 58) !important;
+}
+
+html.dark .to-orange-50,
+html.dark .to-orange-100,
+html.dark .to-orange-500,
+html.dark .to-orange-600,
+html.dark .to-orange-900 {
+  --tw-gradient-to: rgb(151, 97, 6) !important;
+}
+
+html.dark .to-pink-50,
+html.dark .to-pink-600,
+html.dark .to-pink-900 {
+  --tw-gradient-to: rgb(148, 42, 42) !important;
+}
+
+html.dark .to-purple-50,
+html.dark .to-purple-500,
+html.dark .to-purple-600,
+html.dark .to-purple-700,
+html.dark .to-purple-800,
+html.dark .to-purple-900 {
+  --tw-gradient-to: rgb(36, 76, 243) !important;
+}
+
+html.dark .to-rose-600 {
+  --tw-gradient-to: rgb(148, 42, 42) !important;
+}
+
+html.dark .to-sky-600 {
+  --tw-gradient-to: rgb(36, 76, 243) !important;
+}
+
+html.dark .to-teal-600,
+html.dark .to-teal-700 {
+  --tw-gradient-to: rgb(21, 122, 58) !important;
+}
+
+html.dark .to-violet-400 {
+  --tw-gradient-to: rgb(36, 76, 243) !important;
+}
+
+html.dark .to-yellow-50,
+html.dark .to-yellow-600,
+html.dark .to-yellow-900 {
+  --tw-gradient-to: rgb(151, 97, 6) !important;
+}
+
+html.dark .via-indigo-900,
+html.dark .via-indigo-950 {
+  --tw-gradient-stops: rgb(36, 76, 243) !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   html.dark *,
   html.dark *::before,
