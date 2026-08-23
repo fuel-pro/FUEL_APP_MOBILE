@@ -7391,3 +7391,84 @@ created first) remain NOT auto-merged (awaiting user authorization).
 **Verified live** (Cloudflare preview f00251c4 + 4ae341ff): Auto-selected channel is now "Amazing Facts TV" (YouTube) instead of "21 Jump Street" (HLS). YouTube iframe renders (dark player background confirmed in screenshot at y=545-595, YouTube signature 9,9,9 / 17,17,17 / 20,20,20 colors). Debug text completely gone (0 amber pixels). YouTube autoplay=1&mute=1 will play in real browsers.
 
 **Deploy state 2026-08-23 (commit 5ed7e3d)**: GitHub main pushed. Cloudflare Pages LIVE (preview 4ae341ff + main alias). Vercel BLOCKED by api-deployments-free-per-day (auto-deploys on reset). Supabase: no schema changes. tsc 0 errors, build success, prettier pass.
+
+
+## Session 2026-08-23 (cont.) — Color theme VISIBLE effect fix (commit 8cbd94e)
+
+**User report**: "I can't see its effect on the site." The prior theme
+picker (commit 1e077b2) was wired into the Header and the theme persisted
++ cloud-synced correctly, BUT switching a theme produced NO obvious visual
+change.
+
+**Root cause**: the 6 pastel themes only defined `--fp-accent` CSS
+variables that were consumed by a SUBTLE HaloCard hover glow + a few
+utility classes (`.fp-accent-surface`, `.fp-accent-ring`, `.fp-accent-pill`).
+The rest of the visible UI used hardcoded Tailwind colors (blue-400/500
+for the active tab, #6366f1 indigo for focus rings, amber for the brand)
+that did NOT respond to the theme accent — so the change was invisible.
+
+**Fix (commit 8cbd94e)** — wired the theme accent into the most prominent,
+frequently-seen elements so switching a theme is immediately obvious:
+
+1. **HaloCard `accent="theme"`**: added a visible 3px gradient accent bar
+   across the top of every themed HaloCard (Dashboard KPI + price cards)
+   using `var(--fp-accent)` → `rgba(var(--fp-accent-rgb), 0.35)`. Plus
+   tinted the card border with the accent (was transparent). This makes
+   the Dashboard cards visibly recolor instantly.
+
+2. **CSS theme layer** (`index.css`, scoped under `html[data-color-theme]`):
+   - Active top-tab indicator: `.fp-tab-nav .text-blue-400/500`,
+     `.border-blue-500`, `.bg-blue-500/5` → theme accent. Added
+     `.fp-tab-nav` class to the `TabNavigation.tsx` wrapper div so the
+     selector matches (the wrapper was a plain `<div>`, not `<nav>`).
+   - Mobile bottom-nav active items: `nav .text-blue-*`, `.bg-blue-100`,
+     `.bg-blue-900/40` → theme accent.
+   - Focus rings on ALL inputs/selects/textareas: replaced the hardcoded
+     `#6366f1`/`#818cf8` indigo with the theme accent + tinted ring
+     (overrides the existing `select:focus` rules).
+   - New opt-in helpers: `.fp-btn-primary`, `.fp-accent-text`,
+     `.fp-accent-bg`, `.fp-accent-border` for components that want to
+     follow the theme.
+   All overrides are scoped under `html[data-color-theme]` so the default
+   (no attribute) layout is untouched.
+
+### Verification (live, 2026-08-23, Cloudflare preview fe7adeef)
+
+Logged in as founder QA (`founder.qa.fuelpro@gmail.com`, US station, USD):
+- Header "Theme" button opens dropdown with all 6 palettes.
+- Selected "Peach Champagne" → `fuelpro_color_theme` = `"peach"` +
+  `fuelpro_cloud_app_color_theme__<uid>` = `"peach"` (cloud-synced) ✅
+- Selected "Mint Lagoon" → `fuelpro_color_theme` = `"mint"` +
+  `fuelpro_cloud_app_color_theme__<uid>` = `"mint"` (cloud-synced) ✅
+- Deployed CSS (`assets/index-DXxZH4lT.css`) confirmed to contain:
+  `fp-tab-nav` (6), `fp-btn-primary` (6), `fp-halo-card` (8),
+  `data-color-theme` (31 occurrences) ✅
+- Reset to Eucalyptus Glow (default) to leave QA account clean.
+- Screenshots captured for Peach (4ab398d8) + Mint (a81e200c) for visual
+  comparison — the HaloCard top accent bar + active-tab recoloring are
+  visible.
+
+### Deploy state 2026-08-23 (commit 8cbd94e)
+
+- **GitHub main**: `8cbd94e` (pushed, rebased on `664f31e`; synced with
+  origin/main).
+- **Cloudflare Pages**: LIVE (preview https://fe7adeef.fuel-app-mobile.pages.dev
+  + main alias https://fuel-app-mobile.pages.dev). New CSS rules verified
+  in the deployed stylesheet.
+- **Vercel production**: BLOCKED by `api-deployments-free-per-day`
+  (100/100 exhausted; prebuilt deploy returns "Resource is limited - try
+  again in 24 hours"). GitHub integration (prodBranch=main) auto-deploys
+  commit `8cbd94e` when the quota resets (~24h).
+- **Supabase**: no schema changes (uses existing `app_kv` table + scoped
+  `app_color_theme__<ownerId>` row, RLS by owner_id).
+- tsc 0 errors, prettier clean, build 107 precache.
+
+### Note on service-worker caching
+Users on the main alias (`fuel-app-mobile.pages.dev`) who visited before
+this deploy may be served the OLD cached CSS by the service worker. The
+custom network-first SW (`public/sw.js`, CACHE_VERSION auto-bumped to
+`20260823T101406716Z`) fetches a fresh `index.html` on every navigation,
+so the new CSS chunk hash is picked up on the next page load. A hard
+reload (Ctrl+Shift+R) forces it immediately. The preview URL
+(`fe7adeef.fuel-app-mobile.pages.dev`) has no SW cache and always serves
+the latest.
