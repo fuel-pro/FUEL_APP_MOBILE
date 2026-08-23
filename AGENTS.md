@@ -7817,3 +7817,104 @@ Logged in as founder QA (US station, USD). News > Live TV: LOADED WITHOUT CRASH 
 - api/iptv-channels.ts — NEW (Vercel serverless iptv-org proxy)
 - functions/api/iptv-channels.ts — NEW (Cloudflare Pages Function)
 - src/react-app/services/LiveStreamService.ts — MODIFIED (merge iptv-org)
+
+
+## Session 2026-08-23 — Royal dashboard design system (dashboard.html spec)
+
+Integrated the refined dashboard.html design system into the royal theme.
+The dashboard.html reference introduced a more detailed, refined version of
+the royal aesthetic with 3-tier surfaces, 3-tier text, status dim variants,
+JetBrains Mono for numbers, gold gradient area-fill charts, and a full set
+of dashboard component patterns (KPI cards, segmented controls, data
+tables, operation lists, gold buttons, sidebar nav, plan card).
+
+### index.css — extended royal tokens
+
+Added to the `[data-color-theme="royal"]` block:
+- `--bg-card-raised: #141a2b` (3rd surface tier — raised cards/chips)
+- `--bg-hover: #171d2e` (hover surface for nav-items, table rows)
+- `--text-tertiary: #5b6478` (3rd text tier — captions, kbd, sub-text)
+- `--text-on-accent: #0a0e17` (dark text used ON gold backgrounds)
+- `--accent-gold-dim: rgba(197,160,89,0.10)`, `--accent-gold-border:
+  rgba(197,160,89,0.35)`
+- `--status-positive/warning/negative/info` + dim variants (rgba 0.12)
+- `--border-light: #1f2635` (cooler/darker than --dt-border-subtle),
+  `--border-lighter: #252c3f`
+- `--font-mono: "JetBrains Mono", ui-monospace, ...`
+- Added JetBrains Mono (weights 400;500) to the Google Fonts @import.
+
+### index.css — royal dashboard component classes (site-wide under royal)
+
+The full reference component CSS, scoped under `html.dark[data-color-theme=
+"royal"]` so any component can adopt the dashboard aesthetic:
+- `.mono` / `.amount`: JetBrains Mono + tabular-nums for financials.
+- `.btn-gold`: solid gold primary button, dark text, gold glow shadow.
+- `.kpi-card` / `.kpi-top` / `.kpi-icon` (gold/positive/warning/info) /
+  `.kpi-badge` (positive/warning) / `.kpi-value` / `.kpi-label` /
+  `.kpi-foot`: the reference KPI card structure.
+- `.seg-control` / `.seg-btn` (active = gold): 7D/30D/90D segmented toggle.
+- `.fuel-table`: uppercase headers, hover rows, monospace `.amount`.
+- `.desc-cell` / `.desc-dot` (positive/warning/negative) / `.desc-main` /
+  `.desc-sub`.
+- `.status-pill` (warning/positive/negative) with leading dot.
+- `.op-list` / `.op-item` / `.op-icon` (positive/warning/info) /
+  `.op-body` / `.op-title` / `.op-date` / `.op-amount` (positive): recent
+  operations feed.
+- `.link-gold`, `.card-header` / `.card-title` / `.card-caption`,
+  `.route-stats` / `.route-stat` / `.swatch` (a/b), `.brand-mark` (gold
+  gradient square), `.nav-section-label`, `.nav-item` (gold active),
+  `.plan-card` / `.bar` / `.bar-fill`, `.search` / `.icon-btn` / `.avatar`
+  (royal topbar).
+
+### Dashboard.tsx — royal-aware chart rendering
+
+- Chart.js global defaults: `font.family` Inter, `color` #8a94a6 (royal
+  secondary text).
+- `salesChartData`: when royal, the primary line uses a gold gradient area
+  fill. The `backgroundColor` is a FUNCTION (Chart.js calls it with the
+  live chart context at render time) that builds a
+  `createLinearGradient(0, top, 0, bottom)` from `rgba(197,160,89,0.28)` →
+  `rgba(197,160,89,0)` using the actual chart area — no canvas ref needed.
+  Royal: `pointRadius: 0`, `pointHoverRadius: 5`, hover border `#0a0e17`,
+  `borderWidth: 2.5`. Non-royal keeps the existing flat translucent fill
+  + pointRadius 4.
+- `chartOptions` / `doughnutOptions` / `barOptions`: royal tooltip
+  (`#141a2b` bg, `#252c3f` border, `#e7ebf1` title, `#8a94a6` body,
+  `displayColors: false`, 600-weight title font, padding 10), grid color
+  `#1f2635`, hidden x-axis grid + borders, `interaction: {intersect: false,
+  mode: "index"}`, 11px tick font (10.5px for bar chart). Non-royal keeps
+  the existing config.
+
+### Verification (live, 2026-08-23, Cloudflare 4bf4268e + main alias)
+
+- Live CSS (index-hsZ-BYR9.css, 268KB) contains ALL royal dashboard tokens:
+  `#141a2b`, `#171d2e`, `#5b6478`, `#1f2635`, `#252c3f`, `#7dd3fc`,
+  `JetBrains Mono`, and all component classes: `btn-gold`, `kpi-card`,
+  `seg-control`, `fuel-table`, `op-list`, `status-pill`, `brand-mark`,
+  `plan-card`, `op-amount`, `desc-dot`, `nav-section-label`.
+- Live Dashboard chunk (Dashboard-C4aYBomC.js, 230KB) contains: the gold
+  gradient area fill (`createLinearGradient` + `rgba(197,160,89`), royal
+  tooltip colors (`#141a2b`, `#1f2635`, `#252c3f`), refined point styling
+  (`pointHoverBorderColor`, `pointRadius`).
+- Main alias https://fuel-app-mobile.pages.dev serves the new chunks
+  (hashes match local build exactly).
+
+### Deploy state 2026-08-23 (commit 158c75d)
+- GitHub main: 158c75d (pushed, rebased on a076068; synced with origin/main).
+- Cloudflare Pages: LIVE (preview https://4bf4268e.fuel-app-mobile.pages.dev
+  + main alias https://fuel-app-mobile.pages.dev).
+- Vercel production: BLOCKED by api-deployments-free-per-day (100/100;
+  GitHub integration auto-deploys when quota resets ~24h).
+- Supabase: no schema changes (frontend-only).
+- tsc 0 errors, prettier clean, build success (108 precache).
+
+### How the design system is used
+The royal theme (the DEFAULT for new users) now carries the full refined
+dashboard design language. The Dashboard's sales/expenses/distribution
+charts render with the gold gradient area fill + royal tooltips + #1f2635
+grid. The component CSS classes (.btn-gold, .kpi-card, .seg-control,
+.fuel-table, .op-list, .status-pill, .brand-mark, .plan-card, etc.) are
+available site-wide under the royal theme so any component can adopt the
+reference dashboard aesthetic by adding the class names — no JS changes
+needed. JetBrains Mono is loaded for monospace/tabular financial numbers
+via the .mono/.amount classes.
