@@ -6708,3 +6708,7 @@ All fix/feature branches already merged to main. No lost work.
 ### Deploy state
 
 - GitHub main: 931b2b3. Cloudflare: LIVE. Vercel: BLOCKED (quota, auto-deploys on reset). Supabase: no schema changes. tsc 0 errors, build success.
+
+## Session 2026-08-22 — Live TV dual-layer YouTube+HLS fallback (DEPLOYED LIVE, commit d66d89c)
+
+News tab Live TV sub-tab preview video now renders actual live stream content. Dual-layer: YouTube iframe (top) + HLS video (underneath). YouTube-only channels show thumbnail poster + auto-advance to HLS channel after 6s. HLS-only channels use hls.js video. Verified live on Cloudflare ea312353 + Vercel production (aliased fuel-app-mobile.vercel.app). No Supabase changes.
