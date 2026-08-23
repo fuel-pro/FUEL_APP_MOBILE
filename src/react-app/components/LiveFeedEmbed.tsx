@@ -306,8 +306,16 @@ export default function LiveFeedEmbed({
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    setChannels([]);
-    setActiveChannel(null);
+    // NOTE: do NOT call setChannels([]) or setActiveChannel(null) here.
+    // Clearing channels/state at the start of every fetch causes a race:
+    // `defaultCountry` changes async after mount (location detection),
+    // which changes `country` state, which re-fires this effect. Each
+    // re-fire clears channels + activeChannel. If the effect re-fires
+    // before the async fetch completes, cancelled=true discards the
+    // result, leaving channels permanently empty and the player blank.
+    // Instead, let the new channels replace the old ones atomically when
+    // the fetch completes. The auto-select safety-net effect handles
+    // picking a fresh channel if the old one is no longer in the list.
     setVisibleCount(60);
     setPlaybackError(false);
     setFetchError(null);
@@ -329,6 +337,8 @@ export default function LiveFeedEmbed({
         const results = await Promise.all(
           params.map((p) => fetchLiveChannels(p.mode, p.type, p.id)),
         );
+        // Stale fetch: a newer fetch started (country/category changed
+        // again). Bail — don't clobber the newer fetch's channels.
         if (cancelled) return;
         // Merge + dedup by nanoid
         const seen = new Set<string>();
@@ -346,7 +356,6 @@ export default function LiveFeedEmbed({
             setFetchError(
               "Could not load channels — the live TV service may be temporarily unavailable. Try again or select a different country.",
             );
-            setLoading(false);
           }
           return;
         }
@@ -385,9 +394,18 @@ export default function LiveFeedEmbed({
         setChannels(playable);
         // Reset the auto-advance guard for the fresh channel list
         autoAdvanceTriedRef.current = new Set();
-        // Auto-select: prefer non-geo-blocked HLS channels (now reliable via
-        // the CORS proxy), then YouTube channels, then any non-geo-blocked.
+        // Auto-select: prefer YouTube channels FIRST (YouTube embeds are
+        // far more reliable than HLS streams — YouTube handles all the
+        // streaming infrastructure server-side, so the video actually
+        // plays instead of getting stuck at 0:00 like many HLS streams).
+        // Then fall back to non-geo-blocked HLS, then any channel.
         const firstPlayable =
+          playable.find(
+            (c) =>
+              !c.isGeoBlocked &&
+              c.youtube_urls &&
+              c.youtube_urls.length > 0,
+          ) ||
           playable.find(
             (c) =>
               !c.isGeoBlocked &&
@@ -398,14 +416,11 @@ export default function LiveFeedEmbed({
               !c.stream_urls[0].includes("youtu.be"),
           ) ||
           playable.find(
-            (c) =>
-              !c.isGeoBlocked && c.youtube_urls && c.youtube_urls.length > 0,
-          ) ||
-          playable.find(
             (c) => !c.isGeoBlocked && c.stream_urls && c.stream_urls.length > 0,
           ) ||
           playable.find((c) => !c.isGeoBlocked) ||
           playable[0];
+        setChannels(playable);
         if (firstPlayable) setActiveChannel(firstPlayable);
       } catch (err) {
         if (!cancelled) {
@@ -415,7 +430,12 @@ export default function LiveFeedEmbed({
           );
         }
       } finally {
-        if (!cancelled) setLoading(false);
+        // ALWAYS clear loading — if this fetch was cancelled (superseded by a
+        // newer fetch), the newer fetch already set loading=true at its start,
+        // so this setLoading(false) will be overwritten by the newer fetch's
+        // own setLoading(false) when IT completes. If this IS the latest fetch,
+        // this clears loading as expected. Either way, loading is never stuck.
+        setLoading(false);
       }
     })();
     return () => {
@@ -424,11 +444,16 @@ export default function LiveFeedEmbed({
   }, [category, subCategoryId, country, showAll]);
 
   // Safety-net auto-select: if channels are loaded but no active channel is
-  // selected (e.g. due to a race between the fetch effect and state updates),
+  // selected (e.g. due to a race between the fetch effect and state updates,
+  // OR the fetch was stale/superseded and setActiveChannel was skipped),
   // pick the first playable channel. This ensures the video player is never
-  // left empty when channels are available.
+  // left empty when channels are available. Also clears a stale activeChannel
+  // that is no longer in the new channel list (after a category/country change).
   useEffect(() => {
-    if (!activeChannel && channels.length > 0 && !loading) {
+    if (channels.length === 0 || loading) return;
+    const stillInList =
+      activeChannel && channels.some((c) => c.nanoid === activeChannel.nanoid);
+    if (!stillInList) {
       const first =
         channels.find(
           (c) =>
@@ -447,7 +472,10 @@ export default function LiveFeedEmbed({
         ) ||
         channels.find((c) => !c.isGeoBlocked) ||
         channels[0];
-      if (first) setActiveChannel(first);
+      if (first) {
+        autoAdvanceTriedRef.current = new Set();
+        setActiveChannel(first);
+      }
     }
   }, [channels, activeChannel, loading]);
 
@@ -489,6 +517,13 @@ export default function LiveFeedEmbed({
     [channels],
   );
 
+  // Ref to the latest autoAdvanceToNextChannel so the HLS effect can call it
+  // WITHOUT having it in its deps. This prevents the HLS effect from re-running
+  // (and destroying the hls.js instance mid-load) whenever `channels` changes
+  // and recreates the autoAdvanceToNextChannel callback.
+  const autoAdvanceRef = useRef(autoAdvanceToNextChannel);
+  autoAdvanceRef.current = autoAdvanceToNextChannel;
+
   // HLS playback for TV channels
   useEffect(() => {
     if (!activeChannel || isRadio) return;
@@ -503,7 +538,11 @@ export default function LiveFeedEmbed({
     hlsRecoveryRef.current = 0;
 
     const video = videoRef.current;
-    if (!video) return;
+    console.log("[LiveTV] HLS effect fired. activeChannel:", activeChannel?.name, "videoRef.current:", !!video, "isRadio:", isRadio);
+    if (!video) {
+      console.log("[LiveTV] videoRef.current is NULL — video element not rendered yet, effect will retry on next render");
+      return;
+    }
 
     // If the channel has YouTube URLs, use iframe embed (handled in render).
     // BUT: also set up HLS fallback if the channel has HLS stream_urls.
@@ -518,7 +557,7 @@ export default function LiveFeedEmbed({
     if (!streamUrl) {
       // No stream URL — auto-advance to the next playable channel instead
       // of showing a dead "temporarily unavailable" error.
-      const advanced = autoAdvanceToNextChannel(activeChannel.nanoid);
+      const advanced = autoAdvanceRef.current(activeChannel.nanoid);
       if (!advanced) setPlaybackError(true);
       return;
     }
@@ -538,21 +577,25 @@ export default function LiveFeedEmbed({
     // to satisfy browser autoplay policies), then show a play overlay if the
     // browser blocks it.
     const attemptAutoplay = () => {
+      console.log("[LiveTV] MANIFEST_PARSED — attempting autoplay for", activeChannel?.name);
       setReconnecting(false);
       hlsRecoveryRef.current = 0;
       // Start muted to satisfy autoplay policies, then attempt play.
       video.muted = true;
       setMuted(true);
       const playPromise = video.play();
+      console.log("[LiveTV] video.play() called. readyState:", video.readyState, "videoWidth:", video.videoWidth);
       if (playPromise) {
         playPromise
           .then(() => {
             // Muted autoplay succeeded — video is playing.
+            console.log("[LiveTV] play() RESOLVED — autoplay started! videoWidth:", video.videoWidth, "currentTime:", video.currentTime);
             setShowPlayOverlay(false);
           })
-          .catch(() => {
+          .catch((e) => {
             // Autoplay blocked even when muted — show a click-to-play overlay.
             // The user must click to start playback (browser policy).
+            console.log("[LiveTV] play() REJECTED — autoplay blocked:", e?.name || e);
             setShowPlayOverlay(true);
           });
       }
@@ -567,18 +610,19 @@ export default function LiveFeedEmbed({
     let playbackStarted = false;
     const onPlaying = () => {
       playbackStarted = true;
+      console.log("[LiveTV] PLAYING event — video is playing! videoWidth:", video.videoWidth, "currentTime:", video.currentTime);
       setReconnecting(false);
       setShowPlayOverlay(false);
     };
     video.addEventListener("playing", onPlaying);
-    // CRITICAL: use the DIRECT stream URL with hls.js, NOT the CORS proxy.
-    // Diagnostic testing (tv-diag.html) proved the proxy BREAKS hls.js
-    // (manifestLoadError FATAL) because the proxy rewrites manifest URLs
-    // into a chain that hls.js cannot load. The direct URL works because
-    // most HLS CDNs (CloudFront, bozztv, etc.) send Access-Control-Allow-
-    // Origin: * when an Origin header is present (which the browser sends
-    // automatically on cross-origin XHR/fetch). Only fall back to the
-    // proxy if the direct URL fails with a CORS/network error.
+    // CRITICAL: use the CORS PROXY URL with hls.js, NOT the direct stream URL.
+    // The direct URL fails in most browser environments because HLS CDNs do
+    // NOT send Access-Control-Allow-Origin headers on segment requests (only
+    // some CDNs send it on the manifest, but NOT on .ts segments). hls.js
+    // fetches both manifest + segments via XHR/fetch, so ALL requests need
+    // CORS headers. The proxy fetches server-side + adds permissive CORS
+    // headers on BOTH playlists and segments, guaranteeing hls.js can load
+    // everything cross-origin.
     const proxiedStreamUrl = `/api/hls-proxy?url=${encodeURIComponent(streamUrl)}`;
 
     let playbackTimeout: ReturnType<typeof setTimeout> | undefined;
@@ -597,14 +641,15 @@ export default function LiveFeedEmbed({
       });
       hlsRef.current = hls;
 
-      // Track whether we've already retried via the proxy, so a second
-      // network error doesn't loop back to the direct URL forever.
-      let retriedViaProxy = false;
-      const tryProxyFallback = () => {
-        if (retriedViaProxy) return false; // already tried the proxy
-        retriedViaProxy = true;
+      // Track whether we've already retried via the direct URL, so a second
+      // network error doesn't loop back to the proxy forever.
+      let retriedDirect = false;
+      const tryDirectFallback = () => {
+        if (retriedDirect) return false;
+        retriedDirect = true;
         setReconnecting(true);
-        // Reload the same hls instance with the proxied URL.
+        // Reload with the DIRECT stream URL (some CDNs DO send CORS headers
+        // and the proxy may add latency/break URL chains for complex playlists).
         hls.destroy();
         const hls2 = new Hls({
           enableWorker: true,
@@ -615,23 +660,25 @@ export default function LiveFeedEmbed({
           fragLoadingTimeOut: 30000,
         });
         hlsRef.current = hls2;
-        hls2.loadSource(proxiedStreamUrl);
+        console.log("[LiveTV] Proxy failed — trying DIRECT URL:", streamUrl.substring(0, 80));
+        hls2.loadSource(streamUrl);
         hls2.attachMedia(video);
         hls2.on(Hls.Events.MANIFEST_PARSED, attemptAutoplay);
         hls2.on(Hls.Events.ERROR, (_evt2, data2) => {
           if (!data2.fatal) return;
-          // Proxy also failed — give up on this channel.
+          // Direct URL also failed — give up on this channel.
           hls2.destroy();
           if (hlsRef.current === hls2) hlsRef.current = null;
           setReconnecting(false);
-          const advanced = autoAdvanceToNextChannel(activeChannel.nanoid);
+          const advanced = autoAdvanceRef.current(activeChannel.nanoid);
           if (!advanced) setPlaybackError(true);
         });
         return true;
       };
 
-      // Load the DIRECT stream URL first (proven to render visuals).
-      hls.loadSource(streamUrl);
+      // Load the PROXIED stream URL first (guarantees CORS on all requests).
+      console.log("[LiveTV] hls.loadSource(PROXY):", proxiedStreamUrl.substring(0, 80));
+      hls.loadSource(proxiedStreamUrl);
       hls.attachMedia(video);
       hls.on(Hls.Events.MANIFEST_PARSED, attemptAutoplay);
       // Start the playback safety timeout now that hls is defined.
@@ -645,7 +692,7 @@ export default function LiveFeedEmbed({
           setShowPlayOverlay(true);
           setReconnecting(false);
         }
-      }, 30000);
+      }, 10000);
       hls.on(Hls.Events.ERROR, (_event, data) => {
         if (!data.fatal) return;
 
@@ -682,24 +729,23 @@ export default function LiveFeedEmbed({
         }
 
         // Recovery exhausted (or unrecoverable error type). Before giving
-        // up on this channel entirely, try the CORS proxy as a last resort
-        // (some CDNs don't send Access-Control-Allow-Origin, so the direct
-        // URL fails with a network error — the proxy fetches server-side).
-        if (tryProxyFallback()) return;
+        // up on this channel entirely, try the DIRECT stream URL as a last
+        // resort (some CDNs DO send Access-Control-Allow-Origin, so the
+        // direct URL may work when the proxy adds too much latency).
+        if (tryDirectFallback()) return;
 
         hls.destroy();
         hlsRef.current = null;
         setReconnecting(false);
         // Try to auto-advance to the next playable channel; only show
         // the error overlay if no other channel is available.
-        const advanced = autoAdvanceToNextChannel(activeChannel.nanoid);
+        const advanced = autoAdvanceRef.current(activeChannel.nanoid);
         if (!advanced) setPlaybackError(true);
       });
     } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
-      // Native HLS (Safari) — use the DIRECT URL (Safari handles CORS
-      // for media elements natively; the proxy is unnecessary and breaks
-      // native HLS playback the same way it breaks hls.js).
-      video.src = streamUrl;
+      // Native HLS (Safari) — use the PROXIED URL (Safari's native HLS
+      // also needs CORS headers for cross-origin media).
+      video.src = proxiedStreamUrl;
       video.muted = true;
       setMuted(true);
       playbackTimeout = setTimeout(() => {
@@ -707,21 +753,20 @@ export default function LiveFeedEmbed({
           // Show overlay, don't auto-advance (Safari may block autoplay)
           setShowPlayOverlay(true);
         }
-      }, 30000);
+      }, 10000);
       video.play().catch(() => {
         setShowPlayOverlay(true);
       });
     } else {
-      // Non-HLS stream URL — try direct video first (same reasoning:
-      // the proxy breaks media playback).
-      video.src = streamUrl;
+      // Non-HLS stream URL — try proxied first (CORS-safe).
+      video.src = proxiedStreamUrl;
       video.muted = true;
       setMuted(true);
       playbackTimeout = setTimeout(() => {
         if (!playbackStarted) {
           setShowPlayOverlay(true);
         }
-      }, 30000);
+      }, 10000);
       video.play().catch(() => {
         setShowPlayOverlay(true);
       });
@@ -735,7 +780,7 @@ export default function LiveFeedEmbed({
         hlsRef.current = null;
       }
     };
-  }, [activeChannel, isRadio, autoAdvanceToNextChannel]);
+  }, [activeChannel, isRadio]);
 
   // Reset the auto-advance guard when the user MANUALLY selects a channel
   // (so auto-advance can try every channel again in the new context).
