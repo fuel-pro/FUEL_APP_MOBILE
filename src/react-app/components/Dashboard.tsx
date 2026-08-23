@@ -10,8 +10,6 @@ import {
 import RegulatoryAlerts from "@/react-app/components/RegulatoryAlerts";
 import SyncStatusIndicator from "@/react-app/components/SyncStatusIndicator";
 import WeatherWidget from "@/react-app/components/WeatherWidget";
-import GradientMetricCard from "@/react-app/components/ui/GradientMetricCard";
-import HaloCard from "@/react-app/components/ui/HaloCard";
 import {
   TrendingUp,
   TrendingDown,
@@ -1333,15 +1331,15 @@ export default function Dashboard() {
           )}
           <button
             onClick={handlePrintSummary}
-            className="hidden sm:flex items-center gap-2 bg-white dark:bg-gray-800 rounded-xl px-3 py-2.5 shadow-sm border border-gray-200 dark:border-gray-700 hover:border-indigo-400 dark:hover:border-indigo-500 transition-colors text-sm text-gray-700 dark:text-gray-300"
+            className="fp-btn-secondary hidden sm:inline-flex"
             title="Print dashboard summary"
           >
-            <Printer size={16} className="text-indigo-500" />
+            <Printer size={16} />
             <span className="hidden lg:inline">Print Summary</span>
           </button>
-          <div className="flex items-center gap-3 bg-white dark:bg-white dark:bg-gray-800 rounded-xl px-4 py-2.5 shadow-sm border border-gray-200 dark:border-gray-700">
-            <Clock size={18} className="text-blue-500" />
-            <span className="text-sm font-mono text-gray-700 dark:text-gray-300">
+          <div className="hidden sm:flex items-center gap-3 bg-bg-card border border-edge-light rounded-md px-4 py-2.5">
+            <Clock size={18} className="text-gold" />
+            <span className="text-sm font-mono text-stat-primary">
               {currentTime.toLocaleString(stationLocale, {
                 weekday: "short",
                 year: "numeric",
@@ -1356,65 +1354,99 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* KPI Cards — premium gradient metric cards (design spec file 2) with HALO hover (file 9) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        <HaloCard accent="theme">
-          <GradientMetricCard
-            title="Total Revenue"
-            value={`${currencySymbol} ${formatNumber(animatedValues.revenue, 0)}`}
-            subtitle={
-              todaySales > 0
-                ? `${currencySymbol} ${formatNumber(todaySales)} today`
-                : "No sales today"
-            }
-            gradient="aurora-dust"
-            icon={<DollarSign size={18} />}
-          />
-        </HaloCard>
+      {/* KPI Cards — calm financial-grade cards (reference rule 5):
+          dark surface, white values, small colored icon chip + trend badge.
+          Replaces the competing multi-color gradient cards. */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="fp-kpi">
+          <div className="fp-kpi-top">
+            <div className="fp-kpi-icon gold">
+              <DollarSign size={16} />
+            </div>
+            {todaySales > 0 ? (
+              <span className="fp-kpi-badge positive">▲ today</span>
+            ) : null}
+          </div>
+          <div className="fp-kpi-value">
+            {currencySymbol} {formatNumber(animatedValues.revenue, 0)}
+          </div>
+          <div className="fp-kpi-label">Total Revenue</div>
+          <div className="fp-kpi-foot">
+            {todaySales > 0
+              ? `${currencySymbol} ${formatNumber(todaySales)} today`
+              : "No sales today"}
+          </div>
+        </div>
 
-        <HaloCard accent="theme">
-          <GradientMetricCard
-            title="Net Profit"
-            value={`${currencySymbol} ${formatNumber(animatedValues.profit, 0)}`}
-            subtitle={
-              totalExpenses > 0
-                ? `${currencySymbol} ${formatNumber(totalExpenses)} expenses`
-                : "No expenses recorded"
-            }
-            gradient={netProfit >= 0 ? "mint-eclipse" : "cyber-bloom"}
-            icon={
-              netProfit >= 0 ? (
-                <TrendingUp size={18} />
+        <div className="fp-kpi">
+          <div className="fp-kpi-top">
+            <div
+              className={`fp-kpi-icon ${netProfit >= 0 ? "positive" : "warning"}`}
+            >
+              {netProfit >= 0 ? (
+                <TrendingUp size={16} />
               ) : (
-                <TrendingDown size={18} />
-              )
-            }
-          />
-        </HaloCard>
+                <TrendingDown size={16} />
+              )}
+            </div>
+            <span
+              className={`fp-kpi-badge ${netProfit >= 0 ? "positive" : "warning"}`}
+            >
+              {netProfit >= 0 ? "▲ profit" : "▼ loss"}
+            </span>
+          </div>
+          <div className="fp-kpi-value">
+            {currencySymbol} {formatNumber(animatedValues.profit, 0)}
+          </div>
+          <div className="fp-kpi-label">Net Profit</div>
+          <div className="fp-kpi-foot">
+            {totalExpenses > 0
+              ? `${currencySymbol} ${formatNumber(totalExpenses)} expenses`
+              : "No expenses recorded"}
+          </div>
+        </div>
 
-        <HaloCard accent="theme">
-          <GradientMetricCard
-            title="Fuel Sold"
-            value={`${formatNumber(animatedValues.fuelSold, 0)} L`}
-            subtitle={priceCards
-              .map((c) => `${c.label}: ${currencySymbol} ${c.price ?? 0}/L`)
-              .join(" | ")}
-            gradient="ocean-rose"
-            icon={<Droplets size={18} />}
-          />
-        </HaloCard>
+        <div className="fp-kpi">
+          <div className="fp-kpi-top">
+            <div className="fp-kpi-icon info">
+              <Droplets size={16} />
+            </div>
+          </div>
+          <div className="fp-kpi-value">
+            {formatNumber(animatedValues.fuelSold, 0)}{" "}
+            <span style={{ fontSize: 13, color: "#94a3b8", fontWeight: 500 }}>
+              L
+            </span>
+          </div>
+          <div className="fp-kpi-label">Fuel Sold</div>
+          <div className="fp-kpi-foot">
+            {priceCards.map((c) => c.label).join(" · ") || "—"}
+          </div>
+        </div>
 
-        <HaloCard accent="theme">
-          <GradientMetricCard
-            title="Balance Due"
-            value={`${currencySymbol} ${formatNumber(animatedValues.debt, 0)}`}
-            subtitle={`${Object.keys(state.clients).length} client(s)`}
-            gradient={totalDebt > 0 ? "cyber-bloom" : "neon-pulse"}
-            icon={
-              totalDebt > 0 ? <AlertTriangle size={18} /> : <Wallet size={18} />
-            }
-          />
-        </HaloCard>
+        <div className="fp-kpi">
+          <div className="fp-kpi-top">
+            <div
+              className={`fp-kpi-icon ${totalDebt > 0 ? "warning" : "positive"}`}
+            >
+              {totalDebt > 0 ? (
+                <AlertTriangle size={16} />
+              ) : (
+                <Wallet size={16} />
+              )}
+            </div>
+            {totalDebt > 0 ? (
+              <span className="fp-kpi-badge warning">due</span>
+            ) : null}
+          </div>
+          <div className="fp-kpi-value">
+            {currencySymbol} {formatNumber(animatedValues.debt, 0)}
+          </div>
+          <div className="fp-kpi-label">Balance Due</div>
+          <div className="fp-kpi-foot">
+            {Object.keys(state.clients).length} client(s)
+          </div>
+        </div>
       </div>
 
       {/* Auto-Synced Fuel Prices + Tax Info + Regulatory Alerts */}
@@ -1458,34 +1490,38 @@ export default function Dashboard() {
             </span>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {priceCards.map((card) => (
-              <HaloCard
-                key={card.key}
-                accent="theme"
-                className="bg-white dark:bg-white dark:bg-gray-800 rounded-lg"
-              >
-                <div className="p-3 text-center">
-                  <p className="text-[10px] text-gray-500 uppercase tracking-wide">
+            {priceCards.map((card) => {
+              const swatch =
+                card.key === "petrol" || card.key === "Super Petrol"
+                  ? "#4ade80"
+                  : card.key === "diesel" || card.key === "Diesel"
+                    ? "#c5a059"
+                    : card.key === "kerosene" || card.key === "Kerosene"
+                      ? "#7dd3fc"
+                      : "#94a3b8";
+              return (
+                <div key={card.key} className="fp-price-card">
+                  <div className="fp-price-label">
+                    <span
+                      className="fp-price-swatch"
+                      style={{ background: swatch }}
+                    />
                     {card.label}
-                  </p>
-                  <p className={`text-xl font-bold ${card.color}`}>
+                  </div>
+                  <div className="fp-price-value">
                     {currencySymbol} {(card.price ?? 0).toFixed(2)}
-                  </p>
-                  <p className="text-[9px] text-gray-500 dark:text-gray-400">
-                    per litre
-                  </p>
+                  </div>
+                  <div className="fp-price-unit">per litre</div>
                   {isLocationBased ? (
-                    <p className={`text-[9px] mt-0.5 ${card.color}`}>
-                      {priceCityName}
-                    </p>
+                    <div className="fp-price-unit">{priceCityName}</div>
                   ) : regionalPrice.isRegional ? (
-                    <p className={`text-[9px] mt-0.5 ${card.color}`}>
+                    <div className="fp-price-unit">
                       {regionalPrice.cityName}
-                    </p>
+                    </div>
                   ) : null}
                 </div>
-              </HaloCard>
-            ))}
+              );
+            })}
           </div>
           {/* Fuel price interlinks — jump to the editor/finder/price-board so
               a price change here is reflected everywhere, and vice-versa. */}
