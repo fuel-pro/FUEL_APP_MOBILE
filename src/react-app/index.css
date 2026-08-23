@@ -1521,14 +1521,104 @@ html[data-color-theme="mint"] {
   --fp-accent-gradient: linear-gradient(135deg, #dff6f0 0%, #6dd5c4 100%);
 }
 
+/* ============================================================
+   VISIBLE THEME EFFECTS (design spec 99.txt)
+   The accent variables above only drove a subtle hover glow.
+   These rules make the active color theme visibly affect the most
+   prominent, frequently-seen elements site-wide so switching a
+   theme produces an immediate, obvious visual change:
+   - Active top-tab indicator (text + bottom border + tinted bg)
+   - Active bottom-nav icon
+   - Focus rings on inputs/selects (replaces hardcoded indigo)
+   - HaloCard theme-accent border tint (Dashboard KPI/price cards)
+   - Primary action buttons using the .fp-btn-primary class
+   All overrides are scoped under html[data-color-theme="..."] so
+   the default (no attribute) layout is untouched.
+   ============================================================ */
+html[data-color-theme] .fp-halo-card {
+  border-color: rgba(var(--fp-accent-rgb), 0.25);
+}
+html[data-color-theme] .fp-accent-text {
+  color: var(--fp-accent);
+}
+html[data-color-theme] .fp-accent-bg {
+  background: var(--fp-accent);
+}
+html[data-color-theme] .fp-accent-border {
+  border-color: var(--fp-accent);
+}
+
+/* Active top-tab indicator follows the theme accent.
+   TabNavigation renders: text-blue-400 border-blue-500 bg-blue-500/5.
+   The wrapper carries .fp-tab-nav. We override the blue tokens with the
+   theme accent so the active tab visibly recolors. */
+html[data-color-theme] .fp-tab-nav .text-blue-400,
+html[data-color-theme] .fp-tab-nav .text-blue-500 {
+  color: var(--fp-accent) !important;
+}
+html[data-color-theme] .fp-tab-nav .border-blue-500,
+html[data-color-theme] .fp-tab-nav .border-blue-400 {
+  border-color: var(--fp-accent) !important;
+}
+html[data-color-theme] .fp-tab-nav .bg-blue-500\/5,
+html[data-color-theme] .fp-tab-nav .bg-blue-500\/10 {
+  background-color: rgba(var(--fp-accent-rgb), 0.12) !important;
+}
+
+/* Mobile bottom-nav active items: recolor the blue active states to the
+   theme accent (keeps the per-item amber icons as-is unless they are the
+   active tab, in which case the active tint below still applies). */
+html[data-color-theme] nav .text-blue-500,
+html[data-color-theme] nav .text-blue-400,
+html[data-color-theme] nav .text-blue-700,
+html[data-color-theme] nav .text-blue-300 {
+  color: var(--fp-accent) !important;
+}
+html[data-color-theme] nav .bg-blue-100 {
+  background-color: rgba(var(--fp-accent-rgb), 0.18) !important;
+}
+html.dark[data-color-theme] nav .bg-blue-900\/40 {
+  background-color: rgba(var(--fp-accent-rgb), 0.22) !important;
+}
+
+/* Focus rings: replace the hardcoded #6366f1 / #818cf8 indigo with the
+   active theme accent so every focused input/select/button reflects the
+   chosen palette. */
+html[data-color-theme] select:focus,
+html[data-color-theme] input:focus,
+html[data-color-theme] textarea:focus,
+html[data-color-theme] .form-group select:focus {
+  border-color: var(--fp-accent) !important;
+  box-shadow: 0 0 0 2px rgba(var(--fp-accent-rgb), 0.35) !important;
+}
+html.dark[data-color-theme] select:focus,
+html.dark[data-color-theme] input:focus,
+html.dark[data-color-theme] textarea:focus {
+  border-color: var(--fp-accent) !important;
+  box-shadow: 0 0 0 2px rgba(var(--fp-accent-rgb), 0.4) !important;
+}
+
+/* Primary button helper: opt-in themed primary button.
+   Usage: <button className="fp-btn-primary">. */
+html[data-color-theme] .fp-btn-primary {
+  background: var(--fp-accent) !important;
+  color: #1f2937 !important;
+  border-color: transparent !important;
+}
+html[data-color-theme] .fp-btn-primary:hover {
+  background: rgba(var(--fp-accent-rgb), 0.85) !important;
+}
+
+/* Theme accent ring used by the Header theme-picker selected swatch. */
+.fp-accent-ring {
+  box-shadow: 0 0 0 2px rgba(var(--fp-accent-rgb), 0.45);
+}
+
 /* Premium accent surface: a soft tinted card background derived from the
    active color theme. Used by HaloCard / accent surfaces. */
 .fp-accent-surface {
   background: var(--fp-accent-gradient);
   color: #1f2937;
-}
-.fp-accent-ring {
-  box-shadow: 0 0 0 2px rgba(var(--fp-accent-rgb), 0.45);
 }
 .fp-accent-pill {
   background: rgba(var(--fp-accent-rgb), 0.18);

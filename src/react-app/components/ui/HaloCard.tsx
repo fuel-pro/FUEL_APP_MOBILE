@@ -68,6 +68,25 @@ export default function HaloCard({
         } as React.CSSProperties
       }
     >
+      {/* Visible theme accent bar — only for accent="theme" so the active
+          color theme is immediately obvious on Dashboard KPI/price cards. */}
+      {accent === "theme" && (
+        <div
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            height: 3,
+            borderRadius: "inherit",
+            background:
+              "linear-gradient(90deg, var(--fp-accent), rgba(var(--fp-accent-rgb), 0.35))",
+            zIndex: 1,
+            pointerEvents: "none",
+          }}
+        />
+      )}
       <div
         className="fp-halo-glow"
         style={{ background: glowBg }}

@@ -170,7 +170,7 @@ const TabNavigation: React.FC<TabNavigationProps> = ({
     .sort((a, b) => a.order - b.order);
 
   return (
-    <div className="relative group">
+    <div className="relative group fp-tab-nav">
       {/* Left Arrow */}
       {showLeftArrow && (
         <button
