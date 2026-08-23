@@ -5,7 +5,7 @@ import {
   LIVE_FEED_HISTORY_KEY,
   HISTORY_MAX,
   REMINDERS_MAX,
-  fetchLiveChannels,
+  fetchAllChannels,
   resolveChannelFetchParams,
   getRandomLiveFeedCombo,
   trackChannelPlay,
@@ -334,23 +334,12 @@ export default function LiveFeedEmbed({
     }
     (async () => {
       try {
-        const results = await Promise.all(
-          params.map((p) => fetchLiveChannels(p.mode, p.type, p.id)),
-        );
+        // Fetch from BOTH providers (primary tvgarden + iptv-org) and merge.
+        // fetchAllChannels handles the merge + dedup by name internally.
+        const merged = await fetchAllChannels(category, country, showAll);
         // Stale fetch: a newer fetch started (country/category changed
         // again). Bail — don't clobber the newer fetch's channels.
         if (cancelled) return;
-        // Merge + dedup by nanoid
-        const seen = new Set<string>();
-        const merged: LiveChannel[] = [];
-        for (const list of results) {
-          for (const ch of list) {
-            if (!seen.has(ch.nanoid)) {
-              seen.add(ch.nanoid);
-              merged.push(ch);
-            }
-          }
-        }
         if (merged.length === 0) {
           if (!cancelled) {
             setFetchError(
@@ -402,9 +391,7 @@ export default function LiveFeedEmbed({
         const firstPlayable =
           playable.find(
             (c) =>
-              !c.isGeoBlocked &&
-              c.youtube_urls &&
-              c.youtube_urls.length > 0,
+              !c.isGeoBlocked && c.youtube_urls && c.youtube_urls.length > 0,
           ) ||
           playable.find(
             (c) =>
@@ -538,9 +525,18 @@ export default function LiveFeedEmbed({
     hlsRecoveryRef.current = 0;
 
     const video = videoRef.current;
-    console.log("[LiveTV] HLS effect fired. activeChannel:", activeChannel?.name, "videoRef.current:", !!video, "isRadio:", isRadio);
+    console.log(
+      "[LiveTV] HLS effect fired. activeChannel:",
+      activeChannel?.name,
+      "videoRef.current:",
+      !!video,
+      "isRadio:",
+      isRadio,
+    );
     if (!video) {
-      console.log("[LiveTV] videoRef.current is NULL — video element not rendered yet, effect will retry on next render");
+      console.log(
+        "[LiveTV] videoRef.current is NULL — video element not rendered yet, effect will retry on next render",
+      );
       return;
     }
 
@@ -577,25 +573,41 @@ export default function LiveFeedEmbed({
     // to satisfy browser autoplay policies), then show a play overlay if the
     // browser blocks it.
     const attemptAutoplay = () => {
-      console.log("[LiveTV] MANIFEST_PARSED — attempting autoplay for", activeChannel?.name);
+      console.log(
+        "[LiveTV] MANIFEST_PARSED — attempting autoplay for",
+        activeChannel?.name,
+      );
       setReconnecting(false);
       hlsRecoveryRef.current = 0;
       // Start muted to satisfy autoplay policies, then attempt play.
       video.muted = true;
       setMuted(true);
       const playPromise = video.play();
-      console.log("[LiveTV] video.play() called. readyState:", video.readyState, "videoWidth:", video.videoWidth);
+      console.log(
+        "[LiveTV] video.play() called. readyState:",
+        video.readyState,
+        "videoWidth:",
+        video.videoWidth,
+      );
       if (playPromise) {
         playPromise
           .then(() => {
             // Muted autoplay succeeded — video is playing.
-            console.log("[LiveTV] play() RESOLVED — autoplay started! videoWidth:", video.videoWidth, "currentTime:", video.currentTime);
+            console.log(
+              "[LiveTV] play() RESOLVED — autoplay started! videoWidth:",
+              video.videoWidth,
+              "currentTime:",
+              video.currentTime,
+            );
             setShowPlayOverlay(false);
           })
           .catch((e) => {
             // Autoplay blocked even when muted — show a click-to-play overlay.
             // The user must click to start playback (browser policy).
-            console.log("[LiveTV] play() REJECTED — autoplay blocked:", e?.name || e);
+            console.log(
+              "[LiveTV] play() REJECTED — autoplay blocked:",
+              e?.name || e,
+            );
             setShowPlayOverlay(true);
           });
       }
@@ -610,7 +622,12 @@ export default function LiveFeedEmbed({
     let playbackStarted = false;
     const onPlaying = () => {
       playbackStarted = true;
-      console.log("[LiveTV] PLAYING event — video is playing! videoWidth:", video.videoWidth, "currentTime:", video.currentTime);
+      console.log(
+        "[LiveTV] PLAYING event — video is playing! videoWidth:",
+        video.videoWidth,
+        "currentTime:",
+        video.currentTime,
+      );
       setReconnecting(false);
       setShowPlayOverlay(false);
     };
@@ -660,7 +677,10 @@ export default function LiveFeedEmbed({
           fragLoadingTimeOut: 30000,
         });
         hlsRef.current = hls2;
-        console.log("[LiveTV] Proxy failed — trying DIRECT URL:", streamUrl.substring(0, 80));
+        console.log(
+          "[LiveTV] Proxy failed — trying DIRECT URL:",
+          streamUrl.substring(0, 80),
+        );
         hls2.loadSource(streamUrl);
         hls2.attachMedia(video);
         hls2.on(Hls.Events.MANIFEST_PARSED, attemptAutoplay);
@@ -677,7 +697,10 @@ export default function LiveFeedEmbed({
       };
 
       // Load the PROXIED stream URL first (guarantees CORS on all requests).
-      console.log("[LiveTV] hls.loadSource(PROXY):", proxiedStreamUrl.substring(0, 80));
+      console.log(
+        "[LiveTV] hls.loadSource(PROXY):",
+        proxiedStreamUrl.substring(0, 80),
+      );
       hls.loadSource(proxiedStreamUrl);
       hls.attachMedia(video);
       hls.on(Hls.Events.MANIFEST_PARSED, attemptAutoplay);
@@ -2023,7 +2046,17 @@ export default function LiveFeedEmbed({
                     }}
                     className="flex items-center gap-2 flex-1 min-w-0 text-left"
                   >
-                    {isActive ? (
+                    {ch.logo ? (
+                      <img
+                        src={ch.logo}
+                        alt=""
+                        className="w-5 h-5 rounded object-contain flex-shrink-0 bg-white/80 dark:bg-white/10"
+                        loading="lazy"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = "none";
+                        }}
+                      />
+                    ) : isActive ? (
                       <Play
                         size={12}
                         className={

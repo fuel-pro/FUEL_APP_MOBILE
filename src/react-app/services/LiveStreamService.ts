@@ -1130,6 +1130,8 @@ export interface LiveChannel {
   country: string;
   /** Whether the stream is geo-blocked */
   isGeoBlocked: boolean;
+  /** Optional channel logo URL (iptv-org channels have logos) */
+  logo?: string;
 }
 
 /** In-memory cache of fetched channel lists (keyed by URL). 5-min TTL. */
@@ -1180,6 +1182,181 @@ export async function fetchLiveChannels(
   } catch {
     return [];
   }
+}
+
+// ===========================================================================
+// IPTV-ORG INTEGRATION — additional public-domain channel source
+// (https://iptv-org.github.io/api/). 8000+ free-to-air channels. Fetched via
+// /api/iptv-channels proxy (server-side merge of channels.json + streams.json,
+// filtered by country/category, capped at 500 results). Merged with the
+// primary provider's channels so the user gets the widest selection. NO
+// upstream attribution in the UI — channels appear as native FuelPro entries.
+// ===========================================================================
+
+/** A channel from the iptv-org public API (after server-side merge). */
+export interface IptvChannel {
+  id: string;
+  name: string;
+  url: string;
+  logo: string;
+  country: string;
+  language: string;
+  category: string;
+}
+
+/** In-memory cache for iptv-org channel slices (10-min TTL). */
+const iptvCache = new Map<string, { data: IptvChannel[]; ts: number }>();
+const IPTV_CACHE_TTL = 10 * 60 * 1000;
+
+/**
+ * Fetch channels from the iptv-org public API via the /api/iptv-channels
+ * proxy. The proxy fetches channels.json (10MB) + streams.json server-side,
+ * merges them, filters by country/category, and returns a compact slice.
+ *
+ * @param country ISO 2-letter country code (lowercase), or "" for all
+ * @param category category id (lowercase), or "" for all
+ * @param limit max results (default 200, hard cap 500)
+ */
+export async function fetchIptvChannels(
+  country = "",
+  category = "",
+  limit = 200,
+): Promise<IptvChannel[]> {
+  const c = country.toLowerCase().trim();
+  const cat = category.toLowerCase().trim();
+  const cacheKey = `${c || "all"}/${cat || "all"}/${limit}`;
+  const cached = iptvCache.get(cacheKey);
+  if (cached && Date.now() - cached.ts < IPTV_CACHE_TTL) {
+    return cached.data;
+  }
+  try {
+    const params = new URLSearchParams();
+    if (c) params.set("country", c);
+    if (cat) params.set("category", cat);
+    params.set("limit", String(limit));
+    const res = await fetch(`/api/iptv-channels?${params.toString()}`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    const channels: IptvChannel[] = Array.isArray(data?.channels)
+      ? data.channels
+      : [];
+    iptvCache.set(cacheKey, { data: channels, ts: Date.now() });
+    return channels;
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Convert an iptv-org channel to the unified LiveChannel shape so the
+ * existing UI (LiveFeedEmbed) can render it without changes. The HLS stream
+ * URL goes into stream_urls; youtube_urls is empty (iptv-org has no YouTube).
+ */
+export function iptvToLiveChannel(ch: IptvChannel): LiveChannel {
+  return {
+    nanoid: `iptv-${ch.id}`,
+    name: ch.name,
+    stream_urls: ch.url ? [ch.url] : [],
+    youtube_urls: [],
+    languages: ch.language ? [ch.language] : [],
+    country: ch.country,
+    isGeoBlocked: false,
+    logo: ch.logo || undefined,
+  };
+}
+
+/**
+ * Merge primary-provider channels with iptv-org channels, deduped by
+ * case-insensitive name. Primary channels take priority (kept first); iptv-org
+ * channels with a duplicate name are skipped. Returns the merged list.
+ *
+ * @param primary channels from the primary provider (tvgarden)
+ * @param iptv channels from iptv-org
+ */
+export function mergeChannelsWithIptv(
+  primary: LiveChannel[],
+  iptv: IptvChannel[],
+): LiveChannel[] {
+  const seen = new Set<string>();
+  const merged: LiveChannel[] = [];
+  for (const ch of primary) {
+    const key = ch.name.toLowerCase().trim();
+    if (!seen.has(key)) {
+      seen.add(key);
+      merged.push(ch);
+    }
+  }
+  for (const ch of iptv) {
+    const key = ch.name.toLowerCase().trim();
+    if (!seen.has(key)) {
+      seen.add(key);
+      merged.push(iptvToLiveChannel(ch));
+    }
+  }
+  return merged;
+}
+
+/**
+ * Fetch ALL channels for a given category + country from BOTH providers
+ * (primary + iptv-org), merged + deduped. This is the main entry point for
+ * the LiveFeedEmbed component.
+ *
+ * @param category the LiveCategory id
+ * @param country ISO 2-letter country code (lowercase), or "" for all
+ * @param showAll whether to show all countries
+ */
+export async function fetchAllChannels(
+  category: LiveCategory,
+  country: string,
+  showAll: boolean,
+): Promise<LiveChannel[]> {
+  // Fetch primary provider channels
+  const fetchParams = resolveChannelFetchParams(
+    category,
+    "all",
+    country,
+    showAll,
+  );
+  const primaryPromises = fetchParams.map((p) =>
+    fetchLiveChannels(p.mode, p.type, p.id),
+  );
+  const primaryResults = await Promise.all(primaryPromises);
+  const primary = primaryResults.flat();
+
+  // Fetch iptv-org channels (map the FuelPro category to an iptv-org category)
+  const catDef = LIVE_FEED_CATEGORIES.find((c) => c.id === category);
+  const isAudio = catDef?.family === "audio";
+  // iptv-org doesn't have a "radio" mode — only TV channels. Skip iptv for audio.
+  if (!isAudio) {
+    const iptvCategory = mapToIptvCategory(category);
+    const iptvCountry = country && !showAll ? country : "";
+    const iptv = await fetchIptvChannels(iptvCountry, iptvCategory, 200);
+    return mergeChannelsWithIptv(primary, iptv);
+  }
+
+  return primary;
+}
+
+/**
+ * Map a FuelPro LiveCategory to an iptv-org category id. iptv-org uses
+ * different category names (e.g. "news", "movies", "sports", "entertainment",
+ * "music", "kids", "documentary", "culture", "education").
+ */
+function mapToIptvCategory(category: LiveCategory): string {
+  const map: Partial<Record<LiveCategory, string>> = {
+    news: "news",
+    movies: "movies",
+    sports: "sports",
+    entertainment: "entertainment",
+    music: "music",
+    kids: "kids",
+    documentary: "documentary",
+    education: "education",
+    business: "business",
+    religious: "religious",
+    culture: "culture",
+  };
+  return map[category] || "";
 }
 
 /**
@@ -1274,6 +1451,12 @@ export function prefetchLiveChannelsInBackground(): void {
       fetchLiveChannels("tv", "countries", "gb"),
       fetchLiveChannels("radio", "countries", "us"),
     ];
+    // Also pre-fetch iptv-org US channels (adds 200+ extra channels to the cache)
+    commonFetches.push(
+      fetchIptvChannels("us", "", 200).then((chs) =>
+        chs.map(iptvToLiveChannel),
+      ),
+    );
     // Swallow all errors silently — this is a best-effort cache warm
     Promise.allSettled(commonFetches).catch(() => {});
   }, 3000);
