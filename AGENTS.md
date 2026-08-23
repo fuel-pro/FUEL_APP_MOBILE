@@ -7296,3 +7296,86 @@ Logged in as founder QA (US station, USD). Dashboard: 4 gradient KPI cards + 3 H
 
 ### Lost commit audit (2026-08-23)
 5 unmerged branches checked: feature/google-oauth-signin, fix/supabase-project-ref-typo, team-manager-access-codes-merge, qwen-code-6a328546, identifying-security-vulnerabilities-8d289. All contain work ALREADY on main in more complete form. No lost work needs merging.
+
+
+## Session 2026-08-23 — Color theme picker (99.txt) wired into live Header UI
+
+**Requirement**: integrate `/workspace/99.txt` — 6 soft pastel color palettes
+(Eucalyptus Glow, Pearl Mauve, Ocean Breeze, Peach Champagne, Dreamy
+Periwinkle, Mint Lagoon) as selectable, cloud-synced, site-wide color themes
+on https://fuel-app-mobile.pages.dev/.
+
+### What was already done (commit 8d89297, prior session)
+- ThemeContext.tsx extended with ColorTheme union, COLOR_THEMES registry,
+  colorTheme state, localStorage (`fuelpro_color_theme`) + cloud sync
+  (cloud key `app_color_theme`, scoped row id) via cloudStorageService.
+  Applies via `data-color-theme` attribute on <html>.
+- 6 CSS theme blocks in index.css (`[data-color-theme=eucalyptus|mauve|
+  ocean|peach|periwinkle|mint]` overriding `--fp-accent`,
+  `--fp-accent-tint`, `--fp-accent-rgb`, `--fp-accent-gradient`).
+- FuelThemePicker.tsx created + wired into SettingsPanel as "Appearance" tab.
+- HaloCard.tsx gained `accent="theme"` option; Dashboard KPI/price cards use it.
+- tsc 0 errors, prettier clean, build 107 precache. Pushed to GitHub main,
+  deployed to Cloudflare.
+
+### THE GAP (this session): SettingsPanel is a DEAD component
+`SettingsPanel.tsx` is NOT imported/rendered anywhere in the app (grep
+confirmed zero `<SettingsPanel` usages). The actual settings access is the
+Header "Edit Info" button (opens the inline Company Profile form). So the
+FuelThemePicker added in the prior session was UNREACHABLE from the live UI
+— a user could never select a color theme.
+
+### Fix (commit 1e077b2) — quick Theme picker in the Header
+Added a compact color-theme picker directly to the Header so it is
+discoverable on every page:
+
+- **Desktop**: a "Theme" button (Palette icon, tinted with the active
+  theme's primary color) sits between "Edit Info" and "Tabs". Opens a
+  2-column dropdown of all 6 palettes with gradient swatches + a selected
+  checkmark + click-outside-to-close. `title` attr shows the active theme
+  name; `aria-expanded` for accessibility.
+- **Mobile**: the action grid changed from `grid-cols-3` to `grid-cols-4`
+  to add a "Theme" button that toggles an inline panel (same palette grid)
+  within the mobile menu drawer.
+- Selecting a theme calls `setColorTheme(id)` -> applies site-wide via
+  `<html data-color-theme>` + persists to cloud (cross-device) +
+  localStorage cache + shows a toast ("Theme: <name>").
+- Uses `COLOR_THEMES` registry + `colorThemeMeta` from ThemeContext.
+
+### Verification (live, 2026-08-23, Cloudflare preview b1eb9007)
+Logged in as founder QA (`founder.qa.fuelpro@gmail.com`, US station, USD):
+- Header shows the "Theme" button between "Edit Info" and "Tabs".
+- Clicking it opens a dropdown with all 6 palettes: Eucalyptus Glow, Pearl
+  Mauve, Ocean Breeze, Peach Champagne, Dreamy Periwinkle, Mint Lagoon.
+- Selected "Ocean Breeze" -> theme applied site-wide (Dashboard accent
+  colors changed) + toast shown.
+- **Cross-reload persistence confirmed**: reloaded the page -> stayed
+  logged in, theme persisted. Re-opened the Theme dropdown -> picker
+  re-rendered correctly.
+- **Cloud sync confirmed via browser localStorage**: the scoped cloud cache
+  key `fuelpro_cloud_app_color_theme__87e6502b-df68-43cd-ae1a-bebd646efeed`
+  contains `"eucalyptus"` (after resetting to default), plus the local
+  `fuelpro_color_theme` = `"eucalyptus"`. The cloud write (app_kv row
+  `app_color_theme__<ownerId>`) fires on every selection — cross-device
+  sync is active.
+- Reset theme back to Eucalyptus Glow (default) to leave the QA account clean.
+
+### Deploy state 2026-08-23 (commit 1e077b2)
+- **GitHub main**: `1e077b2` (pushed, synced with origin/main).
+- **Cloudflare Pages**: LIVE (preview https://b1eb9007.fuel-app-mobile.pages.dev
+  + main alias https://fuel-app-mobile.pages.dev). Theme button + dropdown
+  verified live.
+- **Vercel production**: BLOCKED by `api-deployments-free-per-day`
+  (100/100 exhausted; prebuilt deploy returns "Resource is limited - try
+  again in 24 hours"). GitHub integration (prodBranch=main) auto-deploys
+  commit `1e077b2` when the quota resets (~24h).
+- **Supabase**: no schema changes (uses existing `app_kv` table + scoped
+  row id `app_color_theme__<ownerId>`, RLS by owner_id).
+- tsc 0 errors, prettier clean, build 107 precache.
+
+### Lost commit audit (2026-08-23)
+No new unmerged branches with lost work. The previously-documented
+`founder-username-login` (7 commits, diverges from c1e907a) and
+`identifying-security-vulnerabilities-8d289` (3 commits, removes exposed
+R2/Upstash secrets — requires /api/r2/* + /api/cache/* endpoints to be
+created first) remain NOT auto-merged (awaiting user authorization).
