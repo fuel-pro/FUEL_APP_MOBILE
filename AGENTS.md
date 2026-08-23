@@ -6663,6 +6663,78 @@ no iframe rendered → **blank video player for ALL YouTube channels**.
 - **Vercel**: BLOCKED by quota; GitHub integration auto-deploys on reset.
 - **Supabase**: no schema changes (frontend-only).
 - tsc 0 errors, build success, prettier pass.
+## Session 2026-08-23 — Live TV blank-player fix: curated known-good channels (DEPLOYED LIVE, commit 80b3fee)
+
+**Symptom**: News tab -> Live TV sub-tab rendered a blank/empty player (avg
+RGB 247,248,248 — near-white). The HLS proxy chain was verified working
+(manifest -> sub-playlist -> .ts segment all HTTP 200), so the backend was
+NOT the problem. The frontend player was landing on a dead tvgarden HLS
+stream or a YouTube embed that didn't render in the browser context (~29%
+of the tvgarden catalog is unplayable: empty stream_urls + youtube_urls).
+
+**Fix** (commit 80b3fee): prepend a curated set of verified-reliable live
+channels to EVERY channel list so the player ALWAYS has a guaranteed-
+playable auto-select target:
+
+- `CURATED_GOOD_CHANNELS` in `LiveStreamService.ts` (~line 1299): 5 YouTube
+  24/7 live news channels (Redacted News, Sky News Australia, France 24
+  English, ABC News Australia, Al Jazeera English) + 3 stable public HLS
+  test loops (Big Buck Bunny, Tears of Steel, Sintel — always-live,
+  CORS-enabled). Each gets a `nanoid` with the `curated-` prefix so the
+  player logic can recognize them.
+- `fetchAllChannels` prepends curated channels to results (before tvgarden
+  + iptv-org).
+- `LiveFeedEmbed.tsx` auto-select now prefers curated channels FIRST, then
+  YouTube, then HLS. The YouTube-blank detection (5s timeout) now
+  auto-advances to a curated channel for non-curated YouTube-only channels
+  that haven't rendered video (was: wait indefinitely -> stuck blank).
+- `autoAdvanceToNextChannel` sort now prioritizes curated channels (weight
+  2) over HLS (weight 1) so dead-stream cycling lands on a known-good
+  channel instead of another dead stream.
+
+**Verified LIVE** (2026-08-23, Cloudflare preview bbb1380c + main alias):
+logged in as founder QA -> News tab -> Live TV sub-tab. The player now
+renders an `<iframe>` (YouTube embed of "ABC News Australia (24/7)" — a
+curated channel auto-selected first). Player area avg RGB changed from
+247,248,248 (blank) to 23,28,42 (video content). The Live Channels sub-tab
+also renders an `<iframe>` player. 1548 channels total load (curated +
+tvgarden + iptv-org). Station dropdown includes the curated "Big Buck
+Bunny (HLS test loop)" + "ABC News Australia (24/7)" entries at the top.
+
+### Deploy state 2026-08-23 (commit 80b3fee)
+- **GitHub main**: 80b3fee (pushed, synced with origin/main; rebased on
+  remote 01d860e which had parallel-session work).
+- **Cloudflare Pages**: LIVE (preview https://bbb1380c.fuel-app-mobile.pages.dev
+  + main alias https://fuel-app-mobile.pages.dev). `curated-` markers +
+  `test-streams.mux.dev` URLs confirmed in the built index chunk.
+- **Vercel production**: BLOCKED by `api-deployments-free-per-day`
+  (100/100 exhausted; resets ~24h). GitHub integration (prodBranch=main)
+  auto-deploys commit 80b3fee when the quota resets. The Cloudflare mirror
+  has the fix NOW.
+- **Supabase**: no schema changes (frontend-only).
+- `npx tsc --noEmit` 0 errors, `npm run build` 108 precache success,
+  prettier pass, eslint 0 errors (1 pre-existing exhaustive-deps warning
+  on the YouTube-blank effect — uses the same `autoAdvanceRef`-style
+  pattern already present elsewhere in the file).
+
+### Player architecture (for future debugging)
+1. `fetchAllChannels` merges curated + tvgarden (via /api/live-channels
+   proxy) + iptv-org, filters out unplayable (no stream_urls AND no
+   youtube_urls), dedupes by name+country.
+2. Auto-select order: curated channels first, then YouTube-embed channels,
+   then HLS channels. The first curated YouTube channel (ABC News AU) is
+   typically auto-selected.
+3. YouTube channels render an `<iframe>` (youtube-nocookie.com/embed).
+   Non-curated YT-only channels get a 5s blank-detection timer -> if no
+   video, auto-advance to a curated channel.
+4. HLS channels render a `<video>` + hls.js, loading through the
+   /api/hls-proxy CORS proxy (rewrites manifest + segment URLs). Fatal
+   errors trigger recovery (2 attempts) then auto-advance.
+5. Channels with BOTH YouTube + HLS render the YouTube iframe on top +
+   HLS video underneath; if the YT iframe is blank after 5s, it's hidden
+   to reveal the HLS video.
+
+
 
 ## Session 2026-08-22 — Customers empty data fix + News Quick Stats + Invoice client creation
 
