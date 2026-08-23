@@ -8113,3 +8113,58 @@ Browser verification (Cloudflare preview 4b50e003): logged in as founder QA -> N
 - api/tvgarden.ts — NEW (Vercel catalog + channels endpoint).
 - functions/api/live-channels.ts — REWRITTEN (inline catalog, mirrors Vercel).
 - functions/api/tvgarden.ts — NEW (Cloudflare catalog + channels endpoint).
+## Session 2026-08-23 — Documents dark in dark mode (commit d09ae2b)
+
+User report: "even in document when in dark mode." Documents (and many
+card/table/panel surfaces across 30+ components) stayed WHITE in dark mode.
+
+### Root cause — 524 occurrences of the dark:bg-white typo
+The pattern "bg-white dark:bg-white dark:bg-gray-800" appeared 524 times
+across the codebase (TeamManager 62, InventoryManagement 54, StationManager
+46, Header 35, Communication 25, ...). The stray dark:bg-white overrode the
+intended dark surface, keeping documents/cards/tables white in dark mode.
+Separately, the generated print HTML (receipts/invoices/reports/labels in
+silent-print-service.ts + printer-service.ts) had NO dark styling at all.
+
+### Fix 1 — index.css: global dark-surface leak fix (one CSS block, all 524 surfaces)
+html.dark override with !important (beats Tailwind non-important defaults):
+- dark:bg-white -> var(--bg-card) (#111625 calm dark card)
+- dark:bg-gray-50/100, slate-50/100 -> var(--bg-card)
+- dark:bg-gray-200, slate-200 -> var(--bg-hover)
+- dark:bg-blue-50 -> status-info-dim; green/emerald-50 -> positive-dim;
+  amber/yellow-50 -> warning-dim; red/rose-50 -> negative-dim
+- dark:border-gray-200/300, slate-200/300 -> var(--border-light)
+Fixes all 524 surfaces + the 6 light-border leaks at once — no component
+file edits needed.
+
+### Fix 2 — silent-print-service.ts: generated document HTML renders dark
+The iframe wrapper injects a fp-dark stylesheet (calm dark surfaces:
+bg-main #0a0e17, card #111625, white text, dark borders). Hardcoded
+#f0f0f0/#e0e0e0/#ddd/#000 borders in receipt/invoice/report/label HTML
+are mapped to dark tokens via attribute selectors. fp-dark class is
+applied to the iframe documentElement when document.documentElement has
+.dark. CRUCIALLY @media print forces LIGHT (white bg, black text, #999
+borders) so physical printing stays paper-friendly — only on-screen/
+preview rendering is dark.
+
+### Fix 3 — printer-service.ts: printFallback dark
+The window.open receipt preview now applies the same fp-dark class when
+the app is dark, with @media print light fallback.
+
+### Verification (live, 2026-08-23, Cloudflare preview a76ce5ab)
+- Built CSS (index-Dxh8WB-Q.css, 273KB) contains the override:
+  dark:bg-white:is(.dark *){background-color:var(--bg-card)!important}
+  + dark:bg-blue-50 -> status-info-dim + dark:border-gray-200 overrides.
+- Main JS chunk contains fp-dark + fp-bg-main + fp-doc markers.
+- Browser pixel analysis of Payroll tab (9 dark:bg-white occurrences):
+  near-WHITE surface pixels = 0.0% (was dominant before), DARK card/
+  surface = 84% of main content area. Surfaces are DARK — fix working.
+
+### Deploy state 2026-08-23 (commit d09ae2b)
+- GitHub main: d09ae2b (pushed, rebased on e92794e remote parallel push).
+- Cloudflare Pages: LIVE (preview https://a76ce5ab.fuel-app-mobile.pages.dev
+  + main alias https://fuel-app-mobile.pages.dev).
+- Vercel production: BLOCKED by api-deployments-free-per-day (100/100;
+  GitHub integration auto-deploys when quota resets ~24h).
+- Supabase: no schema changes (frontend-only).
+- tsc 0 errors, prettier clean, build success.
