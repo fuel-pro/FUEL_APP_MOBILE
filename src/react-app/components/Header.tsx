@@ -2,6 +2,7 @@ import { useFuel } from "@/react-app/context/FuelContext";
 import { useStations } from "@/react-app/context/StationContext";
 import { useAuth } from "@/react-app/context/AuthContext";
 import { useTheme } from "@/react-app/context/ThemeContext";
+import { COLOR_THEMES } from "@/react-app/context/ThemeContext";
 import { useLocation } from "@/react-app/context/LocationContext";
 import { useTutorial } from "@/react-app/context/TutorialContext";
 import LocationSelector from "@/react-app/components/LocationSelector";
@@ -41,6 +42,7 @@ import {
   Crown,
   Loader2,
   HelpCircle,
+  Palette,
 } from "lucide-react";
 
 interface HeaderProps {
@@ -55,11 +57,18 @@ export default function Header({
   const { state, dispatch } = useFuel();
   const { user, logout } = useAuth();
   const { currentStation, stations, switchStation } = useStations();
-  const { resolvedTheme, toggleTheme } = useTheme();
+  const {
+    resolvedTheme,
+    toggleTheme,
+    colorTheme,
+    colorThemeMeta,
+    setColorTheme,
+  } = useTheme();
   const location = useLocation();
   const tutorial = useTutorial();
   const navigate = useNavigate();
   const [showEditInfo, setShowEditInfo] = useState(false);
+  const [showColorThemes, setShowColorThemes] = useState(false);
   const [showQRCode, setShowQRCode] = useState(false);
   const [showStationMenu, setShowStationMenu] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
@@ -299,6 +308,74 @@ export default function Header({
               <Edit3 size={12} />
               <span className="hidden lg:inline">Edit Info</span>
             </button>
+            {/* Quick color-theme picker (design spec 99.txt) */}
+            <div className="relative">
+              <button
+                onClick={() => setShowColorThemes((v) => !v)}
+                className="px-2.5 py-1.5 bg-gray-50 dark:bg-white/5 hover:bg-gray-100 dark:bg-white/10 rounded-lg text-xs text-gray-300 transition-colors flex items-center gap-1.5"
+                title={`Theme: ${colorThemeMeta.name}`}
+                aria-label="Change color theme"
+                aria-expanded={showColorThemes}
+              >
+                <Palette
+                  size={12}
+                  style={{ color: colorThemeMeta.primaryHex }}
+                />
+                <span className="hidden lg:inline">Theme</span>
+              </button>
+              {showColorThemes && (
+                <>
+                  <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => setShowColorThemes(false)}
+                  />
+                  <div className="absolute right-0 top-full mt-1 z-50 w-64 bg-white dark:bg-gray-900 border border-gray-200 dark:border-white/10 rounded-xl shadow-xl p-3 space-y-2">
+                    <p className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 px-1">
+                      App Color Theme
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {COLOR_THEMES.map((t) => {
+                        const sel = colorTheme === t.id;
+                        return (
+                          <button
+                            key={t.id}
+                            onClick={() => {
+                              setColorTheme(t.id);
+                              setShowColorThemes(false);
+                              toastSuccess(`Theme: ${t.name}`);
+                            }}
+                            className={`flex items-center gap-2 p-2 rounded-lg border text-left transition-colors ${
+                              sel
+                                ? "border-transparent fp-accent-ring"
+                                : "border-gray-200 dark:border-white/10 hover:border-gray-300 dark:hover:border-white/20"
+                            }`}
+                          >
+                            <span
+                              className="w-5 h-5 rounded-full border border-black/10 shrink-0"
+                              style={{
+                                background: `linear-gradient(135deg, ${t.tintHex} 0%, ${t.primaryHex} 100%)`,
+                              }}
+                            />
+                            <span className="text-[11px] font-medium text-gray-900 dark:text-white truncate">
+                              {t.name}
+                            </span>
+                            {sel && (
+                              <Check
+                                size={12}
+                                className="text-gray-900 ml-auto shrink-0"
+                              />
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p className="text-[10px] text-gray-400 dark:text-gray-500 px-1 pt-1">
+                      Syncs across your devices
+                    </p>
+                  </div>
+                </>
+              )}
+            </div>
             <button
               onClick={() => setShowTabConfig(true)}
               className="px-2.5 py-1.5 bg-gray-50 dark:bg-white/5 hover:bg-gray-100 dark:bg-white/10 rounded-lg text-xs text-gray-300 transition-colors flex items-center gap-1.5"
@@ -481,7 +558,7 @@ export default function Header({
             </div>
 
             {/* Action Grid */}
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-4 gap-2">
               <button
                 onClick={() => {
                   setShowEditInfo(!showEditInfo);
@@ -526,6 +603,21 @@ export default function Header({
                   className="hidden"
                 />
               </label>
+              <button
+                onClick={() => {
+                  setShowColorThemes((v) => !v);
+                }}
+                className="flex flex-col items-center gap-1.5 p-3 bg-gray-50 dark:bg-white/5 rounded-xl hover:bg-gray-100 dark:bg-white/10 transition-colors"
+                title={`Theme: ${colorThemeMeta.name}`}
+              >
+                <Palette
+                  size={16}
+                  style={{ color: colorThemeMeta.primaryHex }}
+                />
+                <span className="text-[10px] text-gray-500 dark:text-gray-400">
+                  Theme
+                </span>
+              </button>
               <button
                 onClick={() => {
                   setShowQRCode(true);
@@ -593,6 +685,54 @@ export default function Header({
                 </span>
               </button>
             </div>
+
+            {/* Inline color theme picker (mobile) — design spec 99.txt */}
+            {showColorThemes && (
+              <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-white/10 rounded-xl p-3 space-y-2">
+                <p className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 px-1">
+                  App Color Theme
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  {COLOR_THEMES.map((t) => {
+                    const sel = colorTheme === t.id;
+                    return (
+                      <button
+                        key={t.id}
+                        onClick={() => {
+                          setColorTheme(t.id);
+                          setShowColorThemes(false);
+                          toastSuccess(`Theme: ${t.name}`);
+                        }}
+                        className={`flex items-center gap-2 p-2 rounded-lg border text-left transition-colors ${
+                          sel
+                            ? "border-transparent fp-accent-ring"
+                            : "border-gray-200 dark:border-white/10 hover:border-gray-300 dark:hover:border-white/20"
+                        }`}
+                      >
+                        <span
+                          className="w-5 h-5 rounded-full border border-black/10 shrink-0"
+                          style={{
+                            background: `linear-gradient(135deg, ${t.tintHex} 0%, ${t.primaryHex} 100%)`,
+                          }}
+                        />
+                        <span className="text-[11px] font-medium text-gray-900 dark:text-white truncate">
+                          {t.name}
+                        </span>
+                        {sel && (
+                          <Check
+                            size={12}
+                            className="text-gray-900 ml-auto shrink-0"
+                          />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-[10px] text-gray-400 dark:text-gray-500 px-1 pt-1">
+                  Syncs across your devices
+                </p>
+              </div>
+            )}
 
             {/* User & Logout */}
             <div className="flex items-center justify-between pt-3 border-t border-gray-200 dark:border-white/10">
