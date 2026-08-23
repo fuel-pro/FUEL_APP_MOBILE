@@ -418,8 +418,12 @@ export default function LiveFeedEmbed({
       return;
     }
 
-    // Check if it's a YouTube URL in stream_urls
-    if (streamUrl.includes("youtube.com") || streamUrl.includes("youtu.be")) {
+    // Check if it's a YouTube URL in stream_urls (youtube-nocookie.com too)
+    if (
+      streamUrl.includes("youtube.com") ||
+      streamUrl.includes("youtube-nocookie.com") ||
+      streamUrl.includes("youtu.be")
+    ) {
       return; // handled by YouTube iframe
     }
 
@@ -682,13 +686,18 @@ export default function LiveFeedEmbed({
   // Get YouTube embed URL if the active channel has YouTube URLs
   const activeYouTubeId = useMemo(() => {
     if (!activeChannel) return null;
+    // Regex matches youtube.com AND youtube-nocookie.com (tvgarden.world
+    // uses youtube-nocookie.com for all YouTube embeds).
+    const YT_RE =
+      /(?:youtube(?:-nocookie)?\.com\/(?:embed\/|watch\?v=|live\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
+    const isYouTubeUrl = (u: string) =>
+      u.includes("youtube.com") ||
+      u.includes("youtube-nocookie.com") ||
+      u.includes("youtu.be");
     // Check youtube_urls array
     if (activeChannel.youtube_urls && activeChannel.youtube_urls.length > 0) {
       const url = activeChannel.youtube_urls[0];
-      // Extract video ID from URL
-      const match = url.match(
-        /(?:youtube\.com\/(?:embed\/|watch\?v=|live\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/,
-      );
+      const match = url.match(YT_RE);
       if (match) return match[1];
       // If it's just an ID
       if (/^[a-zA-Z0-9_-]{11}$/.test(url)) return url;
@@ -696,10 +705,8 @@ export default function LiveFeedEmbed({
     // Check stream_urls for YouTube URLs
     if (activeChannel.stream_urls) {
       for (const url of activeChannel.stream_urls) {
-        if (url.includes("youtube.com") || url.includes("youtu.be")) {
-          const match = url.match(
-            /(?:youtube\.com\/(?:embed\/|watch\?v=|live\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/,
-          );
+        if (isYouTubeUrl(url)) {
+          const match = url.match(YT_RE);
           if (match) return match[1];
         }
       }
@@ -1003,7 +1010,7 @@ export default function LiveFeedEmbed({
             {activeYouTubeId ? (
               <iframe
                 key={activeYouTubeId}
-                src={`https://www.youtube.com/embed/${activeYouTubeId}?autoplay=1&mute=${muted ? 1 : 0}&playsinline=1`}
+                src={`https://www.youtube-nocookie.com/embed/${activeYouTubeId}?autoplay=1&mute=${muted ? 1 : 0}&playsinline=1&rel=0`}
                 title={activeChannel.name}
                 className="w-full h-full"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
