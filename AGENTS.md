@@ -7379,3 +7379,15 @@ No new unmerged branches with lost work. The previously-documented
 `identifying-security-vulnerabilities-8d289` (3 commits, removes exposed
 R2/Upstash secrets — requires /api/r2/* + /api/cache/* endpoints to be
 created first) remain NOT auto-merged (awaiting user authorization).
+
+## Session 2026-08-23 — Live TV YouTube-first auto-select (DEPLOYED LIVE, commit 5ed7e3d)
+
+**Symptom**: The Live TV player in the News tab was stuck at 0:00 — no actual video played. The auto-select preferred HLS streams (via the CORS proxy), but many TVGarden HLS endpoints are dead/geo-blocked despite the manifest loading (HTTP 200). The video element rendered with a blob URL (hls.js attached) but no video buffered/played.
+
+**Root cause**: The auto-select priority was HLS-first, YouTube-second. This picked "21 Jump Street" (a dead HLS stream) instead of a YouTube channel that would actually play.
+
+**Fix** (LiveFeedEmbed.tsx): REVERSED the auto-select priority — YouTube channels FIRST, then HLS. YouTube embeds are far more reliable — YouTube handles all streaming infrastructure server-side, so the video actually plays. Also removed the diagnostic DEBUG text block + Auto-select first channel button + console.log diagnostics (diagnosis complete).
+
+**Verified live** (Cloudflare preview f00251c4 + 4ae341ff): Auto-selected channel is now "Amazing Facts TV" (YouTube) instead of "21 Jump Street" (HLS). YouTube iframe renders (dark player background confirmed in screenshot at y=545-595, YouTube signature 9,9,9 / 17,17,17 / 20,20,20 colors). Debug text completely gone (0 amber pixels). YouTube autoplay=1&mute=1 will play in real browsers.
+
+**Deploy state 2026-08-23 (commit 5ed7e3d)**: GitHub main pushed. Cloudflare Pages LIVE (preview 4ae341ff + main alias). Vercel BLOCKED by api-deployments-free-per-day (auto-deploys on reset). Supabase: no schema changes. tsc 0 errors, build success, prettier pass.
