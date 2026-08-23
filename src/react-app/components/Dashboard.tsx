@@ -89,6 +89,11 @@ ChartJS.register(
   Filler,
 );
 
+// Royal Professional chart typography (matches dashboard.html spec)
+ChartJS.defaults.font.family =
+  "'Inter', -apple-system, BlinkMacSystemFont, sans-serif";
+ChartJS.defaults.color = "#8a94a6";
+
 /**
  * Tank fill percentage for the Dashboard tank-level bar.
  *
@@ -865,15 +870,34 @@ export default function Dashboard() {
           (CANONICAL_FUEL_TYPES as any)[type]?.label ||
           type.charAt(0).toUpperCase() + type.slice(1);
         const color = colors[idx % colors.length];
+        const flatBg = color.replace("rgb", "rgba").replace(")", ", 0.1)");
+        // Royal theme: gold gradient area fill (matches dashboard.html spec).
+        // Chart.js calls the backgroundColor function at render time with the
+        // chart context, so the gradient is created from the live canvas.
+        const isRoyal =
+          typeof document !== "undefined" &&
+          document.documentElement.dataset.colorTheme === "royal";
         return {
           label,
           data: seriesData[type],
           borderColor: color,
-          backgroundColor: color.replace("rgb", "rgba").replace(")", ", 0.1)"),
+          backgroundColor: (ctx: any) => {
+            const chart = ctx?.chart;
+            if (!isRoyal || !chart?.ctx || !chart.chartArea) return flatBg;
+            const { top, bottom } = chart.chartArea;
+            const g = chart.ctx.createLinearGradient(0, top, 0, bottom);
+            g.addColorStop(0, "rgba(197,160,89,0.28)");
+            g.addColorStop(1, "rgba(197,160,89,0)");
+            return g;
+          },
           fill: true,
           tension: 0.4,
-          pointRadius: 4,
-          pointHoverRadius: 6,
+          pointRadius: isRoyal ? 0 : 4,
+          pointHoverRadius: isRoyal ? 5 : 6,
+          pointHoverBackgroundColor: color,
+          pointHoverBorderColor: isRoyal ? "#0a0e17" : "#fff",
+          pointHoverBorderWidth: 2,
+          borderWidth: isRoyal ? 2.5 : 2,
         };
       }),
     };
@@ -1026,9 +1050,29 @@ export default function Dashboard() {
     };
   }, [state.salesHistory, currencySymbol]);
 
+  const isRoyalTheme =
+    typeof document !== "undefined" &&
+    document.documentElement.dataset.colorTheme === "royal";
+  const royalGrid = isRoyalTheme ? "#1f2635" : null;
+  const royalTooltip = isRoyalTheme
+    ? {
+        backgroundColor: "#141a2b",
+        borderColor: "#252c3f",
+        borderWidth: 1,
+        titleColor: "#e7ebf1",
+        bodyColor: "#8a94a6",
+        padding: 10,
+        displayColors: false,
+        titleFont: { weight: 600 as const },
+      }
+    : {};
+
   const chartOptions = {
     responsive: true,
     maintainAspectRatio: false,
+    interaction: isRoyalTheme
+      ? { intersect: false, mode: "index" as const }
+      : undefined,
     plugins: {
       legend: {
         position: "bottom" as const,
@@ -1038,25 +1082,37 @@ export default function Dashboard() {
           padding: 16,
         },
       },
+      tooltip: royalTooltip,
     },
     scales: {
       x: {
         grid: {
-          color:
-            state.theme === "dark"
+          color: royalGrid
+            ? (royalGrid as any)
+            : state.theme === "dark"
               ? "rgba(255,255,255,0.05)"
               : "rgba(0,0,0,0.05)",
+          display: isRoyalTheme ? false : undefined,
         },
-        ticks: { color: state.theme === "dark" ? "#9ca3af" : "#6b7280" },
+        border: isRoyalTheme ? { display: false } : undefined,
+        ticks: {
+          color: state.theme === "dark" ? "#9ca3af" : "#6b7280",
+          font: isRoyalTheme ? { size: 11 } : undefined,
+        },
       },
       y: {
         grid: {
-          color:
-            state.theme === "dark"
+          color: royalGrid
+            ? (royalGrid as any)
+            : state.theme === "dark"
               ? "rgba(255,255,255,0.05)"
               : "rgba(0,0,0,0.05)",
         },
-        ticks: { color: state.theme === "dark" ? "#9ca3af" : "#6b7280" },
+        border: isRoyalTheme ? { display: false } : undefined,
+        ticks: {
+          color: state.theme === "dark" ? "#9ca3af" : "#6b7280",
+          font: isRoyalTheme ? { size: 11 } : undefined,
+        },
       },
     },
   };
@@ -1073,6 +1129,7 @@ export default function Dashboard() {
           padding: 16,
         },
       },
+      tooltip: royalTooltip,
     },
     cutout: "60%",
   };
@@ -1082,20 +1139,30 @@ export default function Dashboard() {
     maintainAspectRatio: false,
     plugins: {
       legend: { display: false },
+      tooltip: royalTooltip,
     },
     scales: {
       x: {
         grid: { display: false },
-        ticks: { color: state.theme === "dark" ? "#9ca3af" : "#6b7280" },
+        border: isRoyalTheme ? { display: false } : undefined,
+        ticks: {
+          color: state.theme === "dark" ? "#9ca3af" : "#6b7280",
+          font: isRoyalTheme ? { size: 10.5 } : undefined,
+        },
       },
       y: {
         grid: {
-          color:
-            state.theme === "dark"
+          color: royalGrid
+            ? (royalGrid as any)
+            : state.theme === "dark"
               ? "rgba(255,255,255,0.05)"
               : "rgba(0,0,0,0.05)",
         },
-        ticks: { color: state.theme === "dark" ? "#9ca3af" : "#6b7280" },
+        border: isRoyalTheme ? { display: false } : undefined,
+        ticks: {
+          color: state.theme === "dark" ? "#9ca3af" : "#6b7280",
+          font: isRoyalTheme ? { size: 10.5 } : undefined,
+        },
       },
     },
   };
