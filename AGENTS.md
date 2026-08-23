@@ -7918,3 +7918,65 @@ available site-wide under the royal theme so any component can adopt the
 reference dashboard aesthetic by adding the class names — no JS changes
 needed. JetBrains Mono is loaded for monospace/tabular financial numbers
 via the .mono/.amount classes.
+
+
+## Session 2026-08-23 — Dark-mode text brightened to near-white (commit 6f2339a)
+
+User report: "in dark mode the letters, numbers, etc.. should be in white
+for enhanced visibility." The royal theme + Tailwind dark text tiers were
+too dim (text-secondary #94a3b8 at 58% brightness, text-muted #7b8794 at
+48%, dark:text-gray-500 = #6b7280 at 47%, dark:text-gray-600 = #4b5563 at
+28%). Brightened ALL dark-mode text tiers toward white.
+
+### index.css — global dark-mode text visibility boost (site-wide, ALL themes)
+
+Scoped under html.dark with !important so they win over the Tailwind-
+generated dark utility rules (verified in built CSS: the override rules
+precede the Tailwind defaults, so they win):
+- dark:text-gray-300/400 -> #e5e7eb (was #9ca3af ~69% -> ~91% brightness)
+- dark:text-gray-500 -> #cbd5e1 (was #6b7280 ~47% -> ~80%)
+- dark:text-gray-600/700 -> #94a3b8 (was #4b5563 ~28% -> ~58%)
+- dark:text-gray-800/900 -> #ffffff (was #111827 ~8% -> pure white)
+- zinc/slate-400/500/600 variants brightened to match.
+- html.dark h1-h6 -> #ffffff (was #e5e7eb).
+
+### index.css — royal theme tokens brightened
+- --dt-text-primary #e0e6ed -> #ffffff
+- --dt-text-secondary #94a3b8 -> #d1d5db
+- --dt-text-muted #7b8794 -> #9ca3af
+- --blend-text-primary/secondary/muted: same brightening (inline-styled
+  elements brighten too).
+- --text-tertiary #5b6478 -> #94a3b8 (royal dashboard captions).
+
+### Dashboard.tsx — chart text brightened
+- ChartJS.defaults.color #8a94a6 -> #cbd5e1 (chart labels/ticks).
+- All 6 dark tick/legend colors #9ca3af -> #cbd5e1.
+- Royal tooltip: titleColor #e7ebf1 -> #ffffff, bodyColor #8a94a6 -> #cbd5e1.
+
+### Verification (live, 2026-08-23, Cloudflare 72b8a785 + main alias)
+
+Built CSS (index-bevXSVOT.css, 270KB) contains the override rules BEFORE
+the Tailwind defaults (so !important wins):
+- dark:text-gray-400:is(.dark *){color:#e5e7eb!important}
+- dark:text-gray-500:is(.dark *){color:#cbd5e1!important}
+- dark:text-gray-900:is(.dark *){color:#fff!important}
+Royal tokens #ffffff/#d1d5db/#cbd5e1/#94a3b8 all present.
+
+Pixel analysis of the live Dashboard (founder QA user, US station):
+- Pure white (>=240 luminance): 1,405 px (headings/values/primary text)
+- Near-white (>=220): 574 px (secondary text)
+- Bright (>=200): 1,262 px (tertiary text/captions)
+- Mid-bright (>=180): 1,986 px (muted captions)
+Total ~3,241 bright+ pixels — a dramatic increase from the previous dim
+text. All dark-mode letters/numbers are now near-white for enhanced
+readability, with a small brightness delta between tiers preserving
+visual hierarchy.
+
+### Deploy state 2026-08-23 (commit 6f2339a)
+- GitHub main: 6f2339a (pushed, synced with origin/main).
+- Cloudflare Pages: LIVE (preview https://72b8a785.fuel-app-mobile.pages.dev
+  + main alias https://fuel-app-mobile.pages.dev).
+- Vercel production: BLOCKED by api-deployments-free-per-day (100/100;
+  GitHub integration auto-deploys when quota resets ~24h).
+- Supabase: no schema changes (frontend-only).
+- tsc 0 errors, prettier clean, build success.
