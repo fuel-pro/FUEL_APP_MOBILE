@@ -21,6 +21,8 @@ import {
   Loader2,
   ArrowLeft,
 } from "lucide-react";
+import PaymentCard from "@/react-app/components/ui/PaymentCard";
+import SuccessCelebration from "@/react-app/components/ui/SuccessCelebration";
 
 interface SaleItem {
   id: string;
@@ -72,6 +74,12 @@ export default function POSCheckout({
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>("idle");
   const [errorMessage, setErrorMessage] = useState("");
   const [transactionRef, setTransactionRef] = useState("");
+  // Card payment fields (3D PaymentCard, design spec file 5)
+  const [cardName, setCardName] = useState("");
+  const [cardNumber, setCardNumber] = useState("");
+  const [cardExpiry, setCardExpiry] = useState("");
+  const [cardCvc, setCardCvc] = useState("");
+  const [showCelebration, setShowCelebration] = useState(false);
 
   const currencySymbol = getCurrencySymbol(getDetectedCurrency());
 
@@ -138,6 +146,7 @@ export default function POSCheckout({
 
       setTransactionRef(ref);
       setPaymentStatus("success");
+      setShowCelebration(true);
 
       setTimeout(onComplete, 2000);
     } catch (error) {
@@ -149,6 +158,7 @@ export default function POSCheckout({
         await printerService.openCashDrawer();
         setTransactionRef(ref);
         setPaymentStatus("success");
+        setShowCelebration(true);
         setTimeout(onComplete, 2000);
       } catch (fallbackError) {
         setErrorMessage(
@@ -186,6 +196,7 @@ export default function POSCheckout({
         await silentPrintService.queueReceipt(receipt);
 
         setPaymentStatus("success");
+        setShowCelebration(true);
         setTimeout(onComplete, 2000);
       } else {
         setErrorMessage(result.errorMessage || "Card payment failed");
@@ -225,6 +236,7 @@ export default function POSCheckout({
         await silentPrintService.queueReceipt(receipt);
 
         setPaymentStatus("success");
+        setShowCelebration(true);
         setTimeout(onComplete, 2000);
       } else {
         setErrorMessage(result.error || "M-Pesa payment failed");
@@ -348,6 +360,90 @@ export default function POSCheckout({
         </div>
       )}
 
+      {/* Card Payment — 3D interactive card (design spec file 5) */}
+      {paymentMethod === "card" && (
+        <div className="mb-6">
+          <PaymentCard
+            name={cardName}
+            number={cardNumber}
+            expiry={cardExpiry}
+            cvc={cardCvc}
+            paidAmount={`${currencySymbol} ${sale.total.toLocaleString()}`}
+            showSuccess={paymentStatus === "success"}
+            brand="FuelPro Card"
+            accent="cobalt"
+          >
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Cardholder Name
+                </label>
+                <input
+                  type="text"
+                  value={cardName}
+                  onChange={(e) => setCardName(e.target.value)}
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm"
+                  placeholder="JOHN DOE"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Card Number
+                </label>
+                <input
+                  type="text"
+                  value={cardNumber}
+                  onChange={(e) =>
+                    setCardNumber(
+                      e.target.value.replace(/\D/g, "").slice(0, 16),
+                    )
+                  }
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm font-mono"
+                  placeholder="4242 4242 4242 4242"
+                  maxLength={16}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                    Expiry Date
+                  </label>
+                  <input
+                    type="text"
+                    value={cardExpiry}
+                    onChange={(e) => {
+                      let v = e.target.value.replace(/\D/g, "");
+                      if (v.length >= 2)
+                        v = v.substring(0, 2) + "/" + v.substring(2, 4);
+                      setCardExpiry(v);
+                    }}
+                    className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm"
+                    placeholder="MM/YY"
+                    maxLength={5}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                    CVC
+                  </label>
+                  <input
+                    type="text"
+                    data-field="cvc"
+                    value={cardCvc}
+                    onChange={(e) =>
+                      setCardCvc(e.target.value.replace(/\D/g, "").slice(0, 4))
+                    }
+                    className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm"
+                    placeholder="123"
+                    maxLength={4}
+                  />
+                </div>
+              </div>
+            </div>
+          </PaymentCard>
+        </div>
+      )}
+
       {/* Payment Status */}
       {paymentStatus !== "idle" && (
         <div
@@ -407,6 +503,14 @@ export default function POSCheckout({
           {isProcessing ? "Processing..." : "Complete Sale & Print"}
         </button>
       </div>
+
+      {/* Success celebration overlay (Peak-End rule, design spec file 7) */}
+      <SuccessCelebration
+        show={showCelebration}
+        title="Sale Complete!"
+        message={`${currencySymbol} ${sale.total.toLocaleString()} • ${transactionRef || "Receipt printed"}`}
+        onDismiss={() => setShowCelebration(false)}
+      />
     </div>
   );
 }

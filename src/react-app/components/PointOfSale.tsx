@@ -48,6 +48,7 @@ import {
   type UnifiedTransaction,
 } from "@/react-app/lib/mpesa-integration-service";
 import SubTabBar from "@/react-app/components/SubTabBar";
+import SuccessCelebration from "@/react-app/components/ui/SuccessCelebration";
 import { lazy, Suspense } from "react";
 
 const EnhancedPOSView = lazy(() =>
@@ -143,6 +144,8 @@ export default function PointOfSale() {
   const [customerName, setCustomerName] = useState("");
   const [customerPin, setCustomerPin] = useState("");
   const [showReceipt, setShowReceipt] = useState(false);
+  // Success celebration overlay (Peak-End rule, design spec file 7)
+  const [showCelebration, setShowCelebration] = useState(false);
   const [showAllTxns, setShowAllTxns] = useState(false);
   const [txnSearch, setTxnSearch] = useState("");
   const [showSettings, setShowSettings] = useState(false);
@@ -725,6 +728,7 @@ export default function PointOfSale() {
 
     setCurrentTransaction(transaction);
     setShowReceipt(true);
+    setShowCelebration(true);
     setCart([]);
     setCustomerPhone("");
     setCustomerName("");
@@ -2147,6 +2151,14 @@ export default function PointOfSale() {
           )}
         </>
       )}
+
+      {/* Success celebration overlay (Peak-End rule, design spec file 7) */}
+      <SuccessCelebration
+        show={showCelebration}
+        title="Sale Complete!"
+        message={`${currencySymbol} ${formatNumber(total)} • ${currentTransaction?.invoiceNumber || "Receipt ready"}`}
+        onDismiss={() => setShowCelebration(false)}
+      />
     </div>
   );
 }

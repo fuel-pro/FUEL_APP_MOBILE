@@ -10,6 +10,8 @@ import {
 import RegulatoryAlerts from "@/react-app/components/RegulatoryAlerts";
 import SyncStatusIndicator from "@/react-app/components/SyncStatusIndicator";
 import WeatherWidget from "@/react-app/components/WeatherWidget";
+import GradientMetricCard from "@/react-app/components/ui/GradientMetricCard";
+import HaloCard from "@/react-app/components/ui/HaloCard";
 import {
   TrendingUp,
   TrendingDown,
@@ -1260,131 +1262,65 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* KPI Cards */}
+      {/* KPI Cards — premium gradient metric cards (design spec file 2) with HALO hover (file 9) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-3 shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-gray-500 dark:text-gray-500 dark:text-gray-400">
-              Total Revenue
-            </span>
-            <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg">
-              <DollarSign
-                size={18}
-                className="text-green-600 dark:text-green-400"
-              />
-            </div>
-          </div>
-          <p className="text-2xl font-bold text-gray-900 dark:text-gray-900 dark:text-white">
-            {currencySymbol} {formatNumber(animatedValues.revenue, 0)}
-          </p>
-          <div className="flex items-center gap-1 mt-2">
-            <ArrowUpRight size={14} className="text-green-500" />
-            <span className="text-xs text-green-600 dark:text-green-400">
-              {todaySales > 0
+        <HaloCard accent="sage">
+          <GradientMetricCard
+            title="Total Revenue"
+            value={`${currencySymbol} ${formatNumber(animatedValues.revenue, 0)}`}
+            subtitle={
+              todaySales > 0
                 ? `${currencySymbol} ${formatNumber(todaySales)} today`
-                : "No sales today"}
-            </span>
-          </div>
-        </div>
+                : "No sales today"
+            }
+            gradient="aurora-dust"
+            icon={<DollarSign size={18} />}
+          />
+        </HaloCard>
 
-        <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-3 shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-gray-500 dark:text-gray-500 dark:text-gray-400">
-              Net Profit
-            </span>
-            <div
-              className={`p-2 rounded-lg ${netProfit >= 0 ? "bg-green-100 dark:bg-green-900/30" : "bg-red-100 dark:bg-red-900/30"}`}
-            >
-              {netProfit >= 0 ? (
-                <TrendingUp
-                  size={18}
-                  className="text-green-600 dark:text-green-400"
-                />
-              ) : (
-                <TrendingDown
-                  size={18}
-                  className="text-red-600 dark:text-red-400"
-                />
-              )}
-            </div>
-          </div>
-          <p
-            className={`text-2xl font-bold ${netProfit >= 0 ? "text-gray-900 dark:text-gray-900 dark:text-white" : "text-red-600 dark:text-red-400"}`}
-          >
-            {currencySymbol} {formatNumber(animatedValues.profit, 0)}
-          </p>
-          <div className="flex items-center gap-1 mt-2">
-            {netProfit >= 0 ? (
-              <ArrowUpRight size={14} className="text-green-500" />
-            ) : (
-              <ArrowDownRight size={14} className="text-red-500" />
-            )}
-            <span className="text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400">
-              {totalExpenses > 0
+        <HaloCard accent={netProfit >= 0 ? "sage" : "amber"}>
+          <GradientMetricCard
+            title="Net Profit"
+            value={`${currencySymbol} ${formatNumber(animatedValues.profit, 0)}`}
+            subtitle={
+              totalExpenses > 0
                 ? `${currencySymbol} ${formatNumber(totalExpenses)} expenses`
-                : "No expenses recorded"}
-            </span>
-          </div>
-        </div>
-
-        <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-3 shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-gray-500 dark:text-gray-500 dark:text-gray-400">
-              Fuel Sold
-            </span>
-            <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-              <Droplets
-                size={18}
-                className="text-blue-600 dark:text-blue-400"
-              />
-            </div>
-          </div>
-          <p className="text-2xl font-bold text-gray-900 dark:text-gray-900 dark:text-white">
-            {formatNumber(animatedValues.fuelSold, 0)} L
-          </p>
-          <div className="flex items-center gap-1 mt-2">
-            <Fuel size={14} className="text-blue-500" />
-            <span className="text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400">
-              {priceCards
-                .map((c) => `${c.label}: ${currencySymbol} ${c.price ?? 0}/L`)
-                .join(" | ")}
-            </span>
-          </div>
-        </div>
-
-        <div className="bg-white dark:bg-white dark:bg-gray-800 rounded-xl p-3 shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-gray-500 dark:text-gray-500 dark:text-gray-400">
-              Balance Due
-            </span>
-            <div
-              className={`p-2 rounded-lg ${totalDebt > 0 ? "bg-red-100 dark:bg-red-900/30" : "bg-green-100 dark:bg-green-900/30"}`}
-            >
-              {totalDebt > 0 ? (
-                <AlertTriangle
-                  size={18}
-                  className="text-red-600 dark:text-red-400"
-                />
+                : "No expenses recorded"
+            }
+            gradient={netProfit >= 0 ? "mint-eclipse" : "cyber-bloom"}
+            icon={
+              netProfit >= 0 ? (
+                <TrendingUp size={18} />
               ) : (
-                <Wallet
-                  size={18}
-                  className="text-green-600 dark:text-green-400"
-                />
-              )}
-            </div>
-          </div>
-          <p
-            className={`text-2xl font-bold ${totalDebt > 0 ? "text-red-600 dark:text-red-400" : "text-gray-900 dark:text-gray-900 dark:text-white"}`}
-          >
-            {currencySymbol} {formatNumber(animatedValues.debt, 0)}
-          </p>
-          <div className="flex items-center gap-1 mt-2">
-            <Users size={14} className="text-gray-500" />
-            <span className="text-xs text-gray-500 dark:text-gray-500 dark:text-gray-400">
-              {Object.keys(state.clients).length} client(s)
-            </span>
-          </div>
-        </div>
+                <TrendingDown size={18} />
+              )
+            }
+          />
+        </HaloCard>
+
+        <HaloCard accent="cobalt">
+          <GradientMetricCard
+            title="Fuel Sold"
+            value={`${formatNumber(animatedValues.fuelSold, 0)} L`}
+            subtitle={priceCards
+              .map((c) => `${c.label}: ${currencySymbol} ${c.price ?? 0}/L`)
+              .join(" | ")}
+            gradient="ocean-rose"
+            icon={<Droplets size={18} />}
+          />
+        </HaloCard>
+
+        <HaloCard accent={totalDebt > 0 ? "amber" : "sage"}>
+          <GradientMetricCard
+            title="Balance Due"
+            value={`${currencySymbol} ${formatNumber(animatedValues.debt, 0)}`}
+            subtitle={`${Object.keys(state.clients).length} client(s)`}
+            gradient={totalDebt > 0 ? "cyber-bloom" : "neon-pulse"}
+            icon={
+              totalDebt > 0 ? <AlertTriangle size={18} /> : <Wallet size={18} />
+            }
+          />
+        </HaloCard>
       </div>
 
       {/* Auto-Synced Fuel Prices + Tax Info + Regulatory Alerts */}
@@ -1429,29 +1365,32 @@ export default function Dashboard() {
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {priceCards.map((card) => (
-              <div
+              <HaloCard
                 key={card.key}
-                className="bg-white dark:bg-white dark:bg-gray-800 rounded-lg p-3 text-center"
+                accent="cobalt"
+                className="bg-white dark:bg-white dark:bg-gray-800 rounded-lg"
               >
-                <p className="text-[10px] text-gray-500 uppercase tracking-wide">
-                  {card.label}
-                </p>
-                <p className={`text-xl font-bold ${card.color}`}>
-                  {currencySymbol} {(card.price ?? 0).toFixed(2)}
-                </p>
-                <p className="text-[9px] text-gray-500 dark:text-gray-400">
-                  per litre
-                </p>
-                {isLocationBased ? (
-                  <p className={`text-[9px] mt-0.5 ${card.color}`}>
-                    {priceCityName}
+                <div className="p-3 text-center">
+                  <p className="text-[10px] text-gray-500 uppercase tracking-wide">
+                    {card.label}
                   </p>
-                ) : regionalPrice.isRegional ? (
-                  <p className={`text-[9px] mt-0.5 ${card.color}`}>
-                    {regionalPrice.cityName}
+                  <p className={`text-xl font-bold ${card.color}`}>
+                    {currencySymbol} {(card.price ?? 0).toFixed(2)}
                   </p>
-                ) : null}
-              </div>
+                  <p className="text-[9px] text-gray-500 dark:text-gray-400">
+                    per litre
+                  </p>
+                  {isLocationBased ? (
+                    <p className={`text-[9px] mt-0.5 ${card.color}`}>
+                      {priceCityName}
+                    </p>
+                  ) : regionalPrice.isRegional ? (
+                    <p className={`text-[9px] mt-0.5 ${card.color}`}>
+                      {regionalPrice.cityName}
+                    </p>
+                  ) : null}
+                </div>
+              </HaloCard>
             ))}
           </div>
           {/* Fuel price interlinks — jump to the editor/finder/price-board so

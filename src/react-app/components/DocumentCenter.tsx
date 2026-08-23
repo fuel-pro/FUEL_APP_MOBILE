@@ -628,11 +628,17 @@ export default function DocumentCenter() {
             )}
           </div>
 
-          {/* Upload zone */}
+          {/* Upload zone — premium animated dropzone (design spec file 10) */}
           <div
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
+            onPaste={(e) => {
+              const files = Array.from(e.clipboardData.files);
+              if (files.length > 0)
+                addFilesToQueue(files as unknown as FileList);
+            }}
+            tabIndex={0}
             style={{
               border: `2px dashed ${isDragOver ? "#f59e0b" : "#334155"}`,
               borderRadius: 12,
@@ -643,7 +649,13 @@ export default function DocumentCenter() {
                 : "rgba(30,30,35,0.6)",
               transition: "all 0.2s",
               marginBottom: 16,
+              transform: isDragOver ? "scale(1.01)" : "scale(1)",
+              cursor: "pointer",
             }}
+            className={isDragOver ? "fp-dropzone-active" : ""}
+            onClick={() => fileInputRef.current?.click()}
+            role="button"
+            aria-label="Upload files dropzone"
           >
             <input
               ref={fileInputRef}
@@ -673,7 +685,7 @@ export default function DocumentCenter() {
             <p style={{ margin: "0 0 12px", fontSize: 14, color: "#94a3b8" }}>
               {isDragOver
                 ? "Drop files or folders here"
-                : "Drag & drop files or folders here"}
+                : "Drag & drop files or folders here — you can paste too"}
             </p>
             <div
               style={{
@@ -788,6 +800,7 @@ export default function DocumentCenter() {
                       borderRadius: 6,
                       background: "rgba(20,20,25,0.5)",
                       fontSize: 12,
+                      animation: "fp-fade-in 0.2s ease",
                     }}
                   >
                     {item.status === "queued" && (
@@ -801,7 +814,7 @@ export default function DocumentCenter() {
                       </span>
                     )}
                     {item.status === "done" && (
-                      <span style={{ color: "#10b981", flexShrink: 0 }}>
+                      <span style={{ color: "#8DCF74", flexShrink: 0 }}>
                         <CheckCircle2 size={12} />
                       </span>
                     )}
@@ -821,6 +834,29 @@ export default function DocumentCenter() {
                     >
                       {item.file.name}
                     </span>
+                    {/* Progress bar (design spec file 10) */}
+                    {item.status === "uploading" && (
+                      <div
+                        style={{
+                          width: 60,
+                          height: 4,
+                          borderRadius: 2,
+                          background: "#1e293b",
+                          overflow: "hidden",
+                          flexShrink: 0,
+                        }}
+                      >
+                        <div
+                          style={{
+                            height: "100%",
+                            width: `${item.progress}%`,
+                            background: "#035BFE",
+                            borderRadius: 2,
+                            transition: "width 0.3s ease",
+                          }}
+                        />
+                      </div>
+                    )}
                     <span style={{ color: "#475569", flexShrink: 0 }}>
                       {formatSize(item.file.size)}
                     </span>
